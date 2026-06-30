@@ -1,20 +1,23 @@
 # MagicHandy
 
-MagicHandy is a Go-first rewrite of StrokeGPT-ReVibed. The Phase 1 application
-is a buildable core shell: it starts a local HTTP server, serves an embedded
-single-page UI, exposes health/status endpoints, writes structured logs, and
-keeps the architecture boundaries ready for later motion, transport, chat, and
-voice work.
+MagicHandy is a Go-first rewrite of StrokeGPT-ReVibed. The current application
+starts a local HTTP server, serves an embedded single-page UI, exposes
+health/state/settings endpoints, writes structured logs, and keeps the
+architecture boundaries ready for later motion, transport, chat, and voice work.
 
 ## Current Scope
 
-Implemented in Phase 1:
+Implemented:
 
 - pure-Go module and application entrypoint
 - embedded static assets from `web/`
-- `GET /healthz` and `GET /api/status`
+- `GET /healthz`, `GET /api/status`, `GET /api/state`, and settings API routes
 - JSON structured logging
 - graceful shutdown
+- versioned JSON settings with defaults, migration hooks, redacted API views,
+  and atomic saves under the app data directory
+- minimal browser settings UI for server, device placeholders, motion defaults,
+  and diagnostics verbosity
 - baseline tests, race-test compatible packages, and goroutine leak-test
   harnesses for future motion/transport loops
 - CI for formatting, `go vet`, `golangci-lint`, tests, race tests, and a
@@ -24,7 +27,6 @@ Not implemented yet:
 
 - Handy transport
 - motion engine
-- settings persistence
 - local LLM chat
 - voice workers
 
@@ -45,16 +47,27 @@ Useful flags:
 
 ```powershell
 go run ./cmd/magichandy -addr 127.0.0.1:49718
+go run ./cmd/magichandy -data-dir .\.local-data
 go run ./cmd/magichandy -log-level debug
 go run ./cmd/magichandy -version
 ```
+
+Settings are stored in `settings.json` under the resolved app data directory.
+By default this is the OS user config directory plus `MagicHandy`; use
+`-data-dir` or `MAGICHANDY_DATA_DIR` for local development and tests.
 
 Health checks:
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1:49717/healthz
 Invoke-WebRequest http://127.0.0.1:49717/api/status
+Invoke-WebRequest http://127.0.0.1:49717/api/state
+Invoke-WebRequest http://127.0.0.1:49717/api/settings
 ```
+
+`GET /api/settings` and `GET /api/state` return redacted settings. The Handy
+connection key can be saved through `PUT /api/settings`, but it is not returned
+by diagnostics or settings reads.
 
 ## Validate
 
