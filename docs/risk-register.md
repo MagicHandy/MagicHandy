@@ -187,3 +187,46 @@ Mitigation:
 Exit evidence:
 
 - Phase 17 parity review recommends default/continue/freeze/backport with clear evidence
+
+## R11: Rewrite Goals Left Unmeasured
+
+Level: High
+
+Description:
+Maintainability, lower core memory, and shippable binaries are the stated
+reasons for the rewrite, but they are easy to claim and easy to lose. Go does
+not deliver them by itself: a god-package, a CGo dependency, or GC-held memory
+can each defeat a goal silently. Without targets and enforcement, the rewrite
+can complete without achieving its purpose.
+
+Mitigation:
+
+- maintain `docs/goals-and-guardrails.md` with measurable targets
+- capture the Python core baseline and Go idle RSS in Phase 1
+- enforce CI gates (lint, import boundaries, size norms, `CGO_ENABLED=0`)
+- measure RSS at motion/app milestones, not just at idle
+
+Exit evidence:
+
+- recorded baseline plus Go numbers per milestone, and CI enforcing the gates
+
+## R12: Frontend Debt Carryover
+
+Level: Medium
+
+Description:
+The Go core owns only the backend. The current frontend is ~13k lines of vanilla
+JS with a shared state/element god-registry. Porting it wholesale carries the
+maintainability debt across and defeats the goal for half the codebase.
+
+Mitigation:
+
+- follow `docs/decisions/0004-frontend-strategy.md`: rebuild fresh, minimal-first,
+  backend-state-driven; old JS is reference, not base
+- apply the size/no-god-module norms to `web/`
+- defer the heavy authoring UI rather than porting it early
+
+Exit evidence:
+
+- minimal UI built without a ported god-registry; `web/` respects size norms;
+  parity review documents remaining UI gaps

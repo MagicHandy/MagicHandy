@@ -1,4 +1,4 @@
-﻿# MagicHandy Go Implementation Plan
+# MagicHandy Go Implementation Plan
 
 ## Core Direction
 
@@ -18,6 +18,16 @@ Python may still exist behind optional worker boundaries for Chatterbox, faster-
 - Make real-device validation a first-class milestone.
 - Keep the Go core sidecar-compatible even if the end goal is a full Go app.
 - Define parity and kill milestones so the parallel rewrite does not run forever.
+- Track the rewrite goals as measurable targets, not claims: memory, binary
+  size, and startup are budgeted and checked (see `docs/goals-and-guardrails.md`).
+- Keep the core pure-Go (`CGO_ENABLED=0`); native-only needs such as BLE or
+  native audio stay behind the browser bridge or a worker, never in the core.
+- Enforce maintainability in CI from Phase 1 (lint, import boundaries, size
+  norms) so Go does not grow its own god-modules.
+- Rebuild the frontend fresh and minimal instead of porting the old JS (see
+  `docs/decisions/0004-frontend-strategy.md`).
+- Treat the motion goroutine lifecycle as a safety gate (leak and stop-teardown
+  tests), because a goroutine that commands the device after stop is unsafe.
 
 ## Goal-Ready Phase Workflow
 
@@ -56,7 +66,7 @@ MagicHandy/
 
 ## Suggested `/goal`
 
-`/goal Complete MagicHandy Phase 0: write the decision records, risk register, HSP invariants, motion retargeting spec, Bluetooth ownership decision, and worker boundary spec. Do not implement app code yet.`
+`/goal Complete MagicHandy Phase 0: write the decision records, measurable goals/guardrails, risk register, HSP invariants, motion retargeting spec, Bluetooth ownership decision, frontend strategy/UI design, and worker boundary spec. Do not implement app code yet.`
 
 ## Objective
 
@@ -71,6 +81,9 @@ Required docs:
 - `docs/decisions/0001-go-first-core.md`
 - `docs/decisions/0002-motion-transport-contract.md`
 - `docs/decisions/0003-voice-worker-boundary.md`
+- `docs/decisions/0004-frontend-strategy.md`
+- `docs/goals-and-guardrails.md`
+- `docs/ui-design.md`
 - `docs/motion-retargeting.md`
 - `docs/hsp-v4-invariants.md`
 - `docs/bluetooth-ownership.md`
@@ -100,6 +113,31 @@ Required docs:
 - worker lifecycle
 - missing-worker behavior
 - cancellation and timeout expectations
+
+`0004-frontend-strategy.md`:
+
+- fresh frontend strategy rather than porting old JavaScript wholesale
+- backend-state-driven visualizer and motion UI
+- no global mutable client god-registry
+- command/state model and active-controller/read-only-client rules
+- no required runtime build step for users
+
+`goals-and-guardrails.md`:
+
+- measurable memory, binary, startup, and packaging targets
+- baseline measurement procedure
+- pure-Go core rule (`CGO_ENABLED=0`)
+- CI gates and lint/import-boundary expectations
+- motion goroutine lifecycle safety gate
+
+`ui-design.md`:
+
+- persistent Stop and device-state bar
+- single authoritative visualizer
+- immediate-apply quick controls
+- routed settings/navigation model
+- accessibility and responsive layout rules
+- explicit old-app UI flaws to avoid
 
 `motion-retargeting.md`:
 
@@ -140,6 +178,8 @@ Required docs:
 - user migration risk
 - feature parity risk
 - packaging/signing risk
+- unmeasured rewrite-goal risk
+- frontend debt carryover risk
 
 ## Validation
 
@@ -151,6 +191,8 @@ Required docs:
 
 - All required docs exist.
 - The docs explicitly distinguish rewrite motivations from motion-smoothness fixes.
+- Rewrite goals are measurable and have a baseline/perf evidence path.
+- The frontend strategy avoids carrying over old JS debt by default.
 - The HSP invariants are concrete enough to become tests in Phase 2.
 - The retargeting spec is concrete enough to guide Phase 4.
 
@@ -184,7 +226,15 @@ Implement:
 - HTTP server with health/status route
 - structured logging
 - graceful shutdown
-- basic CI
+- basic CI with the gates in `docs/goals-and-guardrails.md` (`go vet`,
+  `golangci-lint` incl. `staticcheck`/`gocyclo`/`funlen`/`depguard`, `go test`,
+  `go test -race`, and a `CGO_ENABLED=0` build)
+- `.golangci.yml` with explicit thresholds and depguard boundaries, even if
+  early thresholds are intentionally lenient
+- import-boundary scaffold (depguard/test for motion/transport/llm/httpapi rules)
+- goroutine-leak test harness (`go.uber.org/goleak`) ready for motion/transport
+- record the StrokeGPT-ReVibed memory baseline and the Go core idle RSS in
+  `docs/perf-baseline.md` using the procedure in `docs/goals-and-guardrails.md`
 
 Suggested initial layout:
 
@@ -219,6 +269,10 @@ Manual check:
 - App starts and serves the embedded UI.
 - Health endpoint works.
 - CI runs `go test ./...` and `go test -race ./...`.
+- CI also runs `go vet`, `golangci-lint`, and a `CGO_ENABLED=0` build.
+- `.golangci.yml` exists and encodes the initial import-boundary and size norms.
+- The StrokeGPT-ReVibed memory baseline and the Go core idle RSS are recorded
+  (see `docs/goals-and-guardrails.md`).
 - README explains how to run from source.
 - No motion, Handy, chat, or voice feature is faked in the UI beyond placeholder status.
 
@@ -582,7 +636,9 @@ Manual real-device checklist:
 
 ## Objective
 
-Build a usable motion-control UI around the validated motion engine.
+Build a usable motion-control UI around the validated motion engine. Follow
+`docs/ui-design.md` for layout, the single visualizer, the persistent Stop,
+immediate-apply controls, feedback, and accessibility.
 
 ## Scope
 
@@ -1106,6 +1162,12 @@ Every implementation phase should run:
 go test ./...
 go test -race ./...
 ```
+
+Every phase also runs `go vet`, `golangci-lint`, and a `CGO_ENABLED=0` build of
+the core binary (see `docs/goals-and-guardrails.md`).
+
+When motion or transport behavior is touched, also run the goroutine-leak and
+emergency-stop-teardown tests (the motion safety gate).
 
 When frontend is touched, also run browser/UI tests once they exist.
 

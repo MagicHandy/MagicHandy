@@ -75,6 +75,10 @@ Stop is global and explicit. It must:
 - mark the engine stopped even if the transport stop fails
 - surface stop failure in diagnostics
 
+This is a safety gate, not a convenience. It must be covered by goroutine-leak
+and stop-teardown tests: after stop during an active retarget, zero motion
+goroutines may remain commanding the device. See `docs/goals-and-guardrails.md`.
+
 ## Consequences
 
 This contract prevents common regressions where:
