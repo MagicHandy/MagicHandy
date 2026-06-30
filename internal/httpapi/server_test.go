@@ -11,6 +11,8 @@ import (
 	"testing/fstest"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 func TestHealthzReturnsOK(t *testing.T) {
@@ -93,6 +95,62 @@ func TestStateReturnsSettingsSnapshotWithoutSecrets(t *testing.T) {
 	}
 	if !body.Settings.Device.ConnectionKeySet {
 		t.Fatal("state did not report that a connection key is configured")
+	}
+}
+
+func TestTransportDiagnosticsEndpointRedactsSecrets(t *testing.T) {
+	server := newTestServer(t)
+	_, err := server.transport.(*transport.Fake).Stop(
+		t.Context(),
+		transport.StopCommand{Reason: "secret-connection-key"},
+	)
+	if err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/transport/diagnostics", nil)
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if strings.Contains(recorder.Body.String(), "secret-connection-key") {
+		t.Fatalf("transport diagnostics leaked secret: %s", recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"kind":"stop"`) {
+		t.Fatalf("transport diagnostics missing stop command shape: %s", recorder.Body.String())
+	}
+}
+
+func TestTraceExportReturnsStableJSON(t *testing.T) {
+	server := newTestServer(t)
+	result := transport.CommandResult{
+		CommandID:     "fake-000001",
+		Kind:          transport.CommandKindHSPPlay,
+		Transport:     "fake_handy",
+		OK:            true,
+		Status:        "recorded",
+		LatencyMillis: 3,
+		CompletedAt:   "2026-06-30T12:00:00Z",
+	}
+	server.traces.Add(diagnostics.MotionTraceRow{
+		Timestamp:       "2026-06-30T12:00:00Z",
+		Source:          "test",
+		Reason:          "export",
+		TransportResult: &result,
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/traces", nil)
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	want := `{"schema_version":"motion_trace.v1","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"export","transport_result":{"command_id":"fake-000001","kind":"hsp_play","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":3,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0}` + "\n"
+	if recorder.Body.String() != want {
+		t.Fatalf("trace export mismatch\nwant: %s\ngot:  %s", want, recorder.Body.String())
 	}
 }
 
@@ -207,7 +265,10 @@ func newTestServer(t *testing.T) *Server {
 		"index.html": {Data: []byte("<!doctype html><title>MagicHandy</title>")},
 		"app.css":    {Data: []byte("body { margin: 0; }")},
 		"app.js":     {Data: []byte("console.log('ready');")},
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)), store, VersionInfo{
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), store, Runtime{
+		Traces:    diagnostics.NewTraceRing(8),
+		Transport: transport.NewFake(),
+	}, VersionInfo{
 		Version: "test",
 		Commit:  "test",
 	})

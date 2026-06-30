@@ -12,6 +12,7 @@ Implemented:
 - pure-Go module and application entrypoint
 - embedded static assets from `web/`
 - `GET /healthz`, `GET /api/status`, `GET /api/state`, and settings API routes
+- fake Handy transport contracts, safe transport diagnostics, and `GET /api/traces`
 - JSON structured logging
 - graceful shutdown
 - versioned JSON settings with defaults, migration hooks, redacted API views,
@@ -25,7 +26,7 @@ Implemented:
 
 Not implemented yet:
 
-- Handy transport
+- real Handy transport
 - motion engine
 - local LLM chat
 - voice workers
@@ -63,11 +64,16 @@ Invoke-WebRequest http://127.0.0.1:49717/healthz
 Invoke-WebRequest http://127.0.0.1:49717/api/status
 Invoke-WebRequest http://127.0.0.1:49717/api/state
 Invoke-WebRequest http://127.0.0.1:49717/api/settings
+Invoke-WebRequest http://127.0.0.1:49717/api/transport/diagnostics
+Invoke-WebRequest http://127.0.0.1:49717/api/traces
 ```
 
 `GET /api/settings` and `GET /api/state` return redacted settings. The Handy
 connection key can be saved through `PUT /api/settings`, but it is not returned
 by diagnostics or settings reads.
+
+Phase 3 transport is fake-only. The app records deterministic command shapes and
+diagnostic snapshots, but it does not call the real Handy API.
 
 ## Validate
 

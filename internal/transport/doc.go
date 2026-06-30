@@ -1,3 +1,3 @@
-// Package transport will own Handy command serialization, dispatch, device
-// state, and transport diagnostics.
+// Package transport defines Handy transport contracts and deterministic fake
+// implementations used before real device integration exists.
 package transport

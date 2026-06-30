@@ -1,0 +1,46 @@
+[
+  {
+    "id": "fake-000001",
+    "kind": "stroke_window",
+    "issued_at": "2026-06-30T12:00:00Z",
+    "stroke_window": {
+      "min_percent": 10,
+      "max_percent": 90
+    }
+  },
+  {
+    "id": "fake-000002",
+    "kind": "hsp_add",
+    "issued_at": "2026-06-30T12:00:00Z",
+    "hsp_add": {
+      "stream_id": "trace-test",
+      "points": [
+        {
+          "position_percent": 20,
+          "time_ms": 0
+        },
+        {
+          "position_percent": 80,
+          "time_ms": 250
+        }
+      ]
+    }
+  },
+  {
+    "id": "fake-000003",
+    "kind": "hsp_play",
+    "issued_at": "2026-06-30T12:00:00Z",
+    "hsp_play": {
+      "stream_id": "trace-test",
+      "start_time_ms": 0
+    }
+  },
+  {
+    "id": "fake-000004",
+    "kind": "stop",
+    "issued_at": "2026-06-30T12:00:00Z",
+    "stop": {
+      "reason": "test complete"
+    }
+  }
+]

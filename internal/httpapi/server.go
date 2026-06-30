@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 const serviceName = "magichandy"
@@ -25,18 +27,26 @@ type VersionInfo struct {
 	Commit  string
 }
 
+// Runtime contains app runtime collaborators exposed through HTTP diagnostics.
+type Runtime struct {
+	Traces    *diagnostics.TraceRing
+	Transport transport.DiagnosticsProvider
+}
+
 // Server owns the local HTTP routes and embedded static asset serving.
 type Server struct {
-	static  fs.FS
-	logger  *slog.Logger
-	store   *config.Store
-	started time.Time
-	version VersionInfo
-	handler http.Handler
+	static    fs.FS
+	logger    *slog.Logger
+	store     *config.Store
+	traces    *diagnostics.TraceRing
+	transport transport.DiagnosticsProvider
+	started   time.Time
+	version   VersionInfo
+	handler   http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.
-func New(static fs.FS, logger *slog.Logger, store *config.Store, version VersionInfo) (*Server, error) {
+func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime, version VersionInfo) (*Server, error) {
 	if static == nil {
 		return nil, errors.New("static filesystem is required")
 	}
@@ -46,13 +56,21 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, version Version
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if runtime.Traces == nil {
+		runtime.Traces = diagnostics.NewTraceRing(1)
+	}
+	if runtime.Transport == nil {
+		runtime.Transport = transport.NewFake()
+	}
 
 	server := &Server{
-		static:  static,
-		logger:  logger,
-		store:   store,
-		started: time.Now().UTC(),
-		version: version,
+		static:    static,
+		logger:    logger,
+		store:     store,
+		traces:    runtime.Traces,
+		transport: runtime.Transport,
+		started:   time.Now().UTC(),
+		version:   version,
 	}
 
 	mux := http.NewServeMux()
@@ -73,6 +91,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
+	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
 
@@ -112,6 +132,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 	settings, status := s.store.PublicSnapshot()
+	transportDiagnostics := s.transport.Diagnostics()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"service":        serviceName,
 		"version":        s.version.Version,
@@ -137,10 +158,8 @@ func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 		"motion": map[string]string{
 			"state": "not_implemented",
 		},
-		"transport": map[string]string{
-			"state":              "not_configured",
-			"hsp_dispatch_owner": settings.Device.HSPDispatchOwner,
-		},
+		"transport": transportDiagnostics,
+		"trace":     s.traces.Summary(),
 	})
 }
 
@@ -177,6 +196,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		"settings": saved.Public(),
 		"status":   status,
 	})
+}
+
+func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.transport.Diagnostics())
+}
+
+func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.traces.Export())
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {

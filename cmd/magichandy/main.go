@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/httpapi"
 	"github.com/mapledaemon/MagicHandy/internal/logging"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/web"
 )
 
@@ -71,7 +73,12 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		logger.Info("settings using defaults", "data_dir", loadStatus.DataDir)
 	}
 
-	api, err := httpapi.New(web.FS(), logger, store, httpapi.VersionInfo{
+	runtime := httpapi.Runtime{
+		Traces:    diagnostics.NewTraceRing(512),
+		Transport: transport.NewFake(),
+	}
+
+	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
 		Version: version,
 		Commit:  commit,
 	})
