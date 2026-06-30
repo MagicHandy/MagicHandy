@@ -1,0 +1,90 @@
+# MagicHandy
+
+MagicHandy is a Go-first rewrite of StrokeGPT-ReVibed. The Phase 1 application
+is a buildable core shell: it starts a local HTTP server, serves an embedded
+single-page UI, exposes health/status endpoints, writes structured logs, and
+keeps the architecture boundaries ready for later motion, transport, chat, and
+voice work.
+
+## Current Scope
+
+Implemented in Phase 1:
+
+- pure-Go module and application entrypoint
+- embedded static assets from `web/`
+- `GET /healthz` and `GET /api/status`
+- JSON structured logging
+- graceful shutdown
+- baseline tests, race-test compatible packages, and goroutine leak-test
+  harnesses for future motion/transport loops
+- CI for formatting, `go vet`, `golangci-lint`, tests, race tests, and a
+  `CGO_ENABLED=0` build
+
+Not implemented yet:
+
+- Handy transport
+- motion engine
+- settings persistence
+- local LLM chat
+- voice workers
+
+## Requirements
+
+- Go 1.24 or newer
+- No Node, Python, or CGO dependency is required for the core app
+
+## Run From Source
+
+```powershell
+go run ./cmd/magichandy
+```
+
+By default the app listens on `127.0.0.1:49717`.
+
+Useful flags:
+
+```powershell
+go run ./cmd/magichandy -addr 127.0.0.1:49718
+go run ./cmd/magichandy -log-level debug
+go run ./cmd/magichandy -version
+```
+
+Health checks:
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:49717/healthz
+Invoke-WebRequest http://127.0.0.1:49717/api/status
+```
+
+## Validate
+
+```powershell
+gofmt -w cmd internal web
+go vet ./...
+go test ./...
+go test -race ./...
+$env:CGO_ENABLED = "0"; go build ./cmd/magichandy
+```
+
+`go test -race` requires CGO and a local C compiler. CI runs the race test on
+Ubuntu so the gate is enforced even when a Windows workstation does not have
+MinGW/GCC installed.
+
+`golangci-lint run` is part of CI. Local developers can install
+`golangci-lint` to run the same static checks before pushing.
+
+## Planning Docs
+
+- [Implementation plan](IMPLEMENTATION_PLAN.md)
+- [Goals and guardrails](docs/goals-and-guardrails.md)
+- [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
+- [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
+- [UI design](docs/ui-design.md)
+- [HSP v4 invariants](docs/hsp-v4-invariants.md)
+- [Risk register](docs/risk-register.md)
+- [Performance baseline](docs/perf-baseline.md)
+
+## License
+
+MagicHandy is licensed under the GNU General Public License v3.0 only. See
+[LICENSE](LICENSE).
