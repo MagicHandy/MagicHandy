@@ -1,0 +1,1156 @@
+﻿# MagicHandy Go Implementation Plan
+
+## Core Direction
+
+MagicHandy is a Go-first ground-up rewrite of StrokeGPT-ReVibed.
+
+The rewrite is justified by maintainability, cleaner architecture, future binary releases, lower non-ML baseline overhead, simpler long-running concurrency, and fewer Python environment failures in the core install path. Go alone will not fix Handy cloud latency, local LLM memory, CUDA memory, or all motion smoothness bugs. Motion quality must come from a better motion model, transport scheduler, retargeting algorithm, diagnostics, and real-device validation.
+
+Python may still exist behind optional worker boundaries for Chatterbox, faster-whisper, Parakeet, Torch, CUDA, or other ML-heavy features. Those dependencies should not define the core app install path.
+
+## Rewrite Guardrails
+
+- Do not start by porting every feature.
+- Build a better motion and transport foundation first.
+- Preserve hard-won StrokeGPT-ReVibed HSP constraints as tests.
+- Keep semantic motion intent separate from physical transport output.
+- Keep modes as clients of the motion engine, not alternate motion engines.
+- Make real-device validation a first-class milestone.
+- Keep the Go core sidecar-compatible even if the end goal is a full Go app.
+- Define parity and kill milestones so the parallel rewrite does not run forever.
+
+## Goal-Ready Phase Workflow
+
+Each phase below is written so a future `/goal` can complete it end-to-end. A phase should end with:
+
+- code committed and pushed to a scoped branch
+- tests passing for the phase
+- documentation updated when behavior or architecture changes
+- a PR opened unless the phase is explicitly local-only planning
+- clear notes about what was intentionally not implemented
+
+Use branch prefix `codex/` unless a different branch is requested.
+
+## Target Architecture
+
+```text
+MagicHandy/
+  cmd/magichandy/          app entrypoint
+  internal/config/         settings, migrations, defaults
+  internal/httpapi/        REST, SSE, and WebSocket routes
+  internal/chat/           chat sessions, streaming, malformed response handling
+  internal/llm/            Ollama client, prompts, JSON repair
+  internal/motion/         semantic targets, pattern engine, sampler, retargeting
+  internal/transport/      Handy cloud REST, HSP/HAMP/HDSP, Bluetooth bridge contract
+  internal/modes/          freestyle, auto, edging, milking successors
+  internal/diagnostics/    traces, setup checks, latency probes, bug-report bundles
+  internal/audio/          voice-output queue, external TTS worker client
+  internal/asr/            voice-input worker client
+  internal/workers/        external worker lifecycle and protocol helpers
+  web/                     frontend assets
+  docs/
+  scripts/
+```
+
+# Phase 0: Planning Specs And Risk Register
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 0: write the decision records, risk register, HSP invariants, motion retargeting spec, Bluetooth ownership decision, and worker boundary spec. Do not implement app code yet.`
+
+## Objective
+
+Capture the architectural decisions and hard-won constraints before implementation starts, so the rewrite does not rediscover StrokeGPT-ReVibed's known failure modes.
+
+## Scope
+
+Create planning docs only.
+
+Required docs:
+
+- `docs/decisions/0001-go-first-core.md`
+- `docs/decisions/0002-motion-transport-contract.md`
+- `docs/decisions/0003-voice-worker-boundary.md`
+- `docs/motion-retargeting.md`
+- `docs/hsp-v4-invariants.md`
+- `docs/bluetooth-ownership.md`
+- `docs/risk-register.md`
+
+## Required Content
+
+`0001-go-first-core.md`:
+
+- why Go-first
+- why not Rust-first for the whole app
+- what Go should improve
+- what Go will not improve
+- why optional Python workers are acceptable
+
+`0002-motion-transport-contract.md`:
+
+- semantic intent vs physical transport
+- speed intent vs physical velocity/timed spacing
+- stroke range as physical envelope
+- reverse direction at transport boundary
+- emergency stop contract
+
+`0003-voice-worker-boundary.md`:
+
+- worker protocol versioning
+- worker lifecycle
+- missing-worker behavior
+- cancellation and timeout expectations
+
+`motion-retargeting.md`:
+
+- active stream representation
+- required future buffer lead
+- command-latency compensation
+- handoff time selection
+- phase preservation
+- avoiding hard resets
+- avoiding stationary bridge holds
+- avoiding direction-opposing handoffs
+- starvation/paused recovery
+
+`hsp-v4-invariants.md`:
+
+- HSP points are `0..100`, not `0..1000`
+- do not pre-apply local stroke-depth calibration to every HSP point
+- stroke range uses transport stroke-window command
+- reverse direction happens at transport boundary
+- do not rewrite semantic speed intent into physical speed feedback
+- HSP timed-point spacing is the speed contract
+- same-pattern updates preserve phase
+- new-pattern replacements choose low-jump handoff phase
+- no silent HDSP fallback when HSP prerequisites fail
+- active speed/stroke/direction settings refresh active motion immediately
+
+`bluetooth-ownership.md`:
+
+- compare browser-owned Web Bluetooth vs native Go Bluetooth
+- default to browser-owned BLE bridge for early implementation
+- define what the Go server owns and what the browser owns
+
+`risk-register.md`:
+
+- real-device validation risk
+- two-codebase drift
+- Bluetooth implementation risk
+- user migration risk
+- feature parity risk
+- packaging/signing risk
+
+## Validation
+
+- Markdown files exist and are internally consistent.
+- No app implementation is started.
+- `README.md` links to the new planning docs if the repo has a README by then.
+
+## Done Criteria
+
+- All required docs exist.
+- The docs explicitly distinguish rewrite motivations from motion-smoothness fixes.
+- The HSP invariants are concrete enough to become tests in Phase 2.
+- The retargeting spec is concrete enough to guide Phase 4.
+
+## Out Of Scope
+
+- Go module scaffolding.
+- UI implementation.
+- real Handy API calls.
+- voice workers.
+
+# Phase 1: Repo Scaffold And App Shell
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 1: create the Go module, GPLv3 repo scaffold, CI, embedded single-page app shell, health endpoint, structured logging, and baseline tests.`
+
+## Objective
+
+Create a buildable, testable Go application skeleton that can be packaged later and can serve a minimal browser UI.
+
+## Scope
+
+Implement:
+
+- Go module
+- GPLv3 license
+- README
+- `.gitignore`
+- basic app entrypoint in `cmd/magichandy`
+- embedded static assets in `web/`
+- HTTP server with health/status route
+- structured logging
+- graceful shutdown
+- basic CI
+
+Suggested initial layout:
+
+```text
+cmd/magichandy/main.go
+internal/httpapi/server.go
+internal/logging/logging.go
+web/index.html
+web/app.css
+web/app.js
+.github/workflows/test.yml
+```
+
+## Validation
+
+Run locally:
+
+```powershell
+go test ./...
+go test -race ./...
+go run ./cmd/magichandy
+```
+
+Manual check:
+
+- open local app URL
+- confirm page loads
+- confirm `/healthz` or equivalent returns OK
+
+## Done Criteria
+
+- App starts and serves the embedded UI.
+- Health endpoint works.
+- CI runs `go test ./...` and `go test -race ./...`.
+- README explains how to run from source.
+- No motion, Handy, chat, or voice feature is faked in the UI beyond placeholder status.
+
+## Out Of Scope
+
+- settings persistence
+- real Handy transport
+- motion engine
+- Ollama chat
+- voice workers
+
+# Phase 2: Config, Settings, And App State
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 2: implement versioned settings, settings API, app state snapshot, settings tests, and a minimal settings UI without adding motion or chat behavior.`
+
+## Objective
+
+Establish durable settings and state foundations before motion and transport are added.
+
+## Scope
+
+Implement:
+
+- settings struct with version field
+- default settings
+- JSON load/save
+- migration hook structure
+- app data directory selection
+- settings API routes
+- app state snapshot route
+- minimal settings UI for core fields
+
+Initial settings should include:
+
+- server port
+- Handy transport mode placeholder
+- Handy firmware version default `fw4`
+- Handy API v3 Application ID field
+- Handy connection key field
+- motion speed min/max
+- stroke range min/max
+- reverse direction
+- diagnostics verbosity
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+go run ./cmd/magichandy
+```
+
+Manual check:
+
+- save settings
+- restart app
+- confirm settings persist
+- corrupt/missing settings file recovers safely
+
+## Done Criteria
+
+- Settings load from disk and save atomically.
+- Defaults are applied for missing fields.
+- Migrations have a testable structure even if only v1 exists.
+- UI can view/save the initial settings.
+- Secrets are not printed in logs or diagnostics.
+
+## Out Of Scope
+
+- Handy connection attempts
+- motion commands
+- Ollama
+- voice
+- migration from StrokeGPT-ReVibed settings
+
+# Phase 3: Transport Interface, Fake Handy, And Trace Schema
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 3: define the transport interface, fake Handy simulator, transport diagnostics, motion trace schema, trace export, and golden tests for command shape. Do not call the real Handy API yet.`
+
+## Objective
+
+Build deterministic transport and trace foundations before real device integration.
+
+## Scope
+
+Implement:
+
+- `internal/transport` interface
+- fake transport implementation
+- command result type
+- transport diagnostics snapshot
+- motion trace row schema
+- trace ring buffer
+- trace export endpoint
+- golden tests for command shape
+
+Suggested types:
+
+- `Transport`
+- `CommandResult`
+- `TransportDiagnostics`
+- `TimedPoint`
+- `MotionTraceRow`
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Tests should cover:
+
+- fake command recording
+- command result diagnostics
+- trace row serialization
+- trace ring capacity
+- no secret leakage in diagnostics
+
+## Done Criteria
+
+- Fake transport can record stop, stroke-window, HSP add/play-like, HAMP-like, and HDSP-like commands.
+- Trace export returns stable JSON.
+- Golden tests make transport command schema explicit.
+- No real network calls exist in this phase.
+
+## Out Of Scope
+
+- real Handy API
+- motion sampler
+- UI visualizer beyond trace/diagnostic display if convenient
+
+# Phase 4: HSP v4 Invariant Tests And Cloud Command Shaping
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 4: add HSP v4 invariant tests and command-shaping code for Handy cloud REST without sending real API calls by default.`
+
+## Objective
+
+Convert known HSP v4 landmines into executable tests before implementing live transport.
+
+## Scope
+
+Implement command builders for:
+
+- firmware v4/API v3 auth metadata
+- HSP stroke-window command
+- HSP timed-point add/play command shape
+- HSP stop/resume/sync placeholders if planned
+- explicit HAMP/HDSP fallback command shapes
+
+Port invariant tests from `docs/hsp-v4-invariants.md`.
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Tests must prove:
+
+- HSP `x` values remain `0..100`
+- stroke-depth settings are not baked into every point
+- reverse orientation maps at transport boundary
+- no silent HDSP fallback when HSP prerequisites are missing
+- speed intent is not fed back as physical velocity
+- command payloads omit secrets in trace rows
+
+## Done Criteria
+
+- HSP command builders exist and are fully tested.
+- No default live network calls occur.
+- The code refuses invalid v4/API v3 prerequisites with clear diagnostics.
+
+## Out Of Scope
+
+- live Handy connection
+- long-running motion loop
+- chat/modes
+
+# Phase 5: Real Handy Cloud Transport
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 5: implement real Handy cloud REST transport, connection checks, HSP state/SSE listener where available, diagnostics, and manual transport test endpoints.`
+
+## Objective
+
+Make the app able to talk to a real Handy through Cloud REST, with honest diagnostics and no silent fallback behavior.
+
+## Scope
+
+Implement:
+
+- API v3 Application ID handling
+- Handy connection key handling
+- firmware v4 default path
+- connection check endpoint
+- real command dispatch client
+- HSP add/play/stop/stroke-window calls
+- HSP state/SSE listener if available and practical
+- HAMP/HDSP only when explicitly selected
+- latency measurement
+- command history diagnostics
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual real-device checklist:
+
+- invalid key reports connection-key problem
+- invalid Application ID reports API auth problem
+- valid credentials connect
+- stop command works
+- stroke-window command works
+- basic HSP timed points move device
+- diagnostics show last command path/status/elapsed/error
+
+## Done Criteria
+
+- Cloud REST transport works with real credentials.
+- Device/API errors are visible and specific.
+- No secret values are logged or exported.
+- Emergency stop works through the real transport.
+
+## Out Of Scope
+
+- full motion engine
+- LLM chat
+- modes
+- Bluetooth
+
+# Phase 6: Motion Engine MVP
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 6: implement the motion engine MVP with semantic targets, continuous plans, sampler, long-lived motion loop, stop, settings refresh, fake transport playback, traces, tests, race tests, and soak tests.`
+
+## Objective
+
+Build the core motion engine independently from LLM chat and modes.
+
+## Scope
+
+Implement:
+
+- `MotionTarget`
+- `MotionPlan`
+- `ActiveMotionState`
+- continuous sampler
+- fixed pattern support
+- area focus support
+- soft anchor loop support if not too large; otherwise document as Phase 7
+- long-lived motion loop
+- stop/cancel handling
+- speed limit updates while moving
+- stroke range updates while moving
+- reverse direction updates while moving
+- trace annotations for every applied target and settings refresh
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Tests should cover:
+
+- target clamping
+- same-pattern phase preservation
+- settings refresh while active
+- stop interrupts active loop
+- fake transport receives continuous points
+- trace rows describe active motion
+- no goroutine leaks in a short soak test
+
+## Done Criteria
+
+- Motion can run continuously against fake transport until stopped.
+- Settings changes apply to active fake-transport motion immediately.
+- No regular stop/start occurs in fake playback traces.
+- Race tests pass.
+
+## Out Of Scope
+
+- real-device retarget proof
+- Ollama
+- UI beyond minimal manual controls if helpful
+
+# Phase 7: Motion Retargeting And Real-Device Validation
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 7: implement motion retargeting per the spec and validate on real hardware with trace exports for area changes, speed changes, stroke changes, direction changes, same-pattern changes, and cross-pattern changes.`
+
+## Objective
+
+Prove the highest-risk motion behavior on real hardware before broad app features are built on top.
+
+## Scope
+
+Implement/refine:
+
+- active stream retargeting
+- latency-aware buffer lead
+- handoff time selection
+- phase-preserving same-pattern changes
+- low-jump cross-pattern handoff
+- starvation/paused recovery behavior
+- real-device trace export workflow
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual real-device checklist:
+
+- manual continuous motion starts
+- area focus changes while already moving
+- speed limit changes while moving
+- stroke range changes while moving
+- reverse direction changes while moving
+- same-pattern speed changes preserve phase
+- cross-pattern retargets do not hard reset to a fixed position
+- Cloud REST latency spike behavior is visible in diagnostics
+- emergency stop works during retargets
+
+## Done Criteria
+
+- Active motion does not stop after routine retargets.
+- Area changes do not jump to a hard reset position.
+- Diagnostics explain transport/API failures.
+- Failed real-device runs produce trace files that can become fixtures.
+- Known unresolved motion limitations are documented.
+
+## Out Of Scope
+
+- LLM chat
+- modes
+- voice
+
+# Phase 8: Minimal Frontend Motion UI And Visualizer
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 8: implement the minimal browser UI for device connection, manual motion controls, quick settings, emergency stop, diagnostics, trace export, and a visualizer driven by motion engine state.`
+
+## Objective
+
+Build a usable motion-control UI around the validated motion engine.
+
+## Scope
+
+Implement UI for:
+
+- Handy credentials and connection status
+- firmware/transport selection
+- manual start/stop motion
+- speed/stroke/direction quick settings
+- emergency stop
+- transport diagnostics
+- trace export
+- visualizer driven by engine state, not guessed UI state
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Browser/manual checks:
+
+- save settings
+- connect/disconnect feedback is clear
+- quick settings apply immediately to active motion
+- stop button remains visible and works
+- visualizer state matches engine trace reasonably
+- no layout overlap on desktop and mobile widths
+
+## Done Criteria
+
+- User can control motion without chat.
+- Quick settings change active motion immediately.
+- Visualizer reads backend state.
+- Diagnostics are visible enough for bug reports.
+
+## Out Of Scope
+
+- Ollama chat
+- voice
+- full settings parity
+
+# Phase 9: Ollama Chat Integration
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 9: implement Ollama chat, streaming responses, strict JSON contract, repair pass, malformed-response UI indicator, prompt sets, and chat-driven motion through the motion engine only.`
+
+## Objective
+
+Add chat without letting the LLM bypass deterministic motion control.
+
+## Scope
+
+Implement:
+
+- Ollama client
+- model availability/status endpoint
+- streaming chat endpoint
+- response schema
+- JSON repair pass
+- malformed response warning metadata
+- prompt templates
+- prompt set structure
+- chat history
+- chat-driven motion target application
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Tests should cover:
+
+- valid response parsing
+- malformed response handling
+- repair pass behavior
+- `move: null` allowed for conversational turns
+- malformed text remains visible with warning metadata
+- chat motion calls only motion engine API
+
+Manual checks:
+
+- Ollama unavailable is clear
+- valid local model can chat
+- malformed response shows visible warning instead of replacing the message entirely
+- motion starts on first appropriate motion request
+
+## Done Criteria
+
+- Chat can drive motion through deterministic targets.
+- LLM cannot issue raw transport commands.
+- Malformed responses remain visible with a warning indicator.
+- Model errors do not enter chat history as assistant dialogue.
+
+## Out Of Scope
+
+- long-term memory
+- modes
+- voice
+
+# Phase 10: Memory And Prompt Management
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 10: implement long-term memory, individual memory removal, prompt sets, prompt library UI, memory import/export basics, and tests.`
+
+## Objective
+
+Add model personalization and prompt management in a maintainable way.
+
+## Scope
+
+Implement:
+
+- memory store
+- enable/disable saved memories
+- individual memory removal
+- memory clear all
+- prompt sets
+- prompt set create/edit/delete/select
+- prompt anatomy/persona fields if not already present
+- UI for model/prompt/memory settings
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual checks:
+
+- add memory
+- remove individual memory
+- clear memories
+- disable memories and verify prompt excludes them
+- prompt set selection persists
+
+## Done Criteria
+
+- Memory is transparent and manageable.
+- Prompt sets are editable without modifying code.
+- Defaults are protected from accidental destructive edits.
+
+## Out Of Scope
+
+- voice
+- advanced mode planners
+
+# Phase 11: Modes As Motion Clients
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 11: implement Freestyle and normal chat continuous mode as clients of the motion engine, with traceable planner decisions and no separate motion pathway.`
+
+## Objective
+
+Introduce autonomous motion behavior without recreating the old split motion architecture.
+
+## Scope
+
+Implement:
+
+- Freestyle MVP
+- normal chat continuous keep-moving behavior
+- planner decision type
+- planner trace rows
+- mode start/stop API
+- mode UI controls
+- mode feedback path if scoped
+
+Rules:
+
+- modes produce semantic targets/plans
+- modes do not call transport directly
+- modes do not replace streams every few seconds without retargeting safeguards
+- no legacy morph behavior unless explicitly redesigned and validated
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual checks:
+
+- Freestyle starts and keeps moving
+- chat mode keeps moving until stop
+- mode changes are traceable
+- stop interrupts modes
+- settings changes apply during modes
+
+## Done Criteria
+
+- Modes use only the motion engine API.
+- Continuous mode does not stop between chat turns.
+- Freestyle does not hard reset on routine changes.
+- Planner decisions are visible in diagnostics.
+
+## Out Of Scope
+
+- Edge/Milk legacy parity unless explicitly requested
+- pattern library authoring UI
+- voice
+
+# Phase 12: Voice Worker Boundary
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 12: implement the optional voice worker protocol, worker lifecycle management, voice status UI, and a stub worker; do not bundle heavy ML models yet.`
+
+## Objective
+
+Add voice architecture without pulling Python ML dependency instability into the Go core.
+
+## Scope
+
+Implement:
+
+- worker protocol version
+- worker process lifecycle
+- health/status messages
+- request/response envelope
+- cancellation
+- timeout handling
+- queue depth status
+- crash status
+- stub TTS worker
+- stub ASR worker
+- UI status for missing/unloaded workers
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual checks:
+
+- app runs without workers
+- stub worker can be started/stopped
+- worker crash is visible
+- cancellation works for stub request
+
+## Done Criteria
+
+- Voice is optional.
+- Worker protocol is versioned and tested.
+- Core app remains usable without Python.
+
+## Out Of Scope
+
+- Chatterbox implementation
+- faster-whisper implementation
+- Parakeet implementation
+- CUDA setup scripts
+
+# Phase 13: Voice Feature Implementations
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 13: implement one real voice worker path at a time, starting with the lowest-risk provider, while keeping the core app functional without voice installed.`
+
+## Objective
+
+Add real voice capabilities incrementally behind the worker boundary.
+
+## Scope
+
+Pick one provider per PR/subphase:
+
+- hosted/ElevenLabs-style TTS client if desired
+- local Chatterbox worker
+- faster-whisper worker
+- Parakeet worker
+
+Each provider must include:
+
+- setup documentation
+- load/unload behavior
+- status diagnostics
+- queue/cancellation behavior
+- failure messages that do not crash the core app
+
+## Validation
+
+Provider-specific tests plus:
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual checks:
+
+- missing dependency is reported clearly
+- provider loads when installed
+- generation/transcription can be cancelled
+- queue depth is visible
+- app still works when provider fails
+
+## Done Criteria
+
+- At least one real voice provider works behind the protocol.
+- No Python ML dependency is required for the core app to start.
+
+## Out Of Scope
+
+- making all voice providers parity-complete in one phase
+
+# Phase 14: Pattern Library, Programs, And Authoring
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 14: implement motion pattern library, program/funscript import, pattern playback through the motion engine, and a simplified pattern authoring UI with sane point simplification/interpolation.`
+
+## Objective
+
+Bring authored content into the new motion architecture without recreating the old pattern playback pitfalls.
+
+## Scope
+
+Implement:
+
+- built-in pattern data format
+- user pattern registry
+- program/funscript registry
+- import/export
+- pattern playback through motion engine
+- authoring canvas
+- drawing simplification
+- interpolation controls
+- preview based on backend sampler
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual checks:
+
+- import pattern/program
+- play pattern
+- draw simple pattern
+- simplification does not flatten pattern unexpectedly
+- drawing is clipped or constrained visibly
+- preview matches playback semantics
+
+## Done Criteria
+
+- Authored content routes through shared motion engine.
+- Drawn patterns are sparse, editable, and interpolated.
+- Programs are not confused with short loop patterns.
+
+## Out Of Scope
+
+- LLM-curated pattern sequencing unless explicitly included
+
+# Phase 15: Migration From StrokeGPT-ReVibed
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 15: implement import tools for StrokeGPT-ReVibed settings, memories, prompt sets, motion patterns, and programs, with a compatibility report and tests.`
+
+## Objective
+
+Let users migrate without manually copying files or guessing what carried over.
+
+## Scope
+
+Implement import for:
+
+- `my_settings.json`
+- memories
+- prompt sets
+- motion patterns
+- programs/funscripts
+- selected assets if safe
+
+Include:
+
+- dry-run mode
+- compatibility report
+- unsupported-field report
+- rollback or non-destructive import behavior
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual checks:
+
+- import sample old settings
+- imported settings appear in UI
+- unsupported fields are reported
+- secrets are handled safely
+
+## Done Criteria
+
+- Migration is non-destructive.
+- Users get a clear report.
+- Tests cover representative old settings files.
+
+## Out Of Scope
+
+- exact behavioral parity for every legacy setting
+
+# Phase 16: Packaging And Release Pipeline
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 16: create Windows release packaging, portable zip output, version metadata, release docs, and a decision record for signing and auto-update.`
+
+## Objective
+
+Make MagicHandy distributable as a core binary app.
+
+## Scope
+
+Implement:
+
+- Windows binary build
+- portable zip
+- embedded web assets
+- default config/data directory behavior
+- version command/endpoint
+- release GitHub Actions workflow
+- release notes template
+- signing decision doc
+- auto-update decision doc
+- worker bundle strategy doc
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+go build ./cmd/magichandy
+```
+
+Manual checks:
+
+- unzip release
+- run app from clean directory
+- app creates config/data directories correctly
+- no source checkout required
+
+## Done Criteria
+
+- A user can download and run the core app without Python.
+- Release artifact includes license and README.
+- Optional voice worker setup is documented separately.
+
+## Out Of Scope
+
+- production code signing unless credentials/process already exist
+- auto-update implementation unless explicitly approved
+
+# Phase 17: Parity Review And Default-App Decision
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 17: compare MagicHandy against StrokeGPT-ReVibed, document remaining gaps, run real-device and packaging checks, and recommend whether MagicHandy is ready to become the default app.`
+
+## Objective
+
+Make an explicit product decision instead of allowing the rewrite to drift indefinitely.
+
+## Scope
+
+Review:
+
+- motion reliability
+- transport diagnostics
+- chat behavior
+- mode behavior
+- voice status
+- settings coverage
+- migration coverage
+- packaging quality
+- known gaps
+
+Produce:
+
+- `docs/parity-review.md`
+- `docs/default-app-readiness.md`
+- GitHub issues for remaining gaps
+- recommendation: default, continue parallel, freeze, or backport/abandon
+
+## Validation
+
+Run full project validation plus real-device checklist.
+
+## Done Criteria
+
+- Gaps are explicit.
+- Recommendation is concrete.
+- If not ready, next milestones are clear.
+- If ready, criteria for freezing StrokeGPT-ReVibed are documented.
+
+## Out Of Scope
+
+- fixing every gap discovered during review
+
+# Cross-Phase Testing Requirements
+
+Every implementation phase should run:
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+When frontend is touched, also run browser/UI tests once they exist.
+
+When transport or motion behavior is touched, update trace/golden tests.
+
+When real-device behavior is touched, capture:
+
+- exact scenario
+- transport mode
+- firmware/API mode
+- command latency summary
+- trace export
+- observed behavior
+- what was intentionally not changed
+
+# Parity And Kill Milestones
+
+## Motion Core Milestone
+
+MagicHandy motion becomes eligible to replace StrokeGPT-ReVibed motion when:
+
+- manual motion works on real hardware
+- area focus works while already moving
+- settings changes apply immediately while moving
+- no regular stop/go behavior occurs during retargets
+- trace diagnostics explain failures
+
+## App Default Milestone
+
+MagicHandy becomes eligible as the recommended app when:
+
+- chat plus motion works end-to-end
+- settings import works
+- emergency stop is reliable
+- basic diagnostics are present
+- packaging produces a usable Windows binary
+
+## Freeze Decision
+
+Once MagicHandy reaches the app default milestone, decide whether to:
+
+- freeze StrokeGPT-ReVibed except for critical fixes
+- continue both temporarily
+- backport the motion core idea and abandon the full rewrite
+
+# Implementation Rule
+
+Do not start by porting every feature. Start with a better motion and transport foundation, preserve the hard-won HSP constraints as tests, validate on real hardware early, then make chat and modes call into the new core.
