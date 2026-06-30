@@ -37,7 +37,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags := flag.NewFlagSet("magichandy", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 
-	addr := flags.String("addr", defaults.Server.Address, "HTTP listen address")
+	addr := flags.String("addr", "", "HTTP listen address override")
+	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
 	logLevel := flags.String("log-level", "info", "structured log level: debug, info, warn, or error")
 	showVersion := flags.Bool("version", false, "print version and exit")
 
@@ -55,7 +56,22 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	logger := logging.New(stderr, level)
 
-	api, err := httpapi.New(web.FS(), logger, httpapi.VersionInfo{
+	resolvedDataDir, err := config.ResolveDataDir(*dataDir)
+	if err != nil {
+		return err
+	}
+	store, err := config.OpenStore(resolvedDataDir)
+	if err != nil {
+		return err
+	}
+	settings, loadStatus := store.Snapshot()
+	if loadStatus.Recovered {
+		logger.Warn("settings recovered with defaults", "source", loadStatus.Source, "message", loadStatus.Message)
+	} else if loadStatus.UsingDefaults {
+		logger.Info("settings using defaults", "data_dir", loadStatus.DataDir)
+	}
+
+	api, err := httpapi.New(web.FS(), logger, store, httpapi.VersionInfo{
 		Version: version,
 		Commit:  commit,
 	})
@@ -63,8 +79,16 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return err
 	}
 
+	listenAddr := defaults.Server.Address
+	if settings.Server.Port != 0 {
+		listenAddr = fmt.Sprintf("127.0.0.1:%d", settings.Server.Port)
+	}
+	if *addr != "" {
+		listenAddr = *addr
+	}
+
 	server := &http.Server{
-		Addr:              *addr,
+		Addr:              listenAddr,
 		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

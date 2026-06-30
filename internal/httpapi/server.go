@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
 const serviceName = "magichandy"
@@ -22,19 +25,23 @@ type VersionInfo struct {
 	Commit  string
 }
 
-// Server owns the Phase 1 HTTP routes and embedded static asset serving.
+// Server owns the local HTTP routes and embedded static asset serving.
 type Server struct {
 	static  fs.FS
 	logger  *slog.Logger
+	store   *config.Store
 	started time.Time
 	version VersionInfo
 	handler http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.
-func New(static fs.FS, logger *slog.Logger, version VersionInfo) (*Server, error) {
+func New(static fs.FS, logger *slog.Logger, store *config.Store, version VersionInfo) (*Server, error) {
 	if static == nil {
 		return nil, errors.New("static filesystem is required")
+	}
+	if store == nil {
+		return nil, errors.New("settings store is required")
 	}
 	if logger == nil {
 		logger = slog.Default()
@@ -43,6 +50,7 @@ func New(static fs.FS, logger *slog.Logger, version VersionInfo) (*Server, error
 	server := &Server{
 		static:  static,
 		logger:  logger,
+		store:   store,
 		started: time.Now().UTC(),
 		version: version,
 	}
@@ -62,6 +70,9 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
+	mux.HandleFunc("GET /api/state", s.handleState)
+	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
 
@@ -76,18 +87,95 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
+	settings, status := s.store.PublicSnapshot()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"service":        serviceName,
 		"version":        s.version.Version,
 		"commit":         s.version.Commit,
 		"uptime_seconds": int64(time.Since(s.started).Seconds()),
 		"ui":             "embedded",
+		"settings": map[string]any{
+			"source":         status.Source,
+			"using_defaults": status.UsingDefaults,
+			"recovered":      status.Recovered,
+			"migrated":       status.Migrated,
+			"version":        settings.Version,
+		},
 		"features": map[string]string{
 			"chat":      "not_implemented",
 			"motion":    "not_implemented",
 			"transport": "not_implemented",
 			"voice":     "not_implemented",
 		},
+	})
+}
+
+func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
+	settings, status := s.store.PublicSnapshot()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service":        serviceName,
+		"version":        s.version.Version,
+		"commit":         s.version.Commit,
+		"uptime_seconds": int64(time.Since(s.started).Seconds()),
+		"data_dir":       status.DataDir,
+		"settings_path":  status.SettingsPath,
+		"settings":       settings,
+		"settings_status": map[string]any{
+			"source":         status.Source,
+			"using_defaults": status.UsingDefaults,
+			"recovered":      status.Recovered,
+			"migrated":       status.Migrated,
+			"message":        status.Message,
+			"loaded_at":      status.LoadedAt,
+		},
+		"features": map[string]string{
+			"chat":      "not_implemented",
+			"motion":    "not_implemented",
+			"transport": "not_implemented",
+			"voice":     "not_implemented",
+		},
+		"motion": map[string]string{
+			"state": "not_implemented",
+		},
+		"transport": map[string]string{
+			"state":              "not_configured",
+			"hsp_dispatch_owner": settings.Device.HSPDispatchOwner,
+		},
+	})
+}
+
+func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
+	settings, status := s.store.PublicSnapshot()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"settings": settings,
+		"status":   status,
+	})
+}
+
+func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
+	var update config.SettingsUpdate
+	if err := decodeJSON(r, &update); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	current, _ := s.store.Snapshot()
+	next, err := current.ApplyUpdate(update)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	saved, err := s.store.Save(next)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("settings could not be saved"))
+		return
+	}
+
+	_, status := s.store.Snapshot()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"settings": saved.Public(),
+		"status":   status,
 	})
 }
 
@@ -139,6 +227,29 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		panic(fmt.Errorf("encode JSON response: %w", err))
 	}
+}
+
+func writeError(w http.ResponseWriter, status int, err error) {
+	writeJSON(w, status, map[string]string{
+		"error": err.Error(),
+	})
+}
+
+func decodeJSON(r *http.Request, target any) error {
+	defer func() {
+		_ = r.Body.Close()
+	}()
+
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 64*1024))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("decode JSON request: %w", err)
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("decode JSON request: multiple JSON values are not allowed")
+	}
+	return nil
 }
 
 type statusRecorder struct {

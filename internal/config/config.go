@@ -1,5 +1,5 @@
-// Package config defines startup defaults and future configuration loading
-// entry points.
+// Package config defines startup defaults, versioned settings, and durable
+// settings storage.
 package config
 
 const defaultAddress = "127.0.0.1:49717"

@@ -31,16 +31,99 @@
       <button class="stop-button" id="stop-button" type="button">Stop</button>
     </header>
 
-    <main class="shell">
-      <section class="hero-band" aria-labelledby="app-title">
-        <div>
-          <p class="eyebrow">Local core shell</p>
-          <h1 id="app-title">MagicHandy</h1>
-          <p class="summary">
-            The Go core is running with embedded assets and health checks.
-          </p>
+    <main class="app-shell">
+      <section class="settings-surface" aria-labelledby="settings-title">
+        <div class="section-heading">
+          <p class="eyebrow">Settings</p>
+          <h1 id="settings-title">Core Settings</h1>
         </div>
-        <dl class="runtime-list" aria-label="Runtime status">
+
+        <form class="settings-form" id="settings-form">
+          <fieldset>
+            <legend>Server</legend>
+            <label>
+              <span>Port</span>
+              <input id="server-port" name="server-port" type="number" min="1" max="65535" inputmode="numeric">
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Device</legend>
+            <label>
+              <span>HSP dispatch owner</span>
+              <select id="dispatch-owner" name="dispatch-owner"></select>
+            </label>
+            <label>
+              <span>Firmware/API requirement</span>
+              <input id="firmware-requirement" name="firmware-requirement" type="text" readonly>
+            </label>
+            <label>
+              <span>API application ID source</span>
+              <select id="app-id-source" name="app-id-source"></select>
+            </label>
+            <label>
+              <span>Developer application ID</span>
+              <input id="app-id-override" name="app-id-override" type="text" autocomplete="off">
+            </label>
+            <label>
+              <span>Handy connection key</span>
+              <input id="connection-key" name="connection-key" type="password" autocomplete="off">
+            </label>
+            <label class="inline-control">
+              <input id="clear-connection-key" name="clear-connection-key" type="checkbox">
+              <span>Clear connection key</span>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Motion Defaults</legend>
+            <div class="field-pair">
+              <label>
+                <span>Speed min</span>
+                <input id="speed-min" name="speed-min" type="number" min="1" max="100" inputmode="numeric">
+              </label>
+              <label>
+                <span>Speed max</span>
+                <input id="speed-max" name="speed-max" type="number" min="1" max="100" inputmode="numeric">
+              </label>
+            </div>
+            <div class="field-pair">
+              <label>
+                <span>Stroke min</span>
+                <input id="stroke-min" name="stroke-min" type="number" min="0" max="100" inputmode="numeric">
+              </label>
+              <label>
+                <span>Stroke max</span>
+                <input id="stroke-max" name="stroke-max" type="number" min="0" max="100" inputmode="numeric">
+              </label>
+            </div>
+            <label class="inline-control">
+              <input id="reverse-direction" name="reverse-direction" type="checkbox">
+              <span>Reverse direction</span>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Diagnostics</legend>
+            <label>
+              <span>Verbosity</span>
+              <select id="diagnostics-verbosity" name="diagnostics-verbosity"></select>
+            </label>
+          </fieldset>
+
+          <div class="form-actions">
+            <button class="primary-button" id="save-settings" type="submit">Save</button>
+            <span class="form-status" id="settings-status" role="status" aria-live="polite">Not loaded</span>
+          </div>
+        </form>
+      </section>
+
+      <aside class="state-surface" aria-labelledby="state-title">
+        <div class="section-heading">
+          <p class="eyebrow">State</p>
+          <h2 id="state-title">Snapshot</h2>
+        </div>
+        <dl class="diagnostic-grid">
           <div>
             <dt>Core</dt>
             <dd id="runtime-core">Pending</dd>
@@ -50,6 +133,10 @@
             <dd id="runtime-ui">Embedded</dd>
           </div>
           <div>
+            <dt>Settings</dt>
+            <dd id="runtime-settings">Pending</dd>
+          </div>
+          <div>
             <dt>Motion</dt>
             <dd id="runtime-motion">Not implemented</dd>
           </div>
@@ -57,15 +144,10 @@
             <dt>Transport</dt>
             <dd id="runtime-transport">Not implemented</dd>
           </div>
-        </dl>
-      </section>
-
-      <section class="content-band" aria-labelledby="diagnostics-title">
-        <div class="section-heading">
-          <p class="eyebrow">Diagnostics</p>
-          <h2 id="diagnostics-title">Core Status</h2>
-        </div>
-        <dl class="diagnostic-grid">
+          <div>
+            <dt>Connection key</dt>
+            <dd id="connection-key-state">Not set</dd>
+          </div>
           <div>
             <dt>Version</dt>
             <dd id="version-value">dev</dd>
@@ -83,7 +165,7 @@
             <dd id="health-value">Pending</dd>
           </div>
         </dl>
-      </section>
+      </aside>
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
