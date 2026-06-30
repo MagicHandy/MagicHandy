@@ -1,4 +1,4 @@
-﻿# ADR 0001: Go-First Core
+# ADR 0001: Go-First Core
 
 ## Status
 
@@ -8,7 +8,7 @@ Accepted for the rewrite plan.
 
 MagicHandy is a ground-up rewrite of StrokeGPT-ReVibed. The current app has accumulated a large Python backend, a browser UI, optional Python ML dependencies, and a motion stack with many hard-won real-device constraints. The rewrite is being pursued for maintainability, cleaner long-running architecture, future binary releases, and lower non-ML baseline overhead.
 
-The rewrite is not based on the claim that Go will make Handy cloud REST latency disappear, reduce Ollama model memory, reduce CUDA model memory, or automatically make motion smooth. Motion quality must come from better motion semantics, retargeting, transport scheduling, diagnostics, and real-device validation.
+The rewrite is not based on the claim that Go will make Handy cloud REST latency disappear, reduce local LLM model memory, reduce CUDA model memory, or automatically make motion smooth. Motion quality must come from better motion semantics, retargeting, transport scheduling, diagnostics, and real-device validation.
 
 ## Decision
 
@@ -19,7 +19,7 @@ The Go core owns:
 - app process lifecycle
 - HTTP API and local UI serving
 - settings and migrations
-- chat orchestration and Ollama transport
+- chat orchestration, local LLM provider selection, managed llama.cpp runner lifecycle, and Ollama compatibility
 - deterministic motion engine
 - Handy transport scheduling and diagnostics
 - mode planners
@@ -28,7 +28,7 @@ The Go core owns:
 
 The Go core does not require Python to start, serve the UI, load settings, control motion, or run diagnostics.
 
-Python remains acceptable for optional ML-heavy workers, especially Chatterbox, faster-whisper, Parakeet, Torch, CUDA, or other model runtimes that are impractical to port early.
+Python remains acceptable for optional ML-heavy workers, especially Chatterbox, faster-whisper, Parakeet, Torch, CUDA, or other model runtimes that are impractical to port early. Local LLM runtimes may also be external processes: llama.cpp is the primary quality-first Windows/NVIDIA target, and Ollama remains a secondary cross-platform compatibility provider.
 
 ## Why Go
 
@@ -60,7 +60,7 @@ Rust is attractive for motion math and transport correctness, but it is a larger
 
 - Handy cloud REST round-trip latency.
 - Remote API behavior or device firmware behavior.
-- Ollama model memory usage.
+- Ollama or llama.cpp model memory usage.
 - CUDA context/model memory usage.
 - Chatterbox/faster-whisper/Parakeet dependency complexity when those workers are installed.
 - Motion smoothness without a better retargeting and transport model.
@@ -86,3 +86,4 @@ Negative:
 - Keep the core sidecar-compatible so the current Python app can drive it during validation if that reduces risk.
 - Do not port legacy architecture blindly.
 - Treat real-device validation as a required milestone before broad feature parity.
+- Do not link libllama into the core binary for the early implementation; keep llama.cpp behind an external runner boundary. See ADR 0005.

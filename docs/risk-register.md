@@ -1,4 +1,4 @@
-﻿# MagicHandy Risk Register
+# MagicHandy Risk Register
 
 ## Purpose
 
@@ -122,7 +122,7 @@ Exit evidence:
 Level: Medium
 
 Description:
-Binary release expectations can expand to installers, code signing, auto-update, and bundled optional workers.
+Binary release expectations can expand to installers, code signing, auto-update, bundled optional workers, and bundled or downloadable llama.cpp runner variants.
 
 Mitigation:
 
@@ -230,3 +230,28 @@ Exit evidence:
 
 - minimal UI built without a ported god-registry; `web/` respects size norms;
   parity review documents remaining UI gaps
+
+## R13: llama.cpp Runner And Model Management Risk
+
+Level: High
+
+Description:
+MagicHandy is intentionally making llama.cpp the quality-first Windows/NVIDIA LLM path. That improves control over model choice and runtime behavior, but it also makes runner packaging, CUDA compatibility, model downloads, GGUF metadata, disk usage, licenses, and hardware-fit reporting part of the product. A broken runner or unclear model manager can make the primary chat path harder to use than Ollama.
+
+Mitigation:
+
+- keep the Go core pure-Go and manage llama.cpp as an external `llama-server` process
+- pin runner builds and record compatibility metadata
+- start with a small curated GGUF catalog instead of an open-ended model zoo
+- support importing a local GGUF without forcing a download
+- require explicit download confirmation with visible size, license, checksum, and expected hardware fit
+- verify downloads before install and move files atomically
+- keep Ollama available as the secondary cross-platform provider
+- surface runner stderr, health, model-load errors, and hardware-fit warnings in diagnostics
+
+Exit evidence:
+
+- Phase 9 can load and chat with a GGUF model on a supported Windows/NVIDIA setup
+- Ollama still works as the secondary provider
+- startup/status checks do not download models
+- model install/import/load/unload paths are tested and documented

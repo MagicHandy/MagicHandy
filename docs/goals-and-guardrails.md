@@ -24,7 +24,7 @@ machine, for StrokeGPT-ReVibed:
 - core active RSS: continuous motion running, no ML worker
 
 Record the actual numbers in Phase 1 notes. The Go targets are starting points
-to refine against that baseline (all exclude Ollama, CUDA, TTS, and ASR, which
+to refine against that baseline (all exclude Ollama, llama.cpp runner processes, CUDA, TTS, and ASR, which
 run as separate processes):
 
 - core idle RSS: target < 40 MB
@@ -48,7 +48,7 @@ Record measurements in `docs/perf-baseline.md` rather than only in PR notes. Eac
 - optional peak RSS during startup or first motion
 - notes for unusual local state
 
-On Windows, prefer process RSS from the app process itself (`WorkingSet64`) and record child processes separately. Do not include Ollama, CUDA model workers, TTS, ASR, browser, or test runners in the core number. Take at least three samples after warmup and record the steady range, not a single lucky low number.
+On Windows, prefer process RSS from the app process itself (`WorkingSet64`) and record child processes separately. Do not include Ollama, llama.cpp runner processes, CUDA model workers, TTS, ASR, browser, or test runners in the core number. Take at least three samples after warmup and record the steady range, not a single lucky low number.
 
 Targets are budgets, not proof. If a phase exceeds a budget, either fix it or record the reason and a follow-up risk. Do not silently relax targets in the same PR that misses them.
 
@@ -69,6 +69,19 @@ Decide explicitly rather than defaulting to Windows-only:
 - primary release: `windows/amd64`
 - best-effort builds: `linux/amd64`, `darwin/arm64`, `darwin/amd64`
 - cross-builds must stay free, which requires the pure-Go rule below
+
+### Local LLM Runtime Strategy
+
+Quality comes first for the main local model path:
+
+- primary LLM pathway: managed llama.cpp for Windows/NVIDIA systems
+- secondary LLM pathway: Ollama for cross-platform compatibility and users who already manage models externally
+- the Go core talks to llama.cpp as an external runner, not through CGo/libllama
+- model downloads are explicit user actions with visible size, license, checksum, and disk-use information
+- startup/status checks must not trigger multi-GB model downloads
+- provider fallback is visible state, not a silent mid-session switch
+
+Measure model-runtime memory separately from core RSS. A lower Go core memory number is not evidence that a loaded GGUF, Ollama model, or CUDA context is smaller.
 
 ## Maintainability Guardrails
 

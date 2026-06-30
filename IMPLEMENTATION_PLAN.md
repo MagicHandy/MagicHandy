@@ -8,6 +8,8 @@ The rewrite is justified by maintainability, cleaner architecture, future binary
 
 Python may still exist behind optional worker boundaries for Chatterbox, faster-whisper, Parakeet, Torch, CUDA, or other ML-heavy features. Those dependencies should not define the core app install path.
 
+Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway for cross-platform compatibility, users who already manage models through Ollama, and non-Windows/non-NVIDIA systems. See `docs/decisions/0005-local-llm-runtime.md` and `docs/model-management.md`.
+
 ## Rewrite Guardrails
 
 - Do not start by porting every feature.
@@ -49,7 +51,7 @@ MagicHandy/
   internal/config/         settings, migrations, defaults
   internal/httpapi/        REST, SSE, and WebSocket routes
   internal/chat/           chat sessions, streaming, malformed response handling
-  internal/llm/            Ollama client, prompts, JSON repair
+  internal/llm/            provider interface, llama.cpp runner, Ollama adapter, prompts, JSON repair
   internal/motion/         semantic targets, pattern engine, sampler, retargeting
   internal/transport/      Handy cloud REST, HSP/HAMP/HDSP, Bluetooth bridge contract
   internal/modes/          freestyle, auto, edging, milking successors
@@ -82,12 +84,14 @@ Required docs:
 - `docs/decisions/0002-motion-transport-contract.md`
 - `docs/decisions/0003-voice-worker-boundary.md`
 - `docs/decisions/0004-frontend-strategy.md`
+- `docs/decisions/0005-local-llm-runtime.md`
 - `docs/goals-and-guardrails.md`
 - `docs/ui-design.md`
 - `docs/motion-retargeting.md`
 - `docs/hsp-v4-invariants.md`
 - `docs/bluetooth-ownership.md`
 - `docs/risk-register.md`
+- `docs/model-management.md`
 
 ## Required Content
 
@@ -121,6 +125,14 @@ Required docs:
 - no global mutable client god-registry
 - command/state model and active-controller/read-only-client rules
 - no required runtime build step for users
+
+`0005-local-llm-runtime.md`:
+
+- llama.cpp as the quality-first Windows/NVIDIA local LLM path
+- Ollama as the secondary cross-platform compatibility path
+- external `llama-server` process instead of CGo/libllama in the core
+- provider contract, runner lifecycle, and explicit model management
+- no surprise model downloads or hidden runtime fallback
 
 `goals-and-guardrails.md`:
 
@@ -180,6 +192,15 @@ Required docs:
 - packaging/signing risk
 - unmeasured rewrite-goal risk
 - frontend debt carryover risk
+- llama.cpp runner and model-management risk
+
+`model-management.md`:
+
+- curated model catalog and GGUF metadata
+- explicit download/import/load/unload flow
+- llama.cpp runner compatibility and hardware-fit checks
+- Ollama model handling as secondary provider support
+- disk usage, checksums, licenses, and failure recovery
 
 ## Validation
 
@@ -281,7 +302,7 @@ Manual check:
 - settings persistence
 - real Handy transport
 - motion engine
-- Ollama chat
+- local LLM chat
 - voice workers
 
 # Phase 2: Config, Settings, And App State
@@ -346,7 +367,7 @@ Manual check:
 
 - Handy connection attempts
 - motion commands
-- Ollama
+- local LLM providers
 - voice
 - migration from StrokeGPT-ReVibed settings
 
@@ -570,7 +591,7 @@ Tests should cover:
 ## Out Of Scope
 
 - real-device retarget proof
-- Ollama
+- local LLM providers
 - UI beyond minimal manual controls if helpful
 
 # Phase 7: Motion Retargeting And Real-Device Validation
@@ -678,27 +699,33 @@ Browser/manual checks:
 
 ## Out Of Scope
 
-- Ollama chat
+- local LLM chat
 - voice
 - full settings parity
 
-# Phase 9: Ollama Chat Integration
+# Phase 9: Local LLM Provider Integration
 
 ## Suggested `/goal`
 
-`/goal Complete MagicHandy Phase 9: implement Ollama chat, streaming responses, strict JSON contract, repair pass, malformed-response UI indicator, prompt sets, and chat-driven motion through the motion engine only.`
+`/goal Complete MagicHandy Phase 9: implement the local LLM provider layer with llama.cpp as the primary Windows/NVIDIA path, Ollama as the secondary cross-platform path, streaming chat, strict JSON contract, repair pass, malformed-response UI indicator, prompt sets, and chat-driven motion through the motion engine only.`
 
 ## Objective
 
-Add chat without letting the LLM bypass deterministic motion control.
+Add chat without letting the LLM bypass deterministic motion control. Prioritize response quality and runtime control by making managed llama.cpp the first-class local model path on Windows/NVIDIA systems, while keeping Ollama as the compatibility provider for users and platforms where llama.cpp packaging is not the right default.
 
 ## Scope
 
 Implement:
 
-- Ollama client
-- model availability/status endpoint
-- streaming chat endpoint
+- LLM provider interface shared by llama.cpp and Ollama
+- managed llama.cpp `llama-server` runner for Windows/NVIDIA
+- pinned runner metadata and compatibility checks
+- GGUF model registry with curated quality-first defaults
+- explicit model download/import/load/unload flow
+- model size, license, checksum, context, quantization, and hardware-fit metadata
+- OpenAI-compatible streaming chat client for llama.cpp
+- Ollama adapter as the secondary provider path
+- provider availability/status endpoint
 - response schema
 - JSON repair pass
 - malformed response warning metadata
@@ -716,24 +743,32 @@ go test -race ./...
 
 Tests should cover:
 
+- provider contract behavior for llama.cpp and Ollama adapters
+- managed runner launch/health/error-state handling with a fake runner
 - valid response parsing
 - malformed response handling
 - repair pass behavior
 - `move: null` allowed for conversational turns
 - malformed text remains visible with warning metadata
 - chat motion calls only motion engine API
+- no surprise model downloads during startup or provider status checks
 
 Manual checks:
 
-- Ollama unavailable is clear
-- valid local model can chat
+- llama.cpp unavailable is clear and actionable
+- a supported Windows/NVIDIA llama.cpp setup can load a GGUF model and chat
+- Ollama unavailable is clear when Ollama is selected
+- valid Ollama model can chat as the secondary path
 - malformed response shows visible warning instead of replacing the message entirely
 - motion starts on first appropriate motion request
 
 ## Done Criteria
 
 - Chat can drive motion through deterministic targets.
+- llama.cpp is the primary documented local LLM path for Windows/NVIDIA.
+- Ollama remains available as the secondary cross-platform provider.
 - LLM cannot issue raw transport commands.
+- Model downloads are explicit and user-confirmed.
 - Malformed responses remain visible with a warning indicator.
 - Model errors do not enter chat history as assistant dialogue.
 
@@ -742,6 +777,7 @@ Manual checks:
 - long-term memory
 - modes
 - voice
+- bundling every llama.cpp acceleration backend in the first pass
 
 # Phase 10: Memory And Prompt Management
 
