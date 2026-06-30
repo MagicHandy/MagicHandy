@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>MagicHandy</title>
+    <link rel="stylesheet" href="/app.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="control-bar" aria-label="Device state">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">MagicHandy</span>
+      </div>
+
+      <div class="status-pill" data-state="pending">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="core-status">Checking core</span>
+      </div>
+
+      <div class="visualizer" aria-label="Motion state">
+        <span class="visualizer-track" aria-hidden="true">
+          <span class="visualizer-range"></span>
+          <span class="visualizer-position"></span>
+        </span>
+        <span id="motion-state">Idle</span>
+      </div>
+
+      <button class="stop-button" id="stop-button" type="button">Stop</button>
+    </header>
+
+    <main class="shell">
+      <section class="hero-band" aria-labelledby="app-title">
+        <div>
+          <p class="eyebrow">Local core shell</p>
+          <h1 id="app-title">MagicHandy</h1>
+          <p class="summary">
+            The Go core is running with embedded assets and health checks.
+          </p>
+        </div>
+        <dl class="runtime-list" aria-label="Runtime status">
+          <div>
+            <dt>Core</dt>
+            <dd id="runtime-core">Pending</dd>
+          </div>
+          <div>
+            <dt>UI</dt>
+            <dd id="runtime-ui">Embedded</dd>
+          </div>
+          <div>
+            <dt>Motion</dt>
+            <dd id="runtime-motion">Not implemented</dd>
+          </div>
+          <div>
+            <dt>Transport</dt>
+            <dd id="runtime-transport">Not implemented</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="content-band" aria-labelledby="diagnostics-title">
+        <div class="section-heading">
+          <p class="eyebrow">Diagnostics</p>
+          <h2 id="diagnostics-title">Core Status</h2>
+        </div>
+        <dl class="diagnostic-grid">
+          <div>
+            <dt>Version</dt>
+            <dd id="version-value">dev</dd>
+          </div>
+          <div>
+            <dt>Commit</dt>
+            <dd id="commit-value">unknown</dd>
+          </div>
+          <div>
+            <dt>Uptime</dt>
+            <dd id="uptime-value">0s</dd>
+          </div>
+          <div>
+            <dt>Health</dt>
+            <dd id="health-value">Pending</dd>
+          </div>
+        </dl>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
