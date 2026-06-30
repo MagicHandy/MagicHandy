@@ -1,4 +1,4 @@
-﻿# ADR 0002: Motion And Transport Contract
+# ADR 0002: Motion And Transport Contract
 
 ## Status
 
@@ -27,7 +27,6 @@ Physical transport output includes:
 
 - HSP timed-point positions and timestamps
 - HSP stroke-window commands
-- HAMP/HDSP commands when explicitly selected
 - local reverse-direction mapping
 - physical speed/velocity limits where the selected transport requires them
 - transport command latency and recovery state
@@ -39,7 +38,7 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 - The LLM and mode planners can produce only semantic targets/plans, not raw Handy API commands.
 - Semantic speed remains an intent percent until transport encoding.
 - HSP encodes speed through timed-point spacing and point deltas.
-- HDSP/Flexible Position may need physical duration/velocity calculations, but those values do not feed back into semantic intent.
+- Transport code may calculate physical duration, lead time, or safety budgets, but those values never feed back into semantic intent.
 - Stroke range settings are physical envelope settings and are applied at the transport boundary.
 - Reverse direction is a physical orientation setting and is applied at the transport boundary.
 - Current semantic target is not inferred from the tail of a future HSP buffer.
@@ -54,6 +53,10 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 - Retarget active motion without hard resets when possible.
 - Annotate trace rows with source, reason, target, sampled position, and transport result.
 - Request transport recovery when device state reports paused, starved, rejected, or stale playback.
+- Run every motion source (chat, Freestyle, modes, trained patterns, imported
+  scripts) through one shared sampler/sanitizer; new sources produce semantic
+  targets, not parallel motion paths. See `docs/motion-retargeting.md`.
+- Never weaken hardware safety clamping (speed, range, step size) for convenience.
 
 ## Transport Responsibilities
 
@@ -61,7 +64,7 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 - Serialize commands according to the selected transport.
 - Send commands and capture safe diagnostics.
 - Never log or export secrets.
-- Report unavailable HSP instead of silently falling back to HDSP.
+- Report HSP unavailable with a clear, actionable error; there is no fallback transport (see ADR 0006).
 - Expose latest command status, latency, and device playback state.
 
 ## Emergency Stop Contract

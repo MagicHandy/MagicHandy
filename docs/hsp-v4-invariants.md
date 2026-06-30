@@ -1,4 +1,4 @@
-﻿# HSP v4 Invariants
+# HSP v4 Invariants
 
 ## Purpose
 
@@ -40,7 +40,7 @@ Test expectation:
 
 ## Invariant 4: Semantic Speed Is Not Physical Velocity Feedback
 
-LLM/user speed percent is intent. HSP timed-point spacing and point deltas encode motion speed for HSP streams. HDSP-style physical velocity calculations must not overwrite semantic speed and then feed back into the motion engine.
+LLM/user speed percent is intent. HSP timed-point spacing and point deltas encode motion speed for HSP streams. Physical velocity calculations must not overwrite semantic speed and then feed back into the motion engine.
 
 Test expectation:
 
@@ -74,13 +74,18 @@ Test expectation:
 - replacement phase selection considers current sampled position
 - generated bridge/handoff points do not snap to stale endpoint or phase-zero position without explicit recovery reason
 
-## Invariant 8: No Silent HDSP Fallback For HSP Prerequisite Failure
+## Invariant 8: HSP Unavailable Is A Clear Error, Not A Fallback
 
-If firmware v4/API v3/HSP prerequisites fail, the app should report HSP unavailable and let the user fix settings or choose legacy fallback explicitly.
+If firmware v4/API v3/HSP prerequisites fail, the app reports HSP unavailable with a clear, actionable error and does not move the device. There is no legacy fallback transport (see ADR 0006); the user fixes settings rather than being silently downgraded.
+
+The API v3 Application ID and the Handy connection key are distinct. The app may
+ship a public Application ID, but diagnostics still need to distinguish a missing,
+invalid, revoked, or overridden Application ID from a malformed user connection
+key. An Application ID failure is not a connection-key problem.
 
 Test expectation:
 
-- missing/invalid API v3 Application ID does not silently dispatch HDSP direct-position commands
+- missing/invalid API v3 Application ID reports HSP unavailable and dispatches no motion (there is no HDSP path)
 - malformed connection key reports a specific validation error
 - auth failure marks HSP unavailable
 
@@ -103,3 +108,23 @@ Test expectation:
 - diagnostics expose safe transport metadata
 - secrets are redacted
 - trace rows distinguish planner waits from transport/API rejection
+
+## Invariant 11: HSP Stream Replacement Sequencing
+
+Replacing the active stream (pattern swap, retarget) must reuse the active HSP
+session, not tear it down. Real Cloud HSP sessions reported stop/go playback
+after morphs when this was done wrong, and it recurred repeatedly.
+
+- bridge into an exact point at the active stream's replacement time
+- flush replacement points through the add path and update the tail threshold
+- do not replay play while firmware reports a healthy active stream
+- keep flushed replacement indexes and thresholds local to the newly added
+  buffer; do not carry old stream indexes into a flushed replacement
+- schedule the first replacement point far enough ahead to cover recent command
+  latency, or a healthy firmware clock skips the bridge points before they arrive
+
+Test expectation:
+
+- a replacement does not issue a new play on a stream firmware reports healthy
+- replacement indexes/threshold are buffer-local, not inherited from the old stream
+- the first replacement point's lead is at least the recent command-latency estimate

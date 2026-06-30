@@ -54,6 +54,23 @@ A TTS worker receives text and voice settings and returns audio chunks or a stru
 
 An ASR worker receives audio or a file/stream reference and returns transcript candidates plus confidence/metadata. It must be able to reject no-speech, silence, or low-confidence audio without sending empty transcripts into chat.
 
+## Message And Audio Delivery Ordering
+
+Voice output is coupled to chat delivery; the old app sometimes spoke a reply the
+chat panel never displayed. The core must keep these ordered:
+
+- chat text emit and TTS enqueue happen in lockstep: a reply that is spoken is
+  always also displayed
+- clients read chat from a shared log via per-client cursors, not a destructively
+  drained global queue, so one client cannot consume another's messages
+- audio playback uses a single-owner lease (the active controller) so multiple
+  clients never speak the same clip at once
+- model/transport errors return to the initiating client as a visible error and
+  stay out of chat history, TTS, motion, and persona/turn countdowns
+- do not expose more voice tuning controls by default before good defaults are
+  validated on real microphones; advanced controls stay collapsed or in
+  diagnostics
+
 ## Consequences
 
 Positive:

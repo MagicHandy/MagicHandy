@@ -82,6 +82,9 @@ One component, one source of truth.
   disconnected. A still frame is never ambiguous between "idle" and "stalled".
 - Reads engine state pushed from the backend (SSE/WebSocket). If state is stale
   it says so; it does not extrapolate a guessed position.
+- Distinguishes commanded/estimated position from device-confirmed position, and
+  never presents a planned point slope as a measured device speed; when only an
+  estimate is available, it is labeled as an estimate.
 - Exposes quick settings through an explicit, labeled control, not by turning
   the artwork itself into a mystery button.
 

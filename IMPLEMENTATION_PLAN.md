@@ -53,7 +53,7 @@ MagicHandy/
   internal/chat/           chat sessions, streaming, malformed response handling
   internal/llm/            provider interface, llama.cpp runner, Ollama adapter, prompts, JSON repair
   internal/motion/         semantic targets, pattern engine, sampler, retargeting
-  internal/transport/      Handy cloud REST, HSP/HAMP/HDSP, Bluetooth bridge contract
+  internal/transport/      Handy cloud REST + browser Bluetooth, HSP-only, bridge contract
   internal/modes/          freestyle, auto, edging, milking successors
   internal/diagnostics/    traces, setup checks, latency probes, bug-report bundles
   internal/audio/          voice-output queue, external TTS worker client
@@ -68,7 +68,7 @@ MagicHandy/
 
 ## Suggested `/goal`
 
-`/goal Complete MagicHandy Phase 0: write the decision records, measurable goals/guardrails, risk register, HSP invariants, motion retargeting spec, Bluetooth ownership decision, frontend strategy/UI design, and worker boundary spec. Do not implement app code yet.`
+`/goal Complete MagicHandy Phase 0: write the decision records, measurable goals/guardrails, risk register, HSP invariants, motion retargeting spec, Bluetooth ownership decision, frontend strategy/UI design, local LLM runtime strategy, legacy motion-path removal decision, and worker boundary spec. Do not implement app code yet.`
 
 ## Objective
 
@@ -85,6 +85,7 @@ Required docs:
 - `docs/decisions/0003-voice-worker-boundary.md`
 - `docs/decisions/0004-frontend-strategy.md`
 - `docs/decisions/0005-local-llm-runtime.md`
+- `docs/decisions/0006-drop-legacy-motion.md`
 - `docs/goals-and-guardrails.md`
 - `docs/ui-design.md`
 - `docs/motion-retargeting.md`
@@ -134,6 +135,14 @@ Required docs:
 - provider contract, runner lifecycle, and explicit model management
 - no surprise model downloads or hidden runtime fallback
 
+`0006-drop-legacy-motion.md`:
+
+- HSP-only transport family for MagicHandy
+- Cloud REST and browser Bluetooth as dispatch owners, not separate motion engines
+- no HAMP, HDSP, firmware v3, or finite-position fallback backend
+- no Legacy Auto / scripted Edge / scripted Milk ports
+- clear unsupported-device and HSP-unavailable behavior
+
 `goals-and-guardrails.md`:
 
 - measurable memory, binary, startup, and packaging targets
@@ -173,7 +182,7 @@ Required docs:
 - HSP timed-point spacing is the speed contract
 - same-pattern updates preserve phase
 - new-pattern replacements choose low-jump handoff phase
-- no silent HDSP fallback when HSP prerequisites fail
+- HSP unavailable is a clear error; no fallback transport exists (see ADR 0006)
 - active speed/stroke/direction settings refresh active motion immediately
 
 `bluetooth-ownership.md`:
@@ -193,6 +202,9 @@ Required docs:
 - unmeasured rewrite-goal risk
 - frontend debt carryover risk
 - llama.cpp runner and model-management risk
+- per-source motion path divergence risk
+- chat/voice delivery ordering risk
+- firmware v4 / API v3-only support risk
 
 `model-management.md`:
 
@@ -331,9 +343,9 @@ Implement:
 Initial settings should include:
 
 - server port
-- Handy transport mode placeholder
-- Handy firmware version default `fw4`
-- Handy API v3 Application ID field
+- HSP dispatch owner placeholder (`cloud_rest` first, `browser_bluetooth` later)
+- firmware v4 / API v3 requirement state, not a v3/v4 selector
+- API v3 Application ID source (`bundled_app_id` by default, optional developer override)
 - Handy connection key field
 - motion speed min/max
 - stroke range min/max
@@ -419,7 +431,7 @@ Tests should cover:
 
 ## Done Criteria
 
-- Fake transport can record stop, stroke-window, HSP add/play-like, HAMP-like, and HDSP-like commands.
+- Fake transport can record stop, stroke-window, and HSP add/play-like commands.
 - Trace export returns stable JSON.
 - Golden tests make transport command schema explicit.
 - No real network calls exist in this phase.
@@ -448,7 +460,6 @@ Implement command builders for:
 - HSP stroke-window command
 - HSP timed-point add/play command shape
 - HSP stop/resume/sync placeholders if planned
-- explicit HAMP/HDSP fallback command shapes
 
 Port invariant tests from `docs/hsp-v4-invariants.md`.
 
@@ -464,7 +475,7 @@ Tests must prove:
 - HSP `x` values remain `0..100`
 - stroke-depth settings are not baked into every point
 - reverse orientation maps at transport boundary
-- no silent HDSP fallback when HSP prerequisites are missing
+- HSP unavailable is reported as a clear error; no fallback transport exists
 - speed intent is not fed back as physical velocity
 - command payloads omit secrets in trace rows
 
@@ -494,14 +505,13 @@ Make the app able to talk to a real Handy through Cloud REST, with honest diagno
 
 Implement:
 
-- API v3 Application ID handling
+- API v3 Application ID handling through a bundled public app identifier, with an optional developer override
 - Handy connection key handling
-- firmware v4 default path
+- firmware v4 / API v3 requirement checks
 - connection check endpoint
 - real command dispatch client
 - HSP add/play/stop/stroke-window calls
 - HSP state/SSE listener if available and practical
-- HAMP/HDSP only when explicitly selected
 - latency measurement
 - command history diagnostics
 
@@ -514,9 +524,10 @@ go test -race ./...
 
 Manual real-device checklist:
 
-- invalid key reports connection-key problem
-- invalid Application ID reports API auth problem
-- valid credentials connect
+- invalid connection key reports a connection-key problem
+- missing/invalid bundled or override Application ID reports an API auth problem
+- ordinary users are not asked for an Application ID unless they choose a developer override
+- valid app identifier plus valid connection key connects
 - stop command works
 - stroke-window command works
 - basic HSP timed points move device
@@ -524,7 +535,7 @@ Manual real-device checklist:
 
 ## Done Criteria
 
-- Cloud REST transport works with real credentials.
+- Cloud REST HSP dispatch works with the app Application ID and user connection key.
 - Device/API errors are visible and specific.
 - No secret values are logged or exported.
 - Emergency stop works through the real transport.
@@ -535,6 +546,56 @@ Manual real-device checklist:
 - LLM chat
 - modes
 - Bluetooth
+
+# Phase 5B: Browser Bluetooth HSP Dispatch Owner
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 5B: implement browser-owned Web Bluetooth as a second HSP dispatch owner, using the same transport interface, command schema, diagnostics, no-cloud-fallback behavior, and stop contract as Cloud REST.`
+
+## Objective
+
+Add the local Bluetooth dispatch owner without creating another motion backend or bypassing the HSP-only transport contract.
+
+## Scope
+
+Implement:
+
+- browser-owned Web Bluetooth bridge protocol
+- HSP command dispatch over the browser bridge
+- bridge connection/status events
+- stale-tab detection
+- explicit no-cloud-fallback behavior while Bluetooth is selected
+- diagnostics parity with Cloud REST command results
+- UI visibility rules from `docs/bluetooth-ownership.md`
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+```
+
+Manual real-device checklist:
+
+- Bluetooth controls are hidden until the dispatch owner is enabled/selected
+- browser permission flow is user-driven
+- disconnect/stale-tab state is visible
+- HSP timed points move the device over Bluetooth
+- emergency stop works over Bluetooth
+- when Bluetooth is selected and unavailable, Cloud REST is not used silently
+
+## Done Criteria
+
+- Browser Bluetooth is a dispatch owner for the same HSP command family as Cloud REST.
+- Bluetooth does not introduce a second sampler, backend, or fallback motion path.
+- Diagnostics make bridge, browser, and device failures distinguishable.
+
+## Out Of Scope
+
+- native Go Bluetooth
+- HAMP/HDSP/Flexible Position over Bluetooth
+- making Bluetooth the default before Cloud REST and diagnostics are stable
 
 # Phase 6: Motion Engine MVP
 
@@ -666,7 +727,7 @@ immediate-apply controls, feedback, and accessibility.
 Implement UI for:
 
 - Handy credentials and connection status
-- firmware/transport selection
+- HSP dispatch owner selection/status (Cloud REST / browser Bluetooth) and firmware/API requirement status
 - manual start/stop motion
 - speed/stroke/direction quick settings
 - emergency stop

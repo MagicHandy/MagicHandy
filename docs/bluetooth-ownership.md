@@ -1,4 +1,4 @@
-﻿# Bluetooth Ownership Decision
+# Bluetooth Ownership Decision
 
 ## Status
 
@@ -51,7 +51,7 @@ Cons:
 
 Use browser-owned Web Bluetooth for the initial MagicHandy Bluetooth implementation.
 
-The Go core should still model Bluetooth as a transport with the same high-level semantics as cloud REST. The difference is dispatch ownership:
+The Go core should model Bluetooth as a second HSP dispatch owner with the same high-level semantics as Cloud REST. It is not a separate motion backend or fallback transport. The difference is dispatch ownership:
 
 - Go owns motion planning, state, traces, and command intent.
 - Browser owns BLE permission, connection, protobuf encoding if needed, dispatch, and immediate BLE result.
@@ -68,13 +68,13 @@ The bridge must expose:
 - command result/error
 - disconnect events
 - stale-tab detection
-- explicit no-cloud-fallback behavior when Bluetooth is selected
+- explicit no-cloud-fallback behavior when the Bluetooth dispatch owner is selected
 
 ## UI Requirements
 
-- Bluetooth controls are hidden unless Bluetooth transport is selected or enabled in settings.
-- Cloud connection key controls are hidden or de-emphasized when Bluetooth is selected.
-- If Bluetooth is selected and unavailable, the app reports that Bluetooth is unavailable; it does not silently use cloud REST.
+- Bluetooth controls are hidden unless the Bluetooth dispatch owner is selected or enabled in settings.
+- Cloud REST credential controls are hidden or de-emphasized when Bluetooth is selected.
+- If Bluetooth is selected and unavailable, the app reports that Bluetooth is unavailable; it does not silently use Cloud REST.
 - Browser permission prompts are user-driven.
 
 ## Revisit Criteria

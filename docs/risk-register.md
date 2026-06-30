@@ -255,3 +255,73 @@ Exit evidence:
 - Ollama still works as the secondary provider
 - startup/status checks do not download models
 - model install/import/load/unload paths are tested and documented
+
+## R14: Per-Source Motion Path Divergence
+
+Level: High
+
+Description:
+StrokeGPT-ReVibed handled motion separately for chat, Freestyle, Edge/Milk,
+trained patterns, and imported scripts. Protections (velocity caps, depth-jump
+splitting, turn smoothing, stop/pause boundaries) added for one path did not
+reach the others, which caused recurring mode-specific motion bugs.
+
+Mitigation:
+
+- one shared sampler/sanitizer for all sources (see `docs/motion-retargeting.md`,
+  "Shared Sampling And Smoothing Protections")
+- new sources produce semantic targets, never a parallel motion path
+- import-boundary rules keep `modes`/`chat`/`llm` off `transport`
+
+Exit evidence:
+
+- a test asserts no motion source bypasses the shared path; protections are
+  applied once and inherited by every caller
+
+## R15: Chat And Voice Delivery Ordering
+
+Level: Medium
+
+Description:
+The old app sometimes spoke a reply the chat panel never displayed, and a
+destructively drained global queue let one browser tab consume another's
+messages.
+
+Mitigation:
+
+- lockstep chat-emit and TTS-enqueue; per-client cursors over a shared log;
+  single-owner audio lease; model-error path kept out of history/TTS/motion
+  (see ADR 0003, "Message And Audio Delivery Ordering")
+
+Exit evidence:
+
+- tests cover spoken-equals-shown, multi-client cursor isolation, and the
+  model-error path
+
+## R16: Firmware v4 / API v3 Only
+
+Level: Medium
+
+Description:
+Dropping HAMP, HDSP, and firmware v3 (ADR 0006) means MagicHandy requires Handy
+firmware v4 plus API v3 access and has no fallback transport. Firmware v3
+hardware is unsupported. A missing, revoked, or incompatible app Application ID
+also blocks Cloud REST HSP until fixed, even if the user's connection key is
+valid. This is a deliberate scope cut, but it can surface as "the app does not
+move my device" if handled quietly.
+
+Mitigation:
+
+- ship and manage the app's own API v3 Application ID if Handy API terms allow;
+  treat it as a public client identifier, not a secret, and keep a developer
+  override for testing or future revocation
+- the connection key stays the user's private credential
+- detect and clearly report HSP-unavailable with concrete fix steps (Invariant 8)
+- document the firmware v4 / API v3 requirement up front in README/setup
+- keep StrokeGPT-ReVibed available for unsupported setups
+
+Exit evidence:
+
+- connect and HSP-unavailable paths give actionable guidance; the requirement is
+  documented before first run; ordinary users do not have to find or paste an
+  Application ID unless using the developer override

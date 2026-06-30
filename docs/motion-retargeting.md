@@ -26,6 +26,32 @@ The minimum future buffer time required so a replacement reaches the device befo
 Bridge points:
 Short transition points added before or around handoff to avoid jumps. Bridge points must not become a long stationary hold.
 
+## Shared Sampling And Smoothing Protections
+
+Every motion source -- plain chat targets, Freestyle, mode planners, trained
+patterns, and imported scripts/programs -- runs through one shared sampler and
+sanitizer. Per-source motion paths were a root cause of mode-specific motion
+bugs in StrokeGPT-ReVibed: a protection added for one caller did not reach the
+others.
+
+The shared path must:
+
+- apply the same generation/stop/pause boundary to every source, so any motion
+  is interruptible and replaceable the same way
+- cap velocity against the current user maximum-speed setting, not only against
+  pattern-local speed
+- split large depth jumps and protect against oversized single steps
+- smooth turn apexes and direction reversals
+- sample with monotone, position-parameterized interpolation (PCHIP /
+  Fritsch-Carlson style) that yields an exact zero-velocity instant at reversal
+  knots; do not use an index/phase-parameterized Catmull-Rom spline, which
+  reintroduces instantaneous velocity at reversals
+- never weaken hardware safety clamping (speed, range, step size) for
+  convenience or smoothness
+
+A new motion source is added by producing a semantic target/plan for this path,
+never by building a parallel sampler or transport path.
+
 ## Active Stream Representation
 
 The motion engine must track at least:
