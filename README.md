@@ -13,6 +13,7 @@ Implemented:
 - embedded static assets from `web/`
 - `GET /healthz`, `GET /api/status`, `GET /api/state`, and settings API routes
 - fake Handy transport contracts, safe transport diagnostics, and `GET /api/traces`
+- Cloud REST HSP v4/API v3 request-shaping code and invariant tests
 - JSON structured logging
 - graceful shutdown
 - versioned JSON settings with defaults, migration hooks, redacted API views,
@@ -72,8 +73,9 @@ Invoke-WebRequest http://127.0.0.1:49717/api/traces
 connection key can be saved through `PUT /api/settings`, but it is not returned
 by diagnostics or settings reads.
 
-Phase 3 transport is fake-only. The app records deterministic command shapes and
-diagnostic snapshots, but it does not call the real Handy API.
+Transport is still fake-only at runtime. The app records deterministic command
+shapes and diagnostic snapshots, and it has pure Cloud REST HSP request builders,
+but it does not call the real Handy API.
 
 ## Validate
 
