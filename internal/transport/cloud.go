@@ -14,6 +14,8 @@ const (
 	cloudPathHSPAdd       = "/api/v3/hsp/streams/%s/points"
 	cloudPathHSPPlay      = "/api/v3/hsp/streams/%s/play"
 	cloudPathHSPStop      = "/api/v3/hsp/stop"
+	cloudPathHSPState     = "/api/v3/hsp/state"
+	cloudPathHSPEvents    = "/api/v3/hsp/events"
 )
 
 // CloudPrerequisites describes the Cloud REST prerequisites needed before live dispatch.
@@ -213,6 +215,39 @@ func (b *CloudRESTBuilder) BuildStop() CloudRequest {
 		Body: cloudStopBody{
 			Reason: "stop",
 		},
+	}
+}
+
+// BuildConnectionCheck shapes a Cloud REST request that checks HSP availability.
+func (b *CloudRESTBuilder) BuildConnectionCheck() CloudRequest {
+	return CloudRequest{
+		Transport: cloudRESTName,
+		Operation: string(CommandKindConnectionCheck),
+		Method:    "GET",
+		Path:      cloudPathHSPState,
+		Auth:      b.auth,
+	}
+}
+
+// BuildHSPState shapes a Cloud REST request that reads HSP state.
+func (b *CloudRESTBuilder) BuildHSPState() CloudRequest {
+	return CloudRequest{
+		Transport: cloudRESTName,
+		Operation: string(CommandKindHSPState),
+		Method:    "GET",
+		Path:      cloudPathHSPState,
+		Auth:      b.auth,
+	}
+}
+
+// BuildHSPEvents shapes a Cloud REST request that opens the HSP event stream.
+func (b *CloudRESTBuilder) BuildHSPEvents() CloudRequest {
+	return CloudRequest{
+		Transport: cloudRESTName,
+		Operation: string(CommandKindHSPEvents),
+		Method:    "GET",
+		Path:      cloudPathHSPEvents,
+		Auth:      b.auth,
 	}
 }
 

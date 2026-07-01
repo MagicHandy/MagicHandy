@@ -23,6 +23,7 @@ func TestFakeRecordsCommandShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
 	}
+	want = []byte(strings.ReplaceAll(string(want), "\r\n", "\n"))
 	if string(got) != string(want) {
 		t.Fatalf("command shape mismatch\nwant:\n%s\ngot:\n%s", want, got)
 	}

@@ -29,8 +29,10 @@ type VersionInfo struct {
 
 // Runtime contains app runtime collaborators exposed through HTTP diagnostics.
 type Runtime struct {
-	Traces    *diagnostics.TraceRing
-	Transport transport.DiagnosticsProvider
+	Traces          *diagnostics.TraceRing
+	Transport       transport.DiagnosticsProvider
+	CloudBaseURL    string
+	CloudHTTPClient *http.Client
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -40,6 +42,7 @@ type Server struct {
 	store     *config.Store
 	traces    *diagnostics.TraceRing
 	transport transport.DiagnosticsProvider
+	cloud     cloudRuntime
 	started   time.Time
 	version   VersionInfo
 	handler   http.Handler
@@ -69,6 +72,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		store:     store,
 		traces:    runtime.Traces,
 		transport: runtime.Transport,
+		cloud:     newCloudRuntime(runtime),
 		started:   time.Now().UTC(),
 		version:   version,
 	}
@@ -92,6 +96,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
+	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)
+	mux.HandleFunc("POST /api/transport/cloud/check", s.handleCloudConnectionCheck)
+	mux.HandleFunc("GET /api/transport/cloud/state", s.handleCloudState)
+	mux.HandleFunc("GET /api/transport/cloud/events", s.handleCloudEvents)
+	mux.HandleFunc("POST /api/transport/cloud/stroke-window", s.handleCloudStrokeWindow)
+	mux.HandleFunc("POST /api/transport/cloud/hsp-add", s.handleCloudHSPAdd)
+	mux.HandleFunc("POST /api/transport/cloud/hsp-play", s.handleCloudHSPPlay)
+	mux.HandleFunc("POST /api/transport/cloud/stop", s.handleCloudStop)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
@@ -124,7 +136,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"features": map[string]string{
 			"chat":      "not_implemented",
 			"motion":    "not_implemented",
-			"transport": "not_implemented",
+			"transport": "cloud_rest_manual",
 			"voice":     "not_implemented",
 		},
 	})
@@ -152,14 +164,15 @@ func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 		"features": map[string]string{
 			"chat":      "not_implemented",
 			"motion":    "not_implemented",
-			"transport": "not_implemented",
+			"transport": "cloud_rest_manual",
 			"voice":     "not_implemented",
 		},
 		"motion": map[string]string{
 			"state": "not_implemented",
 		},
-		"transport": transportDiagnostics,
-		"trace":     s.traces.Summary(),
+		"transport":       transportDiagnostics,
+		"cloud_transport": s.cloudDiagnostics(),
+		"trace":           s.traces.Summary(),
 	})
 }
 
@@ -300,6 +313,15 @@ func (r *statusRecorder) Write(data []byte) (int, error) {
 	n, err := r.ResponseWriter.Write(data)
 	r.bytes += n
 	return n, err
+}
+
+func (r *statusRecorder) Flush() {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
