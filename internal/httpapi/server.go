@@ -29,10 +29,11 @@ type VersionInfo struct {
 
 // Runtime contains app runtime collaborators exposed through HTTP diagnostics.
 type Runtime struct {
-	Traces          *diagnostics.TraceRing
-	Transport       transport.DiagnosticsProvider
-	CloudBaseURL    string
-	CloudHTTPClient *http.Client
+	Traces                 *diagnostics.TraceRing
+	Transport              transport.DiagnosticsProvider
+	CloudBaseURL           string
+	CloudHTTPClient        *http.Client
+	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -43,6 +44,7 @@ type Server struct {
 	traces    *diagnostics.TraceRing
 	transport transport.DiagnosticsProvider
 	cloud     cloudRuntime
+	bluetooth bluetoothRuntime
 	started   time.Time
 	version   VersionInfo
 	handler   http.Handler
@@ -73,6 +75,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		traces:    runtime.Traces,
 		transport: runtime.Transport,
 		cloud:     newCloudRuntime(runtime),
+		bluetooth: newBluetoothRuntime(runtime),
 		started:   time.Now().UTC(),
 		version:   version,
 	}
@@ -104,6 +107,20 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/transport/cloud/hsp-add", s.handleCloudHSPAdd)
 	mux.HandleFunc("POST /api/transport/cloud/hsp-play", s.handleCloudHSPPlay)
 	mux.HandleFunc("POST /api/transport/cloud/stop", s.handleCloudStop)
+	mux.HandleFunc("GET /api/transport/bluetooth/diagnostics", s.handleBluetoothDiagnostics)
+	mux.HandleFunc("GET /api/transport/bluetooth/status", s.handleBluetoothStatus)
+	mux.HandleFunc("POST /api/transport/bluetooth/status", s.handleBluetoothStatus)
+	mux.HandleFunc("POST /api/transport/bluetooth/connect", s.handleBluetoothConnect)
+	mux.HandleFunc("POST /api/transport/bluetooth/disconnect", s.handleBluetoothDisconnect)
+	mux.HandleFunc("GET /api/transport/bluetooth/commands", s.handleBluetoothCommands)
+	mux.HandleFunc("POST /api/transport/bluetooth/ack", s.handleBluetoothAck)
+	mux.HandleFunc("POST /api/transport/bluetooth/check", s.handleBluetoothConnectionCheck)
+	mux.HandleFunc("GET /api/transport/bluetooth/state", s.handleBluetoothState)
+	mux.HandleFunc("GET /api/transport/bluetooth/events", s.handleBluetoothEvents)
+	mux.HandleFunc("POST /api/transport/bluetooth/stroke-window", s.handleBluetoothStrokeWindow)
+	mux.HandleFunc("POST /api/transport/bluetooth/hsp-add", s.handleBluetoothHSPAdd)
+	mux.HandleFunc("POST /api/transport/bluetooth/hsp-play", s.handleBluetoothHSPPlay)
+	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
@@ -136,7 +153,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"features": map[string]string{
 			"chat":      "not_implemented",
 			"motion":    "not_implemented",
-			"transport": "cloud_rest_manual",
+			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "not_implemented",
 		},
 	})
@@ -164,15 +181,17 @@ func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 		"features": map[string]string{
 			"chat":      "not_implemented",
 			"motion":    "not_implemented",
-			"transport": "cloud_rest_manual",
+			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "not_implemented",
 		},
 		"motion": map[string]string{
 			"state": "not_implemented",
 		},
-		"transport":       transportDiagnostics,
-		"cloud_transport": s.cloudDiagnostics(),
-		"trace":           s.traces.Summary(),
+		"transport":           transportDiagnostics,
+		"cloud_transport":     s.cloudDiagnostics(),
+		"bluetooth_transport": s.bluetoothDiagnostics(),
+		"bluetooth_bridge":    s.bluetooth.bridge.Snapshot(),
+		"trace":               s.traces.Summary(),
 	})
 }
 

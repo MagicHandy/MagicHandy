@@ -57,22 +57,46 @@
               <span>Firmware/API requirement</span>
               <input id="firmware-requirement" name="firmware-requirement" type="text" readonly>
             </label>
-            <label>
+            <label class="cloud-credential">
               <span>API application ID source</span>
               <select id="app-id-source" name="app-id-source"></select>
             </label>
-            <label>
+            <label class="cloud-credential">
               <span>Developer application ID</span>
               <input id="app-id-override" name="app-id-override" type="text" autocomplete="off">
             </label>
-            <label>
+            <label class="cloud-credential">
               <span>Handy connection key</span>
               <input id="connection-key" name="connection-key" type="password" autocomplete="off">
             </label>
-            <label class="inline-control">
+            <label class="inline-control cloud-credential">
               <input id="clear-connection-key" name="clear-connection-key" type="checkbox">
               <span>Clear connection key</span>
             </label>
+            <div class="bluetooth-panel" id="bluetooth-panel" hidden>
+              <div class="bluetooth-summary">
+                <span class="bluetooth-indicator" id="bluetooth-indicator" data-state="disconnected" aria-hidden="true"></span>
+                <span id="bluetooth-status">Bluetooth disconnected</span>
+              </div>
+              <div class="bluetooth-actions">
+                <button class="secondary-button" id="bluetooth-connect" type="button">Connect</button>
+                <button class="secondary-button" id="bluetooth-disconnect" type="button">Disconnect</button>
+              </div>
+              <dl class="bluetooth-meta">
+                <div>
+                  <dt>Browser</dt>
+                  <dd id="bluetooth-browser">Pending</dd>
+                </div>
+                <div>
+                  <dt>Device</dt>
+                  <dd id="bluetooth-device">None</dd>
+                </div>
+                <div>
+                  <dt>Bridge</dt>
+                  <dd id="bluetooth-bridge">Idle</dd>
+                </div>
+              </dl>
+            </div>
           </fieldset>
 
           <fieldset>
@@ -143,6 +167,10 @@
           <div>
             <dt>Transport</dt>
             <dd id="runtime-transport">Not implemented</dd>
+          </div>
+          <div>
+            <dt>Bluetooth</dt>
+            <dd id="runtime-bluetooth">Hidden</dd>
           </div>
           <div>
             <dt>Connection key</dt>

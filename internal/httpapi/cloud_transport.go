@@ -308,7 +308,7 @@ func safeCloudErrorMessage(err error) string {
 	if errors.As(err, &unavailable) {
 		return unavailable.Message
 	}
-	if strings.HasPrefix(err.Error(), "Cloud REST ") {
+	if strings.Contains(err.Error(), " returned HTTP ") {
 		return "Cloud REST request failed; see diagnostics"
 	}
 	return err.Error()
