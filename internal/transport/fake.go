@@ -135,7 +135,7 @@ func (f *Fake) Diagnostics() TransportDiagnostics {
 		LastLatencyMillis: lastLatency,
 		LastCommand:       lastCommand,
 		LastResult:        lastResult,
-		LastError:         f.lastError,
+		LastError:         redactedError(f.lastError),
 	}
 }
 
@@ -226,4 +226,11 @@ func cloneCommand(command Command) Command {
 		command.HSPPlay = &play
 	}
 	return command
+}
+
+func redactedError(value string) string {
+	if value == "" {
+		return ""
+	}
+	return "redacted"
 }

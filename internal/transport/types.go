@@ -6,6 +6,12 @@ import "context"
 type CommandKind string
 
 const (
+	// CommandKindConnectionCheck checks Cloud REST/HSP availability without moving the device.
+	CommandKindConnectionCheck CommandKind = "connection_check"
+	// CommandKindHSPState reads Cloud REST HSP state without moving the device.
+	CommandKindHSPState CommandKind = "hsp_state"
+	// CommandKindHSPEvents reads Cloud REST HSP state events without moving the device.
+	CommandKindHSPEvents CommandKind = "hsp_events"
 	// CommandKindStop stops active transport playback.
 	CommandKindStop CommandKind = "stop"
 	// CommandKindStrokeWindow applies a physical stroke envelope.

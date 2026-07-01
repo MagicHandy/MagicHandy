@@ -31,6 +31,9 @@ const (
 	// ApplicationIDSourceDeveloperOverride uses a developer-supplied application ID.
 	ApplicationIDSourceDeveloperOverride = "developer_override"
 
+	// BundledAPIApplicationID is MagicHandy's public API v3 application identifier.
+	BundledAPIApplicationID = "magichandy"
+
 	// DiagnosticsVerbosityNormal records ordinary diagnostics output.
 	DiagnosticsVerbosityNormal = "normal"
 	// DiagnosticsVerbosityDebug records verbose diagnostics output.
