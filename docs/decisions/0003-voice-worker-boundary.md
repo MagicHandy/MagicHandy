@@ -16,6 +16,10 @@ Voice input and voice output run behind optional worker boundaries. The Go core 
 
 The core app must run without voice workers installed.
 
+The concrete engines selected for the first implementation (Parakeet ASR,
+NeuTTS Air local cloning TTS, ElevenLabs cloud TTS — all non-Python) are in
+ADR 0007. Python workers are an optional later addition, not the default.
+
 ## Worker Protocol Requirements
 
 Every worker protocol must include:
