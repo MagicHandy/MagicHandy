@@ -9,7 +9,3 @@ import (
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
-
-func TestMotionPackageScaffold(t *testing.T) {
-	t.Parallel()
-}
