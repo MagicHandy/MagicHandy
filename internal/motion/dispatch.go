@@ -8,6 +8,9 @@ import (
 )
 
 func (e *Engine) dispatchNextChunk(ctx context.Context, reason string) error {
+	if err := e.ensurePlaybackHealthy(ctx, reason); err != nil {
+		return err
+	}
 	streamID, points, lastSample := e.nextChunk()
 	if len(points) == 0 {
 		return nil
@@ -20,6 +23,23 @@ func (e *Engine) dispatchNextChunk(ctx context.Context, reason string) error {
 	e.recordTransportResult(reason, lastSample, result, err)
 	e.rememberResult(result, err)
 	return err
+}
+
+func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, reason string) error {
+	if err := e.ensurePlaybackHealthy(ctx, reason); err != nil {
+		return err
+	}
+	needsLead := false
+	e.mu.Lock()
+	if e.running {
+		requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
+		needsLead = e.nextSampleMillis < requiredTail
+	}
+	e.mu.Unlock()
+	if !needsLead {
+		return nil
+	}
+	return e.dispatchNextChunk(ctx, reason)
 }
 
 func (e *Engine) setStrokeWindow(ctx context.Context, reason string) error {
@@ -53,6 +73,11 @@ func (e *Engine) nextChunk() (string, []transport.TimedPoint, *MotionSample) {
 	for index := range points {
 		streamMillis := e.nextSampleMillis + int64(index)*e.sampleInterval.Milliseconds()
 		sample := e.plan.SampleAt(streamMillis)
+		if e.bridgeSample != nil && streamMillis >= e.bridgeSample.TimeMillis {
+			sample = *e.bridgeSample
+			sample.TimeMillis = streamMillis
+			e.bridgeSample = nil
+		}
 		points[index] = transport.TimedPoint{
 			PositionPercent: e.transportPositionLocked(sample.PositionPercent),
 			TimeMillis:      sample.TimeMillis,
@@ -88,6 +113,12 @@ func (e *Engine) rememberResult(result transport.CommandResult, err error) {
 	defer e.mu.Unlock()
 	result = transport.SafeCommandResult(result)
 	e.lastResult = &result
+	if result.LatencyMillis > 0 {
+		e.latencyMillis = append(e.latencyMillis, result.LatencyMillis)
+		if len(e.latencyMillis) > latencySampleLimit {
+			e.latencyMillis = e.latencyMillis[len(e.latencyMillis)-latencySampleLimit:]
+		}
+	}
 	if err != nil {
 		e.lastError = err.Error()
 		return

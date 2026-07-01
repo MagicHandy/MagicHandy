@@ -2,8 +2,8 @@
   {
     "transport": "handy_cloud_rest",
     "operation": "stroke_window",
-    "method": "POST",
-    "path": "/api/v3/hsp/stroke-window",
+    "method": "PUT",
+    "path": "slider/stroke",
     "auth": {
       "application_id": "app-public-id",
       "connection_key_set": true,
@@ -11,15 +11,30 @@
       "api_major": 3
     },
     "body": {
-      "min": 10,
-      "max": 90
+      "min": 0.1,
+      "max": 0.9
+    }
+  },
+  {
+    "transport": "handy_cloud_rest",
+    "operation": "hsp_setup",
+    "method": "PUT",
+    "path": "hsp/setup",
+    "auth": {
+      "application_id": "app-public-id",
+      "connection_key_set": true,
+      "firmware_major": 4,
+      "api_major": 3
+    },
+    "body": {
+      "stream_id": 1
     }
   },
   {
     "transport": "handy_cloud_rest",
     "operation": "hsp_add",
-    "method": "POST",
-    "path": "/api/v3/hsp/streams/stream-1/points",
+    "method": "PUT",
+    "path": "hsp/add",
     "auth": {
       "application_id": "app-public-id",
       "connection_key_set": true,
@@ -27,7 +42,6 @@
       "api_major": 3
     },
     "body": {
-      "stream_id": "stream-1",
       "points": [
         {
           "x": 0,
@@ -41,14 +55,16 @@
           "x": 100,
           "t": 250
         }
-      ]
+      ],
+      "flush": true,
+      "tail_point_stream_index": 3
     }
   },
   {
     "transport": "handy_cloud_rest",
     "operation": "hsp_play",
-    "method": "POST",
-    "path": "/api/v3/hsp/streams/stream-1/play",
+    "method": "PUT",
+    "path": "hsp/play",
     "auth": {
       "application_id": "app-public-id",
       "connection_key_set": true,
@@ -56,23 +72,23 @@
       "api_major": 3
     },
     "body": {
-      "stream_id": "stream-1",
-      "start_time_ms": 0
+      "start_time": 0,
+      "playback_rate": 1,
+      "pause_on_starving": true,
+      "loop": false
     }
   },
   {
     "transport": "handy_cloud_rest",
     "operation": "stop",
-    "method": "POST",
-    "path": "/api/v3/hsp/stop",
+    "method": "PUT",
+    "path": "hsp/stop",
     "auth": {
       "application_id": "app-public-id",
       "connection_key_set": true,
       "firmware_major": 4,
       "api_major": 3
     },
-    "body": {
-      "reason": "stop"
-    }
+    "body": {}
   }
 ]

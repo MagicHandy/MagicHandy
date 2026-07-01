@@ -19,7 +19,7 @@ import (
 const cloudTestConnectionKey = "test-connection-key"
 
 func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
-	requests := make(chan capturedCloudRequest, 1)
+	requests := make(chan capturedCloudRequest, 2)
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests <- captureCloudRequest(t, r)
 		w.Header().Set("Content-Type", "application/json")
@@ -44,14 +44,22 @@ func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
 		t.Fatalf("manual cloud response leaked connection key: %s", recorder.Body.String())
 	}
 
+	setup := readCapturedCloudRequest(t, requests)
+	if setup.Method != http.MethodPut || setup.Path != "/hsp/setup" {
+		t.Fatalf("request = %+v, want HSP setup path", setup)
+	}
+	if setup.ApplicationID != "dev-app-id" || setup.ConnectionKey != cloudTestConnectionKey {
+		t.Fatalf("auth headers = %+v, want settings-derived credentials", setup)
+	}
 	seen := readCapturedCloudRequest(t, requests)
-	if seen.Method != http.MethodPost || seen.Path != "/api/v3/hsp/streams/stream-A/points" {
+	if seen.Method != http.MethodPut || seen.Path != "/hsp/add" {
 		t.Fatalf("request = %+v, want HSP add path", seen)
 	}
 	if seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey {
 		t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
 	}
-	if !strings.Contains(seen.Body, `"x":75`) || !strings.Contains(seen.Body, `"t":10`) {
+	if !strings.Contains(seen.Body, `"x":75`) || !strings.Contains(seen.Body, `"t":10`) ||
+		!strings.Contains(seen.Body, `"flush":true`) {
 		t.Fatalf("body = %s, want reversed HSP point", seen.Body)
 	}
 
@@ -70,8 +78,8 @@ func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
 
 func TestCloudConnectionCheckEndpointReadsState(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v3/hsp/state" {
-			t.Fatalf("path = %q, want /api/v3/hsp/state", r.URL.Path)
+		if r.URL.Path != "/hsp/state" {
+			t.Fatalf("path = %q, want /hsp/state", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"hsp_available":true,"playback_state":"idle"}`))
@@ -130,8 +138,11 @@ func TestCloudManualTransportFailureRedactsSecrets(t *testing.T) {
 
 func TestCloudEventsEndpointProxiesSSE(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v3/hsp/events" {
-			t.Fatalf("path = %q, want /api/v3/hsp/events", r.URL.Path)
+		if r.URL.Path != "/sse" {
+			t.Fatalf("path = %q, want /sse", r.URL.Path)
+		}
+		if r.URL.Query().Get("ck") != cloudTestConnectionKey || r.URL.Query().Get("apikey") != "dev-app-id" {
+			t.Fatalf("query = %q, want SSE credentials", r.URL.RawQuery)
 		}
 		if r.Header.Get("Accept") != "text/event-stream" {
 			t.Fatalf("accept = %q, want text/event-stream", r.Header.Get("Accept"))
@@ -213,7 +224,7 @@ func captureCloudRequest(t *testing.T, r *http.Request) capturedCloudRequest {
 	return capturedCloudRequest{
 		Method:        r.Method,
 		Path:          r.URL.Path,
-		ApplicationID: r.Header.Get("X-Application-ID"),
+		ApplicationID: r.Header.Get("X-Api-Key"),
 		ConnectionKey: r.Header.Get("X-Connection-Key"),
 		Body:          string(body),
 	}

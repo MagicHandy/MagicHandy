@@ -182,3 +182,40 @@ Every retarget trace should include:
 ## Initial Implementation Allowance
 
 The first version may use a conservative retarget algorithm, but it must be explicit, testable, and instrumented. If a case cannot be smoothed safely, the engine should choose a visible recovery path and diagnostics rather than pretending the transition is smooth.
+
+## Phase 7 Validation Workflow
+
+`go run ./cmd/retarget-validate` runs the hardware checklist against Cloud REST
+HSP with an enforced automated speed cap of 40 percent. The default maximum is
+35 percent. The private Handy connection key is read from
+`MAGICHANDY_HANDY_CONNECTION_KEY` or stdin; the public API v3 application ID is
+bundled and can be overridden with `-app-id`.
+
+The runner exports cumulative trace JSON files for:
+
+- area changes while already moving
+- speed changes while already moving
+- stroke range changes while already moving
+- reverse direction changes while already moving
+- same-pattern changes that preserve phase
+- cross-pattern changes that choose a low-jump handoff
+- emergency stop after retargeting
+
+The exported traces are written to `traces/` by default and are intended as
+review artifacts or future fixtures. They must not contain the private Handy
+connection key.
+
+## Current Limitations
+
+- The main UI does not yet expose high-level motion controls; Phase 7 validation
+  uses the dedicated command-line runner.
+- The Cloud REST transport now follows the live API v3 wire shape used by
+  StrokeGPT-ReVibed, but MagicHandy's motion timing, phase selection, and
+  retarget policy are independent Go implementations.
+- Browser Bluetooth is still a dispatch-owner bridge, not the source of motion
+  behavior. The experimental Python Bluetooth motion path from ReVibed is not
+  treated as a reference implementation because its physical motion was poor.
+- Recovery currently stops and reports unhealthy playback states when the
+  transport reports paused, starved, rejected, or stale playback. More nuanced
+  resume/play recovery can be added after real-device traces prove the state
+  transitions are reliable.

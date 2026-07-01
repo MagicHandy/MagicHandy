@@ -101,11 +101,26 @@ func (p MotionPlan) Retarget(
 	phase := p.PhaseAt(streamMillis)
 	preserved := p.PatternID == target.PatternID
 	if !preserved {
-		phase = chooseNearestPhase(target, settings, p.SampleAt(streamMillis).PositionPercent)
+		phase = chooseNearestPhase(target, settings, p.SampleAt(streamMillis).PositionPercent, p.DirectionAt(streamMillis))
 	}
 	next := NewMotionPlan(id, target, settings, phase, streamMillis, createdAt)
 	next.PhasePreserved = preserved
 	return next
+}
+
+// DirectionAt estimates current semantic travel direction at stream-relative time.
+func (p MotionPlan) DirectionAt(streamMillis int64) int {
+	const probeMillis = int64(25)
+	before := p.SampleAt(streamMillis - probeMillis).PositionPercent
+	after := p.SampleAt(streamMillis + probeMillis).PositionPercent
+	switch {
+	case after > before:
+		return 1
+	case after < before:
+		return -1
+	default:
+		return 0
+	}
 }
 
 func periodForSpeed(speedPercent int) int64 {
@@ -146,16 +161,24 @@ func samplePatternValue(patternID PatternID, phase float64) float64 {
 	return knots[len(knots)-1].value
 }
 
-func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current int) float64 {
+func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current int, currentDirection int) float64 {
 	candidatePlan := NewMotionPlan("candidate", target, settings, 0, 0, time.Unix(0, 0))
 	bestPhase := 0.0
 	bestDistance := math.MaxFloat64
-	for index := range 32 {
-		phase := float64(index) / 32.0
+	for index := range 64 {
+		phase := float64(index) / 64.0
 		position := candidatePlan.SampleAt(int64(float64(candidatePlan.PeriodMillis) * phase)).PositionPercent
 		distance := math.Abs(float64(position - current))
-		if distance < bestDistance {
-			bestDistance = distance
+		candidateDirection := candidatePlan.DirectionAt(int64(float64(candidatePlan.PeriodMillis) * phase))
+		score := distance
+		if currentDirection != 0 && candidateDirection != 0 && candidateDirection != currentDirection {
+			score += 8
+		}
+		if candidateDirection == 0 && distance > 2 {
+			score += 4
+		}
+		if score < bestDistance {
+			bestDistance = score
 			bestPhase = phase
 		}
 	}

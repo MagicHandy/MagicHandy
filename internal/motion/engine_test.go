@@ -2,6 +2,7 @@ package motion
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -115,6 +116,117 @@ func TestEngineApplyTargetPreservesSamePatternWithoutRestart(t *testing.T) {
 	assertTraceAnnotation(t, traces.Rows(), "target_update", "phase_preserved=true")
 }
 
+func TestEngineRetargetUsesLatencyAwareLeadAndTraceExportFields(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	fake := transport.NewFake(
+		transport.WithClock(func() time.Time { return now }),
+		transport.WithLatency(900*time.Millisecond),
+	)
+	traces := diagnostics.NewTraceRing(256)
+	engine := newTestEngine(t, fake, traces, time.Hour)
+	defer func() {
+		_, _ = engine.Stop(context.Background(), "cleanup")
+	}()
+
+	_, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	state, err := engine.ApplyTarget(context.Background(), MotionTarget{
+		Label:        "cross pattern",
+		Source:       "test",
+		PatternID:    PatternPulse,
+		SpeedPercent: 70,
+	}, "cross_pattern_change")
+	if err != nil {
+		t.Fatalf("ApplyTarget: %v", err)
+	}
+
+	retarget := findRetargetTrace(t, traces.Rows(), "cross_pattern_change")
+	if retarget.RecentCommandLatencyMillis != 900 {
+		t.Fatalf("recent latency = %d, want 900", retarget.RecentCommandLatencyMillis)
+	}
+	if retarget.SelectedLeadMillis < 900 {
+		t.Fatalf("lead = %d, want at least observed latency", retarget.SelectedLeadMillis)
+	}
+	if retarget.PreviousPlanID == "" || retarget.NextPlanID == "" {
+		t.Fatalf("retarget trace = %+v, want plan ids", retarget)
+	}
+	if retarget.PreviousTarget == nil || retarget.NextTarget == nil {
+		t.Fatalf("retarget trace = %+v, want previous and next target snapshots", retarget)
+	}
+	if retarget.PhasePreserved {
+		t.Fatalf("retarget trace = %+v, want cross-pattern phase not preserved", retarget)
+	}
+	if state.Running == false {
+		t.Fatalf("state = %+v, want still running after retarget", state)
+	}
+	assertNoRestartBeforeStop(t, fake.Commands())
+}
+
+func TestEngineAreaRetargetInsertsBoundedBridgePoint(t *testing.T) {
+	fake := transport.NewFake()
+	traces := diagnostics.NewTraceRing(256)
+	engine := newTestEngine(t, fake, traces, time.Hour)
+	defer func() {
+		_, _ = engine.Stop(context.Background(), "cleanup")
+	}()
+
+	_, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_, err = engine.ApplyTarget(context.Background(), MotionTarget{
+		Label:        "upper area",
+		Source:       "test",
+		PatternID:    PatternStroke,
+		SpeedPercent: 80,
+		AreaFocus:    &AreaFocus{MinPercent: 0, MaxPercent: 30},
+	}, "area_change")
+	if err != nil {
+		t.Fatalf("ApplyTarget: %v", err)
+	}
+
+	retarget := findRetargetTrace(t, traces.Rows(), "area_change")
+	if !retarget.PhasePreserved {
+		t.Fatalf("retarget = %+v, want same-pattern phase preservation", retarget)
+	}
+	if !retarget.BridgePointsInserted {
+		t.Fatalf("retarget = %+v, want bridge point for large area shift", retarget)
+	}
+	assertTraceAnnotation(t, traces.Rows(), "area_change", "phase_preserved=true;bridge_points=true")
+}
+
+func TestEngineStopsForUnhealthyPlaybackDuringRetarget(t *testing.T) {
+	fake := newPlaybackStateTransport("playing")
+	traces := diagnostics.NewTraceRing(128)
+	engine := newTestEngine(t, fake, traces, time.Hour)
+
+	_, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	fake.SetPlaybackState("starved")
+	state, err := engine.ApplyTarget(context.Background(), MotionTarget{
+		Label:        "recovery target",
+		Source:       "test",
+		PatternID:    PatternPulse,
+		SpeedPercent: 60,
+	}, "cross_pattern_change")
+	if err == nil {
+		t.Fatal("ApplyTarget succeeded despite unhealthy playback")
+	}
+	if state.Running {
+		t.Fatalf("state = %+v, want recovery stopped", state)
+	}
+	if countCommands(fake.Commands(), transport.CommandKindStop) != 1 {
+		t.Fatalf("commands = %+v, want recovery stop", fake.Commands())
+	}
+	if !hasTraceAnnotationPrefix(traces.Rows(), "recovery_retarget_lead_points", "recovery=") {
+		t.Fatalf("trace rows = %+v, want recovery annotation", traces.Rows())
+	}
+}
+
 func TestEngineConcurrentRefreshSnapshotAndStop(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), 2*time.Millisecond)
@@ -148,8 +260,8 @@ func TestEngineShortSoakAgainstFakeTransport(t *testing.T) {
 	if _, err := engine.Stop(context.Background(), "soak_stop"); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if countCommands(fake.Commands(), transport.CommandKindHSPAdd) < 10 {
-		t.Fatalf("commands = %+v, want soak to append many chunks", fake.Commands())
+	if countCommands(fake.Commands(), transport.CommandKindHSPAdd) < 5 {
+		t.Fatalf("commands = %+v, want soak to maintain lead with appended chunks", fake.Commands())
 	}
 }
 
@@ -181,4 +293,31 @@ func testTarget() MotionTarget {
 		PatternID:    PatternStroke,
 		SpeedPercent: 80,
 	}
+}
+
+type playbackStateTransport struct {
+	*transport.Fake
+	mu    sync.Mutex
+	state string
+}
+
+func newPlaybackStateTransport(state string) *playbackStateTransport {
+	return &playbackStateTransport{
+		Fake:  transport.NewFake(),
+		state: state,
+	}
+}
+
+func (t *playbackStateTransport) Diagnostics() transport.TransportDiagnostics {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	diagnostics := t.Fake.Diagnostics()
+	diagnostics.PlaybackState = t.state
+	return diagnostics
+}
+
+func (t *playbackStateTransport) SetPlaybackState(state string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.state = state
 }
