@@ -79,6 +79,9 @@ async function refreshStatus() {
     setCoreState("ok", "Core online");
     renderSettings(state.settings);
     renderState(health, state, bluetooth);
+    if (formStatus.textContent === "Not loaded" || formStatus.textContent === "Load failed") {
+      formStatus.textContent = "Loaded";
+    }
   } catch (error) {
     setCoreState("error", "Core unavailable");
     runtimeCore.textContent = "Unavailable";

@@ -3,7 +3,9 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -17,22 +19,13 @@ var errMotionUnavailable = errors.New("motion engine is unavailable for the conf
 // transport, the engine is absent and motion endpoints report unavailable
 // rather than panicking.
 type motionRuntime struct {
-	engine *motion.Engine
+	mu        sync.Mutex
+	engine    *motion.Engine
+	transport transport.Transport
 }
 
 func newMotionRuntime(runtime Runtime) motionRuntime {
-	commandTransport, ok := runtime.Transport.(transport.Transport)
-	if !ok || commandTransport == nil {
-		return motionRuntime{}
-	}
-	engine, err := motion.NewEngine(motion.EngineOptions{
-		Transport: commandTransport,
-		Traces:    runtime.Traces,
-	})
-	if err != nil {
-		return motionRuntime{}
-	}
-	return motionRuntime{engine: engine}
+	return motionRuntime{transport: runtime.MotionTransport}
 }
 
 // motionRequest is the optional body for start/target control.
@@ -53,13 +46,23 @@ func (r motionRequest) target() motion.MotionTarget {
 // motionState returns a UI-facing snapshot; the "available" flag lets the
 // frontend show an honest "motion unavailable" state instead of guessing.
 func (s *Server) motionState() any {
-	if s.motion.engine == nil {
-		return map[string]any{"available": false}
+	if engine := s.currentMotionEngine(); engine != nil {
+		snapshot := engine.Snapshot()
+		if snapshot.Running {
+			return map[string]any{
+				"available": true,
+				"engine":    snapshot,
+			}
+		}
 	}
-	snapshot := s.motion.engine.Snapshot()
+	if _, err := s.newSelectedMotionTransport(); err != nil {
+		return map[string]any{
+			"available": false,
+			"error":     err.Error(),
+		}
+	}
 	return map[string]any{
 		"available": true,
-		"engine":    snapshot,
 	}
 }
 
@@ -68,10 +71,6 @@ func (s *Server) handleMotionState(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
-	if s.motion.engine == nil {
-		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
-		return
-	}
 	var body motionRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &body); err != nil {
@@ -79,13 +78,19 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	engine, err := s.motionEngineForStart()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err)
+		return
+	}
 	settings, _ := s.store.Snapshot()
-	state, err := s.motion.engine.Start(r.Context(), body.target(), settings.Motion)
+	state, err := engine.Start(r.Context(), body.target(), settings.Motion)
 	s.writeMotionResult(w, state, err)
 }
 
 func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
-	if s.motion.engine == nil {
+	engine := s.currentMotionEngine()
+	if engine == nil {
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
 		return
 	}
@@ -96,7 +101,7 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	state, err := s.motion.engine.ApplyTarget(r.Context(), body.target(), "ui_target")
+	state, err := engine.ApplyTarget(r.Context(), body.target(), "ui_target")
 	s.writeMotionResult(w, state, err)
 }
 
@@ -143,18 +148,19 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 	s.refreshActiveMotion(r.Context(), saved.Motion)
 
 	payload := map[string]any{"motion": saved.Public().Motion}
-	if s.motion.engine != nil {
-		payload["engine"] = s.motion.engine.Snapshot()
+	if engine := s.currentMotionEngine(); engine != nil {
+		payload["engine"] = engine.Snapshot()
 	}
 	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
-	if s.motion.engine == nil {
+	engine := s.currentMotionEngine()
+	if engine == nil {
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
 		return
 	}
-	state, err := s.motion.engine.Stop(r.Context(), "ui_stop")
+	state, err := engine.Stop(r.Context(), "ui_stop")
 	s.writeMotionResult(w, state, err)
 }
 
@@ -174,20 +180,85 @@ func (s *Server) writeMotionResult(w http.ResponseWriter, state motion.ActiveMot
 // refreshActiveMotion applies saved settings to running motion immediately so
 // quick controls take effect without a stop/start (ADR 0002, Invariant 9).
 func (s *Server) refreshActiveMotion(ctx context.Context, settings config.MotionSettings) {
-	if s.motion.engine == nil {
+	engine := s.currentMotionEngine()
+	if engine == nil {
 		return
 	}
-	if !s.motion.engine.Snapshot().Running {
+	if !engine.Snapshot().Running {
 		return
 	}
-	_, _ = s.motion.engine.RefreshSettings(ctx, settings, "settings_saved")
+	_, _ = engine.RefreshSettings(ctx, settings, "settings_saved")
 }
 
 // Close stops any active motion loop so no goroutine keeps commanding the
 // device after shutdown (goroutine-lifecycle safety gate).
 func (s *Server) Close() {
-	if s.motion.engine == nil {
+	engine := s.currentMotionEngine()
+	if engine == nil {
 		return
 	}
-	_, _ = s.motion.engine.Stop(context.Background(), "server_shutdown")
+	_, _ = engine.Stop(context.Background(), "server_shutdown")
+}
+
+func (s *Server) motionEngineForStart() (*motion.Engine, error) {
+	if engine := s.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+		return engine, nil
+	}
+	commandTransport, err := s.newSelectedMotionTransport()
+	if err != nil {
+		return nil, err
+	}
+	engine, err := motion.NewEngine(motion.EngineOptions{
+		Transport: commandTransport,
+		Traces:    s.traces,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.setMotionEngine(engine)
+	return engine, nil
+}
+
+func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
+	if s.motion.transport != nil {
+		return s.motion.transport, nil
+	}
+
+	settings, _ := s.store.Snapshot()
+	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerCloudREST:
+		cloud, err := s.newCloudTransport()
+		if err != nil {
+			return nil, err
+		}
+		return cloud, nil
+	case config.DispatchOwnerBrowserBluetooth:
+		snapshot := s.bluetooth.bridge.Snapshot()
+		if !snapshot.Ready {
+			message := snapshot.Message
+			if message == "" {
+				message = "Bluetooth is not connected."
+			}
+			return nil, fmt.Errorf("Browser Bluetooth is not ready: %s", message)
+		}
+		bluetooth, err := s.newBluetoothTransport()
+		if err != nil {
+			return nil, err
+		}
+		return bluetooth, nil
+	default:
+		return nil, errMotionUnavailable
+	}
+}
+
+func (s *Server) currentMotionEngine() *motion.Engine {
+	s.motion.mu.Lock()
+	defer s.motion.mu.Unlock()
+	return s.motion.engine
+}
+
+func (s *Server) setMotionEngine(engine *motion.Engine) {
+	s.motion.mu.Lock()
+	defer s.motion.mu.Unlock()
+	s.motion.engine = engine
 }

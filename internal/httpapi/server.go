@@ -31,6 +31,7 @@ type VersionInfo struct {
 type Runtime struct {
 	Traces                 *diagnostics.TraceRing
 	Transport              transport.DiagnosticsProvider
+	MotionTransport        transport.Transport
 	CloudBaseURL           string
 	CloudHTTPClient        *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge

@@ -209,20 +209,59 @@ async function applySpeed() {
 }
 
 function quickPayload() {
+  const values = normalizeQuickControls();
   return {
-    speed_min_percent: Number.parseInt(ui.quick.speedMin.value, 10),
-    speed_max_percent: Number.parseInt(ui.quick.speedMax.value, 10),
-    stroke_min_percent: Number.parseInt(ui.quick.strokeMin.value, 10),
-    stroke_max_percent: Number.parseInt(ui.quick.strokeMax.value, 10),
+    speed_min_percent: values.speedMin,
+    speed_max_percent: values.speedMax,
+    stroke_min_percent: values.strokeMin,
+    stroke_max_percent: values.strokeMax,
     reverse_direction: ui.quick.reverse.checked,
   };
 }
 
+function readQuickControls() {
+  return {
+    speedMin: sliderInt(ui.quick.speedMin, 1),
+    speedMax: sliderInt(ui.quick.speedMax, 100),
+    strokeMin: sliderInt(ui.quick.strokeMin, 0),
+    strokeMax: sliderInt(ui.quick.strokeMax, 100),
+  };
+}
+
+function sliderInt(control, fallback) {
+  const value = Number.parseInt(control.value, 10);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeQuickValues(values) {
+  const normalized = { ...values };
+  if (normalized.speedMin > normalized.speedMax) {
+    normalized.speedMax = normalized.speedMin;
+  }
+  if (normalized.strokeMin >= normalized.strokeMax) {
+    normalized.strokeMax = Math.min(100, normalized.strokeMin + 1);
+    if (normalized.strokeMin >= normalized.strokeMax) {
+      normalized.strokeMin = Math.max(0, normalized.strokeMax - 1);
+    }
+  }
+  return normalized;
+}
+
+function normalizeQuickControls() {
+  const values = normalizeQuickValues(readQuickControls());
+  ui.quick.speedMin.value = values.speedMin;
+  ui.quick.speedMax.value = values.speedMax;
+  ui.quick.strokeMin.value = values.strokeMin;
+  ui.quick.strokeMax.value = values.strokeMax;
+  return values;
+}
+
 function updateQuickOutputs() {
-  ui.quickOut.speedMin.textContent = `${ui.quick.speedMin.value}%`;
-  ui.quickOut.speedMax.textContent = `${ui.quick.speedMax.value}%`;
-  ui.quickOut.strokeMin.textContent = `${ui.quick.strokeMin.value}%`;
-  ui.quickOut.strokeMax.textContent = `${ui.quick.strokeMax.value}%`;
+  const values = normalizeQuickControls();
+  ui.quickOut.speedMin.textContent = `${values.speedMin}%`;
+  ui.quickOut.speedMax.textContent = `${values.speedMax}%`;
+  ui.quickOut.strokeMin.textContent = `${values.strokeMin}%`;
+  ui.quickOut.strokeMax.textContent = `${values.strokeMax}%`;
 }
 
 async function applyQuick() {

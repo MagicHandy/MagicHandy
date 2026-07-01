@@ -257,6 +257,23 @@ func TestMissingAssetReturnsNotFound(t *testing.T) {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
+	fake := transport.NewFake()
+	return newTestServerWithRuntime(t, Runtime{
+		Traces:          diagnostics.NewTraceRing(8),
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+}
+
+func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
+	t.Helper()
+
+	if runtime.Traces == nil {
+		runtime.Traces = diagnostics.NewTraceRing(8)
+	}
+	if runtime.Transport == nil {
+		runtime.Transport = transport.NewFake()
+	}
 	store, err := config.OpenStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -265,10 +282,7 @@ func newTestServer(t *testing.T) *Server {
 		"index.html": {Data: []byte("<!doctype html><title>MagicHandy</title>")},
 		"app.css":    {Data: []byte("body { margin: 0; }")},
 		"app.js":     {Data: []byte("console.log('ready');")},
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)), store, Runtime{
-		Traces:    diagnostics.NewTraceRing(8),
-		Transport: transport.NewFake(),
-	}, VersionInfo{
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), store, runtime, VersionInfo{
 		Version: "test",
 		Commit:  "test",
 	})

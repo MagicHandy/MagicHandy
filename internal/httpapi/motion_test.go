@@ -80,6 +80,80 @@ func TestMotionStartClampsSpeedToSettings(t *testing.T) {
 	}
 }
 
+func TestMotionUnavailableWithoutSelectedTransportPrerequisites(t *testing.T) {
+	server := newTestServerWithRuntime(t, Runtime{})
+	t.Cleanup(server.Close)
+
+	stateRecorder := httptest.NewRecorder()
+	stateRequest := httptest.NewRequest(http.MethodGet, "/api/motion/state", nil)
+	server.Handler().ServeHTTP(stateRecorder, stateRequest)
+	if stateRecorder.Code != http.StatusOK {
+		t.Fatalf("state status = %d, want %d", stateRecorder.Code, http.StatusOK)
+	}
+	var state motionEnvelope
+	if err := json.Unmarshal(stateRecorder.Body.Bytes(), &state); err != nil {
+		t.Fatalf("decode motion state: %v", err)
+	}
+	if state.Available {
+		t.Fatalf("motion state should be unavailable without Cloud credentials: %s", stateRecorder.Body.String())
+	}
+	if !strings.Contains(stateRecorder.Body.String(), "Handy connection key is required") {
+		t.Fatalf("state body = %s, want credential error", stateRecorder.Body.String())
+	}
+
+	startRecorder := httptest.NewRecorder()
+	startRequest := httptest.NewRequest(http.MethodPost, "/api/motion/start", strings.NewReader(`{"speed_percent":35}`))
+	server.Handler().ServeHTTP(startRecorder, startRequest)
+	if startRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("start status = %d, want %d: %s", startRecorder.Code, http.StatusServiceUnavailable, startRecorder.Body.String())
+	}
+	if strings.Contains(startRecorder.Body.String(), "fake_handy") {
+		t.Fatalf("motion start should not fall back to fake transport: %s", startRecorder.Body.String())
+	}
+}
+
+func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
+	requests := make(chan capturedCloudRequest, 16)
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- captureCloudRequest(t, r)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"hsp_available":true,"playback_state":"playing"}`))
+	}))
+	defer cloudServer.Close()
+
+	server := newTestServerWithRuntime(t, Runtime{CloudBaseURL: cloudServer.URL})
+	t.Cleanup(server.Close)
+	saveCloudSettings(t, server)
+
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":35}`)
+	if !started.Available || !started.Engine.Running {
+		t.Fatalf("expected Cloud-backed motion to run, got %+v", started)
+	}
+	if started.Engine.LastResult == nil || started.Engine.LastResult.Transport == "fake_handy" {
+		t.Fatalf("motion result used fake transport: %+v", started.Engine.LastResult)
+	}
+
+	wantRequests := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPut, path: "/slider/stroke"},
+		{method: http.MethodPut, path: "/hsp/setup"},
+		{method: http.MethodPut, path: "/hsp/add"},
+		{method: http.MethodGet, path: "/servertime"},
+		{method: http.MethodPut, path: "/hsp/play"},
+	}
+	for _, want := range wantRequests {
+		seen := readCapturedCloudRequest(t, requests)
+		if seen.Method != want.method || seen.Path != want.path {
+			t.Fatalf("request = %+v, want %s %s", seen, want.method, want.path)
+		}
+		if seen.Path != "/servertime" && (seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey) {
+			t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
+		}
+	}
+}
+
 func TestMotionRefreshAppliesToActiveLoopImmediately(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
