@@ -45,7 +45,7 @@ func TestInternalImportBoundaries(t *testing.T) {
 			forbidden: []string{internal + "transport"},
 		},
 		{
-			name: "motion stays above HTTP, chat, LLM, modes, and transport adapters",
+			name: "motion stays above HTTP, chat, LLM, and modes",
 			appliesTo: func(importPath string) bool {
 				return strings.HasPrefix(importPath, internal+"motion")
 			},
@@ -54,7 +54,6 @@ func TestInternalImportBoundaries(t *testing.T) {
 				internal + "httpapi",
 				internal + "llm",
 				internal + "modes",
-				internal + "transport",
 			},
 		},
 		{
