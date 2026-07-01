@@ -63,8 +63,8 @@ func TestStrokeWindowDoesNotRewriteHSPPoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildStrokeWindow: %v", err)
 	}
-	if window.Body.(cloudStrokeWindowBody).Min != 20 || window.Body.(cloudStrokeWindowBody).Max != 80 {
-		t.Fatalf("stroke window = %+v, want 20..80", window.Body)
+	if window.Body.(cloudStrokeWindowBody).Min != 0.2 || window.Body.(cloudStrokeWindowBody).Max != 0.8 {
+		t.Fatalf("stroke window = %+v, want 0.2..0.8", window.Body)
 	}
 
 	add, err := builder.BuildHSPAdd(HSPAddCommand{
@@ -246,8 +246,13 @@ func buildGoldenCloudRequests(t *testing.T, builder *CloudRESTBuilder) []CloudRe
 	if err != nil {
 		t.Fatalf("BuildHSPPlay: %v", err)
 	}
+	setup, err := builder.BuildHSPSetup(HSPSetupCommand{StreamID: 1})
+	if err != nil {
+		t.Fatalf("BuildHSPSetup: %v", err)
+	}
 	return []CloudRequest{
 		strokeWindow,
+		setup,
 		add,
 		play,
 		builder.BuildStop(),

@@ -28,6 +28,12 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	}
 }
 
+func TestBundledAPIApplicationIDUsesPublicV3ID(t *testing.T) {
+	if BundledAPIApplicationID != "rQoTWeMPrklUYcfdSXYYhS_9z.jAVNwy" {
+		t.Fatalf("bundled API application ID = %q, want public Handy API v3 ID", BundledAPIApplicationID)
+	}
+}
+
 func TestLoadMissingSettingsUsesDefaults(t *testing.T) {
 	store, err := OpenStore(t.TempDir())
 	if err != nil {

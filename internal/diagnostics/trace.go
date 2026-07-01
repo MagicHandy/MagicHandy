@@ -17,6 +17,7 @@ type MotionTraceRow struct {
 	Reason           string                   `json:"reason"`
 	Target           *MotionTraceTarget       `json:"target,omitempty"`
 	Sample           *MotionTraceSample       `json:"sample,omitempty"`
+	Retarget         *MotionTraceRetarget     `json:"retarget,omitempty"`
 	TransportCommand *transport.Command       `json:"transport_command,omitempty"`
 	TransportResult  *transport.CommandResult `json:"transport_result,omitempty"`
 	Annotation       string                   `json:"annotation,omitempty"`
@@ -24,18 +25,40 @@ type MotionTraceRow struct {
 
 // MotionTraceTarget records semantic target context without raw transport shape.
 type MotionTraceTarget struct {
-	Label             string `json:"label,omitempty"`
-	SpeedPercent      int    `json:"speed_percent,omitempty"`
-	StrokeMinPercent  int    `json:"stroke_min_percent,omitempty"`
-	StrokeMaxPercent  int    `json:"stroke_max_percent,omitempty"`
-	ReverseDirection  bool   `json:"reverse_direction,omitempty"`
-	PatternIdentifier string `json:"pattern_id,omitempty"`
+	Label                     string `json:"label,omitempty"`
+	SpeedPercent              int    `json:"speed_percent,omitempty"`
+	StrokeMinPercent          int    `json:"stroke_min_percent,omitempty"`
+	StrokeMaxPercent          int    `json:"stroke_max_percent,omitempty"`
+	ReverseDirection          bool   `json:"reverse_direction,omitempty"`
+	PatternIdentifier         string `json:"pattern_id,omitempty"`
+	AreaMinPercent            int    `json:"area_min_percent,omitempty"`
+	AreaMaxPercent            int    `json:"area_max_percent,omitempty"`
+	SoftAnchorPositionPercent int    `json:"soft_anchor_position_percent,omitempty"`
+	SoftAnchorWeightPercent   int    `json:"soft_anchor_weight_percent,omitempty"`
 }
 
 // MotionTraceSample records a sampled transport-neutral motion point.
 type MotionTraceSample struct {
 	PositionPercent int   `json:"position_percent"`
 	TimeMillis      int64 `json:"time_ms"`
+}
+
+// MotionTraceRetarget records retarget decision details required for real-device review.
+type MotionTraceRetarget struct {
+	PreviousPlanID                  string             `json:"previous_plan_id,omitempty"`
+	NextPlanID                      string             `json:"next_plan_id,omitempty"`
+	PreviousPatternIdentifier       string             `json:"previous_pattern_id,omitempty"`
+	NextPatternIdentifier           string             `json:"next_pattern_id,omitempty"`
+	PreviousTarget                  *MotionTraceTarget `json:"previous_target,omitempty"`
+	NextTarget                      *MotionTraceTarget `json:"next_target,omitempty"`
+	EstimatedCurrentPositionPercent int                `json:"estimated_current_position_percent,omitempty"`
+	EstimatedCurrentStreamMillis    int64              `json:"estimated_current_stream_ms,omitempty"`
+	SelectedHandoffMillis           int64              `json:"selected_handoff_ms,omitempty"`
+	SelectedLeadMillis              int64              `json:"selected_lead_ms,omitempty"`
+	RecentCommandLatencyMillis      int64              `json:"recent_command_latency_ms,omitempty"`
+	PhasePreserved                  bool               `json:"phase_preserved"`
+	BridgePointsInserted            bool               `json:"bridge_points_inserted"`
+	Recovery                        string             `json:"recovery,omitempty"`
 }
 
 // TraceExport is the stable JSON envelope returned by trace export endpoints.

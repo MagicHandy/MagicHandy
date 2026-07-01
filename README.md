@@ -3,7 +3,7 @@
 MagicHandy is a Go-first rewrite of StrokeGPT-ReVibed. The current application
 starts a local HTTP server, serves an embedded single-page UI, exposes
 health/state/settings endpoints, writes structured logs, and keeps the
-architecture boundaries ready for later motion, transport, chat, and voice work.
+architecture boundaries ready for later chat and voice work.
 
 ## Current Scope
 
@@ -13,7 +13,11 @@ Implemented:
 - embedded static assets from `web/`
 - `GET /healthz`, `GET /api/status`, `GET /api/state`, and settings API routes
 - fake Handy transport contracts, safe transport diagnostics, and `GET /api/traces`
-- Cloud REST HSP v4/API v3 request-shaping code and invariant tests
+- Cloud REST HSP v4/API v3 transport code, request-shape tests, and invariant tests
+- semantic motion engine with active retargeting, latency-aware buffer lead,
+  phase-preserving same-pattern changes, low-jump cross-pattern handoff, and
+  retarget trace export fields
+- Phase 7 retarget validation runner for safe real-device trace exports
 - JSON structured logging
 - graceful shutdown
 - versioned JSON settings with defaults, migration hooks, redacted API views,
@@ -27,8 +31,7 @@ Implemented:
 
 Not implemented yet:
 
-- real Handy transport
-- motion engine
+- full motion-control HTTP/UI workflows
 - local LLM chat
 - voice workers
 
@@ -73,9 +76,19 @@ Invoke-WebRequest http://127.0.0.1:49717/api/traces
 connection key can be saved through `PUT /api/settings`, but it is not returned
 by diagnostics or settings reads.
 
-Transport is still fake-only at runtime. The app records deterministic command
-shapes and diagnostic snapshots, and it has pure Cloud REST HSP request builders,
-but it does not call the real Handy API.
+The main app still exposes only low-level manual transport routes for Cloud REST
+and browser Bluetooth. The Phase 7 real-device retarget workflow uses the
+dedicated validation command:
+
+```powershell
+$env:MAGICHANDY_HANDY_CONNECTION_KEY = "<private Handy connection key>"
+go run ./cmd/retarget-validate -max-speed 35
+Remove-Item Env:\MAGICHANDY_HANDY_CONNECTION_KEY
+```
+
+Trace exports are written under `traces/` by default. The public Handy API v3
+application ID is bundled; the private connection key is not returned by
+diagnostics, trace exports, or settings reads.
 
 ## Validate
 

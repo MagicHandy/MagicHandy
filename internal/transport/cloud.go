@@ -3,19 +3,19 @@ package transport
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 )
 
 const (
 	cloudRESTName = "handy_cloud_rest"
 
-	cloudPathStrokeWindow = "/api/v3/hsp/stroke-window"
-	cloudPathHSPAdd       = "/api/v3/hsp/streams/%s/points"
-	cloudPathHSPPlay      = "/api/v3/hsp/streams/%s/play"
-	cloudPathHSPStop      = "/api/v3/hsp/stop"
-	cloudPathHSPState     = "/api/v3/hsp/state"
-	cloudPathHSPEvents    = "/api/v3/hsp/events"
+	cloudPathStrokeWindow = "slider/stroke"
+	cloudPathHSPSetup     = "hsp/setup"
+	cloudPathHSPAdd       = "hsp/add"
+	cloudPathHSPPlay      = "hsp/play"
+	cloudPathHSPStop      = "hsp/stop"
+	cloudPathHSPState     = "hsp/state"
+	cloudPathHSPEvents    = "sse"
 )
 
 // CloudPrerequisites describes the Cloud REST prerequisites needed before live dispatch.
@@ -129,24 +129,46 @@ func (b *CloudRESTBuilder) BuildStrokeWindow(command StrokeWindowCommand) (Cloud
 	return CloudRequest{
 		Transport: cloudRESTName,
 		Operation: string(CommandKindStrokeWindow),
-		Method:    "POST",
+		Method:    "PUT",
 		Path:      cloudPathStrokeWindow,
 		Auth:      b.auth,
 		Body: cloudStrokeWindowBody{
-			Min: command.MinPercent,
-			Max: command.MaxPercent,
+			Min: percentFraction(command.MinPercent),
+			Max: percentFraction(command.MaxPercent),
 		},
+	}, nil
+}
+
+// BuildHSPSetup shapes a Cloud REST request that prepares an HSP stream.
+func (b *CloudRESTBuilder) BuildHSPSetup(command HSPSetupCommand) (CloudRequest, error) {
+	if command.StreamID == 0 {
+		return CloudRequest{}, errors.New("HSP setup stream ID must be positive")
+	}
+	return CloudRequest{
+		Transport: cloudRESTName,
+		Operation: string(CommandKindHSPSetup),
+		Method:    "PUT",
+		Path:      cloudPathHSPSetup,
+		Auth:      b.auth,
+		Body:      cloudHSPSetupBody(command),
 	}, nil
 }
 
 // BuildHSPAdd shapes a Cloud REST request that appends HSP timed points.
 func (b *CloudRESTBuilder) BuildHSPAdd(command HSPAddCommand) (CloudRequest, error) {
+	return b.buildHSPAdd(command, true, len(command.Points))
+}
+
+func (b *CloudRESTBuilder) buildHSPAdd(command HSPAddCommand, flush bool, tailPointStreamIndex int) (CloudRequest, error) {
 	streamID, err := cleanStreamID(command.StreamID)
 	if err != nil {
 		return CloudRequest{}, err
 	}
 	if len(command.Points) == 0 {
 		return CloudRequest{}, errors.New("HSP add requires at least one point")
+	}
+	if tailPointStreamIndex < len(command.Points) {
+		return CloudRequest{}, errors.New("HSP tail point stream index must cover the appended points")
 	}
 
 	points := make([]CloudHSPPoint, len(command.Points))
@@ -171,12 +193,14 @@ func (b *CloudRESTBuilder) BuildHSPAdd(command HSPAddCommand) (CloudRequest, err
 	return CloudRequest{
 		Transport: cloudRESTName,
 		Operation: string(CommandKindHSPAdd),
-		Method:    "POST",
-		Path:      fmt.Sprintf(cloudPathHSPAdd, url.PathEscape(streamID)),
+		Method:    "PUT",
+		Path:      cloudPathHSPAdd,
 		Auth:      b.auth,
 		Body: cloudHSPAddBody{
-			StreamID: streamID,
-			Points:   points,
+			StreamID:             streamID,
+			Points:               points,
+			Flush:                flush,
+			TailPointStreamIndex: tailPointStreamIndex,
 		},
 	}, nil
 }
@@ -194,12 +218,16 @@ func (b *CloudRESTBuilder) BuildHSPPlay(command HSPPlayCommand) (CloudRequest, e
 	return CloudRequest{
 		Transport: cloudRESTName,
 		Operation: string(CommandKindHSPPlay),
-		Method:    "POST",
-		Path:      fmt.Sprintf(cloudPathHSPPlay, url.PathEscape(streamID)),
+		Method:    "PUT",
+		Path:      cloudPathHSPPlay,
 		Auth:      b.auth,
 		Body: cloudHSPPlayBody{
-			StreamID:        streamID,
-			StartTimeMillis: command.StartTimeMillis,
+			StreamID:         streamID,
+			StartTimeMillis:  command.StartTimeMillis,
+			ServerTimeMillis: command.ServerTimeMillis,
+			PlaybackRate:     1,
+			PauseOnStarving:  true,
+			Loop:             false,
 		},
 	}, nil
 }
@@ -209,12 +237,10 @@ func (b *CloudRESTBuilder) BuildStop() CloudRequest {
 	return CloudRequest{
 		Transport: cloudRESTName,
 		Operation: string(CommandKindStop),
-		Method:    "POST",
+		Method:    "PUT",
 		Path:      cloudPathHSPStop,
 		Auth:      b.auth,
-		Body: cloudStopBody{
-			Reason: "stop",
-		},
+		Body:      cloudStopBody{},
 	}
 }
 
@@ -252,22 +278,34 @@ func (b *CloudRESTBuilder) BuildHSPEvents() CloudRequest {
 }
 
 type cloudStrokeWindowBody struct {
-	Min int `json:"min"`
-	Max int `json:"max"`
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+type cloudHSPSetupBody struct {
+	StreamID uint32 `json:"stream_id"`
 }
 
 type cloudHSPAddBody struct {
-	StreamID string          `json:"stream_id"`
-	Points   []CloudHSPPoint `json:"points"`
+	StreamID             string          `json:"-"`
+	Points               []CloudHSPPoint `json:"points"`
+	Flush                bool            `json:"flush"`
+	TailPointStreamIndex int             `json:"tail_point_stream_index"`
 }
 
 type cloudHSPPlayBody struct {
-	StreamID        string `json:"stream_id"`
-	StartTimeMillis int64  `json:"start_time_ms"`
+	StreamID         string  `json:"-"`
+	StartTimeMillis  int64   `json:"start_time"`
+	ServerTimeMillis int64   `json:"server_time,omitempty"`
+	PlaybackRate     float64 `json:"playback_rate"`
+	PauseOnStarving  bool    `json:"pause_on_starving"`
+	Loop             bool    `json:"loop"`
 }
 
-type cloudStopBody struct {
-	Reason string `json:"reason"`
+type cloudStopBody struct{}
+
+func percentFraction(value int) float64 {
+	return float64(value) / 100
 }
 
 func validateStrokeWindow(command StrokeWindowCommand) error {

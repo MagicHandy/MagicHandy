@@ -218,6 +218,10 @@ func cloneCommand(command Command) Command {
 		window := *command.StrokeWindow
 		command.StrokeWindow = &window
 	}
+	if command.HSPSetup != nil {
+		setup := *command.HSPSetup
+		command.HSPSetup = &setup
+	}
 	if command.HSPAdd != nil {
 		command.HSPAdd = cloneHSPAdd(*command.HSPAdd)
 	}

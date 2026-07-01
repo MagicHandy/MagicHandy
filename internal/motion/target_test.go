@@ -95,6 +95,43 @@ func TestSamePatternRetargetPreservesPhase(t *testing.T) {
 	}
 }
 
+func TestCrossPatternRetargetChoosesLowJumpPhase(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	started := time.Unix(0, 0)
+	plan := NewMotionPlan("initial", MotionTarget{
+		PatternID:    PatternStroke,
+		SpeedPercent: 70,
+	}, settings, 0, 0, started)
+	streamMillis := int64(float64(plan.PeriodMillis) * 0.37)
+	current := plan.SampleAt(streamMillis)
+
+	next := plan.Retarget("next", MotionTarget{
+		PatternID:    PatternPulse,
+		SpeedPercent: 70,
+	}, settings, streamMillis, started.Add(time.Second))
+	replacement := next.SampleAt(streamMillis)
+	if next.PhasePreserved {
+		t.Fatal("cross-pattern retarget marked phase preservation")
+	}
+	if almostEqual(next.PhaseOffset, 0) {
+		t.Fatal("cross-pattern retarget hard reset to phase zero")
+	}
+	if delta := absInt(replacement.PositionPercent - current.PositionPercent); delta > 10 {
+		t.Fatalf("replacement jump = %d, want low-jump handoff from %d to %d", delta, current.PositionPercent, replacement.PositionPercent)
+	}
+	if plan.DirectionAt(streamMillis) != 0 && next.DirectionAt(streamMillis) != 0 &&
+		plan.DirectionAt(streamMillis) != next.DirectionAt(streamMillis) {
+		t.Fatalf("direction changed immediately from %d to %d", plan.DirectionAt(streamMillis), next.DirectionAt(streamMillis))
+	}
+}
+
 func almostEqual(left float64, right float64) bool {
 	return math.Abs(left-right) < 0.000001
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

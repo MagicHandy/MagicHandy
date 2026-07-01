@@ -48,11 +48,62 @@ func (e *Engine) traceStateLocked(reason string, annotation string) {
 	})
 }
 
+func (e *Engine) traceRetargetLocked(
+	reason string,
+	previous MotionPlan,
+	previousSettings config.MotionSettings,
+	next MotionPlan,
+	nextSettings config.MotionSettings,
+	current MotionSample,
+	handoffMillis int64,
+	leadMillis int64,
+	recentLatencyMillis int64,
+	bridgeInserted bool,
+	recovery string,
+) {
+	if e.traces == nil {
+		return
+	}
+	e.traces.Add(diagnostics.MotionTraceRow{
+		Source:     next.Target.Source,
+		Reason:     reason,
+		Target:     traceTarget(next.Target, nextSettings),
+		Sample:     traceSample(&current),
+		Annotation: retargetAnnotation(next.PhasePreserved, bridgeInserted),
+		Retarget: &diagnostics.MotionTraceRetarget{
+			PreviousPlanID:                  previous.ID,
+			NextPlanID:                      next.ID,
+			PreviousPatternIdentifier:       string(previous.PatternID),
+			NextPatternIdentifier:           string(next.PatternID),
+			PreviousTarget:                  traceTarget(previous.Target, previousSettings),
+			NextTarget:                      traceTarget(next.Target, nextSettings),
+			EstimatedCurrentPositionPercent: current.PositionPercent,
+			EstimatedCurrentStreamMillis:    current.TimeMillis,
+			SelectedHandoffMillis:           handoffMillis,
+			SelectedLeadMillis:              leadMillis,
+			RecentCommandLatencyMillis:      recentLatencyMillis,
+			PhasePreserved:                  next.PhasePreserved,
+			BridgePointsInserted:            bridgeInserted,
+			Recovery:                        recovery,
+		},
+	})
+}
+
 func (e *Engine) recordTransportResult(
 	reason string,
 	sample *MotionSample,
 	result transport.CommandResult,
 	err error,
+) {
+	e.recordTransportResultWithAnnotation(reason, sample, result, err, "")
+}
+
+func (e *Engine) recordTransportResultWithAnnotation(
+	reason string,
+	sample *MotionSample,
+	result transport.CommandResult,
+	err error,
+	annotation string,
 ) {
 	if e.traces == nil {
 		return
@@ -65,13 +116,16 @@ func (e *Engine) recordTransportResult(
 		Target:          e.traceTargetSnapshot(),
 		Sample:          traceSample(sample),
 		TransportResult: safeResultPointer(result),
+		Annotation:      annotation,
 	}
 	if diagnosticsSnapshot.LastCommand != nil {
 		command := transport.SafeCommand(*diagnosticsSnapshot.LastCommand)
 		row.TransportCommand = &command
 	}
 	if err != nil {
-		row.Annotation = "transport_error"
+		if row.Annotation == "" {
+			row.Annotation = "transport_error"
+		}
 	}
 	e.traces.Add(row)
 }
@@ -92,7 +146,7 @@ func (e *Engine) traceTargetSnapshot() *diagnostics.MotionTraceTarget {
 }
 
 func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnostics.MotionTraceTarget {
-	return &diagnostics.MotionTraceTarget{
+	trace := &diagnostics.MotionTraceTarget{
 		Label:             target.Label,
 		SpeedPercent:      target.SpeedPercent,
 		StrokeMinPercent:  settings.StrokeMinPercent,
@@ -100,6 +154,15 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		ReverseDirection:  settings.ReverseDirection,
 		PatternIdentifier: string(target.PatternID),
 	}
+	if target.AreaFocus != nil {
+		trace.AreaMinPercent = target.AreaFocus.MinPercent
+		trace.AreaMaxPercent = target.AreaFocus.MaxPercent
+	}
+	if target.SoftAnchor != nil {
+		trace.SoftAnchorPositionPercent = target.SoftAnchor.PositionPercent
+		trace.SoftAnchorWeightPercent = target.SoftAnchor.WeightPercent
+	}
+	return trace
 }
 
 func traceSample(sample *MotionSample) *diagnostics.MotionTraceSample {
@@ -129,6 +192,14 @@ func phaseAnnotation(preserved bool) string {
 		return "phase_preserved=true"
 	}
 	return "phase_preserved=false"
+}
+
+func retargetAnnotation(phasePreserved bool, bridgeInserted bool) string {
+	annotation := phaseAnnotation(phasePreserved)
+	if bridgeInserted {
+		annotation += ";bridge_points=true"
+	}
+	return annotation
 }
 
 func redactedError(value string) string {

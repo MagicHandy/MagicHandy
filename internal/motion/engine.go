@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,11 @@ const (
 	defaultDispatchInterval = 200 * time.Millisecond
 	defaultSampleInterval   = 125 * time.Millisecond
 	defaultStreamPrefix     = "motion"
+
+	latencySampleLimit      = 8
+	leadSafetyPaddingMillis = int64(250)
+	minLeadMillis           = int64(500)
+	maxLeadMillis           = int64(2000)
 )
 
 // EngineOptions configures a motion engine instance.
@@ -52,6 +58,8 @@ type Engine struct {
 	lastSample       *MotionSample
 	lastResult       *transport.CommandResult
 	lastError        string
+	latencyMillis    []int64
+	bridgeSample     *MotionSample
 	cancel           context.CancelFunc
 	done             chan struct{}
 }
@@ -117,6 +125,9 @@ func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason st
 	if reason == "" {
 		reason = "target_applied"
 	}
+	if err := e.ensureLeadBuffer(ctx, "retarget_lead_points"); err != nil {
+		return e.Snapshot(), err
+	}
 	if err := e.retarget(target, reason); err != nil {
 		return e.Snapshot(), err
 	}
@@ -128,6 +139,9 @@ func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason st
 func (e *Engine) RefreshSettings(ctx context.Context, settings config.MotionSettings, reason string) (ActiveMotionState, error) {
 	if reason == "" {
 		reason = "settings_refresh"
+	}
+	if err := e.ensureLeadBuffer(ctx, "settings_lead_points"); err != nil {
+		return e.Snapshot(), err
 	}
 	active, err := e.refreshSettings(settings, reason)
 	if err != nil {
@@ -184,6 +198,8 @@ func (e *Engine) begin(target MotionTarget, settings config.MotionSettings) erro
 	e.lastSample = nil
 	e.lastResult = nil
 	e.lastError = ""
+	e.latencyMillis = nil
+	e.bridgeSample = nil
 	e.plan = NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")
@@ -197,11 +213,31 @@ func (e *Engine) retarget(target MotionTarget, reason string) error {
 		return errors.New("motion is not running")
 	}
 
+	now := e.now()
 	handoff := e.nextSampleMillis
+	estimatedMillis := e.estimatedPlaybackMillisLocked(now)
+	leadMillis := handoff - estimatedMillis
+	if leadMillis < 0 {
+		leadMillis = 0
+	}
+	recentLatency := e.recentCommandLatencyMillisLocked()
+	previous := e.plan
+	previousSettings := e.settings
+	current := previous.SampleAt(estimatedMillis)
+	previousHandoff := previous.SampleAt(handoff)
 	e.generation++
-	next := e.plan.Retarget(e.planIDLocked(), target, e.settings, handoff, e.now())
+	next := previous.Retarget(e.planIDLocked(), target, e.settings, handoff, now)
+	nextHandoff := next.SampleAt(handoff)
+	bridgeInserted := shouldInsertBridgePoint(previousHandoff, nextHandoff)
+	if bridgeInserted {
+		bridge := previousHandoff
+		bridge.PlanID = next.ID
+		e.bridgeSample = &bridge
+	} else {
+		e.bridgeSample = nil
+	}
 	e.plan = next
-	e.traceStateLocked(reason, phaseAnnotation(next.PhasePreserved))
+	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
 	return nil
 }
 
@@ -214,13 +250,34 @@ func (e *Engine) refreshSettings(settings config.MotionSettings, reason string) 
 	}
 
 	settings = normalizeMotionSettings(settings)
+	now := e.now()
 	handoff := e.nextSampleMillis
+	estimatedMillis := e.estimatedPlaybackMillisLocked(now)
+	leadMillis := handoff - estimatedMillis
+	if leadMillis < 0 {
+		leadMillis = 0
+	}
+	recentLatency := e.recentCommandLatencyMillisLocked()
+	previous := e.plan
+	previousSettings := e.settings
+	current := previous.SampleAt(estimatedMillis)
 	target := NormalizeTarget(e.plan.Target, settings)
 	e.generation++
 	e.settings = settings
-	e.plan = e.plan.Retarget(e.planIDLocked(), target, settings, handoff, e.now())
-	e.plan.PhasePreserved = true
-	e.traceStateLocked(reason, "phase_preserved=true")
+	next := previous.Retarget(e.planIDLocked(), target, settings, handoff, now)
+	next.PhasePreserved = true
+	previousHandoff := previous.SampleAt(handoff)
+	nextHandoff := next.SampleAt(handoff)
+	bridgeInserted := shouldInsertBridgePoint(previousHandoff, nextHandoff)
+	if bridgeInserted {
+		bridge := previousHandoff
+		bridge.PlanID = next.ID
+		e.bridgeSample = &bridge
+	} else {
+		e.bridgeSample = nil
+	}
+	e.plan = next
+	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
 	return true, nil
 }
 
@@ -246,7 +303,7 @@ func (e *Engine) runLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := e.dispatchNextChunk(ctx, "append_points"); err != nil {
+			if err := e.dispatchIfLeadNeeded(ctx, "append_points"); err != nil {
 				e.rememberError(err)
 			}
 		}
@@ -267,9 +324,116 @@ func (e *Engine) stopLoop() (context.CancelFunc, <-chan struct{}, bool) {
 	return cancel, done, true
 }
 
+func (e *Engine) ensureLeadBuffer(ctx context.Context, reason string) error {
+	for range 64 {
+		if err := e.ensurePlaybackHealthy(ctx, reason); err != nil {
+			return err
+		}
+		needsLead := false
+		e.mu.Lock()
+		if e.running {
+			requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
+			needsLead = e.nextSampleMillis < requiredTail
+		}
+		e.mu.Unlock()
+		if !needsLead {
+			return nil
+		}
+		if err := e.dispatchNextChunk(ctx, reason); err != nil {
+			return err
+		}
+	}
+	return errors.New("motion retarget could not build enough lead buffer")
+}
+
+func (e *Engine) ensurePlaybackHealthy(ctx context.Context, reason string) error {
+	diagnostics := e.transport.Diagnostics()
+	if !playbackStateNeedsRecovery(diagnostics.PlaybackState) {
+		return nil
+	}
+	message := fmt.Sprintf("motion recovery stopped active stream after playback state %q during %s", diagnostics.PlaybackState, reason)
+	return e.stopForRecovery(ctx, "recovery_"+reason, message)
+}
+
+func (e *Engine) stopForRecovery(ctx context.Context, reason string, message string) error {
+	e.mu.Lock()
+	if !e.running {
+		e.mu.Unlock()
+		return errors.New(message)
+	}
+	cancel := e.cancel
+	e.running = false
+	e.cancel = nil
+	e.done = nil
+	e.lastError = message
+	e.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
+	e.recordTransportResultWithAnnotation(reason, nil, result, err, "recovery="+message)
+	e.finishStopped(result, err)
+	if err != nil {
+		return err
+	}
+	return errors.New(message)
+}
+
+func (e *Engine) estimatedPlaybackMillisLocked(now time.Time) int64 {
+	if e.startedAt.IsZero() {
+		return 0
+	}
+	elapsed := now.Sub(e.startedAt).Milliseconds()
+	if elapsed < 0 {
+		return 0
+	}
+	return elapsed
+}
+
+func (e *Engine) leadMillisLocked() int64 {
+	lead := e.recentCommandLatencyMillisLocked() + leadSafetyPaddingMillis
+	if lead < minLeadMillis {
+		return minLeadMillis
+	}
+	if lead > maxLeadMillis {
+		return maxLeadMillis
+	}
+	return lead
+}
+
+func (e *Engine) recentCommandLatencyMillisLocked() int64 {
+	var recent int64
+	for _, latency := range e.latencyMillis {
+		if latency > recent {
+			recent = latency
+		}
+	}
+	return recent
+}
+
 func waitForLoop(done <-chan struct{}) {
 	if done != nil {
 		<-done
+	}
+}
+
+func shouldInsertBridgePoint(previous MotionSample, next MotionSample) bool {
+	const maxRetargetJumpPercent = 12
+	delta := previous.PositionPercent - next.PositionPercent
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta > maxRetargetJumpPercent
+}
+
+func playbackStateNeedsRecovery(state string) bool {
+	state = strings.ToLower(strings.TrimSpace(state))
+	switch state {
+	case "paused", "starved", "rejected", "stale", "hsp_paused_on_starving", "hsp_starving", "hsp_state_paused", "hsp_state_starving":
+		return true
+	default:
+		return false
 	}
 }
 

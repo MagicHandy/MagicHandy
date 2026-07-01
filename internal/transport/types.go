@@ -12,6 +12,8 @@ const (
 	CommandKindHSPState CommandKind = "hsp_state"
 	// CommandKindHSPEvents reads Cloud REST HSP state events without moving the device.
 	CommandKindHSPEvents CommandKind = "hsp_events"
+	// CommandKindHSPSetup prepares an HSP stream before timed points are sent.
+	CommandKindHSPSetup CommandKind = "hsp_setup"
 	// CommandKindStop stops active transport playback.
 	CommandKindStop CommandKind = "stop"
 	// CommandKindStrokeWindow applies a physical stroke envelope.
@@ -63,8 +65,14 @@ type HSPAddCommand struct {
 
 // HSPPlayCommand starts or resumes playback of an HSP stream.
 type HSPPlayCommand struct {
-	StreamID        string `json:"stream_id"`
-	StartTimeMillis int64  `json:"start_time_ms"`
+	StreamID         string `json:"stream_id"`
+	StartTimeMillis  int64  `json:"start_time_ms"`
+	ServerTimeMillis int64  `json:"server_time_ms,omitempty"`
+}
+
+// HSPSetupCommand prepares the active HSP stream on API v3 transports.
+type HSPSetupCommand struct {
+	StreamID uint32 `json:"stream_id"`
 }
 
 // Command is the safe serialized transport command shape used for diagnostics.
@@ -74,6 +82,7 @@ type Command struct {
 	IssuedAt     string               `json:"issued_at"`
 	Stop         *StopCommand         `json:"stop,omitempty"`
 	StrokeWindow *StrokeWindowCommand `json:"stroke_window,omitempty"`
+	HSPSetup     *HSPSetupCommand     `json:"hsp_setup,omitempty"`
 	HSPAdd       *HSPAddCommand       `json:"hsp_add,omitempty"`
 	HSPPlay      *HSPPlayCommand      `json:"hsp_play,omitempty"`
 }

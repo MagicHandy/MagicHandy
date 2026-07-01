@@ -21,7 +21,7 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 		seen = append(seen, capturedRequest{
 			Method:        r.Method,
 			Path:          r.URL.Path,
-			ApplicationID: r.Header.Get("X-Application-ID"),
+			ApplicationID: r.Header.Get("X-Api-Key"),
 			ConnectionKey: r.Header.Get("X-Connection-Key"),
 			Body:          string(body),
 		})
@@ -45,17 +45,27 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("result = %+v, want OK", result)
 	}
-	if len(seen) != 1 {
-		t.Fatalf("request count = %d, want 1", len(seen))
+	if len(seen) != 2 {
+		t.Fatalf("request count = %d, want setup plus add", len(seen))
 	}
-	if seen[0].Method != http.MethodPost || seen[0].Path != "/api/v3/hsp/streams/stream-1/points" {
-		t.Fatalf("request = %+v, want HSP add path", seen[0])
+	if seen[0].Method != http.MethodPut || seen[0].Path != "/hsp/setup" {
+		t.Fatalf("request = %+v, want HSP setup path", seen[0])
 	}
 	if seen[0].ApplicationID != "app-public-id" || seen[0].ConnectionKey != cloudSecretFixture {
 		t.Fatalf("auth headers = %+v, want app id and connection key", seen[0])
 	}
-	if !strings.Contains(seen[0].Body, `"x":25`) || !strings.Contains(seen[0].Body, `"t":250`) {
-		t.Fatalf("body = %s, want HSP points", seen[0].Body)
+	if !strings.Contains(seen[0].Body, `"stream_id":1`) {
+		t.Fatalf("body = %s, want setup stream id", seen[0].Body)
+	}
+	if seen[1].Method != http.MethodPut || seen[1].Path != "/hsp/add" {
+		t.Fatalf("request = %+v, want HSP add path", seen[1])
+	}
+	if seen[1].ApplicationID != "app-public-id" || seen[1].ConnectionKey != cloudSecretFixture {
+		t.Fatalf("auth headers = %+v, want app id and connection key", seen[1])
+	}
+	if !strings.Contains(seen[1].Body, `"x":25`) || !strings.Contains(seen[1].Body, `"t":250`) ||
+		!strings.Contains(seen[1].Body, `"flush":true`) {
+		t.Fatalf("body = %s, want HSP points", seen[1].Body)
 	}
 
 	diagnostics := cloud.Diagnostics()
@@ -93,8 +103,8 @@ func TestCloudRESTTransportRedactsDiagnostics(t *testing.T) {
 
 func TestCloudRESTTransportConnectionCheck(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v3/hsp/state" {
-			t.Fatalf("path = %q, want /api/v3/hsp/state", r.URL.Path)
+		if r.URL.Path != "/hsp/state" {
+			t.Fatalf("path = %q, want /hsp/state", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"hsp_available":true,"playback_state":"idle"}`))
@@ -151,8 +161,14 @@ func TestCloudRESTTransportReadState(t *testing.T) {
 
 func TestCloudRESTTransportSSEListener(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v3/hsp/events" {
-			t.Fatalf("path = %q, want /api/v3/hsp/events", r.URL.Path)
+		if r.URL.Path != "/sse" {
+			t.Fatalf("path = %q, want /sse", r.URL.Path)
+		}
+		if r.URL.Query().Get("ck") != cloudSecretFixture || r.URL.Query().Get("apikey") != "app-public-id" {
+			t.Fatalf("query = %q, want SSE credentials", r.URL.RawQuery)
+		}
+		if r.URL.Query().Get("events") == "" {
+			t.Fatalf("query = %q, want event subscriptions", r.URL.RawQuery)
 		}
 		if r.Header.Get("Accept") != "text/event-stream" {
 			t.Fatalf("accept = %q, want text/event-stream", r.Header.Get("Accept"))

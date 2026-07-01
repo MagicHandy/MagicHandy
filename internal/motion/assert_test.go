@@ -1,6 +1,7 @@
 package motion
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
@@ -100,6 +101,26 @@ func assertTraceAnnotation(t *testing.T, rows []diagnostics.MotionTraceRow, reas
 		}
 	}
 	t.Fatalf("trace rows = %+v, want reason %q annotation %q", rows, reason, annotation)
+}
+
+func findRetargetTrace(t *testing.T, rows []diagnostics.MotionTraceRow, reason string) diagnostics.MotionTraceRetarget {
+	t.Helper()
+	for _, row := range rows {
+		if row.Reason == reason && row.Retarget != nil {
+			return *row.Retarget
+		}
+	}
+	t.Fatalf("trace rows = %+v, want retarget reason %q", rows, reason)
+	return diagnostics.MotionTraceRetarget{}
+}
+
+func hasTraceAnnotationPrefix(rows []diagnostics.MotionTraceRow, reason string, prefix string) bool {
+	for _, row := range rows {
+		if row.Reason == reason && strings.HasPrefix(row.Annotation, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func lastHSPAdd(commands []transport.Command) *transport.HSPAddCommand {
