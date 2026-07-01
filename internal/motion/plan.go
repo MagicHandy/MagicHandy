@@ -14,6 +14,8 @@ const (
 )
 
 // MotionPlan is a repeatable semantic pattern sampled over stream time.
+//
+//revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
 type MotionPlan struct {
 	ID             string       `json:"id"`
 	Target         MotionTarget `json:"target"`
@@ -26,6 +28,8 @@ type MotionPlan struct {
 }
 
 // MotionSample is one transport-neutral semantic sample.
+//
+//revive:disable-next-line:exported -- keeps sampler state explicit with MotionPlan.
 type MotionSample struct {
 	PlanID          string    `json:"plan_id"`
 	PatternID       PatternID `json:"pattern_id"`
@@ -170,7 +174,7 @@ func interpolateKnot(left patternKnot, right patternKnot, phase float64) float64
 func normalizePhase(phase float64) float64 {
 	phase = math.Mod(phase, 1)
 	if phase < 0 {
-		phase += 1
+		phase++
 	}
 	return phase
 }

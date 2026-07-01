@@ -33,6 +33,8 @@ type SoftAnchor struct {
 }
 
 // MotionTarget is the app-level semantic motion intent.
+//
+//revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
 type MotionTarget struct {
 	Label        string      `json:"label,omitempty"`
 	Source       string      `json:"source,omitempty"`
