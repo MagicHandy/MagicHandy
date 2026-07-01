@@ -1,0 +1,78 @@
+[
+  {
+    "transport": "handy_cloud_rest",
+    "operation": "stroke_window",
+    "method": "POST",
+    "path": "/api/v3/hsp/stroke-window",
+    "auth": {
+      "application_id": "app-public-id",
+      "connection_key_set": true,
+      "firmware_major": 4,
+      "api_major": 3
+    },
+    "body": {
+      "min": 10,
+      "max": 90
+    }
+  },
+  {
+    "transport": "handy_cloud_rest",
+    "operation": "hsp_add",
+    "method": "POST",
+    "path": "/api/v3/hsp/streams/stream-1/points",
+    "auth": {
+      "application_id": "app-public-id",
+      "connection_key_set": true,
+      "firmware_major": 4,
+      "api_major": 3
+    },
+    "body": {
+      "stream_id": "stream-1",
+      "points": [
+        {
+          "x": 0,
+          "t": 0
+        },
+        {
+          "x": 50,
+          "t": 125
+        },
+        {
+          "x": 100,
+          "t": 250
+        }
+      ]
+    }
+  },
+  {
+    "transport": "handy_cloud_rest",
+    "operation": "hsp_play",
+    "method": "POST",
+    "path": "/api/v3/hsp/streams/stream-1/play",
+    "auth": {
+      "application_id": "app-public-id",
+      "connection_key_set": true,
+      "firmware_major": 4,
+      "api_major": 3
+    },
+    "body": {
+      "stream_id": "stream-1",
+      "start_time_ms": 0
+    }
+  },
+  {
+    "transport": "handy_cloud_rest",
+    "operation": "stop",
+    "method": "POST",
+    "path": "/api/v3/hsp/stop",
+    "auth": {
+      "application_id": "app-public-id",
+      "connection_key_set": true,
+      "firmware_major": 4,
+      "api_major": 3
+    },
+    "body": {
+      "reason": "stop"
+    }
+  }
+]
