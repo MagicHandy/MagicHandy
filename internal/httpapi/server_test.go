@@ -173,6 +173,14 @@ func TestSettingsAPIReadsAndSavesSettings(t *testing.T) {
 			"stroke_max_percent": 95,
 			"reverse_direction": true
 		},
+		"llm": {
+			"provider": "ollama",
+			"llama_cpp_base_url": "http://127.0.0.1:8080/",
+			"ollama_base_url": "http://127.0.0.1:11434/",
+			"model": "test-model",
+			"prompt_set": "magichandy_motion_v1",
+			"request_timeout_ms": 45000
+		},
 		"diagnostics": {"verbosity": "debug"}
 	}`
 
@@ -196,6 +204,12 @@ func TestSettingsAPIReadsAndSavesSettings(t *testing.T) {
 	}
 	if !settings.Motion.ReverseDirection {
 		t.Fatal("reverse direction was not saved")
+	}
+	if settings.LLM.Provider != config.LLMProviderOllama || settings.LLM.Model != "test-model" {
+		t.Fatalf("LLM settings were not saved: %+v", settings.LLM)
+	}
+	if strings.HasSuffix(settings.LLM.OllamaBaseURL, "/") {
+		t.Fatalf("Ollama URL should be normalized without trailing slash: %q", settings.LLM.OllamaBaseURL)
 	}
 }
 

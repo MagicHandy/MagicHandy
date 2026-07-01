@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/app.css">
     <script type="module" src="/app.js"></script>
     <script type="module" src="/motion-ui.js"></script>
+    <script type="module" src="/chat-ui.js"></script>
   </head>
   <body>
     <!-- Persistent control bar: connection, the single visualizer, and Stop.
@@ -102,6 +103,28 @@
         </fieldset>
       </section>
 
+      <section class="panel chat-panel" aria-labelledby="chat-title">
+        <div class="section-heading">
+          <p class="eyebrow">Chat</p>
+          <h2 id="chat-title">Local Chat</h2>
+          <span class="chat-provider" id="chat-provider">llama.cpp</span>
+        </div>
+
+        <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+
+        <form class="chat-form" id="chat-form">
+          <label class="field chat-input-field" for="chat-input">
+            <span>Message</span>
+            <textarea id="chat-input" name="chat-input" rows="3" maxlength="1000" autocomplete="off"></textarea>
+          </label>
+          <div class="chat-actions">
+            <button class="primary-button" id="chat-send" type="submit">Send</button>
+            <span class="chat-status" id="chat-status" role="status" aria-live="polite">Idle</span>
+          </div>
+          <p class="chat-malformed" id="chat-malformed" role="status" hidden></p>
+        </form>
+      </section>
+
       <!-- Connection: credentials and transport. Explicit Save (credentials). -->
       <section class="panel connection-panel" aria-labelledby="connection-title">
         <div class="section-heading">
@@ -163,6 +186,34 @@
             <select id="diagnostics-verbosity" name="diagnostics-verbosity"></select>
           </label>
 
+          <fieldset class="llm-settings">
+            <legend>Local LLM</legend>
+            <label class="field">
+              <span>Provider</span>
+              <select id="llm-provider" name="llm-provider"></select>
+            </label>
+            <label class="field">
+              <span>Model</span>
+              <input id="llm-model" name="llm-model" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              <span>llama.cpp URL</span>
+              <input id="llm-llama-url" name="llm-llama-url" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              <span>Ollama URL</span>
+              <input id="llm-ollama-url" name="llm-ollama-url" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              <span>Prompt set</span>
+              <select id="llm-prompt-set" name="llm-prompt-set"></select>
+            </label>
+            <label class="field">
+              <span>Timeout ms</span>
+              <input id="llm-timeout" name="llm-timeout" type="number" min="1000" max="300000" inputmode="numeric">
+            </label>
+          </fieldset>
+
           <div class="form-actions">
             <button class="primary-button" id="save-settings" type="submit">Save connection</button>
             <span class="form-status" id="settings-status" role="status" aria-live="polite">Not loaded</span>
@@ -190,6 +241,8 @@
           <div><dt>Settings</dt><dd id="runtime-settings">Pending</dd></div>
           <div><dt>Bluetooth</dt><dd id="runtime-bluetooth">Hidden</dd></div>
           <div><dt>Connection key</dt><dd id="connection-key-state">Not set</dd></div>
+          <div><dt>Chat</dt><dd id="runtime-chat">Pending</dd></div>
+          <div><dt>LLM</dt><dd id="runtime-llm">Pending</dd></div>
           <div><dt>Motion feature</dt><dd id="runtime-motion">Pending</dd></div>
           <div><dt>UI</dt><dd id="runtime-ui">Embedded</dd></div>
           <div><dt>Version</dt><dd id="version-value">dev</dd></div>
