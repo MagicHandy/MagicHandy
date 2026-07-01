@@ -48,6 +48,11 @@ const (
 	// LLMProviderOllama is the secondary externally managed local LLM path.
 	LLMProviderOllama = "ollama"
 
+	// LlamaCPPModeManaged starts and owns a configured llama-server process.
+	LlamaCPPModeManaged = "managed"
+	// LlamaCPPModeExternal connects to a user-managed llama-server process.
+	LlamaCPPModeExternal = "external"
+
 	// PromptSetMagicHandyMotionV1 is the default chat and motion JSON contract.
 	PromptSetMagicHandyMotionV1 = "magichandy_motion_v1"
 
@@ -97,7 +102,10 @@ type MotionSettings struct {
 // LLMSettings contains local model provider settings.
 type LLMSettings struct {
 	Provider             string `json:"provider"`
+	LlamaCPPMode         string `json:"llama_cpp_mode"`
 	LlamaCPPBaseURL      string `json:"llama_cpp_base_url"`
+	LlamaCPPRunnerPath   string `json:"llama_cpp_runner_path,omitempty"`
+	LlamaCPPModelPath    string `json:"llama_cpp_model_path,omitempty"`
 	OllamaBaseURL        string `json:"ollama_base_url"`
 	Model                string `json:"model"`
 	PromptSet            string `json:"prompt_set"`
@@ -135,6 +143,7 @@ type PublicSettingsOptionHints struct {
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
 	LLMProviders            []string `json:"llm_providers"`
+	LlamaCPPModes           []string `json:"llama_cpp_modes"`
 	PromptSets              []string `json:"prompt_sets"`
 }
 
@@ -177,6 +186,7 @@ func DefaultSettings() Settings {
 		},
 		LLM: LLMSettings{
 			Provider:             LLMProviderLlamaCPP,
+			LlamaCPPMode:         LlamaCPPModeManaged,
 			LlamaCPPBaseURL:      DefaultLlamaCPPBaseURL,
 			OllamaBaseURL:        DefaultOllamaBaseURL,
 			Model:                DefaultLLMModel,
@@ -221,6 +231,10 @@ func (s Settings) Public() PublicSettings {
 			LLMProviders: []string{
 				LLMProviderLlamaCPP,
 				LLMProviderOllama,
+			},
+			LlamaCPPModes: []string{
+				LlamaCPPModeManaged,
+				LlamaCPPModeExternal,
 			},
 			PromptSets: []string{
 				PromptSetMagicHandyMotionV1,
@@ -397,6 +411,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.LLM.Provider == "" {
 		settings.LLM.Provider = defaults.LLM.Provider
 	}
+	if settings.LLM.LlamaCPPMode == "" {
+		settings.LLM.LlamaCPPMode = defaults.LLM.LlamaCPPMode
+	}
 	if settings.LLM.LlamaCPPBaseURL == "" {
 		settings.LLM.LlamaCPPBaseURL = defaults.LLM.LlamaCPPBaseURL
 	}
@@ -439,6 +456,9 @@ func validateLLMSettings(settings LLMSettings) error {
 	if !oneOf(settings.Provider, LLMProviderLlamaCPP, LLMProviderOllama) {
 		return fmt.Errorf("unknown LLM provider %q", settings.Provider)
 	}
+	if !oneOf(settings.LlamaCPPMode, LlamaCPPModeManaged, LlamaCPPModeExternal) {
+		return fmt.Errorf("unknown llama.cpp mode %q", settings.LlamaCPPMode)
+	}
 	if settings.LlamaCPPBaseURL == "" {
 		return errors.New("llama.cpp base URL is required")
 	}
@@ -459,7 +479,10 @@ func validateLLMSettings(settings LLMSettings) error {
 
 func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.Provider = strings.TrimSpace(settings.Provider)
+	settings.LlamaCPPMode = strings.TrimSpace(settings.LlamaCPPMode)
 	settings.LlamaCPPBaseURL = strings.TrimRight(strings.TrimSpace(settings.LlamaCPPBaseURL), "/")
+	settings.LlamaCPPRunnerPath = strings.TrimSpace(settings.LlamaCPPRunnerPath)
+	settings.LlamaCPPModelPath = strings.TrimSpace(settings.LlamaCPPModelPath)
 	settings.OllamaBaseURL = strings.TrimRight(strings.TrimSpace(settings.OllamaBaseURL), "/")
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)

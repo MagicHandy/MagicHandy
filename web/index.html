@@ -193,12 +193,24 @@
               <select id="llm-provider" name="llm-provider"></select>
             </label>
             <label class="field">
+              <span>llama.cpp mode</span>
+              <select id="llm-mode" name="llm-mode"></select>
+            </label>
+            <label class="field">
               <span>Model</span>
               <input id="llm-model" name="llm-model" type="text" autocomplete="off">
             </label>
             <label class="field">
               <span>llama.cpp URL</span>
               <input id="llm-llama-url" name="llm-llama-url" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              <span>llama-server path</span>
+              <input id="llm-runner-path" name="llm-runner-path" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              <span>GGUF model path</span>
+              <input id="llm-model-path" name="llm-model-path" type="text" autocomplete="off">
             </label>
             <label class="field">
               <span>Ollama URL</span>
@@ -212,6 +224,12 @@
               <span>Timeout ms</span>
               <input id="llm-timeout" name="llm-timeout" type="number" min="1000" max="300000" inputmode="numeric">
             </label>
+            <div class="llm-actions">
+              <button class="secondary-button" id="llm-check" type="button">Check</button>
+              <button class="secondary-button" id="llm-load" type="button">Load</button>
+              <button class="secondary-button" id="llm-unload" type="button">Unload</button>
+              <span class="form-status" id="llm-status" role="status" aria-live="polite">Not checked</span>
+            </div>
           </fieldset>
 
           <div class="form-actions">

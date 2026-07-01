@@ -100,6 +100,38 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 	}
 }
 
+func TestServiceRewritesPlainAssistantHistoryAsContractJSON(t *testing.T) {
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"Still here.","motion":{"action":"none"}}`,
+	}}
+	service := Service{
+		Provider:    provider,
+		PromptSetID: defaultPromptSetID,
+		Model:       "local-model",
+	}
+
+	_, err := service.Complete(t.Context(), Request{
+		Message: "continue",
+		History: []llm.Message{
+			{Role: "assistant", Content: "Plain displayed reply."},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if len(provider.requests) != 1 {
+		t.Fatalf("provider calls = %d, want 1", len(provider.requests))
+	}
+	history := provider.requests[0].Messages[1]
+	if history.Role != "assistant" {
+		t.Fatalf("history role = %q, want assistant", history.Role)
+	}
+	if !strings.Contains(history.Content, `"reply":"Plain displayed reply."`) ||
+		!strings.Contains(history.Content, `"action":"none"`) {
+		t.Fatalf("assistant history was not rewritten as contract JSON: %q", history.Content)
+	}
+}
+
 func sawEvent(events []StreamEvent, eventType string) bool {
 	for _, event := range events {
 		if event.Type == eventType {

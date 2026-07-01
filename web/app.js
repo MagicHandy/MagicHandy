@@ -26,6 +26,10 @@ const bluetoothDevice = document.querySelector("#bluetooth-device");
 const bluetoothBridge = document.querySelector("#bluetooth-bridge");
 const bluetoothConnectButton = document.querySelector("#bluetooth-connect");
 const bluetoothDisconnectButton = document.querySelector("#bluetooth-disconnect");
+const llmCheckButton = document.querySelector("#llm-check");
+const llmLoadButton = document.querySelector("#llm-load");
+const llmUnloadButton = document.querySelector("#llm-unload");
+const llmStatus = document.querySelector("#llm-status");
 const cloudCredentialControls = Array.from(document.querySelectorAll(".cloud-credential"));
 
 const fields = {
@@ -38,8 +42,11 @@ const fields = {
   clearConnectionKey: document.querySelector("#clear-connection-key"),
   diagnosticsVerbosity: document.querySelector("#diagnostics-verbosity"),
   llmProvider: document.querySelector("#llm-provider"),
+  llmMode: document.querySelector("#llm-mode"),
   llmModel: document.querySelector("#llm-model"),
   llmLlamaURL: document.querySelector("#llm-llama-url"),
+  llmRunnerPath: document.querySelector("#llm-runner-path"),
+  llmModelPath: document.querySelector("#llm-model-path"),
   llmOllamaURL: document.querySelector("#llm-ollama-url"),
   llmPromptSet: document.querySelector("#llm-prompt-set"),
   llmTimeout: document.querySelector("#llm-timeout"),
@@ -51,6 +58,8 @@ let unsupportedStatusPostedAt = 0;
 // app.js caches them so a connection save preserves them instead of zeroing them.
 let currentMotion = null;
 let currentLLM = null;
+let settingsDirty = false;
+let renderingSettings = false;
 
 const DISPATCH_OWNER_CLOUD = "cloud_rest";
 const DISPATCH_OWNER_BLUETOOTH = "browser_bluetooth";
@@ -113,7 +122,8 @@ async function saveSettings(event) {
     }
     const payload = settingsPayload();
     const response = await sendJSON("/api/settings", payload);
-    renderSettings(response.settings);
+    renderSettings(response.settings, { force: true });
+    settingsDirty = false;
     runtimeSettings.textContent = labelStatus(response.status.source);
     formStatus.textContent = "Saved";
     showToast("Settings saved.");
@@ -173,6 +183,22 @@ async function postJSON(path, payload = {}) {
   return body;
 }
 
+async function postEmpty(path) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body.error || `${path} returned ${response.status}`);
+  }
+
+  return body;
+}
+
 function renderState(health, state, bluetooth) {
   runtimeCore.textContent = health.status === "ok" ? "Online" : "Degraded";
   runtimeUI.textContent = "Embedded";
@@ -189,11 +215,24 @@ function renderState(health, state, bluetooth) {
   healthValue.textContent = health.status;
 }
 
-function renderSettings(settings) {
+function renderLLMStatus(status) {
+  if (!llmStatus) {
+    return;
+  }
+  const state = status.available ? "Ready" : status.loaded ? "Loaded, not ready" : "Not ready";
+  llmStatus.textContent = status.message ? `${state}: ${status.message}` : state;
+}
+
+function renderSettings(settings, options = {}) {
+  if (settingsDirty && !options.force) {
+    return;
+  }
+  renderingSettings = true;
   fillOptions(fields.dispatchOwner, settings.options.hsp_dispatch_owners);
   fillOptions(fields.appIDSource, settings.options.api_application_id_sources);
   fillOptions(fields.diagnosticsVerbosity, settings.options.diagnostics_verbosities);
   fillOptions(fields.llmProvider, settings.options.llm_providers);
+  fillOptions(fields.llmMode, settings.options.llama_cpp_modes);
   fillOptions(fields.llmPromptSet, settings.options.prompt_sets);
 
   fields.serverPort.value = settings.server.port;
@@ -207,14 +246,19 @@ function renderSettings(settings) {
   currentMotion = settings.motion;
   currentLLM = settings.llm;
   fields.llmProvider.value = settings.llm.provider;
+  fields.llmMode.value = settings.llm.llama_cpp_mode;
   fields.llmModel.value = settings.llm.model;
   fields.llmLlamaURL.value = settings.llm.llama_cpp_base_url;
+  fields.llmRunnerPath.value = settings.llm.llama_cpp_runner_path || "";
+  fields.llmModelPath.value = settings.llm.llama_cpp_model_path || "";
   fields.llmOllamaURL.value = settings.llm.ollama_base_url;
   fields.llmPromptSet.value = settings.llm.prompt_set;
   fields.llmTimeout.value = settings.llm.request_timeout_ms;
   fields.diagnosticsVerbosity.value = settings.diagnostics.verbosity;
   updateApplicationIDOverrideState();
   updateTransportVisibility();
+  updateLLMVisibility();
+  renderingSettings = false;
 }
 
 function settingsPayload() {
@@ -248,12 +292,21 @@ function llmPayload() {
   const fallback = currentLLM || {};
   return {
     provider: fields.llmProvider.value || fallback.provider,
+    llama_cpp_mode: fields.llmMode.value || fallback.llama_cpp_mode,
     llama_cpp_base_url: fields.llmLlamaURL.value.trim() || fallback.llama_cpp_base_url,
+    llama_cpp_runner_path: fields.llmRunnerPath.value.trim(),
+    llama_cpp_model_path: fields.llmModelPath.value.trim(),
     ollama_base_url: fields.llmOllamaURL.value.trim() || fallback.ollama_base_url,
     model: fields.llmModel.value.trim() || fallback.model,
     prompt_set: fields.llmPromptSet.value || fallback.prompt_set,
     request_timeout_ms: numberValue(fields.llmTimeout) || fallback.request_timeout_ms,
   };
+}
+
+function markSettingsDirty() {
+  if (!renderingSettings) {
+    settingsDirty = true;
+  }
 }
 
 function fillOptions(select, values) {
@@ -298,6 +351,43 @@ function updateTransportVisibility() {
   updateApplicationIDOverrideState();
   if (bluetoothSelected && !bluetoothSupported()) {
     maybePostUnsupportedBluetoothStatus();
+  }
+}
+
+function updateLLMVisibility() {
+  const llamaSelected = fields.llmProvider.value === "llama_cpp";
+  const managedSelected = llamaSelected && fields.llmMode.value === "managed";
+  fields.llmMode.disabled = !llamaSelected;
+  fields.llmLlamaURL.disabled = !llamaSelected;
+  fields.llmRunnerPath.disabled = !managedSelected;
+  fields.llmModelPath.disabled = !managedSelected;
+  fields.llmOllamaURL.disabled = fields.llmProvider.value !== "ollama";
+}
+
+async function checkLLM() {
+  try {
+    llmStatus.textContent = "Checking";
+    renderLLMStatus(await fetchJSON("/api/llm/status"));
+  } catch (error) {
+    llmStatus.textContent = error.message;
+  }
+}
+
+async function loadLLM() {
+  try {
+    llmStatus.textContent = "Loading";
+    renderLLMStatus(await postEmpty("/api/llm/load"));
+  } catch (error) {
+    llmStatus.textContent = error.message;
+  }
+}
+
+async function unloadLLM() {
+  try {
+    llmStatus.textContent = "Unloading";
+    renderLLMStatus(await postEmpty("/api/llm/unload"));
+  } catch (error) {
+    llmStatus.textContent = error.message;
   }
 }
 
@@ -843,9 +933,16 @@ function rejectPendingBluetoothResponses(message) {
 
 bluetoothConnectButton?.addEventListener("click", connectBluetooth);
 bluetoothDisconnectButton?.addEventListener("click", disconnectBluetooth);
+llmCheckButton?.addEventListener("click", checkLLM);
+llmLoadButton?.addEventListener("click", loadLLM);
+llmUnloadButton?.addEventListener("click", unloadLLM);
 
 fields.appIDSource.addEventListener("change", updateApplicationIDOverrideState);
 fields.dispatchOwner.addEventListener("change", updateTransportVisibility);
+fields.llmProvider.addEventListener("change", updateLLMVisibility);
+fields.llmMode.addEventListener("change", updateLLMVisibility);
+form.addEventListener("input", markSettingsDirty);
+form.addEventListener("change", markSettingsDirty);
 form.addEventListener("submit", saveSettings);
 
 startBluetoothHeartbeat();

@@ -108,6 +108,33 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	}
 }
 
+func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"This should not be used.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	body := postChatStream(t, server, `{"message":"stop"}`)
+	if !strings.Contains(body, `"reply":"Stopping motion."`) {
+		t.Fatalf("chat stop response missing deterministic reply:\n%s", body)
+	}
+	if provider.callCount() != 0 {
+		t.Fatalf("provider calls = %d, want 0", provider.callCount())
+	}
+
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("last command = %+v, want stop", commands)
+	}
+}
+
 func postChatStream(t *testing.T, server *Server, body string) string {
 	t.Helper()
 

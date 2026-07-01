@@ -34,9 +34,9 @@ function setMalformed(message, repaired = false) {
   chat.malformed.dataset.repaired = repaired ? "true" : "false";
 }
 
-function rememberTurn(user, assistant) {
+function rememberTurn(user, assistantContract) {
   history.push({ role: "user", content: user });
-  history.push({ role: "assistant", content: assistant });
+  history.push({ role: "assistant", content: JSON.stringify(assistantContract) });
   while (history.length > 12) {
     history.shift();
   }
@@ -110,7 +110,10 @@ async function sendChat(event) {
         if (!payload.initial_malformed) {
           assistant.dataset.state = "";
         }
-        rememberTurn(text, finalReply);
+        rememberTurn(text, {
+          reply: finalReply,
+          motion: payload.motion || { action: "none" },
+        });
         return;
       }
       if (name === "motion") {

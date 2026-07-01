@@ -190,8 +190,8 @@ body {
 /* ---- Layout ---- */
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.95fr);
-  grid-template-areas: "motion chat" "connection chat" "diagnostics diagnostics";
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
+  grid-template-areas: "chat chat" "motion connection" "diagnostics diagnostics";
   gap: var(--gap);
   align-items: start;
   padding: clamp(16px, 3vw, 28px);
@@ -449,6 +449,12 @@ button:disabled {
   color: var(--text);
   font-size: 0.8rem;
 }
+.llm-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 /* ---- Chat ---- */
 .chat-provider {
@@ -457,8 +463,8 @@ button:disabled {
   font-size: 0.82rem;
 }
 .chat-log {
-  min-height: 360px;
-  max-height: min(62vh, 640px);
+  min-height: 320px;
+  max-height: min(58vh, 620px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -466,7 +472,7 @@ button:disabled {
   padding: 2px;
 }
 .chat-message {
-  max-width: 88%;
+  max-width: min(72ch, 88%);
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -608,7 +614,7 @@ button:disabled {
 @media (max-width: 880px) {
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-areas: "motion" "chat" "connection" "diagnostics";
+    grid-template-areas: "chat" "motion" "connection" "diagnostics";
   }
   .visualizer {
     margin-left: 0;
