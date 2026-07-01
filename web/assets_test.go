@@ -26,7 +26,7 @@ func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
 
 	for _, fragment := range []string{
 		`id="bluetooth-panel"`,
-		`class="cloud-credential"`,
+		`cloud-credential`,
 	} {
 		if !strings.Contains(string(index), fragment) {
 			t.Fatalf("index.html missing %q", fragment)

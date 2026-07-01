@@ -59,8 +59,8 @@ func TestStatusAdvertisesPhaseOnePlaceholders(t *testing.T) {
 	if body.UI != "embedded" {
 		t.Fatalf("ui = %q, want embedded", body.UI)
 	}
-	if body.Features["motion"] != "not_implemented" {
-		t.Fatalf("motion feature = %q, want not_implemented", body.Features["motion"])
+	if body.Features["motion"] != "manual" {
+		t.Fatalf("motion feature = %q, want manual", body.Features["motion"])
 	}
 }
 

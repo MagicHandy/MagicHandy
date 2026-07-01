@@ -7,193 +7,197 @@
     <title>MagicHandy</title>
     <link rel="stylesheet" href="/app.css">
     <script type="module" src="/app.js"></script>
+    <script type="module" src="/motion-ui.js"></script>
   </head>
   <body>
-    <header class="control-bar" aria-label="Device state">
+    <!-- Persistent control bar: connection, the single visualizer, and Stop.
+         Never collapsed, never hidden by the keyboard (docs/ui-design.md). -->
+    <header class="control-bar">
       <div class="brand-lockup">
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">MagicHandy</span>
       </div>
 
-      <div class="status-pill" data-state="pending">
+      <div class="status-pill" data-state="pending" title="Core service status">
         <span class="status-dot" aria-hidden="true"></span>
         <span id="core-status">Checking core</span>
       </div>
 
-      <div class="visualizer" aria-label="Motion state">
+      <div class="visualizer" role="img" aria-label="Live motion state">
         <span class="visualizer-track" aria-hidden="true">
           <span class="visualizer-range"></span>
           <span class="visualizer-position"></span>
         </span>
-        <span id="motion-state">Idle</span>
+        <span class="motion-state-label">
+          <span id="motion-state" data-state="idle">Idle</span>
+          <span id="motion-substate" class="motion-substate"></span>
+        </span>
       </div>
 
-      <button class="stop-button" id="stop-button" type="button">Stop</button>
+      <button class="stop-button" id="stop-button" type="button" aria-label="Emergency stop all motion">
+        Stop
+      </button>
     </header>
 
     <main class="app-shell">
-      <section class="settings-surface" aria-labelledby="settings-title">
+      <!-- PRIMARY surface: motion control. This is what the app is for. -->
+      <section class="panel motion-panel" aria-labelledby="motion-title">
         <div class="section-heading">
-          <p class="eyebrow">Settings</p>
-          <h1 id="settings-title">Core Settings</h1>
+          <p class="eyebrow">Motion</p>
+          <h1 id="motion-title">Motion Control</h1>
+        </div>
+
+        <div class="motion-run" role="group" aria-label="Start and stop motion">
+          <button class="primary-button start-button" id="motion-start" type="button">Start motion</button>
+          <button class="secondary-button" id="motion-stop" type="button" disabled>Stop motion</button>
+          <span class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</span>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Pattern</span>
+            <select id="motion-pattern">
+              <option value="stroke">Stroke</option>
+              <option value="pulse">Pulse</option>
+              <option value="tease">Tease</option>
+            </select>
+          </label>
+          <label class="field slider-field">
+            <span>Speed <output id="motion-speed-value">50%</output></span>
+            <input id="motion-speed" type="range" min="1" max="100" value="50">
+          </label>
+        </div>
+
+        <!-- Quick controls apply immediately to active motion (no Save). -->
+        <fieldset class="quick-controls">
+          <legend>Quick settings <span class="hint">applies immediately</span></legend>
+          <div class="field-row">
+            <label class="field">
+              <span>Speed min <output id="quick-speed-min-value">20%</output></span>
+              <input id="quick-speed-min" type="range" min="1" max="100" value="20">
+            </label>
+            <label class="field">
+              <span>Speed max <output id="quick-speed-max-value">80%</output></span>
+              <input id="quick-speed-max" type="range" min="1" max="100" value="80">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Stroke min <output id="quick-stroke-min-value">0%</output></span>
+              <input id="quick-stroke-min" type="range" min="0" max="100" value="0">
+            </label>
+            <label class="field">
+              <span>Stroke max <output id="quick-stroke-max-value">100%</output></span>
+              <input id="quick-stroke-max" type="range" min="0" max="100" value="100">
+            </label>
+          </div>
+          <label class="toggle-line" for="quick-reverse">
+            <span class="toggle-switch">
+              <input id="quick-reverse" type="checkbox" role="switch">
+              <span class="toggle-track" aria-hidden="true"></span>
+            </span>
+            <span>Reverse direction</span>
+          </label>
+          <p class="quick-status" id="quick-status" role="status" aria-live="polite"></p>
+        </fieldset>
+      </section>
+
+      <!-- Connection: credentials and transport. Explicit Save (credentials). -->
+      <section class="panel connection-panel" aria-labelledby="connection-title">
+        <div class="section-heading">
+          <p class="eyebrow">Connection</p>
+          <h2 id="connection-title">Device Connection</h2>
         </div>
 
         <form class="settings-form" id="settings-form">
-          <fieldset>
-            <legend>Server</legend>
-            <label>
-              <span>Port</span>
-              <input id="server-port" name="server-port" type="number" min="1" max="65535" inputmode="numeric">
-            </label>
-          </fieldset>
+          <label class="field">
+            <span>HSP dispatch owner</span>
+            <select id="dispatch-owner" name="dispatch-owner"></select>
+          </label>
+          <label class="field">
+            <span>Firmware / API requirement</span>
+            <input id="firmware-requirement" name="firmware-requirement" type="text" readonly>
+          </label>
 
-          <fieldset>
-            <legend>Device</legend>
-            <label>
-              <span>HSP dispatch owner</span>
-              <select id="dispatch-owner" name="dispatch-owner"></select>
-            </label>
-            <label>
-              <span>Firmware/API requirement</span>
-              <input id="firmware-requirement" name="firmware-requirement" type="text" readonly>
-            </label>
-            <label class="cloud-credential">
+          <div class="cloud-credentials">
+            <label class="field cloud-credential">
               <span>API application ID source</span>
               <select id="app-id-source" name="app-id-source"></select>
             </label>
-            <label class="cloud-credential">
+            <label class="field cloud-credential">
               <span>Developer application ID</span>
               <input id="app-id-override" name="app-id-override" type="text" autocomplete="off">
             </label>
-            <label class="cloud-credential">
+            <label class="field cloud-credential">
               <span>Handy connection key</span>
               <input id="connection-key" name="connection-key" type="password" autocomplete="off">
             </label>
-            <label class="inline-control cloud-credential">
+            <label class="toggle-line cloud-credential" for="clear-connection-key">
               <input id="clear-connection-key" name="clear-connection-key" type="checkbox">
               <span>Clear connection key</span>
             </label>
-            <div class="bluetooth-panel" id="bluetooth-panel" hidden>
-              <div class="bluetooth-summary">
-                <span class="bluetooth-indicator" id="bluetooth-indicator" data-state="disconnected" aria-hidden="true"></span>
-                <span id="bluetooth-status">Bluetooth disconnected</span>
-              </div>
-              <div class="bluetooth-actions">
-                <button class="secondary-button" id="bluetooth-connect" type="button">Connect</button>
-                <button class="secondary-button" id="bluetooth-disconnect" type="button">Disconnect</button>
-              </div>
-              <dl class="bluetooth-meta">
-                <div>
-                  <dt>Browser</dt>
-                  <dd id="bluetooth-browser">Pending</dd>
-                </div>
-                <div>
-                  <dt>Device</dt>
-                  <dd id="bluetooth-device">None</dd>
-                </div>
-                <div>
-                  <dt>Bridge</dt>
-                  <dd id="bluetooth-bridge">Idle</dd>
-                </div>
-              </dl>
-            </div>
-          </fieldset>
+          </div>
 
-          <fieldset>
-            <legend>Motion Defaults</legend>
-            <div class="field-pair">
-              <label>
-                <span>Speed min</span>
-                <input id="speed-min" name="speed-min" type="number" min="1" max="100" inputmode="numeric">
-              </label>
-              <label>
-                <span>Speed max</span>
-                <input id="speed-max" name="speed-max" type="number" min="1" max="100" inputmode="numeric">
-              </label>
+          <div class="bluetooth-panel" id="bluetooth-panel" hidden>
+            <div class="bluetooth-summary">
+              <span class="bluetooth-indicator" id="bluetooth-indicator" data-state="disconnected" aria-hidden="true"></span>
+              <span id="bluetooth-status">Bluetooth disconnected</span>
             </div>
-            <div class="field-pair">
-              <label>
-                <span>Stroke min</span>
-                <input id="stroke-min" name="stroke-min" type="number" min="0" max="100" inputmode="numeric">
-              </label>
-              <label>
-                <span>Stroke max</span>
-                <input id="stroke-max" name="stroke-max" type="number" min="0" max="100" inputmode="numeric">
-              </label>
+            <div class="bluetooth-actions">
+              <button class="secondary-button" id="bluetooth-connect" type="button">Connect</button>
+              <button class="secondary-button" id="bluetooth-disconnect" type="button">Disconnect</button>
             </div>
-            <label class="inline-control">
-              <input id="reverse-direction" name="reverse-direction" type="checkbox">
-              <span>Reverse direction</span>
-            </label>
-          </fieldset>
+            <dl class="meta-grid">
+              <div><dt>Browser</dt><dd id="bluetooth-browser">Pending</dd></div>
+              <div><dt>Device</dt><dd id="bluetooth-device">None</dd></div>
+              <div><dt>Bridge</dt><dd id="bluetooth-bridge">Idle</dd></div>
+            </dl>
+          </div>
 
-          <fieldset>
-            <legend>Diagnostics</legend>
-            <label>
-              <span>Verbosity</span>
-              <select id="diagnostics-verbosity" name="diagnostics-verbosity"></select>
-            </label>
-          </fieldset>
+          <label class="field">
+            <span>Server port</span>
+            <input id="server-port" name="server-port" type="number" min="1" max="65535" inputmode="numeric">
+          </label>
+          <label class="field">
+            <span>Diagnostics verbosity</span>
+            <select id="diagnostics-verbosity" name="diagnostics-verbosity"></select>
+          </label>
 
           <div class="form-actions">
-            <button class="primary-button" id="save-settings" type="submit">Save</button>
+            <button class="primary-button" id="save-settings" type="submit">Save connection</button>
             <span class="form-status" id="settings-status" role="status" aria-live="polite">Not loaded</span>
           </div>
         </form>
       </section>
 
-      <aside class="state-surface" aria-labelledby="state-title">
+      <!-- Diagnostics: enough for a bug report, plus trace export. -->
+      <section class="panel diagnostics-panel" aria-labelledby="diagnostics-title">
         <div class="section-heading">
-          <p class="eyebrow">State</p>
-          <h2 id="state-title">Snapshot</h2>
+          <p class="eyebrow">Diagnostics</p>
+          <h2 id="diagnostics-title">Diagnostics</h2>
+          <button class="secondary-button trace-export" id="trace-export" type="button">Export trace</button>
         </div>
-        <dl class="diagnostic-grid">
-          <div>
-            <dt>Core</dt>
-            <dd id="runtime-core">Pending</dd>
-          </div>
-          <div>
-            <dt>UI</dt>
-            <dd id="runtime-ui">Embedded</dd>
-          </div>
-          <div>
-            <dt>Settings</dt>
-            <dd id="runtime-settings">Pending</dd>
-          </div>
-          <div>
-            <dt>Motion</dt>
-            <dd id="runtime-motion">Not implemented</dd>
-          </div>
-          <div>
-            <dt>Transport</dt>
-            <dd id="runtime-transport">Not implemented</dd>
-          </div>
-          <div>
-            <dt>Bluetooth</dt>
-            <dd id="runtime-bluetooth">Hidden</dd>
-          </div>
-          <div>
-            <dt>Connection key</dt>
-            <dd id="connection-key-state">Not set</dd>
-          </div>
-          <div>
-            <dt>Version</dt>
-            <dd id="version-value">dev</dd>
-          </div>
-          <div>
-            <dt>Commit</dt>
-            <dd id="commit-value">unknown</dd>
-          </div>
-          <div>
-            <dt>Uptime</dt>
-            <dd id="uptime-value">0s</dd>
-          </div>
-          <div>
-            <dt>Health</dt>
-            <dd id="health-value">Pending</dd>
-          </div>
+
+        <dl class="meta-grid diagnostic-grid">
+          <div><dt>Engine</dt><dd id="engine-state">Idle</dd></div>
+          <div><dt>Sampled position</dt><dd id="engine-position">—</dd></div>
+          <div><dt>Transport</dt><dd id="runtime-transport">Pending</dd></div>
+          <div><dt>Playback</dt><dd id="transport-playback">—</dd></div>
+          <div><dt>Last command</dt><dd id="transport-command">—</dd></div>
+          <div><dt>Command latency</dt><dd id="transport-latency">—</dd></div>
+          <div><dt>Last error</dt><dd id="engine-error">None</dd></div>
+          <div><dt>Core</dt><dd id="runtime-core">Pending</dd></div>
+          <div><dt>Settings</dt><dd id="runtime-settings">Pending</dd></div>
+          <div><dt>Bluetooth</dt><dd id="runtime-bluetooth">Hidden</dd></div>
+          <div><dt>Connection key</dt><dd id="connection-key-state">Not set</dd></div>
+          <div><dt>Motion feature</dt><dd id="runtime-motion">Pending</dd></div>
+          <div><dt>UI</dt><dd id="runtime-ui">Embedded</dd></div>
+          <div><dt>Version</dt><dd id="version-value">dev</dd></div>
+          <div><dt>Commit</dt><dd id="commit-value">unknown</dd></div>
+          <div><dt>Uptime</dt><dd id="uptime-value">0s</dd></div>
+          <div><dt>Health</dt><dd id="health-value">Pending</dd></div>
         </dl>
-      </aside>
+      </section>
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

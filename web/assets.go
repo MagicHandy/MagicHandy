@@ -6,7 +6,7 @@ import (
 	"io/fs"
 )
 
-//go:embed index.html app.css app.js
+//go:embed index.html app.css app.js motion-ui.js handy-ble-codec.js
 var assets embed.FS
 
 // FS returns the embedded browser UI filesystem.
