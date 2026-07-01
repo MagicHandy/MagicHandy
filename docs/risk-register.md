@@ -325,3 +325,26 @@ Exit evidence:
 - connect and HSP-unavailable paths give actionable guidance; the requirement is
   documented before first run; ordinary users do not have to find or paste an
   Application ID unless using the developer override
+
+## R17: NeuTTS Air Cloning And Codec Spike
+
+Level: Medium
+
+Description:
+ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS, but its cloning
+quality and a native (non-Python) NeuCodec decoder are unproven for this app. If
+it under-delivers on quality or latency, the local non-Python cloning path is at
+risk and voice could drift back toward a Python worker.
+
+Mitigation:
+
+- treat NeuTTS Air integration as an explicit early spike in Phase 13 (codec
+  decoder + cloning quality/latency), not an assumption
+- keep ElevenLabs as the working non-Python premium path meanwhile
+- fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
+  without blocking the rest of voice
+
+Exit evidence:
+
+- a Phase 13 spike shows acceptable NeuTTS Air cloning quality and latency with a
+  non-Python decoder, or a documented fallback is chosen

@@ -6,7 +6,7 @@ MagicHandy is a Go-first ground-up rewrite of StrokeGPT-ReVibed.
 
 The rewrite is justified by maintainability, cleaner architecture, future binary releases, lower non-ML baseline overhead, simpler long-running concurrency, and fewer Python environment failures in the core install path. Go alone will not fix Handy cloud latency, local LLM memory, CUDA memory, or all motion smoothness bugs. Motion quality must come from a better motion model, transport scheduler, retargeting algorithm, diagnostics, and real-device validation.
 
-Python may still exist behind optional worker boundaries for Chatterbox, faster-whisper, Parakeet, Torch, CUDA, or other ML-heavy features. Those dependencies should not define the core app install path.
+The default voice stack is non-Python: Parakeet (ASR), NeuTTS Air (local cloning TTS), and ElevenLabs (cloud TTS) — see ADR 0007. Python may still be added later behind optional worker boundaries for Chatterbox, CosyVoice, or other ML-heavy features, but it never defines the core app install path.
 
 Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway for cross-platform compatibility, users who already manage models through Ollama, and non-Windows/non-NVIDIA systems. See `docs/decisions/0005-local-llm-runtime.md` and `docs/model-management.md`.
 
@@ -994,29 +994,30 @@ Manual checks:
 
 ## Out Of Scope
 
-- Chatterbox implementation
-- faster-whisper implementation
-- Parakeet implementation
+- real provider implementations (Parakeet ASR, NeuTTS Air, ElevenLabs) — Phase 13
+- optional Python workers (Chatterbox, CosyVoice) — later
 - CUDA setup scripts
 
 # Phase 13: Voice Feature Implementations
 
 ## Suggested `/goal`
 
-`/goal Complete MagicHandy Phase 13: implement one real voice worker path at a time, starting with the lowest-risk provider, while keeping the core app functional without voice installed.`
+`/goal Complete MagicHandy Phase 13: implement the non-Python voice providers one per PR — Parakeet ASR, NeuTTS Air local cloning TTS, and ElevenLabs cloud TTS (see ADR 0007) — while keeping the core app functional without voice installed and with no Python required.`
 
 ## Objective
 
-Add real voice capabilities incrementally behind the worker boundary.
+Add the selected non-Python voice providers incrementally behind the worker boundary (see ADR 0007).
 
 ## Scope
 
-Pick one provider per PR/subphase:
+Implement one provider per PR/subphase (all non-Python):
 
-- hosted/ElevenLabs-style TTS client if desired
-- local Chatterbox worker
-- faster-whisper worker
-- Parakeet worker
+- Parakeet-TDT-0.6B-v3 ASR via sherpa-onnx (Go) or achetronic/parakeet
+  (OpenAI-compatible Go server); Whisper optional alternate for heavy
+  noise/accents or extra languages
+- NeuTTS Air local TTS (llama.cpp-family runner + native NeuCodec decoder; CPU
+  real-time; zero-shot cloning) — includes a codec/cloning-quality spike
+- ElevenLabs cloud TTS (HTTP; expressive + high-fidelity cloning premium)
 
 Each provider must include:
 
@@ -1024,6 +1025,7 @@ Each provider must include:
 - load/unload behavior
 - status diagnostics
 - queue/cancellation behavior
+- sentence-level streaming; keep TTS off the LLM's GPU where practical
 - failure messages that do not crash the core app
 
 ## Validation
@@ -1045,11 +1047,14 @@ Manual checks:
 
 ## Done Criteria
 
-- At least one real voice provider works behind the protocol.
-- No Python ML dependency is required for the core app to start.
+- Parakeet ASR, NeuTTS Air TTS, and ElevenLabs TTS work behind the protocol.
+- No Python is required for voice; the core app starts and does voice without it.
+- Sentence streaming works; NeuTTS Air runs without contending for the LLM's GPU.
 
 ## Out Of Scope
 
+- optional Python workers (Chatterbox, CosyVoice) — deferred; the door
+  stays open behind the same protocol
 - making all voice providers parity-complete in one phase
 
 # Phase 14: Pattern Library, Programs, And Authoring
