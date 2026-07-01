@@ -31,6 +31,7 @@ type VersionInfo struct {
 type Runtime struct {
 	Traces                 *diagnostics.TraceRing
 	Transport              transport.DiagnosticsProvider
+	MotionTransport        transport.Transport
 	CloudBaseURL           string
 	CloudHTTPClient        *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
@@ -45,6 +46,7 @@ type Server struct {
 	transport transport.DiagnosticsProvider
 	cloud     cloudRuntime
 	bluetooth bluetoothRuntime
+	motion    motionRuntime
 	started   time.Time
 	version   VersionInfo
 	handler   http.Handler
@@ -76,6 +78,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		transport: runtime.Transport,
 		cloud:     newCloudRuntime(runtime),
 		bluetooth: newBluetoothRuntime(runtime),
+		motion:    newMotionRuntime(runtime),
 		started:   time.Now().UTC(),
 		version:   version,
 	}
@@ -121,6 +124,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/transport/bluetooth/hsp-add", s.handleBluetoothHSPAdd)
 	mux.HandleFunc("POST /api/transport/bluetooth/hsp-play", s.handleBluetoothHSPPlay)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
+	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
+	mux.HandleFunc("POST /api/motion/start", s.handleMotionStart)
+	mux.HandleFunc("POST /api/motion/target", s.handleMotionTarget)
+	mux.HandleFunc("POST /api/motion/quick", s.handleMotionQuick)
+	mux.HandleFunc("POST /api/motion/stop", s.handleMotionStop)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
@@ -152,7 +160,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		},
 		"features": map[string]string{
 			"chat":      "not_implemented",
-			"motion":    "not_implemented",
+			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "not_implemented",
 		},
@@ -180,13 +188,11 @@ func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 		},
 		"features": map[string]string{
 			"chat":      "not_implemented",
-			"motion":    "not_implemented",
+			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "not_implemented",
 		},
-		"motion": map[string]string{
-			"state": "not_implemented",
-		},
+		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),
 		"bluetooth_transport": s.bluetoothDiagnostics(),
@@ -222,6 +228,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, errors.New("settings could not be saved"))
 		return
 	}
+
+	s.refreshActiveMotion(r.Context(), next.Motion)
 
 	_, status := s.store.Snapshot()
 	writeJSON(w, http.StatusOK, map[string]any{

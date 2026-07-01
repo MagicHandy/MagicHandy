@@ -59,8 +59,8 @@ func TestStatusAdvertisesPhaseOnePlaceholders(t *testing.T) {
 	if body.UI != "embedded" {
 		t.Fatalf("ui = %q, want embedded", body.UI)
 	}
-	if body.Features["motion"] != "not_implemented" {
-		t.Fatalf("motion feature = %q, want not_implemented", body.Features["motion"])
+	if body.Features["motion"] != "manual" {
+		t.Fatalf("motion feature = %q, want manual", body.Features["motion"])
 	}
 }
 
@@ -257,6 +257,23 @@ func TestMissingAssetReturnsNotFound(t *testing.T) {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
+	fake := transport.NewFake()
+	return newTestServerWithRuntime(t, Runtime{
+		Traces:          diagnostics.NewTraceRing(8),
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+}
+
+func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
+	t.Helper()
+
+	if runtime.Traces == nil {
+		runtime.Traces = diagnostics.NewTraceRing(8)
+	}
+	if runtime.Transport == nil {
+		runtime.Transport = transport.NewFake()
+	}
 	store, err := config.OpenStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -265,10 +282,7 @@ func newTestServer(t *testing.T) *Server {
 		"index.html": {Data: []byte("<!doctype html><title>MagicHandy</title>")},
 		"app.css":    {Data: []byte("body { margin: 0; }")},
 		"app.js":     {Data: []byte("console.log('ready');")},
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)), store, Runtime{
-		Traces:    diagnostics.NewTraceRing(8),
-		Transport: transport.NewFake(),
-	}, VersionInfo{
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), store, runtime, VersionInfo{
 		Version: "test",
 		Commit:  "test",
 	})
