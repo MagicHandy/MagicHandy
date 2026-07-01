@@ -68,7 +68,7 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 }
 
 func TestCloudRESTTransportRedactsDiagnostics(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "rejected "+cloudSecretFixture, http.StatusUnauthorized)
 	}))
 	defer server.Close()
@@ -112,7 +112,7 @@ func TestCloudRESTTransportConnectionCheck(t *testing.T) {
 }
 
 func TestCloudRESTTransportConnectionCheckReportsUnavailable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"hsp_available":false,"playback_state":"unsupported"}`))
 	}))
@@ -133,7 +133,7 @@ func TestCloudRESTTransportConnectionCheckReportsUnavailable(t *testing.T) {
 }
 
 func TestCloudRESTTransportReadState(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"available":true,"state":"buffering"}`))
 	}))
