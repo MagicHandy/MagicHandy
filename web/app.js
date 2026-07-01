@@ -6,6 +6,8 @@ const runtimeCore = document.querySelector("#runtime-core");
 const runtimeUI = document.querySelector("#runtime-ui");
 const runtimeSettings = document.querySelector("#runtime-settings");
 const runtimeMotion = document.querySelector("#runtime-motion");
+const runtimeChat = document.querySelector("#runtime-chat");
+const runtimeLLM = document.querySelector("#runtime-llm");
 const runtimeTransport = document.querySelector("#runtime-transport");
 const runtimeBluetooth = document.querySelector("#runtime-bluetooth");
 const versionValue = document.querySelector("#version-value");
@@ -35,6 +37,12 @@ const fields = {
   connectionKey: document.querySelector("#connection-key"),
   clearConnectionKey: document.querySelector("#clear-connection-key"),
   diagnosticsVerbosity: document.querySelector("#diagnostics-verbosity"),
+  llmProvider: document.querySelector("#llm-provider"),
+  llmModel: document.querySelector("#llm-model"),
+  llmLlamaURL: document.querySelector("#llm-llama-url"),
+  llmOllamaURL: document.querySelector("#llm-ollama-url"),
+  llmPromptSet: document.querySelector("#llm-prompt-set"),
+  llmTimeout: document.querySelector("#llm-timeout"),
 };
 
 let toastTimer = 0;
@@ -42,6 +50,7 @@ let unsupportedStatusPostedAt = 0;
 // Motion settings are owned by the motion panel (motion-ui.js, immediate-apply).
 // app.js caches them so a connection save preserves them instead of zeroing them.
 let currentMotion = null;
+let currentLLM = null;
 
 const DISPATCH_OWNER_CLOUD = "cloud_rest";
 const DISPATCH_OWNER_BLUETOOTH = "browser_bluetooth";
@@ -98,8 +107,9 @@ async function saveSettings(event) {
     try {
       const fresh = await fetchJSON("/api/state");
       currentMotion = fresh.settings.motion;
+      currentLLM = fresh.settings.llm;
     } catch {
-      // Fall back to the last rendered motion settings.
+      // Fall back to the last rendered settings.
     }
     const payload = settingsPayload();
     const response = await sendJSON("/api/settings", payload);
@@ -167,6 +177,8 @@ function renderState(health, state, bluetooth) {
   runtimeCore.textContent = health.status === "ok" ? "Online" : "Degraded";
   runtimeUI.textContent = "Embedded";
   runtimeSettings.textContent = labelStatus(state.settings_status.source);
+  runtimeChat.textContent = labelFeature(state.features.chat);
+  runtimeLLM.textContent = state.llm?.provider ? `${labelFeature(state.llm.provider)} / ${state.llm.model}` : "Not configured";
   runtimeMotion.textContent = labelFeature(state.features.motion);
   runtimeTransport.textContent = labelFeature(state.features.transport);
   renderBluetoothStatus(bluetooth?.bluetooth || state.bluetooth_bridge);
@@ -181,6 +193,8 @@ function renderSettings(settings) {
   fillOptions(fields.dispatchOwner, settings.options.hsp_dispatch_owners);
   fillOptions(fields.appIDSource, settings.options.api_application_id_sources);
   fillOptions(fields.diagnosticsVerbosity, settings.options.diagnostics_verbosities);
+  fillOptions(fields.llmProvider, settings.options.llm_providers);
+  fillOptions(fields.llmPromptSet, settings.options.prompt_sets);
 
   fields.serverPort.value = settings.server.port;
   fields.dispatchOwner.value = settings.device.hsp_dispatch_owner;
@@ -191,6 +205,13 @@ function renderSettings(settings) {
   fields.connectionKey.placeholder = settings.device.connection_key_set ? "Configured" : "";
   fields.clearConnectionKey.checked = false;
   currentMotion = settings.motion;
+  currentLLM = settings.llm;
+  fields.llmProvider.value = settings.llm.provider;
+  fields.llmModel.value = settings.llm.model;
+  fields.llmLlamaURL.value = settings.llm.llama_cpp_base_url;
+  fields.llmOllamaURL.value = settings.llm.ollama_base_url;
+  fields.llmPromptSet.value = settings.llm.prompt_set;
+  fields.llmTimeout.value = settings.llm.request_timeout_ms;
   fields.diagnosticsVerbosity.value = settings.diagnostics.verbosity;
   updateApplicationIDOverrideState();
   updateTransportVisibility();
@@ -216,9 +237,22 @@ function settingsPayload() {
     device,
     clear_connection_key: fields.clearConnectionKey.checked,
     motion: currentMotion,
+    llm: llmPayload(),
     diagnostics: {
       verbosity: fields.diagnosticsVerbosity.value,
     },
+  };
+}
+
+function llmPayload() {
+  const fallback = currentLLM || {};
+  return {
+    provider: fields.llmProvider.value || fallback.provider,
+    llama_cpp_base_url: fields.llmLlamaURL.value.trim() || fallback.llama_cpp_base_url,
+    ollama_base_url: fields.llmOllamaURL.value.trim() || fallback.ollama_base_url,
+    model: fields.llmModel.value.trim() || fallback.model,
+    prompt_set: fields.llmPromptSet.value || fallback.prompt_set,
+    request_timeout_ms: numberValue(fields.llmTimeout) || fallback.request_timeout_ms,
   };
 }
 

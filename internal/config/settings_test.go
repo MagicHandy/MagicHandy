@@ -26,6 +26,18 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.Device.APIApplicationIDSource != ApplicationIDSourceBundled {
 		t.Fatalf("app ID source = %q, want %q", settings.Device.APIApplicationIDSource, ApplicationIDSourceBundled)
 	}
+	if settings.LLM.Provider != LLMProviderLlamaCPP {
+		t.Fatalf("LLM provider = %q, want %q", settings.LLM.Provider, LLMProviderLlamaCPP)
+	}
+	if settings.LLM.LlamaCPPBaseURL != DefaultLlamaCPPBaseURL {
+		t.Fatalf("llama.cpp URL = %q, want %q", settings.LLM.LlamaCPPBaseURL, DefaultLlamaCPPBaseURL)
+	}
+	if settings.LLM.OllamaBaseURL != DefaultOllamaBaseURL {
+		t.Fatalf("Ollama URL = %q, want %q", settings.LLM.OllamaBaseURL, DefaultOllamaBaseURL)
+	}
+	if settings.LLM.PromptSet != PromptSetMagicHandyMotionV1 {
+		t.Fatalf("prompt set = %q, want %q", settings.LLM.PromptSet, PromptSetMagicHandyMotionV1)
+	}
 }
 
 func TestBundledAPIApplicationIDUsesPublicV3ID(t *testing.T) {
@@ -97,6 +109,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	}
 	if settings.Motion.SpeedMaxPercent != DefaultSettings().Motion.SpeedMaxPercent {
 		t.Fatal("missing motion settings were not defaulted")
+	}
+	if settings.LLM.Provider != LLMProviderLlamaCPP {
+		t.Fatal("missing LLM settings were not defaulted")
 	}
 }
 

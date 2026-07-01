@@ -42,12 +42,32 @@ const (
 	DiagnosticsVerbosityTrace = "trace"
 )
 
+const (
+	// LLMProviderLlamaCPP is the primary managed Windows/NVIDIA local LLM path.
+	LLMProviderLlamaCPP = "llama_cpp"
+	// LLMProviderOllama is the secondary externally managed local LLM path.
+	LLMProviderOllama = "ollama"
+
+	// PromptSetMagicHandyMotionV1 is the default chat and motion JSON contract.
+	PromptSetMagicHandyMotionV1 = "magichandy_motion_v1"
+
+	// DefaultLlamaCPPBaseURL is the default llama-server OpenAI-compatible URL.
+	DefaultLlamaCPPBaseURL = "http://127.0.0.1:8080"
+	// DefaultOllamaBaseURL is the default local Ollama daemon URL.
+	DefaultOllamaBaseURL = "http://127.0.0.1:11434"
+	// DefaultLLMModel is a placeholder model name users replace with a local model.
+	DefaultLLMModel = "local-model"
+	// DefaultLLMRequestTimeoutMillis caps one chat or repair pass.
+	DefaultLLMRequestTimeoutMillis = 120000
+)
+
 // Settings is the versioned on-disk application settings schema.
 type Settings struct {
 	Version     int                 `json:"version"`
 	Server      ServerSettings      `json:"server"`
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
+	LLM         LLMSettings         `json:"llm"`
 	Diagnostics DiagnosticsSettings `json:"diagnostics"`
 }
 
@@ -74,6 +94,16 @@ type MotionSettings struct {
 	ReverseDirection bool `json:"reverse_direction"`
 }
 
+// LLMSettings contains local model provider settings.
+type LLMSettings struct {
+	Provider             string `json:"provider"`
+	LlamaCPPBaseURL      string `json:"llama_cpp_base_url"`
+	OllamaBaseURL        string `json:"ollama_base_url"`
+	Model                string `json:"model"`
+	PromptSet            string `json:"prompt_set"`
+	RequestTimeoutMillis int    `json:"request_timeout_ms"`
+}
+
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
 type DiagnosticsSettings struct {
 	Verbosity string `json:"verbosity"`
@@ -85,6 +115,7 @@ type PublicSettings struct {
 	Server      ServerSettings            `json:"server"`
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
+	LLM         LLMSettings               `json:"llm"`
 	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
 	Options     PublicSettingsOptionHints `json:"options"`
 }
@@ -103,6 +134,8 @@ type PublicSettingsOptionHints struct {
 	HSPDispatchOwners       []string `json:"hsp_dispatch_owners"`
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
+	LLMProviders            []string `json:"llm_providers"`
+	PromptSets              []string `json:"prompt_sets"`
 }
 
 // SettingsUpdate is the payload accepted by the settings API.
@@ -110,6 +143,7 @@ type SettingsUpdate struct {
 	Server             ServerSettings      `json:"server"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
+	LLM                LLMSettings         `json:"llm"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
@@ -141,6 +175,14 @@ func DefaultSettings() Settings {
 			StrokeMinPercent: 0,
 			StrokeMaxPercent: 100,
 		},
+		LLM: LLMSettings{
+			Provider:             LLMProviderLlamaCPP,
+			LlamaCPPBaseURL:      DefaultLlamaCPPBaseURL,
+			OllamaBaseURL:        DefaultOllamaBaseURL,
+			Model:                DefaultLLMModel,
+			PromptSet:            PromptSetMagicHandyMotionV1,
+			RequestTimeoutMillis: DefaultLLMRequestTimeoutMillis,
+		},
 		Diagnostics: DiagnosticsSettings{
 			Verbosity: DiagnosticsVerbosityNormal,
 		},
@@ -160,6 +202,7 @@ func (s Settings) Public() PublicSettings {
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
 		Motion:      s.Motion,
+		LLM:         s.LLM,
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -175,6 +218,13 @@ func (s Settings) Public() PublicSettings {
 				DiagnosticsVerbosityDebug,
 				DiagnosticsVerbosityTrace,
 			},
+			LLMProviders: []string{
+				LLMProviderLlamaCPP,
+				LLMProviderOllama,
+			},
+			PromptSets: []string{
+				PromptSetMagicHandyMotionV1,
+			},
 		},
 	}
 }
@@ -189,6 +239,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDSource = update.Device.APIApplicationIDSource
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
+	next.LLM = normalizeLLMStrings(update.LLM)
 	next.Diagnostics = update.Diagnostics
 
 	if update.ClearConnectionKey {
@@ -314,7 +365,10 @@ func validateSettings(settings Settings) error {
 	if !oneOf(settings.Diagnostics.Verbosity, DiagnosticsVerbosityNormal, DiagnosticsVerbosityDebug, DiagnosticsVerbosityTrace) {
 		return fmt.Errorf("unknown diagnostics verbosity %q", settings.Diagnostics.Verbosity)
 	}
-	return validateMotionSettings(settings.Motion)
+	if err := validateMotionSettings(settings.Motion); err != nil {
+		return err
+	}
+	return validateLLMSettings(settings.LLM)
 }
 
 func applyMissingDefaults(settings Settings) Settings {
@@ -340,6 +394,25 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
+	if settings.LLM.Provider == "" {
+		settings.LLM.Provider = defaults.LLM.Provider
+	}
+	if settings.LLM.LlamaCPPBaseURL == "" {
+		settings.LLM.LlamaCPPBaseURL = defaults.LLM.LlamaCPPBaseURL
+	}
+	if settings.LLM.OllamaBaseURL == "" {
+		settings.LLM.OllamaBaseURL = defaults.LLM.OllamaBaseURL
+	}
+	if settings.LLM.Model == "" {
+		settings.LLM.Model = defaults.LLM.Model
+	}
+	if settings.LLM.PromptSet == "" {
+		settings.LLM.PromptSet = defaults.LLM.PromptSet
+	}
+	if settings.LLM.RequestTimeoutMillis == 0 {
+		settings.LLM.RequestTimeoutMillis = defaults.LLM.RequestTimeoutMillis
+	}
+	settings.LLM = normalizeLLMStrings(settings.LLM)
 	if settings.Diagnostics.Verbosity == "" {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
 	}
@@ -360,6 +433,37 @@ func validateMotionSettings(settings MotionSettings) error {
 		return errors.New("stroke minimum must be lower than maximum")
 	}
 	return nil
+}
+
+func validateLLMSettings(settings LLMSettings) error {
+	if !oneOf(settings.Provider, LLMProviderLlamaCPP, LLMProviderOllama) {
+		return fmt.Errorf("unknown LLM provider %q", settings.Provider)
+	}
+	if settings.LlamaCPPBaseURL == "" {
+		return errors.New("llama.cpp base URL is required")
+	}
+	if settings.OllamaBaseURL == "" {
+		return errors.New("Ollama base URL is required")
+	}
+	if settings.Model == "" {
+		return errors.New("LLM model is required")
+	}
+	if !oneOf(settings.PromptSet, PromptSetMagicHandyMotionV1) {
+		return fmt.Errorf("unknown prompt set %q", settings.PromptSet)
+	}
+	if settings.RequestTimeoutMillis < 1000 || settings.RequestTimeoutMillis > 300000 {
+		return errors.New("LLM request timeout must be between 1000 and 300000 milliseconds")
+	}
+	return nil
+}
+
+func normalizeLLMStrings(settings LLMSettings) LLMSettings {
+	settings.Provider = strings.TrimSpace(settings.Provider)
+	settings.LlamaCPPBaseURL = strings.TrimRight(strings.TrimSpace(settings.LlamaCPPBaseURL), "/")
+	settings.OllamaBaseURL = strings.TrimRight(strings.TrimSpace(settings.OllamaBaseURL), "/")
+	settings.Model = strings.TrimSpace(settings.Model)
+	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
+	return settings
 }
 
 func oneOf(value string, allowed ...string) bool {

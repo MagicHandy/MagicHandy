@@ -2,8 +2,9 @@
 
 MagicHandy is a Go-first rewrite of StrokeGPT-ReVibed. The current application
 starts a local HTTP server, serves an embedded single-page UI, exposes
-health/state/settings endpoints, writes structured logs, and keeps the
-architecture boundaries ready for later chat and voice work.
+health/state/settings endpoints, writes structured logs, runs local LLM chat
+through provider adapters, and sends chat motion intent through the motion
+engine.
 
 ## Current Scope
 
@@ -18,6 +19,10 @@ Implemented:
   phase-preserving same-pattern changes, low-jump cross-pattern handoff, and
   retarget trace export fields
 - Phase 7 retarget validation runner for safe real-device trace exports
+- local LLM provider layer with llama.cpp as the primary HTTP path and Ollama as
+  the secondary path
+- streaming chat endpoint with strict JSON response validation, one repair pass,
+  malformed-response UI indication, prompt sets, and motion-engine dispatch
 - JSON structured logging
 - graceful shutdown
 - versioned JSON settings with defaults, migration hooks, redacted API views,
@@ -31,8 +36,6 @@ Implemented:
 
 Not implemented yet:
 
-- full motion-control HTTP/UI workflows
-- local LLM chat
 - voice workers
 
 ## Requirements
@@ -68,6 +71,7 @@ Invoke-WebRequest http://127.0.0.1:49717/healthz
 Invoke-WebRequest http://127.0.0.1:49717/api/status
 Invoke-WebRequest http://127.0.0.1:49717/api/state
 Invoke-WebRequest http://127.0.0.1:49717/api/settings
+Invoke-WebRequest http://127.0.0.1:49717/api/llm/status
 Invoke-WebRequest http://127.0.0.1:49717/api/transport/diagnostics
 Invoke-WebRequest http://127.0.0.1:49717/api/traces
 ```
@@ -76,9 +80,13 @@ Invoke-WebRequest http://127.0.0.1:49717/api/traces
 connection key can be saved through `PUT /api/settings`, but it is not returned
 by diagnostics or settings reads.
 
-The main app still exposes only low-level manual transport routes for Cloud REST
-and browser Bluetooth. The Phase 7 real-device retarget workflow uses the
-dedicated validation command:
+Chat uses the selected local LLM provider from settings. The default provider is
+llama.cpp at `http://127.0.0.1:8080` through the OpenAI-compatible
+`/v1/chat/completions` API; Ollama is available at
+`http://127.0.0.1:11434` through `/api/chat`. The core does not download models
+automatically and does not link libllama.
+
+The Phase 7 real-device retarget workflow uses the dedicated validation command:
 
 ```powershell
 $env:MAGICHANDY_HANDY_CONNECTION_KEY = "<private Handy connection key>"

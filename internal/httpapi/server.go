@@ -16,6 +16,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -32,6 +33,8 @@ type Runtime struct {
 	Traces                 *diagnostics.TraceRing
 	Transport              transport.DiagnosticsProvider
 	MotionTransport        transport.Transport
+	LLMProvider            llm.Provider
+	LLMHTTPClient          *http.Client
 	CloudBaseURL           string
 	CloudHTTPClient        *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
@@ -47,6 +50,7 @@ type Server struct {
 	cloud     cloudRuntime
 	bluetooth bluetoothRuntime
 	motion    motionRuntime
+	llm       llmRuntime
 	started   time.Time
 	version   VersionInfo
 	handler   http.Handler
@@ -79,6 +83,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		cloud:     newCloudRuntime(runtime),
 		bluetooth: newBluetoothRuntime(runtime),
 		motion:    newMotionRuntime(runtime),
+		llm:       newLLMRuntime(runtime),
 		started:   time.Now().UTC(),
 		version:   version,
 	}
@@ -101,6 +106,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
+	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
 	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)
 	mux.HandleFunc("POST /api/transport/cloud/check", s.handleCloudConnectionCheck)
@@ -159,7 +166,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"version":        settings.Version,
 		},
 		"features": map[string]string{
-			"chat":      "not_implemented",
+			"chat":      "local_llm_streaming",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "not_implemented",
@@ -167,7 +174,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	settings, status := s.store.PublicSnapshot()
 	transportDiagnostics := s.transport.Diagnostics()
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -187,11 +194,12 @@ func (s *Server) handleState(w http.ResponseWriter, _ *http.Request) {
 			"loaded_at":      status.LoadedAt,
 		},
 		"features": map[string]string{
-			"chat":      "not_implemented",
+			"chat":      "local_llm_streaming",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "not_implemented",
 		},
+		"llm":                 s.llmState(r.Context()),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),

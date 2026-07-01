@@ -1,0 +1,122 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
+)
+
+type scriptedLLMProvider struct {
+	mu        sync.Mutex
+	responses []string
+	requests  []llm.ChatRequest
+}
+
+func (p *scriptedLLMProvider) StreamChat(_ context.Context, request llm.ChatRequest, onDelta func(string) error) (string, error) {
+	p.mu.Lock()
+	p.requests = append(p.requests, request)
+	if len(p.responses) == 0 {
+		p.mu.Unlock()
+		return "", errors.New("scripted response missing")
+	}
+	response := p.responses[0]
+	p.responses = p.responses[1:]
+	p.mu.Unlock()
+
+	midpoint := len(response) / 2
+	if onDelta != nil {
+		if midpoint > 0 {
+			if err := onDelta(response[:midpoint]); err != nil {
+				return response, err
+			}
+		}
+		if err := onDelta(response[midpoint:]); err != nil {
+			return response, err
+		}
+	}
+	return response, nil
+}
+
+func (p *scriptedLLMProvider) Status(context.Context) llm.ProviderStatus {
+	return llm.ProviderStatus{Provider: "scripted", Available: true}
+}
+
+func (p *scriptedLLMProvider) callCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.requests)
+}
+
+func TestChatStreamRepairsMalformedJSONAndReportsIndicator(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		"not json",
+		`{"reply":"Fixed.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	body := postChatStream(t, server, `{"message":"hello"}`)
+	if !strings.Contains(body, "event: malformed") {
+		t.Fatalf("chat stream missing malformed event:\n%s", body)
+	}
+	if !strings.Contains(body, `"repaired":true`) {
+		t.Fatalf("chat stream missing repaired indicator:\n%s", body)
+	}
+	if !strings.Contains(body, `"reply":"Fixed."`) {
+		t.Fatalf("chat stream missing repaired reply:\n%s", body)
+	}
+	if provider.callCount() != 2 {
+		t.Fatalf("provider calls = %d, want 2", provider.callCount())
+	}
+}
+
+func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Starting.","motion":{"action":"start","pattern_id":"pulse","speed_percent":30}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	body := postChatStream(t, server, `{"message":"start a pulse at 30 percent"}`)
+	if !strings.Contains(body, `"reply":"Starting."`) {
+		t.Fatalf("chat stream missing assistant message:\n%s", body)
+	}
+	if !strings.Contains(body, `event: motion`) {
+		t.Fatalf("chat stream missing motion event:\n%s", body)
+	}
+
+	commands := fake.Commands()
+	if len(commands) < 3 {
+		t.Fatalf("motion engine commands = %d, want at least 3: %+v", len(commands), commands)
+	}
+	if commands[0].Kind != transport.CommandKindStrokeWindow ||
+		commands[1].Kind != transport.CommandKindHSPAdd ||
+		commands[2].Kind != transport.CommandKindHSPPlay {
+		t.Fatalf("commands did not flow through motion engine: %+v", commands[:3])
+	}
+}
+
+func postChatStream(t *testing.T, server *Server, body string) string {
+	t.Helper()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("chat stream status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	return recorder.Body.String()
+}

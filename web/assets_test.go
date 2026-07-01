@@ -7,9 +7,40 @@ import (
 )
 
 func TestEmbeddedAssetsExist(t *testing.T) {
-	for _, name := range []string{"index.html", "app.css", "app.js", "motion-ui.js", "handy-ble-codec.js"} {
+	for _, name := range []string{"index.html", "app.css", "app.js", "motion-ui.js", "chat-ui.js", "handy-ble-codec.js"} {
 		if _, err := fs.Stat(FS(), name); err != nil {
 			t.Fatalf("asset %s is missing: %v", name, err)
+		}
+	}
+}
+
+func TestEmbeddedChatUIHooksExist(t *testing.T) {
+	index, err := fs.ReadFile(FS(), "index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	chatUI, err := fs.ReadFile(FS(), "chat-ui.js")
+	if err != nil {
+		t.Fatalf("read chat-ui.js: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`id="chat-form"`,
+		`id="chat-malformed"`,
+		`id="llm-provider"`,
+		`id="llm-prompt-set"`,
+	} {
+		if !strings.Contains(string(index), fragment) {
+			t.Fatalf("index.html missing %q", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`/api/chat/stream`,
+		`repair_delta`,
+		`Malformed model JSON`,
+	} {
+		if !strings.Contains(string(chatUI), fragment) {
+			t.Fatalf("chat-ui.js missing %q", fragment)
 		}
 	}
 }
