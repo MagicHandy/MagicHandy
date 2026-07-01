@@ -48,6 +48,24 @@ func assertNoRestartBeforeStop(t *testing.T, commands []transport.Command) {
 	}
 }
 
+func assertNoTraceRestartBeforeStop(t *testing.T, rows []diagnostics.MotionTraceRow) {
+	t.Helper()
+
+	playCount := 0
+	stopCount := 0
+	for _, row := range rows {
+		switch row.Reason {
+		case "play":
+			playCount++
+		case "stop":
+			stopCount++
+		}
+	}
+	if playCount != 1 || stopCount != 0 {
+		t.Fatalf("trace rows = %+v, want one play and no regular stop before explicit stop", rows)
+	}
+}
+
 func assertReversePointMapping(t *testing.T, commands []transport.Command, sample *MotionSample) {
 	t.Helper()
 	if sample == nil {

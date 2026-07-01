@@ -80,6 +80,7 @@ func TestEngineSettingsRefreshAppliesWhileActive(t *testing.T) {
 	}
 	assertRefreshedStrokeWindow(t, fake.Commands())
 	assertNoRestartBeforeStop(t, fake.Commands())
+	assertNoTraceRestartBeforeStop(t, traces.Rows())
 	assertReversePointMapping(t, fake.Commands(), state.LastSample)
 	assertTraceReason(t, traces.Rows(), "settings_refresh")
 }
@@ -110,6 +111,7 @@ func TestEngineApplyTargetPreservesSamePatternWithoutRestart(t *testing.T) {
 		t.Fatalf("state = %+v, want updated semantic speed", state)
 	}
 	assertNoRestartBeforeStop(t, fake.Commands())
+	assertNoTraceRestartBeforeStop(t, traces.Rows())
 	assertTraceAnnotation(t, traces.Rows(), "target_update", "phase_preserved=true")
 }
 
