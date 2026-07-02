@@ -6,12 +6,15 @@
     <meta name="color-scheme" content="light">
     <title>MagicHandy</title>
     <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="/shell.css">
+    <script type="module" src="/shell-ui.js"></script>
     <script type="module" src="/app.js"></script>
     <script type="module" src="/motion-ui.js"></script>
     <script type="module" src="/chat-ui.js"></script>
   </head>
   <body>
-    <!-- Persistent control bar: connection, the single visualizer, and Stop.
+    <!-- Persistent control bar: connection, the single visualizer, Stop, and the
+         two navigation affordances (quick settings popover, routed settings).
          Never collapsed, never hidden by the keyboard (docs/ui-design.md). -->
     <header class="control-bar">
       <div class="brand-lockup">
@@ -45,6 +48,14 @@
         </span>
       </div>
 
+      <div class="bar-nav">
+        <button class="secondary-button bar-nav-button" id="quick-settings-button" type="button"
+                aria-haspopup="dialog" aria-expanded="false" aria-controls="quick-popover">
+          Quick settings
+        </button>
+        <a class="secondary-button bar-nav-button" id="settings-nav" href="#/settings/device">Settings</a>
+      </div>
+
       <button class="stop-button" id="stop-button" type="button" aria-label="Emergency stop all motion">
         <span>Stop</span>
         <span class="shortcut-hint" aria-hidden="true">Esc</span>
@@ -56,246 +67,261 @@
       </div>
     </header>
 
-    <main class="app-shell">
-      <!-- PRIMARY surface: motion control. This is what the app is for. -->
-      <section class="panel motion-panel" aria-labelledby="motion-title" data-requires-backend>
-        <div class="section-heading">
-          <p class="eyebrow">Motion</p>
-          <h1 id="motion-title">Motion Control</h1>
-        </div>
-
-        <div class="motion-run" role="group" aria-label="Start and stop motion">
-          <button class="primary-button start-button" id="motion-start" type="button">Start motion</button>
-          <button class="secondary-button" id="motion-stop" type="button" disabled data-allow-backend-offline>Stop motion</button>
-          <span class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</span>
-        </div>
-
+    <!-- Quick settings popover: opened from the labeled control-bar button.
+         Top layer, positioned from measured geometry (never 100vw/100vh),
+         focus is trapped while open and restored on close.
+         Applies immediately to active motion (no Save). -->
+    <div class="quick-popover" id="quick-popover" role="dialog" aria-labelledby="quick-popover-title"
+         hidden data-requires-backend>
+      <div class="quick-popover-head">
+        <h2 id="quick-popover-title">Quick settings</h2>
+        <span class="hint">applies immediately</span>
+        <button class="secondary-button quick-popover-close" id="quick-popover-close" type="button"
+                aria-label="Close quick settings" data-allow-backend-offline>Close</button>
+      </div>
+      <fieldset class="quick-controls">
+        <legend class="visually-hidden">Speed, stroke, and direction</legend>
         <div class="field-row">
           <label class="field">
-            <span>Pattern</span>
-            <select id="motion-pattern">
-              <option value="stroke">Stroke</option>
-              <option value="pulse">Pulse</option>
-              <option value="tease">Tease</option>
-            </select>
-          </label>
-          <label class="field slider-field">
-            <span>Speed <output id="motion-speed-value">50%</output></span>
-            <input id="motion-speed" type="range" min="1" max="100" value="50">
-          </label>
-        </div>
-
-        <!-- Quick controls apply immediately to active motion (no Save). -->
-        <fieldset class="quick-controls">
-          <legend>Quick settings <span class="hint">applies immediately</span></legend>
-          <div class="field-row">
-            <label class="field">
-              <span>Speed min <output id="quick-speed-min-value">20%</output></span>
-              <input id="quick-speed-min" type="range" min="1" max="100" value="20">
-            </label>
-            <label class="field">
-              <span>Speed max <output id="quick-speed-max-value">80%</output></span>
-              <input id="quick-speed-max" type="range" min="1" max="100" value="80">
-            </label>
-          </div>
-          <div class="field-row">
-            <label class="field">
-              <span>Stroke min <output id="quick-stroke-min-value">0%</output></span>
-              <input id="quick-stroke-min" type="range" min="0" max="100" value="0">
-            </label>
-            <label class="field">
-              <span>Stroke max <output id="quick-stroke-max-value">100%</output></span>
-              <input id="quick-stroke-max" type="range" min="0" max="100" value="100">
-            </label>
-          </div>
-          <label class="toggle-line" for="quick-reverse">
-            <span class="toggle-switch">
-              <input id="quick-reverse" type="checkbox" role="switch">
-              <span class="toggle-track" aria-hidden="true"></span>
-            </span>
-            <span>Reverse direction</span>
-          </label>
-          <p class="quick-status" id="quick-status" role="status" aria-live="polite"></p>
-        </fieldset>
-      </section>
-
-      <section class="panel chat-panel" aria-labelledby="chat-title" data-requires-backend>
-        <div class="section-heading">
-          <p class="eyebrow">Chat</p>
-          <h2 id="chat-title">Local Chat</h2>
-          <span class="chat-provider" id="chat-provider">llama.cpp</span>
-        </div>
-
-        <div class="chat-log-shell">
-          <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
-          <button class="secondary-button chat-jump" id="chat-jump" type="button" hidden>Jump to latest</button>
-        </div>
-
-        <form class="chat-form" id="chat-form">
-          <label class="field chat-input-field" for="chat-input">
-            <span>Message</span>
-            <textarea id="chat-input" name="chat-input" rows="3" maxlength="1000" autocomplete="off"></textarea>
-          </label>
-          <div class="chat-actions">
-            <button class="primary-button" id="chat-send" type="submit">Send</button>
-            <span class="chat-status" id="chat-status" role="status" aria-live="polite">Idle</span>
-          </div>
-          <p class="chat-malformed" id="chat-malformed" role="status" hidden></p>
-        </form>
-      </section>
-
-      <!-- Connection: credentials and transport. Explicit Save (credentials). -->
-      <section class="panel connection-panel" aria-labelledby="connection-title" data-requires-backend>
-        <div class="section-heading">
-          <p class="eyebrow">Connection</p>
-          <h2 id="connection-title">Device Connection</h2>
-        </div>
-
-        <form class="settings-form" id="settings-form">
-          <label class="field">
-            <span>HSP dispatch owner</span>
-            <select id="dispatch-owner" name="dispatch-owner"></select>
+            <span>Speed min <output id="quick-speed-min-value">20%</output></span>
+            <input id="quick-speed-min" type="range" min="1" max="100" value="20">
           </label>
           <label class="field">
-            <span>Firmware / API requirement</span>
-            <input id="firmware-requirement" name="firmware-requirement" type="text" readonly>
+            <span>Speed max <output id="quick-speed-max-value">80%</output></span>
+            <input id="quick-speed-max" type="range" min="1" max="100" value="80">
           </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span>Stroke min <output id="quick-stroke-min-value">0%</output></span>
+            <input id="quick-stroke-min" type="range" min="0" max="100" value="0">
+          </label>
+          <label class="field">
+            <span>Stroke max <output id="quick-stroke-max-value">100%</output></span>
+            <input id="quick-stroke-max" type="range" min="0" max="100" value="100">
+          </label>
+        </div>
+        <label class="toggle-line" for="quick-reverse">
+          <span class="toggle-switch">
+            <input id="quick-reverse" type="checkbox" role="switch">
+            <span class="toggle-track" aria-hidden="true"></span>
+          </span>
+          <span>Reverse direction</span>
+        </label>
+        <p class="quick-status" id="quick-status" role="status" aria-live="polite"></p>
+      </fieldset>
+    </div>
 
-          <div class="cloud-credentials">
-            <label class="field cloud-credential">
-              <span>API application ID source</span>
-              <select id="app-id-source" name="app-id-source"></select>
+    <main class="app-shell">
+      <!-- Default route: chat is the primary scrollable region; the compact
+           motion strip keeps manual control one glance from the composer. -->
+      <section class="view view-control" id="view-control" aria-labelledby="control-title">
+        <h1 id="control-title" class="visually-hidden" tabindex="-1">Control</h1>
+
+        <section class="panel chat-panel" aria-labelledby="chat-title" data-requires-backend>
+          <div class="section-heading">
+            <p class="eyebrow">Chat</p>
+            <h2 id="chat-title">Local Chat</h2>
+            <span class="chat-provider" id="chat-provider">llama.cpp</span>
+          </div>
+
+          <div class="chat-log-shell">
+            <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+            <button class="secondary-button chat-jump" id="chat-jump" type="button" hidden>Jump to latest</button>
+          </div>
+
+          <div class="motion-strip" role="group" aria-label="Manual motion controls">
+            <button class="primary-button start-button" id="motion-start" type="button">Start motion</button>
+            <button class="secondary-button" id="motion-stop" type="button" disabled data-allow-backend-offline>Stop motion</button>
+            <label class="field strip-field">
+              <span>Pattern</span>
+              <select id="motion-pattern">
+                <option value="stroke">Stroke</option>
+                <option value="pulse">Pulse</option>
+                <option value="tease">Tease</option>
+              </select>
             </label>
-            <label class="field cloud-credential">
-              <span>Developer application ID</span>
-              <input id="app-id-override" name="app-id-override" type="text" autocomplete="off">
+            <label class="field strip-field strip-slider">
+              <span>Speed <output id="motion-speed-value">50%</output></span>
+              <input id="motion-speed" type="range" min="1" max="100" value="50">
             </label>
-            <label class="field cloud-credential">
-              <span>Handy connection key</span>
-              <input id="connection-key" name="connection-key" type="password" autocomplete="off">
+            <span class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</span>
+          </div>
+
+          <form class="chat-form" id="chat-form">
+            <label class="field chat-input-field" for="chat-input">
+              <span>Message</span>
+              <textarea id="chat-input" name="chat-input" rows="3" maxlength="1000" autocomplete="off"></textarea>
             </label>
-            <label class="toggle-line cloud-credential" for="clear-connection-key">
-              <input id="clear-connection-key" name="clear-connection-key" type="checkbox">
-              <span>Clear connection key</span>
+            <div class="chat-actions">
+              <button class="primary-button" id="chat-send" type="submit">Send</button>
+              <span class="chat-status" id="chat-status" role="status" aria-live="polite">Idle</span>
+            </div>
+            <p class="chat-malformed" id="chat-malformed" role="status" hidden></p>
+          </form>
+        </section>
+      </section>
+
+      <!-- Settings: a routed full-region view with sibling section routes.
+           Not a modal; nothing stacks (docs/ui-design.md, flat navigation). -->
+      <section class="view view-settings" id="view-settings" aria-labelledby="settings-title" hidden>
+        <div class="settings-head">
+          <a class="secondary-button settings-back" id="settings-back" href="#/">&larr; Control</a>
+          <h1 id="settings-title" tabindex="-1">Settings</h1>
+        </div>
+
+        <nav class="settings-nav" aria-label="Settings sections">
+          <a href="#/settings/device" data-settings-link="device">Device</a>
+          <a href="#/settings/model" data-settings-link="model">Model</a>
+          <a href="#/settings/diagnostics" data-settings-link="diagnostics">Diagnostics</a>
+        </nav>
+
+        <form class="settings-form panel" id="settings-form" data-requires-backend>
+          <div class="settings-section" data-settings-section="device">
+            <h2 class="settings-section-title">Device Connection</h2>
+            <label class="field">
+              <span>HSP dispatch owner</span>
+              <select id="dispatch-owner" name="dispatch-owner"></select>
+            </label>
+            <label class="field">
+              <span>Firmware / API requirement</span>
+              <input id="firmware-requirement" name="firmware-requirement" type="text" readonly>
+            </label>
+
+            <div class="cloud-credentials">
+              <label class="field cloud-credential">
+                <span>API application ID source</span>
+                <select id="app-id-source" name="app-id-source"></select>
+              </label>
+              <label class="field cloud-credential">
+                <span>Developer application ID</span>
+                <input id="app-id-override" name="app-id-override" type="text" autocomplete="off">
+              </label>
+              <label class="field cloud-credential">
+                <span>Handy connection key</span>
+                <input id="connection-key" name="connection-key" type="password" autocomplete="off">
+              </label>
+              <label class="toggle-line cloud-credential" for="clear-connection-key">
+                <input id="clear-connection-key" name="clear-connection-key" type="checkbox">
+                <span>Clear connection key</span>
+              </label>
+            </div>
+
+            <div class="bluetooth-panel" id="bluetooth-panel" hidden>
+              <div class="bluetooth-summary">
+                <span class="bluetooth-indicator" id="bluetooth-indicator" data-state="disconnected" aria-hidden="true"></span>
+                <span id="bluetooth-status">Bluetooth disconnected</span>
+              </div>
+              <div class="bluetooth-actions">
+                <button class="secondary-button" id="bluetooth-connect" type="button">Connect</button>
+                <button class="secondary-button" id="bluetooth-disconnect" type="button">Disconnect</button>
+              </div>
+              <dl class="meta-grid">
+                <div><dt>Browser</dt><dd id="bluetooth-browser">Pending</dd></div>
+                <div><dt>Device</dt><dd id="bluetooth-device">None</dd></div>
+                <div><dt>Bridge</dt><dd id="bluetooth-bridge">Idle</dd></div>
+              </dl>
+            </div>
+
+            <div class="connection-check">
+              <button class="secondary-button" id="connection-check" type="button">Check connection</button>
+              <span class="form-status" id="connection-check-status" role="status" aria-live="polite">Not checked</span>
+            </div>
+
+            <label class="field">
+              <span>Server port</span>
+              <input id="server-port" name="server-port" type="number" min="1" max="65535" inputmode="numeric">
             </label>
           </div>
 
-          <div class="bluetooth-panel" id="bluetooth-panel" hidden>
-            <div class="bluetooth-summary">
-              <span class="bluetooth-indicator" id="bluetooth-indicator" data-state="disconnected" aria-hidden="true"></span>
-              <span id="bluetooth-status">Bluetooth disconnected</span>
+          <div class="settings-section" data-settings-section="model" hidden>
+            <h2 class="settings-section-title">Local LLM</h2>
+            <fieldset class="llm-settings">
+              <legend class="visually-hidden">Provider configuration</legend>
+              <label class="field">
+                <span>Provider</span>
+                <select id="llm-provider" name="llm-provider"></select>
+              </label>
+              <label class="field">
+                <span>llama.cpp mode</span>
+                <select id="llm-mode" name="llm-mode"></select>
+              </label>
+              <label class="field">
+                <span>Model</span>
+                <input id="llm-model" name="llm-model" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>llama.cpp URL</span>
+                <input id="llm-llama-url" name="llm-llama-url" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>llama-server path</span>
+                <input id="llm-runner-path" name="llm-runner-path" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>GGUF model path</span>
+                <input id="llm-model-path" name="llm-model-path" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Ollama URL</span>
+                <input id="llm-ollama-url" name="llm-ollama-url" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Prompt set</span>
+                <select id="llm-prompt-set" name="llm-prompt-set"></select>
+              </label>
+              <label class="field">
+                <span>Timeout ms</span>
+                <input id="llm-timeout" name="llm-timeout" type="number" min="1000" max="300000" inputmode="numeric">
+              </label>
+              <div class="llm-actions">
+                <button class="secondary-button" id="llm-check" type="button">Check</button>
+                <button class="secondary-button" id="llm-load" type="button">Load</button>
+                <button class="secondary-button" id="llm-unload" type="button">Unload</button>
+                <span class="form-status" id="llm-status" role="status" aria-live="polite">Not checked</span>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="settings-section" data-settings-section="diagnostics" hidden>
+            <h2 class="settings-section-title">Diagnostics</h2>
+            <label class="field diagnostics-verbosity-field">
+              <span>Diagnostics verbosity</span>
+              <select id="diagnostics-verbosity" name="diagnostics-verbosity"></select>
+            </label>
+            <div class="diagnostics-actions">
+              <button class="secondary-button" id="diagnostics-copy" type="button" data-allow-backend-offline data-allow-readonly>Copy summary</button>
+              <button class="secondary-button trace-export" id="trace-export" type="button" data-allow-readonly>Export trace</button>
             </div>
-            <div class="bluetooth-actions">
-              <button class="secondary-button" id="bluetooth-connect" type="button">Connect</button>
-              <button class="secondary-button" id="bluetooth-disconnect" type="button">Disconnect</button>
-            </div>
-            <dl class="meta-grid">
-              <div><dt>Browser</dt><dd id="bluetooth-browser">Pending</dd></div>
-              <div><dt>Device</dt><dd id="bluetooth-device">None</dd></div>
-              <div><dt>Bridge</dt><dd id="bluetooth-bridge">Idle</dd></div>
+            <dl class="meta-grid diagnostic-grid">
+              <div><dt>Engine</dt><dd id="engine-state">Idle</dd></div>
+              <div><dt>Estimated position</dt><dd id="engine-position">—</dd></div>
+              <div><dt>Transport</dt><dd id="runtime-transport">Pending</dd></div>
+              <div><dt>Playback</dt><dd id="transport-playback">—</dd></div>
+              <div><dt>Last command</dt><dd id="transport-command">—</dd></div>
+              <div><dt>Command latency</dt><dd id="transport-latency">—</dd></div>
+              <div><dt>Last error</dt><dd id="engine-error">None</dd></div>
+              <div><dt>Core</dt><dd id="runtime-core">Pending</dd></div>
+              <div><dt>Settings</dt><dd id="runtime-settings">Pending</dd></div>
+              <div><dt>Bluetooth</dt><dd id="runtime-bluetooth">Hidden</dd></div>
+              <div><dt>Connection key</dt><dd id="connection-key-state">Not set</dd></div>
+              <div><dt>Chat</dt><dd id="runtime-chat">Pending</dd></div>
+              <div><dt>LLM</dt><dd id="runtime-llm">Pending</dd></div>
+              <div><dt>Motion feature</dt><dd id="runtime-motion">Pending</dd></div>
+              <div><dt>UI</dt><dd id="runtime-ui">Embedded</dd></div>
+              <div><dt>Version</dt><dd id="version-value">dev</dd></div>
+              <div><dt>Commit</dt><dd id="commit-value">unknown</dd></div>
+              <div><dt>Uptime</dt><dd id="uptime-value">0s</dd></div>
+              <div><dt>Health</dt><dd id="health-value">Pending</dd></div>
             </dl>
+            <p class="diagnostics-status" id="diagnostics-copy-status" role="status" aria-live="polite"></p>
           </div>
 
-          <div class="connection-check">
-            <button class="secondary-button" id="connection-check" type="button">Check connection</button>
-            <span class="form-status" id="connection-check-status" role="status" aria-live="polite">Not checked</span>
-          </div>
-
-          <label class="field">
-            <span>Server port</span>
-            <input id="server-port" name="server-port" type="number" min="1" max="65535" inputmode="numeric">
-          </label>
-          <label class="field">
-            <span>Diagnostics verbosity</span>
-            <select id="diagnostics-verbosity" name="diagnostics-verbosity"></select>
-          </label>
-
-          <fieldset class="llm-settings">
-            <legend>Local LLM</legend>
-            <label class="field">
-              <span>Provider</span>
-              <select id="llm-provider" name="llm-provider"></select>
-            </label>
-            <label class="field">
-              <span>llama.cpp mode</span>
-              <select id="llm-mode" name="llm-mode"></select>
-            </label>
-            <label class="field">
-              <span>Model</span>
-              <input id="llm-model" name="llm-model" type="text" autocomplete="off">
-            </label>
-            <label class="field">
-              <span>llama.cpp URL</span>
-              <input id="llm-llama-url" name="llm-llama-url" type="text" autocomplete="off">
-            </label>
-            <label class="field">
-              <span>llama-server path</span>
-              <input id="llm-runner-path" name="llm-runner-path" type="text" autocomplete="off">
-            </label>
-            <label class="field">
-              <span>GGUF model path</span>
-              <input id="llm-model-path" name="llm-model-path" type="text" autocomplete="off">
-            </label>
-            <label class="field">
-              <span>Ollama URL</span>
-              <input id="llm-ollama-url" name="llm-ollama-url" type="text" autocomplete="off">
-            </label>
-            <label class="field">
-              <span>Prompt set</span>
-              <select id="llm-prompt-set" name="llm-prompt-set"></select>
-            </label>
-            <label class="field">
-              <span>Timeout ms</span>
-              <input id="llm-timeout" name="llm-timeout" type="number" min="1000" max="300000" inputmode="numeric">
-            </label>
-            <div class="llm-actions">
-              <button class="secondary-button" id="llm-check" type="button">Check</button>
-              <button class="secondary-button" id="llm-load" type="button">Load</button>
-              <button class="secondary-button" id="llm-unload" type="button">Unload</button>
-              <span class="form-status" id="llm-status" role="status" aria-live="polite">Not checked</span>
-            </div>
-          </fieldset>
-
-          <div class="form-actions">
-            <button class="primary-button" id="save-settings" type="submit">Save connection</button>
+          <div class="form-actions settings-footer">
+            <button class="primary-button" id="save-settings" type="submit">Save settings</button>
             <span class="form-status" id="settings-status" role="status" aria-live="polite">Not loaded</span>
           </div>
         </form>
-      </section>
-
-      <!-- Diagnostics: enough for a bug report, plus trace export. -->
-      <section class="panel diagnostics-panel" aria-labelledby="diagnostics-title" data-requires-backend>
-        <div class="section-heading">
-          <p class="eyebrow">Diagnostics</p>
-          <h2 id="diagnostics-title">Diagnostics</h2>
-          <div class="diagnostics-actions">
-            <button class="secondary-button" id="diagnostics-copy" type="button" data-allow-backend-offline data-allow-readonly>Copy summary</button>
-            <button class="secondary-button trace-export" id="trace-export" type="button" data-allow-readonly>Export trace</button>
-          </div>
-        </div>
-
-        <dl class="meta-grid diagnostic-grid">
-          <div><dt>Engine</dt><dd id="engine-state">Idle</dd></div>
-          <div><dt>Estimated position</dt><dd id="engine-position">—</dd></div>
-          <div><dt>Transport</dt><dd id="runtime-transport">Pending</dd></div>
-          <div><dt>Playback</dt><dd id="transport-playback">—</dd></div>
-          <div><dt>Last command</dt><dd id="transport-command">—</dd></div>
-          <div><dt>Command latency</dt><dd id="transport-latency">—</dd></div>
-          <div><dt>Last error</dt><dd id="engine-error">None</dd></div>
-          <div><dt>Core</dt><dd id="runtime-core">Pending</dd></div>
-          <div><dt>Settings</dt><dd id="runtime-settings">Pending</dd></div>
-          <div><dt>Bluetooth</dt><dd id="runtime-bluetooth">Hidden</dd></div>
-          <div><dt>Connection key</dt><dd id="connection-key-state">Not set</dd></div>
-          <div><dt>Chat</dt><dd id="runtime-chat">Pending</dd></div>
-          <div><dt>LLM</dt><dd id="runtime-llm">Pending</dd></div>
-          <div><dt>Motion feature</dt><dd id="runtime-motion">Pending</dd></div>
-          <div><dt>UI</dt><dd id="runtime-ui">Embedded</dd></div>
-          <div><dt>Version</dt><dd id="version-value">dev</dd></div>
-          <div><dt>Commit</dt><dd id="commit-value">unknown</dd></div>
-          <div><dt>Uptime</dt><dd id="uptime-value">0s</dd></div>
-          <div><dt>Health</dt><dd id="health-value">Pending</dd></div>
-        </dl>
-        <p class="diagnostics-status" id="diagnostics-copy-status" role="status" aria-live="polite"></p>
       </section>
     </main>
 

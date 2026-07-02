@@ -7,9 +7,55 @@ import (
 )
 
 func TestEmbeddedAssetsExist(t *testing.T) {
-	for _, name := range []string{"index.html", "app.css", "app.js", "motion-ui.js", "chat-ui.js", "bluetooth-ui.js", "handy-ble-codec.js"} {
+	for _, name := range []string{"index.html", "app.css", "shell.css", "app.js", "shell-ui.js", "motion-ui.js", "chat-ui.js", "bluetooth-ui.js", "handy-ble-codec.js"} {
 		if _, err := fs.Stat(FS(), name); err != nil {
 			t.Fatalf("asset %s is missing: %v", name, err)
+		}
+	}
+}
+
+func TestEmbeddedShellUIHooksExist(t *testing.T) {
+	index, err := fs.ReadFile(FS(), "index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	shellUI, err := fs.ReadFile(FS(), "shell-ui.js")
+	if err != nil {
+		t.Fatalf("read shell-ui.js: %v", err)
+	}
+
+	// Routed views and the two navigation affordances in the persistent bar.
+	for _, fragment := range []string{
+		`id="view-control"`,
+		`id="view-settings"`,
+		`id="quick-settings-button"`,
+		`id="quick-popover"`,
+		`href="#/settings/device"`,
+		`data-settings-section="device"`,
+		`data-settings-section="model"`,
+		`data-settings-section="diagnostics"`,
+		`aria-haspopup="dialog"`,
+	} {
+		if !strings.Contains(string(index), fragment) {
+			t.Fatalf("index.html missing %q", fragment)
+		}
+	}
+	// The popover positions from measured geometry (never 100vw/100vh), traps
+	// focus, and consumes Escape only while open so Esc-stops-motion survives.
+	for _, fragment := range []string{
+		`getBoundingClientRect`,
+		`document.documentElement.clientWidth`,
+		`trapQuickFocus`,
+		`stopImmediatePropagation`,
+		`hashchange`,
+	} {
+		if !strings.Contains(string(shellUI), fragment) {
+			t.Fatalf("shell-ui.js missing %q", fragment)
+		}
+	}
+	for _, forbidden := range []string{`100vw`, `100vh`} {
+		if strings.Contains(string(shellUI), forbidden) {
+			t.Fatalf("shell-ui.js must not rely on %q for overlay sizing", forbidden)
 		}
 	}
 }

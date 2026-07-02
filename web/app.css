@@ -218,30 +218,7 @@ body {
   line-height: 1;
 }
 
-/* ---- Layout ---- */
-.app-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
-  grid-template-areas: "chat chat" "motion connection" "diagnostics diagnostics";
-  gap: var(--gap);
-  align-items: start;
-  padding: clamp(16px, 3vw, 28px);
-  max-width: 1320px;
-  margin: 0 auto;
-}
-.motion-panel {
-  grid-area: motion;
-}
-.chat-panel {
-  grid-area: chat;
-}
-.connection-panel {
-  grid-area: connection;
-}
-.diagnostics-panel {
-  grid-area: diagnostics;
-}
-
+/* ---- Panels (layout and routing live in shell.css) ---- */
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -276,14 +253,7 @@ body {
   margin-left: auto;
 }
 
-/* ---- Motion run controls ---- */
-.motion-run {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-}
+/* ---- Motion run readout (strip layout in shell.css) ---- */
 .run-readout {
   color: var(--muted);
   font-size: 0.9rem;
@@ -671,12 +641,8 @@ textarea:disabled {
   }
 }
 
-/* ---- Responsive: single column; control bar + Stop stay put ---- */
+/* ---- Responsive: control bar + Stop stay put ---- */
 @media (max-width: 880px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-areas: "chat" "motion" "connection" "diagnostics";
-  }
   .visualizer {
     margin-left: 0;
     order: 3;

@@ -404,8 +404,10 @@ window.addEventListener("magichandy:controller-state", (event) => {
   setQuickControlsDisabled(!backendAvailable);
 });
 
+// Escape stops motion unless an overlay already consumed the key press
+// (shell-ui.js closes the quick-settings popover and marks the event handled).
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
+  if (event.key === "Escape" && !event.defaultPrevented) {
     stopMotion();
   }
 });

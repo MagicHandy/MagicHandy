@@ -72,6 +72,19 @@ Same persistent control bar. The keyboard never hides device state or Stop.
 Settings and library are routed views, not an off-canvas overlay competing with
 the control bar.
 
+### Implemented routes
+
+As of the post-9B shell reorganization the structure is: `#/` is the control
+view (chat as the primary scrollable region with the compact manual-motion
+strip between the log and the composer); `#/settings/device`,
+`#/settings/model`, and `#/settings/diagnostics` are sibling routed settings
+sections sharing one form with a sticky, always-reachable Save; and the
+control bar's labeled "Quick settings" button opens the immediate-apply
+popover (top layer, positioned from measured geometry, focus trapped, Escape
+closes the popover first and stops motion only when no overlay is open).
+Nothing else renders as a dashboard; new surfaces join as routed views, not
+as additional always-visible panels.
+
 ## The Device Visualizer
 
 One component, one source of truth.
