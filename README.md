@@ -20,7 +20,8 @@ Implemented:
   retarget trace export fields
 - Phase 7 retarget validation runner for safe real-device trace exports
 - local LLM provider layer with llama.cpp as the primary HTTP path and Ollama as
-  the secondary path
+  the secondary path, including managed llama-server setup fields and explicit
+  load/unload endpoints
 - streaming chat endpoint with strict JSON response validation, one repair pass,
   malformed-response UI indication, prompt sets, and motion-engine dispatch
 - JSON structured logging
@@ -72,6 +73,8 @@ Invoke-WebRequest http://127.0.0.1:49717/api/status
 Invoke-WebRequest http://127.0.0.1:49717/api/state
 Invoke-WebRequest http://127.0.0.1:49717/api/settings
 Invoke-WebRequest http://127.0.0.1:49717/api/llm/status
+Invoke-WebRequest -Method POST http://127.0.0.1:49717/api/llm/load
+Invoke-WebRequest -Method POST http://127.0.0.1:49717/api/llm/unload
 Invoke-WebRequest http://127.0.0.1:49717/api/transport/diagnostics
 Invoke-WebRequest http://127.0.0.1:49717/api/traces
 ```
@@ -81,8 +84,10 @@ connection key can be saved through `PUT /api/settings`, but it is not returned
 by diagnostics or settings reads.
 
 Chat uses the selected local LLM provider from settings. The default provider is
-llama.cpp at `http://127.0.0.1:8080` through the OpenAI-compatible
-`/v1/chat/completions` API; Ollama is available at
+managed llama.cpp at `http://127.0.0.1:8080`: configure a `llama-server`
+executable path and a GGUF model path, then load it through `/api/llm/load` or
+the UI. External llama.cpp mode connects to an already-running OpenAI-compatible
+server at the configured base URL. Ollama is available at
 `http://127.0.0.1:11434` through `/api/chat`. The core does not download models
 automatically and does not link libllama.
 

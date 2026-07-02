@@ -28,13 +28,25 @@ type Provider interface {
 	Status(ctx context.Context) ProviderStatus
 }
 
+// LoadableProvider can explicitly load and unload provider runtime state.
+type LoadableProvider interface {
+	Provider
+
+	Load(ctx context.Context) ProviderStatus
+	Unload(ctx context.Context) ProviderStatus
+}
+
 // ProviderStatus is a diagnostics-safe provider readiness snapshot.
 type ProviderStatus struct {
-	Provider  string `json:"provider"`
-	BaseURL   string `json:"base_url"`
-	Model     string `json:"model"`
-	Available bool   `json:"available"`
-	Message   string `json:"message,omitempty"`
+	Provider       string   `json:"provider"`
+	BaseURL        string   `json:"base_url"`
+	Model          string   `json:"model"`
+	Available      bool     `json:"available"`
+	ModelAvailable bool     `json:"model_available"`
+	Managed        bool     `json:"managed"`
+	Loaded         bool     `json:"loaded"`
+	Models         []string `json:"models,omitempty"`
+	Message        string   `json:"message,omitempty"`
 }
 
 // HTTPProviderOptions configures a local HTTP-backed provider.

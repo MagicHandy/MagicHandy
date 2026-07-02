@@ -28,6 +28,11 @@ func TestEmbeddedChatUIHooksExist(t *testing.T) {
 		`id="chat-form"`,
 		`id="chat-malformed"`,
 		`id="llm-provider"`,
+		`id="llm-mode"`,
+		`id="llm-runner-path"`,
+		`id="llm-model-path"`,
+		`id="llm-load"`,
+		`id="llm-unload"`,
 		`id="llm-prompt-set"`,
 	} {
 		if !strings.Contains(string(index), fragment) {
@@ -38,9 +43,28 @@ func TestEmbeddedChatUIHooksExist(t *testing.T) {
 		`/api/chat/stream`,
 		`repair_delta`,
 		`Malformed model JSON`,
+		`JSON.stringify(assistantContract)`,
 	} {
 		if !strings.Contains(string(chatUI), fragment) {
 			t.Fatalf("chat-ui.js missing %q", fragment)
+		}
+	}
+}
+
+func TestEmbeddedSettingsUIDoesNotClobberDirtyForm(t *testing.T) {
+	app, err := fs.ReadFile(FS(), "app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+	for _, fragment := range []string{
+		`settingsDirty`,
+		`markSettingsDirty`,
+		`if (settingsDirty && !options.force)`,
+		`/api/llm/load`,
+		`/api/llm/unload`,
+	} {
+		if !strings.Contains(string(app), fragment) {
+			t.Fatalf("app.js missing %q", fragment)
 		}
 	}
 }

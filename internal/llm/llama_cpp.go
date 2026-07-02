@@ -83,32 +83,82 @@ func (p *LlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 	ctx, cancel := checkedRequestContext(ctx, 5*time.Second)
 	defer cancel()
 
+	status := ProviderStatus{
+		Provider: llamaCPPProviderName,
+		BaseURL:  p.baseURL,
+		Model:    p.model,
+		Loaded:   true,
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/health", nil)
 	if err != nil {
-		return ProviderStatus{Provider: llamaCPPProviderName, BaseURL: p.baseURL, Model: p.model, Message: err.Error()}
+		status.Message = err.Error()
+		return status
 	}
 	response, err := p.client.Do(request)
 	if err != nil {
-		return ProviderStatus{Provider: llamaCPPProviderName, BaseURL: p.baseURL, Model: p.model, Message: err.Error()}
+		status.Message = err.Error()
+		return status
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return ProviderStatus{
-			Provider: llamaCPPProviderName,
-			BaseURL:  p.baseURL,
-			Model:    p.model,
-			Message:  fmt.Sprintf("health endpoint returned %d", response.StatusCode),
+		status.Message = fmt.Sprintf("health endpoint returned %d", response.StatusCode)
+		return status
+	}
+
+	models, err := p.listModels(ctx)
+	if err != nil {
+		status.Available = true
+		status.ModelAvailable = true
+		status.Message = fmt.Sprintf("ready; model list unavailable: %s", err)
+		return status
+	}
+	status.Models = models
+	status.ModelAvailable = modelListed(p.model, models)
+	status.Available = status.ModelAvailable
+	if !status.ModelAvailable {
+		status.Message = fmt.Sprintf("model %q is not reported by llama.cpp", p.model)
+		return status
+	}
+	status.Message = "ready"
+	return status
+}
+
+func (p *LlamaCPPProvider) listModels(ctx context.Context) ([]string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := p.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("models endpoint returned %d", response.StatusCode)
+	}
+
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1024*1024)).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode models response: %w", err)
+	}
+	models := make([]string, 0, len(payload.Data))
+	for _, model := range payload.Data {
+		if strings.TrimSpace(model.ID) != "" {
+			models = append(models, strings.TrimSpace(model.ID))
 		}
 	}
-	return ProviderStatus{
-		Provider:  llamaCPPProviderName,
-		BaseURL:   p.baseURL,
-		Model:     p.model,
-		Available: true,
-		Message:   "ready",
+	if len(models) == 0 {
+		return nil, errors.New("models endpoint returned no models")
 	}
+	return models, nil
 }
 
 type openAIChatRequest struct {
@@ -191,4 +241,14 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func modelListed(model string, models []string) bool {
+	model = strings.TrimSpace(model)
+	for _, candidate := range models {
+		if strings.TrimSpace(candidate) == model {
+			return true
+		}
+	}
+	return false
 }

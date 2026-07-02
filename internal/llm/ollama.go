@@ -83,32 +83,44 @@ func (p *OllamaProvider) Status(ctx context.Context) ProviderStatus {
 	ctx, cancel := checkedRequestContext(ctx, 5*time.Second)
 	defer cancel()
 
+	status := ProviderStatus{
+		Provider: ollamaProviderName,
+		BaseURL:  p.baseURL,
+		Model:    p.model,
+		Loaded:   true,
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/tags", nil)
 	if err != nil {
-		return ProviderStatus{Provider: ollamaProviderName, BaseURL: p.baseURL, Model: p.model, Message: err.Error()}
+		status.Message = err.Error()
+		return status
 	}
 	response, err := p.client.Do(request)
 	if err != nil {
-		return ProviderStatus{Provider: ollamaProviderName, BaseURL: p.baseURL, Model: p.model, Message: err.Error()}
+		status.Message = err.Error()
+		return status
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return ProviderStatus{
-			Provider: ollamaProviderName,
-			BaseURL:  p.baseURL,
-			Model:    p.model,
-			Message:  fmt.Sprintf("tags endpoint returned %d", response.StatusCode),
-		}
+		status.Message = fmt.Sprintf("tags endpoint returned %d", response.StatusCode)
+		return status
 	}
-	return ProviderStatus{
-		Provider:  ollamaProviderName,
-		BaseURL:   p.baseURL,
-		Model:     p.model,
-		Available: true,
-		Message:   "ready",
+
+	models, err := decodeOllamaModels(response.Body)
+	if err != nil {
+		status.Message = err.Error()
+		return status
 	}
+	status.Models = models
+	status.ModelAvailable = modelListed(p.model, models)
+	status.Available = status.ModelAvailable
+	if !status.ModelAvailable {
+		status.Message = fmt.Sprintf("model %q is not installed in Ollama", p.model)
+		return status
+	}
+	status.Message = "ready"
+	return status
 }
 
 type ollamaChatRequest struct {
@@ -160,4 +172,27 @@ func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error
 		return builder.String(), fmt.Errorf("read Ollama stream: %w", err)
 	}
 	return builder.String(), nil
+}
+
+func decodeOllamaModels(body io.Reader) ([]string, error) {
+	var payload struct {
+		Models []struct {
+			Name  string `json:"name"`
+			Model string `json:"model"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, 1024*1024)).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode Ollama tags response: %w", err)
+	}
+	models := make([]string, 0, len(payload.Models))
+	for _, model := range payload.Models {
+		name := strings.TrimSpace(model.Name)
+		if name == "" {
+			name = strings.TrimSpace(model.Model)
+		}
+		if name != "" {
+			models = append(models, name)
+		}
+	}
+	return models, nil
 }

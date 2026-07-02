@@ -29,6 +29,9 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatalf("LLM provider = %q, want %q", settings.LLM.Provider, LLMProviderLlamaCPP)
 	}
+	if settings.LLM.LlamaCPPMode != LlamaCPPModeManaged {
+		t.Fatalf("llama.cpp mode = %q, want %q", settings.LLM.LlamaCPPMode, LlamaCPPModeManaged)
+	}
 	if settings.LLM.LlamaCPPBaseURL != DefaultLlamaCPPBaseURL {
 		t.Fatalf("llama.cpp URL = %q, want %q", settings.LLM.LlamaCPPBaseURL, DefaultLlamaCPPBaseURL)
 	}

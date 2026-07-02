@@ -193,6 +193,7 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 // Close stops any active motion loop so no goroutine keeps commanding the
 // device after shutdown (goroutine-lifecycle safety gate).
 func (s *Server) Close() {
+	s.closeLLM()
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return

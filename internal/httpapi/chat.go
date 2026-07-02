@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
@@ -24,6 +25,8 @@ type chatMotionDispatch struct {
 	Error   string                   `json:"error,omitempty"`
 }
 
+type sseEmitter func(string, any) error
+
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	var body chatStreamRequest
 	if err := decodeJSON(r, &body); err != nil {
@@ -32,6 +35,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	settings, _ := s.store.Snapshot()
+	if isChatStopMessage(body.Message) {
+		s.handleChatStopFastPath(w, r, settings.LLM.Provider, settings.LLM.Model)
+		return
+	}
+
 	provider, err := s.newLLMProvider(settings.LLM)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
@@ -44,9 +52,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		PromptSetID: settings.LLM.PromptSet,
 		Model:       settings.LLM.Model,
 	}
-	emit := func(event string, payload any) error {
+	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
-	}
+	})
 
 	if err := emit("status", map[string]any{
 		"state":      "streaming",
@@ -78,8 +86,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 	})
+	s.emitChatCompletionResult(r, emit, result, err, settings.LLM.Provider)
+}
+
+func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, result chat.Result, err error, provider string) {
 	if err != nil {
-		s.logger.Warn("chat stream failed", "provider", settings.LLM.Provider, "error", err)
+		s.logger.Warn("chat stream failed", "provider", provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})
 		_ = emit("done", map[string]any{"ok": false})
 		return
@@ -167,6 +179,40 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 	}
 }
 
+func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, provider string, model string) {
+	setSSEHeaders(w)
+	emit := func(event string, payload any) error {
+		return writeSSE(w, event, payload)
+	}
+	if err := emit("status", map[string]any{
+		"state":    "deterministic_stop",
+		"provider": provider,
+		"model":    model,
+	}); err != nil {
+		return
+	}
+	command := &chat.MotionCommand{Action: chat.MotionActionStop}
+	if err := emit("message", map[string]any{
+		"reply":             "Stopping motion.",
+		"repaired":          false,
+		"initial_malformed": false,
+		"motion":            command,
+	}); err != nil {
+		return
+	}
+	dispatch, motionErr := s.dispatchChatMotion(r.Context(), command)
+	if motionErr != nil {
+		dispatch.Error = motionErr.Error()
+		s.logger.Warn("chat deterministic stop failed", "error", motionErr)
+	}
+	if err := emit("motion", dispatch); err != nil {
+		return
+	}
+	_ = emit("done", map[string]any{
+		"ok": motionErr == nil,
+	})
+}
+
 func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
 	patternID := motion.PatternID(command.PatternID)
 	speedPercent := 0
@@ -186,6 +232,18 @@ func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionSt
 		Source:       "chat",
 		PatternID:    patternID,
 		SpeedPercent: speedPercent,
+	}
+}
+
+func isChatStopMessage(message string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	normalized = strings.Trim(normalized, " \t\r\n.!?")
+	switch normalized {
+	case "stop", "stop motion", "stop the motion", "pause", "pause motion", "pause the motion",
+		"end", "end motion", "end the motion", "emergency stop":
+		return true
+	default:
+		return false
 	}
 }
 

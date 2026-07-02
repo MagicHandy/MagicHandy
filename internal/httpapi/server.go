@@ -107,6 +107,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
+	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
+	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
 	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)

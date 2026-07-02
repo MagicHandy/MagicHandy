@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -144,9 +145,29 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 		if len(content) > maxUserMessageBytes {
 			content = content[:maxUserMessageBytes]
 		}
+		if role == "assistant" {
+			content = assistantHistoryContent(content)
+		}
 		messages = append(messages, llm.Message{Role: role, Content: content})
 	}
 	return messages
+}
+
+func assistantHistoryContent(content string) string {
+	if _, err := ParseAssistantResponse(content); err == nil {
+		return content
+	}
+	response := AssistantResponse{
+		Reply: content,
+		Motion: &MotionCommand{
+			Action: MotionActionNone,
+		},
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		return `{"reply":"Previous assistant reply omitted.","motion":{"action":"none"}}`
+	}
+	return string(data)
 }
 
 func emitEvent(emit func(StreamEvent) error, event StreamEvent) error {
