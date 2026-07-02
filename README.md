@@ -35,9 +35,16 @@ Implemented:
 - CI for formatting, `go vet`, `golangci-lint`, tests, race tests, and a
   `CGO_ENABLED=0` build
 
-Not implemented yet:
+Not implemented yet (see the status table in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)):
 
-- voice workers
+- real-device validation of the full app path and single-controller
+  enforcement (Phase 9B)
+- long-term memory and editable prompt sets (Phase 10)
+- autonomous modes (Phase 11)
+- voice workers and providers (Phases 12-13)
+- pattern library, authoring, and migration (Phases 14-15)
+- release packaging (Phase 16)
 
 ## Requirements
 

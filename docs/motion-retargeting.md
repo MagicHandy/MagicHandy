@@ -52,6 +52,47 @@ The shared path must:
 A new motion source is added by producing a semantic target/plan for this path,
 never by building a parallel sampler or transport path.
 
+## Route Policy Learned On Hardware
+
+StrokeGPT-ReVibed's June 2026 real-device testing produced a route policy that
+MagicHandy must not rediscover. The regression: routing routine chat retargets
+(plain "faster"/"slower", numeric adjustments, active focus changes) through
+flushed HSP stream replacements produced repeated stop/go, "brick wall" feel on
+hardware even after buffering and cadence fixes. Two design hazards were
+identified in replacement-based morphs:
+
+- A spatial morph blends from the predicted old position into a new moving
+  cyclic sample; depending on the selected phase, the blend can cancel part of
+  the cycle and create near-hold segments.
+- A replacement scheduled at a fixed future lead can land while the old stream
+  is moving opposite to the new target, which feels like hitting an endpoint.
+
+Policy for MagicHandy:
+
+- **Prefer adjusting the active plan over replacing the active stream** for
+  routine changes: speed, stroke range, direction, and area-focus emphasis
+  should retune the running plan and transport envelope (stroke-window,
+  timestamp spacing) rather than flush-and-replace the timed stream.
+- **Reserve stream replacement for genuine pattern changes**, and when
+  replacing, follow Invariant 11 sequencing (`docs/hsp-v4-invariants.md`) plus
+  the handoff-selection rules below.
+- **Localize wide semantic focus requests** before dispatch: `tip`, `shaft`,
+  and `base` become bounded local transport windows, not raw broad targets.
+  Trace both the requested and the transport-resolved focus window so a
+  "motion left the requested region" report is diagnosable.
+- **Ramp envelope changes at a capped transition speed**, then restore the
+  requested speed once the new window is active; do not trade a morph stop for
+  a sudden high-speed correction into a new focus area.
+- **Keepalive/recovery restarts motion only when the transport is actually
+  inactive** or the active stream reports stale playback — never because state
+  from a previous, already-replaced stream looks starved.
+- **Higher-level variation goes through a planner contract**, not per-turn
+  stream replacement: a mode or LLM requests a bounded arrangement of named
+  styles, focus regions, durations, and intensity drift, and deterministic
+  code compiles it with explicit transition rules (see IMPLEMENTATION_PLAN.md,
+  Phase 11). LLM-facing contracts never expose transport details such as HSP
+  replacement, morph duration, or phase offsets.
+
 ## Active Stream Representation
 
 The motion engine must track at least:
@@ -207,8 +248,10 @@ connection key.
 
 ## Current Limitations
 
-- The main UI does not yet expose high-level motion controls; Phase 7 validation
-  uses the dedicated command-line runner.
+- The main UI exposes motion controls (Phase 8) and the engine binds to the
+  selected live dispatch owner, but the full app path has not yet been
+  validated on real hardware; Phase 7 validation used the dedicated
+  command-line runner. Closing this is Phase 9B.
 - The Cloud REST transport now follows the live API v3 wire shape used by
   StrokeGPT-ReVibed, but MagicHandy's motion timing, phase selection, and
   retarget policy are independent Go implementations.
