@@ -27,8 +27,27 @@ Core idle result: the Go core idles at roughly **1/58th** of the Python core
 
 Still required (Phase 9B):
 
-- full browser UI hardware validation for the Cloud REST controls/chat path
-- full Browser Bluetooth hardware validation with UI/chat path
+- full Browser Bluetooth hardware validation with UI/chat path; the in-app
+  browser reports Web Bluetooth as available, but automated Playwright,
+  DOM-click, and coordinate-click attempts are rejected by Chromium's
+  `navigator.bluetooth.requestDevice` user-gesture requirement, so a manual
+  device-chooser step is still required.
+
+## Full App Path Evidence
+
+- 2026-07-02 Cloud REST browser UI/chat path: launched the embedded UI in the
+  in-app browser against a real Handy with the motion envelope capped at 10-35%.
+  The visible connection-check button reported `Connected: HSP ready / 540 ms`;
+  the visible Start motion button started `Stroke` at 23%; the SSE-driven
+  visualizer reported `Running` with `Stroke - speed 23%`; the chat form sent
+  `stop`, received the deterministic `Stopping motion.` reply, and the motion
+  UI returned to `Idle`. An explicit Cloud stop cleanup succeeded afterward.
+- 2026-07-02 Browser Bluetooth browser UI attempt: switched the visible UI to
+  `browser_bluetooth`, saved the dispatch owner, observed the Bluetooth panel,
+  `Browser: Available`, and an enabled Connect button. Automated browser clicks
+  could not complete `requestDevice`; Chromium returned `Must be handling a user
+  gesture to show a permission request.` Browser Bluetooth full motion/chat
+  validation remains open until a human selects the device in the chooser.
 
 ## Procedure
 

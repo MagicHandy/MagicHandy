@@ -249,9 +249,10 @@ connection key.
 ## Current Limitations
 
 - The main UI exposes motion controls (Phase 8) and the engine binds to the
-  selected live dispatch owner, but the full app path has not yet been
-  validated on real hardware; Phase 7 validation used the dedicated
-  command-line runner. Closing this is Phase 9B.
+  selected live dispatch owner. The Cloud REST browser UI/chat path has been
+  validated on real hardware in Phase 9B; Browser Bluetooth still needs manual
+  device-chooser validation because Web Bluetooth requires a real browser user
+  gesture.
 - The Cloud REST transport now follows the live API v3 wire shape used by
   StrokeGPT-ReVibed, but MagicHandy's motion timing, phase selection, and
   retarget policy are independent Go implementations.
