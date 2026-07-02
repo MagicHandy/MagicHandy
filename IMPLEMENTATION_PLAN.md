@@ -30,7 +30,7 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 8 | Motion UI and live visualizer | Complete | #10 |
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
 | 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
-| 10 | Memory, editable prompt sets, settings reset | **Complete** | this PR |
+| 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11-17 | Modes, voice, patterns, migration, packaging, parity | Not started | — |
 
 Phase 9B closed with PR #22: the visible Edge Web Bluetooth flow selected the
