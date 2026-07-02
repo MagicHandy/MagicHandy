@@ -41,8 +41,8 @@
 }
 .bar-nav-button[aria-current="page"],
 .bar-nav-button[aria-expanded="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 /* ---- Quick settings popover: dedicated top layer, measured position ---- */
@@ -90,6 +90,7 @@
   margin-top: 14px;
   padding: 12px 14px;
   border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
@@ -149,8 +150,8 @@
   color: var(--text);
 }
 .settings-nav a[aria-current="page"] {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--primary);
+  border-bottom-color: var(--primary);
 }
 
 .settings-section {
@@ -169,7 +170,7 @@
   bottom: 0;
   margin: 14px calc(-1 * clamp(16px, 2.4vw, 24px)) calc(-1 * clamp(16px, 2.4vw, 24px));
   padding: 14px clamp(16px, 2.4vw, 24px);
-  background: rgba(23, 27, 33, 0.96);
+  background: rgba(21, 26, 33, 0.96);
   backdrop-filter: blur(6px);
   border-top: 1px solid var(--line);
   border-radius: 0 0 var(--radius) var(--radius);
