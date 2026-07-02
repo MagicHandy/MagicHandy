@@ -470,6 +470,10 @@ button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   filter: none;
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--muted);
+  box-shadow: none;
 }
 
 input:disabled,
@@ -555,7 +559,7 @@ textarea:disabled {
   border-radius: var(--radius-sm);
 }
 .chat-log:empty::before {
-  content: "No messages yet. Say hello, or ask for motion — chat can start, adjust, and stop it.";
+  content: "No messages yet";
   margin: auto;
   max-width: 34ch;
   text-align: center;
@@ -695,11 +699,6 @@ textarea:disabled {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.chat-hint {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 0.75rem;
 }
 .chat-status {
   color: var(--muted);
