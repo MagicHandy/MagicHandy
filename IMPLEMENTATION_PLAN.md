@@ -72,6 +72,11 @@ These are tracked so they cannot silently become permanent:
    handling still needs extraction into a transport module.
 7. **Prompt sets are a single hardcoded set**; the editable prompt-set and
    memory surface is Phase 10.
+8. **The UI regressed several behaviors StrokeGPT-ReVibed had already
+   proven** (backend-loss banner and control lock, chat scrollback
+   stickiness, a visible connection check, estimate labeling, pause/resume,
+   copyable diagnostics, settings reset). See `docs/ui-design.md`,
+   "Functional Parity Baseline" — each row is assigned to a phase below.
 
 ## Rewrite Guardrails
 
@@ -166,6 +171,14 @@ Implement:
   state when the stream drops
 - extract the BLE session handling from `web/app.js` so `web/` returns under
   the size norms
+- restore the proven StrokeGPT-ReVibed failure-handling behaviors
+  (`docs/ui-design.md`, "Functional Parity Baseline"): persistent
+  connection-lost banner plus backend-required control lock, a visible cloud
+  connection-check action with transport status in the persistent bar,
+  commanded-estimate labeling on the visualizer, a documented visible Stop
+  shortcut, and chat scrollback stickiness with a jump-to-latest affordance
+- add a copyable diagnostics summary (one-click bug-report text) — required
+  by this phase's own real-device validation runs
 - record Go active-motion RSS and the one-hour sustained-motion soak per
   `docs/goals-and-guardrails.md` (fake transport injection is acceptable for
   the soak; real transport for a shorter active sample)
@@ -183,6 +196,8 @@ Manual real-device checklist (both Cloud REST and Browser Bluetooth):
 - start/stop motion from the control bar
 - quick settings apply to active motion immediately
 - chat-driven start/adjust/stop moves the device
+- kill the backend process: the UI shows the connection-lost banner, locks
+  backend-required controls, and recovers when the backend returns
 - dispatch-owner switch during active motion stops first and reports why
 - second browser tab is read-only but can trigger Stop
 - emergency stop works from both tabs
@@ -193,6 +208,10 @@ Manual real-device checklist (both Cloud REST and Browser Bluetooth):
 - The full app path has moved a real device through both dispatch owners.
 - Owner switching and controller ownership are enforced by tests, not advice.
 - Motion state reaches the UI by push with a visible stale state.
+- The Phase 9B rows of the Functional Parity Baseline
+  (`docs/ui-design.md`) are closed: connection-lost banner and control lock,
+  visible connection check, estimate labeling, documented Stop shortcut,
+  scrollback stickiness, copyable diagnostics.
 - `docs/perf-baseline.md` gains active RSS and soak rows.
 - Known unresolved motion limitations are re-documented after hardware runs.
 
@@ -224,6 +243,11 @@ Implement:
   read-only templates that users copy, not editable in place
 - persona/anatomy fields if not already covered by prompt sets
 - UI for model/prompt/memory settings as routed views per `docs/ui-design.md`
+- explicit reset-to-defaults for settings (parity baseline item; today only
+  corrupt-file auto-recovery exists)
+- decide chat-history persistence: server-side history that survives reload
+  is groundwork for the Phase 12 shared message log (ADR 0003), so at minimum
+  record the decision here rather than letting client-only history calcify
 
 Rules carried from StrokeGPT-ReVibed:
 
@@ -283,6 +307,10 @@ Implement:
   failure
 - mode start/stop API and UI controls; Stop and settings changes interrupt and
   apply during modes
+- engine-level **pause/resume** (parity baseline item): pause holds without
+  tearing down the plan, resume preserves phase, and both are exposed next to
+  Stop and available to chat; Stop stays the safety path and is never replaced
+  by pause
 
 Rules:
 
@@ -576,6 +604,8 @@ indefinitely.
 
 Review motion reliability, transport diagnostics, chat, modes, voice status,
 settings coverage, migration coverage, packaging quality, and known gaps.
+Walk the Functional Parity Baseline in `docs/ui-design.md` row by row; any
+still-open row is either closed, explicitly accepted, or becomes an issue.
 Also decide on deferred product questions: device profiles (Handy 1 vs
 Handy 2 speed behavior; Handy 2 Pro overclock only with documented limits),
 and which post-parity backlog items are worth scheduling.
