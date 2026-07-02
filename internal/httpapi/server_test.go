@@ -185,7 +185,7 @@ func TestSettingsAPIReadsAndSavesSettings(t *testing.T) {
 	}`
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body)))
 	server.Handler().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -233,7 +233,7 @@ func TestSettingsAPIRejectsInvalidSettings(t *testing.T) {
 	}`
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body)))
 	server.Handler().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -313,6 +313,15 @@ func saveSettings(t *testing.T, store *config.Store, mutate func(config.Settings
 	if _, err := store.Save(mutate(settings)); err != nil {
 		t.Fatalf("Save settings: %v", err)
 	}
+}
+
+func withController(request *http.Request) *http.Request {
+	return withControllerID(request, "test-controller")
+}
+
+func withControllerID(request *http.Request, clientID string) *http.Request {
+	request.Header.Set(controllerHeaderName, clientID)
+	return request
 }
 
 func contains(value string, fragment string) bool {

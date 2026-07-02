@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -21,6 +22,7 @@ var errMotionUnavailable = errors.New("motion engine is unavailable for the conf
 type motionRuntime struct {
 	mu        sync.Mutex
 	engine    *motion.Engine
+	owner     string
 	transport transport.Transport
 }
 
@@ -70,7 +72,50 @@ func (s *Server) handleMotionState(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.motionState())
 }
 
+func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, errors.New("streaming responses are unavailable"))
+		return
+	}
+
+	clientID := clientIDFromRequest(r)
+	setSSEHeaders(w)
+	w.WriteHeader(http.StatusOK)
+
+	emit := func() bool {
+		if clientID != "" {
+			s.controller.Touch(clientID)
+		}
+		if err := writeSSE(w, "motion", s.motionState()); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !emit() {
+		return
+	}
+
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if !emit() {
+				return
+			}
+		}
+	}
+}
+
 func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
 	var body motionRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &body); err != nil {
@@ -89,6 +134,10 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
@@ -109,6 +158,10 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 // them, and applies them to any active loop immediately, so quick controls take
 // effect without a save-and-restart cycle.
 func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
 	var body struct {
 		SpeedMinPercent  *int  `json:"speed_min_percent,omitempty"`
 		SpeedMaxPercent  *int  `json:"speed_max_percent,omitempty"`
@@ -190,33 +243,57 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 	_, _ = engine.RefreshSettings(ctx, settings, "settings_saved")
 }
 
+func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) {
+	if previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner {
+		s.stopAndClearMotionEngine(ctx, "dispatch_owner_changed")
+		return
+	}
+	s.refreshActiveMotion(ctx, next.Motion)
+}
+
+func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
+	s.motion.mu.Lock()
+	engine := s.motion.engine
+	s.motion.engine = nil
+	s.motion.owner = ""
+	s.motion.mu.Unlock()
+
+	if engine == nil {
+		return
+	}
+	if engine.Snapshot().Running {
+		_, _ = engine.Stop(ctx, reason)
+	}
+}
+
 // Close stops any active motion loop so no goroutine keeps commanding the
 // device after shutdown (goroutine-lifecycle safety gate).
 func (s *Server) Close() {
 	s.closeLLM()
-	engine := s.currentMotionEngine()
-	if engine == nil {
-		return
-	}
-	_, _ = engine.Stop(context.Background(), "server_shutdown")
+	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
 }
 
 func (s *Server) motionEngineForStart() (*motion.Engine, error) {
-	if engine := s.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+	settings, _ := s.store.Snapshot()
+	owner := settings.Device.HSPDispatchOwner
+	engine, engineOwner := s.currentMotionEngineWithOwner()
+	if engine != nil && engineOwner != owner {
+		s.stopAndClearMotionEngine(context.Background(), "dispatch_owner_changed")
+	} else if engine != nil && engine.Snapshot().Running {
 		return engine, nil
 	}
 	commandTransport, err := s.newSelectedMotionTransport()
 	if err != nil {
 		return nil, err
 	}
-	engine, err := motion.NewEngine(motion.EngineOptions{
+	engine, err = motion.NewEngine(motion.EngineOptions{
 		Transport: commandTransport,
 		Traces:    s.traces,
 	})
 	if err != nil {
 		return nil, err
 	}
-	s.setMotionEngine(engine)
+	s.setMotionEngine(engine, owner)
 	return engine, nil
 }
 
@@ -258,8 +335,15 @@ func (s *Server) currentMotionEngine() *motion.Engine {
 	return s.motion.engine
 }
 
-func (s *Server) setMotionEngine(engine *motion.Engine) {
+func (s *Server) currentMotionEngineWithOwner() (*motion.Engine, string) {
+	s.motion.mu.Lock()
+	defer s.motion.mu.Unlock()
+	return s.motion.engine, s.motion.owner
+}
+
+func (s *Server) setMotionEngine(engine *motion.Engine, owner string) {
 	s.motion.mu.Lock()
 	defer s.motion.mu.Unlock()
 	s.motion.engine = engine
+	s.motion.owner = owner
 }

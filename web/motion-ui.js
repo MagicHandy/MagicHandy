@@ -49,9 +49,12 @@ let running = false;
 let pollTimer = 0;
 let quickTimer = 0;
 let backendAvailable = true;
+let controllerReadOnly = false;
+let motionEvents = null;
+const CONTROLLER_CLIENT_ID = appClientID();
 
 async function getJSON(path) {
-  const response = await fetch(path, { headers: { Accept: "application/json" } });
+  const response = await fetch(path, { headers: { Accept: "application/json", ...controllerHeaders() } });
   if (!response.ok) {
     throw new Error(`${path} returned ${response.status}`);
   }
@@ -61,7 +64,7 @@ async function getJSON(path) {
 async function postJSON(path, body) {
   const response = await fetch(path, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...controllerHeaders() },
     body: JSON.stringify(body || {}),
   });
   const payload = await response.json().catch(() => ({}));
@@ -86,9 +89,9 @@ function renderMotion(motion) {
   const engine = motion?.engine || {};
   running = available && Boolean(engine.running);
 
-  ui.start.disabled = !backendAvailable || !available || running;
+  ui.start.disabled = controllerReadOnly || !backendAvailable || !available || running;
   ui.stopMotion.disabled = !running;
-  setQuickControlsDisabled(!backendAvailable || !available);
+  setQuickControlsDisabled(controllerReadOnly || !backendAvailable || !available);
 
   const stateName = !available ? "unavailable" : running ? "running" : "idle";
   ui.state.textContent = available ? (running ? "Running" : "Idle") : "Unavailable";
@@ -301,6 +304,27 @@ function setQuickControlsDisabled(disabled) {
   }
 }
 
+function controllerHeaders() {
+  return {
+    "X-MagicHandy-Client-ID": CONTROLLER_CLIENT_ID,
+  };
+}
+
+function appClientID() {
+  const key = "magichandy.controller.client_id";
+  try {
+    const existing = window.localStorage.getItem(key);
+    if (existing) {
+      return existing;
+    }
+    const generated = `browser-${crypto.randomUUID()}`;
+    window.localStorage.setItem(key, generated);
+    return generated;
+  } catch {
+    return `browser-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+  }
+}
+
 function applyMotionSettings(motion) {
   ui.quick.speedMin.value = motion.speed_min_percent;
   ui.quick.speedMax.value = motion.speed_max_percent;
@@ -367,7 +391,17 @@ window.addEventListener("magichandy:backend-availability", (event) => {
     }
     return;
   }
-  setQuickControlsDisabled(false);
+  setQuickControlsDisabled(controllerReadOnly);
+});
+
+window.addEventListener("magichandy:controller-state", (event) => {
+  controllerReadOnly = Boolean(event.detail?.read_only);
+  if (controllerReadOnly) {
+    ui.start.disabled = true;
+    setQuickControlsDisabled(true);
+    return;
+  }
+  setQuickControlsDisabled(!backendAvailable);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -375,6 +409,28 @@ document.addEventListener("keydown", (event) => {
     stopMotion();
   }
 });
+
+function startMotionEvents() {
+  if (typeof EventSource === "undefined") {
+    return;
+  }
+  const url = `/api/motion/events?client_id=${encodeURIComponent(CONTROLLER_CLIENT_ID)}`;
+  motionEvents = new EventSource(url);
+  motionEvents.addEventListener("motion", (event) => {
+    try {
+      renderMotion(JSON.parse(event.data));
+    } catch {
+      // The polling path will recover if a malformed event is ever observed.
+    }
+  });
+  motionEvents.addEventListener("error", () => {
+    if (motionEvents) {
+      motionEvents.close();
+      motionEvents = null;
+    }
+    window.setTimeout(startMotionEvents, 2000);
+  });
+}
 
 async function init() {
   try {
@@ -385,6 +441,7 @@ async function init() {
   } catch {
     // The poll loop will retry and surface unavailability.
   }
+  startMotionEvents();
   poll();
 }
 

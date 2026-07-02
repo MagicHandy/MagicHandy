@@ -39,6 +39,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.handleChatStopFastPath(w, r, settings.LLM.Provider, settings.LLM.Model)
 		return
 	}
+	if !s.requireController(w, r) {
+		return
+	}
 
 	provider, err := s.newLLMProvider(settings.LLM)
 	if err != nil {

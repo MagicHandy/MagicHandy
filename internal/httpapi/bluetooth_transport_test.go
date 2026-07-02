@@ -25,16 +25,17 @@ func TestBluetoothManualHSPAddQueuesBrowserCommandAndTraces(t *testing.T) {
 		"device_name": "Handy",
 		"protocol": "hsp_ble"
 	}`))
+	connectRequest = withController(connectRequest)
 	server.Handler().ServeHTTP(connectRecorder, connectRequest)
 	if connectRecorder.Code != http.StatusOK {
 		t.Fatalf("connect status = %d, want %d: %s", connectRecorder.Code, http.StatusOK, connectRecorder.Body.String())
 	}
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/transport/bluetooth/hsp-add", strings.NewReader(`{
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/bluetooth/hsp-add", strings.NewReader(`{
 		"stream_id": "7",
 		"points": [{"position_percent": 25, "time_ms": 10}]
-	}`))
+	}`)))
 	done := make(chan struct{})
 	go func() {
 		server.Handler().ServeHTTP(recorder, request)
@@ -106,10 +107,10 @@ func TestBluetoothSelectedUnavailableReturnsBridgeFailure(t *testing.T) {
 	saveBluetoothSettings(t, server)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/transport/bluetooth/hsp-play", strings.NewReader(`{
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/bluetooth/hsp-play", strings.NewReader(`{
 		"stream_id": "7",
 		"start_time_ms": 0
-	}`))
+	}`)))
 	server.Handler().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {

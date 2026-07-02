@@ -139,6 +139,7 @@ func postChatStream(t *testing.T, server *Server, body string) string {
 	t.Helper()
 
 	request := httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(body))
+	request = withController(request)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, request)
