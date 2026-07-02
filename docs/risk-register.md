@@ -28,6 +28,11 @@ Exit evidence:
 
 - real-device checklist passes for area focus, speed changes, stroke range changes, reverse changes, same-pattern updates, cross-pattern retargets, and emergency stop
 
+Status 2026-07-01: the Phase 7 checklist passed through the dedicated
+`cmd/retarget-validate` runner. The risk stays open until the shipped app path
+(UI and chat driving the engine through the selected live dispatch owner)
+passes the same checklist on hardware — Phase 9B.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -348,3 +353,33 @@ Exit evidence:
 
 - a Phase 13 spike shows acceptable NeuTTS Air cloning quality and latency with a
   non-Python decoder, or a documented fallback is chosen
+
+## R18: LAN And Mobile Secure-Context Requirements
+
+Level: Medium
+
+Description:
+Web Bluetooth and browser microphone capture only work in secure contexts.
+`http://localhost` qualifies, so the default single-machine setup is fine, but
+any LAN/mobile use of Bluetooth dispatch or voice input requires HTTPS on a
+LAN address. StrokeGPT-ReVibed needed a generated local CA, an Android
+certificate-helper endpoint, and exact-IP certificate SANs to make mobile
+Chrome work — a large support surface that is easy to promise accidentally by
+saying "works on your phone".
+
+Mitigation:
+
+- treat localhost as the supported default; the app binds to 127.0.0.1 unless
+  the user opts in to LAN exposure
+- decide the LAN/mobile scope explicitly in Phase 13 (voice input) and record
+  the HTTPS/certificate decision in Phase 16's exposure decision doc
+- if LAN HTTPS is shipped, reuse the StrokeGPT lessons: generated local CA,
+  cert-helper flow for Android, exact-IP SANs, and docs that forbid
+  port-forwarding
+- never describe Bluetooth or voice features as LAN/mobile-capable before the
+  secure-context story exists
+
+Exit evidence:
+
+- a recorded decision on LAN/mobile scope, and — if in scope — a working
+  documented HTTPS flow verified from a real mobile browser

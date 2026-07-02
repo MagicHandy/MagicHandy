@@ -115,6 +115,11 @@ Diagnostics) but fix the structural flaws:
   button.
 - Advanced and experimental settings live under a clearly marked, collapsed
   "Advanced" area, not interleaved with everyday controls.
+- New features ship with a minimal settings surface. Tuning knobs start as
+  diagnostics instrumentation and are promoted to settings only when real use
+  proves users need them. (StrokeGPT's voice tab grew ~12 recognition knobs —
+  beam size, VAD thresholds, noise floors — before defaults were validated,
+  making reliability feel like the user's tuning problem.)
 
 ## Feedback And Status
 
