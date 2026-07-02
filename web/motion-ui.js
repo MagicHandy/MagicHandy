@@ -48,6 +48,7 @@ const ui = {
 let running = false;
 let pollTimer = 0;
 let quickTimer = 0;
+let backendAvailable = true;
 
 async function getJSON(path) {
   const response = await fetch(path, { headers: { Accept: "application/json" } });
@@ -85,8 +86,9 @@ function renderMotion(motion) {
   const engine = motion?.engine || {};
   running = available && Boolean(engine.running);
 
-  ui.start.disabled = !available || running;
+  ui.start.disabled = !backendAvailable || !available || running;
   ui.stopMotion.disabled = !running;
+  setQuickControlsDisabled(!backendAvailable || !available);
 
   const stateName = !available ? "unavailable" : running ? "running" : "idle";
   ui.state.textContent = available ? (running ? "Running" : "Idle") : "Unavailable";
@@ -108,15 +110,16 @@ function renderMotion(motion) {
   if (ui.position) {
     ui.position.style.left = `${positionPercent}%`;
     ui.position.dataset.active = running ? "true" : "false";
+    ui.position.title = "Commanded position estimate";
   }
 
   const target = engine.target || {};
   if (running) {
     ui.runReadout.textContent = `${titleCase(target.pattern_id || "stroke")} · speed ${target.speed_percent ?? "—"}%`;
-    ui.substate.textContent = engine.last_error ? "recovering" : "live";
+    ui.substate.textContent = engine.last_error ? "recovering estimate" : "estimate";
   } else {
     ui.runReadout.textContent = available ? "Idle" : "Motion unavailable";
-    ui.substate.textContent = "";
+    ui.substate.textContent = sample ? "estimate" : "";
   }
 }
 
@@ -136,7 +139,7 @@ function renderDiagnostics(state) {
       : "Idle"
     : "Unavailable";
   const sample = engine.last_sample;
-  ui.diag.enginePosition.textContent = sample ? `${sample.position_percent}%` : "—";
+  ui.diag.enginePosition.textContent = sample ? `${sample.position_percent}% estimate` : "—";
   ui.diag.engineError.textContent = engine.last_error || "None";
 
   const transport = state?.transport || {};
@@ -157,6 +160,8 @@ async function poll() {
     running = false;
     ui.state.textContent = "Unavailable";
     ui.state.dataset.state = "unavailable";
+    ui.start.disabled = true;
+    setQuickControlsDisabled(true);
   }
   schedulePoll();
 }
@@ -290,6 +295,12 @@ function setQuickStatus(message) {
   ui.quickStatus.textContent = message;
 }
 
+function setQuickControlsDisabled(disabled) {
+  for (const control of Object.values(ui.quick)) {
+    control.disabled = disabled;
+  }
+}
+
 function applyMotionSettings(motion) {
   ui.quick.speedMin.value = motion.speed_min_percent;
   ui.quick.speedMax.value = motion.speed_max_percent;
@@ -343,6 +354,21 @@ for (const control of Object.values(ui.quick)) {
 }
 
 ui.traceExport.addEventListener("click", exportTrace);
+
+window.addEventListener("magichandy:backend-availability", (event) => {
+  backendAvailable = Boolean(event.detail?.available);
+  if (!backendAvailable) {
+    ui.start.disabled = true;
+    setQuickControlsDisabled(true);
+    ui.state.textContent = "Unavailable";
+    ui.state.dataset.state = "unavailable";
+    if (ui.visualizer) {
+      ui.visualizer.dataset.state = "unavailable";
+    }
+    return;
+  }
+  setQuickControlsDisabled(false);
+});
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {

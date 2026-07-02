@@ -217,6 +217,89 @@ Observed in StrokeGPT-ReVibed, then the design response here:
 - Multi-tab hardware hazard handled by a warning banner -> an enforced single
   active controller; extra clients are read-only.
 
+## Functional Parity Baseline
+
+StrokeGPT-ReVibed's UI was aesthetically flawed but **functionally good**, and
+much of that function was hard-won from real bug reports. Avoiding its visual
+and structural flaws must not silently drop its behavior. This section is the
+checklist of functional behaviors the old app proved out; a MagicHandy phase
+that touches an area owns the corresponding rows. Compared 2026-07-01 against
+`main` (post-Phase 9).
+
+### Regressed — implemented in MagicHandy but functionally weaker
+
+These exist in some form today but lost behavior the old app had already
+learned the hard way. They are scheduled (Phase 9B unless noted):
+
+1. **Backend-loss handling.** The old app showed a persistent connection-lost
+   banner and locked `data-requires-backend` controls the moment any fetch
+   failed, restoring them on the next success. MagicHandy shrinks this to a
+   small "Core unavailable" pill and a failed-save toast; controls stay
+   enabled and look functional while the backend is gone — the exact "tab
+   keeps pretending to save" failure the old app fixed.
+2. **Chat scrollback.** The old app learned near-bottom stickiness: background
+   messages never yank the user away from older content, with a visible
+   "jump to latest" affordance. MagicHandy force-scrolls to the bottom on
+   every streamed delta.
+3. **Connection verification.** The old app had a visible connection panel
+   with key status; MagicHandy has a cloud connection-check endpoint but no UI
+   affordance to run it, and no transport/connection state in the persistent
+   bar (this document requires it). A user cannot confirm their key works
+   without starting motion.
+4. **Estimate honesty in the visualizer.** The old app documented that the
+   position line is a commanded estimate, not a device readout. MagicHandy
+   renders engine sample position with no estimate/confirmed labeling (this
+   document requires the distinction).
+5. **Pause/Resume.** The old app had pause/resume as a first-class control
+   next to Stop, including chat-driven pause. MagicHandy has only Stop; the
+   engine has no pause state (Phase 11 with the mode work, since resume must
+   preserve phase).
+6. **Copyable diagnostics.** The old app had one-click copyable system status
+   for bug reports. MagicHandy shows a diagnostics grid and raw trace export
+   but no copyable summary bundle (Phase 9B — needed for hardware-validation
+   bug reports).
+7. **Reset to defaults.** The old app had an explicit settings reset;
+   MagicHandy only auto-recovers from a corrupt file (Phase 10 with the
+   settings UI).
+8. **Stop shortcut visibility.** Escape triggers Stop but nothing in the UI
+   says so; this document requires the shortcut to be documented and visible.
+9. **Chat continuity.** The old app kept a server-side message log with
+   per-client cursors; MagicHandy chat history is a 12-turn client array lost
+   on reload and invisible to a second tab. The shared-log architecture is
+   deferred to Phase 12 (ADR 0003) — acceptable, but chat shipped in Phase 9,
+   so the retrofit must not be forgotten.
+
+### Phase 9B parity implementation
+
+The Phase 9B UI pass closes rows 1-4, 6, and 8 at the current architecture
+level: backend loss now shows a persistent banner and locks backend-required
+controls; chat scrolling keeps the user's scrollback position unless they are
+already near the bottom; the connection panel exposes a non-motion connection
+check; the visualizer and diagnostics label position as a commanded estimate;
+diagnostics has a one-click copyable summary; and the persistent Stop control
+shows the Esc shortcut. Pause/resume remains Phase 11 because it needs
+phase-preserving engine state. Reset to defaults remains Phase 10 with the
+settings UI. Server-side chat continuity remains Phase 12 with ADR 0003.
+
+### Not yet built — planned, not regressions
+
+Modes and their affordances (mode buttons, "I'm close", mood/timer, sequence
+log — Phase 11), memory and prompt library UI (Phase 10), voice input/output
+controls (Phases 12-13), pattern library, training studio, program player and
+feedback buttons (Phase 14), migration/setup wizard (Phase 15/17), Ollama/GGUF
+model catalog UI (`docs/model-management.md`), multi-tab controller
+enforcement (Phase 9B — stronger than the old app's warning banner), the
+bounded speed-test button and live device-position layer (post-parity
+backlog).
+
+### Improved — keep these wins
+
+One authoritative visualizer driven by engine state; Stop in a persistent bar
+(the old app hid it in a collapsible sidebar); immediate-apply quick controls
+with no Save between the user and the device; flat navigation without stacked
+modals; strict JSON chat contract with visible repair/malformed states; a
+single motion path with no per-source divergence; trace export as one click.
+
 ## Deferred And Open
 
 - The framework choice stays deferred per ADR 0004 (default: none); revisit at
