@@ -74,7 +74,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory.
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
 | Full app path — Cloud REST | **Met** | 2026-07-02: browser UI + chat against a real Handy; visible connection check (`HSP ready / 540 ms`), Start via UI, SSE visualizer running, deterministic chat stop (`docs/perf-baseline.md`, "Full App Path Evidence") |
-| Full app path — Browser Bluetooth | **Unmeasured (needs a human)** | Chromium requires a real user gesture for `requestDevice`; automation cannot complete the device chooser. One manual session finishes Phase 9B. |
+| Full app path — Browser Bluetooth | **Unmeasured (blocked on BLE visibility)** | Chromium requires a real chooser selection, but the 2026-07-02 Edge/Windows session saw no selectable `OHD`/Handy device: DevTools `DeviceAccess` returned empty chooser lists, a visible manual Edge page never connected, and Windows BLE advertisement scanning saw zero advertisements (`docs/perf-baseline.md`, "Full App Path Evidence"). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -94,8 +94,10 @@ Ranked by threat to the stated goals:
    violated, and it regressed further during the phase that was supposed to
    fix it. Extract the BLE session code and add the automated file-size check
    before Phase 10 UI work makes it worse.
-2. **Bluetooth app-path validation (blocked on a human).** Everything else in
-   Phase 9B is done; this needs one manual device-chooser session.
+2. **Bluetooth app-path validation (blocked on BLE visibility).** Everything
+   else in Phase 9B is done; the next session needs Windows/Chromium to see the
+   `OHD`/Handy advertisement, then a real chooser selection can finish the UI
+   and chat validation.
 3. **Cold start at the boundary.** Probably measurement overhead, but nobody
    has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
    it server-side.
@@ -109,6 +111,7 @@ Ranked by threat to the stated goals:
 - **2026-07-02** — Initial scorecard @ `f5441ba`. Memory goal fully measured
   and met (idle 8.96 MB, active 16.76 MB, soak +9.53%, Python baseline
   525 MB). Binary 10.59 MB / cold start 411-522 ms measured ad hoc. Cloud
-  REST app path validated on hardware; Bluetooth pending a manual gesture.
-  Size norms violated by `web/app.js` (1120); no automated size enforcement
-  yet.
+  REST app path validated on hardware; Bluetooth later refined from "manual
+  gesture needed" to "BLE visibility needed" after Edge/Windows saw no
+  selectable `OHD`/Handy advertisement. Size norms violated by `web/app.js`
+  (1120); no automated size enforcement yet.

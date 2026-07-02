@@ -27,11 +27,14 @@ Core idle result: the Go core idles at roughly **1/58th** of the Python core
 
 Still required (Phase 9B):
 
-- full Browser Bluetooth hardware validation with UI/chat path; the in-app
-  browser reports Web Bluetooth as available, but automated Playwright,
-  DOM-click, and coordinate-click attempts are rejected by Chromium's
-  `navigator.bluetooth.requestDevice` user-gesture requirement, so a manual
-  device-chooser step is still required.
+- full Browser Bluetooth hardware validation with UI/chat path. Chromium's
+  `navigator.bluetooth.requestDevice` still requires a real chooser selection,
+  and the 2026-07-02 Edge/Windows session did not reach a ready Bluetooth
+  bridge: DevTools `DeviceAccess` returned an empty chooser device list,
+  exact-name and `OHD` prefix probes returned no devices, a visible manual Edge
+  session never posted a connected bridge, and a Windows BLE advertisement
+  watcher saw zero advertisements in 25 seconds. No Bluetooth motion command
+  was sent.
 
 ## Full App Path Evidence
 
@@ -48,6 +51,18 @@ Still required (Phase 9B):
   could not complete `requestDevice`; Chromium returned `Must be handling a user
   gesture to show a permission request.` Browser Bluetooth full motion/chat
   validation remains open until a human selects the device in the chooser.
+- 2026-07-02 Browser Bluetooth Edge/Windows attempt with the device in
+  Bluetooth mode: launched an isolated Edge profile against a local
+  `browser_bluetooth` MagicHandy server with speed capped at 35%. Edge exposed
+  Web Bluetooth and DevTools `DeviceAccess` on the page target, but the chooser
+  event returned an empty device list. Additional `requestDevice` probes using
+  the reported `OHD` device name and `OHD` prefix also returned empty device
+  lists. After disabling DevTools chooser interception, a visible manual Edge
+  page remained `Bluetooth disconnected` for four minutes. Windows PnP did not
+  list an `OHD` Bluetooth device, and a Windows BLE advertisement watcher saw
+  zero advertisements while running. The UI discovery filter was widened to
+  include `OHD`/Handy name prefixes, but hardware app-path validation remains
+  open until the OS/browser can see and select the device.
 
 ## Procedure
 

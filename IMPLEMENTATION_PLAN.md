@@ -32,9 +32,10 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 9B | App-path device validation, controller ownership | **Nearly complete** | #15, #16, #17 |
 | 10-17 | Memory/prompts, modes, voice, patterns, migration, packaging, parity | Not started | — |
 
-Phase 9B remaining: one manual Browser Bluetooth session (Chromium's device
-chooser requires a real user gesture, so automation cannot finish it), and
-the `web/app.js` BLE-session extraction. Everything else — controller lease,
+Phase 9B remaining: the Browser Bluetooth session, which is blocked until
+Windows/Chromium can see the `OHD`/Handy BLE advertisement and the user can make
+the required chooser selection, plus the `web/app.js` BLE-session extraction.
+Everything else — controller lease,
 read-only clients, stop-first owner switch, motion SSE, parity-regression
 fixes, Cloud REST hardware validation through the real UI/chat path, active
 RSS, and the one-hour soak — is merged and evidenced.
@@ -64,10 +65,12 @@ status now lives in `docs/goal-scorecard.md`; this list is the open remainder.
 owner-switch semantics, controller enforcement, motion SSE, active RSS and
 soak measurements, and parity rows 1-4/6/8.)
 
-1. **Browser Bluetooth app-path hardware validation needs a human.**
-   Chromium's `requestDevice` chooser requires a real user gesture; one
-   manual session closes it (see `docs/perf-baseline.md`, "Full App Path
-   Evidence").
+1. **Browser Bluetooth app-path hardware validation is blocked on BLE
+   visibility.** Chromium's `requestDevice` chooser requires a real user
+   gesture, but the 2026-07-02 Edge/Windows session saw no selectable
+   `OHD`/Handy device and the Windows BLE advertisement watcher saw zero
+   advertisements. One manual chooser session closes this after the OS/browser
+   can see the device (see `docs/perf-baseline.md`, "Full App Path Evidence").
 2. **`web/app.js` is now ~1120 lines** — further over the size norm than at
    Phase 9 (870), because the 9B parity fixes landed before the planned BLE
    extraction. The only currently violated guardrail; extract before Phase 10

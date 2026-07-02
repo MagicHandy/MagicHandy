@@ -86,6 +86,7 @@ const DISPATCH_OWNER_BLUETOOTH = "browser_bluetooth";
 const HANDY_BLE_SERVICE_UUID = "77834d26-40f7-11ee-be56-0242ac120002";
 const HANDY_BLE_TX_UUID = "77835032-40f7-11ee-be56-0242ac120002";
 const HANDY_BLE_RX_UUID = "77835410-40f7-11ee-be56-0242ac120002";
+const HANDY_BLE_NAME_PREFIXES = ["OHD", "Handy", "The Handy"];
 const COMMAND_WAIT_SECONDS = 4;
 const HSP_ADD_CHUNK_POINTS = 20;
 const WRITE_WITHOUT_RESPONSE_SETTLE_MS = 20;
@@ -756,6 +757,16 @@ function bluetoothSupported() {
   return Boolean(globalThis.navigator?.bluetooth?.requestDevice);
 }
 
+function handyBluetoothRequestOptions() {
+  return {
+    filters: [
+      { services: [HANDY_BLE_SERVICE_UUID] },
+      ...HANDY_BLE_NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
+    ],
+    optionalServices: [HANDY_BLE_SERVICE_UUID],
+  };
+}
+
 function bluetoothConnected() {
   return Boolean(bluetoothState.device?.gatt?.connected && bluetoothState.tx && bluetoothState.rx);
 }
@@ -815,10 +826,7 @@ async function connectBluetooth() {
   });
 
   try {
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [HANDY_BLE_SERVICE_UUID] }],
-      optionalServices: [HANDY_BLE_SERVICE_UUID],
-    });
+    const device = await navigator.bluetooth.requestDevice(handyBluetoothRequestOptions());
     bluetoothState.device = device;
     device.addEventListener("gattserverdisconnected", handleBluetoothDisconnect);
 

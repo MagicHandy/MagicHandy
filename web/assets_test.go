@@ -162,6 +162,9 @@ func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
 		`/api/transport/bluetooth/commands`,
 		`/api/transport/bluetooth/ack`,
 		`navigator.bluetooth.requestDevice`,
+		`handyBluetoothRequestOptions`,
+		`HANDY_BLE_NAME_PREFIXES = ["OHD", "Handy", "The Handy"]`,
+		`optionalServices: [HANDY_BLE_SERVICE_UUID]`,
 	} {
 		if !strings.Contains(string(app), fragment) {
 			t.Fatalf("app.js missing %q", fragment)
