@@ -24,6 +24,14 @@ Implemented:
   load/unload endpoints
 - streaming chat endpoint with strict JSON response validation, one repair pass,
   malformed-response UI indication, prompt sets, and motion-engine dispatch
+- user-managed long-term memory (`/api/memory`): add, enable/disable
+  individually or globally, remove, clear; enabled memories are injected into
+  the chat system prompt, and chat works identically with memory off
+- editable prompt sets (`/api/prompt-sets`) with protected built-in templates
+  (duplicate to edit); the motion JSON contract is appended by code and can
+  never be edited out of a prompt
+- explicit settings factory reset (`POST /api/settings/reset`) behind a
+  double-confirm control in Settings > Diagnostics
 - JSON structured logging
 - graceful shutdown
 - versioned JSON settings with defaults, migration hooks, redacted API views,
@@ -38,9 +46,6 @@ Implemented:
 Not implemented yet (see the status table in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)):
 
-- real-device validation of the full app path and single-controller
-  enforcement (Phase 9B)
-- long-term memory and editable prompt sets (Phase 10)
 - autonomous modes (Phase 11)
 - voice workers and providers (Phases 12-13)
 - pattern library, authoring, and migration (Phases 14-15)

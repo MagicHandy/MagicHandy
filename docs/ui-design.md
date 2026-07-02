@@ -310,6 +310,13 @@ learned the hard way. They are scheduled (Phase 9B unless noted):
    deferred to Phase 12 (ADR 0003) — acceptable, but chat shipped in Phase 9,
    so the retrofit must not be forgotten.
 
+### Phase 10 parity implementation
+
+Row 7 (reset to defaults) is closed: Settings > Diagnostics has an explicit
+double-confirm "Reset all settings" action backed by `POST /api/settings/reset`;
+memories and prompt sets are deliberately untouched by it. Rows 5
+(pause/resume, Phase 11) and 9 (server-side chat continuity, Phase 12) remain.
+
 ### Phase 9B parity implementation
 
 The Phase 9B UI pass closes rows 1-4, 6, and 8 at the current architecture

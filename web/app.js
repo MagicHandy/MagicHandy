@@ -437,7 +437,8 @@ function renderSettings(settings, options = {}) {
   fillOptions(fields.diagnosticsVerbosity, settings.options.diagnostics_verbosities);
   fillOptions(fields.llmProvider, settings.options.llm_providers);
   fillOptions(fields.llmMode, settings.options.llama_cpp_modes);
-  fillOptions(fields.llmPromptSet, settings.options.prompt_sets);
+  // #llm-prompt-set options are dynamic (built-ins plus user sets); the
+  // prompts-memory module owns them via /api/prompt-sets.
 
   fields.serverPort.value = settings.server.port;
   fields.dispatchOwner.value = settings.device.hsp_dispatch_owner;
@@ -456,7 +457,7 @@ function renderSettings(settings, options = {}) {
   fields.llmRunnerPath.value = settings.llm.llama_cpp_runner_path || "";
   fields.llmModelPath.value = settings.llm.llama_cpp_model_path || "";
   fields.llmOllamaURL.value = settings.llm.ollama_base_url;
-  fields.llmPromptSet.value = settings.llm.prompt_set;
+  setSelectValueIfPresent(fields.llmPromptSet, settings.llm.prompt_set);
   fields.llmTimeout.value = settings.llm.request_timeout_ms;
   fields.diagnosticsVerbosity.value = settings.diagnostics.verbosity;
   updateApplicationIDOverrideState();
@@ -508,9 +509,24 @@ function llmPayload() {
   };
 }
 
-function markSettingsDirty() {
-  if (!renderingSettings) {
-    settingsDirty = true;
+function markSettingsDirty(event) {
+  if (renderingSettings) {
+    return;
+  }
+  // Standalone areas inside the settings form (prompt editor, memory manager,
+  // reset zone) apply through their own endpoints; they never dirty the form.
+  if (event?.target?.closest?.("[data-settings-standalone]")) {
+    return;
+  }
+  settingsDirty = true;
+}
+
+function setSelectValueIfPresent(select, value) {
+  const exists = Array.from(select.options).some((option) => option.value === value);
+  if (exists) {
+    select.value = value;
+  } else {
+    select.dataset.pendingValue = value || "";
   }
 }
 

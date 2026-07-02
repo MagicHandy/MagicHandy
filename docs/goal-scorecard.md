@@ -56,7 +56,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory.
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met (early)** | Measured 2026-07-02 @ `f5441ba`: 10.59 MB plain, 7.50 MB with `-trimpath -ldflags "-s -w"`. Will grow with features; re-measure each phase. |
+| Binary size | < 30 MB | **Met (early)** | Measured 2026-07-02 at Phase 10: 10.74 MB plain, 7.62 MB with `-trimpath -ldflags "-s -w"` (+0.12 MB over the 9B-era measurement for memory + prompt-set stores and UI). Re-measure each phase. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 411 / 518 / 522 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which inflates the number). Sits at the boundary; re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -103,6 +103,14 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-02** — Phase 10 complete: user-managed long-term memory
+  (`internal/memory`, `/api/memory`, immediate-apply UI with individual and
+  global switches), editable prompt sets with protected built-ins
+  (`internal/chat` library, `/api/prompt-sets`), the code-owned chat contract
+  (`ComposeSystem` appends the motion JSON contract so prompt edits cannot
+  weaken it), and the settings factory reset (parity row 7 closed). Chat
+  verified to work with memory disabled at the service and API levels.
+  Binary size re-measured: 10.74 MB plain / 7.62 MB stripped (+0.12 MB).
 - **2026-07-02** - Patched Browser Bluetooth app-path validation passed in the
   user's running Edge profile with the real `OHD_hw0_29b3243120f4` device:
   visible Check connection used bridge readiness and did not queue `hsp/state`;

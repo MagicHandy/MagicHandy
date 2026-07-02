@@ -11,6 +11,7 @@
     <script type="module" src="/app.js"></script>
     <script type="module" src="/motion-ui.js"></script>
     <script type="module" src="/chat-ui.js"></script>
+    <script type="module" src="/prompts-memory-ui.js"></script>
   </head>
   <body>
     <!-- Persistent control bar: connection, the single visualizer, Stop, and the
@@ -174,6 +175,7 @@
         <nav class="settings-nav" aria-label="Settings sections">
           <a href="#/settings/device" data-settings-link="device">Device</a>
           <a href="#/settings/model" data-settings-link="model">Model</a>
+          <a href="#/settings/prompts" data-settings-link="prompts">Prompts &amp; Memory</a>
           <a href="#/settings/diagnostics" data-settings-link="diagnostics">Diagnostics</a>
         </nav>
 
@@ -268,10 +270,6 @@
                 <input id="llm-ollama-url" name="llm-ollama-url" type="text" autocomplete="off">
               </label>
               <label class="field">
-                <span>Prompt set</span>
-                <select id="llm-prompt-set" name="llm-prompt-set"></select>
-              </label>
-              <label class="field">
                 <span>Timeout ms</span>
                 <input id="llm-timeout" name="llm-timeout" type="number" min="1000" max="300000" inputmode="numeric">
               </label>
@@ -280,6 +278,60 @@
                 <button class="secondary-button" id="llm-load" type="button">Load</button>
                 <button class="secondary-button" id="llm-unload" type="button">Unload</button>
                 <span class="form-status" id="llm-status" role="status" aria-live="polite">Not checked</span>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="settings-section" data-settings-section="prompts" hidden>
+            <h2 class="settings-section-title">Prompts &amp; Memory</h2>
+
+            <label class="field">
+              <span>Active prompt set <span class="hint-inline">saved with Save settings</span></span>
+              <select id="llm-prompt-set" name="llm-prompt-set"></select>
+            </label>
+
+            <fieldset class="editor-card" data-settings-standalone>
+              <legend>Prompt set editor</legend>
+              <label class="field">
+                <span>Edit set</span>
+                <select id="prompt-editor-select"></select>
+              </label>
+              <label class="field">
+                <span>Name <span class="editor-badge" id="prompt-editor-badge" hidden>Built-in (read-only)</span></span>
+                <input id="prompt-editor-name" type="text" maxlength="80" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Behavior instructions <span class="hint-inline">the motion JSON contract is enforced by code and cannot be edited</span></span>
+                <textarea id="prompt-editor-system" rows="7" maxlength="16384"></textarea>
+              </label>
+              <div class="editor-actions">
+                <button class="secondary-button" id="prompt-editor-new" type="button">New set</button>
+                <button class="secondary-button" id="prompt-editor-duplicate" type="button">Duplicate as new</button>
+                <button class="primary-button" id="prompt-editor-save" type="button">Save set</button>
+                <button class="secondary-button danger-outline" id="prompt-editor-delete" type="button">Delete set</button>
+                <span class="form-status" id="prompt-editor-status" role="status" aria-live="polite"></span>
+              </div>
+            </fieldset>
+
+            <fieldset class="editor-card" data-settings-standalone>
+              <legend>Long-term memory</legend>
+              <label class="toggle-line" for="memory-enabled">
+                <span class="toggle-switch">
+                  <input id="memory-enabled" type="checkbox" role="switch">
+                  <span class="toggle-track" aria-hidden="true"></span>
+                </span>
+                <span>Include saved memories in chat <span class="hint-inline">applies immediately</span></span>
+              </label>
+              <ul class="memory-list" id="memory-list" aria-label="Saved memories"></ul>
+              <label class="field">
+                <span>New memory</span>
+                <textarea id="memory-add-text" rows="2" maxlength="2000"
+                          placeholder="A short fact the assistant should remember"></textarea>
+              </label>
+              <div class="editor-actions">
+                <button class="primary-button" id="memory-add" type="button">Add memory</button>
+                <button class="secondary-button danger-outline" id="memory-clear" type="button">Clear all</button>
+                <span class="form-status" id="memory-status" role="status" aria-live="polite"></span>
               </div>
             </fieldset>
           </div>
@@ -316,6 +368,16 @@
               <div><dt>Health</dt><dd id="health-value">Pending</dd></div>
             </dl>
             <p class="diagnostics-status" id="diagnostics-copy-status" role="status" aria-live="polite"></p>
+
+            <div class="reset-zone" data-settings-standalone>
+              <h3 class="reset-zone-title">Reset</h3>
+              <p class="reset-zone-hint">Restores every setting to factory defaults, including the connection
+                key. Saved memories and prompt sets are not touched.</p>
+              <div class="editor-actions">
+                <button class="secondary-button danger-outline" id="settings-reset" type="button">Reset all settings</button>
+                <span class="form-status" id="settings-reset-status" role="status" aria-live="polite"></span>
+              </div>
+            </div>
           </div>
 
           <div class="form-actions settings-footer">

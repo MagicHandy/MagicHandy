@@ -7,7 +7,7 @@ import (
 )
 
 func TestEmbeddedAssetsExist(t *testing.T) {
-	for _, name := range []string{"index.html", "app.css", "shell.css", "app.js", "shell-ui.js", "motion-ui.js", "chat-ui.js", "bluetooth-ui.js", "handy-ble-codec.js"} {
+	for _, name := range []string{"index.html", "app.css", "shell.css", "app.js", "shell-ui.js", "motion-ui.js", "chat-ui.js", "bluetooth-ui.js", "handy-ble-codec.js", "prompts-memory-ui.js"} {
 		if _, err := fs.Stat(FS(), name); err != nil {
 			t.Fatalf("asset %s is missing: %v", name, err)
 		}
@@ -56,6 +56,48 @@ func TestEmbeddedShellUIHooksExist(t *testing.T) {
 	for _, forbidden := range []string{`100vw`, `100vh`} {
 		if strings.Contains(string(shellUI), forbidden) {
 			t.Fatalf("shell-ui.js must not rely on %q for overlay sizing", forbidden)
+		}
+	}
+}
+
+func TestEmbeddedPromptsMemoryUIHooksExist(t *testing.T) {
+	index, err := fs.ReadFile(FS(), "index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	module, err := fs.ReadFile(FS(), "prompts-memory-ui.js")
+	if err != nil {
+		t.Fatalf("read prompts-memory-ui.js: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`data-settings-section="prompts"`,
+		`href="#/settings/prompts"`,
+		`id="llm-prompt-set"`,
+		`id="prompt-editor-select"`,
+		`id="prompt-editor-system"`,
+		`id="memory-enabled"`,
+		`id="memory-list"`,
+		`id="memory-add"`,
+		`id="memory-clear"`,
+		`id="settings-reset"`,
+		`data-settings-standalone`,
+	} {
+		if !strings.Contains(string(index), fragment) {
+			t.Fatalf("index.html missing %q", fragment)
+		}
+	}
+	// The module owns its endpoints and double-confirms destructive actions.
+	for _, fragment := range []string{
+		`/api/prompt-sets`,
+		`/api/memory`,
+		`/api/memory/enabled`,
+		`/api/settings/reset`,
+		`confirmable(`,
+		`dataset.armed`,
+	} {
+		if !strings.Contains(string(module), fragment) {
+			t.Fatalf("prompts-memory-ui.js missing %q", fragment)
 		}
 	}
 }

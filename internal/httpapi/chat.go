@@ -50,10 +50,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setSSEHeaders(w)
+	prompt, ok := s.personalization.prompts.Resolve(settings.LLM.PromptSet)
+	if !ok {
+		// A deleted or unknown selection falls back to the bundled default so
+		// chat keeps working; the status event reports what actually ran.
+		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
+	}
 	service := chat.Service{
-		Provider:    provider,
-		PromptSetID: settings.LLM.PromptSet,
-		Model:       settings.LLM.Model,
+		Provider: provider,
+		Prompt:   prompt,
+		Model:    settings.LLM.Model,
+		Memories: s.personalization.memory.PromptTexts(),
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -63,7 +70,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		"state":      "streaming",
 		"provider":   settings.LLM.Provider,
 		"model":      settings.LLM.Model,
-		"prompt_set": settings.LLM.PromptSet,
+		"prompt_set": prompt.ID,
 	}); err != nil {
 		return
 	}

@@ -41,10 +41,13 @@ type Result struct {
 }
 
 // Service runs chat prompts, strict validation, and repair over an LLM provider.
+// Prompt is the resolved behavior profile; Memories are the enabled memory
+// texts (empty when the memory switch is off — chat must work without them).
 type Service struct {
-	Provider    llm.Provider
-	PromptSetID string
-	Model       string
+	Provider llm.Provider
+	Prompt   PromptSet
+	Model    string
+	Memories []string
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -60,12 +63,13 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return Result{}, fmt.Errorf("chat message must be at most %d bytes", maxUserMessageBytes)
 	}
 
-	prompt, ok := PromptSetByID(s.PromptSetID)
-	if !ok {
-		return Result{}, fmt.Errorf("unknown prompt set %q", s.PromptSetID)
+	prompt := s.Prompt
+	if strings.TrimSpace(prompt.ID) == "" {
+		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
+	systemPrompt := ComposeSystem(prompt, s.Memories)
 
-	messages := buildMessages(prompt, request.History, userMessage)
+	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:    messages,
 		Model:       s.Model,
@@ -93,7 +97,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	}
 
 	repairMessages := []llm.Message{
-		{Role: "system", Content: prompt.System},
+		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: RepairPrompt(prompt, raw, parseErr.Error())},
 	}
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
@@ -121,8 +125,8 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	return result, nil
 }
 
-func buildMessages(prompt PromptSet, history []llm.Message, userMessage string) []llm.Message {
-	messages := []llm.Message{{Role: "system", Content: prompt.System}}
+func buildMessages(systemPrompt string, history []llm.Message, userMessage string) []llm.Message {
+	messages := []llm.Message{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, sanitizeHistory(history)...)
 	messages = append(messages, llm.Message{Role: "user", Content: userMessage})
 	return messages

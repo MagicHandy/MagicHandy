@@ -471,8 +471,11 @@ func validateLLMSettings(settings LLMSettings) error {
 	if settings.Model == "" {
 		return errors.New("LLM model is required")
 	}
-	if !oneOf(settings.PromptSet, PromptSetMagicHandyMotionV1) {
-		return fmt.Errorf("unknown prompt set %q", settings.PromptSet)
+	// Prompt sets are dynamic (built-in templates plus user-created sets in
+	// the prompt library), so config only requires a non-empty identifier;
+	// the chat layer falls back to the bundled default if a selection is gone.
+	if settings.PromptSet == "" {
+		return errors.New("prompt set is required")
 	}
 	if settings.RequestTimeoutMillis < 1000 || settings.RequestTimeoutMillis > 300000 {
 		return errors.New("LLM request timeout must be between 1000 and 300000 milliseconds")
