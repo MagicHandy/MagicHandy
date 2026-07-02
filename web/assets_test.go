@@ -178,6 +178,10 @@ func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
 		`handyBluetoothRequestOptions`,
 		`HANDY_BLE_NAME_PREFIXES = ["OHD", "Handy", "The Handy"]`,
 		`optionalServices: [HANDY_BLE_SERVICE_UUID]`,
+		`ensureBluetoothCommandLoop`,
+		`COMMAND_FETCH_TIMEOUT_MS`,
+		`AbortController`,
+		`clientID: transientClientID("bluetooth-tab")`,
 	} {
 		if !strings.Contains(string(bluetoothUI), fragment) {
 			t.Fatalf("bluetooth-ui.js missing %q", fragment)

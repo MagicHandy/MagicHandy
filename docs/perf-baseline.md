@@ -27,14 +27,12 @@ Core idle result: the Go core idles at roughly **1/58th** of the Python core
 
 Still required (Phase 9B):
 
-- full Browser Bluetooth hardware validation with UI/chat path. Chromium's
-  `navigator.bluetooth.requestDevice` still requires a real chooser selection,
-  and the 2026-07-02 Edge/Windows session did not reach a ready Bluetooth
-  bridge: DevTools `DeviceAccess` returned an empty chooser device list,
-  exact-name and `OHD` prefix probes returned no devices, a visible manual Edge
-  session never posted a connected bridge, and a Windows BLE advertisement
-  watcher saw zero advertisements in 25 seconds. No Bluetooth motion command
-  was sent.
+- full Browser Bluetooth hardware validation with UI/chat path. The blocker has
+  moved past discovery: Edge can now select `OHD_hw0_29b3243120f4`, the browser
+  bridge can become ready, and a non-moving Stop command ACKed over Bluetooth in
+  102 ms. Full motion/chat validation is still open because the live GATT link
+  dropped or reported `hsp/state` timeout before a capped app-path start could
+  complete. No successful Browser Bluetooth motion command has been recorded.
 
 ## Full App Path Evidence
 
@@ -63,6 +61,23 @@ Still required (Phase 9B):
   zero advertisements while running. The UI discovery filter was widened to
   include `OHD`/Handy name prefixes, but hardware app-path validation remains
   open until the OS/browser can see and select the device.
+- 2026-07-02 Browser Bluetooth connected Edge follow-up: launched a local
+  `browser_bluetooth` server with motion capped at 20-35%, opened it in the
+  user's running Edge profile, and selected `OHD_hw0_29b3243120f4` in the real
+  chooser. The bridge reported `connected=true`, `ready=true`, protocol
+  `hsp_ble`, and `motion.available=true`. A non-moving Stop command ACKed via
+  the browser bridge in 102 ms with no pending or inflight commands afterward.
+  The first capped `23%` app-path start found a transport bug: motion engine
+  stream ID `motion-000001` was rejected by the Browser Bluetooth BLE path,
+  which required a numeric stream ID. That is fixed by mapping semantic stream
+  IDs to numeric BLE stream IDs while retaining semantic diagnostics. Further
+  retests found two UI/bridge recovery bugs, also fixed: command long-poll now
+  survives backend restarts, and Bluetooth command consumers now use per-tab IDs
+  so stale tabs cannot consume commands for the connected tab. The remaining
+  blocker is live link stability: after reconnect, `hsp/state` timed out and/or
+  the GATT server disconnected before the capped start sequence could complete.
+  Logs were written under `.tmp-phase9b-manual/` for the local validation
+  session; they are not committed because they are run artifacts.
 
 ## Procedure
 

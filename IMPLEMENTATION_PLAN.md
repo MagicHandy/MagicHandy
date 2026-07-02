@@ -32,12 +32,14 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 9B | App-path device validation, controller ownership | **Nearly complete** | #15, #16, #17 |
 | 10-17 | Memory/prompts, modes, voice, patterns, migration, packaging, parity | Not started | — |
 
-Phase 9B remaining: the Browser Bluetooth session, which is blocked until
-Windows/Chromium can see the `OHD`/Handy BLE advertisement and the user can make
-the required chooser selection. Everything else — controller lease,
-read-only clients, stop-first owner switch, motion SSE, parity-regression
-fixes, Cloud REST hardware validation through the real UI/chat path, active
-RSS, and the one-hour soak — is merged and evidenced.
+Phase 9B remaining: the Browser Bluetooth full motion/chat session. The blocker
+has moved past BLE discovery: Edge can select `OHD_hw0_29b3243120f4`, the bridge
+can become ready, and a non-moving Stop command ACKed over Bluetooth. Full
+motion remains open because the live GATT link disconnected or reported
+`hsp/state` timeout before the capped start sequence could complete. Everything
+else — controller lease, read-only clients, stop-first owner switch, motion SSE,
+parity-regression fixes, Cloud REST hardware validation through the real UI/chat
+path, active RSS, and the one-hour soak — is merged and evidenced.
 
 ### What Exists On Main
 
@@ -66,12 +68,12 @@ enforcement, motion SSE, active RSS and soak measurements, parity rows
 1-4/6/8, BLE-session extraction from `web/app.js`, and automated source file
 line-budget checks.)
 
-1. **Browser Bluetooth app-path hardware validation is blocked on BLE
-   visibility.** Chromium's `requestDevice` chooser requires a real user
-   gesture, but the 2026-07-02 Edge/Windows session saw no selectable
-   `OHD`/Handy device and the Windows BLE advertisement watcher saw zero
-   advertisements. One manual chooser session closes this after the OS/browser
-   can see the device (see `docs/perf-baseline.md`, "Full App Path Evidence").
+1. **Browser Bluetooth app-path hardware validation is blocked after BLE
+   connect.** The 2026-07-02 connected Edge follow-up selected
+   `OHD_hw0_29b3243120f4`, reached a ready browser bridge, and ACKed a
+   non-moving Stop command. The full motion/chat path still needs one stable
+   GATT session long enough to run the capped start/stop and chat stop sequence
+   (see `docs/perf-baseline.md`, "Full App Path Evidence").
 2. **Prompt sets are a single hardcoded set**; the editable prompt-set and
    memory surface is Phase 10.
 3. **Open parity rows**: pause/resume (Phase 11), reset-to-defaults

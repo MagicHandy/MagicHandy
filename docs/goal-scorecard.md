@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-02, `main` @ `f5441ba` (post Phase 9B PRs #15-#17)
+## Snapshot — 2026-07-02, Phase 9B live-validation follow-up branch
 
 ### Goal 1: Maintainability
 
@@ -31,9 +31,9 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20) |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | `transport/browser_bluetooth.go` 954 remains over cap but is now pinned by `TestSourceFileLineBudgets`; `transport/cloud_client.go` 645 is in the gray zone. Split when next touched. |
-| Size norms — web | same norms for `web/` | **Met** | BLE session extracted to `web/bluetooth-ui.js`; current major JS modules are `app.js` 677, `bluetooth-ui.js` 615, `motion-ui.js` 448, `chat-ui.js` 379. |
-| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` enforces 800-line defaults and pins the existing oversized Go BLE file at its current line count so it cannot grow silently. |
+| Size norms — Go core | no core file over ~600-800 lines | **Met** | Browser Bluetooth was split into bridge and transport files; all Go source files are now under the automated 800-line budget. `transport/cloud_client.go` remains in the gray zone at ~645 lines; split when next behavior change touches it. |
+| Size norms — web | same norms for `web/` | **Met** | BLE session extracted to `web/bluetooth-ui.js`; current major JS modules are `app.js` 620, `bluetooth-ui.js` 592, `motion-ui.js` 448, `chat-ui.js` 379. |
+| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` enforces 800-line defaults for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; largest structs are scoped (bridge, engine, server). Re-check when modes land. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | 17 PRs, one scope each; docs updated in the same PR as behavior. |
 
@@ -74,7 +74,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory.
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
 | Full app path — Cloud REST | **Met** | 2026-07-02: browser UI + chat against a real Handy; visible connection check (`HSP ready / 540 ms`), Start via UI, SSE visualizer running, deterministic chat stop (`docs/perf-baseline.md`, "Full App Path Evidence") |
-| Full app path — Browser Bluetooth | **Unmeasured (blocked on BLE visibility)** | Chromium requires a real chooser selection, but the 2026-07-02 Edge/Windows session saw no selectable `OHD`/Handy device: DevTools `DeviceAccess` returned empty chooser lists, a visible manual Edge page never connected, and Windows BLE advertisement scanning saw zero advertisements (`docs/perf-baseline.md`, "Full App Path Evidence"). |
+| Full app path — Browser Bluetooth | **Unmeasured (blocked after BLE connect)** | 2026-07-02 follow-up reached Edge chooser selection and a ready `OHD_hw0_29b3243120f4` bridge. A non-moving Bluetooth Stop command ACKed in 102 ms. Full motion still did not complete: the first capped app-path start exposed a semantic stream-ID mapping bug, then later retests exposed dead command-loop recovery and shared Bluetooth client IDs across tabs; those are now patched. The remaining live blocker is the Edge/device GATT link dropping or reporting `hsp/state` timeout before the start sequence can run (`docs/perf-baseline.md`, "Full App Path Evidence"). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -90,23 +90,32 @@ continuity) is Phase 12.
 
 Ranked by threat to the stated goals:
 
-1. **Bluetooth app-path validation (blocked on BLE visibility).** Everything
-   else in Phase 9B is done; the next session needs Windows/Chromium to see the
-   `OHD`/Handy advertisement, then a real chooser selection can finish the UI
-   and chat validation.
-2. **Go BLE transport file size.** `transport/browser_bluetooth.go` is still
-   over the soft cap. It is pinned so it cannot grow, but it should be split
-   when the next behavior change touches it.
-3. **Cold start at the boundary.** Probably measurement overhead, but nobody
+1. **Bluetooth app-path validation (blocked after BLE connect).** Windows/Edge
+   can now select the `OHD` device and the browser bridge can ACK a non-moving
+   Stop command. Full motion/chat validation remains open because the live GATT
+   link drops or reports `hsp/state` timeout before the capped start sequence
+   can complete.
+2. **Cold start at the boundary.** Probably measurement overhead, but nobody
    has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
    it server-side.
-4. **Feature growth vs binary/memory budgets.** Voice workers, pattern
+3. **Feature growth vs binary/memory budgets.** Voice workers, pattern
    libraries, and the model manager all add weight; re-measure size and
    active RSS at each phase completion so growth is a trend line, not a
    surprise.
 
 ## History
 
+- **2026-07-02** — Live Browser Bluetooth follow-up with the device online:
+  Edge selected `OHD_hw0_29b3243120f4`, the bridge became ready, and a
+  non-moving Stop command ACKed in 102 ms. The run found and fixed three
+  app-path defects before motion could complete: Browser Bluetooth now maps
+  semantic motion stream IDs to numeric BLE stream IDs, the command long-poll
+  recovers after backend restarts, and Bluetooth command consumers use
+  per-tab IDs so stale tabs cannot steal commands. The follow-up also split
+  the Browser Bluetooth Go transport out of the bridge file, removing the last
+  file-size override. Full Bluetooth motion/chat remains unmeasured because the
+  live GATT link then disconnected or reported `hsp/state` timeout before a
+  capped start could run.
 - **2026-07-02** — Phase 9B close-out follow-up extracted browser-owned BLE
   session handling from `web/app.js` into `web/bluetooth-ui.js`, brought web
   files back under the size norm, and added `TestSourceFileLineBudgets` so file

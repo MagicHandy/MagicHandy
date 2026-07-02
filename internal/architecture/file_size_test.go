@@ -20,9 +20,6 @@ func TestSourceFileLineBudgets(t *testing.T) {
 			root:       "internal",
 			extension:  ".go",
 			defaultMax: 800,
-			overrides: map[string]int{
-				"internal/transport/browser_bluetooth.go": 954,
-			},
 		},
 		{
 			root:       "web",

@@ -17,6 +17,7 @@ const HANDY_BLE_TX_UUID = "77835032-40f7-11ee-be56-0242ac120002";
 const HANDY_BLE_RX_UUID = "77835410-40f7-11ee-be56-0242ac120002";
 const HANDY_BLE_NAME_PREFIXES = ["OHD", "Handy", "The Handy"];
 const COMMAND_WAIT_SECONDS = 4;
+const COMMAND_FETCH_TIMEOUT_MS = (COMMAND_WAIT_SECONDS + 2) * 1000;
 const HSP_ADD_CHUNK_POINTS = 20;
 const WRITE_WITHOUT_RESPONSE_SETTLE_MS = 20;
 const RESPONSE_TIMEOUT_MS = 5000;
@@ -28,7 +29,7 @@ let unsupportedStatusPostedAt = 0;
 let toastTimer = 0;
 
 const bluetoothState = {
-  clientID: stableClientID("magichandy.bluetooth.client_id", "bluetooth-browser"),
+  clientID: transientClientID("bluetooth-tab"),
   device: null,
   server: null,
   tx: null,
@@ -118,6 +119,7 @@ export function startBluetoothHeartbeat() {
         message: bluetoothConnected() ? "Handy Bluetooth connected." : "Bluetooth disconnected.",
       });
       renderBluetoothStatus(response.bluetooth);
+      ensureBluetoothCommandLoop();
     } catch {
       // The next status refresh will surface server availability.
     }
@@ -257,9 +259,20 @@ async function commandLoop() {
   bluetoothState.commandLoopActive = true;
   try {
     while (bluetoothConnected()) {
-      const response = await fetch(`/api/transport/bluetooth/commands?client_id=${encodeURIComponent(bluetoothState.clientID)}&wait=${COMMAND_WAIT_SECONDS}`, {
-        headers: { Accept: "application/json" },
-      });
+      let response;
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), COMMAND_FETCH_TIMEOUT_MS);
+      try {
+        response = await fetch(`/api/transport/bluetooth/commands?client_id=${encodeURIComponent(bluetoothState.clientID)}&wait=${COMMAND_WAIT_SECONDS}`, {
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+      } catch {
+        await delay(1000);
+        continue;
+      } finally {
+        window.clearTimeout(timeout);
+      }
       if (!response.ok) {
         await delay(1000);
         continue;
@@ -276,6 +289,12 @@ async function commandLoop() {
     }
   } finally {
     bluetoothState.commandLoopActive = false;
+  }
+}
+
+function ensureBluetoothCommandLoop() {
+  if (bluetoothConnected() && !bluetoothState.commandLoopActive) {
+    commandLoop();
   }
 }
 
@@ -568,6 +587,14 @@ function stableClientID(key, prefix) {
     const generated = `${prefix}-${crypto.randomUUID()}`;
     window.localStorage.setItem(key, generated);
     return generated;
+  } catch {
+    return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+  }
+}
+
+function transientClientID(prefix) {
+  try {
+    return `${prefix}-${crypto.randomUUID()}`;
   } catch {
     return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`;
   }
