@@ -184,7 +184,6 @@ async function connectBluetooth() {
     } catch (error) {
       console.warn("Bluetooth clock sync failed:", error);
     }
-    await sendBleRequest("hsp/state");
 
     const response = await postJSON("/api/transport/bluetooth/connect", {
       client_id: bluetoothState.clientID,
@@ -339,7 +338,7 @@ async function runBluetoothCommand(command) {
   }
   if (path === "hsp/play") {
     await ensureHSPStream(body.stream_id);
-    return sendBleRequest("hsp/play", { ...body, server_time: Date.now() });
+    return sendBleRequest("hsp/play", { ...body, server_time: Date.now() }, { waitForResponse: false });
   }
   if (path === "hsp/stop") {
     bluetoothState.activeStreamID = null;

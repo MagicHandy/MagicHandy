@@ -8,7 +8,8 @@ core number.
 ## Environment
 
 - Date: 2026-06-30 (Go idle), 2026-07-01 (Python baseline),
-  2026-07-02 (Go active Cloud REST short run and one-hour soak)
+  2026-07-02 (Go active Cloud REST short run and one-hour soak; Browser
+  Bluetooth UI/chat hardware run)
 - OS and architecture: Windows / amd64
 - Go toolchain: Go 1.26.3
 - Python runtime: CPython 3.11 in the StrokeGPT-ReVibed `.venv`
@@ -21,18 +22,17 @@ core number.
 | MagicHandy Go core idle | pending Phase 1 working tree | `CGO_ENABLED=0 go build -o $env:TEMP\magichandy-phase1.exe ./cmd/magichandy`, then run built binary with `-addr 127.0.0.1:49718` | No, `Invoke-WebRequest` loaded `/` once | Yes | 8.96 MB (9,392,128 bytes) across 3 samples | Not measured separately | `/healthz` returned `ok`; `/` returned HTTP 200. |
 | MagicHandy Go core active, Cloud REST short run | Phase 9B controller/SSE working tree | temp `CGO_ENABLED=0` binary, Cloud REST configured with real Handy, `POST /api/motion/start` at 25%, `GET /api/motion/events` held open, deterministic chat `stop` | No browser window; HTTP API exercised the app endpoints and SSE stream | Yes; no Ollama/llama.cpp/voice worker loaded | 16.75-16.76 MB (17,563,648-17,571,840 bytes) across 3 samples | Not measured separately | Real Cloud REST check returned OK/HSP available; motion SSE showed running `stroke` at 25%; chat `stop` returned `Stopping motion.` and cleanup Stop was sent. This is a short safety run, not the one-hour soak. |
 | MagicHandy Go core active, Cloud REST one-hour soak | Phase 9B soak-evidence working tree | temp `CGO_ENABLED=0` binary under `.tmp-phase9b-soak`, Cloud REST configured with real Handy, `POST /api/motion/start` at 25%, `GET /api/motion/events` held open, one sample per minute, deterministic chat `stop` cleanup | No browser window; HTTP API exercised the app endpoints and SSE stream | Yes; measured only the `magichandy` PID, excluding the PowerShell supervisor/SSE reader and direct-stop cleanup helper | 18.41-20.16 MB (19,300,352-21,139,456 bytes) across 56 warmed samples from 302s through 3600s | 20.16 MB (21,139,456 bytes) | 61 total samples from 2s through 3600s; all samples reported `running=true` at 25%; SSE log recorded 28,800 lines with 14,392 running events; warmed RSS range grew 9.53%, within the +20% Phase 9B gate; chat `stop`, motion stop, Cloud stop, and direct cleanup Stop all completed. |
+| MagicHandy Go core active, Browser Bluetooth UI/chat short run | Phase 9B Browser Bluetooth readiness/play patch working tree | temp binary under `.tmp-phase9b-manual`, running on `127.0.0.1:49736` with dispatch owner `browser_bluetooth`; Edge Web Bluetooth selected `OHD_hw0_29b3243120f4`; visible UI Start at 28%, deterministic chat `stop`, then a repeat UI Start/Stop for RSS samples | Yes; the user's running Edge profile owned the BLE GATT link | Yes; measured only the `magichandy` PID, excluding Edge, Codex, and automation helpers | First run active sample 17.23 MB (18,063,360 bytes; post-chat-stop 18,071,552 bytes). Repeat active RSS 17.52-17.53 MB (18,374,656-18,378,752 bytes) across 3 samples | Not measured separately | Visible Check connection returned `Connected: HSP ready / Unknown / 0 ms` without queuing `hsp/state`. First run: UI Start sent `stroke_window` 97 ms, `hsp_add` 236 ms, `hsp_play` 176 ms, all `browser_ack`; chat `stop` returned `Stopping motion.` and Stop ACKed in 163 ms. Repeat run: `stroke_window` 80 ms, `hsp_add` 235 ms, `hsp_play` 116 ms, UI Stop 71 ms. Speed remained 28%, below the 40% automated-test cap. |
 
 Core idle result: the Go core idles at roughly **1/58th** of the Python core
 (8.96 MB vs ~525 MB) on the same machine.
 
 Still required (Phase 9B):
 
-- full Browser Bluetooth hardware validation with UI/chat path. The blocker has
-  moved past discovery: Edge can now select `OHD_hw0_29b3243120f4`, the browser
-  bridge can become ready, and a non-moving Stop command ACKed over Bluetooth in
-  102 ms. Full motion/chat validation is still open because the live GATT link
-  dropped or reported `hsp/state` timeout before a capped app-path start could
-  complete. No successful Browser Bluetooth motion command has been recorded.
+- none for the current real-device app-path gate. Cloud REST has the one-hour
+  soak, and Browser Bluetooth now has a full short UI/chat hardware run with
+  active RSS samples. A longer Browser Bluetooth soak can be scheduled later if
+  BLE link endurance becomes a release criterion.
 
 ## Full App Path Evidence
 
@@ -74,10 +74,24 @@ Still required (Phase 9B):
   retests found two UI/bridge recovery bugs, also fixed: command long-poll now
   survives backend restarts, and Bluetooth command consumers now use per-tab IDs
   so stale tabs cannot consume commands for the connected tab. The remaining
-  blocker is live link stability: after reconnect, `hsp/state` timed out and/or
-  the GATT server disconnected before the capped start sequence could complete.
-  Logs were written under `.tmp-phase9b-manual/` for the local validation
-  session; they are not committed because they are run artifacts.
+  blocker was live link stability: after reconnect, `hsp/state` timed out
+  and/or the GATT server disconnected before the capped start sequence could
+  complete. That failure led to treating the Browser Bluetooth connection check
+  as bridge readiness instead of a state probe, and treating `hsp/play` as a
+  write-ack command.
+- 2026-07-02 Browser Bluetooth patched Edge validation: rebuilt the embedded
+  app, reloaded the user's running Edge profile, reconnected the paired
+  `OHD_hw0_29b3243120f4` device, and verified that the visible Check connection
+  control reported `Connected: HSP ready / Unknown / 0 ms` with `/api/traces`
+  still empty. A visible Start motion at 28% produced `stroke_window`,
+  `hsp_add`, and `hsp_play` traces with `browser_ack`; `/api/motion/state`
+  reported `running=true`, source `manual_ui`, pattern `stroke`, speed 28, and
+  `last_result.kind=hsp_play`. The chat form then sent `stop`, received the
+  deterministic `Stopping motion.` reply, returned the UI to `Idle`, and traced
+  Stop as `browser_ack`. A repeat visible Start/Stop captured the three-sample
+  active RSS range above. Logs were written under `.tmp-phase9b-manual/` for
+  the local validation session; they are not committed because they are run
+  artifacts.
 
 ## Procedure
 
