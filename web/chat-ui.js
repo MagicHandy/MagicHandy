@@ -24,10 +24,48 @@ function appendMessage(role, text, state = "", options = {}) {
   if (state) {
     message.dataset.state = state;
   }
-  message.textContent = text;
+
+  const avatar = document.createElement("span");
+  avatar.className = "chat-avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.textContent = role === "user" ? "Y" : "M";
+
+  const body = document.createElement("div");
+  body.className = "chat-message-body";
+
+  const speaker = document.createElement("span");
+  speaker.className = "chat-speaker";
+  speaker.textContent = role === "user" ? "You" : "MagicHandy";
+  const stamp = document.createElement("time");
+  const now = new Date();
+  stamp.dateTime = now.toISOString();
+  stamp.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  speaker.appendChild(stamp);
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble";
+  bubble.textContent = text;
+
+  body.appendChild(speaker);
+  body.appendChild(bubble);
+  message.appendChild(avatar);
+  message.appendChild(body);
   chat.log.appendChild(message);
   maybeScrollToLatest(shouldStick);
   return message;
+}
+
+function setMessageText(message, text) {
+  const bubble = message.querySelector(".chat-bubble");
+  (bubble || message).textContent = text;
+}
+
+function setStreaming(message, active) {
+  if (active) {
+    message.dataset.streaming = "true";
+  } else {
+    delete message.dataset.streaming;
+  }
 }
 
 function setStatus(message) {
@@ -104,7 +142,8 @@ async function sendChat(event) {
   setMalformed("");
   setStatus("Streaming");
   appendMessage("user", text, "", { forceScroll: true });
-  const assistant = appendMessage("assistant", "...", "", { forceScroll: true });
+  const assistant = appendMessage("assistant", "…", "", { forceScroll: true });
+  setStreaming(assistant, true);
 
   let raw = "";
   let repairRaw = "";
@@ -153,7 +192,8 @@ async function sendChat(event) {
       if (name === "message") {
         const shouldStick = shouldStickToBottom();
         finalReply = payload.reply || "";
-        assistant.textContent = finalReply || "...";
+        setStreaming(assistant, false);
+        setMessageText(assistant, finalReply || "…");
         maybeScrollToLatest(shouldStick);
         if (!payload.initial_malformed) {
           assistant.dataset.state = "";
@@ -171,16 +211,18 @@ async function sendChat(event) {
       if (name === "error") {
         const shouldStick = shouldStickToBottom();
         assistant.dataset.state = "warning";
-        assistant.textContent = payload.message || "Chat failed.";
+        setStreaming(assistant, false);
+        setMessageText(assistant, payload.message || "Chat failed.");
         maybeScrollToLatest(shouldStick);
         setStatus("Failed");
         return;
       }
       if (name === "done") {
+        setStreaming(assistant, false);
         if (!payload.ok && !finalReply) {
           const shouldStick = shouldStickToBottom();
           assistant.dataset.state = "warning";
-          assistant.textContent = "Malformed model response.";
+          setMessageText(assistant, "Malformed model response.");
           maybeScrollToLatest(shouldStick);
         }
         setStatus(payload.ok ? "Idle" : "Needs attention");
@@ -189,7 +231,8 @@ async function sendChat(event) {
   } catch (error) {
     const shouldStick = shouldStickToBottom();
     assistant.dataset.state = "warning";
-    assistant.textContent = error.message;
+    setStreaming(assistant, false);
+    setMessageText(assistant, error.message);
     maybeScrollToLatest(shouldStick);
     setStatus("Failed");
   } finally {
@@ -248,7 +291,7 @@ function dispatchEventBlock(block, onEvent) {
 function renderDraft(element, raw) {
   const shouldStick = shouldStickToBottom();
   const reply = extractReplyDraft(raw);
-  element.textContent = reply || "...";
+  setMessageText(element, reply || "…");
   maybeScrollToLatest(shouldStick);
 }
 

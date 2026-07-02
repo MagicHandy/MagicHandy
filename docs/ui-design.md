@@ -134,6 +134,32 @@ Diagnostics) but fix the structural flaws:
   beam size, VAD thresholds, noise floors — before defaults were validated,
   making reliability feel like the user's tuning problem.)
 
+## Visual Language
+
+The app is dark, layered, and hue-coded. StrokeGPT-ReVibed's visual strengths
+(a semantic multi-hue system, colored section identity, chat bubbles with real
+anatomy, surface depth) are kept; its weaknesses (an external font fetch, ad
+hoc per-widget colors) are not.
+
+- **Surface layering, not hairlines alone**: page < panel < raised element <
+  overlay, each a distinct value with shadows. Insets (chat log, inputs) drop
+  below the panel value so regions read at a glance.
+- **Hue roles are semantic and fixed**: violet is app personality — headings,
+  navigation state, primary app actions (Send, Save). Teal is motion and
+  live-device identity — Start, the visualizer, the motion strip's edge, quick
+  controls. Green/amber/red are reserved for status. The user's chat bubble is
+  slate-blue. A new feature picks the role it belongs to; it does not invent a
+  hue.
+- **Chat messages have anatomy**: speaker label with timestamp, avatar chip,
+  tail-cornered bubble with shadow, right/left role alignment, a streaming
+  cursor while the model is generating, and a subtle entry animation. All
+  animation respects `prefers-reduced-motion`.
+- **Native controls render dark**: the `color-scheme` meta is `dark` so
+  scrollbars, selects, and checkboxes match (a light scrollbar on a dark app
+  is a bug), with thin themed scrollbars on top.
+- **No network-fetched fonts or assets**: system font stack, everything
+  embedded and offline.
+
 ## Feedback And Status
 
 - One notification system, layered above content, that a modal or route cannot
