@@ -29,17 +29,21 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 7 | Retargeting + real-device validation runner | Complete | #9 |
 | 8 | Motion UI and live visualizer | Complete | #10 |
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
-| 9B | App-path device validation, controller ownership | **Nearly complete** | #15, #16, #17 |
-| 10-17 | Memory/prompts, modes, voice, patterns, migration, packaging, parity | Not started | — |
+| 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
+| 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
+| 11-17 | Modes, voice, patterns, migration, packaging, parity | Not started | — |
 
-Phase 9B remaining: the Browser Bluetooth full motion/chat session. The blocker
-has moved past BLE discovery: Edge can select `OHD_hw0_29b3243120f4`, the bridge
-can become ready, and a non-moving Stop command ACKed over Bluetooth. Full
-motion remains open because the live GATT link disconnected or reported
-`hsp/state` timeout before the capped start sequence could complete. Everything
-else — controller lease, read-only clients, stop-first owner switch, motion SSE,
-parity-regression fixes, Cloud REST hardware validation through the real UI/chat
-path, active RSS, and the one-hour soak — is merged and evidenced.
+Phase 9B closed with PR #22: the visible Edge Web Bluetooth flow selected the
+real device, checked the connection, started motion at 28%, and stopped it via
+deterministic chat — full app-path evidence for both dispatch owners lives in
+`docs/perf-baseline.md`.
+
+Phase 10 decision (2026-07-02): **chat history stays client-side for now.**
+Server-side history is deliberately deferred to Phase 12, where ADR 0003's
+shared message log with per-client cursors introduces it as the single
+canonical history; building a separate Phase 10 history store would create a
+second source of truth that Phase 12 would immediately replace. Parity row 9
+tracks it.
 
 ### What Exists On Main
 
@@ -68,17 +72,14 @@ enforcement, motion SSE, active RSS and soak measurements, parity rows
 1-4/6/8, BLE-session extraction from `web/app.js`, and automated source file
 line-budget checks.)
 
-1. **Browser Bluetooth app-path hardware validation is blocked after BLE
-   connect.** The 2026-07-02 connected Edge follow-up selected
-   `OHD_hw0_29b3243120f4`, reached a ready browser bridge, and ACKed a
-   non-moving Stop command. The full motion/chat path still needs one stable
-   GATT session long enough to run the capped start/stop and chat stop sequence
-   (see `docs/perf-baseline.md`, "Full App Path Evidence").
-2. **Prompt sets are a single hardcoded set**; the editable prompt-set and
-   memory surface is Phase 10.
-3. **Open parity rows**: pause/resume (Phase 11), reset-to-defaults
-   (Phase 10), server-side chat continuity (Phase 12). See
-   `docs/ui-design.md`, "Functional Parity Baseline".
+(Also closed since: Browser Bluetooth full app-path validation — PR #22;
+editable prompt sets, memory, and reset-to-defaults — Phase 10.)
+
+1. **Open parity rows**: pause/resume (Phase 11) and server-side chat
+   continuity (Phase 12). See `docs/ui-design.md`, "Functional Parity
+   Baseline".
+2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
+   one-hour soak ran on Cloud REST only (scorecard watch list).
 
 ## Rewrite Guardrails
 

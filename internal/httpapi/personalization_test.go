@@ -1,0 +1,254 @@
+package httpapi
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/memory"
+)
+
+func personalizationRequest(t *testing.T, server *Server, method string, path string, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	var request *http.Request
+	if body == "" {
+		request = httptest.NewRequest(method, path, nil)
+	} else {
+		request = httptest.NewRequest(method, path, strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+	}
+	// Match postChatStream's client ID so one test client owns the lease.
+	request.Header.Set("X-MagicHandy-Client-ID", "test-controller")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestMemoryEndpointsRoundTrip(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	added := personalizationRequest(t, server, http.MethodPost, "/api/memory", `{"text":"Likes slow starts."}`)
+	if added.Code != http.StatusOK {
+		t.Fatalf("add status = %d: %s", added.Code, added.Body.String())
+	}
+	var snapshot memory.Snapshot
+	if err := json.Unmarshal(added.Body.Bytes(), &snapshot); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	if len(snapshot.Memories) != 1 || !snapshot.Enabled {
+		t.Fatalf("snapshot after add = %+v", snapshot)
+	}
+	id := snapshot.Memories[0].ID
+
+	toggled := personalizationRequest(t, server, http.MethodPatch, "/api/memory/"+id, `{"enabled":false}`)
+	if toggled.Code != http.StatusOK || !strings.Contains(toggled.Body.String(), `"enabled":false`) {
+		t.Fatalf("toggle = %d: %s", toggled.Code, toggled.Body.String())
+	}
+
+	globalOff := personalizationRequest(t, server, http.MethodPost, "/api/memory/enabled", `{"enabled":false}`)
+	if globalOff.Code != http.StatusOK {
+		t.Fatalf("global off = %d: %s", globalOff.Code, globalOff.Body.String())
+	}
+
+	removed := personalizationRequest(t, server, http.MethodDelete, "/api/memory/"+id, "")
+	if removed.Code != http.StatusOK {
+		t.Fatalf("remove = %d: %s", removed.Code, removed.Body.String())
+	}
+	missing := personalizationRequest(t, server, http.MethodDelete, "/api/memory/"+id, "")
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("remove missing = %d, want 404", missing.Code)
+	}
+
+	cleared := personalizationRequest(t, server, http.MethodPost, "/api/memory/clear", "")
+	if cleared.Code != http.StatusOK {
+		t.Fatalf("clear = %d: %s", cleared.Code, cleared.Body.String())
+	}
+}
+
+func TestChatSystemPromptIncludesMemoriesOnlyWhenEnabled(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Hi.","motion":{"action":"none"}}`,
+		`{"reply":"Hi again.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	added := personalizationRequest(t, server, http.MethodPost, "/api/memory", `{"text":"Prefers the tease pattern."}`)
+	if added.Code != http.StatusOK {
+		t.Fatalf("add memory = %d: %s", added.Code, added.Body.String())
+	}
+
+	postChatStream(t, server, `{"message":"hello"}`)
+	if provider.callCount() != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.callCount())
+	}
+	system := provider.requests[0].Messages[0].Content
+	if !strings.Contains(system, "Prefers the tease pattern.") {
+		t.Fatalf("system prompt missing enabled memory:\n%s", system)
+	}
+	if !strings.Contains(system, "JSON contract") {
+		t.Fatalf("system prompt missing code-owned contract:\n%s", system)
+	}
+
+	// Chat keeps working identically with the memory switch off: same contract,
+	// no memory block.
+	off := personalizationRequest(t, server, http.MethodPost, "/api/memory/enabled", `{"enabled":false}`)
+	if off.Code != http.StatusOK {
+		t.Fatalf("disable memory = %d: %s", off.Code, off.Body.String())
+	}
+	body := postChatStream(t, server, `{"message":"hello again"}`)
+	if !strings.Contains(body, `"reply":"Hi again."`) {
+		t.Fatalf("chat with memory disabled did not complete:\n%s", body)
+	}
+	system = provider.requests[1].Messages[0].Content
+	if strings.Contains(system, "Prefers the tease pattern.") || strings.Contains(system, "Saved user memories") {
+		t.Fatalf("system prompt leaked memories while disabled:\n%s", system)
+	}
+	if !strings.Contains(system, "JSON contract") {
+		t.Fatalf("contract missing with memory disabled:\n%s", system)
+	}
+}
+
+func TestPromptSetCRUDProtectsBuiltinsAndResetsSelection(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	// Built-ins are read-only.
+	editBuiltin := personalizationRequest(t, server, http.MethodPut,
+		"/api/prompt-sets/"+chat.DefaultPromptSetID, `{"name":"Hack","system":"Rewritten."}`)
+	if editBuiltin.Code != http.StatusForbidden {
+		t.Fatalf("edit builtin = %d, want 403: %s", editBuiltin.Code, editBuiltin.Body.String())
+	}
+	deleteBuiltin := personalizationRequest(t, server, http.MethodDelete,
+		"/api/prompt-sets/"+chat.DefaultPromptSetID, "")
+	if deleteBuiltin.Code != http.StatusForbidden {
+		t.Fatalf("delete builtin = %d, want 403", deleteBuiltin.Code)
+	}
+
+	created := personalizationRequest(t, server, http.MethodPost, "/api/prompt-sets",
+		`{"name":"Gentle","system":"Be gentle."}`)
+	if created.Code != http.StatusOK {
+		t.Fatalf("create = %d: %s", created.Code, created.Body.String())
+	}
+	var payload struct {
+		Set  chat.PromptSet   `json:"set"`
+		Sets []chat.PromptSet `json:"sets"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode create payload: %v", err)
+	}
+	if payload.Set.ID == "" || payload.Set.Builtin {
+		t.Fatalf("created set = %+v", payload.Set)
+	}
+
+	// Select the new set through the normal settings path.
+	settings, _ := server.store.Snapshot()
+	settings.LLM.PromptSet = payload.Set.ID
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("select user set: %v", err)
+	}
+
+	updated := personalizationRequest(t, server, http.MethodPut,
+		"/api/prompt-sets/"+payload.Set.ID, `{"name":"Gentler","system":"Be gentler."}`)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("update = %d: %s", updated.Code, updated.Body.String())
+	}
+
+	// Deleting the selected set resets the selection to the default.
+	deleted := personalizationRequest(t, server, http.MethodDelete,
+		"/api/prompt-sets/"+payload.Set.ID, "")
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("delete = %d: %s", deleted.Code, deleted.Body.String())
+	}
+	if !strings.Contains(deleted.Body.String(), fmt.Sprintf(`"selected":%q`, chat.DefaultPromptSetID)) {
+		t.Fatalf("delete payload did not reset selection: %s", deleted.Body.String())
+	}
+	settings, _ = server.store.Snapshot()
+	if settings.LLM.PromptSet != chat.DefaultPromptSetID {
+		t.Fatalf("selection after delete = %q, want default", settings.LLM.PromptSet)
+	}
+}
+
+func TestChatFallsBackToDefaultPromptSetWhenSelectionMissing(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Still chatting.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	settings, _ := server.store.Snapshot()
+	settings.LLM.PromptSet = "user-deleted-long-ago"
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save dangling selection: %v", err)
+	}
+
+	body := postChatStream(t, server, `{"message":"hello"}`)
+	if !strings.Contains(body, `"reply":"Still chatting."`) {
+		t.Fatalf("chat with dangling prompt selection failed:\n%s", body)
+	}
+	if !strings.Contains(body, fmt.Sprintf(`"prompt_set":%q`, chat.DefaultPromptSetID)) {
+		t.Fatalf("status event did not report the fallback set:\n%s", body)
+	}
+}
+
+func TestReadOnlyClientCannotEditPersonalization(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	// First client takes the controller lease.
+	_ = controllerFromState(t, server, "controller-a")
+
+	recorder := httptest.NewRecorder()
+	request := withControllerID(httptest.NewRequest(http.MethodPost, "/api/memory",
+		strings.NewReader(`{"text":"Sneaky write."}`)), "reader-b")
+	request.Header.Set("Content-Type", "application/json")
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("read-only memory add = %d, want %d: %s", recorder.Code, http.StatusConflict, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	request = withControllerID(httptest.NewRequest(http.MethodPost, "/api/prompt-sets",
+		strings.NewReader(`{"name":"X","system":"Y"}`)), "reader-b")
+	request.Header.Set("Content-Type", "application/json")
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("read-only prompt create = %d, want %d", recorder.Code, http.StatusConflict)
+	}
+}
+
+func TestSettingsResetRestoresDefaults(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	settings, _ := server.store.Snapshot()
+	settings.Motion.SpeedMaxPercent = 55
+	settings.Device.HandyConnectionKey = "secret-key-value"
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save modified settings: %v", err)
+	}
+
+	recorder := personalizationRequest(t, server, http.MethodPost, "/api/settings/reset", "")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("reset = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "secret-key-value") {
+		t.Fatalf("reset response leaked the connection key: %s", recorder.Body.String())
+	}
+
+	after, _ := server.store.Snapshot()
+	defaults := config.DefaultSettings()
+	if after.Motion.SpeedMaxPercent != defaults.Motion.SpeedMaxPercent {
+		t.Fatalf("speed max after reset = %d, want default %d",
+			after.Motion.SpeedMaxPercent, defaults.Motion.SpeedMaxPercent)
+	}
+	if after.Device.HandyConnectionKey != "" {
+		t.Fatal("connection key survived the reset")
+	}
+}

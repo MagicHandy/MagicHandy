@@ -42,19 +42,20 @@ type Runtime struct {
 
 // Server owns the local HTTP routes and embedded static asset serving.
 type Server struct {
-	static     fs.FS
-	logger     *slog.Logger
-	store      *config.Store
-	traces     *diagnostics.TraceRing
-	transport  transport.DiagnosticsProvider
-	cloud      cloudRuntime
-	bluetooth  bluetoothRuntime
-	motion     motionRuntime
-	llm        llmRuntime
-	controller controllerRuntime
-	started    time.Time
-	version    VersionInfo
-	handler    http.Handler
+	static          fs.FS
+	logger          *slog.Logger
+	store           *config.Store
+	traces          *diagnostics.TraceRing
+	transport       transport.DiagnosticsProvider
+	cloud           cloudRuntime
+	bluetooth       bluetoothRuntime
+	motion          motionRuntime
+	llm             llmRuntime
+	controller      controllerRuntime
+	personalization personalizationRuntime
+	started         time.Time
+	version         VersionInfo
+	handler         http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.
@@ -75,19 +76,31 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		runtime.Transport = transport.NewFake()
 	}
 
+	personalization, err := newPersonalizationRuntime(store.DataDir())
+	if err != nil {
+		return nil, err
+	}
+	if personalization.memory.Recovered() {
+		logger.Warn("memory store recovered with defaults", "data_dir", store.DataDir())
+	}
+	if personalization.prompts.Recovered() {
+		logger.Warn("prompt set store recovered with defaults", "data_dir", store.DataDir())
+	}
+
 	server := &Server{
-		static:     static,
-		logger:     logger,
-		store:      store,
-		traces:     runtime.Traces,
-		transport:  runtime.Transport,
-		cloud:      newCloudRuntime(runtime),
-		bluetooth:  newBluetoothRuntime(runtime),
-		motion:     newMotionRuntime(runtime),
-		llm:        newLLMRuntime(runtime),
-		controller: newControllerRuntime(),
-		started:    time.Now().UTC(),
-		version:    version,
+		static:          static,
+		logger:          logger,
+		store:           store,
+		traces:          runtime.Traces,
+		transport:       runtime.Transport,
+		cloud:           newCloudRuntime(runtime),
+		bluetooth:       newBluetoothRuntime(runtime),
+		motion:          newMotionRuntime(runtime),
+		llm:             newLLMRuntime(runtime),
+		controller:      newControllerRuntime(),
+		personalization: personalization,
+		started:         time.Now().UTC(),
+		version:         version,
 	}
 
 	mux := http.NewServeMux()
@@ -109,6 +122,17 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
+	mux.HandleFunc("GET /api/memory", s.handleMemoryGet)
+	mux.HandleFunc("POST /api/memory", s.handleMemoryAdd)
+	mux.HandleFunc("POST /api/memory/enabled", s.handleMemorySetEnabled)
+	mux.HandleFunc("POST /api/memory/clear", s.handleMemoryClear)
+	mux.HandleFunc("PATCH /api/memory/{id}", s.handleMemoryPatchItem)
+	mux.HandleFunc("DELETE /api/memory/{id}", s.handleMemoryRemove)
+	mux.HandleFunc("GET /api/prompt-sets", s.handlePromptSetsGet)
+	mux.HandleFunc("POST /api/prompt-sets", s.handlePromptSetCreate)
+	mux.HandleFunc("PUT /api/prompt-sets/{id}", s.handlePromptSetUpdate)
+	mux.HandleFunc("DELETE /api/prompt-sets/{id}", s.handlePromptSetDelete)
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
@@ -207,6 +231,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		},
 		"llm":                 s.llmState(r.Context()),
 		"controller":          s.controllerState(r),
+		"memory":              s.memoryState(),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),

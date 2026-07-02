@@ -6,7 +6,7 @@
 // dedicated top layer and is positioned from measured geometry, never from
 // viewport units (which can resolve to 0 in embedded/headless contexts).
 
-const SETTINGS_SECTIONS = ["device", "model", "diagnostics"];
+const SETTINGS_SECTIONS = ["device", "model", "prompts", "diagnostics"];
 
 const shell = {
   controlView: document.querySelector("#view-control"),

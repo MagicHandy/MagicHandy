@@ -66,9 +66,8 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 		`{"reply":"Fixed.","motion":{"action":"none"}}`,
 	}}
 	service := Service{
-		Provider:    provider,
-		PromptSetID: defaultPromptSetID,
-		Model:       "local-model",
+		Provider: provider,
+		Model:    "local-model",
 	}
 	var events []StreamEvent
 
@@ -105,9 +104,8 @@ func TestServiceRewritesPlainAssistantHistoryAsContractJSON(t *testing.T) {
 		`{"reply":"Still here.","motion":{"action":"none"}}`,
 	}}
 	service := Service{
-		Provider:    provider,
-		PromptSetID: defaultPromptSetID,
-		Model:       "local-model",
+		Provider: provider,
+		Model:    "local-model",
 	}
 
 	_, err := service.Complete(t.Context(), Request{
