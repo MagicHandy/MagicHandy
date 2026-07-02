@@ -34,8 +34,7 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 
 Phase 9B remaining: the Browser Bluetooth session, which is blocked until
 Windows/Chromium can see the `OHD`/Handy BLE advertisement and the user can make
-the required chooser selection, plus the `web/app.js` BLE-session extraction.
-Everything else — controller lease,
+the required chooser selection. Everything else — controller lease,
 read-only clients, stop-first owner switch, motion SSE, parity-regression
 fixes, Cloud REST hardware validation through the real UI/chat path, active
 RSS, and the one-hour soak — is merged and evidenced.
@@ -61,9 +60,11 @@ RSS, and the one-hour soak — is merged and evidenced.
 
 These are tracked so they cannot silently become permanent. Goal and budget
 status now lives in `docs/goal-scorecard.md`; this list is the open remainder.
-(Closed by Phase 9B PRs #15-#17: app-path Cloud REST hardware validation,
-owner-switch semantics, controller enforcement, motion SSE, active RSS and
-soak measurements, and parity rows 1-4/6/8.)
+(Closed by Phase 9B PRs #15-#17 and the follow-up close-out branch: app-path
+Cloud REST hardware validation, owner-switch semantics, controller
+enforcement, motion SSE, active RSS and soak measurements, parity rows
+1-4/6/8, BLE-session extraction from `web/app.js`, and automated source file
+line-budget checks.)
 
 1. **Browser Bluetooth app-path hardware validation is blocked on BLE
    visibility.** Chromium's `requestDevice` chooser requires a real user
@@ -71,16 +72,9 @@ soak measurements, and parity rows 1-4/6/8.)
    `OHD`/Handy device and the Windows BLE advertisement watcher saw zero
    advertisements. One manual chooser session closes this after the OS/browser
    can see the device (see `docs/perf-baseline.md`, "Full App Path Evidence").
-2. **`web/app.js` is now ~1120 lines** — further over the size norm than at
-   Phase 9 (870), because the 9B parity fixes landed before the planned BLE
-   extraction. The only currently violated guardrail; extract before Phase 10
-   adds more UI.
-3. **Size norms have no automated enforcement**, which is how gap 2 grew
-   silently. Add a file-length check to the `internal/architecture` tests
-   with a grandfathered ceiling so oversized files can only shrink.
-4. **Prompt sets are a single hardcoded set**; the editable prompt-set and
+2. **Prompt sets are a single hardcoded set**; the editable prompt-set and
    memory surface is Phase 10.
-5. **Open parity rows**: pause/resume (Phase 11), reset-to-defaults
+3. **Open parity rows**: pause/resume (Phase 11), reset-to-defaults
    (Phase 10), server-side chat continuity (Phase 12). See
    `docs/ui-design.md`, "Functional Parity Baseline".
 
@@ -178,11 +172,11 @@ Implement:
 - motion state pushed over SSE (reuse the cloud/bluetooth event pattern) with
   the polling loop kept as fallback; the visualizer shows an explicit stale
   state when the stream drops
-- extract the BLE session handling from `web/app.js` so `web/` returns under
-  the size norms
-- add an automated file-length check (in `internal/architecture`) with a
-  grandfathered ceiling for existing oversized files, so size norms stop
-  depending on manual review
+- BLE session handling is split out of `web/app.js`; `web/app.js` is back under
+  the size norms and browser-owned BLE now lives in `web/bluetooth-ui.js`
+- automated file-length checks live in `internal/architecture` with a
+  grandfathered ceiling for existing oversized files, so size norms no longer
+  depend on manual review
 - restore the proven StrokeGPT-ReVibed failure-handling behaviors
   (`docs/ui-design.md`, "Functional Parity Baseline"): persistent
   connection-lost banner plus backend-required control lock, a visible cloud

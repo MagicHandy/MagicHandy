@@ -7,7 +7,7 @@ import (
 )
 
 func TestEmbeddedAssetsExist(t *testing.T) {
-	for _, name := range []string{"index.html", "app.css", "app.js", "motion-ui.js", "chat-ui.js", "handy-ble-codec.js"} {
+	for _, name := range []string{"index.html", "app.css", "app.js", "motion-ui.js", "chat-ui.js", "bluetooth-ui.js", "handy-ble-codec.js"} {
 		if _, err := fs.Stat(FS(), name); err != nil {
 			t.Fatalf("asset %s is missing: %v", name, err)
 		}
@@ -149,6 +149,10 @@ func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read app.js: %v", err)
 	}
+	bluetoothUI, err := fs.ReadFile(FS(), "bluetooth-ui.js")
+	if err != nil {
+		t.Fatalf("read bluetooth-ui.js: %v", err)
+	}
 
 	for _, fragment := range []string{
 		`id="bluetooth-panel"`,
@@ -159,6 +163,15 @@ func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
 		}
 	}
 	for _, fragment := range []string{
+		`./bluetooth-ui.js`,
+		`renderBluetoothStatus`,
+		`maybePostUnsupportedBluetoothStatus`,
+	} {
+		if !strings.Contains(string(app), fragment) {
+			t.Fatalf("app.js missing %q", fragment)
+		}
+	}
+	for _, fragment := range []string{
 		`/api/transport/bluetooth/commands`,
 		`/api/transport/bluetooth/ack`,
 		`navigator.bluetooth.requestDevice`,
@@ -166,8 +179,8 @@ func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
 		`HANDY_BLE_NAME_PREFIXES = ["OHD", "Handy", "The Handy"]`,
 		`optionalServices: [HANDY_BLE_SERVICE_UUID]`,
 	} {
-		if !strings.Contains(string(app), fragment) {
-			t.Fatalf("app.js missing %q", fragment)
+		if !strings.Contains(string(bluetoothUI), fragment) {
+			t.Fatalf("bluetooth-ui.js missing %q", fragment)
 		}
 	}
 }

@@ -31,9 +31,9 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20) |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | `transport/browser_bluetooth.go` 875 (over cap), `transport/cloud_client.go` 645 (gray zone). Split when next touched. |
-| Size norms — web | same norms for `web/` | **Violated** | `web/app.js` **1120 lines and growing** (870 at Phase 9; +250 from the 9B parity pass). The planned BLE-session extraction has not happened. Owner: Phase 9B close-out. |
-| Size-norm enforcement | norms surface as findings, not manual review | **Violated** | No automated file-length check exists; the `app.js` drift happened silently. Recommended: a file-size test in `internal/architecture` with a grandfathered ceiling so files can only shrink. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | `transport/browser_bluetooth.go` 954 remains over cap but is now pinned by `TestSourceFileLineBudgets`; `transport/cloud_client.go` 645 is in the gray zone. Split when next touched. |
+| Size norms — web | same norms for `web/` | **Met** | BLE session extracted to `web/bluetooth-ui.js`; current major JS modules are `app.js` 677, `bluetooth-ui.js` 615, `motion-ui.js` 448, `chat-ui.js` 379. |
+| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` enforces 800-line defaults and pins the existing oversized Go BLE file at its current line count so it cannot grow silently. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; largest structs are scoped (bridge, engine, server). Re-check when modes land. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | 17 PRs, one scope each; docs updated in the same PR as behavior. |
 
@@ -90,14 +90,13 @@ continuity) is Phase 12.
 
 Ranked by threat to the stated goals:
 
-1. **`web/app.js` size drift (Violated).** The only guardrail currently being
-   violated, and it regressed further during the phase that was supposed to
-   fix it. Extract the BLE session code and add the automated file-size check
-   before Phase 10 UI work makes it worse.
-2. **Bluetooth app-path validation (blocked on BLE visibility).** Everything
+1. **Bluetooth app-path validation (blocked on BLE visibility).** Everything
    else in Phase 9B is done; the next session needs Windows/Chromium to see the
    `OHD`/Handy advertisement, then a real chooser selection can finish the UI
    and chat validation.
+2. **Go BLE transport file size.** `transport/browser_bluetooth.go` is still
+   over the soft cap. It is pinned so it cannot grow, but it should be split
+   when the next behavior change touches it.
 3. **Cold start at the boundary.** Probably measurement overhead, but nobody
    has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
    it server-side.
@@ -108,6 +107,11 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-02** — Phase 9B close-out follow-up extracted browser-owned BLE
+  session handling from `web/app.js` into `web/bluetooth-ui.js`, brought web
+  files back under the size norm, and added `TestSourceFileLineBudgets` so file
+  growth is enforced automatically. Browser Bluetooth app-path validation
+  remains blocked on Windows/Chromium seeing the `OHD`/Handy BLE advertisement.
 - **2026-07-02** — Initial scorecard @ `f5441ba`. Memory goal fully measured
   and met (idle 8.96 MB, active 16.76 MB, soak +9.53%, Python baseline
   525 MB). Binary 10.59 MB / cold start 411-522 ms measured ad hoc. Cloud
