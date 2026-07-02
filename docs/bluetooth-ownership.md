@@ -70,6 +70,13 @@ The bridge must expose:
 - stale-tab detection
 - explicit no-cloud-fallback behavior when the Bluetooth dispatch owner is selected
 
+Hardware validation on 2026-07-02 showed that some Handy BLE operations are
+write-only in practice. The Browser Bluetooth connection check therefore
+reports bridge readiness and HSP availability from the active browser heartbeat
+instead of probing `hsp/state`; explicit state reads remain diagnostics. The
+`hsp/play` bridge path is also treated as write-ack on successful BLE write, so
+the motion engine does not wait for a response that the device may not emit.
+
 ## UI Requirements
 
 - Bluetooth controls are hidden unless the Bluetooth dispatch owner is selected or enabled in settings.

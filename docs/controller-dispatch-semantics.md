@@ -28,8 +28,9 @@ These paths require the active controller:
 - Cloud and Browser Bluetooth stroke-window, HSP add, and HSP play endpoints
 - Browser Bluetooth connect
 
-Read-only diagnostic and state paths remain available. Low-level Stop endpoints
-remain available.
+Read-only diagnostic and state paths remain available. Browser Bluetooth
+connection check is a bridge-readiness diagnostic and does not queue a device
+command. Low-level Stop endpoints remain available.
 
 ## Dispatch Owner Switching
 

@@ -243,6 +243,37 @@ func TestBrowserBluetoothTransportReusesMappedStreamIDForPlay(t *testing.T) {
 	}
 }
 
+func TestBrowserBluetoothConnectionCheckUsesBridgeReadinessWithoutStateProbe(t *testing.T) {
+	bridge := NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(BrowserBluetoothClientStatus{
+		ClientID:   "client-1",
+		Connected:  &connected,
+		DeviceName: "Handy",
+		Protocol:   "hsp_ble",
+		Status:     "connected",
+	})
+	bluetooth := newTestBrowserBluetoothTransport(t, bridge, BrowserBluetoothOptions{})
+
+	check, err := bluetooth.CheckConnection(context.Background())
+	if err != nil {
+		t.Fatalf("CheckConnection: %v", err)
+	}
+	if !check.OK || !check.HSPAvailable || check.Status != "connected" {
+		t.Fatalf("check = %+v, want ready bridge check", check)
+	}
+	commands, err := bridge.NextCommands(context.Background(), "client-1", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("NextCommands: %v", err)
+	}
+	if len(commands) != 0 {
+		t.Fatalf("commands = %+v, want connection check to avoid hsp/state probe", commands)
+	}
+	if diagnostics := bluetooth.Diagnostics(); diagnostics.CommandCount != 0 {
+		t.Fatalf("diagnostics command count = %d, want no command", diagnostics.CommandCount)
+	}
+}
+
 type resultAndError struct {
 	result CommandResult
 	err    error

@@ -155,21 +155,32 @@ func (t *BrowserBluetoothTransport) PlayHSP(ctx context.Context, command HSPPlay
 	return result, err
 }
 
-// CheckConnection probes browser Bluetooth HSP state.
-func (t *BrowserBluetoothTransport) CheckConnection(ctx context.Context) (ConnectionCheckResult, error) {
-	recorded := Command{Kind: CommandKindConnectionCheck}
-	result, ack, err := t.dispatchWithAck(ctx, recorded, "hsp/state", nil)
-	snapshot := stateSnapshotFromBridgeAck(ack)
-	check := ConnectionCheckResult{
-		OK:            result.OK,
-		Status:        result.Status,
-		HSPAvailable:  result.OK,
-		PlaybackState: snapshot.PlaybackState,
-		LatencyMillis: result.LatencyMillis,
-		Diagnostics:   t.Diagnostics(),
+// CheckConnection reports browser Bluetooth bridge readiness without sending a
+// device command. Some Handy BLE commands are write-only in practice, and a
+// state probe can destabilize an otherwise-ready browser-owned GATT link.
+func (t *BrowserBluetoothTransport) CheckConnection(context.Context) (ConnectionCheckResult, error) {
+	snapshot := t.bridge.Snapshot()
+	diagnostics := t.Diagnostics()
+	status := snapshot.Status
+	if status == "" {
+		status = "disconnected"
 	}
-	if err != nil {
-		return check, err
+	check := ConnectionCheckResult{
+		OK:            snapshot.Ready,
+		Status:        status,
+		HSPAvailable:  snapshot.Ready,
+		PlaybackState: diagnostics.PlaybackState,
+		Diagnostics:   diagnostics,
+	}
+	if check.PlaybackState == "" {
+		check.PlaybackState = "unknown"
+	}
+	if !snapshot.Ready {
+		message := snapshot.Message
+		if message == "" {
+			message = "Browser Bluetooth is not ready."
+		}
+		return check, BrowserBluetoothError{Status: status, Message: message}
 	}
 	return check, nil
 }

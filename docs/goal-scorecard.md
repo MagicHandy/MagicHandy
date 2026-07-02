@@ -46,7 +46,7 @@ Full rows in `docs/perf-baseline.md`.
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
 | Go core idle RSS | < 40 MB | **Met** | 8.96 MB — ~1/58th of the Python core |
-| Go core active RSS | < 80 MB | **Met** | 16.75-16.76 MB (real Cloud REST motion + SSE + chat stop, 2026-07-02) |
+| Go core active RSS | < 80 MB | **Met** | 16.75-16.76 MB (real Cloud REST motion + SSE + chat stop) and 17.52-17.53 MB repeat active RSS for Browser Bluetooth UI motion, both on 2026-07-02 |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
 
 Risk R11 (goals unmeasured) is substantially closed for memory.
@@ -74,7 +74,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory.
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
 | Full app path — Cloud REST | **Met** | 2026-07-02: browser UI + chat against a real Handy; visible connection check (`HSP ready / 540 ms`), Start via UI, SSE visualizer running, deterministic chat stop (`docs/perf-baseline.md`, "Full App Path Evidence") |
-| Full app path — Browser Bluetooth | **Unmeasured (blocked after BLE connect)** | 2026-07-02 follow-up reached Edge chooser selection and a ready `OHD_hw0_29b3243120f4` bridge. A non-moving Bluetooth Stop command ACKed in 102 ms. Full motion still did not complete: the first capped app-path start exposed a semantic stream-ID mapping bug, then later retests exposed dead command-loop recovery and shared Bluetooth client IDs across tabs; those are now patched. The remaining live blocker is the Edge/device GATT link dropping or reporting `hsp/state` timeout before the start sequence can run (`docs/perf-baseline.md`, "Full App Path Evidence"). |
+| Full app path — Browser Bluetooth | **Met** | 2026-07-02: visible Edge Web Bluetooth flow selected `OHD_hw0_29b3243120f4`; visible Check connection reported `Connected: HSP ready / Unknown / 0 ms` without queuing `hsp/state`; visible Start motion at 28% sent `stroke_window`, `hsp_add`, and `hsp_play` with `browser_ack`; chat `stop` returned `Stopping motion.` and Stop ACKed; repeat UI Start/Stop captured active RSS samples (`docs/perf-baseline.md`, "Full App Path Evidence"). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -90,14 +90,12 @@ continuity) is Phase 12.
 
 Ranked by threat to the stated goals:
 
-1. **Bluetooth app-path validation (blocked after BLE connect).** Windows/Edge
-   can now select the `OHD` device and the browser bridge can ACK a non-moving
-   Stop command. Full motion/chat validation remains open because the live GATT
-   link drops or reports `hsp/state` timeout before the capped start sequence
-   can complete.
-2. **Cold start at the boundary.** Probably measurement overhead, but nobody
+1. **Cold start at the boundary.** Probably measurement overhead, but nobody
    has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
    it server-side.
+2. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
+   Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
+   browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 3. **Feature growth vs binary/memory budgets.** Voice workers, pattern
    libraries, and the model manager all add weight; re-measure size and
    active RSS at each phase completion so growth is a trend line, not a
@@ -105,6 +103,15 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-02** - Patched Browser Bluetooth app-path validation passed in the
+  user's running Edge profile with the real `OHD_hw0_29b3243120f4` device:
+  visible Check connection used bridge readiness and did not queue `hsp/state`;
+  visible Start motion at 28% traced `stroke_window`, `hsp_add`, and
+  `hsp_play` as `browser_ack`; deterministic chat `stop` returned
+  `Stopping motion.` and traced Stop as `browser_ack`. A repeat visible
+  Start/Stop captured Browser Bluetooth active RSS at 17.52-17.53 MB across
+  three samples. The earlier `hsp/state`/`hsp_play` failures are retained in
+  `docs/perf-baseline.md` as debugging history.
 - **2026-07-02** — Live Browser Bluetooth follow-up with the device online:
   Edge selected `OHD_hw0_29b3243120f4`, the bridge became ready, and a
   non-moving Stop command ACKed in 102 ms. The run found and fixed three
