@@ -1,7 +1,11 @@
 import { encodeHandyRequest, decodeHandyRPCMessage } from "./handy-ble-codec.js";
 
 const statusPill = document.querySelector(".status-pill");
+const transportPill = document.querySelector(".transport-pill");
 const coreStatus = document.querySelector("#core-status");
+const transportStatus = document.querySelector("#transport-status");
+const backendBanner = document.querySelector("#backend-banner");
+const backendBannerMessage = document.querySelector("#backend-banner-message");
 const runtimeCore = document.querySelector("#runtime-core");
 const runtimeUI = document.querySelector("#runtime-ui");
 const runtimeSettings = document.querySelector("#runtime-settings");
@@ -26,11 +30,18 @@ const bluetoothDevice = document.querySelector("#bluetooth-device");
 const bluetoothBridge = document.querySelector("#bluetooth-bridge");
 const bluetoothConnectButton = document.querySelector("#bluetooth-connect");
 const bluetoothDisconnectButton = document.querySelector("#bluetooth-disconnect");
+const connectionCheckButton = document.querySelector("#connection-check");
+const connectionCheckStatus = document.querySelector("#connection-check-status");
 const llmCheckButton = document.querySelector("#llm-check");
 const llmLoadButton = document.querySelector("#llm-load");
 const llmUnloadButton = document.querySelector("#llm-unload");
 const llmStatus = document.querySelector("#llm-status");
+const diagnosticsCopyButton = document.querySelector("#diagnostics-copy");
+const diagnosticsCopyStatus = document.querySelector("#diagnostics-copy-status");
 const cloudCredentialControls = Array.from(document.querySelectorAll(".cloud-credential"));
+const backendRequiredControls = Array.from(document.querySelectorAll(
+  "[data-requires-backend] button, [data-requires-backend] input, [data-requires-backend] select, [data-requires-backend] textarea",
+)).filter((control) => !control.hasAttribute("data-allow-backend-offline"));
 
 const fields = {
   serverPort: document.querySelector("#server-port"),
@@ -60,6 +71,8 @@ let currentMotion = null;
 let currentLLM = null;
 let settingsDirty = false;
 let renderingSettings = false;
+let backendAvailable = true;
+let lastState = null;
 
 const DISPATCH_OWNER_CLOUD = "cloud_rest";
 const DISPATCH_OWNER_BLUETOOTH = "browser_bluetooth";
@@ -95,6 +108,7 @@ async function refreshStatus() {
     ]);
 
     setCoreState("ok", "Core online");
+    setBackendAvailability(true);
     renderSettings(state.settings);
     renderState(health, state, bluetooth);
     if (formStatus.textContent === "Not loaded" || formStatus.textContent === "Load failed") {
@@ -102,6 +116,7 @@ async function refreshStatus() {
     }
   } catch (error) {
     setCoreState("error", "Core unavailable");
+    setBackendAvailability(false, error.message);
     runtimeCore.textContent = "Unavailable";
     healthValue.textContent = error.message;
     formStatus.textContent = "Load failed";
@@ -200,6 +215,7 @@ async function postEmpty(path) {
 }
 
 function renderState(health, state, bluetooth) {
+  lastState = state;
   runtimeCore.textContent = health.status === "ok" ? "Online" : "Degraded";
   runtimeUI.textContent = "Embedded";
   runtimeSettings.textContent = labelStatus(state.settings_status.source);
@@ -207,12 +223,172 @@ function renderState(health, state, bluetooth) {
   runtimeLLM.textContent = state.llm?.provider ? `${labelFeature(state.llm.provider)} / ${state.llm.model}` : "Not configured";
   runtimeMotion.textContent = labelFeature(state.features.motion);
   runtimeTransport.textContent = labelFeature(state.features.transport);
+  renderTransportStatus(state, bluetooth);
   renderBluetoothStatus(bluetooth?.bluetooth || state.bluetooth_bridge);
   connectionKeyState.textContent = state.settings.device.connection_key_set ? "Set" : "Not set";
   versionValue.textContent = state.version || "dev";
   commitValue.textContent = state.commit || "unknown";
   uptimeValue.textContent = `${state.uptime_seconds}s`;
   healthValue.textContent = health.status;
+}
+
+function setBackendAvailability(available, reason = "") {
+  backendAvailable = Boolean(available);
+  document.body.dataset.backend = backendAvailable ? "online" : "offline";
+  if (backendBanner) {
+    backendBanner.hidden = backendAvailable;
+  }
+  if (backendBannerMessage && !backendAvailable) {
+    backendBannerMessage.textContent = reason || "Backend-required controls are locked until the core responds.";
+  }
+  if (!backendAvailable && transportPill && transportStatus) {
+    transportPill.dataset.state = "error";
+    transportStatus.textContent = "Transport unavailable";
+  }
+  for (const control of backendRequiredControls) {
+    setControlBackendDisabled(control, !backendAvailable, reason);
+  }
+  if (backendAvailable) {
+    updateApplicationIDOverrideState();
+    updateTransportVisibility();
+    updateLLMVisibility();
+    renderBluetoothStatus(lastState?.bluetooth_bridge);
+  }
+  window.dispatchEvent(new CustomEvent("magichandy:backend-availability", {
+    detail: { available: backendAvailable, reason },
+  }));
+}
+
+function setControlBackendDisabled(control, disabled, reason) {
+  if (disabled) {
+    if (!control.disabled && !("backendTitle" in control.dataset)) {
+      control.dataset.backendTitle = control.getAttribute("title") || "";
+      control.dataset.disabledByBackend = "true";
+    }
+    control.disabled = true;
+    control.title = reason ? `Core unavailable: ${reason}` : "Core unavailable";
+    return;
+  }
+  if (control.dataset.disabledByBackend === "true") {
+    control.disabled = false;
+    if (control.dataset.backendTitle) {
+      control.title = control.dataset.backendTitle;
+    } else {
+      control.removeAttribute("title");
+    }
+  }
+  delete control.dataset.backendTitle;
+  delete control.dataset.disabledByBackend;
+}
+
+function renderTransportStatus(state, bluetooth) {
+  if (!transportStatus || !transportPill) {
+    return;
+  }
+  const owner = state?.settings?.device?.hsp_dispatch_owner;
+  if (owner === DISPATCH_OWNER_BLUETOOTH) {
+    const bridge = bluetooth?.bluetooth || state?.bluetooth_bridge || {};
+    const status = bridge.status || (bridge.connected ? "connected" : "disconnected");
+    transportPill.dataset.state = bridge.connected ? "ok" : status === "error" || status === "stale" ? "error" : "pending";
+    transportStatus.textContent = `Bluetooth: ${labelStatus(status)}`;
+    return;
+  }
+
+  const cloud = state?.cloud_transport || {};
+  const playback = cloud.playback_state || state?.transport?.playback_state || "unknown";
+  transportPill.dataset.state = cloud.last_error ? "error" : playback === "unknown" ? "pending" : "ok";
+  transportStatus.textContent = `Cloud: ${labelStatus(playback)}`;
+}
+
+async function checkConnection() {
+  if (!connectionCheckStatus) {
+    return;
+  }
+  connectionCheckStatus.textContent = "Checking";
+  const owner = fields.dispatchOwner.value;
+  const path = owner === DISPATCH_OWNER_BLUETOOTH
+    ? "/api/transport/bluetooth/check"
+    : "/api/transport/cloud/check";
+  try {
+    const check = await postEmpty(path);
+    renderConnectionCheck(owner, check);
+  } catch (error) {
+    connectionCheckStatus.textContent = error.message;
+    if (transportPill) {
+      transportPill.dataset.state = "error";
+    }
+    if (transportStatus) {
+      transportStatus.textContent = `${labelFeature(owner)}: Check failed`;
+    }
+  }
+}
+
+function renderConnectionCheck(owner, check = {}) {
+  const hspState = check.hsp_available ? "HSP ready" : "HSP unavailable";
+  const playback = check.playback_state ? ` / ${labelStatus(check.playback_state)}` : "";
+  const latency = Number.isFinite(check.latency_ms) ? ` / ${check.latency_ms} ms` : "";
+  const label = check.ok ? "Connected" : "Not ready";
+  connectionCheckStatus.textContent = `${label}: ${hspState}${playback}${latency}`;
+  if (transportPill) {
+    transportPill.dataset.state = check.ok && check.hsp_available ? "ok" : "error";
+  }
+  if (transportStatus) {
+    transportStatus.textContent = `${labelFeature(owner)}: ${label}`;
+  }
+}
+
+async function copyDiagnosticsSummary() {
+  if (!diagnosticsCopyStatus) {
+    return;
+  }
+  diagnosticsCopyStatus.textContent = "Collecting";
+  const summary = {
+    copied_at: new Date().toISOString(),
+    backend_available: backendAvailable,
+    page: window.location.href,
+    health: await collectJSON("/healthz"),
+    state: await collectJSON("/api/state"),
+    transport: await collectJSON("/api/transport/diagnostics"),
+    cloud_transport: await collectJSON("/api/transport/cloud/diagnostics"),
+    bluetooth_transport: await collectJSON("/api/transport/bluetooth/diagnostics"),
+    traces: await collectJSON("/api/traces"),
+  };
+  try {
+    await writeClipboard(JSON.stringify(summary, null, 2));
+    diagnosticsCopyStatus.textContent = "Copied";
+    showToast("Diagnostics copied.");
+  } catch (error) {
+    diagnosticsCopyStatus.textContent = error.message;
+  }
+}
+
+async function collectJSON(path) {
+  try {
+    return await fetchJSON(path);
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function writeClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("Clipboard copy was blocked.");
+    }
+  } finally {
+    textarea.remove();
+  }
 }
 
 function renderLLMStatus(status) {
@@ -417,10 +593,10 @@ function renderBluetoothStatus(bridge = {}) {
       : "Hidden";
   }
   if (bluetoothConnectButton) {
-    bluetoothConnectButton.disabled = status === "connecting" || bluetoothConnected();
+    bluetoothConnectButton.disabled = !backendAvailable || status === "connecting" || bluetoothConnected();
   }
   if (bluetoothDisconnectButton) {
-    bluetoothDisconnectButton.disabled = !connected && !bluetoothConnected();
+    bluetoothDisconnectButton.disabled = !backendAvailable || (!connected && !bluetoothConnected());
   }
 }
 
@@ -933,9 +1109,11 @@ function rejectPendingBluetoothResponses(message) {
 
 bluetoothConnectButton?.addEventListener("click", connectBluetooth);
 bluetoothDisconnectButton?.addEventListener("click", disconnectBluetooth);
+connectionCheckButton?.addEventListener("click", checkConnection);
 llmCheckButton?.addEventListener("click", checkLLM);
 llmLoadButton?.addEventListener("click", loadLLM);
 llmUnloadButton?.addEventListener("click", unloadLLM);
+diagnosticsCopyButton?.addEventListener("click", copyDiagnosticsSummary);
 
 fields.appIDSource.addEventListener("change", updateApplicationIDOverrideState);
 fields.dispatchOwner.addEventListener("change", updateTransportVisibility);

@@ -269,6 +269,18 @@ learned the hard way. They are scheduled (Phase 9B unless noted):
    deferred to Phase 12 (ADR 0003) — acceptable, but chat shipped in Phase 9,
    so the retrofit must not be forgotten.
 
+### Phase 9B parity implementation
+
+The Phase 9B UI pass closes rows 1-4, 6, and 8 at the current architecture
+level: backend loss now shows a persistent banner and locks backend-required
+controls; chat scrolling keeps the user's scrollback position unless they are
+already near the bottom; the connection panel exposes a non-motion connection
+check; the visualizer and diagnostics label position as a commanded estimate;
+diagnostics has a one-click copyable summary; and the persistent Stop control
+shows the Esc shortcut. Pause/resume remains Phase 11 because it needs
+phase-preserving engine state. Reset to defaults remains Phase 10 with the
+settings UI. Server-side chat continuity remains Phase 12 with ADR 0003.
+
 ### Not yet built — planned, not regressions
 
 Modes and their affordances (mode buttons, "I'm close", mood/timer, sequence

@@ -93,6 +93,27 @@ body {
 .status-pill[data-state="error"] .status-dot {
   background: var(--danger);
 }
+.status-pill[data-state="pending"] .status-dot {
+  background: var(--warn);
+}
+
+.backend-banner {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(229, 72, 77, 0.16);
+  border: 1px solid rgba(229, 72, 77, 0.58);
+  color: #fff;
+}
+.backend-banner strong {
+  white-space: nowrap;
+}
+.backend-banner span {
+  color: #ffd9db;
+}
 
 /* ---- The single, authoritative live visualizer ---- */
 .visualizer {
@@ -168,6 +189,9 @@ body {
 
 /* ---- Emergency Stop: always visible, unmissable ---- */
 .stop-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   padding: 12px 22px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -185,6 +209,13 @@ body {
 }
 .stop-button:active {
   transform: translateY(1px);
+}
+.shortcut-hint {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 /* ---- Layout ---- */
@@ -413,6 +444,13 @@ button:disabled {
   cursor: not-allowed;
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 .form-actions {
   display: flex;
   align-items: center;
@@ -433,6 +471,13 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+.connection-check,
+.diagnostics-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .llm-settings {
@@ -462,6 +507,9 @@ button:disabled {
   color: var(--muted);
   font-size: 0.82rem;
 }
+.chat-log-shell {
+  position: relative;
+}
 .chat-log {
   min-height: 320px;
   max-height: min(58vh, 620px);
@@ -470,6 +518,13 @@ button:disabled {
   flex-direction: column;
   gap: 10px;
   padding: 2px;
+}
+.chat-jump {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  background: rgba(30, 36, 44, 0.94);
+  box-shadow: var(--shadow);
 }
 .chat-message {
   max-width: min(72ch, 88%);
@@ -573,6 +628,12 @@ button:disabled {
   margin: 4px 0 0;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.diagnostics-status {
+  min-height: 1em;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 /* ---- Toast (shared transient feedback) ---- */

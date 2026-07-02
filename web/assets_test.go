@@ -26,6 +26,7 @@ func TestEmbeddedChatUIHooksExist(t *testing.T) {
 
 	for _, fragment := range []string{
 		`id="chat-form"`,
+		`id="chat-jump"`,
 		`id="chat-malformed"`,
 		`id="llm-provider"`,
 		`id="llm-mode"`,
@@ -44,6 +45,7 @@ func TestEmbeddedChatUIHooksExist(t *testing.T) {
 		`repair_delta`,
 		`Malformed model JSON`,
 		`JSON.stringify(assistantContract)`,
+		`shouldStickToBottom`,
 	} {
 		if !strings.Contains(string(chatUI), fragment) {
 			t.Fatalf("chat-ui.js missing %q", fragment)
@@ -62,6 +64,69 @@ func TestEmbeddedSettingsUIDoesNotClobberDirtyForm(t *testing.T) {
 		`if (settingsDirty && !options.force)`,
 		`/api/llm/load`,
 		`/api/llm/unload`,
+	} {
+		if !strings.Contains(string(app), fragment) {
+			t.Fatalf("app.js missing %q", fragment)
+		}
+	}
+}
+
+func TestEmbeddedBackendLossUIHooksExist(t *testing.T) {
+	index, err := fs.ReadFile(FS(), "index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	app, err := fs.ReadFile(FS(), "app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`id="backend-banner"`,
+		`id="transport-status"`,
+		`data-requires-backend`,
+		`data-allow-backend-offline`,
+	} {
+		if !strings.Contains(string(index), fragment) {
+			t.Fatalf("index.html missing %q", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`setBackendAvailability`,
+		`magichandy:backend-availability`,
+		`backendRequiredControls`,
+	} {
+		if !strings.Contains(string(app), fragment) {
+			t.Fatalf("app.js missing %q", fragment)
+		}
+	}
+}
+
+func TestEmbeddedConnectionAndDiagnosticsUIHooksExist(t *testing.T) {
+	index, err := fs.ReadFile(FS(), "index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	app, err := fs.ReadFile(FS(), "app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+
+	for _, fragment := range []string{
+		`id="connection-check"`,
+		`id="diagnostics-copy"`,
+		`Estimated position`,
+		`class="shortcut-hint"`,
+	} {
+		if !strings.Contains(string(index), fragment) {
+			t.Fatalf("index.html missing %q", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`/api/transport/cloud/check`,
+		`/api/transport/bluetooth/check`,
+		`copyDiagnosticsSummary`,
+		`writeClipboard`,
 	} {
 		if !strings.Contains(string(app), fragment) {
 			t.Fatalf("app.js missing %q", fragment)
@@ -127,5 +192,8 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 	}
 	if !strings.Contains(string(motionUI), `normalizeQuickControls`) {
 		t.Fatal("motion-ui.js must normalize quick control ranges before posting")
+	}
+	if !strings.Contains(string(motionUI), `Commanded position estimate`) {
+		t.Fatal("motion-ui.js must label visualizer position as an estimate")
 	}
 }
