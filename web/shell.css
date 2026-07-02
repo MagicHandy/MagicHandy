@@ -1,4 +1,4 @@
-/* shell.css — routed views, control-bar navigation, quick-settings popover,
+﻿/* shell.css â€” routed views, control-bar navigation, quick-settings popover,
    motion strip, and settings layout. Complements app.css. */
 
 .visually-hidden {
@@ -41,8 +41,8 @@
 }
 .bar-nav-button[aria-current="page"],
 .bar-nav-button[aria-expanded="true"] {
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ---- Quick settings popover: dedicated top layer, measured position ---- */
@@ -66,7 +66,7 @@
   font-size: 1rem;
 }
 .quick-popover-head .hint {
-  color: var(--accent);
+  color: var(--muted);
   font-size: 0.75rem;
 }
 .quick-popover-close {
@@ -150,8 +150,8 @@
   color: var(--text);
 }
 .settings-nav a[aria-current="page"] {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .settings-section {

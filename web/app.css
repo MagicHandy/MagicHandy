@@ -1,32 +1,34 @@
 /* app.css — MagicHandy visual system.
-   Hue roles: violet = app personality and primary actions; teal = motion and
-   live-device identity; green/amber/red = status semantics only. Surfaces are
-   layered (page < panel < raised < overlay) with shadows, not hairlines alone.
-   No external font or asset fetches: the UI is fully embedded and offline. */
+   Hue roles: steel azure is the single interactive hue (headings, navigation,
+   app actions, toggles); green means running/go only (Start, active
+   visualizer, ok status); amber = warning, red = stop/danger. Everything else
+   is neutral graphite — no purple and no blue-green decorative tones.
+   Surfaces are layered (page < panel < raised < overlay) with shadows, not
+   hairlines alone. No external font or asset fetches: fully embedded/offline. */
 
 :root {
-  --bg: #0b0d11;
-  --bg-inset: #0e1117;
-  --surface: #151a21;
-  --surface-2: #1c232c;
-  --surface-3: #242d38;
-  --line: #2b3440;
-  --line-strong: #3a4553;
-  --text: #eceade;
-  --muted: #93a0af;
-  --primary: #a89af0;
-  --primary-strong: #8d7cf0;
-  --primary-ink: #14101f;
-  --accent: #5fc0a7;
-  --accent-strong: #46a98f;
-  --accent-ink: #071511;
+  --bg: #0e0f11;
+  --bg-inset: #101215;
+  --surface: #17191d;
+  --surface-2: #1e2126;
+  --surface-3: #262a30;
+  --line: #2d3138;
+  --line-strong: #3d434c;
+  --text: #eae9e4;
+  --muted: #98a0a9;
+  --accent: #5b9dd9;
+  --accent-strong: #497fb5;
+  --accent-ink: #0b131c;
+  --steel-deep: #3a5a7c;
   --danger: #e5484d;
   --danger-strong: #c93b40;
   --warn: #d8b66a;
   --ok: #4fc06d;
-  --focus: #b4a8f5;
-  --user-bubble: #2a3646;
-  --user-bubble-line: #3d4d61;
+  --ok-strong: #3da55c;
+  --ok-ink: #08130c;
+  --focus: #82b4e2;
+  --user-bubble: #28303b;
+  --user-bubble-line: #3a4450;
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
@@ -61,10 +63,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(1100px 520px at 85% -12%, rgba(168, 154, 240, 0.08), transparent 60%),
-    radial-gradient(900px 480px at -10% 8%, rgba(95, 192, 167, 0.05), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   line-height: 1.45;
 }
@@ -97,8 +96,8 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 6px;
-  background: linear-gradient(135deg, var(--accent), var(--primary));
-  box-shadow: 0 0 10px rgba(168, 154, 240, 0.35);
+  background: linear-gradient(135deg, var(--accent), var(--steel-deep));
+  box-shadow: 0 0 10px rgba(91, 157, 217, 0.3);
 }
 
 .status-pill {
@@ -170,7 +169,7 @@ body {
 }
 
 .visualizer[data-state="running"] {
-  border-color: rgba(95, 192, 167, 0.45);
+  border-color: rgba(79, 192, 109, 0.45);
 }
 
 .visualizer-track {
@@ -189,9 +188,9 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  background: linear-gradient(90deg, rgba(95, 192, 167, 0.14), rgba(95, 192, 167, 0.26));
-  border-left: 1px solid rgba(95, 192, 167, 0.45);
-  border-right: 1px solid rgba(95, 192, 167, 0.45);
+  background: linear-gradient(90deg, rgba(125, 152, 182, 0.12), rgba(125, 152, 182, 0.2));
+  border-left: 1px solid rgba(125, 152, 182, 0.4);
+  border-right: 1px solid rgba(125, 152, 182, 0.4);
 }
 
 .visualizer-position {
@@ -202,14 +201,14 @@ body {
   height: 14px;
   border-radius: 50%;
   background: var(--muted);
-  box-shadow: 0 0 0 3px rgba(11, 13, 17, 0.9);
+  box-shadow: 0 0 0 3px rgba(14, 15, 17, 0.9);
   transform: translate(-50%, -50%);
   transition: left 0.24s ease, background 0.2s ease;
 }
 
 .visualizer-position[data-active="true"] {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(11, 13, 17, 0.9), 0 0 14px rgba(95, 192, 167, 0.65);
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(14, 15, 17, 0.9), 0 0 14px rgba(79, 192, 109, 0.6);
 }
 
 .motion-state-label {
@@ -223,7 +222,7 @@ body {
   font-weight: 600;
 }
 #motion-state[data-state="running"] {
-  color: var(--accent);
+  color: var(--ok);
 }
 #motion-state[data-state="unavailable"] {
   color: var(--warn);
@@ -285,7 +284,7 @@ body {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--primary);
+  color: var(--accent);
   font-weight: 650;
 }
 .section-heading h1,
@@ -345,7 +344,7 @@ select {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 textarea {
   min-height: 60px;
@@ -375,7 +374,7 @@ input[type="range"] {
 }
 .quick-controls .hint,
 .quick-controls .quick-status {
-  color: var(--accent);
+  color: var(--muted);
   font-size: 0.75rem;
 }
 .quick-status {
@@ -443,9 +442,9 @@ input[type="range"] {
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
 }
 .primary-button {
-  background: linear-gradient(180deg, var(--primary), var(--primary-strong));
-  color: var(--primary-ink);
-  border-color: var(--primary-strong);
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--accent-ink);
+  border-color: var(--accent-strong);
   box-shadow: var(--shadow-soft);
 }
 .primary-button:hover {
@@ -453,9 +452,9 @@ input[type="range"] {
 }
 .start-button {
   padding: 12px 24px;
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  color: var(--accent-ink);
-  border-color: var(--accent-strong);
+  background: linear-gradient(180deg, var(--ok), var(--ok-strong));
+  color: var(--ok-ink);
+  border-color: var(--ok-strong);
 }
 .secondary-button {
   background: var(--surface-2);
@@ -463,8 +462,8 @@ input[type="range"] {
   border-color: var(--line-strong);
 }
 .secondary-button:hover {
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 button:disabled {
   opacity: 0.45;
@@ -603,8 +602,8 @@ textarea:disabled {
   user-select: none;
 }
 .chat-message[data-role="assistant"] .chat-avatar {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: var(--primary-ink);
+  background: linear-gradient(135deg, var(--accent), var(--steel-deep));
+  color: var(--accent-ink);
 }
 .chat-message[data-role="user"] .chat-avatar {
   order: 2;
@@ -663,7 +662,7 @@ textarea:disabled {
   height: 1em;
   margin-left: 3px;
   vertical-align: -0.15em;
-  background: var(--primary);
+  background: var(--accent);
   border-radius: 2px;
   animation: chat-cursor 1s steps(2, jump-none) infinite;
 }

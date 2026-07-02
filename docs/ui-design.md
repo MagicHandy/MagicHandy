@@ -144,11 +144,13 @@ hoc per-widget colors) are not.
 - **Surface layering, not hairlines alone**: page < panel < raised element <
   overlay, each a distinct value with shadows. Insets (chat log, inputs) drop
   below the panel value so regions read at a glance.
-- **Hue roles are semantic and fixed**: violet is app personality — headings,
-  navigation state, primary app actions (Send, Save). Teal is motion and
-  live-device identity — Start, the visualizer, the motion strip's edge, quick
-  controls. Green/amber/red are reserved for status. The user's chat bubble is
-  slate-blue. A new feature picks the role it belongs to; it does not invent a
+- **Hue roles are semantic and fixed**: steel azure is the single interactive
+  hue — headings, navigation state, app actions (Send, Save), toggles, and
+  focus. Green strictly means running/go — the Start button, the active
+  visualizer, ok status. Amber = warning, red = stop/danger. Everything else
+  stays neutral graphite; the user's chat bubble is a muted slate. Purple and
+  pale blue-green decorative tones are explicitly banned (they read as
+  distracting); a new feature picks an existing role, it does not invent a
   hue.
 - **Chat messages have anatomy**: speaker label with timestamp, avatar chip,
   tail-cornered bubble with shadow, right/left role alignment, a streaming
