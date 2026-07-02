@@ -311,5 +311,7 @@ single motion path with no per-source divergence; trace export as one click.
 
 - ADR 0004: frontend strategy (fresh, minimal, backend-driven).
 - ADR 0002: stop contract and the semantic/transport split the UI reflects.
+- `docs/controller-dispatch-semantics.md`: active-controller lease, read-only
+  clients, motion SSE, and dispatch-owner switch behavior.
 - `docs/goals-and-guardrails.md`: maintainability norms for `web/`.
 - `docs/risk-register.md`: R9 (UI regression) and R12 (frontend debt).

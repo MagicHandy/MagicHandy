@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -27,6 +29,7 @@ func callMotion(t *testing.T, server *Server, method, path, body string) motionE
 		reader = strings.NewReader("")
 	}
 	request := httptest.NewRequest(method, path, reader)
+	request = withController(request)
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")
 	}
@@ -102,7 +105,7 @@ func TestMotionUnavailableWithoutSelectedTransportPrerequisites(t *testing.T) {
 	}
 
 	startRecorder := httptest.NewRecorder()
-	startRequest := httptest.NewRequest(http.MethodPost, "/api/motion/start", strings.NewReader(`{"speed_percent":35}`))
+	startRequest := withController(httptest.NewRequest(http.MethodPost, "/api/motion/start", strings.NewReader(`{"speed_percent":35}`)))
 	server.Handler().ServeHTTP(startRecorder, startRequest)
 	if startRecorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("start status = %d, want %d: %s", startRecorder.Code, http.StatusServiceUnavailable, startRecorder.Body.String())
@@ -196,5 +199,48 @@ func TestMotionStateExposedInAggregateState(t *testing.T) {
 	}
 	if !body.Motion.Available {
 		t.Fatalf("state should report motion available with a command transport")
+	}
+}
+
+func TestMotionEventsStreamsMotionState(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, httpServer.URL+"/api/motion/events?client_id=events-client", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("motion events request: %v", err)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if got := response.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
+		t.Fatalf("content-type = %q, want text/event-stream", got)
+	}
+
+	reader := bufio.NewReader(response.Body)
+	var block strings.Builder
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read SSE line: %v", err)
+		}
+		if line == "\n" || line == "\r\n" {
+			break
+		}
+		block.WriteString(line)
+	}
+	if !strings.Contains(block.String(), "event: motion") || !strings.Contains(block.String(), `"available":true`) {
+		t.Fatalf("SSE block = %q, want motion availability event", block.String())
 	}
 }

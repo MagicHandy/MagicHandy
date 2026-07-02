@@ -46,6 +46,8 @@ func TestEmbeddedChatUIHooksExist(t *testing.T) {
 		`Malformed model JSON`,
 		`JSON.stringify(assistantContract)`,
 		`shouldStickToBottom`,
+		`X-MagicHandy-Client-ID`,
+		`magichandy:controller-state`,
 	} {
 		if !strings.Contains(string(chatUI), fragment) {
 			t.Fatalf("chat-ui.js missing %q", fragment)
@@ -84,6 +86,7 @@ func TestEmbeddedBackendLossUIHooksExist(t *testing.T) {
 	for _, fragment := range []string{
 		`id="backend-banner"`,
 		`id="transport-status"`,
+		`id="controller-status"`,
 		`data-requires-backend`,
 		`data-allow-backend-offline`,
 	} {
@@ -93,8 +96,11 @@ func TestEmbeddedBackendLossUIHooksExist(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		`setBackendAvailability`,
+		`setControllerState`,
 		`magichandy:backend-availability`,
+		`magichandy:controller-state`,
 		`backendRequiredControls`,
+		`controllerRequiredControls`,
 	} {
 		if !strings.Contains(string(app), fragment) {
 			t.Fatalf("app.js missing %q", fragment)
@@ -195,5 +201,15 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 	}
 	if !strings.Contains(string(motionUI), `Commanded position estimate`) {
 		t.Fatal("motion-ui.js must label visualizer position as an estimate")
+	}
+	for _, fragment := range []string{
+		`/api/motion/events?client_id=`,
+		`new EventSource`,
+		`X-MagicHandy-Client-ID`,
+		`magichandy:controller-state`,
+	} {
+		if !strings.Contains(string(motionUI), fragment) {
+			t.Fatalf("motion-ui.js missing %q", fragment)
+		}
 	}
 }

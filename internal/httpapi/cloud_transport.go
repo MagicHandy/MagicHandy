@@ -138,6 +138,10 @@ func (s *Server) handleCloudEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCloudStrokeWindow(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
 	var command transport.StrokeWindowCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -154,6 +158,10 @@ func (s *Server) handleCloudStrokeWindow(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleCloudHSPAdd(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
 	var command transport.HSPAddCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -170,6 +178,10 @@ func (s *Server) handleCloudHSPAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCloudHSPPlay(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
 	var command transport.HSPPlayCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)

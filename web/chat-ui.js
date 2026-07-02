@@ -12,7 +12,9 @@ const chat = {
 const history = [];
 let streaming = false;
 let backendAvailable = true;
+let controllerReadOnly = false;
 let stickToBottom = true;
+const CONTROLLER_CLIENT_ID = appClientID();
 
 function appendMessage(role, text, state = "", options = {}) {
   const shouldStick = options.forceScroll || shouldStickToBottom();
@@ -47,8 +49,8 @@ function rememberTurn(user, assistantContract) {
 }
 
 function updateChatAvailability() {
-  chat.input.disabled = !backendAvailable;
-  chat.send.disabled = streaming || !backendAvailable;
+  chat.input.disabled = !backendAvailable || controllerReadOnly;
+  chat.send.disabled = streaming || !backendAvailable || controllerReadOnly;
 }
 
 function isNearBottom() {
@@ -114,6 +116,7 @@ async function sendChat(event) {
       headers: {
         Accept: "text/event-stream",
         "Content-Type": "application/json",
+        "X-MagicHandy-Client-ID": CONTROLLER_CLIENT_ID,
       },
       body: JSON.stringify({ message: text, history }),
     });
@@ -319,7 +322,12 @@ function labelProvider(value) {
 
 async function refreshChatState() {
   try {
-    const response = await fetch("/api/state", { headers: { Accept: "application/json" } });
+    const response = await fetch("/api/state", {
+      headers: {
+        Accept: "application/json",
+        "X-MagicHandy-Client-ID": CONTROLLER_CLIENT_ID,
+      },
+    });
     if (!response.ok) {
       return;
     }
@@ -329,6 +337,21 @@ async function refreshChatState() {
     }
   } catch {
     // The core status poll in app.js owns global availability.
+  }
+}
+
+function appClientID() {
+  const key = "magichandy.controller.client_id";
+  try {
+    const existing = window.localStorage.getItem(key);
+    if (existing) {
+      return existing;
+    }
+    const generated = `browser-${crypto.randomUUID()}`;
+    window.localStorage.setItem(key, generated);
+    return generated;
+  } catch {
+    return `browser-${Date.now()}-${Math.round(Math.random() * 100000)}`;
   }
 }
 
@@ -345,6 +368,10 @@ chat.input?.addEventListener("keydown", (event) => {
 });
 window.addEventListener("magichandy:backend-availability", (event) => {
   backendAvailable = Boolean(event.detail?.available);
+  updateChatAvailability();
+});
+window.addEventListener("magichandy:controller-state", (event) => {
+  controllerReadOnly = Boolean(event.detail?.read_only);
   updateChatAvailability();
 });
 

@@ -29,6 +29,11 @@
         <span id="transport-status">Transport pending</span>
       </div>
 
+      <div class="status-pill controller-pill" data-state="pending" title="Single-controller lease status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="controller-status">Controller pending</span>
+      </div>
+
       <div class="visualizer" role="img" aria-label="Live motion state">
         <span class="visualizer-track" aria-hidden="true">
           <span class="visualizer-range"></span>
@@ -264,8 +269,8 @@
           <p class="eyebrow">Diagnostics</p>
           <h2 id="diagnostics-title">Diagnostics</h2>
           <div class="diagnostics-actions">
-            <button class="secondary-button" id="diagnostics-copy" type="button" data-allow-backend-offline>Copy summary</button>
-            <button class="secondary-button trace-export" id="trace-export" type="button">Export trace</button>
+            <button class="secondary-button" id="diagnostics-copy" type="button" data-allow-backend-offline data-allow-readonly>Copy summary</button>
+            <button class="secondary-button trace-export" id="trace-export" type="button" data-allow-readonly>Export trace</button>
           </div>
         </div>
 

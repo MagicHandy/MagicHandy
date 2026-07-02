@@ -31,10 +31,10 @@ func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
 	saveCloudSettings(t, server)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/transport/cloud/hsp-add", strings.NewReader(`{
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/cloud/hsp-add", strings.NewReader(`{
 		"stream_id": "stream-A",
 		"points": [{"position_percent": 25, "time_ms": 10}]
-	}`))
+	}`)))
 	server.Handler().ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {

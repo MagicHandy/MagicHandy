@@ -2,8 +2,10 @@ import { encodeHandyRequest, decodeHandyRPCMessage } from "./handy-ble-codec.js"
 
 const statusPill = document.querySelector(".status-pill");
 const transportPill = document.querySelector(".transport-pill");
+const controllerPill = document.querySelector(".controller-pill");
 const coreStatus = document.querySelector("#core-status");
 const transportStatus = document.querySelector("#transport-status");
+const controllerStatus = document.querySelector("#controller-status");
 const backendBanner = document.querySelector("#backend-banner");
 const backendBannerMessage = document.querySelector("#backend-banner-message");
 const runtimeCore = document.querySelector("#runtime-core");
@@ -42,6 +44,9 @@ const cloudCredentialControls = Array.from(document.querySelectorAll(".cloud-cre
 const backendRequiredControls = Array.from(document.querySelectorAll(
   "[data-requires-backend] button, [data-requires-backend] input, [data-requires-backend] select, [data-requires-backend] textarea",
 )).filter((control) => !control.hasAttribute("data-allow-backend-offline"));
+const controllerRequiredControls = Array.from(document.querySelectorAll(
+  "[data-requires-backend] button, [data-requires-backend] input, [data-requires-backend] select, [data-requires-backend] textarea",
+)).filter((control) => !control.hasAttribute("data-allow-backend-offline") && !control.hasAttribute("data-allow-readonly"));
 
 const fields = {
   serverPort: document.querySelector("#server-port"),
@@ -72,6 +77,8 @@ let currentLLM = null;
 let settingsDirty = false;
 let renderingSettings = false;
 let backendAvailable = true;
+let controllerReadOnly = false;
+let controllerReason = "";
 let lastState = null;
 
 const DISPATCH_OWNER_CLOUD = "cloud_rest";
@@ -84,6 +91,7 @@ const HSP_ADD_CHUNK_POINTS = 20;
 const WRITE_WITHOUT_RESPONSE_SETTLE_MS = 20;
 const RESPONSE_TIMEOUT_MS = 5000;
 const NO_COMPLETION_ID = 2147483647;
+const CONTROLLER_CLIENT_ID = appClientID();
 
 const bluetoothState = {
   clientID: browserClientID(),
@@ -152,6 +160,7 @@ async function fetchJSON(path) {
   const response = await fetch(path, {
     headers: {
       Accept: "application/json",
+      ...controllerHeaders(),
     },
   });
 
@@ -168,6 +177,7 @@ async function sendJSON(path, payload) {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...controllerHeaders(),
     },
     body: JSON.stringify(payload),
   });
@@ -186,6 +196,7 @@ async function postJSON(path, payload = {}) {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...controllerHeaders(),
     },
     body: JSON.stringify(payload),
   });
@@ -203,6 +214,7 @@ async function postEmpty(path) {
     method: "POST",
     headers: {
       Accept: "application/json",
+      ...controllerHeaders(),
     },
   });
 
@@ -216,6 +228,7 @@ async function postEmpty(path) {
 
 function renderState(health, state, bluetooth) {
   lastState = state;
+  setControllerState(state.controller);
   runtimeCore.textContent = health.status === "ok" ? "Online" : "Degraded";
   runtimeUI.textContent = "Embedded";
   runtimeSettings.textContent = labelStatus(state.settings_status.source);
@@ -254,6 +267,7 @@ function setBackendAvailability(available, reason = "") {
     updateLLMVisibility();
     renderBluetoothStatus(lastState?.bluetooth_bridge);
   }
+  applyControllerLock();
   window.dispatchEvent(new CustomEvent("magichandy:backend-availability", {
     detail: { available: backendAvailable, reason },
   }));
@@ -279,6 +293,65 @@ function setControlBackendDisabled(control, disabled, reason) {
   }
   delete control.dataset.backendTitle;
   delete control.dataset.disabledByBackend;
+}
+
+function setControllerState(controller = {}) {
+  controllerReadOnly = Boolean(controller.read_only);
+  controllerReason = controller.reason || "";
+  document.body.dataset.controller = controllerReadOnly ? "readonly" : "active";
+  if (controllerPill) {
+    controllerPill.dataset.state = controllerReadOnly ? "pending" : "ok";
+  }
+  if (controllerStatus) {
+    controllerStatus.textContent = controllerReadOnly
+      ? `Read-only: ${controllerReason || "another tab controls motion"}`
+      : "Controller active";
+  }
+  applyControllerLock();
+  window.dispatchEvent(new CustomEvent("magichandy:controller-state", {
+    detail: controller,
+  }));
+}
+
+function applyControllerLock() {
+  for (const control of controllerRequiredControls) {
+    setControlControllerDisabled(control, controllerReadOnly, controllerReason);
+  }
+  if (!controllerReadOnly) {
+    updateApplicationIDOverrideState();
+    updateTransportVisibility();
+    updateLLMVisibility();
+    renderBluetoothStatus(lastState?.bluetooth_bridge);
+  }
+}
+
+function setControlControllerDisabled(control, disabled, reason) {
+  if (disabled) {
+    if (control.dataset.disabledByController !== "true") {
+      control.dataset.controllerTitle = control.getAttribute("title") || "";
+      control.dataset.controllerWasDisabled = control.disabled ? "true" : "false";
+      control.dataset.disabledByController = "true";
+    }
+    control.disabled = true;
+    if (control.dataset.disabledByBackend !== "true") {
+      control.title = reason ? `Read-only: ${reason}` : "Read-only client";
+    }
+    return;
+  }
+  if (control.dataset.disabledByController === "true") {
+    const wasDisabled = control.dataset.controllerWasDisabled === "true";
+    delete control.dataset.disabledByController;
+    delete control.dataset.controllerWasDisabled;
+    if (control.dataset.disabledByBackend !== "true" && !wasDisabled) {
+      control.disabled = false;
+      if (control.dataset.controllerTitle) {
+        control.title = control.dataset.controllerTitle;
+      } else {
+        control.removeAttribute("title");
+      }
+    }
+  }
+  delete control.dataset.controllerTitle;
 }
 
 function renderTransportStatus(state, bluetooth) {
@@ -434,6 +507,7 @@ function renderSettings(settings, options = {}) {
   updateApplicationIDOverrideState();
   updateTransportVisibility();
   updateLLMVisibility();
+  applyControllerLock();
   renderingSettings = false;
 }
 
@@ -650,18 +724,31 @@ function showToast(message) {
   }, 2800);
 }
 
+function controllerHeaders() {
+  return {
+    "X-MagicHandy-Client-ID": CONTROLLER_CLIENT_ID,
+  };
+}
+
+function appClientID() {
+  return stableClientID("magichandy.controller.client_id", "browser");
+}
+
 function browserClientID() {
-  const key = "magichandy.bluetooth.client_id";
+  return stableClientID("magichandy.bluetooth.client_id", "bluetooth-browser");
+}
+
+function stableClientID(key, prefix) {
   try {
     const existing = window.localStorage.getItem(key);
     if (existing) {
       return existing;
     }
-    const generated = `browser-${crypto.randomUUID()}`;
+    const generated = `${prefix}-${crypto.randomUUID()}`;
     window.localStorage.setItem(key, generated);
     return generated;
   } catch {
-    return `browser-${Date.now()}-${Math.round(Math.random() * 100000)}`;
+    return `${prefix}-${Date.now()}-${Math.round(Math.random() * 100000)}`;
   }
 }
 
