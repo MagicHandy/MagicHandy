@@ -24,6 +24,11 @@
         <span id="core-status">Checking core</span>
       </div>
 
+      <div class="status-pill transport-pill" data-state="pending" title="Selected transport status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="transport-status">Transport pending</span>
+      </div>
+
       <div class="visualizer" role="img" aria-label="Live motion state">
         <span class="visualizer-track" aria-hidden="true">
           <span class="visualizer-range"></span>
@@ -36,13 +41,19 @@
       </div>
 
       <button class="stop-button" id="stop-button" type="button" aria-label="Emergency stop all motion">
-        Stop
+        <span>Stop</span>
+        <span class="shortcut-hint" aria-hidden="true">Esc</span>
       </button>
+
+      <div class="backend-banner" id="backend-banner" role="alert" hidden>
+        <strong>Core connection lost</strong>
+        <span id="backend-banner-message">Backend-required controls are locked until the core responds.</span>
+      </div>
     </header>
 
     <main class="app-shell">
       <!-- PRIMARY surface: motion control. This is what the app is for. -->
-      <section class="panel motion-panel" aria-labelledby="motion-title">
+      <section class="panel motion-panel" aria-labelledby="motion-title" data-requires-backend>
         <div class="section-heading">
           <p class="eyebrow">Motion</p>
           <h1 id="motion-title">Motion Control</h1>
@@ -50,7 +61,7 @@
 
         <div class="motion-run" role="group" aria-label="Start and stop motion">
           <button class="primary-button start-button" id="motion-start" type="button">Start motion</button>
-          <button class="secondary-button" id="motion-stop" type="button" disabled>Stop motion</button>
+          <button class="secondary-button" id="motion-stop" type="button" disabled data-allow-backend-offline>Stop motion</button>
           <span class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</span>
         </div>
 
@@ -103,14 +114,17 @@
         </fieldset>
       </section>
 
-      <section class="panel chat-panel" aria-labelledby="chat-title">
+      <section class="panel chat-panel" aria-labelledby="chat-title" data-requires-backend>
         <div class="section-heading">
           <p class="eyebrow">Chat</p>
           <h2 id="chat-title">Local Chat</h2>
           <span class="chat-provider" id="chat-provider">llama.cpp</span>
         </div>
 
-        <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div class="chat-log-shell">
+          <div class="chat-log" id="chat-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+          <button class="secondary-button chat-jump" id="chat-jump" type="button" hidden>Jump to latest</button>
+        </div>
 
         <form class="chat-form" id="chat-form">
           <label class="field chat-input-field" for="chat-input">
@@ -126,7 +140,7 @@
       </section>
 
       <!-- Connection: credentials and transport. Explicit Save (credentials). -->
-      <section class="panel connection-panel" aria-labelledby="connection-title">
+      <section class="panel connection-panel" aria-labelledby="connection-title" data-requires-backend>
         <div class="section-heading">
           <p class="eyebrow">Connection</p>
           <h2 id="connection-title">Device Connection</h2>
@@ -175,6 +189,11 @@
               <div><dt>Device</dt><dd id="bluetooth-device">None</dd></div>
               <div><dt>Bridge</dt><dd id="bluetooth-bridge">Idle</dd></div>
             </dl>
+          </div>
+
+          <div class="connection-check">
+            <button class="secondary-button" id="connection-check" type="button">Check connection</button>
+            <span class="form-status" id="connection-check-status" role="status" aria-live="polite">Not checked</span>
           </div>
 
           <label class="field">
@@ -240,16 +259,19 @@
       </section>
 
       <!-- Diagnostics: enough for a bug report, plus trace export. -->
-      <section class="panel diagnostics-panel" aria-labelledby="diagnostics-title">
+      <section class="panel diagnostics-panel" aria-labelledby="diagnostics-title" data-requires-backend>
         <div class="section-heading">
           <p class="eyebrow">Diagnostics</p>
           <h2 id="diagnostics-title">Diagnostics</h2>
-          <button class="secondary-button trace-export" id="trace-export" type="button">Export trace</button>
+          <div class="diagnostics-actions">
+            <button class="secondary-button" id="diagnostics-copy" type="button" data-allow-backend-offline>Copy summary</button>
+            <button class="secondary-button trace-export" id="trace-export" type="button">Export trace</button>
+          </div>
         </div>
 
         <dl class="meta-grid diagnostic-grid">
           <div><dt>Engine</dt><dd id="engine-state">Idle</dd></div>
-          <div><dt>Sampled position</dt><dd id="engine-position">—</dd></div>
+          <div><dt>Estimated position</dt><dd id="engine-position">—</dd></div>
           <div><dt>Transport</dt><dd id="runtime-transport">Pending</dd></div>
           <div><dt>Playback</dt><dd id="transport-playback">—</dd></div>
           <div><dt>Last command</dt><dd id="transport-command">—</dd></div>
@@ -268,6 +290,7 @@
           <div><dt>Uptime</dt><dd id="uptime-value">0s</dd></div>
           <div><dt>Health</dt><dd id="health-value">Pending</dd></div>
         </dl>
+        <p class="diagnostics-status" id="diagnostics-copy-status" role="status" aria-live="polite"></p>
       </section>
     </main>
 

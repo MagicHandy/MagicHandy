@@ -3,6 +3,7 @@ const chat = {
   input: document.querySelector("#chat-input"),
   send: document.querySelector("#chat-send"),
   log: document.querySelector("#chat-log"),
+  jump: document.querySelector("#chat-jump"),
   status: document.querySelector("#chat-status"),
   malformed: document.querySelector("#chat-malformed"),
   provider: document.querySelector("#chat-provider"),
@@ -10,8 +11,11 @@ const chat = {
 
 const history = [];
 let streaming = false;
+let backendAvailable = true;
+let stickToBottom = true;
 
-function appendMessage(role, text, state = "") {
+function appendMessage(role, text, state = "", options = {}) {
+  const shouldStick = options.forceScroll || shouldStickToBottom();
   const message = document.createElement("div");
   message.className = "chat-message";
   message.dataset.role = role;
@@ -20,7 +24,7 @@ function appendMessage(role, text, state = "") {
   }
   message.textContent = text;
   chat.log.appendChild(message);
-  chat.log.scrollTop = chat.log.scrollHeight;
+  maybeScrollToLatest(shouldStick);
   return message;
 }
 
@@ -42,6 +46,45 @@ function rememberTurn(user, assistantContract) {
   }
 }
 
+function updateChatAvailability() {
+  chat.input.disabled = !backendAvailable;
+  chat.send.disabled = streaming || !backendAvailable;
+}
+
+function isNearBottom() {
+  if (!chat.log) {
+    return true;
+  }
+  const remaining = chat.log.scrollHeight - chat.log.scrollTop - chat.log.clientHeight;
+  return remaining < 56;
+}
+
+function shouldStickToBottom() {
+  stickToBottom = isNearBottom();
+  return stickToBottom;
+}
+
+function maybeScrollToLatest(shouldStick) {
+  if (shouldStick) {
+    scrollToLatest();
+    return;
+  }
+  updateJumpVisibility();
+}
+
+function scrollToLatest() {
+  chat.log.scrollTop = chat.log.scrollHeight;
+  stickToBottom = true;
+  updateJumpVisibility();
+}
+
+function updateJumpVisibility() {
+  if (!chat.jump) {
+    return;
+  }
+  chat.jump.hidden = stickToBottom || !chat.log.children.length;
+}
+
 async function sendChat(event) {
   event.preventDefault();
   if (streaming) {
@@ -54,12 +97,12 @@ async function sendChat(event) {
   }
 
   streaming = true;
-  chat.send.disabled = true;
+  updateChatAvailability();
   chat.input.value = "";
   setMalformed("");
   setStatus("Streaming");
-  appendMessage("user", text);
-  const assistant = appendMessage("assistant", "...");
+  appendMessage("user", text, "", { forceScroll: true });
+  const assistant = appendMessage("assistant", "...", "", { forceScroll: true });
 
   let raw = "";
   let repairRaw = "";
@@ -105,8 +148,10 @@ async function sendChat(event) {
         return;
       }
       if (name === "message") {
+        const shouldStick = shouldStickToBottom();
         finalReply = payload.reply || "";
         assistant.textContent = finalReply || "...";
+        maybeScrollToLatest(shouldStick);
         if (!payload.initial_malformed) {
           assistant.dataset.state = "";
         }
@@ -121,26 +166,32 @@ async function sendChat(event) {
         return;
       }
       if (name === "error") {
+        const shouldStick = shouldStickToBottom();
         assistant.dataset.state = "warning";
         assistant.textContent = payload.message || "Chat failed.";
+        maybeScrollToLatest(shouldStick);
         setStatus("Failed");
         return;
       }
       if (name === "done") {
         if (!payload.ok && !finalReply) {
+          const shouldStick = shouldStickToBottom();
           assistant.dataset.state = "warning";
           assistant.textContent = "Malformed model response.";
+          maybeScrollToLatest(shouldStick);
         }
         setStatus(payload.ok ? "Idle" : "Needs attention");
       }
     });
   } catch (error) {
+    const shouldStick = shouldStickToBottom();
     assistant.dataset.state = "warning";
     assistant.textContent = error.message;
+    maybeScrollToLatest(shouldStick);
     setStatus("Failed");
   } finally {
     streaming = false;
-    chat.send.disabled = false;
+    updateChatAvailability();
     chat.input.focus();
   }
 }
@@ -192,9 +243,10 @@ function dispatchEventBlock(block, onEvent) {
 }
 
 function renderDraft(element, raw) {
+  const shouldStick = shouldStickToBottom();
   const reply = extractReplyDraft(raw);
   element.textContent = reply || "...";
-  chat.log.scrollTop = chat.log.scrollHeight;
+  maybeScrollToLatest(shouldStick);
 }
 
 function extractReplyDraft(raw) {
@@ -281,10 +333,20 @@ async function refreshChatState() {
 }
 
 chat.form?.addEventListener("submit", sendChat);
+chat.log?.addEventListener("scroll", () => {
+  stickToBottom = isNearBottom();
+  updateJumpVisibility();
+});
+chat.jump?.addEventListener("click", scrollToLatest);
 chat.input?.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     chat.form.requestSubmit();
   }
 });
+window.addEventListener("magichandy:backend-availability", (event) => {
+  backendAvailable = Boolean(event.detail?.available);
+  updateChatAvailability();
+});
 
+updateChatAvailability();
 refreshChatState();
