@@ -118,6 +118,21 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	}
 }
 
+func TestSettingsLoaderAcceptsUTF8BOM(t *testing.T) {
+	raw := append([]byte{0xEF, 0xBB, 0xBF}, []byte(`{"version":1,"server":{"port":49724}}`)...)
+
+	settings, migrated, err := loadSettingsFromBytes(raw)
+	if err != nil {
+		t.Fatalf("loadSettingsFromBytes: %v", err)
+	}
+	if migrated {
+		t.Fatal("current settings unexpectedly migrated")
+	}
+	if settings.Server.Port != 49724 {
+		t.Fatalf("server port = %d, want 49724", settings.Server.Port)
+	}
+}
+
 func TestMigrationHookPromotesVersionZero(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Version = 0

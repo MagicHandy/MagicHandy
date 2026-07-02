@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -301,6 +302,8 @@ func MigrateSettings(settings Settings, sourceVersion int) (Settings, bool, erro
 }
 
 func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+
 	var header struct {
 		Version int `json:"version"`
 	}

@@ -154,5 +154,8 @@ builds features on top of the motion loop.
 - ADR 0001: why Go, and what Go will and will not improve
 - ADR 0002: semantic/transport contract and emergency stop contract
 - ADR 0004: frontend strategy
+- `docs/goal-scorecard.md`: the living status of every target in this file —
+  scored per phase with evidence links; budget misses are recorded there in
+  the PR that misses them
 - `docs/risk-register.md`: R11 (goals unmeasured) and R12 (frontend debt) track
   the risks these guardrails mitigate

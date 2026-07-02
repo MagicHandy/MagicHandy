@@ -1,0 +1,214 @@
+/* shell.css — routed views, control-bar navigation, quick-settings popover,
+   motion strip, and settings layout. Complements app.css. */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ---- Views: one region at a time, flat routing ---- */
+.app-shell {
+  display: block;
+  padding: clamp(16px, 3vw, 28px);
+  max-width: 1020px;
+  margin: 0 auto;
+}
+
+.view:focus,
+.view h1:focus {
+  outline: none;
+}
+
+/* ---- Control-bar navigation ---- */
+.bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bar-nav-button {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.bar-nav-button[aria-current="page"],
+.bar-nav-button[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Quick settings popover: dedicated top layer, measured position ---- */
+.quick-popover {
+  position: fixed;
+  z-index: 40;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.quick-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.quick-popover-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.quick-popover-head .hint {
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+.quick-popover-close {
+  margin-left: auto;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+.quick-popover .quick-controls {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ---- Motion strip: compact manual control between chat log and composer ---- */
+.motion-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.motion-strip .start-button {
+  padding: 10px 20px;
+}
+.strip-field {
+  min-width: 130px;
+}
+.strip-slider {
+  flex: 1 1 180px;
+}
+.motion-strip .run-readout {
+  flex: 0 1 auto;
+  padding-bottom: 8px;
+  min-width: 110px;
+  text-align: right;
+  margin-left: auto;
+}
+
+/* ---- Settings view ---- */
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.settings-head h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.settings-back {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.settings-nav {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-nav a {
+  padding: 10px 16px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.settings-nav a:hover {
+  color: var(--text);
+}
+.settings-nav a[aria-current="page"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.settings-section-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+/* Save stays reachable in every settings section. */
+.settings-footer {
+  position: sticky;
+  bottom: 0;
+  margin: 14px calc(-1 * clamp(16px, 2.4vw, 24px)) calc(-1 * clamp(16px, 2.4vw, 24px));
+  padding: 14px clamp(16px, 2.4vw, 24px);
+  background: rgba(23, 27, 33, 0.96);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 700px) {
+  .motion-strip .run-readout {
+    flex-basis: 100%;
+    text-align: left;
+    padding-bottom: 0;
+  }
+  .settings-nav {
+    overflow-x: auto;
+  }
+  .bar-nav {
+    order: 4;
+  }
+
+  /* Compact the persistent bar so it does not eat the mobile viewport:
+     smaller pills, tighter gaps, Stop stays large. */
+  .control-bar {
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .status-pill {
+    padding: 4px 9px;
+    font-size: 0.74rem;
+    gap: 6px;
+  }
+  .brand-name {
+    font-size: 0.95rem;
+  }
+  .visualizer {
+    padding: 4px 10px;
+  }
+  .bar-nav-button {
+    padding: 7px 11px;
+    font-size: 0.8rem;
+  }
+}

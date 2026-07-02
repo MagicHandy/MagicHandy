@@ -29,8 +29,17 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 7 | Retargeting + real-device validation runner | Complete | #9 |
 | 8 | Motion UI and live visualizer | Complete | #10 |
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
-| 9B | App-path device validation, controller ownership | **Next** | — |
+| 9B | App-path device validation, controller ownership | **Nearly complete** | #15, #16, #17 |
 | 10-17 | Memory/prompts, modes, voice, patterns, migration, packaging, parity | Not started | — |
+
+Phase 9B remaining: the Browser Bluetooth full motion/chat session. The blocker
+has moved past BLE discovery: Edge can select `OHD_hw0_29b3243120f4`, the bridge
+can become ready, and a non-moving Stop command ACKed over Bluetooth. Full
+motion remains open because the live GATT link disconnected or reported
+`hsp/state` timeout before the capped start sequence could complete. Everything
+else — controller lease, read-only clients, stop-first owner switch, motion SSE,
+parity-regression fixes, Cloud REST hardware validation through the real UI/chat
+path, active RSS, and the one-hour soak — is merged and evidenced.
 
 ### What Exists On Main
 
@@ -51,32 +60,25 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 
 ### Known Gaps Carried Forward
 
-These are tracked so they cannot silently become permanent:
+These are tracked so they cannot silently become permanent. Goal and budget
+status now lives in `docs/goal-scorecard.md`; this list is the open remainder.
+(Closed by Phase 9B PRs #15-#17 and the follow-up close-out branch: app-path
+Cloud REST hardware validation, owner-switch semantics, controller
+enforcement, motion SSE, active RSS and soak measurements, parity rows
+1-4/6/8, BLE-session extraction from `web/app.js`, and automated source file
+line-budget checks.)
 
-1. **Real hardware has validated the engine only through the dedicated
-   `cmd/retarget-validate` runner.** The full app path — UI and chat driving
-   the engine through the selected live dispatch owner — has not run against a
-   physical Handy. This is the core of Phase 9B.
-2. **Dispatch-owner changes while motion is active have no defined semantics.**
-   The engine binds a transport at start; switching owners mid-motion keeps the
-   old transport until stop. Phase 9B makes stop-first switching explicit and
-   tested.
-3. **Single-active-controller is designed but not enforced** (see
-   `docs/ui-design.md`); extra tabs are not yet read-only.
-4. **The UI polls motion state** (250 ms active / 1.5 s idle);
-   `docs/ui-design.md` calls for pushed state (SSE) with an explicit stale
-   indicator.
-5. **Go active-motion RSS and the one-hour soak number are unmeasured**; only
-   idle RSS is recorded (`docs/goals-and-guardrails.md` requires both).
-6. **`web/app.js` (~870 lines) exceeds the size norm**; the BLE session
-   handling still needs extraction into a transport module.
-7. **Prompt sets are a single hardcoded set**; the editable prompt-set and
+1. **Browser Bluetooth app-path hardware validation is blocked after BLE
+   connect.** The 2026-07-02 connected Edge follow-up selected
+   `OHD_hw0_29b3243120f4`, reached a ready browser bridge, and ACKed a
+   non-moving Stop command. The full motion/chat path still needs one stable
+   GATT session long enough to run the capped start/stop and chat stop sequence
+   (see `docs/perf-baseline.md`, "Full App Path Evidence").
+2. **Prompt sets are a single hardcoded set**; the editable prompt-set and
    memory surface is Phase 10.
-8. **The UI regressed several behaviors StrokeGPT-ReVibed had already
-   proven** (backend-loss banner and control lock, chat scrollback
-   stickiness, a visible connection check, estimate labeling, pause/resume,
-   copyable diagnostics, settings reset). See `docs/ui-design.md`,
-   "Functional Parity Baseline" — each row is assigned to a phase below.
+3. **Open parity rows**: pause/resume (Phase 11), reset-to-defaults
+   (Phase 10), server-side chat continuity (Phase 12). See
+   `docs/ui-design.md`, "Functional Parity Baseline".
 
 ## Rewrite Guardrails
 
@@ -110,6 +112,9 @@ Each phase below is written so a future `/goal` can complete it end-to-end. A ph
 - code committed and pushed to a scoped branch
 - tests passing for the phase
 - documentation updated when behavior or architecture changes
+- `docs/goal-scorecard.md` updated: affected rows re-scored, budgets
+  re-measured when the phase touches size/memory/startup, and a History entry
+  appended
 - a PR opened unless the phase is explicitly local-only planning
 - clear notes about what was intentionally not implemented
 
@@ -169,8 +174,11 @@ Implement:
 - motion state pushed over SSE (reuse the cloud/bluetooth event pattern) with
   the polling loop kept as fallback; the visualizer shows an explicit stale
   state when the stream drops
-- extract the BLE session handling from `web/app.js` so `web/` returns under
-  the size norms
+- BLE session handling is split out of `web/app.js`; `web/app.js` is back under
+  the size norms and browser-owned BLE now lives in `web/bluetooth-ui.js`
+- automated file-length checks live in `internal/architecture` with a
+  grandfathered ceiling for existing oversized files, so size norms no longer
+  depend on manual review
 - restore the proven StrokeGPT-ReVibed failure-handling behaviors
   (`docs/ui-design.md`, "Functional Parity Baseline"): persistent
   connection-lost banner plus backend-required control lock, a visible cloud

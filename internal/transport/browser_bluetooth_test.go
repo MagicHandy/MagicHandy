@@ -151,19 +151,95 @@ func TestBrowserBluetoothTransportDistinguishesDeviceFailure(t *testing.T) {
 	}
 }
 
-func TestBrowserBluetoothTransportRequiresNumericStreamID(t *testing.T) {
+func TestBrowserBluetoothTransportMapsSemanticStreamID(t *testing.T) {
 	bridge := NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(BrowserBluetoothClientStatus{
+		ClientID:  "client-1",
+		Connected: &connected,
+	})
 	bluetooth := newTestBrowserBluetoothTransport(t, bridge, BrowserBluetoothOptions{})
 
-	result, err := bluetooth.AddHSP(context.Background(), HSPAddCommand{
-		StreamID: "stream-A",
-		Points:   []TimedPoint{{PositionPercent: 50, TimeMillis: 0}},
-	})
-	if err == nil {
-		t.Fatal("AddHSP accepted non-numeric Bluetooth stream id")
+	done := make(chan resultAndError, 1)
+	go func() {
+		result, err := bluetooth.AddHSP(context.Background(), HSPAddCommand{
+			StreamID: "motion-000001",
+			Points:   []TimedPoint{{PositionPercent: 50, TimeMillis: 0}},
+		})
+		done <- resultAndError{result: result, err: err}
+	}()
+
+	commands, err := bridge.NextCommands(context.Background(), "client-1", time.Second)
+	if err != nil {
+		t.Fatalf("NextCommands: %v", err)
 	}
-	if result.OK || result.Status != "failed" {
-		t.Fatalf("result = %+v, want build failure", result)
+	if len(commands) != 1 {
+		t.Fatalf("command count = %d, want 1", len(commands))
+	}
+	if commands[0].Path != "hsp/add" || commands[0].Body["stream_id"] != 1 {
+		t.Fatalf("command = %+v, want semantic stream mapped to numeric 1", commands[0])
+	}
+	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{
+		ID: commands[0].ID,
+		OK: true,
+	})
+
+	outcome := readBluetoothOutcome(t, done)
+	if outcome.err != nil {
+		t.Fatalf("AddHSP: %v", outcome.err)
+	}
+	diagnostics := bluetooth.Diagnostics()
+	if diagnostics.LastCommand == nil ||
+		diagnostics.LastCommand.HSPAdd == nil ||
+		diagnostics.LastCommand.HSPAdd.StreamID != "motion-000001" {
+		t.Fatalf("diagnostics last command = %+v, want semantic stream id retained", diagnostics.LastCommand)
+	}
+}
+
+func TestBrowserBluetoothTransportReusesMappedStreamIDForPlay(t *testing.T) {
+	bridge := NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(BrowserBluetoothClientStatus{
+		ClientID:  "client-1",
+		Connected: &connected,
+	})
+	bluetooth := newTestBrowserBluetoothTransport(t, bridge, BrowserBluetoothOptions{})
+
+	addDone := make(chan resultAndError, 1)
+	go func() {
+		result, err := bluetooth.AddHSP(context.Background(), HSPAddCommand{
+			StreamID: "motion-000001",
+			Points:   []TimedPoint{{PositionPercent: 50, TimeMillis: 0}},
+		})
+		addDone <- resultAndError{result: result, err: err}
+	}()
+	addCommands, err := bridge.NextCommands(context.Background(), "client-1", time.Second)
+	if err != nil {
+		t.Fatalf("NextCommands add: %v", err)
+	}
+	if len(addCommands) != 1 || addCommands[0].Body["stream_id"] != 1 {
+		t.Fatalf("add commands = %+v, want numeric stream 1", addCommands)
+	}
+	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{ID: addCommands[0].ID, OK: true})
+	if outcome := readBluetoothOutcome(t, addDone); outcome.err != nil {
+		t.Fatalf("AddHSP: %v", outcome.err)
+	}
+
+	playDone := make(chan resultAndError, 1)
+	go func() {
+		result, err := bluetooth.PlayHSP(context.Background(), HSPPlayCommand{StreamID: "motion-000001"})
+		playDone <- resultAndError{result: result, err: err}
+	}()
+	playCommands, err := bridge.NextCommands(context.Background(), "client-1", time.Second)
+	if err != nil {
+		t.Fatalf("NextCommands play: %v", err)
+	}
+	if len(playCommands) != 1 || playCommands[0].Path != "hsp/play" || playCommands[0].Body["stream_id"] != 1 {
+		t.Fatalf("play commands = %+v, want same numeric stream 1", playCommands)
+	}
+	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{ID: playCommands[0].ID, OK: true})
+	if outcome := readBluetoothOutcome(t, playDone); outcome.err != nil {
+		t.Fatalf("PlayHSP: %v", outcome.err)
 	}
 }
 
