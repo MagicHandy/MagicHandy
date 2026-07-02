@@ -29,8 +29,15 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 7 | Retargeting + real-device validation runner | Complete | #9 |
 | 8 | Motion UI and live visualizer | Complete | #10 |
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
-| 9B | App-path device validation, controller ownership | **Next** | — |
+| 9B | App-path device validation, controller ownership | **Nearly complete** | #15, #16, #17 |
 | 10-17 | Memory/prompts, modes, voice, patterns, migration, packaging, parity | Not started | — |
+
+Phase 9B remaining: one manual Browser Bluetooth session (Chromium's device
+chooser requires a real user gesture, so automation cannot finish it), and
+the `web/app.js` BLE-session extraction. Everything else — controller lease,
+read-only clients, stop-first owner switch, motion SSE, parity-regression
+fixes, Cloud REST hardware validation through the real UI/chat path, active
+RSS, and the one-hour soak — is merged and evidenced.
 
 ### What Exists On Main
 
@@ -51,32 +58,28 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 
 ### Known Gaps Carried Forward
 
-These are tracked so they cannot silently become permanent:
+These are tracked so they cannot silently become permanent. Goal and budget
+status now lives in `docs/goal-scorecard.md`; this list is the open remainder.
+(Closed by Phase 9B PRs #15-#17: app-path Cloud REST hardware validation,
+owner-switch semantics, controller enforcement, motion SSE, active RSS and
+soak measurements, and parity rows 1-4/6/8.)
 
-1. **Real hardware has validated the engine only through the dedicated
-   `cmd/retarget-validate` runner.** The full app path — UI and chat driving
-   the engine through the selected live dispatch owner — has not run against a
-   physical Handy. This is the core of Phase 9B.
-2. **Dispatch-owner changes while motion is active have no defined semantics.**
-   The engine binds a transport at start; switching owners mid-motion keeps the
-   old transport until stop. Phase 9B makes stop-first switching explicit and
-   tested.
-3. **Single-active-controller is designed but not enforced** (see
-   `docs/ui-design.md`); extra tabs are not yet read-only.
-4. **The UI polls motion state** (250 ms active / 1.5 s idle);
-   `docs/ui-design.md` calls for pushed state (SSE) with an explicit stale
-   indicator.
-5. **Go active-motion RSS and the one-hour soak number are unmeasured**; only
-   idle RSS is recorded (`docs/goals-and-guardrails.md` requires both).
-6. **`web/app.js` (~870 lines) exceeds the size norm**; the BLE session
-   handling still needs extraction into a transport module.
-7. **Prompt sets are a single hardcoded set**; the editable prompt-set and
+1. **Browser Bluetooth app-path hardware validation needs a human.**
+   Chromium's `requestDevice` chooser requires a real user gesture; one
+   manual session closes it (see `docs/perf-baseline.md`, "Full App Path
+   Evidence").
+2. **`web/app.js` is now ~1120 lines** — further over the size norm than at
+   Phase 9 (870), because the 9B parity fixes landed before the planned BLE
+   extraction. The only currently violated guardrail; extract before Phase 10
+   adds more UI.
+3. **Size norms have no automated enforcement**, which is how gap 2 grew
+   silently. Add a file-length check to the `internal/architecture` tests
+   with a grandfathered ceiling so oversized files can only shrink.
+4. **Prompt sets are a single hardcoded set**; the editable prompt-set and
    memory surface is Phase 10.
-8. **The UI regressed several behaviors StrokeGPT-ReVibed had already
-   proven** (backend-loss banner and control lock, chat scrollback
-   stickiness, a visible connection check, estimate labeling, pause/resume,
-   copyable diagnostics, settings reset). See `docs/ui-design.md`,
-   "Functional Parity Baseline" — each row is assigned to a phase below.
+5. **Open parity rows**: pause/resume (Phase 11), reset-to-defaults
+   (Phase 10), server-side chat continuity (Phase 12). See
+   `docs/ui-design.md`, "Functional Parity Baseline".
 
 ## Rewrite Guardrails
 
@@ -110,6 +113,9 @@ Each phase below is written so a future `/goal` can complete it end-to-end. A ph
 - code committed and pushed to a scoped branch
 - tests passing for the phase
 - documentation updated when behavior or architecture changes
+- `docs/goal-scorecard.md` updated: affected rows re-scored, budgets
+  re-measured when the phase touches size/memory/startup, and a History entry
+  appended
 - a PR opened unless the phase is explicitly local-only planning
 - clear notes about what was intentionally not implemented
 
@@ -171,6 +177,9 @@ Implement:
   state when the stream drops
 - extract the BLE session handling from `web/app.js` so `web/` returns under
   the size norms
+- add an automated file-length check (in `internal/architecture`) with a
+  grandfathered ceiling for existing oversized files, so size norms stop
+  depending on manual review
 - restore the proven StrokeGPT-ReVibed failure-handling behaviors
   (`docs/ui-design.md`, "Functional Parity Baseline"): persistent
   connection-lost banner plus backend-required control lock, a visible cloud

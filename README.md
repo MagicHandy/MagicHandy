@@ -131,6 +131,7 @@ MinGW/GCC installed.
 
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 - [Goals and guardrails](docs/goals-and-guardrails.md)
+- [Goal scorecard](docs/goal-scorecard.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
 - [UI design](docs/ui-design.md)
