@@ -39,16 +39,18 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 
 ### Persistent control bar (all viewports, never hidden)
 
-A slim, always-on bar owns the safety- and state-critical elements:
+A slim, always-on bar owns **status and safety only** — it is not a control
+strip:
 
-- connection/transport status, live, with the reason available on expand
+- connection/transport/controller status, live
 - the one device visualizer in compact form
 - the emergency Stop control
-- active mode/label and the quick-settings entry point
+- the clickable profile button that opens the settings window
 
 This bar is fixed to the viewport. It is never inside the sidebar, never inside a
 collapsible panel, and is not hidden when the keyboard opens. Stop and device
-state survive every UI state.
+state survive every UI state — including while the settings window is open,
+which layers below the bar.
 
 ### Primary content
 
@@ -56,34 +58,39 @@ state survive every UI state.
   desktop width. Do not reintroduce the narrow-chat regression from the old app;
   constrain line length inside message bubbles rather than constraining the
   entire chat column unnecessarily.
-- One navigation affordance opens Settings as a routed full-region view, so
-  deeper screens (prompt library, pattern authoring, diagnostics detail) are
-  sibling routes, never stacked modals.
+- One navigation affordance — the profile button in the bar — opens Settings
+  as a single window over the control view; deeper areas are sibling sections
+  inside that one window, never stacked modals.
 
-### Sidebar (optional, desktop only)
+### Sidebar (the control rail)
 
-The sidebar holds only non-critical, browse-style content such as history and
-library lists. Nothing safety-critical lives here, because it can be collapsed.
-Stop, connection, and the visualizer are in the persistent bar.
+Controls live in an always-visible sidebar next to the chat — the shape the
+old app proved out — not in the top bar (top-bar controls read as awkward) and
+not between the chat log and composer. Today it holds manual motion
+(Start/Stop, pattern, speed) and the immediate-apply quick settings; modes
+join it in Phase 11. Nothing safety-critical lives here: Stop, connection
+state, and the visualizer stay in the persistent bar. On narrow viewports the
+sidebar stacks below the chat rather than collapsing behind a toggle.
 
 ### Mobile
 
 Same persistent control bar. The keyboard never hides device state or Stop.
-Settings and library are routed views, not an off-canvas overlay competing with
-the control bar.
+The sidebar stacks below the chat; the settings window fits the viewport with
+Save still reachable.
 
-### Implemented routes
+### Implemented structure
 
-As of the post-9B shell reorganization the structure is: `#/` is the control
-view (chat as the primary scrollable region with the compact manual-motion
-strip between the log and the composer); `#/settings/device`,
-`#/settings/model`, and `#/settings/diagnostics` are sibling routed settings
-sections sharing one form with a sticky, always-reachable Save; and the
-control bar's labeled "Quick settings" button opens the immediate-apply
-popover (top layer, positioned from measured geometry, focus trapped, Escape
-closes the popover first and stops motion only when no overlay is open).
-Nothing else renders as a dashboard; new surfaces join as routed views, not
-as additional always-visible panels.
+`#/` is the control view: chat fills the main column (the log grows with the
+viewport) and the sidebar rail holds Motion plus Quick settings.
+`#/settings/device|model|prompts|diagnostics` open the settings window on that
+section — deep-linkable, driven by the same hash router. The window is opened
+by the profile button, closed by its Close button, the backdrop, or Escape
+(Escape closes the window first and stops motion only when no overlay is
+open); focus is trapped inside while open and restored on close. Chat stays
+visible dimmed behind the window, and the bar — status, visualizer, Stop —
+stays above the backdrop and clickable. Nothing renders as a dashboard; new
+surfaces join the sidebar rail or the settings window, not as additional
+always-visible panels.
 
 ## The Device Visualizer
 
@@ -98,15 +105,17 @@ One component, one source of truth.
 - Distinguishes commanded/estimated position from device-confirmed position, and
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
-- Exposes quick settings through an explicit, labeled control, not by turning
-  the artwork itself into a mystery button.
+- Is never itself a click target: controls are separate, labeled elements
+  (quick settings live in the sidebar), not artwork turned into a mystery
+  button.
 
 ## Quick Controls
 
 Speed limit, stroke range, reverse direction.
 
 - Apply immediately to active motion (ADR 0002, invariant 9). No save step.
-- Reachable from the persistent bar in every viewport.
+- Always visible in the sidebar control rail (stacked below chat on mobile) —
+  no popover to hunt for.
 - Reflect engine state live; if the engine clamps or resolves a value, the
   control shows the resolved value inline rather than via a status line
   elsewhere on screen.
@@ -116,8 +125,12 @@ Speed limit, stroke range, reverse direction.
 Preserve the familiar grouping (Persona, Model, Voice, Device, Motion,
 Diagnostics) but fix the structural flaws:
 
-- Settings is a routed view, not a modal; sub-areas are sibling routes. No
-  modal-in-modal.
+- Settings is **one window layered over the control view** (product decision
+  2026-07-03, matching the old app's settings-in-a-window shape): chat stays
+  visible behind it, the persistent bar and Stop stay above it, and sub-areas
+  are sibling sections inside that one window. The anti-flaw substance is
+  unchanged — exactly one layer, never a modal stacked on a modal, and it can
+  never occlude the feedback channel or Stop.
 - Live device settings apply immediately. The few genuinely expensive or
   destructive actions (changing transport, clearing memory) use an explicit,
   clearly labeled action with confirmation.

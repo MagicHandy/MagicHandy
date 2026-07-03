@@ -24,15 +24,19 @@ func TestEmbeddedShellUIHooksExist(t *testing.T) {
 		t.Fatalf("read shell-ui.js: %v", err)
 	}
 
-	// Routed views and the two navigation affordances in the persistent bar.
+	// Status-only bar with the profile entry point, the control sidebar, and
+	// the settings window layered over the control view.
 	for _, fragment := range []string{
 		`id="view-control"`,
-		`id="view-settings"`,
-		`id="quick-settings-button"`,
-		`id="quick-popover"`,
+		`class="sidebar"`,
+		`id="profile-button"`,
+		`id="settings-overlay"`,
+		`id="settings-window"`,
+		`id="settings-close"`,
 		`href="#/settings/device"`,
 		`data-settings-section="device"`,
 		`data-settings-section="model"`,
+		`data-settings-section="prompts"`,
 		`data-settings-section="diagnostics"`,
 		`aria-haspopup="dialog"`,
 	} {
@@ -40,12 +44,10 @@ func TestEmbeddedShellUIHooksExist(t *testing.T) {
 			t.Fatalf("index.html missing %q", fragment)
 		}
 	}
-	// The popover positions from measured geometry (never 100vw/100vh), traps
-	// focus, and consumes Escape only while open so Esc-stops-motion survives.
+	// The window traps focus while open and consumes Escape only while open,
+	// so Esc-stops-motion survives; overlay sizing never uses viewport units.
 	for _, fragment := range []string{
-		`getBoundingClientRect`,
-		`document.documentElement.clientWidth`,
-		`trapQuickFocus`,
+		`trapFocus`,
 		`stopImmediatePropagation`,
 		`hashchange`,
 	} {
