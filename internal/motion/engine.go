@@ -210,7 +210,7 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	if reason == "" {
 		reason = "resume"
 	}
-	if err := e.beginResume(); err != nil {
+	if err := e.beginResume(reason); err != nil {
 		return e.Snapshot(), err
 	}
 	if err := e.setStrokeWindow(ctx, "resume_stroke_window"); err != nil {
@@ -233,7 +233,7 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	return e.Snapshot(), nil
 }
 
-func (e *Engine) beginResume() error {
+func (e *Engine) beginResume(reason string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.running {
@@ -256,7 +256,7 @@ func (e *Engine) beginResume() error {
 	e.plan = plan
 	e.paused = false
 	e.running = true
-	e.traceStateLocked("resumed", phaseAnnotation(true))
+	e.traceStateLocked(reason, phaseAnnotation(true))
 	return nil
 }
 
