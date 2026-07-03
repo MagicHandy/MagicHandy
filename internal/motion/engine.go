@@ -49,6 +49,10 @@ type Engine struct {
 	streamIDPrefix   string
 
 	running          bool
+	paused           bool
+	pausedPhase      float64
+	pausedTarget     MotionTarget
+	runMillisAccum   int64
 	generation       uint64
 	streamID         string
 	plan             MotionPlan
@@ -67,6 +71,8 @@ type Engine struct {
 // ActiveMotionState is a safe snapshot of the current motion loop.
 type ActiveMotionState struct {
 	Running          bool                     `json:"running"`
+	Paused           bool                     `json:"paused"`
+	RunningMillis    int64                    `json:"running_ms"`
 	Generation       uint64                   `json:"generation"`
 	StreamID         string                   `json:"stream_id,omitempty"`
 	PlanID           string                   `json:"plan_id,omitempty"`
@@ -157,14 +163,134 @@ func (e *Engine) RefreshSettings(ctx context.Context, settings config.MotionSett
 	return e.Snapshot(), err
 }
 
-// Stop cancels active motion and sends an explicit transport stop.
+// Pause stops dispatch and the device while freezing the plan phase, so
+// Resume can continue the same pattern where it left off. It is not the
+// safety path: Stop clears everything, Pause deliberately retains state.
+func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, error) {
+	if reason == "" {
+		reason = "pause"
+	}
+	e.mu.Lock()
+	if e.paused && !e.running {
+		e.mu.Unlock()
+		return e.Snapshot(), nil
+	}
+	if !e.running {
+		e.mu.Unlock()
+		return e.Snapshot(), errors.New("motion is not running")
+	}
+	played := e.estimatedPlaybackMillisLocked(e.now())
+	e.pausedPhase = e.plan.PhaseAt(played)
+	e.pausedTarget = e.plan.Target
+	e.runMillisAccum += played
+	e.mu.Unlock()
+
+	cancel, done, active := e.stopLoop()
+	if active {
+		cancel()
+		waitForLoop(done)
+	}
+
+	result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
+	e.recordTransportResult(reason, nil, result, err)
+	e.finishStopped(result, err)
+
+	// The loop is dead either way, so the engine is paused even if the
+	// transport stop errored; the error stays visible in the snapshot.
+	e.mu.Lock()
+	e.paused = true
+	e.traceStateLocked("paused", phaseAnnotation(true))
+	e.mu.Unlock()
+	return e.Snapshot(), err
+}
+
+// Resume continues paused motion with the same target and preserved phase on
+// a fresh stream.
+func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, error) {
+	if reason == "" {
+		reason = "resume"
+	}
+	if err := e.beginResume(reason); err != nil {
+		return e.Snapshot(), err
+	}
+	if err := e.setStrokeWindow(ctx, "resume_stroke_window"); err != nil {
+		e.forceStopped(err)
+		e.restorePaused()
+		return e.Snapshot(), err
+	}
+	if err := e.dispatchNextChunk(ctx, "resume_points"); err != nil {
+		e.forceStopped(err)
+		e.restorePaused()
+		return e.Snapshot(), err
+	}
+	if err := e.play(ctx); err != nil {
+		e.forceStopped(err)
+		e.restorePaused()
+		return e.Snapshot(), err
+	}
+
+	e.startLoop(ctx)
+	return e.Snapshot(), nil
+}
+
+func (e *Engine) beginResume(reason string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.running {
+		return errors.New("motion is already running")
+	}
+	if !e.paused {
+		return errors.New("motion is not paused")
+	}
+
+	e.generation++
+	e.streamID = fmt.Sprintf("%s-%06d", e.streamIDPrefix, e.generation)
+	e.startedAt = e.now()
+	e.nextSampleMillis = 0
+	e.lastResult = nil
+	e.lastError = ""
+	e.latencyMillis = nil
+	e.bridgeSample = nil
+	plan := NewMotionPlan(e.planIDLocked(), e.pausedTarget, e.settings, e.pausedPhase, 0, e.startedAt)
+	plan.PhasePreserved = true
+	e.plan = plan
+	e.paused = false
+	e.running = true
+	e.traceStateLocked(reason, phaseAnnotation(true))
+	return nil
+}
+
+// restorePaused re-marks the engine paused after a failed resume so the
+// frozen phase and target survive for a retry.
+func (e *Engine) restorePaused() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.paused = true
+}
+
+// Stop cancels active motion and sends an explicit transport stop. It also
+// clears any paused state: after Stop there is nothing to resume and the
+// run clock resets.
 func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, error) {
 	if reason == "" {
 		reason = "stop"
 	}
 	cancel, done, active := e.stopLoop()
 	if !active {
-		return e.Snapshot(), nil
+		e.mu.Lock()
+		wasPaused := e.paused
+		e.paused = false
+		e.runMillisAccum = 0
+		e.mu.Unlock()
+		if !wasPaused {
+			return e.Snapshot(), nil
+		}
+		// Paused motion already stopped the device; send an explicit stop
+		// anyway so the safety command is unconditional.
+		result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
+		e.recordTransportResult(reason, nil, result, err)
+		e.finishStopped(result, err)
+		return e.Snapshot(), err
 	}
 	cancel()
 	waitForLoop(done)
@@ -172,6 +298,10 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 	result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
 	e.recordTransportResult(reason, nil, result, err)
 	e.finishStopped(result, err)
+	e.mu.Lock()
+	e.paused = false
+	e.runMillisAccum = 0
+	e.mu.Unlock()
 	return e.Snapshot(), err
 }
 
@@ -200,6 +330,8 @@ func (e *Engine) begin(target MotionTarget, settings config.MotionSettings) erro
 	e.lastError = ""
 	e.latencyMillis = nil
 	e.bridgeSample = nil
+	e.paused = false
+	e.runMillisAccum = 0
 	e.plan = NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")

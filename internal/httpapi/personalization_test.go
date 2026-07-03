@@ -223,6 +223,48 @@ func TestReadOnlyClientCannotEditPersonalization(t *testing.T) {
 	}
 }
 
+func TestMotionPauseResumeRoundTrip(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	started := personalizationRequest(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`)
+	if started.Code != http.StatusOK {
+		t.Fatalf("start = %d: %s", started.Code, started.Body.String())
+	}
+
+	paused := personalizationRequest(t, server, http.MethodPost, "/api/motion/pause", "")
+	if paused.Code != http.StatusOK {
+		t.Fatalf("pause = %d: %s", paused.Code, paused.Body.String())
+	}
+	if !strings.Contains(paused.Body.String(), `"paused":true`) {
+		t.Fatalf("pause payload = %s, want paused state", paused.Body.String())
+	}
+
+	resumed := personalizationRequest(t, server, http.MethodPost, "/api/motion/resume", "")
+	if resumed.Code != http.StatusOK {
+		t.Fatalf("resume = %d: %s", resumed.Code, resumed.Body.String())
+	}
+	if !strings.Contains(resumed.Body.String(), `"running":true`) {
+		t.Fatalf("resume payload = %s, want running state", resumed.Body.String())
+	}
+
+	stopped := personalizationRequest(t, server, http.MethodPost, "/api/motion/stop", "")
+	if stopped.Code != http.StatusOK {
+		t.Fatalf("stop = %d: %s", stopped.Code, stopped.Body.String())
+	}
+	if !strings.Contains(stopped.Body.String(), `"running_ms":0`) {
+		t.Fatalf("stop payload = %s, want reset run clock", stopped.Body.String())
+	}
+
+	// Read-only clients cannot pause (control action), matching start/target.
+	recorder := httptest.NewRecorder()
+	request := withControllerID(httptest.NewRequest(http.MethodPost, "/api/motion/pause", nil), "reader-b")
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("read-only pause = %d, want %d", recorder.Code, http.StatusConflict)
+	}
+}
+
 func TestSettingsResetRestoresDefaults(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)

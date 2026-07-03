@@ -1,25 +1,26 @@
-// shell-ui.js — app shell navigation: hash router and quick-settings popover.
+// shell-ui.js — app shell navigation: hash router and the settings window.
 //
-// Routes are flat siblings (docs/ui-design.md): "#/" is the control view and
-// "#/settings/<section>" are the settings sections. The quick-settings popover
-// is the control bar's explicit quick-settings entry point; it lives in a
-// dedicated top layer and is positioned from measured geometry, never from
-// viewport units (which can resolve to 0 in embedded/headless contexts).
+// The control view (chat + sidebar) is always mounted. Settings opens as one
+// window layered over it — chat stays visible behind, the persistent bar and
+// Stop stay above and clickable, and nothing ever stacks on the window
+// (docs/ui-design.md). Routes stay flat and linkable: "#/" is the control
+// view and "#/settings/<section>" opens the window on that section.
 
 const SETTINGS_SECTIONS = ["device", "model", "prompts", "diagnostics"];
 
 const shell = {
-  controlView: document.querySelector("#view-control"),
-  settingsView: document.querySelector("#view-settings"),
   controlTitle: document.querySelector("#control-title"),
+  overlay: document.querySelector("#settings-overlay"),
+  window: document.querySelector("#settings-window"),
   settingsTitle: document.querySelector("#settings-title"),
-  settingsNav: document.querySelector("#settings-nav"),
+  close: document.querySelector("#settings-close"),
+  profile: document.querySelector("#profile-button"),
   sectionLinks: Array.from(document.querySelectorAll("[data-settings-link]")),
   sections: Array.from(document.querySelectorAll("[data-settings-section]")),
-  quickButton: document.querySelector("#quick-settings-button"),
-  quickPopover: document.querySelector("#quick-popover"),
-  quickClose: document.querySelector("#quick-popover-close"),
 };
+
+let settingsOpen = false;
+let previousFocus = null;
 
 // --- Router --------------------------------------------------------------------
 
@@ -34,11 +35,7 @@ function parseRoute(hash) {
 
 function applyRoute(options = {}) {
   const route = parseRoute(window.location.hash);
-  const settings = route.view === "settings";
-
-  shell.controlView.hidden = settings;
-  shell.settingsView.hidden = !settings;
-  shell.settingsNav?.setAttribute("data-active", route.section || "");
+  const open = route.view === "settings";
 
   for (const section of shell.sections) {
     section.hidden = section.dataset.settingsSection !== route.section;
@@ -50,112 +47,93 @@ function applyRoute(options = {}) {
       link.removeAttribute("aria-current");
     }
   }
-  const settingsNavLink = document.querySelector("#settings-nav");
-  if (settingsNavLink) {
-    if (settings) {
-      settingsNavLink.setAttribute("aria-current", "page");
-    } else {
-      settingsNavLink.removeAttribute("aria-current");
-    }
-  }
 
-  if (options.focusHeading) {
-    const heading = settings ? shell.settingsTitle : shell.controlTitle;
-    heading?.focus({ preventScroll: true });
+  if (open && !settingsOpen) {
+    previousFocus = document.activeElement;
+    shell.overlay.hidden = false;
+    settingsOpen = true;
+    shell.profile?.setAttribute("aria-expanded", "true");
+    if (options.focus !== false) {
+      shell.settingsTitle?.focus({ preventScroll: true });
+    }
+  } else if (!open && settingsOpen) {
+    shell.overlay.hidden = true;
+    settingsOpen = false;
+    shell.profile?.setAttribute("aria-expanded", "false");
+    if (options.focus !== false) {
+      if (previousFocus && document.contains(previousFocus) && previousFocus !== document.body) {
+        previousFocus.focus?.({ preventScroll: true });
+      } else {
+        shell.profile?.focus({ preventScroll: true });
+      }
+    }
+    previousFocus = null;
   }
 }
 
-window.addEventListener("hashchange", () => {
-  closeQuickPopover({ restoreFocus: false });
-  applyRoute({ focusHeading: true });
+window.addEventListener("hashchange", () => applyRoute());
+
+// --- Settings window open/close ---------------------------------------------------
+
+function openSettings() {
+  if (settingsOpen) {
+    closeSettings();
+    return;
+  }
+  window.location.hash = "#/settings/device";
+}
+
+function closeSettings() {
+  if (!settingsOpen) {
+    return;
+  }
+  window.location.hash = "#/";
+}
+
+shell.profile?.addEventListener("click", openSettings);
+shell.close?.addEventListener("click", closeSettings);
+
+// Clicking the dimmed backdrop (not the window itself) closes settings.
+shell.overlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === shell.overlay) {
+    closeSettings();
+  }
 });
 
-// --- Quick settings popover ------------------------------------------------------
-
-let quickOpen = false;
-let quickPreviousFocus = null;
-
-function positionQuickPopover() {
-  const anchor = shell.quickButton.getBoundingClientRect();
-  const popover = shell.quickPopover;
-  // Explicit pixel width from measured geometry; clientWidth (not innerWidth)
-  // so a 0-viewport headless context still yields a usable value.
-  const viewportWidth = Math.max(document.documentElement.clientWidth, 320);
-  const width = Math.min(380, viewportWidth - 16);
-  popover.style.width = `${width}px`;
-  const left = Math.max(8, Math.min(anchor.right - width, viewportWidth - width - 8));
-  popover.style.left = `${Math.round(left)}px`;
-  popover.style.top = `${Math.round(anchor.bottom + 8)}px`;
-}
-
-function quickFocusables() {
-  return Array.from(
-    shell.quickPopover.querySelectorAll("button, input, select, textarea, a[href]"),
-  ).filter((element) => !element.disabled && element.offsetParent !== null);
-}
-
-function openQuickPopover() {
-  if (quickOpen) {
-    closeQuickPopover();
-    return;
-  }
-  quickPreviousFocus = document.activeElement;
-  shell.quickPopover.hidden = false;
-  quickOpen = true;
-  shell.quickButton.setAttribute("aria-expanded", "true");
-  positionQuickPopover();
-  const focusables = quickFocusables();
-  (focusables[0] || shell.quickPopover).focus?.({ preventScroll: true });
-}
-
-function closeQuickPopover(options = {}) {
-  if (!quickOpen) {
-    return;
-  }
-  shell.quickPopover.hidden = true;
-  quickOpen = false;
-  shell.quickButton.setAttribute("aria-expanded", "false");
-  const restore = options.restoreFocus !== false;
-  if (restore && quickPreviousFocus && document.contains(quickPreviousFocus)) {
-    quickPreviousFocus.focus?.({ preventScroll: true });
-  } else if (restore) {
-    shell.quickButton.focus?.({ preventScroll: true });
-  }
-  quickPreviousFocus = null;
-}
-
-shell.quickButton?.addEventListener("click", openQuickPopover);
-shell.quickClose?.addEventListener("click", () => closeQuickPopover());
-
-// Escape closes the popover when it is open — and only then. The handler runs
-// in the capture phase and marks the event consumed so the global
-// Escape-stops-motion handler (motion-ui.js) does not also fire. When the
-// popover is closed, Escape still reaches the Stop handler unchanged.
+// Escape closes the settings window when it is open — and only then. The
+// handler runs in the capture phase and marks the event consumed so the
+// global Escape-stops-motion handler (motion-ui.js) does not also fire.
+// With the window closed, Escape still reaches the Stop handler unchanged.
 document.addEventListener(
   "keydown",
   (event) => {
-    if (event.key === "Escape" && quickOpen) {
+    if (event.key === "Escape" && settingsOpen) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      closeQuickPopover();
+      closeSettings();
       return;
     }
-    if (event.key === "Tab" && quickOpen) {
-      trapQuickFocus(event);
+    if (event.key === "Tab" && settingsOpen) {
+      trapFocus(event);
     }
   },
   { capture: true },
 );
 
-function trapQuickFocus(event) {
-  const focusables = quickFocusables();
+// Keyboard focus cycles within the window while it is open. The bar's Stop
+// stays reachable for pointer users always, and for keyboard users via
+// Escape (close) then Escape (stop).
+function trapFocus(event) {
+  const focusables = Array.from(
+    shell.window.querySelectorAll("button, input, select, textarea, a[href]"),
+  ).filter((element) => !element.disabled && element.offsetParent !== null);
   if (!focusables.length) {
     return;
   }
   const first = focusables[0];
   const last = focusables[focusables.length - 1];
   const active = document.activeElement;
-  if (!shell.quickPopover.contains(active)) {
+  if (!shell.window.contains(active)) {
     event.preventDefault();
     first.focus({ preventScroll: true });
     return;
@@ -169,30 +147,4 @@ function trapQuickFocus(event) {
   }
 }
 
-document.addEventListener("pointerdown", (event) => {
-  if (!quickOpen) {
-    return;
-  }
-  const target = event.target;
-  if (shell.quickPopover.contains(target) || shell.quickButton.contains(target)) {
-    return;
-  }
-  closeQuickPopover({ restoreFocus: false });
-});
-
-window.addEventListener("resize", () => {
-  if (quickOpen) {
-    positionQuickPopover();
-  }
-});
-window.addEventListener(
-  "scroll",
-  () => {
-    if (quickOpen) {
-      positionQuickPopover();
-    }
-  },
-  { passive: true },
-);
-
-applyRoute();
+applyRoute({ focus: false });

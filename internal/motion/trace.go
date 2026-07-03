@@ -11,6 +11,8 @@ import (
 func (e *Engine) snapshotLocked() ActiveMotionState {
 	state := ActiveMotionState{
 		Running:          e.running,
+		Paused:           e.paused,
+		RunningMillis:    e.runningMillisLocked(),
 		Generation:       e.generation,
 		StreamID:         e.streamID,
 		PlanID:           e.plan.ID,
@@ -34,6 +36,18 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		state.LastResult = &result
 	}
 	return state
+}
+
+// runningMillisLocked is the stopwatch value: accumulated run time across
+// pauses, plus the live segment while running. Stop resets it to zero.
+func (e *Engine) runningMillisLocked() int64 {
+	if e.running {
+		return e.runMillisAccum + e.estimatedPlaybackMillisLocked(e.now())
+	}
+	if e.paused {
+		return e.runMillisAccum
+	}
+	return 0
 }
 
 func (e *Engine) traceStateLocked(reason string, annotation string) {

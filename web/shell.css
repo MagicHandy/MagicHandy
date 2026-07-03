@@ -1,5 +1,5 @@
-﻿/* shell.css â€” routed views, control-bar navigation, quick-settings popover,
-   motion strip, and settings layout. Complements app.css. */
+/* shell.css — app shell: chat + sidebar layout, the settings window, and the
+   profile button. Complements app.css. */
 
 .visually-hidden {
   position: absolute;
@@ -13,105 +13,196 @@
   white-space: nowrap;
 }
 
-/* ---- Views: one region at a time, flat routing ---- */
+/* ---- Layout: chat main column + always-visible control sidebar ---- */
 .app-shell {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 320px);
+  gap: var(--gap);
+  align-items: start;
   padding: clamp(16px, 3vw, 28px);
-  max-width: 1020px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
-.view:focus,
-.view h1:focus {
+.view-control:focus,
+.view-control h1:focus {
   outline: none;
 }
 
-/* ---- Control-bar navigation ---- */
-.bar-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.bar-nav-button {
-  padding: 8px 14px;
-  font-size: 0.85rem;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-}
-.bar-nav-button[aria-current="page"],
-.bar-nav-button[aria-expanded="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
+/* Chat owns the main column's height: the log grows with the viewport
+   instead of leaving dead space under the panel. */
+.chat-panel .chat-log {
+  max-height: none;
+  height: clamp(320px, calc(100vh - 350px), 960px);
 }
 
-/* ---- Quick settings popover: dedicated top layer, measured position ---- */
-.quick-popover {
-  position: fixed;
-  z-index: 40;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  /* Not sticky: a sticky sidebar forms a stacking context that would trap
+     the Stop button's z-index under the settings backdrop. The page itself
+     barely scrolls (the chat log scrolls internally), so nothing is lost. */
 }
-.quick-popover-head {
+
+.side-panel {
+  padding: 16px;
+}
+.side-title {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+.side-group-title {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.side-group-hint {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.side-divider {
+  height: 1px;
+  margin: 14px -16px;
+  background: var(--line);
+}
+.test-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.control-actions {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.pause-resume {
+  min-width: 92px;
+}
+.control-actions .run-readout {
+  margin: 0;
+  font-size: 0.82rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.side-panel .motion-run {
+  display: flex;
+  gap: 10px;
   margin-bottom: 12px;
 }
-.quick-popover-head h2 {
-  margin: 0;
-  font-size: 1rem;
+.side-panel .start-button {
+  flex: 1 1 auto;
 }
-.quick-popover-head .hint {
-  color: var(--muted);
-  font-size: 0.75rem;
+.side-panel .field {
+  margin-bottom: 12px;
 }
-.quick-popover-close {
-  margin-left: auto;
-  padding: 6px 10px;
-  font-size: 0.8rem;
+.side-panel .field:last-of-type {
+  margin-bottom: 0;
 }
-.quick-popover .quick-controls {
+.side-quick {
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
 }
+.side-quick .field {
+  margin-bottom: 12px;
+}
+.side-quick .toggle-line {
+  margin: 2px 0 6px;
+}
+.stop-everything {
+  width: 100%;
+  justify-content: center;
+  /* Stays above the settings backdrop (z 30): the safety control is never
+     dimmed or occluded by the settings window. */
+  position: relative;
+  z-index: 35;
+}
 
-/* ---- Motion strip: compact manual control between chat log and composer ---- */
-.motion-strip {
+/* ---- Stopwatch pill: monospace digits, green while running ---- */
+.timer-pill {
+  font-variant-numeric: tabular-nums;
+}
+.timer-glyph {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+/* ---- Profile button: opens the settings window ---- */
+.profile-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.profile-button:hover,
+.profile-button[aria-expanded="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(91, 157, 217, 0.35);
+}
+.profile-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.motion-strip .start-button {
-  padding: 10px 20px;
-}
-.strip-field {
-  min-width: 130px;
-}
-.strip-slider {
-  flex: 1 1 180px;
-}
-.motion-strip .run-readout {
-  flex: 0 1 auto;
-  padding-bottom: 8px;
-  min-width: 110px;
-  text-align: right;
-  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent), var(--steel-deep));
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+  user-select: none;
 }
 
-/* ---- Settings view ---- */
+/* ---- Settings window: one layer over the control view ----
+   The backdrop sits below the persistent bar (bar z-index wins), so status,
+   the visualizer, and Stop stay visible and clickable while settings is open.
+   Chat remains visible dimmed behind the window. */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(8, 9, 11, 0.62);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 96px 16px 24px;
+}
+.control-bar {
+  z-index: 50;
+}
+
+.settings-window {
+  width: min(760px, 100%);
+  max-height: calc(100% - 8px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: clamp(16px, 2.4vw, 24px);
+}
+
 .settings-head {
   display: flex;
   align-items: center;
@@ -120,12 +211,13 @@
 }
 .settings-head h1 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.25rem;
 }
-.settings-back {
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
+.settings-head h1:focus {
+  outline: none;
+}
+.settings-close {
+  margin-left: auto;
   padding: 8px 14px;
   font-size: 0.85rem;
 }
@@ -164,7 +256,7 @@
   font-size: 1.05rem;
 }
 
-/* ---- Prompts & memory (standalone areas inside the settings view) ---- */
+/* ---- Prompts & memory (standalone areas inside the settings window) ---- */
 .hint-inline {
   color: var(--muted);
   font-size: 0.72rem;
@@ -271,17 +363,39 @@
 }
 
 /* ---- Responsive ---- */
-@media (max-width: 700px) {
-  .motion-strip .run-readout {
-    flex-basis: 100%;
-    text-align: left;
-    padding-bottom: 0;
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
   }
+  /* Stop lives in the sidebar now, so on one column the sidebar goes first:
+     controls stay reachable without scrolling past the chat. */
+  .sidebar {
+    position: static;
+    order: -1;
+  }
+  /* The tall single panel would push Stop below the fold, so on small
+     screens it pins to the bottom of the viewport instead — always visible,
+     above the settings backdrop, below the status bar. */
+  .stop-everything {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    z-index: 45;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(229, 72, 77, 0.35);
+  }
+  body {
+    padding-bottom: 78px;
+  }
+}
+
+@media (max-width: 700px) {
   .settings-nav {
     overflow-x: auto;
   }
-  .bar-nav {
-    order: 4;
+  .settings-overlay {
+    padding: 88px 8px 12px;
   }
 
   /* Compact the persistent bar so it does not eat the mobile viewport:
@@ -301,9 +415,5 @@
   }
   .visualizer {
     padding: 4px 10px;
-  }
-  .bar-nav-button {
-    padding: 7px 11px;
-    font-size: 0.8rem;
   }
 }

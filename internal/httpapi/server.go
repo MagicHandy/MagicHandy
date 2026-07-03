@@ -165,6 +165,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/motion/start", s.handleMotionStart)
 	mux.HandleFunc("POST /api/motion/target", s.handleMotionTarget)
 	mux.HandleFunc("POST /api/motion/quick", s.handleMotionQuick)
+	mux.HandleFunc("POST /api/motion/pause", s.handleMotionPause)
+	mux.HandleFunc("POST /api/motion/resume", s.handleMotionResume)
 	mux.HandleFunc("POST /api/motion/stop", s.handleMotionStop)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)

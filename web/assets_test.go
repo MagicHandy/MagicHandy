@@ -24,15 +24,19 @@ func TestEmbeddedShellUIHooksExist(t *testing.T) {
 		t.Fatalf("read shell-ui.js: %v", err)
 	}
 
-	// Routed views and the two navigation affordances in the persistent bar.
+	// Status-only bar with the profile entry point, the control sidebar, and
+	// the settings window layered over the control view.
 	for _, fragment := range []string{
 		`id="view-control"`,
-		`id="view-settings"`,
-		`id="quick-settings-button"`,
-		`id="quick-popover"`,
+		`class="sidebar"`,
+		`id="profile-button"`,
+		`id="settings-overlay"`,
+		`id="settings-window"`,
+		`id="settings-close"`,
 		`href="#/settings/device"`,
 		`data-settings-section="device"`,
 		`data-settings-section="model"`,
+		`data-settings-section="prompts"`,
 		`data-settings-section="diagnostics"`,
 		`aria-haspopup="dialog"`,
 	} {
@@ -40,12 +44,10 @@ func TestEmbeddedShellUIHooksExist(t *testing.T) {
 			t.Fatalf("index.html missing %q", fragment)
 		}
 	}
-	// The popover positions from measured geometry (never 100vw/100vh), traps
-	// focus, and consumes Escape only while open so Esc-stops-motion survives.
+	// The window traps focus while open and consumes Escape only while open,
+	// so Esc-stops-motion survives; overlay sizing never uses viewport units.
 	for _, fragment := range []string{
-		`getBoundingClientRect`,
-		`document.documentElement.clientWidth`,
-		`trapQuickFocus`,
+		`trapFocus`,
 		`stopImmediatePropagation`,
 		`hashchange`,
 	} {
@@ -294,12 +296,19 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 	for _, fragment := range []string{
 		`id="stop-button"`,
 		`id="motion-start"`,
+		`id="motion-pause-resume"`,
+		`id="motion-timer"`,
 		`id="quick-speed-min"`,
 		`id="quick-speed-max"`,
+		`class="test-badge"`,
 	} {
 		if !strings.Contains(string(index), fragment) {
 			t.Fatalf("index.html missing %q", fragment)
 		}
+	}
+	// Stop is a sidebar control now; the bar stays status-only.
+	if strings.Contains(barSection(string(index)), `id="stop-button"`) {
+		t.Fatal("index.html control bar must not contain the stop button")
 	}
 	if !strings.Contains(string(css), `[hidden]`) {
 		t.Fatal("app.css must preserve hidden elements")
@@ -312,6 +321,9 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		`/api/motion/events?client_id=`,
+		`/api/motion/pause`,
+		`/api/motion/resume`,
+		`formatClock`,
 		`new EventSource`,
 		`X-MagicHandy-Client-ID`,
 		`magichandy:controller-state`,
@@ -320,4 +332,14 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 			t.Fatalf("motion-ui.js missing %q", fragment)
 		}
 	}
+}
+
+// barSection returns the <header> control-bar markup for containment checks.
+func barSection(index string) string {
+	start := strings.Index(index, "<header")
+	end := strings.Index(index, "</header>")
+	if start == -1 || end == -1 {
+		return ""
+	}
+	return index[start:end]
 }
