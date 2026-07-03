@@ -109,9 +109,18 @@
           <h2 class="side-title" id="controls-title">Controls</h2>
 
           <div class="control-actions" role="group" aria-label="Session controls">
+            <button class="primary-button mode-freestyle" id="mode-freestyle" type="button">Start Freestyle</button>
             <button class="secondary-button pause-resume" id="motion-pause-resume" type="button" disabled>Pause</button>
-            <span class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</span>
           </div>
+          <p class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</p>
+          <label class="toggle-line" for="mode-chat">
+            <span class="toggle-switch">
+              <input id="mode-chat" type="checkbox" role="switch">
+              <span class="toggle-track" aria-hidden="true"></span>
+            </span>
+            <span>Chat keeps motion going
+              <span class="hint-inline">restarts after connection recovery only</span></span>
+          </label>
 
           <div class="side-divider" role="separator" aria-hidden="true"></div>
 
@@ -140,6 +149,14 @@
                 <span class="toggle-track" aria-hidden="true"></span>
               </span>
               <span>Reverse direction</span>
+            </label>
+            <label class="field">
+              <span>Style <span class="hint-inline">biases Freestyle pacing</span></span>
+              <select id="quick-style">
+                <option value="gentle">Gentle</option>
+                <option value="balanced">Balanced</option>
+                <option value="intense">Intense</option>
+              </select>
             </label>
             <p class="quick-status" id="quick-status" role="status" aria-live="polite"></p>
           </fieldset>

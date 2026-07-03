@@ -163,11 +163,12 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		SpeedMinPercent  *int  `json:"speed_min_percent,omitempty"`
-		SpeedMaxPercent  *int  `json:"speed_max_percent,omitempty"`
-		StrokeMinPercent *int  `json:"stroke_min_percent,omitempty"`
-		StrokeMaxPercent *int  `json:"stroke_max_percent,omitempty"`
-		ReverseDirection *bool `json:"reverse_direction,omitempty"`
+		SpeedMinPercent  *int    `json:"speed_min_percent,omitempty"`
+		SpeedMaxPercent  *int    `json:"speed_max_percent,omitempty"`
+		StrokeMinPercent *int    `json:"stroke_min_percent,omitempty"`
+		StrokeMaxPercent *int    `json:"stroke_max_percent,omitempty"`
+		ReverseDirection *bool   `json:"reverse_direction,omitempty"`
+		Style            *string `json:"style,omitempty"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -191,6 +192,9 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 	if body.ReverseDirection != nil {
 		motionSettings.ReverseDirection = *body.ReverseDirection
 	}
+	if body.Style != nil {
+		motionSettings.Style = *body.Style
+	}
 	current.Motion = motionSettings
 
 	saved, err := s.store.Save(current)
@@ -208,6 +212,11 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
+	// An explicit user stop always ends autonomous modes first, so no
+	// keepalive or planner can restart motion the user just stopped.
+	if s.modes != nil {
+		s.modes.NotifyUserStop()
+	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
@@ -273,6 +282,10 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) {
 	if previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner {
+		// Owner switches stop first — including any autonomous mode.
+		if s.modes != nil {
+			s.modes.Stop("dispatch_owner_changed")
+		}
 		s.stopAndClearMotionEngine(ctx, "dispatch_owner_changed")
 		return
 	}
@@ -298,6 +311,9 @@ func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
 // device after shutdown (goroutine-lifecycle safety gate).
 func (s *Server) Close() {
 	s.closeLLM()
+	if s.modes != nil {
+		s.modes.Shutdown()
+	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
 }
 

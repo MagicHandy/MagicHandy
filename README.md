@@ -32,6 +32,12 @@ Implemented:
   never be edited out of a prompt
 - explicit settings factory reset (`POST /api/settings/reset`) behind a
   double-confirm control in Settings > Diagnostics
+- autonomous modes as motion-engine clients (`/api/modes`): Freestyle drives
+  bounded arrangement segments through deterministic style scoring (gentle /
+  balanced / intense, a quick setting), with every planner decision — seed,
+  score table, segment — recorded as trace rows; chat keepalive restarts the
+  last chat target only after transport recovery, never after a user stop or
+  pause
 - JSON structured logging
 - graceful shutdown
 - versioned JSON settings with defaults, migration hooks, redacted API views,
@@ -46,7 +52,6 @@ Implemented:
 Not implemented yet (see the status table in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)):
 
-- autonomous modes (Phase 11)
 - voice workers and providers (Phases 12-13)
 - pattern library, authoring, and migration (Phases 14-15)
 - release packaging (Phase 16)

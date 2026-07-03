@@ -17,6 +17,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -53,6 +54,7 @@ type Server struct {
 	llm             llmRuntime
 	controller      controllerRuntime
 	personalization personalizationRuntime
+	modes           *modes.Manager
 	started         time.Time
 	version         VersionInfo
 	handler         http.Handler
@@ -102,6 +104,12 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		started:         time.Now().UTC(),
 		version:         version,
 	}
+
+	manager, err := server.newModeManager()
+	if err != nil {
+		return nil, err
+	}
+	server.modes = manager
 
 	mux := http.NewServeMux()
 	server.routes(mux)
@@ -168,6 +176,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/motion/pause", s.handleMotionPause)
 	mux.HandleFunc("POST /api/motion/resume", s.handleMotionResume)
 	mux.HandleFunc("POST /api/motion/stop", s.handleMotionStop)
+	mux.HandleFunc("GET /api/modes", s.handleModesGet)
+	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
+	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
@@ -234,6 +245,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"llm":                 s.llmState(r.Context()),
 		"controller":          s.controllerState(r),
 		"memory":              s.memoryState(),
+		"modes":               s.modes.Status(),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),

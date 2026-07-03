@@ -67,9 +67,13 @@ shape the old app proved out — not in the top bar (top-bar controls read as
 awkward) and not between the chat log and composer. It is organized by use,
 top to bottom:
 
-1. **Controls** — Pause/Resume (phase-preserving, disabled when idle) with the
-   live run readout.
-2. **Quick settings** — speed/stroke/reverse, immediate-apply.
+1. **Controls** — Freestyle start/stop, Pause/Resume (phase-preserving,
+   disabled when idle), the live run readout, and the chat-keepalive toggle
+   (restarts after transport recovery only — never after a user stop or
+   pause).
+2. **Quick settings** — speed/stroke/reverse plus the motion style
+   (gentle/balanced/intense) that biases Freestyle's deterministic scoring;
+   immediate-apply.
 3. **Manual motion** — Start/Stop test, pattern, speed, **explicitly badged
    "testing"** with a hint that it drives the device directly to test the
    connection; normal motion comes from chat (and modes in Phase 11).
@@ -77,7 +81,6 @@ top to bottom:
 
 The panel is never collapsible. On narrow viewports it stacks **above** the
 chat, and Stop detaches into a fixed bottom bar so it is always on screen.
-Modes join this panel in Phase 11.
 
 ### Mobile
 
