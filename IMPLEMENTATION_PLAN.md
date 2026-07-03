@@ -31,7 +31,7 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
 | 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
-| 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | this PR |
+| 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
 | 12-17 | Voice, patterns, migration, packaging, parity | Not started | — |
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
