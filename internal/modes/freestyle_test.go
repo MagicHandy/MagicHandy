@@ -21,17 +21,24 @@ func TestPlannerIsDeterministicForSeed(t *testing.T) {
 	for index := range 12 {
 		a, _ := first.NextSegment(settings)
 		b, _ := second.NextSegment(settings)
-		if a != b && (a.AreaFocus == nil) == (b.AreaFocus == nil) {
-			// Segments with focus pointers compare by value below.
-		}
 		if a.PatternID != b.PatternID || a.SpeedPercent != b.SpeedPercent ||
 			a.DurationMillis != b.DurationMillis || a.DriftToSpeedPercent != b.DriftToSpeedPercent {
 			t.Fatalf("segment %d diverged for identical seeds: %+v vs %+v", index, a, b)
+		}
+		if !sameAreaFocus(a.AreaFocus, b.AreaFocus) {
+			t.Fatalf("segment %d area focus diverged for identical seeds: %+v vs %+v", index, a.AreaFocus, b.AreaFocus)
 		}
 	}
 	if first.Seed() != 42 {
 		t.Fatalf("seed = %d, want 42", first.Seed())
 	}
+}
+
+func sameAreaFocus(a *motion.AreaFocus, b *motion.AreaFocus) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.MinPercent == b.MinPercent && a.MaxPercent == b.MaxPercent
 }
 
 func TestPlannerRecordsScoresAndAvoidsLongRepeats(t *testing.T) {

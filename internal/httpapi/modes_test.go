@@ -79,26 +79,15 @@ func TestFreestyleDrivesRealEngineAcrossSegmentsWithoutStall(t *testing.T) {
 		t.Fatal("engine not running after segment boundaries — freestyle stalled")
 	}
 
-	commands := fake.Commands()
-	plays, adds, stops := 0, 0, 0
-	for _, command := range commands {
-		switch command.Kind {
-		case transport.CommandKindHSPPlay:
-			plays++
-		case transport.CommandKindHSPAdd:
-			adds++
-		case transport.CommandKindStop:
-			stops++
-		}
+	counts := countModeCommands(fake.Commands())
+	if counts.plays != 1 {
+		t.Fatalf("HSP play commands = %d, want exactly 1 (boundaries must not restart the stream)", counts.plays)
 	}
-	if plays != 1 {
-		t.Fatalf("HSP play commands = %d, want exactly 1 (boundaries must not restart the stream)", plays)
+	if counts.stops != 0 {
+		t.Fatalf("stop commands during freestyle = %d, want 0", counts.stops)
 	}
-	if stops != 0 {
-		t.Fatalf("stop commands during freestyle = %d, want 0", stops)
-	}
-	if adds < 4 {
-		t.Fatalf("HSP add chunks = %d, want continuous dispatch", adds)
+	if counts.adds < 4 {
+		t.Fatalf("HSP add chunks = %d, want continuous dispatch", counts.adds)
 	}
 
 	// Mode stop ends planning and stops motion.
@@ -112,6 +101,27 @@ func TestFreestyleDrivesRealEngineAcrossSegmentsWithoutStall(t *testing.T) {
 	if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
 		t.Fatal("motion still running after mode stop")
 	}
+}
+
+type modeCommandCounts struct {
+	plays int
+	adds  int
+	stops int
+}
+
+func countModeCommands(commands []transport.Command) modeCommandCounts {
+	var counts modeCommandCounts
+	for _, command := range commands {
+		switch command.Kind {
+		case transport.CommandKindHSPPlay:
+			counts.plays++
+		case transport.CommandKindHSPAdd:
+			counts.adds++
+		case transport.CommandKindStop:
+			counts.stops++
+		}
+	}
+	return counts
 }
 
 func segmentTraceCount(server *Server) int {
