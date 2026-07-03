@@ -38,6 +38,11 @@
         <span id="controller-status">Controller pending</span>
       </div>
 
+      <div class="status-pill timer-pill" title="Motion run time">
+        <span class="timer-glyph" aria-hidden="true">&#9201;</span>
+        <span id="motion-timer">00:00</span>
+      </div>
+
       <div class="visualizer" role="img" aria-label="Live motion state">
         <span class="visualizer-track" aria-hidden="true">
           <span class="visualizer-range"></span>
@@ -48,11 +53,6 @@
           <span id="motion-substate" class="motion-substate"></span>
         </span>
       </div>
-
-      <button class="stop-button" id="stop-button" type="button" aria-label="Emergency stop all motion">
-        <span>Stop</span>
-        <span class="shortcut-hint" aria-hidden="true">Esc</span>
-      </button>
 
       <button class="profile-button" id="profile-button" type="button"
               aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-window"
@@ -100,33 +100,22 @@
         </section>
       </section>
 
-      <!-- Sidebar: the always-visible control rail (STGPT's proven shape).
-           Nothing safety-critical lives here; Stop stays in the bar. -->
-      <aside class="sidebar" aria-label="Motion controls">
-        <section class="panel side-card" aria-labelledby="motion-side-title" data-requires-backend>
-          <h2 class="side-title" id="motion-side-title">Motion</h2>
-          <div class="motion-run" role="group" aria-label="Start and stop motion">
-            <button class="primary-button start-button" id="motion-start" type="button">Start motion</button>
-            <button class="secondary-button" id="motion-stop" type="button" disabled data-allow-backend-offline>Stop</button>
-          </div>
-          <p class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</p>
-          <label class="field">
-            <span>Pattern</span>
-            <select id="motion-pattern">
-              <option value="stroke">Stroke</option>
-              <option value="pulse">Pulse</option>
-              <option value="tease">Tease</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Speed <output id="motion-speed-value">50%</output></span>
-            <input id="motion-speed" type="range" min="1" max="100" value="50">
-          </label>
-        </section>
+      <!-- Sidebar: one control panel (STGPT's proven shape). Ordered by use:
+           session controls, live quick settings, the labeled manual test
+           group, then the unconditional Stop at the bottom. On mobile the
+           whole panel stacks above the chat so Stop stays in reach. -->
+      <aside class="sidebar" aria-label="Controls">
+        <section class="panel side-panel" aria-labelledby="controls-title" data-requires-backend>
+          <h2 class="side-title" id="controls-title">Controls</h2>
 
-        <section class="panel side-card" aria-labelledby="quick-side-title" data-requires-backend>
-          <h2 class="side-title" id="quick-side-title">Quick settings
-            <span class="hint-inline">applies immediately</span></h2>
+          <div class="control-actions" role="group" aria-label="Session controls">
+            <button class="secondary-button pause-resume" id="motion-pause-resume" type="button" disabled>Pause</button>
+            <span class="run-readout" id="motion-run-readout" role="status" aria-live="polite">Idle</span>
+          </div>
+
+          <div class="side-divider" role="separator" aria-hidden="true"></div>
+
+          <h3 class="side-group-title">Quick settings <span class="hint-inline">applies immediately</span></h3>
           <fieldset class="quick-controls side-quick">
             <legend class="visually-hidden">Speed, stroke, and direction</legend>
             <label class="field">
@@ -154,6 +143,36 @@
             </label>
             <p class="quick-status" id="quick-status" role="status" aria-live="polite"></p>
           </fieldset>
+
+          <div class="side-divider" role="separator" aria-hidden="true"></div>
+
+          <h3 class="side-group-title">Manual motion <span class="test-badge">testing</span></h3>
+          <p class="side-group-hint">Drives the device directly to test the connection.
+            Normal motion comes from chat.</p>
+          <div class="motion-run" role="group" aria-label="Start and stop test motion">
+            <button class="primary-button start-button" id="motion-start" type="button">Start test</button>
+            <button class="secondary-button" id="motion-stop" type="button" disabled data-allow-backend-offline>Stop test</button>
+          </div>
+          <label class="field">
+            <span>Pattern</span>
+            <select id="motion-pattern">
+              <option value="stroke">Stroke</option>
+              <option value="pulse">Pulse</option>
+              <option value="tease">Tease</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Speed <output id="motion-speed-value">50%</output></span>
+            <input id="motion-speed" type="range" min="1" max="100" value="50">
+          </label>
+
+          <div class="side-divider" role="separator" aria-hidden="true"></div>
+
+          <button class="stop-button stop-everything" id="stop-button" type="button"
+                  aria-label="Emergency stop all motion" data-allow-backend-offline data-allow-readonly>
+            <span>Stop everything</span>
+            <span class="shortcut-hint" aria-hidden="true">Esc</span>
+          </button>
         </section>
       </aside>
     </main>

@@ -224,8 +224,14 @@ body {
 #motion-state[data-state="running"] {
   color: var(--ok);
 }
+#motion-state[data-state="paused"] {
+  color: var(--warn);
+}
 #motion-state[data-state="unavailable"] {
   color: var(--warn);
+}
+.visualizer[data-state="paused"] {
+  border-color: rgba(216, 182, 106, 0.45);
 }
 .motion-substate {
   font-size: 0.72rem;

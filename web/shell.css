@@ -40,37 +40,75 @@
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  position: sticky;
-  top: 76px;
+  /* Not sticky: a sticky sidebar forms a stacking context that would trap
+     the Stop button's z-index under the settings backdrop. The page itself
+     barely scrolls (the chat log scrolls internally), so nothing is lost. */
 }
 
-.side-card {
+.side-panel {
   padding: 16px;
 }
 .side-title {
   margin: 0 0 12px;
   font-size: 0.95rem;
+}
+.side-group-title {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
   display: flex;
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
 }
-.side-card .motion-run {
+.side-group-hint {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.side-divider {
+  height: 1px;
+  margin: 14px -16px;
+  background: var(--line);
+}
+.test-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.control-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pause-resume {
+  min-width: 92px;
+}
+.control-actions .run-readout {
+  margin: 0;
+  font-size: 0.82rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.side-panel .motion-run {
   display: flex;
   gap: 10px;
-  margin-bottom: 8px;
-}
-.side-card .start-button {
-  flex: 1 1 auto;
-}
-.side-card .run-readout {
-  margin: 0 0 12px;
-  font-size: 0.82rem;
-}
-.side-card .field {
   margin-bottom: 12px;
 }
-.side-card .field:last-child {
+.side-panel .start-button {
+  flex: 1 1 auto;
+}
+.side-panel .field {
+  margin-bottom: 12px;
+}
+.side-panel .field:last-of-type {
   margin-bottom: 0;
 }
 .side-quick {
@@ -84,6 +122,23 @@
 }
 .side-quick .toggle-line {
   margin: 2px 0 6px;
+}
+.stop-everything {
+  width: 100%;
+  justify-content: center;
+  /* Stays above the settings backdrop (z 30): the safety control is never
+     dimmed or occluded by the settings window. */
+  position: relative;
+  z-index: 35;
+}
+
+/* ---- Stopwatch pill: monospace digits, green while running ---- */
+.timer-pill {
+  font-variant-numeric: tabular-nums;
+}
+.timer-glyph {
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 /* ---- Profile button: opens the settings window ---- */
@@ -312,8 +367,26 @@
   .app-shell {
     grid-template-columns: 1fr;
   }
+  /* Stop lives in the sidebar now, so on one column the sidebar goes first:
+     controls stay reachable without scrolling past the chat. */
   .sidebar {
     position: static;
+    order: -1;
+  }
+  /* The tall single panel would push Stop below the fold, so on small
+     screens it pins to the bottom of the viewport instead — always visible,
+     above the settings backdrop, below the status bar. */
+  .stop-everything {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    z-index: 45;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(229, 72, 77, 0.35);
+  }
+  body {
+    padding-bottom: 78px;
   }
 }
 

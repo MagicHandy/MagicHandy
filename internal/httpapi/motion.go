@@ -217,6 +217,34 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	s.writeMotionResult(w, state, err)
 }
 
+// handleMotionPause freezes active motion (phase retained for resume). Unlike
+// Stop it is a control action, so read-only clients cannot trigger it.
+func (s *Server) handleMotionPause(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
+		return
+	}
+	state, err := engine.Pause(r.Context(), "ui_pause")
+	s.writeMotionResult(w, state, err)
+}
+
+func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
+		return
+	}
+	state, err := engine.Resume(r.Context(), "ui_resume")
+	s.writeMotionResult(w, state, err)
+}
+
 // writeMotionResult always returns the resolved engine state so the UI can
 // reconcile optimistic controls, and reports transport failures as 502 with the
 // state attached rather than a bare error.

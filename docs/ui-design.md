@@ -39,18 +39,16 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 
 ### Persistent control bar (all viewports, never hidden)
 
-A slim, always-on bar owns **status and safety only** — it is not a control
-strip:
+A slim, always-on bar owns **status only** — it is not a control strip:
 
 - connection/transport/controller status, live
+- the motion stopwatch (accumulated run time; freezes on pause, resets on stop)
 - the one device visualizer in compact form
-- the emergency Stop control
 - the clickable profile button that opens the settings window
 
-This bar is fixed to the viewport. It is never inside the sidebar, never inside a
-collapsible panel, and is not hidden when the keyboard opens. Stop and device
-state survive every UI state — including while the settings window is open,
-which layers below the bar.
+This bar is fixed to the viewport, never collapsible, and not hidden when the
+keyboard opens. Controls — including Stop — live in the sidebar panel; the
+bar carries the state the user glances at.
 
 ### Primary content
 
@@ -64,13 +62,22 @@ which layers below the bar.
 
 ### Sidebar (the control rail)
 
-Controls live in an always-visible sidebar next to the chat — the shape the
-old app proved out — not in the top bar (top-bar controls read as awkward) and
-not between the chat log and composer. Today it holds manual motion
-(Start/Stop, pattern, speed) and the immediate-apply quick settings; modes
-join it in Phase 11. Nothing safety-critical lives here: Stop, connection
-state, and the visualizer stay in the persistent bar. On narrow viewports the
-sidebar stacks below the chat rather than collapsing behind a toggle.
+Controls live in **one always-visible sidebar panel** next to the chat — the
+shape the old app proved out — not in the top bar (top-bar controls read as
+awkward) and not between the chat log and composer. It is organized by use,
+top to bottom:
+
+1. **Controls** — Pause/Resume (phase-preserving, disabled when idle) with the
+   live run readout.
+2. **Quick settings** — speed/stroke/reverse, immediate-apply.
+3. **Manual motion** — Start/Stop test, pattern, speed, **explicitly badged
+   "testing"** with a hint that it drives the device directly to test the
+   connection; normal motion comes from chat (and modes in Phase 11).
+4. **Stop everything** — full-width, red, at the bottom, with the Esc hint.
+
+The panel is never collapsible. On narrow viewports it stacks **above** the
+chat, and Stop detaches into a fixed bottom bar so it is always on screen.
+Modes join this panel in Phase 11.
 
 ### Mobile
 
@@ -81,16 +88,17 @@ Save still reachable.
 ### Implemented structure
 
 `#/` is the control view: chat fills the main column (the log grows with the
-viewport) and the sidebar rail holds Motion plus Quick settings.
-`#/settings/device|model|prompts|diagnostics` open the settings window on that
-section — deep-linkable, driven by the same hash router. The window is opened
-by the profile button, closed by its Close button, the backdrop, or Escape
-(Escape closes the window first and stops motion only when no overlay is
-open); focus is trapped inside while open and restored on close. Chat stays
-visible dimmed behind the window, and the bar — status, visualizer, Stop —
-stays above the backdrop and clickable. Nothing renders as a dashboard; new
-surfaces join the sidebar rail or the settings window, not as additional
-always-visible panels.
+viewport) and the single sidebar panel holds Controls (Pause/Resume + run
+readout), Quick settings, the testing-badged Manual motion group, and Stop
+everything. `#/settings/device|model|prompts|diagnostics` open the settings
+window on that section — deep-linkable, driven by the same hash router. The
+window is opened by the profile button, closed by its Close button, the
+backdrop, or Escape (Escape closes the window first and stops motion only
+when no overlay is open); focus is trapped inside while open and restored on
+close. Chat stays visible dimmed behind the window; the status bar stays
+above the backdrop, and Stop renders above it too. Nothing renders as a
+dashboard; new surfaces join the sidebar panel or the settings window, not as
+additional always-visible panels.
 
 ## The Device Visualizer
 
@@ -189,13 +197,24 @@ hoc per-widget colors) are not.
 
 ## Emergency Stop
 
-- Always rendered in the persistent bar; large touch target; high contrast.
-- Has a documented, visible global keyboard shortcut.
-- Backed by ADR 0002's stop contract: it cancels motion, stops planners, and
-  marks stopped even if the transport call fails. The UI shows "stopped"
-  immediately, then reconciles with engine state.
+- "Stop everything": full-width, red, at the bottom of the never-collapsible
+  sidebar panel (the old app's placement, minus its collapsibility flaw);
+  large touch target; high contrast.
+- Always on screen: it renders above the settings backdrop (never dimmed or
+  occluded by the settings window), and on small viewports it detaches into a
+  fixed bottom bar so scrolling cannot hide it.
+- Has a documented, visible global keyboard shortcut (Esc; with the settings
+  window open, the first Esc closes the window and the second stops).
+- Backed by ADR 0002's stop contract: it cancels motion, stops planners,
+  clears any paused state, and marks stopped even if the transport call
+  fails. The UI shows "stopped" immediately, then reconciles with engine
+  state.
 - Never disabled by a transient UI state. If the backend is unreachable, Stop
-  still attempts and the UI reports whether it succeeded.
+  still attempts and the UI reports whether it succeeded. Read-only clients
+  can always trigger it.
+- Pause is not Stop: Pause/Resume is a control action (read-only clients
+  cannot trigger it) that freezes phase for continuation; Stop is the safety
+  path and always resets everything, including the run clock.
 
 ## Connection And Single-Controller
 
@@ -258,9 +277,10 @@ Observed in StrokeGPT-ReVibed, then the design response here:
 - A single stale CSS rule once hid every settings Save button -> immediate-apply
   by default, minimal explicit-commit affordances, and a UI test asserting they
   exist.
-- Emergency Stop in a collapsible sidebar, and the motion strip hidden when the
-  mobile keyboard opened -> Stop and device state live in a persistent bar that is
-  never hidden.
+- Emergency Stop in a *collapsible* sidebar, and the motion strip hidden when
+  the mobile keyboard opened -> Stop lives in a never-collapsible sidebar
+  panel, renders above the settings backdrop, and pins to a fixed bottom bar
+  on small viewports; device state stays in the persistent bar.
 - Mixed checkbox / toggle / save-on-change idioms -> one consistent, predictable
   immediacy model.
 - Status scattered across many spans and occluded by the settings modal -> one
@@ -323,12 +343,21 @@ learned the hard way. They are scheduled (Phase 9B unless noted):
    deferred to Phase 12 (ADR 0003) — acceptable, but chat shipped in Phase 9,
    so the retrofit must not be forgotten.
 
+### Post-Phase-10 shell pass
+
+Row 5 (pause/resume) is closed early: the engine gained phase-preserving
+Pause/Resume (`/api/motion/pause`, `/api/motion/resume`) with a run clock
+(`running_ms`) that freezes on pause and resets on stop, surfaced as the
+Pause/Resume control in the sidebar panel and the stopwatch in the status
+bar. Chat-driven pause maps to the deterministic stop fast-path until Phase
+11 wires planners. Only row 9 (server-side chat continuity, Phase 12)
+remains.
+
 ### Phase 10 parity implementation
 
 Row 7 (reset to defaults) is closed: Settings > Diagnostics has an explicit
 double-confirm "Reset all settings" action backed by `POST /api/settings/reset`;
-memories and prompt sets are deliberately untouched by it. Rows 5
-(pause/resume, Phase 11) and 9 (server-side chat continuity, Phase 12) remain.
+memories and prompt sets are deliberately untouched by it.
 
 ### Phase 9B parity implementation
 

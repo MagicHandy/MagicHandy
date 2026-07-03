@@ -296,12 +296,19 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 	for _, fragment := range []string{
 		`id="stop-button"`,
 		`id="motion-start"`,
+		`id="motion-pause-resume"`,
+		`id="motion-timer"`,
 		`id="quick-speed-min"`,
 		`id="quick-speed-max"`,
+		`class="test-badge"`,
 	} {
 		if !strings.Contains(string(index), fragment) {
 			t.Fatalf("index.html missing %q", fragment)
 		}
+	}
+	// Stop is a sidebar control now; the bar stays status-only.
+	if strings.Contains(barSection(string(index)), `id="stop-button"`) {
+		t.Fatal("index.html control bar must not contain the stop button")
 	}
 	if !strings.Contains(string(css), `[hidden]`) {
 		t.Fatal("app.css must preserve hidden elements")
@@ -314,6 +321,9 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		`/api/motion/events?client_id=`,
+		`/api/motion/pause`,
+		`/api/motion/resume`,
+		`formatClock`,
 		`new EventSource`,
 		`X-MagicHandy-Client-ID`,
 		`magichandy:controller-state`,
@@ -322,4 +332,14 @@ func TestEmbeddedMotionUIHooksExist(t *testing.T) {
 			t.Fatalf("motion-ui.js missing %q", fragment)
 		}
 	}
+}
+
+// barSection returns the <header> control-bar markup for containment checks.
+func barSection(index string) string {
+	start := strings.Index(index, "<header")
+	end := strings.Index(index, "</header>")
+	if start == -1 || end == -1 {
+		return ""
+	}
+	return index[start:end]
 }

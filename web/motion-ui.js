@@ -16,6 +16,8 @@ const ui = {
   stop: el("stop-button"),
   start: el("motion-start"),
   stopMotion: el("motion-stop"),
+  pauseResume: el("motion-pause-resume"),
+  timer: el("motion-timer"),
   runReadout: el("motion-run-readout"),
   pattern: el("motion-pattern"),
   speed: el("motion-speed"),
@@ -46,11 +48,16 @@ const ui = {
 };
 
 let running = false;
+let paused = false;
 let pollTimer = 0;
 let quickTimer = 0;
 let backendAvailable = true;
 let controllerReadOnly = false;
 let motionEvents = null;
+// Stopwatch state: the backend's running_ms is authoritative; the local clock
+// only interpolates between updates so the display ticks smoothly.
+let clockBaseMs = 0;
+let clockBaseAt = 0;
 const CONTROLLER_CLIENT_ID = appClientID();
 
 async function getJSON(path) {
@@ -88,13 +95,16 @@ function renderMotion(motion) {
   const available = Boolean(motion?.available);
   const engine = motion?.engine || {};
   running = available && Boolean(engine.running);
+  paused = available && !running && Boolean(engine.paused);
 
-  ui.start.disabled = controllerReadOnly || !backendAvailable || !available || running;
-  ui.stopMotion.disabled = !running;
+  ui.start.disabled = controllerReadOnly || !backendAvailable || !available || running || paused;
+  ui.stopMotion.disabled = !(running || paused);
+  renderPauseResume(available);
   setQuickControlsDisabled(controllerReadOnly || !backendAvailable || !available);
+  syncClock(engine.running_ms);
 
-  const stateName = !available ? "unavailable" : running ? "running" : "idle";
-  ui.state.textContent = available ? (running ? "Running" : "Idle") : "Unavailable";
+  const stateName = !available ? "unavailable" : running ? "running" : paused ? "paused" : "idle";
+  ui.state.textContent = available ? (running ? "Running" : paused ? "Paused" : "Idle") : "Unavailable";
   ui.state.dataset.state = stateName;
   if (ui.visualizer) {
     ui.visualizer.dataset.state = stateName;
@@ -120,11 +130,57 @@ function renderMotion(motion) {
   if (running) {
     ui.runReadout.textContent = `${titleCase(target.pattern_id || "stroke")} · speed ${target.speed_percent ?? "—"}%`;
     ui.substate.textContent = engine.last_error ? "recovering estimate" : "estimate";
+  } else if (paused) {
+    ui.runReadout.textContent = `Paused · ${titleCase(target.pattern_id || "stroke")}`;
+    ui.substate.textContent = "paused";
   } else {
     ui.runReadout.textContent = available ? "Idle" : "Motion unavailable";
     ui.substate.textContent = sample ? "estimate" : "";
   }
 }
+
+function renderPauseResume(available) {
+  if (!ui.pauseResume) {
+    return;
+  }
+  ui.pauseResume.disabled =
+    controllerReadOnly || !backendAvailable || !available || (!running && !paused);
+  ui.pauseResume.textContent = paused ? "Resume" : "Pause";
+}
+
+// --- Stopwatch ------------------------------------------------------------------
+
+function syncClock(runningMillis) {
+  clockBaseMs = Number.isFinite(runningMillis) ? runningMillis : 0;
+  clockBaseAt = performance.now();
+  renderClock();
+}
+
+function renderClock() {
+  if (!ui.timer) {
+    return;
+  }
+  let elapsed = clockBaseMs;
+  if (running) {
+    elapsed += performance.now() - clockBaseAt;
+  }
+  ui.timer.textContent = formatClock(elapsed);
+  ui.timer.parentElement?.setAttribute("data-state", running ? "ok" : paused ? "pending" : "");
+}
+
+function formatClock(milliseconds) {
+  const total = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value) => String(value).padStart(2, "0");
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
+window.setInterval(renderClock, 500);
 
 function clampPercent(value, fallback) {
   const number = Number(value);
@@ -139,7 +195,9 @@ function renderDiagnostics(state) {
   ui.diag.engineState.textContent = state?.motion?.available
     ? engine.running
       ? "Running"
-      : "Idle"
+      : engine.paused
+        ? "Paused"
+        : "Idle"
     : "Unavailable";
   const sample = engine.last_sample;
   ui.diag.enginePosition.textContent = sample ? `${sample.position_percent}% estimate` : "—";
@@ -193,6 +251,17 @@ async function startMotion() {
 async function stopMotion() {
   try {
     const motion = await postJSON("/api/motion/stop", {});
+    renderMotion(motion);
+    schedulePoll();
+  } catch (error) {
+    setQuickStatus(error.message);
+  }
+}
+
+async function pauseResumeMotion() {
+  const path = paused ? "/api/motion/resume" : "/api/motion/pause";
+  try {
+    const motion = await postJSON(path, {});
     renderMotion(motion);
     schedulePoll();
   } catch (error) {
@@ -361,6 +430,7 @@ async function exportTrace() {
 ui.start.addEventListener("click", startMotion);
 ui.stopMotion.addEventListener("click", stopMotion);
 ui.stop.addEventListener("click", stopMotion);
+ui.pauseResume?.addEventListener("click", pauseResumeMotion);
 ui.speed.addEventListener("input", () => {
   ui.speed.dataset.touched = "true";
   ui.speedValue.textContent = `${ui.speed.value}%`;
@@ -383,6 +453,9 @@ window.addEventListener("magichandy:backend-availability", (event) => {
   backendAvailable = Boolean(event.detail?.available);
   if (!backendAvailable) {
     ui.start.disabled = true;
+    if (ui.pauseResume) {
+      ui.pauseResume.disabled = true;
+    }
     setQuickControlsDisabled(true);
     ui.state.textContent = "Unavailable";
     ui.state.dataset.state = "unavailable";

@@ -75,9 +75,9 @@ line-budget checks.)
 (Also closed since: Browser Bluetooth full app-path validation — PR #22;
 editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 
-1. **Open parity rows**: pause/resume (Phase 11) and server-side chat
-   continuity (Phase 12). See `docs/ui-design.md`, "Functional Parity
-   Baseline".
+1. **Open parity rows**: only server-side chat continuity (Phase 12) remains;
+   pause/resume shipped early in the post-Phase-10 shell pass. See
+   `docs/ui-design.md`, "Functional Parity Baseline".
 2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
    one-hour soak ran on Cloud REST only (scorecard watch list).
 
@@ -316,10 +316,11 @@ Implement:
   failure
 - mode start/stop API and UI controls; Stop and settings changes interrupt and
   apply during modes
-- engine-level **pause/resume** (parity baseline item): pause holds without
-  tearing down the plan, resume preserves phase, and both are exposed next to
-  Stop and available to chat; Stop stays the safety path and is never replaced
-  by pause
+- engine-level **pause/resume** shipped early (post-Phase-10 shell pass):
+  Phase 11 planners must stay interruptible by it — a paused mode resumes its
+  plan with preserved phase, and chat/planner keepalives never restart motion
+  that the user paused; Stop stays the safety path and is never replaced by
+  pause
 
 Rules:
 
