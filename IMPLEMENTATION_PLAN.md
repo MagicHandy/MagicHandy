@@ -31,7 +31,13 @@ Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
 | 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
-| 11-17 | Modes, voice, patterns, migration, packaging, parity | Not started | — |
+| 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
+| 12-17 | Voice, patterns, migration, packaging, parity | Not started | — |
+
+Phase 11 note: Freestyle boundary behavior is proven on the real engine over
+the fake transport (one continuous stream across many segment retargets, one
+HSP play, zero stops). Real-hardware freestyle validation rides the next
+manual device session, alongside the Bluetooth-endurance watch item.
 
 Phase 9B closed with PR #22: the visible Edge Web Bluetooth flow selected the
 real device, checked the connection, started motion at 28%, and stopped it via

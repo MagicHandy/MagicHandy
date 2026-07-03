@@ -17,6 +17,9 @@ const ui = {
   start: el("motion-start"),
   stopMotion: el("motion-stop"),
   pauseResume: el("motion-pause-resume"),
+  modeFreestyle: el("mode-freestyle"),
+  modeChat: el("mode-chat"),
+  quickStyle: el("quick-style"),
   timer: el("motion-timer"),
   runReadout: el("motion-run-readout"),
   pattern: el("motion-pattern"),
@@ -49,6 +52,7 @@ const ui = {
 
 let running = false;
 let paused = false;
+let modesStatus = { active: false, mode: "" };
 let pollTimer = 0;
 let quickTimer = 0;
 let backendAvailable = true;
@@ -128,7 +132,10 @@ function renderMotion(motion) {
 
   const target = engine.target || {};
   if (running) {
-    ui.runReadout.textContent = `${titleCase(target.pattern_id || "stroke")} · speed ${target.speed_percent ?? "—"}%`;
+    const modePrefix = modesStatus.active && modesStatus.mode === "freestyle"
+      ? `Freestyle #${modesStatus.segment_index || 1} · `
+      : "";
+    ui.runReadout.textContent = `${modePrefix}${titleCase(target.pattern_id || "stroke")} · speed ${target.speed_percent ?? "—"}%`;
     ui.substate.textContent = engine.last_error ? "recovering estimate" : "estimate";
   } else if (paused) {
     ui.runReadout.textContent = `Paused · ${titleCase(target.pattern_id || "stroke")}`;
@@ -215,6 +222,7 @@ function renderDiagnostics(state) {
 async function poll() {
   try {
     const [motion, state] = await Promise.all([getJSON("/api/motion/state"), getJSON("/api/state")]);
+    renderModes(state.modes);
     renderMotion(motion);
     renderDiagnostics(state);
   } catch {
@@ -264,6 +272,61 @@ async function pauseResumeMotion() {
     const motion = await postJSON(path, {});
     renderMotion(motion);
     schedulePoll();
+  } catch (error) {
+    setQuickStatus(error.message);
+  }
+}
+
+// --- Modes ------------------------------------------------------------------------
+
+function renderModes(status) {
+  modesStatus = status || { active: false, mode: "" };
+  if (ui.modeFreestyle) {
+    const freestyleActive = modesStatus.active && modesStatus.mode === "freestyle";
+    ui.modeFreestyle.textContent = freestyleActive ? "Stop Freestyle" : "Start Freestyle";
+    ui.modeFreestyle.setAttribute("aria-pressed", freestyleActive ? "true" : "false");
+  }
+  if (ui.modeChat) {
+    ui.modeChat.checked = modesStatus.active && modesStatus.mode === "chat";
+  }
+}
+
+async function toggleFreestyle() {
+  const freestyleActive = modesStatus.active && modesStatus.mode === "freestyle";
+  try {
+    const status = freestyleActive
+      ? await postJSON("/api/modes/stop", {})
+      : await postJSON("/api/modes/start", { mode: "freestyle" });
+    renderModes(status);
+    setQuickStatus(freestyleActive ? "Freestyle stopped." : "Freestyle running.");
+    schedulePoll();
+  } catch (error) {
+    setQuickStatus(error.message);
+  }
+}
+
+async function toggleChatKeepalive() {
+  const enable = ui.modeChat.checked;
+  try {
+    // Turning keepalive off is a planning change only: live motion continues.
+    const status = enable
+      ? await postJSON("/api/modes/start", { mode: "chat" })
+      : await postJSON("/api/modes/stop", { stop_motion: false });
+    renderModes(status);
+    setQuickStatus(enable ? "Chat keepalive on." : "Chat keepalive off.");
+  } catch (error) {
+    ui.modeChat.checked = !enable;
+    setQuickStatus(error.message);
+  }
+}
+
+async function applyStyle() {
+  try {
+    const result = await postJSON("/api/motion/quick", { style: ui.quickStyle.value });
+    if (result.motion) {
+      applyMotionSettings(result.motion);
+    }
+    setQuickStatus("Applied");
   } catch (error) {
     setQuickStatus(error.message);
   }
@@ -400,6 +463,9 @@ function applyMotionSettings(motion) {
   ui.quick.strokeMin.value = motion.stroke_min_percent;
   ui.quick.strokeMax.value = motion.stroke_max_percent;
   ui.quick.reverse.checked = Boolean(motion.reverse_direction);
+  if (ui.quickStyle && motion.style) {
+    ui.quickStyle.value = motion.style;
+  }
   updateQuickOutputs();
   const mid = Math.round((motion.speed_min_percent + motion.speed_max_percent) / 2);
   if (!ui.speed.dataset.touched) {
@@ -431,6 +497,9 @@ ui.start.addEventListener("click", startMotion);
 ui.stopMotion.addEventListener("click", stopMotion);
 ui.stop.addEventListener("click", stopMotion);
 ui.pauseResume?.addEventListener("click", pauseResumeMotion);
+ui.modeFreestyle?.addEventListener("click", toggleFreestyle);
+ui.modeChat?.addEventListener("change", toggleChatKeepalive);
+ui.quickStyle?.addEventListener("change", applyStyle);
 ui.speed.addEventListener("input", () => {
   ui.speed.dataset.touched = "true";
   ui.speedValue.textContent = `${ui.speed.value}%`;

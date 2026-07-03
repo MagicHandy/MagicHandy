@@ -56,7 +56,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory.
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met (early)** | Measured 2026-07-02 at Phase 10: 10.74 MB plain, 7.62 MB with `-trimpath -ldflags "-s -w"` (+0.12 MB over the 9B-era measurement for memory + prompt-set stores and UI). Re-measure each phase. |
+| Binary size | < 30 MB | **Met (early)** | Measured 2026-07-03 at Phase 11: 10.84 MB plain, 7.70 MB with `-trimpath -ldflags "-s -w"` (+0.10 MB for the modes package and UI). Re-measure each phase. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 411 / 518 / 522 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which inflates the number). Sits at the boundary; re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -103,6 +103,17 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-03** — Phase 11 complete: `internal/modes` implements Freestyle
+  and chat keepalive as motion-engine clients behind a bounded
+  motion-arrangement contract (1-8 segments, 4-120s each, optional focus and
+  one mid-segment drift). Deterministic style scoring (gentle/balanced/
+  intense, a persisted quick setting) with seeded, fully-traced planner
+  decisions (`planner` rows: seed, score table, segment). The no-stall gate
+  passes on the real engine over the fake transport: many segment boundaries,
+  exactly one HSP play, zero stops. Keepalive restarts only after transport
+  recovery — never after user stop or pause (tested). Import boundaries hold
+  (modes never import transport). Binary re-measured: 10.84 MB plain /
+  7.70 MB stripped (+0.10 MB).
 - **2026-07-02** — Phase 10 complete: user-managed long-term memory
   (`internal/memory`, `/api/memory`, immediate-apply UI with individual and
   global switches), editable prompt sets with protected built-ins

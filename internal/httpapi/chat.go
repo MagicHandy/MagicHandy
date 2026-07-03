@@ -162,6 +162,7 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 		}
 		current := engine.Snapshot()
 		target := chatMotionTarget(command, current)
+		s.notifyChatTarget(target)
 		if current.Running {
 			state, err := engine.ApplyTarget(ctx, target, "chat_start_retarget")
 			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
@@ -175,9 +176,16 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running")
 		}
 		current := engine.Snapshot()
-		state, err := engine.ApplyTarget(ctx, chatMotionTarget(command, current), "chat_target")
+		target := chatMotionTarget(command, current)
+		s.notifyChatTarget(target)
+		state, err := engine.ApplyTarget(ctx, target, "chat_target")
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 	case chat.MotionActionStop:
+		// A chat stop is a user stop: modes end and keepalive stands down.
+		if s.modes != nil {
+			s.modes.NotifyChatStop()
+			s.modes.NotifyUserStop()
+		}
 		engine := s.currentMotionEngine()
 		if engine == nil {
 			return chatMotionDispatch{Applied: true, Action: command.Action}, nil
@@ -186,6 +194,12 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
+	}
+}
+
+func (s *Server) notifyChatTarget(target motion.MotionTarget) {
+	if s.modes != nil {
+		s.modes.NotifyChatTarget(target)
 	}
 }
 

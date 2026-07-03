@@ -91,13 +91,25 @@ type DeviceSettings struct {
 	HandyConnectionKey       string `json:"handy_connection_key,omitempty"`
 }
 
+// Motion style preferences bias the deterministic mode planners directly
+// (never only prompt text): pattern weights, speed bias, and segment pacing.
+const (
+	// MotionStyleGentle favors slow full strokes and longer segments.
+	MotionStyleGentle = "gentle"
+	// MotionStyleBalanced is the default mixed profile.
+	MotionStyleBalanced = "balanced"
+	// MotionStyleIntense favors pulse patterns, higher speeds, faster changes.
+	MotionStyleIntense = "intense"
+)
+
 // MotionSettings contains transport-neutral motion control defaults.
 type MotionSettings struct {
-	SpeedMinPercent  int  `json:"speed_min_percent"`
-	SpeedMaxPercent  int  `json:"speed_max_percent"`
-	StrokeMinPercent int  `json:"stroke_min_percent"`
-	StrokeMaxPercent int  `json:"stroke_max_percent"`
-	ReverseDirection bool `json:"reverse_direction"`
+	SpeedMinPercent  int    `json:"speed_min_percent"`
+	SpeedMaxPercent  int    `json:"speed_max_percent"`
+	StrokeMinPercent int    `json:"stroke_min_percent"`
+	StrokeMaxPercent int    `json:"stroke_max_percent"`
+	ReverseDirection bool   `json:"reverse_direction"`
+	Style            string `json:"style"`
 }
 
 // LLMSettings contains local model provider settings.
@@ -143,6 +155,7 @@ type PublicSettingsOptionHints struct {
 	HSPDispatchOwners       []string `json:"hsp_dispatch_owners"`
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
+	MotionStyles            []string `json:"motion_styles"`
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
 	PromptSets              []string `json:"prompt_sets"`
@@ -184,6 +197,7 @@ func DefaultSettings() Settings {
 			SpeedMaxPercent:  80,
 			StrokeMinPercent: 0,
 			StrokeMaxPercent: 100,
+			Style:            MotionStyleBalanced,
 		},
 		LLM: LLMSettings{
 			Provider:             LLMProviderLlamaCPP,
@@ -223,6 +237,11 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDSources: []string{
 				ApplicationIDSourceBundled,
 				ApplicationIDSourceDeveloperOverride,
+			},
+			MotionStyles: []string{
+				MotionStyleGentle,
+				MotionStyleBalanced,
+				MotionStyleIntense,
 			},
 			DiagnosticsVerbosities: []string{
 				DiagnosticsVerbosityNormal,
@@ -408,6 +427,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.SpeedMaxPercent == 0 {
 		settings.Motion.SpeedMaxPercent = defaults.Motion.SpeedMaxPercent
 	}
+	if settings.Motion.Style == "" {
+		settings.Motion.Style = defaults.Motion.Style
+	}
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
@@ -451,6 +473,9 @@ func validateMotionSettings(settings MotionSettings) error {
 	}
 	if settings.StrokeMinPercent >= settings.StrokeMaxPercent {
 		return errors.New("stroke minimum must be lower than maximum")
+	}
+	if !oneOf(settings.Style, MotionStyleGentle, MotionStyleBalanced, MotionStyleIntense) {
+		return fmt.Errorf("unknown motion style %q", settings.Style)
 	}
 	return nil
 }

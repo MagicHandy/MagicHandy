@@ -18,9 +18,33 @@ type MotionTraceRow struct {
 	Target           *MotionTraceTarget       `json:"target,omitempty"`
 	Sample           *MotionTraceSample       `json:"sample,omitempty"`
 	Retarget         *MotionTraceRetarget     `json:"retarget,omitempty"`
+	Planner          *MotionTracePlanner      `json:"planner,omitempty"`
 	TransportCommand *transport.Command       `json:"transport_command,omitempty"`
 	TransportResult  *transport.CommandResult `json:"transport_result,omitempty"`
 	Annotation       string                   `json:"annotation,omitempty"`
+}
+
+// MotionTracePlanner records one deterministic mode-planner decision so a
+// stopped device is diagnosable as planner-wait versus transport failure.
+type MotionTracePlanner struct {
+	Mode              string         `json:"mode"`
+	Event             string         `json:"event"`
+	Style             string         `json:"style,omitempty"`
+	Seed              int64          `json:"seed,omitempty"`
+	PatternIdentifier string         `json:"pattern_id,omitempty"`
+	SpeedPercent      int            `json:"speed_percent,omitempty"`
+	DriftToPercent    int            `json:"drift_to_percent,omitempty"`
+	DurationMillis    int64          `json:"duration_ms,omitempty"`
+	SegmentIndex      int            `json:"segment_index,omitempty"`
+	Scores            []PlannerScore `json:"scores,omitempty"`
+	Note              string         `json:"note,omitempty"`
+}
+
+// PlannerScore records one candidate's deterministic score.
+type PlannerScore struct {
+	PatternIdentifier string  `json:"pattern_id"`
+	Score             float64 `json:"score"`
+	Chosen            bool    `json:"chosen"`
 }
 
 // MotionTraceTarget records semantic target context without raw transport shape.
