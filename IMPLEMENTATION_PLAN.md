@@ -14,7 +14,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-01. Phases 0 through 9 are merged to `main`.
+Updated 2026-07-05. Phases 0 through 11 are merged to `main`.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -145,8 +145,8 @@ MagicHandy/
   internal/transport/      Cloud REST + browser Bluetooth, HSP-only[exists]
   internal/diagnostics/    trace ring, export                      [exists]
   internal/validation/     retarget validation checklist           [exists]
-  internal/modes/          freestyle, continuous-chat planners     [stub]
-  internal/memory/         long-term memory store                  [planned]
+  internal/modes/          freestyle, continuous-chat planners     [exists]
+  internal/memory/         long-term memory store                  [exists]
   internal/audio/          voice-output queue, TTS worker client   [planned]
   internal/asr/            voice-input worker client               [planned]
   internal/workers/        external worker lifecycle/protocol      [planned]

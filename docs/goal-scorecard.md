@@ -103,6 +103,21 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-05** — Motion-safety review fixes (external review pass). Three
+  confirmed defects fixed with regression tests: (1) reverse direction
+  double-inverted — the engine pre-reversed HSP points and the Cloud/Bluetooth
+  transports reversed again from the same setting, so `reverse=true` was a
+  silent no-op on the shipped path; the engine now emits semantic positions and
+  the transport boundary owns reverse (Invariant 3). **Consequence for prior
+  rows:** the Cloud REST / Browser Bluetooth "full app path validated" runs did
+  not actually exercise working reverse direction; re-verify reverse on the next
+  hardware session. (2) A concurrent Stop/Pause during Start's transport setup
+  could call a nil cancel func and panic; the loop cancel is now installed
+  atomically with `running=true`. (3) The recovery stop reused the just-cancelled
+  loop context, so the safety stop could be dropped on a real transport; it now
+  sends on a detached context. (A self-deadlocking `waitForLoop` in
+  `stopForRecovery` was proposed on a separate open branch; a regression test
+  here guards against it.)
 - **2026-07-03** — Phase 11 complete: `internal/modes` implements Freestyle
   and chat keepalive as motion-engine clients behind a bounded
   motion-arrangement contract (1-8 segments, 4-120s each, optional focus and
