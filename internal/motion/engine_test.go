@@ -107,7 +107,7 @@ func TestEngineSettingsRefreshAppliesWhileActive(t *testing.T) {
 	assertRefreshedStrokeWindow(t, fake.Commands())
 	assertNoRestartBeforeStop(t, fake.Commands())
 	assertNoTraceRestartBeforeStop(t, traces.Rows())
-	assertReversePointMapping(t, fake.Commands(), state.LastSample)
+	assertEngineEmitsSemanticPosition(t, fake.Commands(), state.LastSample)
 	assertTraceReason(t, traces.Rows(), "settings_refresh")
 }
 

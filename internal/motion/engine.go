@@ -106,7 +106,15 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 
 // Start begins continuous motion against the configured transport.
 func (e *Engine) Start(ctx context.Context, target MotionTarget, settings config.MotionSettings) (ActiveMotionState, error) {
-	if err := e.begin(target, settings); err != nil {
+	// Create the loop cancel handle up front and publish it atomically with
+	// running=true (in begin). Start then does slow transport setup before
+	// launching the loop; installing cancel first means a concurrent Stop or
+	// Pause during that window always has a real cancel to call rather than a
+	// nil one. The loop must outlive the request, so its context drops the
+	// request's cancellation while keeping its values.
+	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	if err := e.begin(target, settings, cancel); err != nil {
+		cancel()
 		return e.Snapshot(), err
 	}
 	if err := e.setStrokeWindow(ctx, "start_stroke_window"); err != nil {
@@ -122,7 +130,7 @@ func (e *Engine) Start(ctx context.Context, target MotionTarget, settings config
 		return e.Snapshot(), err
 	}
 
-	e.startLoop(ctx)
+	e.startLoop(loopCtx)
 	return e.Snapshot(), nil
 }
 
@@ -210,7 +218,9 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	if reason == "" {
 		reason = "resume"
 	}
-	if err := e.beginResume(reason); err != nil {
+	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	if err := e.beginResume(reason, cancel); err != nil {
+		cancel()
 		return e.Snapshot(), err
 	}
 	if err := e.setStrokeWindow(ctx, "resume_stroke_window"); err != nil {
@@ -229,11 +239,11 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 		return e.Snapshot(), err
 	}
 
-	e.startLoop(ctx)
+	e.startLoop(loopCtx)
 	return e.Snapshot(), nil
 }
 
-func (e *Engine) beginResume(reason string) error {
+func (e *Engine) beginResume(reason string, cancel context.CancelFunc) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.running {
@@ -243,6 +253,8 @@ func (e *Engine) beginResume(reason string) error {
 		return errors.New("motion is not paused")
 	}
 
+	e.cancel = cancel
+	e.done = nil
 	e.generation++
 	e.streamID = fmt.Sprintf("%s-%06d", e.streamIDPrefix, e.generation)
 	e.startedAt = e.now()
@@ -312,7 +324,7 @@ func (e *Engine) Snapshot() ActiveMotionState {
 	return e.snapshotLocked()
 }
 
-func (e *Engine) begin(target MotionTarget, settings config.MotionSettings) error {
+func (e *Engine) begin(target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.running {
@@ -332,6 +344,12 @@ func (e *Engine) begin(target MotionTarget, settings config.MotionSettings) erro
 	e.bridgeSample = nil
 	e.paused = false
 	e.runMillisAccum = 0
+	// The loop cancel is live before running is published, so any concurrent
+	// Stop/Pause can cancel it. The done channel is installed later, when the
+	// loop goroutine actually launches (startLoop); until then it is nil, and
+	// waitForLoop tolerates nil.
+	e.cancel = cancel
+	e.done = nil
 	e.plan = NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")
@@ -413,14 +431,17 @@ func (e *Engine) refreshSettings(settings config.MotionSettings, reason string) 
 	return true, nil
 }
 
-func (e *Engine) startLoop(parent context.Context) {
-	// Command setup should honor the caller's request context, but the
-	// continuous dispatch loop must outlive that request once motion has
-	// started. Stop/Pause still cancel the loop through e.cancel.
-	loopCtx, cancel := context.WithCancel(context.WithoutCancel(parent))
+// startLoop launches the dispatch goroutine on the context whose cancel was
+// installed by begin/beginResume. If a concurrent Stop/Pause flipped running
+// false during setup, that stop already cancelled loopCtx and cleared the
+// handles, so there is nothing to launch.
+func (e *Engine) startLoop(loopCtx context.Context) {
 	done := make(chan struct{})
 	e.mu.Lock()
-	e.cancel = cancel
+	if !e.running {
+		e.mu.Unlock()
+		return
+	}
 	e.done = done
 	e.mu.Unlock()
 
@@ -506,7 +527,12 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 	if cancel != nil {
 		cancel()
 	}
-	result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
+	// Cancelling the loop above also cancels ctx when recovery is reached from
+	// the dispatch loop. The safety stop must still go out, so send it on a
+	// context detached from that cancellation (a cancelled ctx would abort the
+	// stop on the real Cloud/Bluetooth transports).
+	stopCtx := context.WithoutCancel(ctx)
+	result, err := e.transport.Stop(stopCtx, transport.StopCommand{Reason: reason})
 	e.recordTransportResultWithAnnotation(reason, nil, result, err, "recovery="+message)
 	e.finishStopped(result, err)
 	if err != nil {

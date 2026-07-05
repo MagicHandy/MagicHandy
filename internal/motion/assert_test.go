@@ -67,7 +67,12 @@ func assertNoTraceRestartBeforeStop(t *testing.T, rows []diagnostics.MotionTrace
 	}
 }
 
-func assertReversePointMapping(t *testing.T, commands []transport.Command, sample *MotionSample) {
+// assertEngineEmitsSemanticPosition proves the engine sends the semantic
+// 0..100 position even when reverse is enabled: reverse is a transport-boundary
+// mapping (Invariant 3), so the engine must not pre-invert (which would
+// double-invert on the real Cloud/Bluetooth transports). The reverse mapping
+// itself is covered by the transport tests.
+func assertEngineEmitsSemanticPosition(t *testing.T, commands []transport.Command, sample *MotionSample) {
 	t.Helper()
 	if sample == nil {
 		t.Fatal("last semantic sample is missing")
@@ -77,9 +82,8 @@ func assertReversePointMapping(t *testing.T, commands []transport.Command, sampl
 		t.Fatalf("commands = %+v, want HSP add points", commands)
 	}
 	got := add.Points[len(add.Points)-1].PositionPercent
-	want := 100 - sample.PositionPercent
-	if got != want {
-		t.Fatalf("last transport point = %d, want reverse of semantic sample %d", got, sample.PositionPercent)
+	if got != sample.PositionPercent {
+		t.Fatalf("last transport point = %d, want semantic sample %d (engine must not pre-reverse)", got, sample.PositionPercent)
 	}
 }
 

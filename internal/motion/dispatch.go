@@ -78,8 +78,12 @@ func (e *Engine) nextChunk() (string, []transport.TimedPoint, *MotionSample) {
 			sample.TimeMillis = streamMillis
 			e.bridgeSample = nil
 		}
+		// Emit the semantic 0..100 travel position. Reverse direction is a
+		// transport-boundary mapping (docs/hsp-v4-invariants.md, Invariant 3):
+		// the Cloud REST and Browser Bluetooth transports invert x from the
+		// same setting, so inverting here too would double-invert to a no-op.
 		points[index] = transport.TimedPoint{
-			PositionPercent: e.transportPositionLocked(sample.PositionPercent),
+			PositionPercent: sample.PositionPercent,
 			TimeMillis:      sample.TimeMillis,
 		}
 		lastSample = sample
@@ -99,13 +103,6 @@ func (e *Engine) motionSettings() config.MotionSettings {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.settings
-}
-
-func (e *Engine) transportPositionLocked(position int) int {
-	if e.settings.ReverseDirection {
-		return 100 - position
-	}
-	return position
 }
 
 func (e *Engine) rememberResult(result transport.CommandResult, err error) {
@@ -135,14 +132,23 @@ func (e *Engine) rememberError(err error) {
 	e.lastError = err.Error()
 }
 
+// forceStopped abandons a start/resume that failed during transport setup. It
+// releases the loop context installed by begin/beginResume so a startup
+// failure never leaks a live cancel func, and a concurrent Stop that already
+// cleared e.cancel is a no-op here.
 func (e *Engine) forceStopped(err error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	cancel := e.cancel
 	e.running = false
 	e.cancel = nil
 	e.done = nil
 	if err != nil {
 		e.lastError = err.Error()
+	}
+	e.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
 }
 

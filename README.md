@@ -105,8 +105,9 @@ managed llama.cpp at `http://127.0.0.1:8080`: configure a `llama-server`
 executable path and a GGUF model path, then load it through `/api/llm/load` or
 the UI. External llama.cpp mode connects to an already-running OpenAI-compatible
 server at the configured base URL. Ollama is available at
-`http://127.0.0.1:11434` through `/api/chat`. The core does not download models
-automatically and does not link libllama.
+`http://127.0.0.1:11434` through Ollama's own native `/api/chat` endpoint (the
+MagicHandy browser route is `POST /api/chat/stream`). The core does not
+download models automatically and does not link libllama.
 
 The Phase 7 real-device retarget workflow uses the dedicated validation command:
 
