@@ -123,12 +123,13 @@ func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitFor(t, 2*time.Second, func() bool { return manager.Status().SegmentIndex >= 1 })
 
 	// Cross four segment boundaries by jumping the planner clock.
 	for range 4 {
+		before := manager.Status().SegmentIndex
 		clock.Advance(150 * time.Second)
-		before := retargetCount(engine)
-		waitFor(t, time.Second, func() bool { return retargetCount(engine) > before })
+		waitFor(t, 2*time.Second, func() bool { return manager.Status().SegmentIndex > before })
 	}
 
 	starts, retargets := engine.counts()
@@ -149,7 +150,7 @@ func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
 		}
 		return rows
 	}
-	waitFor(t, time.Second, func() bool { return countSegmentRows() >= 3 })
+	waitFor(t, 2*time.Second, func() bool { return countSegmentRows() >= 4 })
 	for _, row := range traces.Rows() {
 		if row.Planner != nil && row.Planner.Event == "freestyle_segment" {
 			if row.Planner.Seed != 42 || len(row.Planner.Scores) != 3 || row.Planner.Style == "" {
