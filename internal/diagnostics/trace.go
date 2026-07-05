@@ -130,7 +130,7 @@ func (r *TraceRing) Add(row MotionTraceRow) MotionTraceRow {
 	if row.Timestamp == "" {
 		row.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	row = sanitizeTraceRow(row)
+	row = cloneTraceRow(row)
 
 	if len(r.rows) == r.capacity {
 		copy(r.rows, r.rows[1:])
@@ -148,9 +148,7 @@ func (r *TraceRing) Rows() []MotionTraceRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	rows := make([]MotionTraceRow, len(r.rows))
-	copy(rows, r.rows)
-	return rows
+	return cloneTraceRows(r.rows)
 }
 
 // Export returns the stable trace export envelope.
@@ -158,11 +156,9 @@ func (r *TraceRing) Export() TraceExport {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	rows := make([]MotionTraceRow, len(r.rows))
-	copy(rows, r.rows)
 	return TraceExport{
 		SchemaVersion: traceSchemaVersion,
-		Rows:          rows,
+		Rows:          cloneTraceRows(r.rows),
 		DroppedRows:   r.dropped,
 	}
 }
@@ -180,7 +176,33 @@ func (r *TraceRing) Summary() TraceSummary {
 	}
 }
 
-func sanitizeTraceRow(row MotionTraceRow) MotionTraceRow {
+func cloneTraceRows(rows []MotionTraceRow) []MotionTraceRow {
+	clones := make([]MotionTraceRow, len(rows))
+	for index, row := range rows {
+		clones[index] = cloneTraceRow(row)
+	}
+	return clones
+}
+
+func cloneTraceRow(row MotionTraceRow) MotionTraceRow {
+	if row.Target != nil {
+		row.Target = cloneTraceTarget(row.Target)
+	}
+	if row.Sample != nil {
+		sample := *row.Sample
+		row.Sample = &sample
+	}
+	if row.Retarget != nil {
+		retarget := *row.Retarget
+		retarget.PreviousTarget = cloneTraceTarget(row.Retarget.PreviousTarget)
+		retarget.NextTarget = cloneTraceTarget(row.Retarget.NextTarget)
+		row.Retarget = &retarget
+	}
+	if row.Planner != nil {
+		planner := *row.Planner
+		planner.Scores = append([]PlannerScore(nil), row.Planner.Scores...)
+		row.Planner = &planner
+	}
 	if row.TransportCommand != nil {
 		command := transport.SafeCommand(*row.TransportCommand)
 		row.TransportCommand = &command
@@ -190,4 +212,12 @@ func sanitizeTraceRow(row MotionTraceRow) MotionTraceRow {
 		row.TransportResult = &result
 	}
 	return row
+}
+
+func cloneTraceTarget(target *MotionTraceTarget) *MotionTraceTarget {
+	if target == nil {
+		return nil
+	}
+	clone := *target
+	return &clone
 }

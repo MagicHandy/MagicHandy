@@ -111,6 +111,38 @@ func TestEngineSettingsRefreshAppliesWhileActive(t *testing.T) {
 	assertTraceReason(t, traces.Rows(), "settings_refresh")
 }
 
+func TestEngineSnapshotReturnsIndependentTargetPointers(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), time.Hour)
+	defer func() {
+		_, _ = engine.Stop(context.Background(), "cleanup")
+	}()
+
+	_, err := engine.Start(context.Background(), MotionTarget{
+		Label:        "focused",
+		Source:       "test",
+		PatternID:    PatternStroke,
+		SpeedPercent: 40,
+		AreaFocus:    &AreaFocus{MinPercent: 20, MaxPercent: 80},
+		SoftAnchor:   &SoftAnchor{PositionPercent: 55, WeightPercent: 25},
+	}, config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	snapshot := engine.Snapshot()
+	snapshot.Target.AreaFocus.MinPercent = 99
+	snapshot.Target.SoftAnchor.PositionPercent = 99
+
+	fresh := engine.Snapshot()
+	if fresh.Target.AreaFocus.MinPercent != 20 {
+		t.Fatalf("area focus mutated through snapshot: %+v", fresh.Target.AreaFocus)
+	}
+	if fresh.Target.SoftAnchor.PositionPercent != 55 {
+		t.Fatalf("soft anchor mutated through snapshot: %+v", fresh.Target.SoftAnchor)
+	}
+}
+
 func TestEngineApplyTargetPreservesSamePatternWithoutRestart(t *testing.T) {
 	fake := transport.NewFake()
 	traces := diagnostics.NewTraceRing(128)

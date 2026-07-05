@@ -34,3 +34,13 @@ func TestParseLevelRejectsUnknownLevel(t *testing.T) {
 		t.Fatal("ParseLevel accepted an unknown level")
 	}
 }
+
+func TestParseLevelNormalizesUserInput(t *testing.T) {
+	level, err := ParseLevel(" WARN ")
+	if err != nil {
+		t.Fatalf("ParseLevel: %v", err)
+	}
+	if level != slog.LevelWarn {
+		t.Fatalf("level = %v, want warn", level)
+	}
+}

@@ -67,12 +67,18 @@ func OpenPromptLibrary(dataDir string) (*PromptLibrary, error) {
 		library.recovered = true
 		return library, nil
 	}
+	seen := make(map[string]struct{}, len(file.Sets))
 	for _, set := range file.Sets {
 		id := strings.TrimSpace(set.ID)
 		if id == "" {
 			library.recovered = true
 			continue
 		}
+		if _, exists := seen[id]; exists {
+			library.recovered = true
+			continue
+		}
+		seen[id] = struct{}{}
 		if _, builtin := BuiltinPromptSetByID(id); builtin {
 			library.recovered = true
 			continue

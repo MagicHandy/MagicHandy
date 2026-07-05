@@ -94,11 +94,9 @@ func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 		status.Message = message
 		return status
 	}
-	if !p.running() {
-		if err := p.start(); err != nil {
-			status.Message = err.Error()
-			return status
-		}
+	if err := p.ensureStarted(); err != nil {
+		status.Message = err.Error()
+		return status
 	}
 
 	deadline := time.Now().Add(managedLlamaLoadTimeout)
@@ -183,7 +181,16 @@ func (p *ManagedLlamaCPPProvider) setupMessage() string {
 	return ""
 }
 
-func (p *ManagedLlamaCPPProvider) start() error {
+func (p *ManagedLlamaCPPProvider) ensureStarted() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.runningLocked() {
+		return nil
+	}
+	return p.startLocked()
+}
+
+func (p *ManagedLlamaCPPProvider) startLocked() error {
 	host, port, err := llamaHostPort(p.baseURL)
 	if err != nil {
 		return err
@@ -209,16 +216,18 @@ func (p *ManagedLlamaCPPProvider) start() error {
 		done <- command.Wait()
 	}()
 
-	p.mu.Lock()
 	p.process = command
 	p.done = done
-	p.mu.Unlock()
 	return nil
 }
 
 func (p *ManagedLlamaCPPProvider) running() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.runningLocked()
+}
+
+func (p *ManagedLlamaCPPProvider) runningLocked() bool {
 	if p.process == nil {
 		return false
 	}

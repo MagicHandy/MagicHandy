@@ -22,7 +22,8 @@ func New(out io.Writer, level slog.Level) *slog.Logger {
 // ParseLevel converts a user-supplied log level string to a slog level.
 func ParseLevel(value string) (slog.Level, error) {
 	var level slog.Level
-	if err := level.UnmarshalText([]byte(strings.ToLower(value))); err == nil {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if err := level.UnmarshalText([]byte(normalized)); err == nil {
 		return level, nil
 	}
 

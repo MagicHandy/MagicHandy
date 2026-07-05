@@ -154,6 +154,7 @@ func TestPromptLibrarySkipsInvalidLoadedUserSets(t *testing.T) {
 		Sets: []PromptSet{
 			{ID: DefaultPromptSetID, Name: "Fake built-in", System: "Should not shadow code-owned prompts."},
 			{ID: "  user-valid  ", Name: "  Valid  ", System: "  Kept.  "},
+			{ID: "user-valid", Name: "Duplicate", System: "Must not replace the first valid set."},
 			{ID: "user-blank-name", Name: " ", System: "Skipped."},
 			{ID: "user-oversized", Name: "Big", System: strings.Repeat("x", maxPromptSystemSize+1)},
 		},

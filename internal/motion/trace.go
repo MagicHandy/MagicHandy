@@ -16,7 +16,7 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		Generation:       e.generation,
 		StreamID:         e.streamID,
 		PlanID:           e.plan.ID,
-		Target:           e.plan.Target,
+		Target:           cloneMotionTarget(e.plan.Target),
 		Settings:         e.settings,
 		NextSampleMillis: e.nextSampleMillis,
 		LastError:        redactedError(e.lastError),
@@ -177,6 +177,18 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		trace.SoftAnchorWeightPercent = target.SoftAnchor.WeightPercent
 	}
 	return trace
+}
+
+func cloneMotionTarget(target MotionTarget) MotionTarget {
+	if target.AreaFocus != nil {
+		area := *target.AreaFocus
+		target.AreaFocus = &area
+	}
+	if target.SoftAnchor != nil {
+		anchor := *target.SoftAnchor
+		target.SoftAnchor = &anchor
+	}
+	return target
 }
 
 func traceSample(sample *MotionSample) *diagnostics.MotionTraceSample {
