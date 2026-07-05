@@ -107,25 +107,26 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 // Start begins continuous motion against the configured transport.
 func (e *Engine) Start(ctx context.Context, target MotionTarget, settings config.MotionSettings) (ActiveMotionState, error) {
 	// Create the loop cancel handle up front and publish it atomically with
-	// running=true (in begin). Start then does slow transport setup before
-	// launching the loop; installing cancel first means a concurrent Stop or
-	// Pause during that window always has a real cancel to call rather than a
-	// nil one. The loop must outlive the request, so its context drops the
-	// request's cancellation while keeping its values.
+	// running=true (in begin). The startup transport commands also run on
+	// loopCtx, so a concurrent Stop/Pause cancels not just the future loop but
+	// the in-flight setup: Stop's cancel() aborts a blocked setStrokeWindow/
+	// dispatchNextChunk and makes a not-yet-sent play() fail instead of
+	// starting motion the user just stopped. The loop must outlive the request,
+	// so loopCtx drops the request's cancellation while keeping its values.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	if err := e.begin(target, settings, cancel); err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.setStrokeWindow(ctx, "start_stroke_window"); err != nil {
+	if err := e.setStrokeWindow(loopCtx, "start_stroke_window"); err != nil {
 		e.forceStopped(err)
 		return e.Snapshot(), err
 	}
-	if err := e.dispatchNextChunk(ctx, "start_points"); err != nil {
+	if err := e.dispatchNextChunk(loopCtx, "start_points"); err != nil {
 		e.forceStopped(err)
 		return e.Snapshot(), err
 	}
-	if err := e.play(ctx); err != nil {
+	if err := e.play(loopCtx); err != nil {
 		e.forceStopped(err)
 		return e.Snapshot(), err
 	}
@@ -218,22 +219,24 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	if reason == "" {
 		reason = "resume"
 	}
+	// Startup commands run on loopCtx so a concurrent Stop cancels in-flight
+	// resume setup, same as Start.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	if err := e.beginResume(reason, cancel); err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.setStrokeWindow(ctx, "resume_stroke_window"); err != nil {
+	if err := e.setStrokeWindow(loopCtx, "resume_stroke_window"); err != nil {
 		e.forceStopped(err)
 		e.restorePaused()
 		return e.Snapshot(), err
 	}
-	if err := e.dispatchNextChunk(ctx, "resume_points"); err != nil {
+	if err := e.dispatchNextChunk(loopCtx, "resume_points"); err != nil {
 		e.forceStopped(err)
 		e.restorePaused()
 		return e.Snapshot(), err
 	}
-	if err := e.play(ctx); err != nil {
+	if err := e.play(loopCtx); err != nil {
 		e.forceStopped(err)
 		e.restorePaused()
 		return e.Snapshot(), err
@@ -511,6 +514,12 @@ func (e *Engine) ensurePlaybackHealthy(ctx context.Context, reason string) error
 	return e.stopForRecovery(ctx, "recovery_"+reason, message)
 }
 
+// stopForRecovery halts the active stream when playback goes unhealthy. It is
+// reachable from the dispatch loop goroutine itself (runLoop ->
+// dispatchIfLeadNeeded -> ensurePlaybackHealthy), so it must NOT wait on the
+// loop's own done channel: doing so would make the loop goroutine wait on
+// itself and deadlock. Cancelling is sufficient; the loop exits on ctx.Done.
+// TestLoopTriggeredRecoveryDoesNotDeadlock guards this.
 func (e *Engine) stopForRecovery(ctx context.Context, reason string, message string) error {
 	e.mu.Lock()
 	if !e.running {

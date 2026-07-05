@@ -80,6 +80,14 @@ func TestConcurrentStopDuringStartupDoesNotPanic(t *testing.T) {
 	if countCommands(fake.Commands(), transport.CommandKindStop) == 0 {
 		t.Fatal("no transport stop recorded for the concurrent stop")
 	}
+
+	// Motion must not restart: the play() that was in-flight when Stop landed
+	// runs on the loop context Stop cancelled, so it aborts instead of sending
+	// an HSP play after the stop. A play recorded here means startup work
+	// restarted motion the user just stopped.
+	if plays := countCommands(fake.Commands(), transport.CommandKindHSPPlay); plays != 0 {
+		t.Fatalf("HSP play commands = %d after concurrent stop, want 0 (motion must not restart)", plays)
+	}
 }
 
 // recoveryTransport reports unhealthy playback on demand so the dispatch loop
