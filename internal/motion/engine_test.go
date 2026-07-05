@@ -52,6 +52,31 @@ func TestEngineContinuousFakePlaybackAndStop(t *testing.T) {
 	}
 }
 
+func TestEngineDispatchLoopOutlivesStartRequestContext(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), 2*time.Millisecond)
+	t.Cleanup(func() {
+		_, _ = engine.Stop(context.Background(), "cleanup")
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := engine.Start(ctx, testTarget(), config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	cancel()
+
+	initialAdds := countCommands(fake.Commands(), transport.CommandKindHSPAdd)
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if countCommands(fake.Commands(), transport.CommandKindHSPAdd) > initialAdds {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("HSP add commands stayed at %d after start context cancellation; dispatch loop stopped", initialAdds)
+}
+
 func TestEngineSettingsRefreshAppliesWhileActive(t *testing.T) {
 	fake := transport.NewFake()
 	traces := diagnostics.NewTraceRing(128)

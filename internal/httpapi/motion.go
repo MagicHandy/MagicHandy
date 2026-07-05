@@ -50,7 +50,7 @@ func (r motionRequest) target() motion.MotionTarget {
 func (s *Server) motionState() any {
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
-		if snapshot.Running {
+		if snapshot.Running || snapshot.Paused {
 			return map[string]any{
 				"available": true,
 				"engine":    snapshot,

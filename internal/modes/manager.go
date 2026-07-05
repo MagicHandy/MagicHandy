@@ -118,7 +118,7 @@ func (m *Manager) Status() Status {
 	}
 	if m.mode == ModeFreestyle {
 		status.SegmentIndex = m.segmentIdx
-		if remaining := time.Until(m.deadline).Milliseconds(); remaining > 0 {
+		if remaining := m.deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
 			status.SegmentEndsMs = remaining
 		}
 	}

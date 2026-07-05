@@ -68,6 +68,25 @@ func TestMotionStartStateStop(t *testing.T) {
 	}
 }
 
+func TestMotionStateReportsPausedEngine(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":60}`)
+	if !started.Engine.Running {
+		t.Fatalf("expected running motion after start, got %+v", started)
+	}
+	paused := callMotion(t, server, http.MethodPost, "/api/motion/pause", `{}`)
+	if paused.Engine.Running || !paused.Engine.Paused {
+		t.Fatalf("expected paused motion, got %+v", paused)
+	}
+
+	state := callMotion(t, server, http.MethodGet, "/api/motion/state", "")
+	if !state.Available || state.Engine.Running || !state.Engine.Paused {
+		t.Fatalf("state should expose paused engine for Resume UI: %+v", state)
+	}
+}
+
 func TestMotionStartClampsSpeedToSettings(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
