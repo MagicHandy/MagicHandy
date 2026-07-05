@@ -219,7 +219,7 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
-		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
+		writeJSON(w, http.StatusOK, s.motionState())
 		return
 	}
 	state, err := engine.Stop(r.Context(), "ui_stop")

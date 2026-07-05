@@ -535,11 +535,14 @@ func stateSnapshotFromBody(body []byte) HSPStateSnapshot {
 		return snapshot
 	}
 	for _, candidate := range statePayloadCandidates(payload) {
+		if ok, present := candidate["ok"].(bool); present && !ok {
+			snapshot.Available = false
+		}
 		if available, ok := candidate["hsp_available"].(bool); ok {
-			snapshot.Available = available
+			snapshot.Available = snapshot.Available && available
 		}
 		if available, ok := candidate["available"].(bool); ok {
-			snapshot.Available = available
+			snapshot.Available = snapshot.Available && available
 		}
 		if state, ok := candidate["playback_state"].(string); ok && snapshot.PlaybackState == "" {
 			snapshot.PlaybackState = state

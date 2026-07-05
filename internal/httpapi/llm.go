@@ -34,9 +34,9 @@ func (s *Server) newLLMProvider(settings config.LLMSettings) (llm.Provider, erro
 
 	key := llmCacheKey(settings)
 	s.llm.mu.Lock()
+	defer s.llm.mu.Unlock()
 	if s.llm.cached != nil && s.llm.cacheKey == key {
 		provider := s.llm.cached
-		s.llm.mu.Unlock()
 		return provider, nil
 	}
 	if s.llm.cached != nil {
@@ -44,7 +44,6 @@ func (s *Server) newLLMProvider(settings config.LLMSettings) (llm.Provider, erro
 	}
 	s.llm.cached = nil
 	s.llm.cacheKey = ""
-	s.llm.mu.Unlock()
 
 	timeout := time.Duration(settings.RequestTimeoutMillis) * time.Millisecond
 	options := llm.HTTPProviderOptions{
@@ -76,10 +75,8 @@ func (s *Server) newLLMProvider(settings config.LLMSettings) (llm.Provider, erro
 		return nil, err
 	}
 
-	s.llm.mu.Lock()
 	s.llm.cached = provider
 	s.llm.cacheKey = key
-	s.llm.mu.Unlock()
 	return provider, nil
 }
 
@@ -175,7 +172,6 @@ func llmCacheKey(settings config.LLMSettings) string {
 		settings.LlamaCPPModelPath,
 		settings.OllamaBaseURL,
 		settings.Model,
-		settings.PromptSet,
 		fmt.Sprint(settings.RequestTimeoutMillis),
 	}, "\x00")
 }

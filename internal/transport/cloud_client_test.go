@@ -142,6 +142,27 @@ func TestCloudRESTTransportConnectionCheckReportsUnavailable(t *testing.T) {
 	}
 }
 
+func TestCloudRESTTransportConnectionCheckHonorsOKFalse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":false,"playback_state":"unsupported"}`))
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	check, err := cloud.CheckConnection(context.Background())
+	if err == nil {
+		t.Fatal("CheckConnection succeeded for ok=false response")
+	}
+	var unavailable HSPUnavailableError
+	if !errors.As(err, &unavailable) {
+		t.Fatalf("error = %T %[1]v, want HSPUnavailableError", err)
+	}
+	if check.OK || check.HSPAvailable {
+		t.Fatalf("check = %+v, want unavailable", check)
+	}
+}
+
 func TestCloudRESTTransportReadState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

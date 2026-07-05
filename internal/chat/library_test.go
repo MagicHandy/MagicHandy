@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -143,5 +144,49 @@ func TestPromptLibraryRecoversFromCorruptFile(t *testing.T) {
 	}
 	if _, err := library.Create("After recovery", "Still writable."); err != nil {
 		t.Fatalf("Create after recovery: %v", err)
+	}
+}
+
+func TestPromptLibrarySkipsInvalidLoadedUserSets(t *testing.T) {
+	dir := t.TempDir()
+	file := promptSetsFile{
+		Version: promptSetsVersion,
+		Sets: []PromptSet{
+			{ID: DefaultPromptSetID, Name: "Fake built-in", System: "Should not shadow code-owned prompts."},
+			{ID: "  user-valid  ", Name: "  Valid  ", System: "  Kept.  "},
+			{ID: "user-blank-name", Name: " ", System: "Skipped."},
+			{ID: "user-oversized", Name: "Big", System: strings.Repeat("x", maxPromptSystemSize+1)},
+		},
+	}
+	data, err := json.Marshal(file)
+	if err != nil {
+		t.Fatalf("marshal prompt file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, promptSetsFileName), data, 0o600); err != nil {
+		t.Fatalf("write prompt file: %v", err)
+	}
+
+	library, err := OpenPromptLibrary(dir)
+	if err != nil {
+		t.Fatalf("OpenPromptLibrary: %v", err)
+	}
+	if !library.Recovered() {
+		t.Fatal("invalid loaded prompt records should report recovery")
+	}
+	if _, ok := library.sets[DefaultPromptSetID]; ok {
+		t.Fatal("loaded file created a user-owned duplicate of the built-in prompt set")
+	}
+	valid, ok := library.Resolve("user-valid")
+	if !ok {
+		t.Fatal("valid loaded user set did not resolve")
+	}
+	if valid.Name != "Valid" || valid.System != "Kept." {
+		t.Fatalf("valid set = %+v, want trimmed fields", valid)
+	}
+	if _, ok := library.Resolve("user-blank-name"); ok {
+		t.Fatal("invalid blank-name set resolved")
+	}
+	if _, ok := library.Resolve("user-oversized"); ok {
+		t.Fatal("oversized loaded set resolved")
 	}
 }

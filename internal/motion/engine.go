@@ -527,6 +527,7 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 		return errors.New(message)
 	}
 	cancel := e.cancel
+	done := e.done
 	e.running = false
 	e.cancel = nil
 	e.done = nil
@@ -535,6 +536,7 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 
 	if cancel != nil {
 		cancel()
+		waitForLoop(done)
 	}
 	// Cancelling the loop above also cancels ctx when recovery is reached from
 	// the dispatch loop. The safety stop must still go out, so send it on a

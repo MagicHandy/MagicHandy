@@ -68,10 +68,28 @@ func OpenPromptLibrary(dataDir string) (*PromptLibrary, error) {
 		return library, nil
 	}
 	for _, set := range file.Sets {
-		set.Builtin = false
-		if strings.TrimSpace(set.ID) == "" {
+		id := strings.TrimSpace(set.ID)
+		if id == "" {
+			library.recovered = true
 			continue
 		}
+		if _, builtin := BuiltinPromptSetByID(id); builtin {
+			library.recovered = true
+			continue
+		}
+		name, system, err := validatePromptSetFields(set.Name, set.System)
+		if err != nil {
+			library.recovered = true
+			continue
+		}
+		if len(library.sets) >= maxUserPromptSets {
+			library.recovered = true
+			break
+		}
+		set.ID = id
+		set.Name = name
+		set.System = system
+		set.Builtin = false
 		library.sets[set.ID] = set
 	}
 	return library, nil
