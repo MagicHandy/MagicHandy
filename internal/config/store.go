@@ -88,13 +88,13 @@ func (s *Store) Save(next Settings) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	if err := writeSettingsFile(s.path, next); err != nil {
-		return Settings{}, err
-	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := writeSettingsFile(s.path, next); err != nil {
+		return Settings{}, err
+	}
 	s.settings = next
 	s.status = LoadStatus{
 		DataDir:      s.dataDir,

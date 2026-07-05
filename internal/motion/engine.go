@@ -25,6 +25,8 @@ const (
 	maxLeadMillis           = int64(2000)
 )
 
+type loopRecoveryContextKey struct{}
+
 // EngineOptions configures a motion engine instance.
 type EngineOptions struct {
 	Transport        transport.Transport
@@ -455,6 +457,7 @@ func (e *Engine) startLoop(loopCtx context.Context) {
 }
 
 func (e *Engine) runLoop(ctx context.Context) {
+	ctx = context.WithValue(ctx, loopRecoveryContextKey{}, true)
 	ticker := time.NewTicker(e.dispatchInterval)
 	defer ticker.Stop()
 	for {
@@ -516,10 +519,9 @@ func (e *Engine) ensurePlaybackHealthy(ctx context.Context, reason string) error
 
 // stopForRecovery halts the active stream when playback goes unhealthy. It is
 // reachable from the dispatch loop goroutine itself (runLoop ->
-// dispatchIfLeadNeeded -> ensurePlaybackHealthy), so it must NOT wait on the
-// loop's own done channel: doing so would make the loop goroutine wait on
-// itself and deadlock. Cancelling is sufficient; the loop exits on ctx.Done.
-// TestLoopTriggeredRecoveryDoesNotDeadlock guards this.
+// dispatchIfLeadNeeded -> ensurePlaybackHealthy), so loop-originated recovery
+// must not wait on the loop's own done channel. Request-originated recovery can
+// wait to drain an in-flight append before sending the safety stop.
 func (e *Engine) stopForRecovery(ctx context.Context, reason string, message string) error {
 	e.mu.Lock()
 	if !e.running {
@@ -527,6 +529,7 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 		return errors.New(message)
 	}
 	cancel := e.cancel
+	done := e.done
 	e.running = false
 	e.cancel = nil
 	e.done = nil
@@ -535,6 +538,9 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 
 	if cancel != nil {
 		cancel()
+		if !recoveryFromLoop(ctx) {
+			waitForLoop(done)
+		}
 	}
 	// Cancelling the loop above also cancels ctx when recovery is reached from
 	// the dispatch loop. The safety stop must still go out, so send it on a
@@ -548,6 +554,11 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 		return err
 	}
 	return errors.New(message)
+}
+
+func recoveryFromLoop(ctx context.Context) bool {
+	fromLoop, _ := ctx.Value(loopRecoveryContextKey{}).(bool)
+	return fromLoop
 }
 
 func (e *Engine) estimatedPlaybackMillisLocked(now time.Time) int64 {

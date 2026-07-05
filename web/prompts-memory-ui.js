@@ -36,6 +36,8 @@ const ui = {
 let promptSets = [];
 let editingID = "";
 let creatingNew = false;
+let backendAvailable = true;
+let controllerReadOnly = false;
 
 const CLIENT_ID = (() => {
   try {
@@ -110,6 +112,7 @@ function renderPromptSets(payload) {
     }
     renderEditorFields();
   }
+  applyPersonalizationAvailability();
 }
 
 function fillSetSelect(select) {
@@ -146,9 +149,13 @@ function renderEditorFields() {
   ui.editor.save.disabled = set.builtin;
   ui.editor.remove.disabled = set.builtin;
   setStatus(ui.editor.status, "");
+  applyPersonalizationAvailability();
 }
 
 function enterNewSetMode(baseName, baseSystem) {
+  if (personalizationLocked()) {
+    return;
+  }
   creatingNew = true;
   ui.editor.name.readOnly = false;
   ui.editor.system.readOnly = false;
@@ -159,6 +166,7 @@ function enterNewSetMode(baseName, baseSystem) {
   ui.editor.system.value = baseSystem;
   setStatus(ui.editor.status, "New set — Save set to keep it.");
   ui.editor.name.focus();
+  applyPersonalizationAvailability();
 }
 
 async function savePromptSet() {
@@ -212,6 +220,7 @@ function renderMemory(snapshot) {
     ...(snapshot.memories || []).map((item) => memoryRow(item)),
   );
   ui.memory.clear.disabled = !(snapshot.memories || []).length;
+  applyPersonalizationAvailability();
 }
 
 function memoryRow(item) {
@@ -225,6 +234,7 @@ function memoryRow(item) {
   toggle.type = "checkbox";
   toggle.setAttribute("role", "switch");
   toggle.checked = item.enabled;
+  toggle.disabled = personalizationLocked();
   toggle.setAttribute("aria-label", "Include this memory in chat");
   const track = document.createElement("span");
   track.className = "toggle-track";
@@ -253,6 +263,7 @@ function memoryRow(item) {
   remove.type = "button";
   remove.className = "secondary-button memory-remove";
   remove.textContent = "Remove";
+  remove.disabled = personalizationLocked();
   remove.addEventListener("click", async () => {
     try {
       renderMemory(await api(`/api/memory/${encodeURIComponent(item.id)}`, "DELETE"));
@@ -285,6 +296,34 @@ async function addMemory() {
 
 function setStatus(element, message) {
   element.textContent = message;
+}
+
+function personalizationLocked() {
+  return !backendAvailable || controllerReadOnly;
+}
+
+function applyPersonalizationAvailability() {
+  const locked = personalizationLocked();
+  const current = currentEditorSet();
+  const builtin = Boolean(current?.builtin) && !creatingNew;
+
+  ui.activeSelect.disabled = locked;
+  ui.editor.select.disabled = !backendAvailable;
+  ui.editor.name.disabled = locked;
+  ui.editor.system.disabled = locked;
+  ui.editor.save.disabled = locked || builtin;
+  ui.editor.duplicate.disabled = locked || !current;
+  ui.editor.create.disabled = locked;
+  ui.editor.remove.disabled = locked || builtin || creatingNew;
+
+  ui.memory.enabled.disabled = locked;
+  ui.memory.addText.disabled = locked;
+  ui.memory.add.disabled = locked;
+  ui.memory.clear.disabled = locked || !ui.memory.list.children.length;
+  for (const control of ui.memory.list.querySelectorAll("input, button")) {
+    control.disabled = locked;
+  }
+  ui.reset.disabled = locked;
 }
 
 async function refresh() {
@@ -338,6 +377,16 @@ confirmable(ui.reset, "reset every setting", async () => {
   } catch (error) {
     setStatus(ui.resetStatus, error.message);
   }
+});
+
+window.addEventListener("magichandy:backend-availability", (event) => {
+  backendAvailable = Boolean(event.detail?.available);
+  applyPersonalizationAvailability();
+});
+
+window.addEventListener("magichandy:controller-state", (event) => {
+  controllerReadOnly = Boolean(event.detail?.read_only);
+  applyPersonalizationAvailability();
 });
 
 refresh();

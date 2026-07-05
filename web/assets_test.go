@@ -97,6 +97,10 @@ func TestEmbeddedPromptsMemoryUIHooksExist(t *testing.T) {
 		`/api/settings/reset`,
 		`confirmable(`,
 		`dataset.armed`,
+		`applyPersonalizationAvailability`,
+		`magichandy:backend-availability`,
+		`magichandy:controller-state`,
+		`toggle.disabled = personalizationLocked()`,
 	} {
 		if !strings.Contains(string(module), fragment) {
 			t.Fatalf("prompts-memory-ui.js missing %q", fragment)
@@ -191,6 +195,8 @@ func TestEmbeddedBackendLossUIHooksExist(t *testing.T) {
 		`magichandy:controller-state`,
 		`backendRequiredControls`,
 		`controllerRequiredControls`,
+		`backendWasDisabled`,
+		`if (backendAvailable && !controllerReadOnly)`,
 	} {
 		if !strings.Contains(string(app), fragment) {
 			t.Fatalf("app.js missing %q", fragment)

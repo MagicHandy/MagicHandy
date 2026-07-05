@@ -111,6 +111,38 @@ func TestEngineSettingsRefreshAppliesWhileActive(t *testing.T) {
 	assertTraceReason(t, traces.Rows(), "settings_refresh")
 }
 
+func TestEngineSnapshotReturnsIndependentTargetPointers(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), time.Hour)
+	defer func() {
+		_, _ = engine.Stop(context.Background(), "cleanup")
+	}()
+
+	_, err := engine.Start(context.Background(), MotionTarget{
+		Label:        "focused",
+		Source:       "test",
+		PatternID:    PatternStroke,
+		SpeedPercent: 40,
+		AreaFocus:    &AreaFocus{MinPercent: 20, MaxPercent: 80},
+		SoftAnchor:   &SoftAnchor{PositionPercent: 55, WeightPercent: 25},
+	}, config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	snapshot := engine.Snapshot()
+	snapshot.Target.AreaFocus.MinPercent = 99
+	snapshot.Target.SoftAnchor.PositionPercent = 99
+
+	fresh := engine.Snapshot()
+	if fresh.Target.AreaFocus.MinPercent != 20 {
+		t.Fatalf("area focus mutated through snapshot: %+v", fresh.Target.AreaFocus)
+	}
+	if fresh.Target.SoftAnchor.PositionPercent != 55 {
+		t.Fatalf("soft anchor mutated through snapshot: %+v", fresh.Target.SoftAnchor)
+	}
+}
+
 func TestEngineApplyTargetPreservesSamePatternWithoutRestart(t *testing.T) {
 	fake := transport.NewFake()
 	traces := diagnostics.NewTraceRing(128)
@@ -252,6 +284,49 @@ func TestEngineStopsForUnhealthyPlaybackDuringRetarget(t *testing.T) {
 	}
 }
 
+func TestEngineRecoveryStopWaitsForInFlightDispatch(t *testing.T) {
+	fake := newBlockingAddTransport("playing")
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), time.Millisecond)
+
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	fake.BlockFutureAdds()
+	select {
+	case <-fake.addStarted:
+	case <-time.After(time.Second):
+		t.Fatal("dispatch loop did not start an append command")
+	}
+
+	fake.SetPlaybackState("starved")
+	done := make(chan error, 1)
+	go func() {
+		_, err := engine.ApplyTarget(context.Background(), MotionTarget{
+			Label:        "recovery target",
+			Source:       "test",
+			PatternID:    PatternPulse,
+			SpeedPercent: 60,
+		}, "cross_pattern_change")
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("recovery returned before blocked append was drained: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+	close(fake.releaseAdd)
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("ApplyTarget succeeded despite unhealthy playback")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("recovery did not finish after blocked append was released")
+	}
+}
+
 func TestEngineConcurrentRefreshSnapshotAndStop(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), 2*time.Millisecond)
@@ -345,4 +420,51 @@ func (t *playbackStateTransport) SetPlaybackState(state string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.state = state
+}
+
+type blockingAddTransport struct {
+	*playbackStateTransport
+	blockMu    sync.Mutex
+	blockAdds  bool
+	addStarted chan struct{}
+	releaseAdd chan struct{}
+	startOnce  sync.Once
+}
+
+func newBlockingAddTransport(state string) *blockingAddTransport {
+	return &blockingAddTransport{
+		playbackStateTransport: newPlaybackStateTransport(state),
+		addStarted:             make(chan struct{}),
+		releaseAdd:             make(chan struct{}),
+	}
+}
+
+func (t *blockingAddTransport) BlockFutureAdds() {
+	t.blockMu.Lock()
+	defer t.blockMu.Unlock()
+	t.blockAdds = true
+}
+
+func (t *blockingAddTransport) AddHSP(ctx context.Context, command transport.HSPAddCommand) (transport.CommandResult, error) {
+	t.blockMu.Lock()
+	block := t.blockAdds
+	t.blockMu.Unlock()
+	if !block {
+		return t.Fake.AddHSP(ctx, command)
+	}
+
+	t.startOnce.Do(func() { close(t.addStarted) })
+	<-t.releaseAdd
+	err := ctx.Err()
+	if err == nil {
+		err = context.Canceled
+	}
+	return transport.CommandResult{
+		Kind:        transport.CommandKindHSPAdd,
+		Transport:   "blocked_append",
+		OK:          false,
+		Status:      "failed",
+		Error:       err.Error(),
+		CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}, err
 }

@@ -201,6 +201,27 @@ func TestUserStopEndsFreestyleThroughMotionStop(t *testing.T) {
 	}
 }
 
+func TestMotionStopClearsWaitingModeWithoutEngine(t *testing.T) {
+	server := newTestServerWithRuntime(t, Runtime{})
+	t.Cleanup(server.Close)
+
+	started := personalizationRequest(t, server, http.MethodPost, "/api/modes/start", `{"mode":"freestyle"}`)
+	if started.Code != http.StatusOK {
+		t.Fatalf("start freestyle = %d: %s", started.Code, started.Body.String())
+	}
+	if !server.modes.Status().Active {
+		t.Fatal("freestyle should be active while waiting for a startable engine")
+	}
+
+	stopped := personalizationRequest(t, server, http.MethodPost, "/api/motion/stop", "")
+	if stopped.Code != http.StatusOK {
+		t.Fatalf("motion stop = %d, want 200 for idempotent safety stop: %s", stopped.Code, stopped.Body.String())
+	}
+	if server.modes.Status().Active {
+		t.Fatal("waiting freestyle mode survived Stop")
+	}
+}
+
 func TestQuickEndpointPersistsMotionStyle(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)

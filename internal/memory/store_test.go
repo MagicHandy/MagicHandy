@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,5 +130,46 @@ func TestStoreRecoversFromCorruptFileWithoutFailingStartup(t *testing.T) {
 	// The store stays writable after recovery.
 	if _, err := store.Add("Post-recovery memory."); err != nil {
 		t.Fatalf("Add after recovery: %v", err)
+	}
+}
+
+func TestStoreNormalizesLoadedMemoryFile(t *testing.T) {
+	dir := t.TempDir()
+	file := struct {
+		Version  int      `json:"version"`
+		Memories []Memory `json:"memories"`
+	}{
+		Version: memoriesVersion,
+		Memories: []Memory{
+			{ID: " mem-1 ", Text: "  Kept.  ", Enabled: true, CreatedAt: "2026-07-05T00:00:00Z"},
+			{ID: "mem-1", Text: "Duplicate.", Enabled: true},
+			{ID: "mem-blank", Text: " ", Enabled: true},
+			{ID: "mem-big", Text: strings.Repeat("x", maxMemoryChars+1), Enabled: true},
+		},
+	}
+	data, err := json.Marshal(file)
+	if err != nil {
+		t.Fatalf("marshal memory file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, memoriesFileName), data, 0o600); err != nil {
+		t.Fatalf("write memory file: %v", err)
+	}
+
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if !store.Recovered() {
+		t.Fatal("invalid loaded memory records should report recovery")
+	}
+	snapshot := store.Snapshot()
+	if !snapshot.Enabled {
+		t.Fatal("missing enabled switch should default to true")
+	}
+	if len(snapshot.Memories) != 1 {
+		t.Fatalf("memories = %+v, want only one valid unique memory", snapshot.Memories)
+	}
+	if snapshot.Memories[0].ID != "mem-1" || snapshot.Memories[0].Text != "Kept." {
+		t.Fatalf("memory = %+v, want trimmed valid record", snapshot.Memories[0])
 	}
 }

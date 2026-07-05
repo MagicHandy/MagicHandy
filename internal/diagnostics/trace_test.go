@@ -94,3 +94,100 @@ func TestTraceExportRedactsTransportSecrets(t *testing.T) {
 		t.Fatalf("trace export leaked secret: %s", data)
 	}
 }
+
+func TestTraceRingOwnsAddedRows(t *testing.T) {
+	ring := NewTraceRing(2)
+	target := &MotionTraceTarget{
+		Label:        "original",
+		SpeedPercent: 30,
+	}
+	planner := &MotionTracePlanner{
+		Mode: "freestyle",
+		Scores: []PlannerScore{
+			{PatternIdentifier: "a", Score: 1, Chosen: true},
+		},
+	}
+	retarget := &MotionTraceRetarget{
+		PreviousTarget: &MotionTraceTarget{Label: "previous"},
+		NextTarget:     &MotionTraceTarget{Label: "next"},
+	}
+	command := transport.Command{
+		ID:   "fake-000001",
+		Kind: transport.CommandKindHSPAdd,
+		HSPAdd: &transport.HSPAddCommand{
+			StreamID: "1",
+			Points: []transport.TimedPoint{
+				{PositionPercent: 20, TimeMillis: 100},
+			},
+		},
+	}
+
+	ring.Add(MotionTraceRow{
+		Timestamp:        "2026-06-30T12:00:00Z",
+		Source:           "test",
+		Reason:           "clone",
+		Target:           target,
+		Planner:          planner,
+		Retarget:         retarget,
+		TransportCommand: &command,
+	})
+
+	target.Label = "mutated"
+	planner.Scores[0].Score = 99
+	retarget.PreviousTarget.Label = "mutated-previous"
+	command.HSPAdd.Points[0].PositionPercent = 99
+
+	row := ring.Export().Rows[0]
+	if row.Target.Label != "original" {
+		t.Fatalf("target label = %q, want original", row.Target.Label)
+	}
+	if row.Planner.Scores[0].Score != 1 {
+		t.Fatalf("planner score = %v, want 1", row.Planner.Scores[0].Score)
+	}
+	if row.Retarget.PreviousTarget.Label != "previous" {
+		t.Fatalf("previous target label = %q, want previous", row.Retarget.PreviousTarget.Label)
+	}
+	if row.TransportCommand.HSPAdd.Points[0].PositionPercent != 20 {
+		t.Fatalf("transport point = %d, want 20", row.TransportCommand.HSPAdd.Points[0].PositionPercent)
+	}
+}
+
+func TestTraceRowsAndExportReturnIndependentSnapshots(t *testing.T) {
+	ring := NewTraceRing(2)
+	ring.Add(MotionTraceRow{
+		Timestamp: "2026-06-30T12:00:00Z",
+		Source:    "test",
+		Reason:    "snapshot",
+		Target: &MotionTraceTarget{
+			Label:        "stored",
+			SpeedPercent: 30,
+		},
+		Planner: &MotionTracePlanner{
+			Mode: "freestyle",
+			Scores: []PlannerScore{
+				{PatternIdentifier: "a", Score: 1, Chosen: true},
+			},
+		},
+		Retarget: &MotionTraceRetarget{
+			PreviousTarget: &MotionTraceTarget{Label: "previous"},
+		},
+	})
+
+	rows := ring.Rows()
+	rows[0].Target.Label = "mutated-rows"
+	rows[0].Planner.Scores[0].Score = 99
+
+	export := ring.Export()
+	export.Rows[0].Retarget.PreviousTarget.Label = "mutated-export"
+
+	row := ring.Export().Rows[0]
+	if row.Target.Label != "stored" {
+		t.Fatalf("target label = %q, want stored", row.Target.Label)
+	}
+	if row.Planner.Scores[0].Score != 1 {
+		t.Fatalf("planner score = %v, want 1", row.Planner.Scores[0].Score)
+	}
+	if row.Retarget.PreviousTarget.Label != "previous" {
+		t.Fatalf("previous target label = %q, want previous", row.Retarget.PreviousTarget.Label)
+	}
+}

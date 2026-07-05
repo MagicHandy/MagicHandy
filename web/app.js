@@ -230,8 +230,11 @@ function setBackendAvailability(available, reason = "") {
 
 function setControlBackendDisabled(control, disabled, reason) {
   if (disabled) {
-    if (!control.disabled && !("backendTitle" in control.dataset)) {
+    if (control.dataset.disabledByBackend !== "true") {
+      const wasDisabled = (control.disabled && control.dataset.disabledByController !== "true") ||
+        control.dataset.controllerWasDisabled === "true";
       control.dataset.backendTitle = control.getAttribute("title") || "";
+      control.dataset.backendWasDisabled = wasDisabled ? "true" : "false";
       control.dataset.disabledByBackend = "true";
     }
     control.disabled = true;
@@ -239,15 +242,18 @@ function setControlBackendDisabled(control, disabled, reason) {
     return;
   }
   if (control.dataset.disabledByBackend === "true") {
-    control.disabled = false;
-    if (control.dataset.backendTitle) {
-      control.title = control.dataset.backendTitle;
-    } else {
-      control.removeAttribute("title");
+    const wasDisabled = control.dataset.backendWasDisabled === "true";
+    const previousTitle = control.dataset.backendTitle || "";
+    delete control.dataset.disabledByBackend;
+    delete control.dataset.backendWasDisabled;
+    delete control.dataset.backendTitle;
+    if (control.dataset.disabledByController !== "true") {
+      if (!wasDisabled) {
+        control.disabled = false;
+      }
+      restoreControlTitle(control, previousTitle);
     }
   }
-  delete control.dataset.backendTitle;
-  delete control.dataset.disabledByBackend;
 }
 
 function setControllerState(controller = {}) {
@@ -272,7 +278,7 @@ function applyControllerLock() {
   for (const control of controllerRequiredControls) {
     setControlControllerDisabled(control, controllerReadOnly, controllerReason);
   }
-  if (!controllerReadOnly) {
+  if (backendAvailable && !controllerReadOnly) {
     updateApplicationIDOverrideState();
     updateTransportVisibility();
     updateLLMVisibility();
@@ -283,8 +289,10 @@ function applyControllerLock() {
 function setControlControllerDisabled(control, disabled, reason) {
   if (disabled) {
     if (control.dataset.disabledByController !== "true") {
+      const wasDisabled = (control.disabled && control.dataset.disabledByBackend !== "true") ||
+        control.dataset.backendWasDisabled === "true";
       control.dataset.controllerTitle = control.getAttribute("title") || "";
-      control.dataset.controllerWasDisabled = control.disabled ? "true" : "false";
+      control.dataset.controllerWasDisabled = wasDisabled ? "true" : "false";
       control.dataset.disabledByController = "true";
     }
     control.disabled = true;
@@ -295,18 +303,25 @@ function setControlControllerDisabled(control, disabled, reason) {
   }
   if (control.dataset.disabledByController === "true") {
     const wasDisabled = control.dataset.controllerWasDisabled === "true";
+    const previousTitle = control.dataset.controllerTitle || "";
     delete control.dataset.disabledByController;
     delete control.dataset.controllerWasDisabled;
-    if (control.dataset.disabledByBackend !== "true" && !wasDisabled) {
-      control.disabled = false;
-      if (control.dataset.controllerTitle) {
-        control.title = control.dataset.controllerTitle;
-      } else {
-        control.removeAttribute("title");
+    if (control.dataset.disabledByBackend !== "true") {
+      if (!wasDisabled) {
+        control.disabled = false;
       }
+      restoreControlTitle(control, previousTitle);
     }
   }
   delete control.dataset.controllerTitle;
+}
+
+function restoreControlTitle(control, title) {
+  if (title) {
+    control.title = title;
+    return;
+  }
+  control.removeAttribute("title");
 }
 
 function renderTransportStatus(state, bluetooth) {

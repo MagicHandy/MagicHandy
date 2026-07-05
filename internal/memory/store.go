@@ -73,12 +73,12 @@ func Open(dataDir string) (*Store, error) {
 		}
 		return store, nil
 	}
-	var file memoriesFile
+	file := memoriesFile{Version: memoriesVersion, Enabled: true}
 	if err := json.Unmarshal(data, &file); err != nil {
 		store.recovered = true
 		return store, nil
 	}
-	file.Version = memoriesVersion
+	file = store.normalizeLoadedFile(file)
 	store.state = file
 	return store, nil
 }
@@ -217,6 +217,32 @@ func (s *Store) SetEnabled(enabled bool) error {
 
 func (s *Store) persistLocked() error {
 	return writeJSONFileAtomic(s.path, s.state)
+}
+
+func (s *Store) normalizeLoadedFile(file memoriesFile) memoriesFile {
+	file.Version = memoriesVersion
+	normalized := file.Memories[:0]
+	seen := make(map[string]struct{}, len(file.Memories))
+	for _, item := range file.Memories {
+		item.ID = strings.TrimSpace(item.ID)
+		item.Text = strings.TrimSpace(item.Text)
+		if item.ID == "" || item.Text == "" || len(item.Text) > maxMemoryChars {
+			s.recovered = true
+			continue
+		}
+		if _, exists := seen[item.ID]; exists {
+			s.recovered = true
+			continue
+		}
+		seen[item.ID] = struct{}{}
+		if len(normalized) >= maxMemories {
+			s.recovered = true
+			break
+		}
+		normalized = append(normalized, item)
+	}
+	file.Memories = normalized
+	return file
 }
 
 func randomHex(bytes int) string {
