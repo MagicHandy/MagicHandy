@@ -414,7 +414,10 @@ func (e *Engine) refreshSettings(settings config.MotionSettings, reason string) 
 }
 
 func (e *Engine) startLoop(parent context.Context) {
-	loopCtx, cancel := context.WithCancel(parent)
+	// Command setup should honor the caller's request context, but the
+	// continuous dispatch loop must outlive that request once motion has
+	// started. Stop/Pause still cancel the loop through e.cancel.
+	loopCtx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	done := make(chan struct{})
 	e.mu.Lock()
 	e.cancel = cancel
