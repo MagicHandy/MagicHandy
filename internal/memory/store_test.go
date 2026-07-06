@@ -92,6 +92,60 @@ func TestPromptTextsHonorsItemAndGlobalSwitches(t *testing.T) {
 	}
 }
 
+func TestStoreImportsLegacyMemoryFile(t *testing.T) {
+	dir := t.TempDir()
+	file := memoriesFile{
+		Version: memoriesVersion,
+		Enabled: false,
+		Memories: []Memory{
+			{ID: "mem-legacy-1", Text: "Legacy one.", Enabled: true, CreatedAt: "2026-07-05T00:00:00Z"},
+			{ID: "mem-legacy-2", Text: "Legacy two.", Enabled: false, CreatedAt: "2026-07-05T00:00:01Z"},
+		},
+	}
+	data, err := json.Marshal(file)
+	if err != nil {
+		t.Fatalf("marshal legacy memory file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, memoriesFileName), data, 0o600); err != nil {
+		t.Fatalf("write legacy memory file: %v", err)
+	}
+
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	snapshot := store.Snapshot()
+	if snapshot.Enabled {
+		t.Fatal("legacy global memory switch did not import as disabled")
+	}
+	if len(snapshot.Memories) != 2 {
+		t.Fatalf("imported memories = %+v, want 2", snapshot.Memories)
+	}
+	if texts := store.PromptTexts(); texts != nil {
+		t.Fatalf("PromptTexts with imported global switch off = %v, want nil", texts)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, memoriesFileName)); !os.IsNotExist(err) {
+		t.Fatalf("legacy memory path stat = %v, want renamed away", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, memoriesFileName+".migrated")); err != nil {
+		t.Fatalf("archived legacy memory file missing: %v", err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() {
+		_ = reopened.Close()
+	}()
+	if got := reopened.Snapshot(); got.Enabled || len(got.Memories) != 2 {
+		t.Fatalf("reopened imported snapshot = %+v, want disabled with 2 memories", got)
+	}
+}
+
 func TestStoreValidatesInputAndUnknownIDs(t *testing.T) {
 	store, err := Open(t.TempDir())
 	if err != nil {

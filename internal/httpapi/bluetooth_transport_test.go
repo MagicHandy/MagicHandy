@@ -97,7 +97,7 @@ func TestCloudEndpointDoesNotFallbackWhenBluetoothIsSelected(t *testing.T) {
 	if cloudHits.Load() != 0 {
 		t.Fatalf("cloud endpoint was called %d time(s), want no fallback", cloudHits.Load())
 	}
-	if !strings.Contains(recorder.Body.String(), "Cloud REST dispatch owner is not selected") {
+	if !strings.Contains(recorder.Body.String(), "cloud REST dispatch owner is not selected") {
 		t.Fatalf("response = %s, want dispatch owner error", recorder.Body.String())
 	}
 }

@@ -1,55 +1,59 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
   enable:
     - depguard
-    - errcheck
     - funlen
     - gocyclo
-    - gofmt
     - gosec
-    - govet
-    - ineffassign
     - revive
-    - staticcheck
-    - unused
-
-linters-settings:
-  depguard:
-    rules:
-      pure-go-core:
-        files:
-          - $all
-        deny:
-          - pkg: C
-            desc: MagicHandy core must stay CGO-free.
-      no-transport-from-semantic-clients:
-        files:
-          - internal/chat/**/*.go
-          - internal/llm/**/*.go
-          - internal/modes/**/*.go
-        deny:
-          - pkg: github.com/mapledaemon/MagicHandy/internal/transport
-            desc: Chat, LLM, and modes produce semantic targets and must not call transport.
-      httpapi-is-edge-only:
-        files:
-          - internal/config/**/*.go
-          - internal/logging/**/*.go
-          - internal/motion/**/*.go
-          - internal/transport/**/*.go
-          - internal/chat/**/*.go
-          - internal/llm/**/*.go
-          - internal/modes/**/*.go
-        deny:
-          - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
-            desc: HTTP API is an edge adapter; core packages must not depend on it.
-  funlen:
-    lines: 100
-    statements: 60
-  gocyclo:
-    min-complexity: 20
-
-issues:
-  exclude-use-default: false
+  settings:
+    depguard:
+      rules:
+        httpapi-is-edge-only:
+          files:
+            - internal/config/**/*.go
+            - internal/logging/**/*.go
+            - internal/motion/**/*.go
+            - internal/transport/**/*.go
+            - internal/chat/**/*.go
+            - internal/llm/**/*.go
+            - internal/modes/**/*.go
+          deny:
+            - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
+              desc: HTTP API is an edge adapter; core packages must not depend on it.
+        no-transport-from-semantic-clients:
+          files:
+            - internal/chat/**/*.go
+            - internal/llm/**/*.go
+            - internal/modes/**/*.go
+          deny:
+            - pkg: github.com/mapledaemon/MagicHandy/internal/transport
+              desc: Chat, LLM, and modes produce semantic targets and must not call transport.
+        pure-go-core:
+          files:
+            - $all
+          deny:
+            - pkg: C
+              desc: MagicHandy core must stay CGO-free.
+    funlen:
+      lines: 100
+      statements: 60
+    gocyclo:
+      min-complexity: 20
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
