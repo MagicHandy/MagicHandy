@@ -90,11 +90,13 @@ One link per workspace, each an icon + label row:
 | 4 | Settings | `#/settings/*` | configuration |
 
 Row spec: 40px tall, `0 12px` padding, 18px icon + 0.9rem label, radius
-`--radius-sm`. **Active state is an edge marker, not a fill blob**: a 3px
-`--accent` (steel azure) left border plus a one-step surface raise
-(`--surface-2`) and `--text` label. Hover is `--surface`. Do not paint the
-active row as a saturated pill — that is the exact "oversized bubble" quirk
-this redesign avoids (see "Anti-Vibecoding Rules").
+`--radius-sm` for default and hover states. Hover uses `--surface-2`. **Active
+state is an edge marker, not a fill blob**: a 3px `--accent` (steel azure) left
+border plus a one-step surface raise (`--surface-2`), `--text` label,
+`--accent` icon, and square row corners (`border-radius: 0`) so the single-side
+edge marker reads cleanly. Do not paint the active row as a saturated pill —
+that is the exact "oversized bubble" quirk this redesign avoids (see
+"Anti-Vibecoding Rules").
 
 Links are real `<a href="#/...">` elements so they are keyboard-focusable,
 middle-clickable, and deep-linkable. `aria-current="page"` marks the active
@@ -399,6 +401,9 @@ changes these deliberately (not silently):
   accessibility, visual language, and the Functional Parity Baseline. Its
   "Layout" and "Settings" sections are annotated to defer to this document for
   the shell shape.
+- [ui-design-guidelines.md](ui-design-guidelines.md): the token, component, and
+  sketch-level visual contract for implementing this shell without introducing
+  generic oversized status bubbles or new decorative hues.
 - ADR 0002 (motion/transport contract) and ADR 0004 (frontend strategy):
   unchanged; this redesign obeys both (engine-only motion, fresh minimal ES
   modules, embedded assets, no build step).

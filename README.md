@@ -151,6 +151,7 @@ MinGW/GCC installed.
 - [SQLite persistence (ADR 0008)](docs/decisions/0008-sqlite-persistence.md)
 - [UI design](docs/ui-design.md)
 - [UI navigation redesign (sidebar shell)](docs/ui-navigation-redesign.md)
+- [UI design guidelines](docs/ui-design-guidelines.md)
 - [Localization wording](docs/localization-wording.md)
 - [Prompt localization strategy](docs/prompt-localization-strategy.md)
 - [StrokeGPT-ReVibed prompt inventory](docs/stgpt-rv-prompt-inventory.md)
