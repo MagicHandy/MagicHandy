@@ -14,7 +14,8 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-05. Phases 0 through 11 are merged to `main`.
+Updated 2026-07-06. Phases 0 through 11 are merged to `main`. Phase 11B (SQLite
+persistence foundation, ADR 0008) is the planned next step.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -32,6 +33,7 @@ Updated 2026-07-05. Phases 0 through 11 are merged to `main`.
 | 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
+| 11B | SQLite persistence foundation (ADR 0008) | Planned | — |
 | 12-17 | Voice, patterns, migration, packaging, parity | Not started | — |
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
@@ -167,6 +169,7 @@ MagicHandy/
   internal/validation/     retarget validation checklist           [exists]
   internal/modes/          freestyle, continuous-chat planners     [exists]
   internal/memory/         long-term memory store                  [exists]
+  internal/store/          SQLite datastore, schema, migrations    [planned]
   internal/audio/          voice-output queue, TTS worker client   [planned]
   internal/asr/            voice-input worker client               [planned]
   internal/workers/        external worker lifecycle/protocol      [planned]
@@ -385,6 +388,73 @@ in diagnostics; stop interrupts instantly; settings apply during modes.
 - Edge/Milk legacy parity unless explicitly requested
 - pattern library authoring (Phase 14)
 - voice
+
+# Phase 11B: SQLite Persistence Foundation
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 11B: introduce a single pure-Go SQLite datastore (modernc.org/sqlite) behind the existing settings, memory, and prompt-set store interfaces, with schema migrations, a non-destructive one-time JSON import, and re-measured budgets.`
+
+## Objective
+
+Replace the three independent JSON stores with one embedded, transactional
+SQLite datastore (ADR 0008) so the Phase 12 chat log and Phase 14 pattern
+library have a store shaped for them, without regressing the pure-Go,
+single-binary, low-memory guarantees.
+
+## Scope
+
+Implement:
+
+- `internal/store`: a `modernc.org/sqlite` connection (WAL, `foreign_keys` on,
+  bounded cache, `busy_timeout`, serialized single writer) and a forward-only
+  migration runner keyed on `PRAGMA user_version`
+- move settings, memory, and prompt sets onto DB tables behind their current
+  interfaces (`config.Store`, `memory.Store`, `chat.PromptLibrary` keep their
+  method signatures and contracts): settings as a versioned document row,
+  memory and prompt sets as relational rows
+- a non-destructive one-time import: when the DB is absent but the JSON files
+  exist, import in one transaction and rename the JSON files `*.migrated`;
+  report it in load status
+- preserve every existing contract: corrupt-store recovery to safe defaults,
+  the redacted settings view (connection key never returned), and "reset
+  settings does not touch memory or prompt sets"
+- re-measure binary size and idle/active RSS; record in `docs/goal-scorecard.md`
+
+Rules:
+
+- pure-Go only; the `CGO_ENABLED=0` build and depguard `C` denial stay green
+- no behavior visible to the API or UI changes beyond load status reporting the
+  import; the store swap is substrate-only
+- do not normalize settings into columns (ADR 0008): keep the document plus the
+  existing migration/redaction machinery
+
+## Validation
+
+```powershell
+go test ./...
+go test -race ./...
+$env:CGO_ENABLED = "0"; go build ./cmd/magichandy
+```
+
+Fixtures cover import from present, absent, and corrupt JSON stores; a migration
+test covers forward migration and the newer-than-binary error; redaction tests
+still pass; budgets re-measured.
+
+## Done Criteria
+
+- Settings, memory, and prompt sets persist through one SQLite datastore with no
+  API/UI contract change; the one-time JSON import is non-destructive and
+  tested.
+- The `CGO_ENABLED=0` build stays green; binary and RSS budgets are re-measured
+  and recorded (or a waiver is recorded).
+
+## Out Of Scope
+
+- the chat message log and per-client cursors (Phase 12, ADR 0003)
+- the pattern/program library tables (Phase 14)
+- StrokeGPT-ReVibed import (Phase 15) — same schema target, separate phase
+- at-rest encryption (the trust model stays a single local operator)
 
 # Phase 12: Voice Worker Boundary
 

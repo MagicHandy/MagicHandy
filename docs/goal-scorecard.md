@@ -99,10 +99,19 @@ Ranked by threat to the stated goals:
 3. **Feature growth vs binary/memory budgets.** Voice workers, pattern
    libraries, and the model manager all add weight; re-measure size and
    active RSS at each phase completion so growth is a trend line, not a
-   surprise.
+   surprise. The first concrete addition is the ADR 0008 SQLite datastore
+   (`modernc.org/sqlite` + `modernc.org/libc` are multi-MB transpiled
+   packages); measure binary and RSS when Phase 11B lands.
 
 ## History
 
+- **2026-07-06** — Decision recorded (ADR 0008): persistence moves to a single
+  pure-Go SQLite datastore (`modernc.org/sqlite`, `CGO_ENABLED=0`) in Phase
+  11B, replacing the three JSON stores (settings, memory, prompt sets).
+  Planning only — no code or measurement yet. Binary/RSS impact is Watch-List
+  item 3 and must be re-measured when 11B lands (current headroom: 7.70 MB
+  stripped against the 30 MB budget; idle 8.96 MB against 40 MB). The redaction
+  contract and "reset keeps memory and prompt sets" are preserved by the ADR.
 - **2026-07-05** — Motion-safety review fixes (external review pass). Three
   confirmed defects fixed with regression tests: (1) reverse direction
   double-inverted — the engine pre-reversed HSP points and the Cloud/Bluetooth
