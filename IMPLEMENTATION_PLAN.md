@@ -448,8 +448,9 @@ still pass; budgets are re-measured.
 
 ## Completion Evidence
 
-- `modernc.org/sqlite v1.45.0` is pinned with Go 1.24-compatible transitive
-  packages; `CGO_ENABLED=0` build remains required.
+- `modernc.org/sqlite v1.53.0` is pinned with Go 1.25-compatible transitive
+  packages and validated locally with Go 1.26.4; `CGO_ENABLED=0` build remains
+  required.
 - Settings, memories, and user prompt sets round-trip through `magichandy.db`;
   legacy `settings.json`, `memories.json`, and `prompt_sets.json` fixtures
   import and archive to `*.migrated`.

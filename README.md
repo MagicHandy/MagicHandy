@@ -59,7 +59,7 @@ Not implemented yet (see the status table in
 
 ## Requirements
 
-- Go 1.24 or newer
+- Go 1.25 or newer (tested locally with Go 1.26.4)
 - No Node, Python, or CGO dependency is required for the core app
 
 ## Run From Source

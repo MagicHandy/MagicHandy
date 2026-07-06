@@ -107,7 +107,7 @@ Ranked by threat to the stated goals:
 
 - **2026-07-06** — Phase 11B complete on the current branch: settings,
   memories, and user prompt sets now round-trip through one pure-Go SQLite
-  datastore (`magichandy.db`, `modernc.org/sqlite v1.45.0`) with forward
+  datastore (`magichandy.db`, `modernc.org/sqlite v1.53.0`) with forward
   `PRAGMA user_version` migrations, WAL/busy-timeout pragmas, serialized write
   transactions, and legacy JSON import fixtures. Legacy `settings.json`,
   `memories.json`, and `prompt_sets.json` are archived as `*.migrated` after
