@@ -401,15 +401,18 @@ Mitigation:
 
 - pure-Go driver only (`modernc.org/sqlite`), preserving `CGO_ENABLED=0` and
   free cross-builds; never a CGo driver
-- non-destructive one-time import: keep the JSON files (renamed `*.migrated`)
-  rather than deleting them, inside one transaction, reported in load status
+- non-destructive one-time import: keep the JSON file contents (renamed
+  `*.migrated`) rather than deleting them; each legacy domain imports inside a
+  SQLite transaction and archives only after commit, with settings import
+  reported in load status
 - forward-only migrations keyed on `PRAGMA user_version`, run transactionally at
   open; a schema newer than the binary is a clear error, never a silent
   downgrade
 - WAL plus `busy_timeout` plus a serialized single writer so the app's own
   concurrency cannot deadlock the store
 - re-measure binary size and idle/active RSS when Phase 11B lands and record in
-  `docs/goal-scorecard.md`; a budget miss is recorded, not silently relaxed
+  `docs/goal-scorecard.md`; the Phase 11B RSS miss is recorded as a waiver, not
+  silently relaxed
 - preserve the redaction contract: the connection key is never returned by
   reads, diagnostics, or exports; the `.db` file carries the same at-rest
   sensitivity as `settings.json` did
@@ -418,7 +421,7 @@ Exit evidence:
 
 - Phase 11B: settings, memory, and prompt sets round-trip through SQLite with
   tests; the JSON import is covered by fixtures (present, absent, corrupt);
-  budgets re-measured within target or a recorded waiver; redaction tests still
-  pass
+  binary size remains within target; RSS has a recorded waiver; redaction tests
+  still pass
 
 Relates to R8 (user migration) and R11 (goals unmeasured).

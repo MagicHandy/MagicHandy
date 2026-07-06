@@ -65,14 +65,14 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 
 	response, err := p.client.Do(httpRequest)
 	if err != nil {
-		return "", fmt.Errorf("Ollama chat request failed: %w", err)
+		return "", fmt.Errorf("ollama chat request failed: %w", err)
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return "", fmt.Errorf("Ollama chat returned %d: %s", response.StatusCode, strings.TrimSpace(string(message)))
+		return "", fmt.Errorf("ollama chat returned %d: %s", response.StatusCode, strings.TrimSpace(string(message)))
 	}
 
 	return readOllamaStream(response.Body, onDelta)

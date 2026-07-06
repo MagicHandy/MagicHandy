@@ -80,10 +80,10 @@ func NewCloudRESTTransport(prerequisites CloudPrerequisites, options CloudBuildO
 	}
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("parse Cloud REST base URL: %w", err)
+		return nil, fmt.Errorf("parse cloud REST base URL: %w", err)
 	}
 	if parsed.Scheme == "" || parsed.Host == "" {
-		return nil, errors.New("Cloud REST base URL must include scheme and host")
+		return nil, errors.New("cloud REST base URL must include scheme and host")
 	}
 	if parsed.Path == "" {
 		parsed.Path = "/"
@@ -233,7 +233,7 @@ func (t *CloudRESTTransport) ListenStateEvents(ctx context.Context, onEvent func
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 1024))
-		err := fmt.Errorf("Cloud REST HSP events returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		err := fmt.Errorf("cloud REST HSP events returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 		t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
 		return err
 	}
@@ -313,7 +313,7 @@ func (t *CloudRESTTransport) dispatchWithBody(ctx context.Context, request Cloud
 		return result, body, readErr
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		err := fmt.Errorf("Cloud REST %s returned HTTP %d: %s", request.Operation, response.StatusCode, strings.TrimSpace(string(body)))
+		err := fmt.Errorf("cloud REST %s returned HTTP %d: %s", request.Operation, response.StatusCode, strings.TrimSpace(string(body)))
 		result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
 		t.rememberPlaybackState(body)
 		return result, body, err
@@ -407,11 +407,11 @@ func (t *CloudRESTTransport) refreshServerTimeOffsetLocked(ctx context.Context, 
 		return err
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("Cloud REST server time returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("cloud REST server time returned HTTP %d", response.StatusCode)
 	}
 	serverTimeMillis, ok := parseServerTimeMillis(body)
 	if !ok {
-		return errors.New("Cloud REST server time response did not include a recognized timestamp")
+		return errors.New("cloud REST server time response did not include a recognized timestamp")
 	}
 	ended := time.Now().UTC()
 	localMidpoint := (unixMillis(started) + unixMillis(ended)) / 2

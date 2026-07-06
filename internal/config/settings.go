@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -350,53 +348,6 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	return MigrateSettings(settings, header.Version)
 }
 
-func writeSettingsFile(path string, settings Settings) error {
-	settings, err := NormalizeSettings(settings)
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode settings: %w", err)
-	}
-	data = append(data, '\n')
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create settings directory: %w", err)
-	}
-
-	temp, err := os.CreateTemp(filepath.Dir(path), ".settings-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temporary settings file: %w", err)
-	}
-	tempName := temp.Name()
-	defer func() {
-		_ = os.Remove(tempName)
-	}()
-
-	if _, err := temp.Write(data); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("write temporary settings file: %w", err)
-	}
-	if err := temp.Chmod(0o600); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("secure temporary settings file: %w", err)
-	}
-	if err := temp.Sync(); err != nil {
-		_ = temp.Close()
-		return fmt.Errorf("sync temporary settings file: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("close temporary settings file: %w", err)
-	}
-	if err := os.Rename(tempName, path); err != nil {
-		return fmt.Errorf("replace settings file: %w", err)
-	}
-
-	return nil
-}
-
 func validateSettings(settings Settings) error {
 	if settings.Server.Port < 1 || settings.Server.Port > 65535 {
 		return fmt.Errorf("server port must be between 1 and 65535")
@@ -503,7 +454,7 @@ func validateLLMSettings(settings LLMSettings) error {
 		return errors.New("llama.cpp base URL is required")
 	}
 	if settings.OllamaBaseURL == "" {
-		return errors.New("Ollama base URL is required")
+		return errors.New("ollama base URL is required")
 	}
 	if settings.Model == "" {
 		return errors.New("LLM model is required")

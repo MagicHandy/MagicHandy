@@ -28,6 +28,15 @@ func newPersonalizationRuntime(dataDir string) (personalizationRuntime, error) {
 	return personalizationRuntime{memory: memoryStore, prompts: prompts}, nil
 }
 
+func (p personalizationRuntime) Close() {
+	if p.memory != nil {
+		_ = p.memory.Close()
+	}
+	if p.prompts != nil {
+		_ = p.prompts.Close()
+	}
+}
+
 // --- Memory -------------------------------------------------------------------
 
 // memoryState is the compact aggregate-state view (counts, not contents).

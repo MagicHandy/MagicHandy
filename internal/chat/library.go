@@ -1,17 +1,20 @@
 package chat
 
 import (
+	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 const (
@@ -34,13 +37,14 @@ type promptSetsFile struct {
 	Sets    []PromptSet `json:"sets"`
 }
 
-// PromptLibrary owns user-created prompt sets on disk. Built-in sets are
-// code-defined templates and never enter the file.
+// PromptLibrary owns user-created prompt sets in the datastore. Built-in sets
+// are code-defined templates and never enter the DB.
 type PromptLibrary struct {
-	mu        sync.RWMutex
-	path      string
-	sets      map[string]PromptSet
-	recovered bool
+	mu         sync.RWMutex
+	path       string
+	legacyPath string
+	db         *dbstore.DB
+	recovered  bool
 }
 
 // OpenPromptLibrary loads user prompt sets from dataDir, recovering to an
@@ -50,53 +54,19 @@ func OpenPromptLibrary(dataDir string) (*PromptLibrary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve data directory: %w", err)
 	}
+	database, err := dbstore.Open(absDir)
+	if err != nil {
+		return nil, err
+	}
 	library := &PromptLibrary{
-		path: filepath.Join(absDir, promptSetsFileName),
-		sets: map[string]PromptSet{},
+		path:       database.Path(),
+		legacyPath: filepath.Join(database.DataDir(), promptSetsFileName),
+		db:         database,
 	}
 
-	data, err := os.ReadFile(library.path) // #nosec G304 -- resolved app data file.
-	if err != nil {
-		if !os.IsNotExist(err) {
-			library.recovered = true
-		}
-		return library, nil
-	}
-	var file promptSetsFile
-	if err := json.Unmarshal(data, &file); err != nil {
-		library.recovered = true
-		return library, nil
-	}
-	seen := make(map[string]struct{}, len(file.Sets))
-	for _, set := range file.Sets {
-		id := strings.TrimSpace(set.ID)
-		if id == "" {
-			library.recovered = true
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			library.recovered = true
-			continue
-		}
-		seen[id] = struct{}{}
-		if _, builtin := BuiltinPromptSetByID(id); builtin {
-			library.recovered = true
-			continue
-		}
-		name, system, err := validatePromptSetFields(set.Name, set.System)
-		if err != nil {
-			library.recovered = true
-			continue
-		}
-		if len(library.sets) >= maxUserPromptSets {
-			library.recovered = true
-			break
-		}
-		set.ID = id
-		set.Name = name
-		set.System = system
-		set.Builtin = false
-		library.sets[set.ID] = set
+	if err := library.importLegacyPromptSets(context.Background()); err != nil {
+		_ = database.Close()
+		return nil, err
 	}
 	return library, nil
 }
@@ -108,6 +78,11 @@ func (l *PromptLibrary) Recovered() bool {
 	return l.recovered
 }
 
+// Close releases the prompt library database handle.
+func (l *PromptLibrary) Close() error {
+	return l.db.Close()
+}
+
 // Resolve returns a built-in or user prompt set by identifier.
 func (l *PromptLibrary) Resolve(id string) (PromptSet, bool) {
 	if set, ok := BuiltinPromptSetByID(id); ok {
@@ -115,8 +90,9 @@ func (l *PromptLibrary) Resolve(id string) (PromptSet, bool) {
 	}
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	set, ok := l.sets[strings.TrimSpace(id)]
-	return set, ok
+
+	set, err := l.resolveUserLocked(context.Background(), strings.TrimSpace(id))
+	return set, err == nil
 }
 
 // List returns built-in sets first, then user sets sorted by name.
@@ -125,17 +101,7 @@ func (l *PromptLibrary) List() []PromptSet {
 	defer l.mu.RUnlock()
 
 	sets := BuiltinPromptSets()
-	user := make([]PromptSet, 0, len(l.sets))
-	for _, set := range l.sets {
-		user = append(user, set)
-	}
-	sort.Slice(user, func(i, j int) bool {
-		if user[i].Name == user[j].Name {
-			return user[i].ID < user[j].ID
-		}
-		return user[i].Name < user[j].Name
-	})
-	return append(sets, user...)
+	return append(sets, l.userSetsLocked(context.Background())...)
 }
 
 // Create validates and persists a new user prompt set.
@@ -148,7 +114,8 @@ func (l *PromptLibrary) Create(name string, system string) (PromptSet, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if len(l.sets) >= maxUserPromptSets {
+	ctx := context.Background()
+	if l.userSetCountLocked(ctx) >= maxUserPromptSets {
 		return PromptSet{}, fmt.Errorf("prompt set limit reached (%d)", maxUserPromptSets)
 	}
 	set := PromptSet{
@@ -156,9 +123,13 @@ func (l *PromptLibrary) Create(name string, system string) (PromptSet, error) {
 		Name:   name,
 		System: system,
 	}
-	l.sets[set.ID] = set
-	if err := l.persistLocked(); err != nil {
-		delete(l.sets, set.ID)
+	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO prompt_sets(id, name, system, created_at)
+			VALUES(?, ?, ?, ?)
+		`, set.ID, set.Name, set.System, time.Now().UTC().Format(time.RFC3339Nano))
+		return err
+	}); err != nil {
 		return PromptSet{}, err
 	}
 	return set, nil
@@ -177,16 +148,35 @@ func (l *PromptLibrary) Update(id string, name string, system string) (PromptSet
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	previous, ok := l.sets[strings.TrimSpace(id)]
-	if !ok {
+	ctx := context.Background()
+	trimmed := strings.TrimSpace(id)
+	previous, err := l.resolveUserLocked(ctx, trimmed)
+	if errors.Is(err, sql.ErrNoRows) {
 		return PromptSet{}, ErrPromptSetNotFound
+	} else if err != nil {
+		return PromptSet{}, err
 	}
 	next := previous
 	next.Name = name
 	next.System = system
-	l.sets[previous.ID] = next
-	if err := l.persistLocked(); err != nil {
-		l.sets[previous.ID] = previous
+	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			UPDATE prompt_sets
+			SET name = ?, system = ?
+			WHERE id = ?
+		`, next.Name, next.System, trimmed)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return ErrPromptSetNotFound
+		}
+		return nil
+	}); err != nil {
 		return PromptSet{}, err
 	}
 	return next, nil
@@ -201,16 +191,169 @@ func (l *PromptLibrary) Delete(id string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	previous, ok := l.sets[strings.TrimSpace(id)]
-	if !ok {
-		return ErrPromptSetNotFound
+	ctx := context.Background()
+	return l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM prompt_sets
+			WHERE id = ?
+		`, strings.TrimSpace(id))
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return ErrPromptSetNotFound
+		}
+		return nil
+	})
+}
+
+func (l *PromptLibrary) importLegacyPromptSets(ctx context.Context) error {
+	const domain = "prompt_sets"
+	if _, ok, err := l.db.LegacyImportStatus(ctx, domain); err != nil {
+		return fmt.Errorf("read prompt set import status: %w", err)
+	} else if ok {
+		return nil
 	}
-	delete(l.sets, previous.ID)
-	if err := l.persistLocked(); err != nil {
-		l.sets[previous.ID] = previous
-		return err
+
+	status := dbstore.LegacyImportStatus{
+		Domain:     domain,
+		SourcePath: l.legacyPath,
+		Status:     dbstore.LegacyStatusAbsent,
+	}
+	data, err := os.ReadFile(l.legacyPath) // #nosec G304 -- resolved legacy app prompt set file.
+	if err != nil {
+		if !os.IsNotExist(err) {
+			l.recovered = true
+			status.Status = dbstore.LegacyStatusRecovered
+			status.Message = "legacy prompt set file could not be read; empty library is active"
+		}
+		return l.db.RecordLegacyImport(ctx, status)
+	}
+	var file promptSetsFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		l.recovered = true
+		status.Status = dbstore.LegacyStatusRecovered
+		status.Message = "legacy prompt set file could not be parsed; empty library is active"
+		return l.db.RecordLegacyImport(ctx, status)
+	}
+
+	sets := l.normalizeLoadedSets(file.Sets)
+	status.Status = dbstore.LegacyStatusImported
+	status.Message = "legacy prompt sets imported"
+	if l.recovered {
+		status.Message = "legacy prompt sets imported with invalid records skipped"
+	}
+	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		for _, set := range sets {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO prompt_sets(id, name, system, created_at)
+				VALUES(?, ?, ?, ?)
+				ON CONFLICT(id) DO NOTHING
+			`, set.ID, set.Name, set.System, now); err != nil {
+				return err
+			}
+		}
+		return dbstore.RecordLegacyImportTx(ctx, tx, status)
+	}); err != nil {
+		return fmt.Errorf("import legacy prompt sets: %w", err)
+	}
+
+	archivePath, archiveErr := dbstore.ArchiveLegacyJSON(l.legacyPath)
+	if archiveErr != nil {
+		status.Message += "; legacy prompt set archive failed: " + archiveErr.Error()
+	} else if archivePath != "" {
+		status.ArchivedPath = archivePath
+	}
+	if status.ArchivedPath != "" || archiveErr != nil {
+		return l.db.RecordLegacyImport(ctx, status)
 	}
 	return nil
+}
+
+func (l *PromptLibrary) normalizeLoadedSets(raw []PromptSet) []PromptSet {
+	seen := make(map[string]struct{}, len(raw))
+	sets := make([]PromptSet, 0, len(raw))
+	for _, set := range raw {
+		id := strings.TrimSpace(set.ID)
+		if id == "" {
+			l.recovered = true
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			l.recovered = true
+			continue
+		}
+		seen[id] = struct{}{}
+		if _, builtin := BuiltinPromptSetByID(id); builtin {
+			l.recovered = true
+			continue
+		}
+		name, system, err := validatePromptSetFields(set.Name, set.System)
+		if err != nil {
+			l.recovered = true
+			continue
+		}
+		if len(sets) >= maxUserPromptSets {
+			l.recovered = true
+			break
+		}
+		set.ID = id
+		set.Name = name
+		set.System = system
+		set.Builtin = false
+		sets = append(sets, set)
+	}
+	return sets
+}
+
+func (l *PromptLibrary) resolveUserLocked(ctx context.Context, id string) (PromptSet, error) {
+	var set PromptSet
+	err := l.db.SQL().QueryRowContext(ctx, `
+		SELECT id, name, system
+		FROM prompt_sets
+		WHERE id = ?
+	`, strings.TrimSpace(id)).Scan(&set.ID, &set.Name, &set.System)
+	if err != nil {
+		return PromptSet{}, err
+	}
+	return set, nil
+}
+
+func (l *PromptLibrary) userSetsLocked(ctx context.Context) []PromptSet {
+	rows, err := l.db.SQL().QueryContext(ctx, `
+		SELECT id, name, system
+		FROM prompt_sets
+		ORDER BY name, id
+	`)
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var sets []PromptSet
+	for rows.Next() {
+		var set PromptSet
+		if err := rows.Scan(&set.ID, &set.Name, &set.System); err != nil {
+			return nil
+		}
+		sets = append(sets, set)
+	}
+	return sets
+}
+
+func (l *PromptLibrary) userSetCountLocked(ctx context.Context) int {
+	var count int
+	if err := l.db.SQL().QueryRowContext(ctx, "SELECT COUNT(*) FROM prompt_sets").Scan(&count); err != nil {
+		return maxUserPromptSets
+	}
+	return count
 }
 
 func validatePromptSetFields(name string, system string) (string, string, error) {
@@ -231,55 +374,10 @@ func validatePromptSetFields(name string, system string) (string, string, error)
 	return name, system, nil
 }
 
-func (l *PromptLibrary) persistLocked() error {
-	sets := make([]PromptSet, 0, len(l.sets))
-	for _, set := range l.sets {
-		sets = append(sets, set)
-	}
-	sort.Slice(sets, func(i, j int) bool { return sets[i].ID < sets[j].ID })
-
-	return writeJSONFileAtomic(l.path, promptSetsFile{
-		Version: promptSetsVersion,
-		Sets:    sets,
-	})
-}
-
 func randomHex(bytes int) string {
 	buffer := make([]byte, bytes)
 	if _, err := rand.Read(buffer); err != nil {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buffer)
-}
-
-// writeJSONFileAtomic writes JSON with a temp-file rename so a crash cannot
-// leave a truncated store behind (same durability rule as settings.json).
-func writeJSONFileAtomic(path string, payload any) error {
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode store file: %w", err)
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create data directory: %w", err)
-	}
-	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp store file: %w", err)
-	}
-	tempName := temp.Name()
-	if _, err := temp.Write(append(data, '\n')); err != nil {
-		_ = temp.Close()
-		_ = os.Remove(tempName)
-		return fmt.Errorf("write temp store file: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		_ = os.Remove(tempName)
-		return fmt.Errorf("close temp store file: %w", err)
-	}
-	if err := os.Rename(tempName, path); err != nil {
-		_ = os.Remove(tempName)
-		return fmt.Errorf("replace store file: %w", err)
-	}
-	return nil
 }

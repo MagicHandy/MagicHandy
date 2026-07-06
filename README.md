@@ -40,8 +40,9 @@ Implemented:
   pause
 - JSON structured logging
 - graceful shutdown
-- versioned JSON settings with defaults, migration hooks, redacted API views,
-  and atomic saves under the app data directory
+- SQLite persistence (`magichandy.db`) for settings, user memories, and editable
+  prompt sets, with schema migrations, legacy JSON import, and redacted API
+  views
 - minimal browser settings UI for server, device placeholders, motion defaults,
   and diagnostics verbosity
 - baseline tests, race-test compatible packages, and goroutine leak-test
@@ -52,15 +53,13 @@ Implemented:
 Not implemented yet (see the status table in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)):
 
-- SQLite persistence datastore (Phase 11B, ADR 0008); persistence is JSON files
-  today
 - voice workers and providers (Phases 12-13)
 - pattern library, authoring, and migration (Phases 14-15)
 - release packaging (Phase 16)
 
 ## Requirements
 
-- Go 1.24 or newer
+- Go 1.25 or newer (tested locally with Go 1.26.4)
 - No Node, Python, or CGO dependency is required for the core app
 
 ## Run From Source
@@ -80,9 +79,11 @@ go run ./cmd/magichandy -log-level debug
 go run ./cmd/magichandy -version
 ```
 
-Settings are stored in `settings.json` under the resolved app data directory.
-By default this is the OS user config directory plus `MagicHandy`; use
-`-data-dir` or `MAGICHANDY_DATA_DIR` for local development and tests.
+Settings, saved memories, and user prompt sets are stored in `magichandy.db`
+under the resolved app data directory. By default this is the OS user config
+directory plus `MagicHandy`; use `-data-dir` or `MAGICHANDY_DATA_DIR` for local
+development and tests. Legacy `settings.json`, `memories.json`, and
+`prompt_sets.json` files are imported once and renamed to `*.migrated`.
 
 Health checks:
 

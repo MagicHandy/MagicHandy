@@ -6,7 +6,11 @@ MagicHandy is a Go-first ground-up rewrite of StrokeGPT-ReVibed.
 
 The rewrite is justified by maintainability, cleaner architecture, future binary releases, lower non-ML baseline overhead, simpler long-running concurrency, and fewer Python environment failures in the core install path. Go alone will not fix Handy cloud latency, local LLM memory, CUDA memory, or all motion smoothness bugs. Motion quality must come from a better motion model, transport scheduler, retargeting algorithm, diagnostics, and real-device validation.
 
-The measured evidence so far supports the memory goal: the StrokeGPT-ReVibed Python core idles at ~525 MB with no model loaded, while the MagicHandy Go core idles at ~9 MB (see `docs/perf-baseline.md`).
+The measured evidence still supports the rewrite's lower core overhead: the
+StrokeGPT-ReVibed Python core idles at ~525 MB with no model loaded, while the
+MagicHandy Go core idled at ~9 MB before SQLite and ~54 MB after the pure-Go
+SQLite datastore landed (see `docs/perf-baseline.md`). The SQLite result is a
+Phase 11B waiver against the original <40 MB idle budget, not a budget change.
 
 The default voice stack is non-Python: Parakeet (ASR), NeuTTS Air (local cloning TTS), and ElevenLabs (cloud TTS) — see ADR 0007. Python may still be added later behind optional worker boundaries for Chatterbox, CosyVoice, or other ML-heavy features, but it never defines the core app install path.
 
@@ -14,8 +18,8 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-06. Phases 0 through 11 are merged to `main`. Phase 11B (SQLite
-persistence foundation, ADR 0008) is the planned next step.
+Updated 2026-07-06. Phases 0 through 11 are merged to `main`. Phase 11B
+(SQLite persistence foundation, ADR 0008) is implemented on the current branch.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -33,7 +37,7 @@ persistence foundation, ADR 0008) is the planned next step.
 | 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
-| 11B | SQLite persistence foundation (ADR 0008) | Planned | — |
+| 11B | SQLite persistence foundation (ADR 0008) | **Complete** | pending |
 | 12-17 | Voice, patterns, migration, packaging, parity | Not started | — |
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
@@ -169,7 +173,7 @@ MagicHandy/
   internal/validation/     retarget validation checklist           [exists]
   internal/modes/          freestyle, continuous-chat planners     [exists]
   internal/memory/         long-term memory store                  [exists]
-  internal/store/          SQLite datastore, schema, migrations    [planned]
+  internal/store/          SQLite datastore, schema, migrations    [exists]
   internal/audio/          voice-output queue, TTS worker client   [planned]
   internal/asr/            voice-input worker client               [planned]
   internal/workers/        external worker lifecycle/protocol      [planned]
@@ -413,9 +417,10 @@ Implement:
   interfaces (`config.Store`, `memory.Store`, `chat.PromptLibrary` keep their
   method signatures and contracts): settings as a versioned document row,
   memory and prompt sets as relational rows
-- a non-destructive one-time import: when the DB is absent but the JSON files
-  exist, import in one transaction and rename the JSON files `*.migrated`;
-  report it in load status
+- a non-destructive one-time import: when legacy JSON files exist, each legacy
+  store imports its domain in one SQLite transaction and renames the JSON file
+  `*.migrated` only after the DB commit; settings import is reported in load
+  status
 - preserve every existing contract: corrupt-store recovery to safe defaults,
   the redacted settings view (connection key never returned), and "reset
   settings does not touch memory or prompt sets"
@@ -439,7 +444,22 @@ $env:CGO_ENABLED = "0"; go build ./cmd/magichandy
 
 Fixtures cover import from present, absent, and corrupt JSON stores; a migration
 test covers forward migration and the newer-than-binary error; redaction tests
-still pass; budgets re-measured.
+still pass; budgets are re-measured.
+
+## Completion Evidence
+
+- `modernc.org/sqlite v1.53.0` is pinned with Go 1.25-compatible transitive
+  packages and validated locally with Go 1.26.4; `CGO_ENABLED=0` build remains
+  required.
+- Settings, memories, and user prompt sets round-trip through `magichandy.db`;
+  legacy `settings.json`, `memories.json`, and `prompt_sets.json` fixtures
+  import and archive to `*.migrated`.
+- Binary size: 17.62 MB plain / 12.10 MB stripped, under the 30 MB stripped
+  budget.
+- RSS waiver: stripped SQLite build idles at 53.92 MB after `/healthz` and
+  54.27 MB after `/api/state`, `/api/settings`, `/api/memory`, and
+  `/api/prompt-sets`; this exceeds the original <40 MB idle budget and is
+  recorded in `docs/goal-scorecard.md`.
 
 ## Done Criteria
 
