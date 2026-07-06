@@ -108,6 +108,44 @@ func TestPromptLibraryProtectsBuiltins(t *testing.T) {
 	}
 }
 
+func TestLocalizedBuiltinPromptSets(t *testing.T) {
+	expected := map[string]string{
+		DefaultPromptSetID:           "in English",
+		PromptSetIDSpanish:           "en español",
+		PromptSetIDPortugueseBrazil:  "português do Brasil",
+		PromptSetIDSimplifiedChinese: "简体中文",
+		PromptSetIDJapanese:          "日本語",
+	}
+
+	seen := map[string]bool{}
+	for _, set := range BuiltinPromptSets() {
+		if seen[set.ID] {
+			t.Fatalf("duplicate built-in prompt id %q", set.ID)
+		}
+		seen[set.ID] = true
+		if !set.Builtin {
+			t.Fatalf("set %q is not marked built-in", set.ID)
+		}
+	}
+
+	for id, languageCue := range expected {
+		set, ok := BuiltinPromptSetByID(id)
+		if !ok {
+			t.Fatalf("missing built-in prompt %q", id)
+		}
+		if !strings.Contains(set.System, languageCue) {
+			t.Fatalf("prompt %q missing language cue %q:\n%s", id, languageCue, set.System)
+		}
+		if !strings.Contains(set.System, "JSON") || !strings.Contains(set.System, "`reply`") {
+			t.Fatalf("prompt %q missing protocol-preservation cue:\n%s", id, set.System)
+		}
+		composed := ComposeSystem(set, nil)
+		if !strings.Contains(composed, ContractInstructions) {
+			t.Fatalf("prompt %q did not compose with the contract", id)
+		}
+	}
+}
+
 func TestPromptLibraryValidatesFieldsAndUnknownIDs(t *testing.T) {
 	library, err := OpenPromptLibrary(t.TempDir())
 	if err != nil {

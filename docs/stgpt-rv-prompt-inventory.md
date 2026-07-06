@@ -365,9 +365,10 @@ NEW CONVERSATION LOG:
 
 ## MagicHandy Follow-Ups
 
-MagicHandy currently ships a smaller neutral built-in prompt in
-`internal/chat/prompts.go`. That is acceptable for early phases, but parity work
-should not forget the adult prompt behavior above.
+MagicHandy currently ships smaller neutral built-in prompt sets in
+`internal/chat/prompts.go`, with localized behavior text for each supported
+language and a shared English JSON contract. That is acceptable for early
+phases, but parity work should not forget the adult prompt behavior above.
 
 Follow-up candidates:
 

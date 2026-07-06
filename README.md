@@ -147,6 +147,7 @@ MinGW/GCC installed.
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
 - [UI design](docs/ui-design.md)
 - [Localization wording](docs/localization-wording.md)
+- [Prompt localization strategy](docs/prompt-localization-strategy.md)
 - [StrokeGPT-ReVibed prompt inventory](docs/stgpt-rv-prompt-inventory.md)
 - [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Risk register](docs/risk-register.md)

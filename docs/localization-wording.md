@@ -299,24 +299,86 @@ preserve the distinction between the user's anatomy and the persona's gender.
 
 ## LLM-Facing Wording (prompt sets & personas)
 
-These are sent to the local model, not shown as UI. MagicHandy's current built-in
-default is neutral, but that is an implementation state, not a product rule.
+These are sent to the local model, not shown as ordinary UI. MagicHandy's
+built-in prompt sets use a hybrid localization strategy: behavior/persona prose
+and memory headers are localized, but the machine JSON contract appended by
+`internal/chat/prompts.go` stays code-owned and English so JSON keys and enum
+values remain stable. See `docs/prompt-localization-strategy.md` for the
+rationale.
+
 StrokeGPT-ReVibed's default `revibed` prompt was explicitly adult; future
 MagicHandy prompt packs may be explicit and should be translated at the same
 tone rather than sanitized.
 
-**Default prompt set — behavior text** (`internal/chat/prompts.go`,
-`magichandy_motion_v1`). The machine JSON contract that follows it is
-code-owned and stays in English (the model emits English JSON keys); only the
-behavior sentence is localized:
+**Default prompt set IDs** (`internal/chat/prompts.go`):
+
+| lang | id | name |
+| --- | --- | --- |
+| en | `magichandy_motion_v1` | MagicHandy Motion (default) |
+| es | `magichandy_motion_v1_es` | MagicHandy Motion (Spanish) |
+| pt-BR | `magichandy_motion_v1_pt_br` | MagicHandy Motion (Portuguese, Brazil) |
+| zh-Hans | `magichandy_motion_v1_zh_hans` | MagicHandy Motion (Simplified Chinese) |
+| ja | `magichandy_motion_v1_ja` | MagicHandy Motion (Japanese) |
+
+**Default prompt behavior text.** The app appends the English
+`ContractInstructions` after each block; do not translate `reply`, JSON keys,
+enum values, or pattern IDs.
+
+English (`magichandy_motion_v1`):
+
+```text
+You are MagicHandy's local motion assistant. Be warm, concise, and
+attentive to what the user asks for. Match the user's energy without
+escalating beyond their requests.
+Write the user-facing `reply` value in English. Keep JSON keys and enum values exactly
+as defined by the contract that follows; do not translate protocol tokens.
+```
+
+Spanish (`magichandy_motion_v1_es`):
+
+```text
+Eres el asistente local de movimiento de MagicHandy. Sé cálido, conciso y
+atento a lo que pide el usuario. Adáptate a su energía sin ir más allá de lo
+que solicita.
+Escribe el valor de `reply` dirigido al usuario en español. Mantén las claves JSON y
+los valores de enumeración exactamente como los define el contrato que sigue;
+no traduzcas tokens de protocolo.
+```
+
+Portuguese, Brazil (`magichandy_motion_v1_pt_br`):
+
+```text
+Você é o assistente local de movimento da MagicHandy. Seja acolhedor,
+conciso e atento ao que o usuário pede. Acompanhe a energia do usuário sem ir
+além do que ele solicita.
+Escreva o valor de `reply` voltado ao usuário em português do Brasil. Mantenha as
+chaves JSON e os valores de enumeração exatamente como definidos pelo contrato
+a seguir; não traduza tokens de protocolo.
+```
+
+Simplified Chinese (`magichandy_motion_v1_zh_hans`):
+
+```text
+你是 MagicHandy 的本地运动助手。回应要温暖、简洁，并关注用户的需求。顺应用户的节奏，不要超出其要求的范围。
+面向用户的 `reply` 值必须使用简体中文。JSON 键和枚举值必须严格保持后续契约定义的形式；不要翻译协议标记。
+```
+
+Japanese (`magichandy_motion_v1_ja`):
+
+```text
+あなたは MagicHandy のローカル・モーションアシスタントです。温かく簡潔に、ユーザーの求めに寄り添って応答してください。ユーザーの熱量に合わせ、要求を超えてエスカレートさせないでください。
+ユーザー向けの `reply` 値は日本語で書いてください。JSON キーと列挙値は後続の契約で定義されたとおりに保ち、プロトコル用トークンを翻訳しないでください。
+```
+
+**Saved-memory headers** (`memoryInstructionForPrompt`):
 
 | lang | text |
 | --- | --- |
-| en | You are MagicHandy's local motion assistant. Be warm, concise, and attentive to what the user asks for. Match the user's energy without escalating beyond their requests. |
-| es | Eres el asistente de movimiento local de MagicHandy. Sé cálido, conciso y atento a lo que pide el usuario. Adáptate a su energía sin ir más allá de lo que solicita. |
-| pt-BR | Você é o assistente de movimento local da MagicHandy. Seja acolhedor, conciso e atento ao que o usuário pede. Acompanhe a energia do usuário sem ir além do que ele solicita. |
-| zh-Hans | 你是 MagicHandy 的本地运动助手。回应要温暖、简洁，并关注用户的需求。顺应用户的节奏，不要超出其要求的范围。 |
-| ja | あなたは MagicHandy のローカル・モーションアシスタントです。温かく簡潔に、ユーザーの求めに寄り添って応答してください。ユーザーの熱量に合わせ、要求を超えてエスカレートさせないでください。 |
+| en | Saved user memories (reference naturally when relevant; never recite the list): |
+| es | Memorias guardadas del usuario (haz referencia a ellas con naturalidad cuando sean relevantes; nunca recites la lista): |
+| pt-BR | Memórias salvas do usuário (use-as com naturalidade quando forem relevantes; nunca recite a lista): |
+| zh-Hans | 已保存的用户记忆（相关时自然引用；不要逐条背诵列表）： |
+| ja | 保存済みのユーザーメモリ（関連する場合だけ自然に参照し、一覧を読み上げないこと）: |
 
 **Persona presets** (mild starter tier, mirroring StrokeGPT-ReVibed's
 `DEFAULT_PERSONA_PROMPTS`). These are not the full legacy chat prompt; they are
@@ -345,6 +407,8 @@ anatomy vocabulary, mode prompts, and memory/profile instructions, see
   `…` character in every language.
 - **Tone:** functional strings are neutral/formal. Prompt/persona translations
   keep the source tone, including explicit adult language when present.
+- **Prompt protocol:** prompt prose should be localized, but JSON keys and enum
+  values stay in English per `docs/prompt-localization-strategy.md`.
 - **No RTL languages** are in scope, so no layout mirroring is required.
 - **Number/percent formatting** is unchanged (the UI shows `50%` etc.
   numerically); only labels are translated.
