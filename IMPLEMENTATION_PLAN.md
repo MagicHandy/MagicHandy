@@ -87,6 +87,26 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
    one-hour soak ran on Cloud REST only (scorecard watch list).
 
+### UI Shell Redesign (Sidebar Navigation)
+
+The UI is moving from the current status-bar + single-control-sidebar +
+settings-window shell to a **permanent left navigation sidebar that switches
+pages** (Chat / Preset Modes / Pattern Library / Settings), with Stop pinned to
+the sidebar footer on every page. Full spec:
+[docs/ui-navigation-redesign.md](docs/ui-navigation-redesign.md). It ships in
+three steps that never drop a safety control mid-migration:
+
+1. **Shell refactor** (front-end only): nav sidebar + top-level router, Stop to
+   the pinned footer, current controls move into the Chat page, settings window
+   becomes the Settings page.
+2. **Preset Modes + Autopilot**: relocate Freestyle; add an LLM-driven
+   **Autopilot** mode in `internal/modes` that changes direction/pattern from
+   context through bounded arrangement segments — an engine client, traced,
+   Stop/Pause-interruptible, clamped by the quick-settings envelope. Rides the
+   Phase 11 mode architecture.
+3. **Pattern Library**: the browse/import/player/authoring/curation workspace —
+   Phase 14; a labeled empty state until then.
+
 ## Rewrite Guardrails
 
 - Do not start by porting every feature.

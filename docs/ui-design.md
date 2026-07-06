@@ -37,6 +37,14 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 
 ## Layout
 
+> **Shell shape is being superseded.** The status-bar + single-control-sidebar
+> + settings-**window** shell below describes the current build. The next UI
+> phase moves to a **permanent left navigation sidebar that switches pages**
+> (Chat / Preset Modes / Pattern Library / Settings), with Stop pinned to the
+> sidebar footer — see [ui-navigation-redesign.md](ui-navigation-redesign.md).
+> The safety, accessibility, visual-language, and parity rules in this document
+> stay in force; only the arrangement of surfaces changes.
+
 ### Persistent control bar (all viewports, never hidden)
 
 A slim, always-on bar owns **status only** — it is not a control strip:
@@ -132,6 +140,14 @@ Speed limit, stroke range, reverse direction.
   elsewhere on screen.
 
 ## Settings
+
+> **Settings becomes a page, not a window.** The window-over-chat decision
+> below (2026-07-03) is superseded by the sidebar-navigation redesign: with four
+> peer workspaces, Settings is a routed page reached from the profile lockup,
+> and the value it protected — never leaving chat for a quick change — is kept
+> by docking the live quick settings on the Chat page. The immediate-apply,
+> single-layer, and confirmed-destructive rules below are unchanged. See
+> [ui-navigation-redesign.md](ui-navigation-redesign.md).
 
 Preserve the familiar grouping (Persona, Model, Voice, Device, Motion,
 Diagnostics) but fix the structural flaws:
