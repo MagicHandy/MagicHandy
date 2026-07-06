@@ -56,6 +56,14 @@ const (
 
 	// PromptSetMagicHandyMotionV1 is the default chat and motion JSON contract.
 	PromptSetMagicHandyMotionV1 = "magichandy_motion_v1"
+	// PromptSetMagicHandyMotionV1ES is the built-in Spanish prompt set.
+	PromptSetMagicHandyMotionV1ES = "magichandy_motion_v1_es"
+	// PromptSetMagicHandyMotionV1PTBR is the built-in Brazilian Portuguese prompt set.
+	PromptSetMagicHandyMotionV1PTBR = "magichandy_motion_v1_pt_br"
+	// PromptSetMagicHandyMotionV1ZHHans is the built-in Simplified Chinese prompt set.
+	PromptSetMagicHandyMotionV1ZHHans = "magichandy_motion_v1_zh_hans"
+	// PromptSetMagicHandyMotionV1JA is the built-in Japanese prompt set.
+	PromptSetMagicHandyMotionV1JA = "magichandy_motion_v1_ja"
 
 	// DefaultLlamaCPPBaseURL is the default llama-server OpenAI-compatible URL.
 	DefaultLlamaCPPBaseURL = "http://127.0.0.1:8080"
@@ -258,6 +266,10 @@ func (s Settings) Public() PublicSettings {
 			},
 			PromptSets: []string{
 				PromptSetMagicHandyMotionV1,
+				PromptSetMagicHandyMotionV1ES,
+				PromptSetMagicHandyMotionV1PTBR,
+				PromptSetMagicHandyMotionV1ZHHans,
+				PromptSetMagicHandyMotionV1JA,
 			},
 		},
 	}
