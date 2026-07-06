@@ -146,6 +146,7 @@ MinGW/GCC installed.
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
 - [UI design](docs/ui-design.md)
+- [UI navigation redesign (sidebar shell)](docs/ui-navigation-redesign.md)
 - [Localization wording](docs/localization-wording.md)
 - [Prompt localization strategy](docs/prompt-localization-strategy.md)
 - [StrokeGPT-ReVibed prompt inventory](docs/stgpt-rv-prompt-inventory.md)
