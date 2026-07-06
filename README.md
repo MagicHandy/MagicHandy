@@ -146,6 +146,8 @@ MinGW/GCC installed.
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
 - [UI design](docs/ui-design.md)
+- [Localization wording](docs/localization-wording.md)
+- [StrokeGPT-ReVibed prompt inventory](docs/stgpt-rv-prompt-inventory.md)
 - [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Risk register](docs/risk-register.md)
 - [Performance baseline](docs/perf-baseline.md)
