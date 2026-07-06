@@ -52,6 +52,8 @@ Implemented:
 Not implemented yet (see the status table in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)):
 
+- SQLite persistence datastore (Phase 11B, ADR 0008); persistence is JSON files
+  today
 - voice workers and providers (Phases 12-13)
 - pattern library, authoring, and migration (Phases 14-15)
 - release packaging (Phase 16)
@@ -145,6 +147,7 @@ MinGW/GCC installed.
 - [Goal scorecard](docs/goal-scorecard.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
+- [SQLite persistence (ADR 0008)](docs/decisions/0008-sqlite-persistence.md)
 - [UI design](docs/ui-design.md)
 - [UI navigation redesign (sidebar shell)](docs/ui-navigation-redesign.md)
 - [Localization wording](docs/localization-wording.md)

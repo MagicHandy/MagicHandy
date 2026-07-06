@@ -101,8 +101,10 @@ These are enforced in CI from Phase 1, not aspirational.
 
 - the core binary builds with `CGO_ENABLED=0`
 - no CGo dependency in `internal/` core paths
-- prefer pure-Go libraries (e.g., if a datastore is ever needed, a pure-Go one,
-  not a CGo SQLite driver)
+- prefer pure-Go libraries. The persistence datastore is `modernc.org/sqlite`
+  (pure-Go SQLite, builds under `CGO_ENABLED=0`) per ADR 0008 — never a CGo
+  SQLite driver such as `mattn/go-sqlite3`. Its binary-size and RSS cost is
+  tracked against the budgets above in `docs/goal-scorecard.md`.
 - anything that genuinely needs native code (BLE, native audio) lives behind the
   browser bridge or a worker process, never in the core binary
 
