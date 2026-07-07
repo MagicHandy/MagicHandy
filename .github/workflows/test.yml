@@ -46,3 +46,32 @@ jobs:
 
       - name: CGO-free build
         run: CGO_ENABLED=0 go build ./cmd/magichandy
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Component tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build

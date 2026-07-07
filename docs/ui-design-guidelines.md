@@ -239,5 +239,6 @@ Don't:
   tokens dress.
 - [ui-design.md](ui-design.md): the safety/accessibility/parity rules these
   components must not regress.
-- ADR 0004 (frontend strategy): fresh, minimal, embedded, no build step — these
-  guidelines add no framework and no asset fetch.
+- ADR 0004 (frontend strategy) and ADR 0009 (React frontend migration): the UI
+  is now React, but still statically built, embedded, and offline at runtime;
+  these guidelines add no external asset fetch.

@@ -95,23 +95,37 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 
 ### UI Shell Redesign (Sidebar Navigation)
 
-The UI is moving from the current status-bar + single-control-sidebar +
-settings-window shell to a **permanent left navigation sidebar that switches
-pages** (Chat / Preset Modes / Pattern Library / Settings), with Stop pinned to
-the sidebar footer on every page. Full spec:
-[docs/ui-navigation-redesign.md](docs/ui-navigation-redesign.md). It ships in
-three steps that never drop a safety control mid-migration:
+The UI is moving to React now, then from the current status-bar +
+single-control-sidebar + settings-window shell to a **permanent left navigation
+sidebar that switches pages** (Chat / Preset Modes / Pattern Library /
+Settings), with Stop pinned to the sidebar footer on every page. Framework
+decision and handoff:
+[docs/decisions/0009-react-frontend.md](docs/decisions/0009-react-frontend.md)
+and [docs/react-ui-implementation-handoff.md](docs/react-ui-implementation-handoff.md).
+Full shell spec: [docs/ui-navigation-redesign.md](docs/ui-navigation-redesign.md).
+It ships in steps that never drop a safety control mid-migration:
 
-1. **Shell refactor** (front-end only): nav sidebar + top-level router, Stop to
+1. **React migration scaffold**: Vite + React + TypeScript static build embedded
+   by Go; preserve current visible safety behavior before changing the shell.
+2. **Shell refactor** (front-end only): nav sidebar + top-level router, Stop to
    the pinned footer, current controls move into the Chat page, settings window
    becomes the Settings page.
-2. **Preset Modes + Autopilot**: relocate Freestyle; add an LLM-driven
+3. **Preset Modes + Autopilot**: relocate Freestyle; add an LLM-driven
    **Autopilot** mode in `internal/modes` that changes direction/pattern from
    context through bounded arrangement segments — an engine client, traced,
    Stop/Pause-interruptible, clamped by the quick-settings envelope. Rides the
    Phase 11 mode architecture.
-3. **Pattern Library**: the browse/import/player/authoring/curation workspace —
+4. **Pattern Library**: the browse/import/player/authoring/curation workspace —
    Phase 14; a labeled empty state until then.
+
+Status: steps 1 and 2 have landed together — the UI is now a Vite + React +
+TypeScript app (`web/`, built to `web/dist`, embedded by Go; no runtime Node)
+implementing the permanent nav rail, status-only bar, pinned Stop, and the
+Chat / Preset Modes / Pattern Library / Settings routes with the safety
+invariants (Stop outside routes, backend-loss lock, read-only lock) under
+Vitest. Autopilot renders as coming-soon until its planner exists (step 3);
+Pattern Library is the empty state (step 4). The legacy vanilla UI is retained
+under `web/legacy/` for reference until React reaches parity, then removed.
 
 ## Rewrite Guardrails
 
