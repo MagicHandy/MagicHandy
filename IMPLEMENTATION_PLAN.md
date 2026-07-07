@@ -468,10 +468,10 @@ still pass; budgets are re-measured.
 - Settings, memories, and user prompt sets round-trip through `magichandy.db`;
   legacy `settings.json`, `memories.json`, and `prompt_sets.json` fixtures
   import and archive to `*.migrated`.
-- Binary size: 17.62 MB plain / 12.10 MB stripped, under the 30 MB stripped
+- Binary size: 17.92 MB plain / 12.32 MB stripped, under the 30 MB stripped
   budget.
-- RSS waiver: stripped SQLite build idles at 53.92 MB after `/healthz` and
-  54.27 MB after `/api/state`, `/api/settings`, `/api/memory`, and
+- RSS waiver: stripped SQLite build idles at 54.13 MB after `/healthz` and
+  54.36 MB after `/api/state`, `/api/settings`, `/api/memory`, and
   `/api/prompt-sets`; this exceeds the original <40 MB idle budget and is
   recorded in `docs/goal-scorecard.md`.
 

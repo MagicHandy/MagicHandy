@@ -136,10 +136,10 @@ Positive:
 Negative / deliberate trade-offs:
 
 - Binary size grows: `modernc.org/sqlite` + `modernc.org/libc` are large
-  transpiled packages. Phase 11B measured 17.62 MB plain / 12.10 MB stripped,
+  transpiled packages. Phase 11B measured 17.92 MB plain / 12.32 MB stripped,
   still under the < 30 MB stripped budget.
-- Core RSS grows materially. Phase 11B measured 53.92 MB idle after `/healthz`
-  and 54.27 MB after DB-backed API reads, exceeding the original < 40 MB idle
+- Core RSS grows materially. Phase 11B measured 54.13 MB idle after `/healthz`
+  and 54.36 MB after DB-backed API reads, exceeding the original < 40 MB idle
   budget. This is recorded as a Phase 11B waiver in `docs/goal-scorecard.md`,
   not silently relaxed.
 - New dependency surface: this is the first substantial third-party runtime

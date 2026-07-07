@@ -45,8 +45,8 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 11B SQLite stripped build idles at 53.92 MB after `/healthz`; pre-SQLite baseline was 8.96 MB. Waiver recorded for pure-Go SQLite cost. |
-| Go core active RSS | < 80 MB | **Met** | Phase 11B SQLite API-read sample is 54.27 MB; pre-SQLite real-device active samples were 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth. Re-measure real-device active path after SQLite if a later phase changes transport/motion memory. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 11B SQLite stripped build idles at 54.13 MB after `/healthz`; pre-SQLite baseline was 8.96 MB. Waiver recorded for pure-Go SQLite cost. |
+| Go core active RSS | < 80 MB | **Met** | Phase 11B SQLite API-read sample is 54.36 MB; pre-SQLite real-device active samples were 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth. Re-measure real-device active path after SQLite if a later phase changes transport/motion memory. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
 
 Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Measured 2026-07-06 at Phase 11B: 17.62 MB plain, 12.10 MB with `-trimpath -ldflags "-s -w"` after adding `modernc.org/sqlite`. |
+| Binary size | < 30 MB | **Met** | Measured 2026-07-06 at Phase 11B: 17.92 MB plain, 12.32 MB with `-trimpath -ldflags "-s -w"` after adding `modernc.org/sqlite`. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 411 / 518 / 522 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which inflates the number). Sits at the boundary; re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -113,9 +113,9 @@ Ranked by threat to the stated goals:
   `memories.json`, and `prompt_sets.json` are archived as `*.migrated` after
   import. Redaction still holds: the imported Handy connection key remains in
   the private settings snapshot and does not appear in public settings.
-  Binary re-measured: 17.62 MB plain / 12.10 MB stripped, under the <30 MB
-  stripped budget. RSS waiver: stripped build idles at 53.92 MB after
-  `/healthz` and 54.27 MB after DB-backed API reads, exceeding the original
+  Binary re-measured: 17.92 MB plain / 12.32 MB stripped, under the <30 MB
+  stripped budget. RSS waiver: stripped build idles at 54.13 MB after
+  `/healthz` and 54.36 MB after DB-backed API reads, exceeding the original
   <40 MB idle target; this is accepted for Phase 11B as the cost of pure-Go
   SQLite, not a silent target change.
 - **2026-07-06** — Decision recorded (ADR 0008): persistence moves to a single
