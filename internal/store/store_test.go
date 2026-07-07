@@ -1,111 +1,122 @@
 package store
 
 import (
-	"encoding/json"
+	"context"
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestOpenCreatesDatabaseAndRunsMigrations(t *testing.T) {
-	dir := TestDir(t)
-	db, err := Open(dir)
+func TestOpenCreatesSchemaAndDatabaseFile(t *testing.T) {
+	db, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	defer func() {
+		_ = db.Close()
+	}()
 
-	version, err := schemaUserVersion(db.sql)
-	if err != nil {
-		t.Fatalf("schemaUserVersion: %v", err)
-	}
-	if version != SchemaVersion {
-		t.Fatalf("user_version = %d, want %d", version, SchemaVersion)
-	}
-	if _, err := os.Stat(filepath.Join(dir, DBFileName)); err != nil {
+	if _, err := os.Stat(db.Path()); err != nil {
 		t.Fatalf("database file missing: %v", err)
 	}
+	var version int
+	if err := db.SQL().QueryRowContext(context.Background(), "PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if version != CurrentSchemaVersion {
+		t.Fatalf("user_version = %d, want %d", version, CurrentSchemaVersion)
+	}
 }
 
-func TestImportRenamesLegacyJSONFiles(t *testing.T) {
-	dir := TestDir(t)
-	settings := []byte(`{"version":1,"server":{"port":49730}}` + "\n")
-	if err := os.WriteFile(filepath.Join(dir, settingsJSONFile), settings, 0o600); err != nil {
-		t.Fatalf("write settings: %v", err)
-	}
-	enabled := true
-	memories, err := json.Marshal(struct {
-		Enabled  *bool       `json:"enabled"`
-		Memories []MemoryRow `json:"memories"`
-	}{
-		Enabled:  &enabled,
-		Memories: []MemoryRow{{ID: "mem-1", Text: "Remember this.", Enabled: true, CreatedAt: "2026-07-06T00:00:00Z"}},
-	})
-	if err != nil {
-		t.Fatalf("marshal memories: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, memoriesJSONFile), memories, 0o600); err != nil {
-		t.Fatalf("write memories: %v", err)
-	}
-
+func TestOpenRejectsNewerSchemaWithoutDowngrade(t *testing.T) {
+	dir := t.TempDir()
 	db, err := Open(dir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	result := db.ImportResult()
-	if !result.SettingsImported || !result.MemoriesImported {
-		t.Fatalf("import result = %+v, want settings and memories imported", result)
-	}
-	if _, err := os.Stat(filepath.Join(dir, settingsJSONFile)); !os.IsNotExist(err) {
-		t.Fatal("settings.json was not renamed after import")
-	}
-	if _, err := os.Stat(filepath.Join(dir, settingsJSONFile+migratedSuffix)); err != nil {
-		t.Fatalf("settings.json.migrated missing: %v", err)
+	path := db.Path()
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 
-	document, found, err := db.LoadSettingsDocument()
-	if err != nil || !found {
-		t.Fatalf("LoadSettingsDocument: found=%v err=%v", found, err)
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
 	}
-	if string(document) != string(settings) {
-		t.Fatalf("settings document = %q, want %q", document, settings)
+	if _, err := raw.Exec("PRAGMA user_version = 999"); err != nil {
+		_ = raw.Close()
+		t.Fatalf("set newer user_version: %v", err)
 	}
-	enabled, rows, found, err := db.LoadMemories()
-	if err != nil || !found || !enabled || len(rows) != 1 {
-		t.Fatalf("LoadMemories = enabled=%v rows=%+v found=%v err=%v", enabled, rows, found, err)
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	_, err = Open(dir)
+	if !errors.Is(err, ErrNewerSchema) {
+		t.Fatalf("Open newer schema error = %v, want ErrNewerSchema", err)
+	}
+
+	raw, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw reopen: %v", err)
+	}
+	defer func() {
+		_ = raw.Close()
+	}()
+	var version int
+	if err := raw.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read user_version after rejection: %v", err)
+	}
+	if version != 999 {
+		t.Fatalf("user_version after rejection = %d, want 999", version)
 	}
 }
 
-func TestNewerSchemaVersionIsRejected(t *testing.T) {
-	dir := TestDir(t)
-	db, err := Open(dir)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
+func TestArchiveLegacyJSONPreservesContents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	contents := []byte(`{"version":1}`)
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatalf("write legacy file: %v", err)
 	}
-	if _, err := db.sql.Exec("PRAGMA user_version=99"); err != nil {
-		t.Fatalf("set user_version: %v", err)
-	}
-	_ = db.Close()
 
-	if _, err := Open(dir); err == nil {
-		t.Fatal("Open with newer schema did not fail")
+	archivePath, err := ArchiveLegacyJSON(path)
+	if err != nil {
+		t.Fatalf("ArchiveLegacyJSON: %v", err)
+	}
+	if archivePath != path+".migrated" {
+		t.Fatalf("archive path = %q, want %q", archivePath, path+".migrated")
+	}
+	archived, err := os.ReadFile(archivePath) // #nosec G304 -- temp test path.
+	if err != nil {
+		t.Fatalf("read archived file: %v", err)
+	}
+	if string(archived) != string(contents) {
+		t.Fatalf("archived contents = %q, want %q", archived, contents)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("legacy path stat error = %v, want not exists", err)
 	}
 }
 
-func TestSettingsDocumentRoundTrip(t *testing.T) {
-	dir := TestDir(t)
-	db, err := Open(dir)
+func TestRockfireTablesExistAfterOpen(t *testing.T) {
+	db, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	payload := []byte(`{"version":1}` + "\n")
-	if err := db.SaveSettingsDocument(payload); err != nil {
-		t.Fatalf("SaveSettingsDocument: %v", err)
-	}
-	got, found, err := db.LoadSettingsDocument()
-	if err != nil {
-		t.Fatalf("LoadSettingsDocument: %v", err)
-	}
-	if !found || string(got) != string(payload) {
-		t.Fatalf("document = %q found=%v, want %q", got, found, payload)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	for _, table := range []string{"personas", "ui_preferences", "app_state", "funscript_files"} {
+		var name string
+		err := db.SQL().QueryRow(
+			`SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+			table,
+		).Scan(&name)
+		if err != nil {
+			t.Fatalf("table %q missing: %v", table, err)
+		}
 	}
 }

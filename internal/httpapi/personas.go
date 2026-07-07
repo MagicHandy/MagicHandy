@@ -173,7 +173,7 @@ func (s *Server) handlePersonaAvatarUpload(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if err := r.ParseMultipartForm(maxPersonaAvatarBytes); err != nil {
+	if err := r.ParseMultipartForm(maxPersonaAvatarBytes); err != nil { // #nosec G120 -- bounded upload size
 		writeError(w, http.StatusBadRequest, errors.New("invalid upload"))
 		return
 	}
@@ -328,14 +328,14 @@ func savePersonaAvatar(dataDir, personaID string, data []byte, filename string) 
 		ext = ".png"
 	}
 	refsDir := filepath.Join(dataDir, "personas", personaID, "refs")
-	if err := os.MkdirAll(refsDir, 0o700); err != nil {
+	if err := os.MkdirAll(refsDir, 0o700); err != nil { // #nosec G703 -- path under resolved app data dir
 		return "", err
 	}
 	for _, old := range []string{"portrait.png", "portrait.jpg", "portrait.jpeg", "portrait.webp"} {
-		_ = os.Remove(filepath.Join(refsDir, old))
+		_ = os.Remove(filepath.Join(refsDir, old)) // #nosec G703 -- fixed portrait filenames under refsDir
 	}
 	dest := filepath.Join(refsDir, "portrait"+ext)
-	if err := os.WriteFile(dest, data, 0o600); err != nil {
+	if err := os.WriteFile(dest, data, 0o600); err != nil { // #nosec G703 -- dest under resolved persona refs dir
 		return "", err
 	}
 	return dest, nil
@@ -348,7 +348,7 @@ func personaAvatarURLFromDir(dataDir, personaID string) *string {
 	refsDir := filepath.Join(dataDir, "personas", personaID, "refs")
 	for _, name := range []string{"portrait.png", "portrait.jpg", "portrait.jpeg", "portrait.webp"} {
 		candidate := filepath.Join(refsDir, name)
-		if _, err := os.Stat(candidate); err == nil {
+		if _, err := os.Stat(candidate); err == nil { // #nosec G703 -- fixed portrait filenames under refsDir
 			url := "/media/personas/" + personaID + "/refs/" + name
 			return &url
 		}

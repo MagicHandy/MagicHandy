@@ -126,7 +126,10 @@ These are enforced in CI from Phase 1, not aspirational.
 ### Frontend
 
 The same size/no-god-module norms apply to `web/`. See
-`docs/decisions/0004-frontend-strategy.md`.
+`docs/decisions/0004-frontend-strategy.md` and
+`docs/decisions/0009-react-frontend.md`. React components, hooks, and contexts
+must stay narrowly owned; do not recreate the old global mutable frontend
+registry under a different name.
 
 ## Safety Gate: Motion Goroutine Lifecycle
 

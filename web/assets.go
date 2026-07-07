@@ -1,4 +1,7 @@
-// Package web embeds the static single-page application assets.
+// Package web embeds the static single-page application built by Vite into
+// web/dist. The React frontend (docs/decisions/0009-react-frontend.md) is a
+// build-time dependency only — Node/npm/Vite build the assets, and this Go
+// binary serves the committed embedded output at runtime with no Node process.
 package web
 
 import (
@@ -6,10 +9,14 @@ import (
 	"io/fs"
 )
 
-//go:embed index.html app.css shell.css app.js shell-ui.js motion-ui.js chat-ui.js bluetooth-ui.js handy-ble-codec.js prompts-memory-ui.js
+//go:embed all:dist
 var assets embed.FS
 
-// FS returns the embedded browser UI filesystem.
+// FS returns the embedded browser UI filesystem rooted at the built output.
 func FS() fs.FS {
-	return assets
+	sub, err := fs.Sub(assets, "dist")
+	if err != nil {
+		panic("web: embedded dist is missing; run `npm run build` in web/: " + err.Error())
+	}
+	return sub
 }

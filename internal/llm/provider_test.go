@@ -22,7 +22,7 @@ func TestMain(m *testing.M) {
 
 func runManagedLlamaRunnerHelper() {
 	if path := os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER_COUNT"); path != "" {
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304 -- test helper writes a temp-file path injected by its parent test.
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304,G703 -- test helper writes a temp-file path injected by its parent test.
 		if err == nil {
 			_, _ = file.WriteString("start\n")
 			_ = file.Close()

@@ -88,14 +88,59 @@ func TestSaveAndLoadSettings(t *testing.T) {
 		t.Fatalf("OpenStore reload: %v", err)
 	}
 	got, status := reloaded.Snapshot()
-	if status.Source != loadSourceFile {
-		t.Fatalf("source = %q, want %q", status.Source, loadSourceFile)
+	if status.Source != loadSourceSQLite {
+		t.Fatalf("source = %q, want %q", status.Source, loadSourceSQLite)
 	}
 	if got.Server.Port != 49720 {
 		t.Fatalf("server port = %d, want 49720", got.Server.Port)
 	}
 	if got.Device.HandyConnectionKey != "secret" {
 		t.Fatal("connection key did not persist")
+	}
+}
+
+func TestOpenStoreImportsLegacySettingsFile(t *testing.T) {
+	dir := t.TempDir()
+	legacy := DefaultSettings()
+	legacy.Server.Port = 49725
+	legacy.Device.HandyConnectionKey = "secret-import-key"
+	legacy.Diagnostics.Verbosity = DiagnosticsVerbosityDebug
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy settings: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, settingsFileName), data, 0o600); err != nil {
+		t.Fatalf("write legacy settings: %v", err)
+	}
+
+	store, err := OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	got, status := store.Snapshot()
+	if !status.Imported || status.Source != loadSourceImport {
+		t.Fatalf("status = %+v, want imported legacy settings", status)
+	}
+	if got.Server.Port != 49725 || got.Device.HandyConnectionKey != "secret-import-key" {
+		t.Fatalf("settings = %+v, want imported port and private key", got)
+	}
+	public, _ := store.PublicSnapshot()
+	publicData, err := json.Marshal(public)
+	if err != nil {
+		t.Fatalf("marshal public settings: %v", err)
+	}
+	if strings.Contains(string(publicData), "secret-import-key") {
+		t.Fatal("imported connection key leaked through public settings")
+	}
+	if _, err := os.Stat(filepath.Join(dir, settingsFileName)); !os.IsNotExist(err) {
+		t.Fatalf("legacy settings path stat = %v, want renamed away", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, settingsFileName+".migrated")); err != nil {
+		t.Fatalf("archived legacy settings missing: %v", err)
 	}
 }
 
@@ -190,8 +235,8 @@ func TestPublicSettingsRedactsConnectionKey(t *testing.T) {
 	}
 }
 
-func TestSaveWritesAtomicallyNamedSettingsFile(t *testing.T) {
-	dir := store.TestDir(t)
+func TestSaveWritesSQLiteDatastore(t *testing.T) {
+	dir := t.TempDir()
 	store, err := OpenStore(dir)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -202,8 +247,15 @@ func TestSaveWritesAtomicallyNamedSettingsFile(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "magichandy.db")); err != nil {
-		t.Fatalf("database file missing after save: %v", err)
+	if _, err := os.Stat(store.Path()); err != nil {
+		t.Fatalf("settings datastore missing after save: %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, ".settings-*.tmp"))
+	if err != nil {
+		t.Fatalf("glob temp files: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("temporary settings files left behind: %v", matches)
 	}
 }
 

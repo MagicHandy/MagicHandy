@@ -110,6 +110,44 @@ func TestPromptLibraryProtectsBuiltins(t *testing.T) {
 	}
 }
 
+func TestPromptLibraryImportsLegacyUserSets(t *testing.T) {
+	dir := t.TempDir()
+	file := promptSetsFile{
+		Version: promptSetsVersion,
+		Sets: []PromptSet{
+			{ID: "user-legacy", Name: "  Legacy  ", System: "  Imported system.  "},
+		},
+	}
+	data, err := json.Marshal(file)
+	if err != nil {
+		t.Fatalf("marshal prompt file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, promptSetsFileName), data, 0o600); err != nil {
+		t.Fatalf("write prompt file: %v", err)
+	}
+
+	library, err := OpenPromptLibrary(dir)
+	if err != nil {
+		t.Fatalf("OpenPromptLibrary: %v", err)
+	}
+	defer func() {
+		_ = library.Close()
+	}()
+	set, ok := library.Resolve("user-legacy")
+	if !ok {
+		t.Fatal("imported prompt set did not resolve")
+	}
+	if set.Name != "Legacy" || set.System != "Imported system." {
+		t.Fatalf("imported set = %+v, want trimmed fields", set)
+	}
+	if _, err := os.Stat(filepath.Join(dir, promptSetsFileName)); !os.IsNotExist(err) {
+		t.Fatalf("legacy prompt path stat = %v, want renamed away", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, promptSetsFileName+".migrated")); err != nil {
+		t.Fatalf("archived legacy prompt file missing: %v", err)
+	}
+}
+
 func TestLocalizedBuiltinPromptSets(t *testing.T) {
 	expected := map[string]string{
 		DefaultPromptSetID:           "in English",
@@ -214,7 +252,14 @@ func TestPromptLibrarySkipsInvalidLoadedUserSets(t *testing.T) {
 	if !library.Recovered() {
 		t.Fatal("invalid loaded prompt records should report recovery")
 	}
-	if _, ok := library.sets[DefaultPromptSetID]; ok {
+	var storedBuiltins int
+	if err := library.db.SQL().QueryRow(
+		"SELECT COUNT(*) FROM prompt_sets WHERE id = ?",
+		DefaultPromptSetID,
+	).Scan(&storedBuiltins); err != nil {
+		t.Fatalf("count stored builtins: %v", err)
+	}
+	if storedBuiltins != 0 {
 		t.Fatal("loaded file created a user-owned duplicate of the built-in prompt set")
 	}
 	valid, ok := library.Resolve("user-valid")

@@ -216,7 +216,7 @@ func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {
 func (s *Server) newCloudTransport() (*transport.CloudRESTTransport, error) {
 	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerCloudREST {
-		return nil, errors.New("Cloud REST dispatch owner is not selected")
+		return nil, errors.New("cloud REST dispatch owner is not selected")
 	}
 
 	return transport.NewCloudRESTTransport(

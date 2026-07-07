@@ -124,7 +124,7 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
 	tmpPath := tmp.Name()
 	defer func() {
 		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
+		_ = os.Remove(tmpPath) // #nosec G703 -- temp path from os.CreateTemp
 	}()
 	if _, err := tmp.Write(data); err != nil {
 		writeError(w, http.StatusInternalServerError, err)

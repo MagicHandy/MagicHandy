@@ -119,7 +119,7 @@ func (s *Server) handleDeviceBootstrap(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeviceScan(w http.ResponseWriter, r *http.Request) {
 	client := s.intifaceClient()
 	if client == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("Intiface client is unavailable"))
+		writeError(w, http.StatusServiceUnavailable, errors.New("intiface client is unavailable"))
 		return
 	}
 	devices, err := client.Scan(r.Context())
@@ -140,7 +140,7 @@ func (s *Server) handleDeviceSelect(w http.ResponseWriter, r *http.Request) {
 	}
 	client := s.intifaceClient()
 	if client == nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New("Intiface client is unavailable"))
+		writeError(w, http.StatusServiceUnavailable, errors.New("intiface client is unavailable"))
 		return
 	}
 	if err := client.SelectDevice(body.DeviceID); err != nil {
@@ -169,7 +169,7 @@ func (s *Server) bootstrapIntiface(ctx context.Context) (map[string]any, error) 
 	}
 	client := s.intifaceClient()
 	if client == nil {
-		result["error"] = "Intiface client is unavailable"
+		result["error"] = "intiface client is unavailable"
 		return result, nil
 	}
 	if err := client.Connect(ctx); err != nil {
@@ -216,7 +216,7 @@ func (s *Server) startIntifaceBootstrapLoop(ctx context.Context) {
 	if s.intifaceClient() == nil {
 		return
 	}
-	go func() {
+	go func() { //nolint:gosec // bootstrap loop outlives individual HTTP requests
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -279,7 +279,7 @@ func (s *Server) ensureIntifaceDeviceForMotion(ctx context.Context) error {
 	}
 	client := s.intifaceClient()
 	if client == nil {
-		return errors.New("Intiface client is unavailable")
+		return errors.New("intiface client is unavailable")
 	}
 	if client.SelectedDeviceID() != "" {
 		return nil
@@ -299,14 +299,14 @@ func (s *Server) ensureIntifaceDeviceForMotion(ctx context.Context) error {
 func (s *Server) newIntifaceTransport() (*intiface.Transport, error) {
 	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerIntiface {
-		return nil, errors.New("Intiface dispatch owner is not selected")
+		return nil, errors.New("intiface dispatch owner is not selected")
 	}
 	client := s.intifaceClient()
 	if client == nil {
-		return nil, errors.New("Intiface client is unavailable")
+		return nil, errors.New("intiface client is unavailable")
 	}
 	if !client.Connected() {
-		return nil, errors.New("Intiface is not connected")
+		return nil, errors.New("intiface is not connected")
 	}
 	if client.SelectedDeviceID() == "" {
 		bootstrapCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -314,7 +314,7 @@ func (s *Server) newIntifaceTransport() (*intiface.Transport, error) {
 		cancel()
 	}
 	if client.SelectedDeviceID() == "" {
-		return nil, errors.New("No Intiface device selected")
+		return nil, errors.New("no intiface device selected")
 	}
 	return intiface.NewTransport(client, intiface.TransportOptions{
 		ReverseDirection: settings.Motion.ReverseDirection,

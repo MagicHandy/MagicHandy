@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-02, Phase 9B live-validation follow-up branch
+## Snapshot — 2026-07-06, Phase 11B SQLite branch
 
 ### Goal 1: Maintainability
 
@@ -45,18 +45,19 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Met** | 8.96 MB — ~1/58th of the Python core |
-| Go core active RSS | < 80 MB | **Met** | 16.75-16.76 MB (real Cloud REST motion + SSE + chat stop) and 17.52-17.53 MB repeat active RSS for Browser Bluetooth UI motion, both on 2026-07-02 |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 11B SQLite stripped build idles at 54.13 MB after `/healthz`; pre-SQLite baseline was 8.96 MB. Waiver recorded for pure-Go SQLite cost. |
+| Go core active RSS | < 80 MB | **Met** | Phase 11B SQLite API-read sample is 54.36 MB; pre-SQLite real-device active samples were 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth. Re-measure real-device active path after SQLite if a later phase changes transport/motion memory. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
 
-Risk R11 (goals unmeasured) is substantially closed for memory.
+Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
+11B SQLite idle-RSS waiver now explicit.
 
 ### Goal 3: Binary Releases
 
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met (early)** | Measured 2026-07-03 at Phase 11: 10.84 MB plain, 7.70 MB with `-trimpath -ldflags "-s -w"` (+0.10 MB for the modes package and UI). Re-measure each phase. |
+| Binary size | < 30 MB | **Met** | Measured 2026-07-06 at Phase 11B: 17.92 MB plain, 12.32 MB with `-trimpath -ldflags "-s -w"` after adding `modernc.org/sqlite`. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 411 / 518 / 522 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which inflates the number). Sits at the boundary; re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -99,12 +100,24 @@ Ranked by threat to the stated goals:
 3. **Feature growth vs binary/memory budgets.** Voice workers, pattern
    libraries, and the model manager all add weight; re-measure size and
    active RSS at each phase completion so growth is a trend line, not a
-   surprise. The first concrete addition is the ADR 0008 SQLite datastore
-   (`modernc.org/sqlite` + `modernc.org/libc` are multi-MB transpiled
-   packages); measure binary and RSS when Phase 11B lands.
+   surprise. The ADR 0008 SQLite datastore landed within binary budget but over
+   the original idle RSS budget; the Phase 11B waiver is recorded below.
 
 ## History
 
+- **2026-07-06** — Phase 11B complete on the current branch: settings,
+  memories, and user prompt sets now round-trip through one pure-Go SQLite
+  datastore (`magichandy.db`, `modernc.org/sqlite v1.53.0`) with forward
+  `PRAGMA user_version` migrations, WAL/busy-timeout pragmas, serialized write
+  transactions, and legacy JSON import fixtures. Legacy `settings.json`,
+  `memories.json`, and `prompt_sets.json` are archived as `*.migrated` after
+  import. Redaction still holds: the imported Handy connection key remains in
+  the private settings snapshot and does not appear in public settings.
+  Binary re-measured: 17.92 MB plain / 12.32 MB stripped, under the <30 MB
+  stripped budget. RSS waiver: stripped build idles at 54.13 MB after
+  `/healthz` and 54.36 MB after DB-backed API reads, exceeding the original
+  <40 MB idle target; this is accepted for Phase 11B as the cost of pure-Go
+  SQLite, not a silent target change.
 - **2026-07-06** — Decision recorded (ADR 0008): persistence moves to a single
   pure-Go SQLite datastore (`modernc.org/sqlite`, `CGO_ENABLED=0`) in Phase
   11B, replacing the three JSON stores (settings, memory, prompt sets).

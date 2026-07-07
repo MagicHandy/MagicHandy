@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the rewrite plan. Implemented starting in Phase 11B.
+Accepted for the rewrite plan. Implemented in Phase 11B.
 
 ## Context
 
@@ -100,13 +100,13 @@ non-destructive error — never a silent downgrade.
 
 ### One-time import from the JSON stores
 
-On first open where `magichandy.db` is absent but `settings.json` /
-`memories.json` / `prompt_sets.json` exist, import them into the DB in one
-transaction, then rename the JSON files `*.migrated` (rather than deleting them)
-so a bad import is recoverable. The import is non-destructive, logged, and
-reported in load status. This mirrors the R8 user-migration discipline for the
-app's own files, and it is the same relational target the Phase 15
-StrokeGPT-ReVibed importer will write into.
+On first open where `settings.json`, `memories.json`, or `prompt_sets.json`
+exist, import each legacy store into its DB tables inside a SQLite transaction,
+then rename that JSON file `*.migrated` (rather than deleting it) only after the
+commit so a bad import is recoverable. The import is non-destructive, logged in
+the `legacy_imports` table, and settings import is reported in load status. This
+mirrors the R8 user-migration discipline for the app's own files, and it is the
+same relational target the Phase 15 StrokeGPT-ReVibed importer will write into.
 
 ### Redaction and at-rest sensitivity
 
@@ -136,14 +136,12 @@ Positive:
 Negative / deliberate trade-offs:
 
 - Binary size grows: `modernc.org/sqlite` + `modernc.org/libc` are large
-  transpiled packages (order of a few MB). The current binary is 10.84 MB plain
-  / 7.70 MB stripped against a < 30 MB budget, so the headroom absorbs it — but
-  this is Watch-List item 3 (feature growth vs budgets) and **must be
-  re-measured and recorded in `docs/goal-scorecard.md` when Phase 11B lands**,
-  not assumed.
-- Core RSS grows modestly (page cache, mmap). Idle 8.96 MB against a < 40 MB
-  budget leaves ample room; the page cache is bounded and idle/active RSS is
-  re-measured.
+  transpiled packages. Phase 11B measured 17.92 MB plain / 12.32 MB stripped,
+  still under the < 30 MB stripped budget.
+- Core RSS grows materially. Phase 11B measured 54.13 MB idle after `/healthz`
+  and 54.36 MB after DB-backed API reads, exceeding the original < 40 MB idle
+  budget. This is recorded as a Phase 11B waiver in `docs/goal-scorecard.md`,
+  not silently relaxed.
 - New dependency surface: this is the first substantial third-party runtime
   dependency in the core (`modernc.org/sqlite` and its transitive `modernc.org`
   packages, all pure-Go and permissively licensed). Accepted for what it buys.

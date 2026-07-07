@@ -119,7 +119,7 @@ func TestMotionUnavailableWithoutSelectedTransportPrerequisites(t *testing.T) {
 	if state.Available {
 		t.Fatalf("motion state should be unavailable without Intiface: %s", stateRecorder.Body.String())
 	}
-	if !strings.Contains(stateRecorder.Body.String(), "Intiface client is unavailable") {
+	if !strings.Contains(stateRecorder.Body.String(), "intiface client is unavailable") {
 		t.Fatalf("state body = %s, want Intiface error", stateRecorder.Body.String())
 	}
 

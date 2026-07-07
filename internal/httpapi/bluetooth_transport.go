@@ -334,7 +334,7 @@ func (s *Server) handleBluetoothStop(w http.ResponseWriter, r *http.Request) {
 func (s *Server) newBluetoothTransport() (*transport.BrowserBluetoothTransport, error) {
 	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerBrowserBluetooth {
-		return nil, errors.New("Browser Bluetooth dispatch owner is not selected")
+		return nil, errors.New("browser Bluetooth dispatch owner is not selected")
 	}
 	return transport.NewBrowserBluetoothTransport(
 		s.bluetooth.bridge,

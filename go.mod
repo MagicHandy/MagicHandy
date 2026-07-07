@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/gorilla/websocket v1.5.3
 	go.uber.org/goleak v1.3.0
-	modernc.org/sqlite v1.37.0
+	modernc.org/sqlite v1.53.0
 )
 
 require (

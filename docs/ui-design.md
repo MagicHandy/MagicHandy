@@ -419,7 +419,13 @@ single motion path with no per-source divergence; trace export as one click.
 ## Relationship To Other Docs
 
 - ADR 0004: frontend strategy (fresh, minimal, backend-driven).
+- ADR 0009: React frontend migration, keeping backend-authoritative state and
+  static embedded output.
 - ADR 0002: stop contract and the semantic/transport split the UI reflects.
+- `docs/ui-navigation-redesign.md`: the newer sidebar-shell information
+  architecture that supersedes this document's current-build layout notes.
+- `docs/ui-design-guidelines.md`: the token, component, and visual-language
+  details for implementing the sidebar shell.
 - `docs/controller-dispatch-semantics.md`: active-controller lease, read-only
   clients, motion SSE, and dispatch-owner switch behavior.
 - `docs/goals-and-guardrails.md`: maintainability norms for `web/`.

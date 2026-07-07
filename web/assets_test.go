@@ -6,352 +6,73 @@ import (
 	"testing"
 )
 
-func TestEmbeddedAssetsExist(t *testing.T) {
-	for _, name := range []string{"index.html", "app.css", "shell.css", "app.js", "shell-ui.js", "motion-ui.js", "chat-ui.js", "bluetooth-ui.js", "handy-ble-codec.js", "prompts-memory-ui.js"} {
-		if _, err := fs.Stat(FS(), name); err != nil {
-			t.Fatalf("asset %s is missing: %v", name, err)
-		}
-	}
-}
+// The UI is now a built Vite/React bundle. These tests assert the generated app
+// shell and that critical, safety-relevant strings survive the build, per
+// docs/decisions/0009-react-frontend.md. Behavioral coverage of the shell lives
+// in the Vitest component tests (web/src/**/*.test.tsx).
 
-func TestEmbeddedShellUIHooksExist(t *testing.T) {
+func TestEmbeddedAppShellBuilt(t *testing.T) {
 	index, err := fs.ReadFile(FS(), "index.html")
 	if err != nil {
-		t.Fatalf("read index.html: %v", err)
+		t.Fatalf("built index.html missing (run `npm run build` in web/): %v", err)
 	}
-	shellUI, err := fs.ReadFile(FS(), "shell-ui.js")
-	if err != nil {
-		t.Fatalf("read shell-ui.js: %v", err)
-	}
-
-	// Status-only bar with the profile entry point, the control sidebar, and
-	// the settings window layered over the control view.
-	for _, fragment := range []string{
-		`id="view-control"`,
-		`class="sidebar"`,
-		`id="profile-button"`,
-		`id="settings-overlay"`,
-		`id="settings-window"`,
-		`id="settings-close"`,
-		`href="#/settings/device"`,
-		`data-settings-section="device"`,
-		`data-settings-section="model"`,
-		`data-settings-section="prompts"`,
-		`data-settings-section="diagnostics"`,
-		`aria-haspopup="dialog"`,
-	} {
+	for _, fragment := range []string{`id="root"`, `/assets/`, `type="module"`} {
 		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
-		}
-	}
-	// The window traps focus while open and consumes Escape only while open,
-	// so Esc-stops-motion survives; overlay sizing never uses viewport units.
-	for _, fragment := range []string{
-		`trapFocus`,
-		`stopImmediatePropagation`,
-		`hashchange`,
-	} {
-		if !strings.Contains(string(shellUI), fragment) {
-			t.Fatalf("shell-ui.js missing %q", fragment)
-		}
-	}
-	for _, forbidden := range []string{`100vw`, `100vh`} {
-		if strings.Contains(string(shellUI), forbidden) {
-			t.Fatalf("shell-ui.js must not rely on %q for overlay sizing", forbidden)
+			t.Fatalf("built index.html missing %q", fragment)
 		}
 	}
 }
 
-func TestEmbeddedPromptsMemoryUIHooksExist(t *testing.T) {
-	index, err := fs.ReadFile(FS(), "index.html")
-	if err != nil {
-		t.Fatalf("read index.html: %v", err)
-	}
-	module, err := fs.ReadFile(FS(), "prompts-memory-ui.js")
-	if err != nil {
-		t.Fatalf("read prompts-memory-ui.js: %v", err)
-	}
-
+func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
+	js := readBuiltJS(t)
+	// Safety-critical and shell wiring must be present in the shipped bundle:
+	// the permanent Stop and its endpoint, the four routes, the compact status
+	// language, chat/motion endpoints, the read-only lock, and the honest
+	// commanded-estimate label.
 	for _, fragment := range []string{
-		`data-settings-section="prompts"`,
-		`href="#/settings/prompts"`,
-		`id="llm-prompt-set"`,
-		`id="prompt-editor-select"`,
-		`id="prompt-editor-system"`,
-		`id="memory-enabled"`,
-		`id="memory-list"`,
-		`id="memory-add"`,
-		`id="memory-clear"`,
-		`id="settings-reset"`,
-		`data-settings-standalone`,
+		"Stop everything",
+		"/api/motion/stop",
+		"/api/chat/stream",
+		"/api/motion/events",
+		"Preset modes",
+		"Pattern library",
+		"Autopilot",
+		"Commanded position estimate",
+		"read-only",
+		"controller: you",
+		"#/settings",
+		"X-MagicHandy-Client-ID",
 	} {
-		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
+		if !strings.Contains(js, fragment) {
+			t.Fatalf("built bundle missing critical string %q", fragment)
 		}
 	}
-	// The module owns its endpoints and double-confirms destructive actions.
-	for _, fragment := range []string{
-		`/api/prompt-sets`,
-		`/api/memory`,
-		`/api/memory/enabled`,
-		`/api/settings/reset`,
-		`confirmable(`,
-		`dataset.armed`,
-		`applyPersonalizationAvailability`,
-		`magichandy:backend-availability`,
-		`magichandy:controller-state`,
-		`toggle.disabled = personalizationLocked()`,
-	} {
-		if !strings.Contains(string(module), fragment) {
-			t.Fatalf("prompts-memory-ui.js missing %q", fragment)
-		}
+	// The old oversized-round-bubble status class must not come back.
+	if strings.Contains(js, "status-pill") {
+		t.Fatal("built bundle contains status-pill; status readouts must be compact dot+text, not round pills")
 	}
 }
 
-func TestEmbeddedChatUIHooksExist(t *testing.T) {
-	index, err := fs.ReadFile(FS(), "index.html")
+func readBuiltJS(t *testing.T) string {
+	t.Helper()
+	entries, err := fs.ReadDir(FS(), "assets")
 	if err != nil {
-		t.Fatalf("read index.html: %v", err)
+		t.Fatalf("built assets/ dir missing (run `npm run build` in web/): %v", err)
 	}
-	chatUI, err := fs.ReadFile(FS(), "chat-ui.js")
-	if err != nil {
-		t.Fatalf("read chat-ui.js: %v", err)
-	}
-
-	for _, fragment := range []string{
-		`id="chat-form"`,
-		`id="chat-jump"`,
-		`id="chat-malformed"`,
-		`id="llm-provider"`,
-		`id="llm-mode"`,
-		`id="llm-runner-path"`,
-		`id="llm-model-path"`,
-		`id="llm-load"`,
-		`id="llm-unload"`,
-		`id="llm-prompt-set"`,
-	} {
-		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
+	var combined strings.Builder
+	found := false
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".js") {
+			data, err := fs.ReadFile(FS(), "assets/"+e.Name())
+			if err != nil {
+				t.Fatalf("read built asset %s: %v", e.Name(), err)
+			}
+			combined.Write(data)
+			found = true
 		}
 	}
-	for _, fragment := range []string{
-		`/api/chat/stream`,
-		`repair_delta`,
-		`Malformed model JSON`,
-		`JSON.stringify(assistantContract)`,
-		`shouldStickToBottom`,
-		`X-MagicHandy-Client-ID`,
-		`magichandy:controller-state`,
-	} {
-		if !strings.Contains(string(chatUI), fragment) {
-			t.Fatalf("chat-ui.js missing %q", fragment)
-		}
+	if !found {
+		t.Fatal("no built JS asset found under dist/assets")
 	}
-}
-
-func TestEmbeddedSettingsUIDoesNotClobberDirtyForm(t *testing.T) {
-	app, err := fs.ReadFile(FS(), "app.js")
-	if err != nil {
-		t.Fatalf("read app.js: %v", err)
-	}
-	for _, fragment := range []string{
-		`settingsDirty`,
-		`markSettingsDirty`,
-		`if (settingsDirty && !options.force)`,
-		`/api/llm/load`,
-		`/api/llm/unload`,
-	} {
-		if !strings.Contains(string(app), fragment) {
-			t.Fatalf("app.js missing %q", fragment)
-		}
-	}
-}
-
-func TestEmbeddedBackendLossUIHooksExist(t *testing.T) {
-	index, err := fs.ReadFile(FS(), "index.html")
-	if err != nil {
-		t.Fatalf("read index.html: %v", err)
-	}
-	app, err := fs.ReadFile(FS(), "app.js")
-	if err != nil {
-		t.Fatalf("read app.js: %v", err)
-	}
-
-	for _, fragment := range []string{
-		`id="backend-banner"`,
-		`id="transport-status"`,
-		`id="controller-status"`,
-		`data-requires-backend`,
-		`data-allow-backend-offline`,
-	} {
-		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
-		}
-	}
-	for _, fragment := range []string{
-		`setBackendAvailability`,
-		`setControllerState`,
-		`magichandy:backend-availability`,
-		`magichandy:controller-state`,
-		`backendRequiredControls`,
-		`controllerRequiredControls`,
-		`backendWasDisabled`,
-		`if (backendAvailable && !controllerReadOnly)`,
-	} {
-		if !strings.Contains(string(app), fragment) {
-			t.Fatalf("app.js missing %q", fragment)
-		}
-	}
-}
-
-func TestEmbeddedConnectionAndDiagnosticsUIHooksExist(t *testing.T) {
-	index, err := fs.ReadFile(FS(), "index.html")
-	if err != nil {
-		t.Fatalf("read index.html: %v", err)
-	}
-	app, err := fs.ReadFile(FS(), "app.js")
-	if err != nil {
-		t.Fatalf("read app.js: %v", err)
-	}
-
-	for _, fragment := range []string{
-		`id="connection-check"`,
-		`id="diagnostics-copy"`,
-		`Estimated position`,
-		`class="shortcut-hint"`,
-	} {
-		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
-		}
-	}
-	for _, fragment := range []string{
-		`/api/transport/cloud/check`,
-		`/api/transport/bluetooth/check`,
-		`copyDiagnosticsSummary`,
-		`writeClipboard`,
-	} {
-		if !strings.Contains(string(app), fragment) {
-			t.Fatalf("app.js missing %q", fragment)
-		}
-	}
-}
-
-func TestEmbeddedBluetoothBridgeUIHooksExist(t *testing.T) {
-	index, err := fs.ReadFile(FS(), "index.html")
-	if err != nil {
-		t.Fatalf("read index.html: %v", err)
-	}
-	app, err := fs.ReadFile(FS(), "app.js")
-	if err != nil {
-		t.Fatalf("read app.js: %v", err)
-	}
-	bluetoothUI, err := fs.ReadFile(FS(), "bluetooth-ui.js")
-	if err != nil {
-		t.Fatalf("read bluetooth-ui.js: %v", err)
-	}
-
-	for _, fragment := range []string{
-		`id="bluetooth-panel"`,
-		`cloud-credential`,
-	} {
-		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
-		}
-	}
-	for _, fragment := range []string{
-		`./bluetooth-ui.js`,
-		`renderBluetoothStatus`,
-		`maybePostUnsupportedBluetoothStatus`,
-	} {
-		if !strings.Contains(string(app), fragment) {
-			t.Fatalf("app.js missing %q", fragment)
-		}
-	}
-	for _, fragment := range []string{
-		`/api/transport/bluetooth/commands`,
-		`/api/transport/bluetooth/ack`,
-		`navigator.bluetooth.requestDevice`,
-		`handyBluetoothRequestOptions`,
-		`HANDY_BLE_NAME_PREFIXES = ["OHD", "Handy", "The Handy"]`,
-		`optionalServices: [HANDY_BLE_SERVICE_UUID]`,
-		`ensureBluetoothCommandLoop`,
-		`COMMAND_FETCH_TIMEOUT_MS`,
-		`AbortController`,
-		`clientID: transientClientID("bluetooth-tab")`,
-	} {
-		if !strings.Contains(string(bluetoothUI), fragment) {
-			t.Fatalf("bluetooth-ui.js missing %q", fragment)
-		}
-	}
-}
-
-func TestEmbeddedMotionUIHooksExist(t *testing.T) {
-	index, err := fs.ReadFile(FS(), "index.html")
-	if err != nil {
-		t.Fatalf("read index.html: %v", err)
-	}
-	css, err := fs.ReadFile(FS(), "app.css")
-	if err != nil {
-		t.Fatalf("read app.css: %v", err)
-	}
-	motionUI, err := fs.ReadFile(FS(), "motion-ui.js")
-	if err != nil {
-		t.Fatalf("read motion-ui.js: %v", err)
-	}
-
-	for _, fragment := range []string{
-		`id="stop-button"`,
-		`id="motion-start"`,
-		`id="motion-pause-resume"`,
-		`id="mode-freestyle"`,
-		`id="mode-chat"`,
-		`id="quick-style"`,
-		`id="motion-timer"`,
-		`id="quick-speed-min"`,
-		`id="quick-speed-max"`,
-		`class="test-badge"`,
-	} {
-		if !strings.Contains(string(index), fragment) {
-			t.Fatalf("index.html missing %q", fragment)
-		}
-	}
-	// Stop is a sidebar control now; the bar stays status-only.
-	if strings.Contains(barSection(string(index)), `id="stop-button"`) {
-		t.Fatal("index.html control bar must not contain the stop button")
-	}
-	if !strings.Contains(string(css), `[hidden]`) {
-		t.Fatal("app.css must preserve hidden elements")
-	}
-	if !strings.Contains(string(motionUI), `normalizeQuickControls`) {
-		t.Fatal("motion-ui.js must normalize quick control ranges before posting")
-	}
-	if !strings.Contains(string(motionUI), `Commanded position estimate`) {
-		t.Fatal("motion-ui.js must label visualizer position as an estimate")
-	}
-	for _, fragment := range []string{
-		`/api/motion/events?client_id=`,
-		`/api/motion/pause`,
-		`/api/motion/resume`,
-		`/api/modes/start`,
-		`/api/modes/stop`,
-		`stop_motion: false`,
-		`formatClock`,
-		`new EventSource`,
-		`X-MagicHandy-Client-ID`,
-		`magichandy:controller-state`,
-	} {
-		if !strings.Contains(string(motionUI), fragment) {
-			t.Fatalf("motion-ui.js missing %q", fragment)
-		}
-	}
-}
-
-// barSection returns the <header> control-bar markup for containment checks.
-func barSection(index string) string {
-	start := strings.Index(index, "<header")
-	end := strings.Index(index, "</header>")
-	if start == -1 || end == -1 {
-		return ""
-	}
-	return index[start:end]
+	return combined.String()
 }

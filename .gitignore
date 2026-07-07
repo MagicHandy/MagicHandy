@@ -20,6 +20,7 @@ coverage.out
 .env
 .env.*
 !.env.example
+/.local-data/
 .local-data/
 
 # Logs and diagnostics generated locally
@@ -34,3 +35,7 @@ coverage.out
 *.swo
 .DS_Store
 Thumbs.db
+
+# Frontend (Vite/React) — build output web/dist is committed for Go embed
+/web/node_modules/
+/web/.vite/

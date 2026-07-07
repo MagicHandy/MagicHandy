@@ -472,7 +472,7 @@ func validateLLMSettings(settings LLMSettings) error {
 		return errors.New("llama.cpp base URL is required")
 	}
 	if settings.OllamaBaseURL == "" {
-		return errors.New("Ollama base URL is required")
+		return errors.New("ollama base URL is required")
 	}
 	if settings.Model == "" {
 		return errors.New("LLM model is required")

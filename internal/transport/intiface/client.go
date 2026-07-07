@@ -173,7 +173,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.mu.Unlock()
 
 	go c.readerLoop(conn)
-	go c.linearWorker()
+	go c.linearWorker() //nolint:gosec // worker lifetime is bound to the active connection
 
 	if _, err := c.requestServerInfo(ctx); err != nil {
 		_ = c.Disconnect(context.Background(), false)

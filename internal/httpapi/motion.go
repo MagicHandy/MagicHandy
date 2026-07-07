@@ -315,6 +315,7 @@ func (s *Server) Close() {
 		s.modes.Shutdown()
 	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
+	s.personalization.Close()
 	if s.library != nil && s.library.Store() != nil {
 		_ = s.library.Store().Close()
 	}
@@ -367,7 +368,7 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 			if message == "" {
 				message = "Bluetooth is not connected."
 			}
-			return nil, fmt.Errorf("Browser Bluetooth is not ready: %s", message)
+			return nil, fmt.Errorf("browser Bluetooth is not ready: %s", message)
 		}
 		bluetooth, err := s.newBluetoothTransport()
 		if err != nil {

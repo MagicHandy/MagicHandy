@@ -269,9 +269,26 @@ func TestSettingsResetRestoresDefaults(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 
+	addedMemory := personalizationRequest(t, server, http.MethodPost, "/api/memory", `{"text":"Survives settings reset."}`)
+	if addedMemory.Code != http.StatusOK {
+		t.Fatalf("add memory = %d: %s", addedMemory.Code, addedMemory.Body.String())
+	}
+	createdPrompt := personalizationRequest(t, server, http.MethodPost, "/api/prompt-sets",
+		`{"name":"Reset survivor","system":"Still available after settings reset."}`)
+	if createdPrompt.Code != http.StatusOK {
+		t.Fatalf("create prompt set = %d: %s", createdPrompt.Code, createdPrompt.Body.String())
+	}
+	var promptPayload struct {
+		Set chat.PromptSet `json:"set"`
+	}
+	if err := json.Unmarshal(createdPrompt.Body.Bytes(), &promptPayload); err != nil {
+		t.Fatalf("decode created prompt set: %v", err)
+	}
+
 	settings, _ := server.store.Snapshot()
 	settings.Motion.SpeedMaxPercent = 55
 	settings.Device.HandyConnectionKey = "secret-key-value"
+	settings.LLM.PromptSet = promptPayload.Set.ID
 	if _, err := server.store.Save(settings); err != nil {
 		t.Fatalf("save modified settings: %v", err)
 	}
@@ -292,5 +309,16 @@ func TestSettingsResetRestoresDefaults(t *testing.T) {
 	}
 	if after.Device.HandyConnectionKey != "" {
 		t.Fatal("connection key survived the reset")
+	}
+	if after.LLM.PromptSet != defaults.LLM.PromptSet {
+		t.Fatalf("prompt set selection after reset = %q, want default %q", after.LLM.PromptSet, defaults.LLM.PromptSet)
+	}
+
+	memorySnapshot := server.personalization.memory.Snapshot()
+	if len(memorySnapshot.Memories) != 1 || memorySnapshot.Memories[0].Text != "Survives settings reset." {
+		t.Fatalf("memory rows after settings reset = %+v, want pre-reset memory intact", memorySnapshot.Memories)
+	}
+	if set, ok := server.personalization.prompts.Resolve(promptPayload.Set.ID); !ok || set.Name != "Reset survivor" {
+		t.Fatalf("prompt set after settings reset = %+v ok=%v, want pre-reset prompt set intact", set, ok)
 	}
 }

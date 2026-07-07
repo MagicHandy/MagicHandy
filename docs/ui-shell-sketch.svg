@@ -1,0 +1,141 @@
+<svg viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Segoe UI, system-ui, sans-serif">
+  <title>MagicHandy sidebar-navigation shell — Preset Modes workspace</title>
+  <desc>A dark app frame: a permanent left navigation rail with a profile lockup, Chat, Preset modes (active), Pattern library and Settings links, and a pinned red Stop button; a status-only top bar of compact dot-and-text readouts; and the Preset Modes workspace featuring an Autopilot control, a Freestyle card with a style selector, preset arrangement chips, and a session panel.</desc>
+  <defs>
+    <clipPath id="frame"><rect x="6" y="6" width="988" height="628" rx="16"/></clipPath>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b9dd9"/><stop offset="1" stop-color="#3a5a7c"/>
+    </linearGradient>
+    <linearGradient id="stop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ea5459"/><stop offset="1" stop-color="#c93b40"/>
+    </linearGradient>
+    <linearGradient id="start" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4fc06d"/><stop offset="1" stop-color="#3da55c"/>
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect x="6" y="6" width="988" height="628" fill="#0e0f11"/>
+    <rect x="6" y="6" width="224" height="628" fill="#17191d"/>
+    <line x1="230" y1="6" x2="230" y2="634" stroke="#2d3138"/>
+    <line x1="230" y1="70" x2="994" y2="70" stroke="#2d3138"/>
+
+    <!-- profile lockup -->
+    <rect x="26" y="24" width="40" height="40" rx="11" fill="url(#brand)"/>
+    <text x="46" y="51" fill="#0b131c" font-size="20" font-weight="700" text-anchor="middle">M</text>
+    <text x="76" y="42" fill="#eae9e4" font-size="18" font-weight="600">MagicHandy</text>
+    <text x="76" y="61" fill="#98a0a9" font-size="13">local · llama.cpp</text>
+    <line x1="26" y1="84" x2="210" y2="84" stroke="#2d3138"/>
+
+    <!-- nav: Chat -->
+    <rect x="30" y="113" width="18" height="14" rx="4" fill="none" stroke="#98a0a9" stroke-width="1.6"/>
+    <text x="58" y="127" fill="#98a0a9" font-size="18">Chat</text>
+
+    <!-- nav: Preset modes (active) -->
+    <rect x="14" y="148" width="204" height="44" fill="#1e2126"/>
+    <rect x="14" y="148" width="3" height="44" fill="#5b9dd9"/>
+    <rect x="30" y="161" width="18" height="16" rx="4" fill="none" stroke="#5b9dd9" stroke-width="1.6"/>
+    <circle cx="36" cy="168" r="1.5" fill="#5b9dd9"/><circle cx="42" cy="168" r="1.5" fill="#5b9dd9"/>
+    <text x="58" y="176" fill="#eae9e4" font-size="18" font-weight="600">Preset modes</text>
+
+    <!-- nav: Pattern library -->
+    <line x1="30" y1="212" x2="48" y2="212" stroke="#98a0a9" stroke-width="1.6"/>
+    <line x1="30" y1="218" x2="48" y2="218" stroke="#98a0a9" stroke-width="1.6"/>
+    <line x1="30" y1="224" x2="48" y2="224" stroke="#98a0a9" stroke-width="1.6"/>
+    <text x="58" y="224" fill="#98a0a9" font-size="18">Pattern library</text>
+
+    <!-- nav: Settings -->
+    <line x1="30" y1="262" x2="48" y2="262" stroke="#98a0a9" stroke-width="1.6"/>
+    <circle cx="38" cy="262" r="3" fill="#17191d" stroke="#98a0a9" stroke-width="1.6"/>
+    <line x1="30" y1="270" x2="48" y2="270" stroke="#98a0a9" stroke-width="1.6"/>
+    <circle cx="42" cy="270" r="3" fill="#17191d" stroke="#98a0a9" stroke-width="1.6"/>
+    <text x="58" y="272" fill="#98a0a9" font-size="18">Settings</text>
+
+    <!-- pinned Stop -->
+    <rect x="14" y="578" width="204" height="44" rx="8" fill="url(#stop)"/>
+    <rect x="34" y="593" width="14" height="14" rx="3" fill="#ffffff"/>
+    <text x="58" y="605" fill="#ffffff" font-size="16" font-weight="700">Stop everything</text>
+    <rect x="180" y="592" width="30" height="18" rx="5" fill="#ffffff" fill-opacity="0.18"/>
+    <text x="195" y="605" fill="#ffffff" font-size="12" text-anchor="middle">Esc</text>
+
+    <!-- status bar: compact dot + text readouts (no pills, no glow) -->
+    <circle cx="256" cy="37" r="5" fill="#5b9dd9"/>
+    <text x="268" y="42" fill="#98a0a9" font-size="15">freestyle</text>
+    <circle cx="372" cy="37" r="5" fill="#4fc06d"/>
+    <text x="384" y="42" fill="#98a0a9" font-size="15">cloud · ok</text>
+    <circle cx="500" cy="37" r="5" fill="#4fc06d"/>
+    <text x="512" y="42" fill="#98a0a9" font-size="15">controller: you</text>
+    <circle cx="672" cy="37" r="7" fill="none" stroke="#98a0a9" stroke-width="1.4"/>
+    <line x1="672" y1="37" x2="672" y2="33" stroke="#98a0a9" stroke-width="1.4"/>
+    <line x1="672" y1="37" x2="675" y2="39" stroke="#98a0a9" stroke-width="1.4"/>
+    <text x="686" y="42" fill="#eae9e4" font-size="15">04:12</text>
+    <text x="806" y="42" fill="#4fc06d" font-size="14">moving</text>
+    <rect x="868" y="32" width="108" height="10" rx="5" fill="#101215" stroke="#2d3138"/>
+    <rect x="892" y="32" width="52" height="10" rx="5" fill="#7d98b6" fill-opacity="0.20"/>
+    <circle cx="922" cy="37" r="6" fill="#4fc06d"/>
+
+    <!-- workspace: Preset modes -->
+    <text x="256" y="106" fill="#5b9dd9" font-size="12" letter-spacing="2">AUTONOMOUS MOTION</text>
+    <text x="256" y="134" fill="#eae9e4" font-size="26" font-weight="600">Preset modes</text>
+
+    <!-- Autopilot card (hero: accent border) -->
+    <rect x="256" y="152" width="468" height="150" rx="14" fill="#17191d" stroke="#497fb5" stroke-width="1.5"/>
+    <text x="282" y="192" fill="#eae9e4" font-size="20" font-weight="600">Autopilot</text>
+    <text x="282" y="218" fill="#98a0a9" font-size="15">Let the assistant change direction from the</text>
+    <text x="282" y="238" fill="#98a0a9" font-size="15">conversation, within your limits.</text>
+    <text x="606" y="196" fill="#5b9dd9" font-size="15" text-anchor="end">On</text>
+    <rect x="620" y="178" width="60" height="30" rx="15" fill="#497fb5"/>
+    <circle cx="665" cy="193" r="12" fill="#ffffff"/>
+    <rect x="282" y="262" width="80" height="26" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="322" y="279" fill="#98a0a9" font-size="13" text-anchor="middle">bounded</text>
+    <rect x="372" y="262" width="72" height="26" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="408" y="279" fill="#98a0a9" font-size="13" text-anchor="middle">traced</text>
+    <rect x="454" y="262" width="104" height="26" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="506" y="279" fill="#98a0a9" font-size="13" text-anchor="middle">stop anytime</text>
+    <text x="576" y="279" fill="#98a0a9" font-size="13">· off by default</text>
+
+    <!-- Freestyle card -->
+    <rect x="256" y="318" width="468" height="126" rx="14" fill="#17191d" stroke="#2d3138"/>
+    <text x="282" y="352" fill="#eae9e4" font-size="20" font-weight="600">Freestyle</text>
+    <text x="282" y="376" fill="#98a0a9" font-size="14">Deterministic autonomous motion</text>
+    <rect x="282" y="394" width="112" height="36" rx="8" fill="url(#start)"/>
+    <text x="338" y="418" fill="#08130c" font-size="15" font-weight="700" text-anchor="middle">Start</text>
+    <rect x="410" y="394" width="290" height="36" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <rect x="506" y="394" width="96" height="36" fill="#262a30"/>
+    <line x1="506" y1="394" x2="506" y2="430" stroke="#2d3138"/>
+    <line x1="602" y1="394" x2="602" y2="430" stroke="#2d3138"/>
+    <text x="458" y="417" fill="#98a0a9" font-size="14" text-anchor="middle">Gentle</text>
+    <text x="554" y="417" fill="#eae9e4" font-size="14" text-anchor="middle">Balanced</text>
+    <text x="651" y="417" fill="#98a0a9" font-size="14" text-anchor="middle">Intense</text>
+
+    <!-- preset arrangements -->
+    <text x="256" y="478" fill="#98a0a9" font-size="12" letter-spacing="2">PRESET ARRANGEMENTS</text>
+    <rect x="256" y="490" width="96" height="30" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="304" y="510" fill="#98a0a9" font-size="14" text-anchor="middle">Slow build</text>
+    <rect x="362" y="490" width="72" height="30" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="398" y="510" fill="#98a0a9" font-size="14" text-anchor="middle">Waves</text>
+    <rect x="444" y="490" width="64" height="30" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="476" y="510" fill="#98a0a9" font-size="14" text-anchor="middle">Edge</text>
+    <rect x="518" y="490" width="74" height="30" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="555" y="510" fill="#98a0a9" font-size="14" text-anchor="middle">Steady</text>
+    <rect x="602" y="490" width="92" height="30" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="648" y="510" fill="#98a0a9" font-size="14" text-anchor="middle">Cooldown</text>
+
+    <!-- session panel -->
+    <rect x="740" y="152" width="228" height="292" rx="14" fill="#17191d" stroke="#2d3138"/>
+    <text x="764" y="190" fill="#eae9e4" font-size="20" font-weight="600">Session</text>
+    <text x="764" y="228" fill="#98a0a9" font-size="14">Style bias</text>
+    <text x="944" y="228" fill="#eae9e4" font-size="14" text-anchor="end">Balanced</text>
+    <line x1="764" y1="244" x2="944" y2="244" stroke="#2d3138"/>
+    <text x="764" y="270" fill="#98a0a9" font-size="14">Speed cap</text>
+    <text x="944" y="270" fill="#eae9e4" font-size="14" text-anchor="end">80%</text>
+    <line x1="764" y1="286" x2="944" y2="286" stroke="#2d3138"/>
+    <text x="764" y="312" fill="#98a0a9" font-size="14">Session length</text>
+    <text x="944" y="312" fill="#eae9e4" font-size="14" text-anchor="end">20 min</text>
+    <rect x="764" y="338" width="180" height="38" rx="8" fill="#1e2126" stroke="#3d434c"/>
+    <text x="854" y="362" fill="#eae9e4" font-size="15" text-anchor="middle">I’m close</text>
+    <text x="764" y="410" fill="#98a0a9" font-size="13">Stop and Pause interrupt</text>
+    <text x="764" y="428" fill="#98a0a9" font-size="13">instantly.</text>
+  </g>
+  <rect x="6" y="6" width="988" height="628" rx="16" fill="none" stroke="#2d3138"/>
+</svg>
