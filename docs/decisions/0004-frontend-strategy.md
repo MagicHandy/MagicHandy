@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for the rewrite plan.
+Accepted for the rewrite plan. Amended by
+[ADR 0009](0009-react-frontend.md): React is now the selected frontend
+implementation path.
 
 ## Context
 
@@ -16,9 +18,10 @@ and the duplicated client-side motion state are themselves a meaningful part of
 the maintainability debt the rewrite is meant to escape. Porting it verbatim
 would carry the debt straight across and defeat the goal for half the codebase.
 
-The current app also has a deliberate no-heavy-build ethos (no `npm install`, no
-bundler at runtime), which keeps distribution simple and pairs well with Go
-embedding assets into a single binary.
+The current app also has a deliberate no-runtime-build ethos: the app must serve
+static assets embedded in the Go binary, and running MagicHandy must not require
+Node or a bundler server. ADR 0009 keeps that release property while allowing a
+build-time React toolchain.
 
 ## Decision
 
@@ -37,19 +40,22 @@ and proven behaviors, not as a code base to copy.
   active motion.
 - Build the minimal core flows first (connection, manual motion, quick settings,
   emergency stop, diagnostics, trace export, visualizer) per Phase 8, then grow.
+- React is an implementation tool, not a state-model change: the backend remains
+  authoritative for motion, controller ownership, settings, prompt sets, memory,
+  and diagnostics.
 
 Detailed layout, components, feedback, accessibility, and the specific
 StrokeGPT-ReVibed flaws this UI avoids live in `docs/ui-design.md`.
 
 ## Build And Tooling
 
-- Keep the no-heavy-build ethos: assets are embedded into the Go binary; running
-  the app must not require a Node runtime or a bundler server.
-- A framework is optional but must produce static, embeddable output with no
-  runtime build step. Bias strongly to minimal.
-- Default: small modular ES modules with clear ownership and no global mutable
-  god-registry. The exact framework question (if any) is decided concretely at
-  Phase 8, defaulting to no framework unless a specific need is shown.
+- Keep the no-runtime-build ethos: assets are embedded into the Go binary;
+  running the app must not require a Node runtime or a bundler server.
+- Use React as decided in ADR 0009. It must produce static, embeddable output.
+- Node is a development and CI build dependency only. Release artifacts remain a
+  Go binary plus embedded static files.
+- Preserve clear ownership and avoid a new global mutable god-registry. React
+  contexts/hooks must stay narrow and backend-derived.
 - The maintainability norms in `docs/goals-and-guardrails.md` (file-size limits,
   no god-module) apply to `web/`.
 
@@ -67,8 +73,8 @@ Recommended default:
 ## Scope And Deferral
 
 - The heavy authoring UI (pattern studio / training editor, Phase 14) is the
-  largest frontend risk. It is explicitly deferred and may remain partial at the
-  Phase 17 parity review.
+  largest frontend risk. Choosing React now is intended to reduce the later
+  maintainability cost of that work, not to move Phase 14 into the shell PR.
 - Feature-parity gaps in the UI are expected and acceptable until the motion core
   and core flows are proven.
 
@@ -77,19 +83,22 @@ Recommended default:
 Positive:
 
 - Frontend maintainability actually improves instead of being inherited.
-- No god-registry; client reads backend truth instead of guessing state.
+- React component ownership replaces ad-hoc DOM registries; client reads backend
+  truth instead of guessing state.
 - Distribution stays simple (embedded static assets, single binary).
 
 Negative:
 
-- More upfront UI work than copy-pasting the existing JS.
+- More upfront UI work than copy-pasting or incrementally patching the existing
+  vanilla JS.
+- Adds a Node build step in development and CI, though not at runtime.
 - UX parity gaps until later phases, especially pattern authoring.
-- A framework decision is deferred, so an early choice could still be revisited.
 
 ## Revisit Criteria
 
-Reconsider a framework or a larger frontend investment only if:
+Reconsider React only if:
 
-- the minimal modular approach starts reproducing god-module size in `web/`
-- pattern authoring (Phase 14) cannot be delivered maintainably without one
-- a packaging or offline requirement makes the current approach insufficient
+- the static build cannot stay embedded/offline without runtime Node
+- React state starts duplicating backend motion/controller truth
+- bundle size or startup measurably violates the project budgets and cannot be
+  fixed by ordinary code splitting or dependency trimming

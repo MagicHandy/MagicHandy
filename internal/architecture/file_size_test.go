@@ -26,6 +26,16 @@ func TestSourceFileLineBudgets(t *testing.T) {
 			extension:  ".js",
 			defaultMax: 800,
 		},
+		{
+			root:       "web",
+			extension:  ".ts",
+			defaultMax: 800,
+		},
+		{
+			root:       "web",
+			extension:  ".tsx",
+			defaultMax: 800,
+		},
 	}
 
 	for _, budget := range budgets {
@@ -48,7 +58,17 @@ func checkSourceBudget(t *testing.T, repo string, budget sourceBudget) {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || filepath.Ext(path) != budget.extension {
+		if entry.IsDir() {
+			// Skip generated output and installed dependencies: only
+			// hand-written source is size-governed (the React build output and
+			// node_modules are neither authored nor shipped as source).
+			switch entry.Name() {
+			case "node_modules", "dist", ".vite":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != budget.extension {
 			return nil
 		}
 		relative, err := filepath.Rel(repo, path)

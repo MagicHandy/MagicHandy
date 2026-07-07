@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "magichandy",
+      "runtimeExecutable": "go",
+      "runtimeArgs": ["run", "./cmd/magichandy", "-addr", "127.0.0.1:49717"],
+      "port": 49717
+    }
+  ]
+}

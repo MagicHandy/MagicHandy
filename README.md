@@ -60,7 +60,10 @@ Not implemented yet (see the status table in
 ## Requirements
 
 - Go 1.25 or newer (tested locally with Go 1.26.4)
-- No Node, Python, or CGO dependency is required for the core app
+- No Python or CGO dependency is required for the core app; the runtime is a
+  single Go binary with the browser UI embedded
+- Node.js 20+ and npm are needed only to build the `web/` React UI
+  (development/CI), never to run the compiled binary
 
 ## Run From Source
 
@@ -124,6 +127,24 @@ Trace exports are written under `traces/` by default. The public Handy API v3
 application ID is bundled; the private connection key is not returned by
 diagnostics, trace exports, or settings reads.
 
+## Browser UI (React)
+
+The browser UI is a Vite + React + TypeScript app under `web/`, built to
+`web/dist` and embedded by the Go binary (ADR 0009). The build output is
+committed so `go run`/`go build` work without Node. To change the UI:
+
+```powershell
+cd web
+npm ci
+npm run build      # regenerate web/dist (commit it)
+npm run test       # Vitest component/safety tests
+npm run typecheck
+npm run dev        # optional Vite dev server on :5173 (proxy API to the Go app)
+```
+
+The previous vanilla-JS UI is kept for reference under `web/legacy/` and is not
+embedded; it will be removed once React reaches parity.
+
 ## Validate
 
 ```powershell
@@ -132,6 +153,7 @@ go vet ./...
 go test ./...
 go test -race ./...
 $env:CGO_ENABLED = "0"; go build ./cmd/magichandy
+(cd web; npm ci; npm run typecheck; npm run test; npm run build)
 ```
 
 `go test -race` requires CGO and a local C compiler. CI runs the race test on
@@ -148,6 +170,8 @@ MinGW/GCC installed.
 - [Goal scorecard](docs/goal-scorecard.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
+- [React frontend migration](docs/decisions/0009-react-frontend.md)
+- [React UI implementation handoff](docs/react-ui-implementation-handoff.md)
 - [SQLite persistence (ADR 0008)](docs/decisions/0008-sqlite-persistence.md)
 - [UI design](docs/ui-design.md)
 - [UI navigation redesign (sidebar shell)](docs/ui-navigation-redesign.md)

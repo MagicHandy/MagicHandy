@@ -419,6 +419,8 @@ single motion path with no per-source divergence; trace export as one click.
 ## Relationship To Other Docs
 
 - ADR 0004: frontend strategy (fresh, minimal, backend-driven).
+- ADR 0009: React frontend migration, keeping backend-authoritative state and
+  static embedded output.
 - ADR 0002: stop contract and the semantic/transport split the UI reflects.
 - `docs/ui-navigation-redesign.md`: the newer sidebar-shell information
   architecture that supersedes this document's current-build layout notes.

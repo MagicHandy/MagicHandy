@@ -3,11 +3,12 @@
 ## Status
 
 Proposed 2026-07-06. Design target for the next UI phase (see "Migration",
-below). This document specifies the **shell and information architecture**; it
-does not restate the safety, accessibility, and parity rules in
-[ui-design.md](ui-design.md), which stay in force unchanged. Where the two
-overlap on layout, this document is the newer decision and
-[ui-design.md](ui-design.md) is annotated to point here.
+below). The shell is now expected to be implemented during the React migration
+accepted in [ADR 0009](decisions/0009-react-frontend.md). This document
+specifies the **shell and information architecture**; it does not restate the
+safety, accessibility, and parity rules in [ui-design.md](ui-design.md), which
+stay in force unchanged. Where the two overlap on layout, this document is the
+newer decision and [ui-design.md](ui-design.md) is annotated to point here.
 
 ## Why Change The Shell
 
@@ -357,10 +358,14 @@ Every ui-design.md safety property maps to a home in the new shell:
 
 ## Migration
 
-Ship incrementally; never lose a safety control mid-migration. Each step is
-verified against the live rendered DOM (headless run + inspection), runs the
+Ship incrementally; never lose a safety control mid-migration. The React
+implementation handoff is `docs/react-ui-implementation-handoff.md`. Each step
+is verified against the live rendered DOM (headless run + inspection), runs the
 asset/UI tests, and re-checks the Functional Parity Baseline rows it touches.
 
+- **Step 0 — React scaffold (no behavior loss).** Add the static React build,
+  embed its output from Go, preserve existing visible safety behavior, and add
+  frontend build/test CI.
 - **Step 1 — Shell refactor (no new backend).** Introduce the permanent nav
   sidebar and top-level router; move Stop to the pinned sidebar bottom; move the
   current control panel (quick settings, manual test, visualizer detail,
@@ -404,9 +409,11 @@ changes these deliberately (not silently):
 - [ui-design-guidelines.md](ui-design-guidelines.md): the token, component, and
   sketch-level visual contract for implementing this shell without introducing
   generic oversized status bubbles or new decorative hues.
-- ADR 0002 (motion/transport contract) and ADR 0004 (frontend strategy):
-  unchanged; this redesign obeys both (engine-only motion, fresh minimal ES
-  modules, embedded assets, no build step).
+- ADR 0002 (motion/transport contract), ADR 0004 (frontend strategy), and
+  ADR 0009 (React frontend migration): this redesign obeys all three
+  (engine-only motion, backend-authoritative state, static embedded React build).
+- [react-ui-implementation-handoff.md](react-ui-implementation-handoff.md): the
+  Claude-oriented implementation sequence and acceptance checklist.
 - [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md): the shell refactor is a
   UI phase; Autopilot rides the Phase 11 mode architecture; Pattern Library is
   Phase 14.
