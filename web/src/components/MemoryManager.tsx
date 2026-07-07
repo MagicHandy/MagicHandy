@@ -7,7 +7,7 @@ import { useAppState, useToast } from "../state/app-state";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
-export function MemoryManager() {
+export function MemoryManager({ locked = false }: { locked?: boolean }) {
   const { backendOnline } = useAppState();
   const { show } = useToast();
   const [mem, setMem] = useState<MemoryState | null>(null);
@@ -34,7 +34,8 @@ export function MemoryManager() {
     }
   }
 
-  if (!mem) return <p className="form-status">Loading memory…</p>;
+  if (!mem) return <p className="form-status">Loading memory...</p>;
+  const memories = Array.isArray(mem.memories) ? mem.memories : [];
 
   return (
     <div className="group">
@@ -45,7 +46,7 @@ export function MemoryManager() {
             type="checkbox"
             role="switch"
             checked={mem.enabled}
-            disabled={!backendOnline}
+            disabled={locked}
             onChange={(e) => void run(() => api.setMemoryEnabled(e.target.checked))}
           />
           <span className="track" aria-hidden="true" />
@@ -54,22 +55,22 @@ export function MemoryManager() {
       </label>
 
       <ul style={{ listStyle: "none", margin: "0 0 12px", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-        {mem.memories.length === 0 && <li className="form-status">No memories saved.</li>}
-        {mem.memories.map((m) => (
+        {memories.length === 0 && <li className="form-status">No memories saved.</li>}
+        {memories.map((m) => (
           <li key={m.id} className="group" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}>
             <label className="toggle">
               <input
                 type="checkbox"
                 role="switch"
                 checked={m.enabled}
-                disabled={!backendOnline}
+                disabled={locked}
                 aria-label="Enable memory"
                 onChange={(e) => void run(() => api.setMemoryItemEnabled(m.id, e.target.checked))}
               />
               <span className="track" aria-hidden="true" />
             </label>
             <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", color: "var(--text)" }}>{m.text}</span>
-            <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void run(() => api.removeMemory(m.id))}>
+            <button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void run(() => api.removeMemory(m.id))}>
               Remove
             </button>
           </li>
@@ -82,7 +83,7 @@ export function MemoryManager() {
           rows={2}
           maxLength={2000}
           value={draft}
-          disabled={!backendOnline}
+          disabled={locked}
           placeholder="A short fact the assistant should remember"
           onChange={(e) => setDraft(e.target.value)}
         />
@@ -91,7 +92,7 @@ export function MemoryManager() {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!backendOnline || !draft.trim()}
+          disabled={locked || !draft.trim()}
           onClick={() => void run(async () => { await api.addMemory(draft.trim()); setDraft(""); })}
         >
           Add memory
@@ -99,7 +100,7 @@ export function MemoryManager() {
         <button
           type="button"
           className="btn btn-danger-outline"
-          disabled={!backendOnline || mem.memories.length === 0}
+          disabled={locked || memories.length === 0}
           onClick={() => {
             if (!confirmClear) {
               setConfirmClear(true);
@@ -112,6 +113,7 @@ export function MemoryManager() {
           {confirmClear ? "Confirm clear all" : "Clear all"}
         </button>
       </div>
+      {locked && <p className="form-status">{backendOnline ? "Read-only client." : "Core offline."}</p>}
     </div>
   );
 }

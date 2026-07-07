@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, SettingsUpdate } from "../api/types";
+import { BluetoothBridge } from "../components/BluetoothBridge";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { MemoryManager } from "../components/MemoryManager";
 import { PromptSetEditor } from "../components/PromptSetEditor";
@@ -19,13 +20,15 @@ const SECTIONS = [
 ] as const;
 
 export function SettingsRoute() {
-  const { backendOnline, refresh } = useAppState();
+  const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const hash = useHashRoute();
-  const section = hash.split("/")[2] || "device";
+  const requestedSection = hash.split("/")[2] || "device";
+  const section = SECTIONS.some((item) => item.id === requestedSection) ? requestedSection : "device";
   const [s, setS] = useState<PublicSettings | null>(null);
   const [newKey, setNewKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
+  const locked = !backendOnline || readOnly;
 
   async function load() {
     try {
@@ -96,9 +99,17 @@ export function SettingsRoute() {
 
   if (!s) return (<><WorkspaceHead title="Settings" /><p className="form-status">Loading settings…</p></>);
 
-  const opt = s.options;
+  const opt = s.options ?? {
+    hsp_dispatch_owners: [],
+    api_application_id_sources: [],
+    diagnostics_verbosities: [],
+    motion_styles: [],
+    llm_providers: [],
+    llama_cpp_modes: [],
+    prompt_sets: [],
+  };
   const sel = (value: string, onChange: (v: string) => void, options: string[] = []) => (
-    <select value={value} disabled={!backendOnline} onChange={(e) => onChange(e.target.value)}>
+    <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
       {(options.length ? options : [value]).map((o) => (
         <option key={o} value={o}>{o}</option>
       ))}
@@ -121,11 +132,12 @@ export function SettingsRoute() {
             <label className="field"><span className="label">HSP dispatch owner</span>{sel(s.device.hsp_dispatch_owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
             <label className="field"><span className="label">Firmware / API requirement</span><input type="text" value={s.device.firmware_api_requirement} readOnly /></label>
             <label className="field"><span className="label">API application ID source</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
-            <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>
-            <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "•••••• (leave blank to keep)" : "Paste key"} value={newKey} onChange={(e) => setNewKey(e.target.value)} /></label>
-            <label className="toggle-line" style={{ marginBottom: 12 }}><span className="toggle"><input type="checkbox" checked={clearKey} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
-            <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={s.server.port} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
-            <div className="row-actions"><button type="button" className="btn btn-secondary" onClick={() => void checkConnection()} disabled={!backendOnline}>Check connection</button></div>
+            <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>
+            <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => setNewKey(e.target.value)} /></label>
+            <label className="toggle-line" style={{ marginBottom: 12 }}><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
+            <BluetoothBridge visible={s.device.hsp_dispatch_owner.toLowerCase().includes("blue")} locked={locked} backendOnline={backendOnline} initial={state?.bluetooth_bridge} />
+            <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
+            <div className="row-actions"><button type="button" className="btn btn-secondary" onClick={() => void checkConnection()} disabled={locked}>Check connection</button></div>
           </>
         )}
 
@@ -134,13 +146,13 @@ export function SettingsRoute() {
             <h2 className="section-title">Local LLM</h2>
             <label className="field"><span className="label">Provider</span>{sel(s.llm.provider, (v) => patchLLM({ provider: v }), opt.llm_providers)}</label>
             <label className="field"><span className="label">llama.cpp mode</span>{sel(s.llm.llama_cpp_mode, (v) => patchLLM({ llama_cpp_mode: v }), opt.llama_cpp_modes)}</label>
-            <label className="field"><span className="label">Model</span><input type="text" value={s.llm.model} onChange={(e) => patchLLM({ model: e.target.value })} /></label>
-            <label className="field"><span className="label">llama.cpp URL</span><input type="text" value={s.llm.llama_cpp_base_url} onChange={(e) => patchLLM({ llama_cpp_base_url: e.target.value })} /></label>
-            <label className="field"><span className="label">llama-server path</span><input type="text" value={s.llm.llama_cpp_runner_path ?? ""} onChange={(e) => patchLLM({ llama_cpp_runner_path: e.target.value })} /></label>
-            <label className="field"><span className="label">GGUF model path</span><input type="text" value={s.llm.llama_cpp_model_path ?? ""} onChange={(e) => patchLLM({ llama_cpp_model_path: e.target.value })} /></label>
-            <label className="field"><span className="label">Ollama URL</span><input type="text" value={s.llm.ollama_base_url} onChange={(e) => patchLLM({ ollama_base_url: e.target.value })} /></label>
-            <label className="field"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={s.llm.request_timeout_ms} onChange={(e) => patchLLM({ request_timeout_ms: Number(e.target.value) })} /></label>
-            <div className="row-actions"><button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void llm("load")}>Load</button><button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void llm("unload")}>Unload</button></div>
+            <label className="field"><span className="label">Model</span><input type="text" value={s.llm.model} disabled={locked} onChange={(e) => patchLLM({ model: e.target.value })} /></label>
+            <label className="field"><span className="label">llama.cpp URL</span><input type="text" value={s.llm.llama_cpp_base_url} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_base_url: e.target.value })} /></label>
+            <label className="field"><span className="label">llama-server path</span><input type="text" value={s.llm.llama_cpp_runner_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_runner_path: e.target.value })} /></label>
+            <label className="field"><span className="label">GGUF model path</span><input type="text" value={s.llm.llama_cpp_model_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_model_path: e.target.value })} /></label>
+            <label className="field"><span className="label">Ollama URL</span><input type="text" value={s.llm.ollama_base_url} disabled={locked} onChange={(e) => patchLLM({ ollama_base_url: e.target.value })} /></label>
+            <label className="field"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={s.llm.request_timeout_ms} disabled={locked} onChange={(e) => patchLLM({ request_timeout_ms: Number(e.target.value) })} /></label>
+            <div className="row-actions"><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("load")}>Load</button><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("unload")}>Unload</button></div>
           </>
         )}
 
@@ -149,9 +161,9 @@ export function SettingsRoute() {
             <h2 className="section-title">Prompts &amp; memory</h2>
             <label className="field"><span className="label">Active prompt set <span className="hint-inline">saved with Save settings</span></span>{sel(s.llm.prompt_set, (v) => patchLLM({ prompt_set: v }), opt.prompt_sets)}</label>
             <div className="divider" />
-            <PromptSetEditor />
+            <PromptSetEditor locked={locked} />
             <div className="divider" />
-            <MemoryManager />
+            <MemoryManager locked={locked} />
           </>
         )}
 
@@ -160,13 +172,14 @@ export function SettingsRoute() {
             <h2 className="section-title">Diagnostics</h2>
             <label className="field"><span className="label">Diagnostics verbosity</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
             <div className="divider" />
-            <DiagnosticsPanel />
+            <DiagnosticsPanel locked={locked} />
           </>
         )}
 
         {section !== "diagnostics" && (
           <div className="row-actions" style={{ marginTop: 18 }}>
-            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={!backendOnline}>Save settings</button>
+            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked}>Save settings</button>
+            {locked && <span className="form-status">{backendOnline ? "Read-only client" : "Core offline"}</span>}
           </div>
         )}
       </section>

@@ -52,7 +52,7 @@ export interface MemoryItem {
 }
 export interface MemoryState {
   enabled: boolean;
-  memories: MemoryItem[];
+  memories?: MemoryItem[];
 }
 
 export interface PromptSet {
@@ -60,6 +60,69 @@ export interface PromptSet {
   name: string;
   system: string;
   builtin: boolean;
+}
+
+export interface PromptSetsPayload {
+  selected?: string;
+  default?: string;
+  sets?: PromptSet[];
+  set?: PromptSet;
+}
+
+export interface BluetoothBridgeSnapshot {
+  connected?: boolean;
+  supported?: boolean;
+  ready?: boolean;
+  status?: string;
+  message?: string;
+  device_name?: string;
+  pending?: number;
+  inflight?: number;
+  last_ack?: { ok?: boolean; status?: string; error?: string };
+}
+
+export interface BluetoothStatusResponse {
+  status: string;
+  dispatch_owner: string;
+  bluetooth: BluetoothBridgeSnapshot;
+  diagnostics?: Record<string, unknown>;
+}
+
+export interface BluetoothCommand {
+  id: string;
+  path: string;
+  body?: Record<string, unknown>;
+}
+
+export interface BluetoothCommandsResponse {
+  status: string;
+  commands?: BluetoothCommand[];
+  bluetooth: BluetoothBridgeSnapshot;
+}
+
+export interface BluetoothClientStatus {
+  client_id: string;
+  connected: boolean;
+  supported: boolean;
+  device_name?: string;
+  protocol?: string;
+  status?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface BluetoothAckPayload {
+  id: string;
+  ok: boolean;
+  status?: string;
+  elapsed_ms?: number;
+  error?: string;
+  response?: Record<string, unknown>;
+}
+
+export interface ChatHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface ModesStatus {
@@ -133,12 +196,12 @@ export interface AppState {
   controller?: ControllerSnapshot;
   motion?: MotionInfo;
   modes?: ModesStatus;
-  memory?: MemoryState;
+  memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   transport?: Record<string, unknown>;
   cloud_transport?: Record<string, unknown>;
   bluetooth_transport?: Record<string, unknown>;
-  bluetooth_bridge?: Record<string, unknown>;
+  bluetooth_bridge?: BluetoothBridgeSnapshot;
   trace?: Record<string, unknown>;
 }
 
@@ -151,6 +214,8 @@ export interface MotionTarget {
 export type ChatStreamEvent =
   | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string } }
   | { event: "delta" | "repair_delta"; data: { phase?: string; text?: string } }
+  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; initial_malformed?: boolean } }
+  | { event: "motion"; data: { applied?: boolean; action?: string; error?: string } }
   | { event: "malformed"; data: { repaired?: boolean; recoverable?: boolean; phase?: string; error?: string } }
   | { event: "error"; data: { message?: string } }
   | { event: "done"; data: { ok?: boolean; malformed?: boolean } }

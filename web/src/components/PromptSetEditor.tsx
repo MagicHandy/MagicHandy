@@ -8,7 +8,7 @@ import { useAppState, useToast } from "../state/app-state";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
-export function PromptSetEditor() {
+export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
   const { backendOnline } = useAppState();
   const { show } = useToast();
   const [sets, setSets] = useState<PromptSet[]>([]);
@@ -19,7 +19,7 @@ export function PromptSetEditor() {
   async function reload(keep?: string) {
     try {
       const res = await api.getPromptSets();
-      const list = res.sets ?? [];
+      const list = Array.isArray(res.sets) ? res.sets : [];
       setSets(list);
       const pick = list.find((s) => s.id === (keep ?? selId)) ?? list[0];
       if (pick) {
@@ -62,7 +62,7 @@ export function PromptSetEditor() {
     try {
       const created = await api.createPromptSet(`${name || "Prompt set"} copy`, system || "You are a helpful assistant.");
       show("Duplicated.");
-      await reload(created.id);
+      await reload(created.set?.id);
     } catch (e) {
       show(msg(e), "error");
     }
@@ -93,19 +93,20 @@ export function PromptSetEditor() {
         <span className="label">
           Name {builtin && <span className="badge">Built-in — read-only</span>}
         </span>
-        <input type="text" maxLength={80} value={name} readOnly={builtin} onChange={(e) => setName(e.target.value)} />
+        <input type="text" maxLength={80} value={name} readOnly={builtin || locked} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
         <span className="label">
           Behavior instructions <span className="hint-inline">the motion JSON contract is enforced by code</span>
         </span>
-        <textarea rows={6} maxLength={16384} value={system} readOnly={builtin} onChange={(e) => setSystem(e.target.value)} />
+        <textarea rows={6} maxLength={16384} value={system} readOnly={builtin || locked} onChange={(e) => setSystem(e.target.value)} />
       </label>
       <div className="row-actions">
-        <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void duplicate()}>Duplicate as new</button>
-        <button type="button" className="btn btn-primary" disabled={!backendOnline || builtin} onClick={() => void save()}>Save set</button>
-        <button type="button" className="btn btn-danger-outline" disabled={!backendOnline || builtin} onClick={() => void remove()}>Delete set</button>
+        <button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void duplicate()}>Duplicate as new</button>
+        <button type="button" className="btn btn-primary" disabled={locked || builtin} onClick={() => void save()}>Save set</button>
+        <button type="button" className="btn btn-danger-outline" disabled={locked || builtin} onClick={() => void remove()}>Delete set</button>
       </div>
+      {locked && <p className="form-status">{backendOnline ? "Read-only client." : "Core offline."}</p>}
     </div>
   );
 }

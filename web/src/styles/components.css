@@ -529,6 +529,41 @@ textarea:disabled {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+.bluetooth-panel {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.bluetooth-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.bluetooth-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent);
+}
+.bluetooth-indicator[data-state="connected"] {
+  background: var(--go);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--go) 18%, transparent);
+}
+.bluetooth-indicator[data-state="connecting"] {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.bluetooth-indicator[data-state="error"],
+.bluetooth-indicator[data-state="unsupported"] {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+}
 .empty-state {
   display: flex;
   flex-direction: column;
