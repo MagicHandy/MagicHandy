@@ -29,7 +29,7 @@ func (db *DB) LoadMemories() (bool, []MemoryRow, bool, error) {
 	if err != nil {
 		return enabledInt == 1, nil, true, fmt.Errorf("load memories: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	memories := make([]MemoryRow, 0)
 	for rows.Next() {

@@ -36,7 +36,7 @@ func (s *Service) Store() *Store {
 }
 
 // PersistIngestResult upserts the imported file and inserts motion blocks.
-func (s *Service) PersistIngestResult(ctx context.Context, result funscript.IngestResult) (PersistResult, error) {
+func (s *Service) PersistIngestResult(ctx context.Context, result funscript.IngestResult) (PersistResult, error) { //nolint:gocyclo,funlen // ingest persistence mirrors source metadata branches
 	if s == nil || s.store == nil {
 		return PersistResult{}, fmt.Errorf("library store is unavailable")
 	}
@@ -199,7 +199,7 @@ func (s *Service) insertBlockRecord(
 func actionsFromStored(stored []funscript.StoredAction) []funscript.Action {
 	out := make([]funscript.Action, len(stored))
 	for i, action := range stored {
-		out[i] = funscript.Action{At: action.At, Pos: action.Pos}
+		out[i] = funscript.Action(action)
 	}
 	return out
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/funscript"
 )
 
-func TestFunscriptFileAndMotionBlockCRUD(t *testing.T) {
+func TestFunscriptFileAndMotionBlockCRUD(t *testing.T) { //nolint:gocyclo,funlen // integration test exercises full CRUD surface
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "library.db")
 	store, err := Open(dbPath)

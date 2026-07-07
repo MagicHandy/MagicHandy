@@ -195,7 +195,7 @@ func (s *Server) handleManualQueuePreview(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (s *Server) handleManualQueuePlay(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleManualQueuePlay(w http.ResponseWriter, _ *http.Request) {
 	draft := s.manualQueueDraft()
 	if draft["count"].(int) == 0 {
 		writeError(w, http.StatusBadRequest, errors.New("manual queue is empty"))
@@ -289,7 +289,7 @@ func (s *Server) manualQueueDraftLocked() map[string]any {
 	}
 }
 
-func (s *Server) resolveManualQueueItem(r *http.Request, blockID string, durationSec float64) (manualQueueItem, error) {
+func (s *Server) resolveManualQueueItem(_ *http.Request, blockID string, durationSec float64) (manualQueueItem, error) {
 	return s.resolveManualQueueItemCtx(blockID, durationSec)
 }
 

@@ -43,6 +43,7 @@ type PersonaPayload struct {
 	UpdatedAt      *string     `json:"updated_at,omitempty"`
 }
 
+// PersonaWrite is the editable persona fields accepted by SavePersona.
 type PersonaWrite struct {
 	Name           string
 	Description    *string
@@ -53,8 +54,10 @@ type PersonaWrite struct {
 	MotionBiasJSON *string
 }
 
+// ErrPersonaNotFound is returned when a persona id does not exist.
 var ErrPersonaNotFound = errors.New("persona not found")
 
+// CountPersonas returns the number of persisted personas.
 func (db *DB) CountPersonas() (int, error) {
 	var count int
 	err := db.sql.QueryRow(`SELECT COUNT(*) FROM personas`).Scan(&count)
@@ -64,6 +67,7 @@ func (db *DB) CountPersonas() (int, error) {
 	return count, nil
 }
 
+// ListPersonas returns all persona rows ordered by name.
 func (db *DB) ListPersonas() ([]PersonaRow, error) {
 	rows, err := db.sql.Query(`
 		SELECT id, name, description, system_prompt, tone_json, mood_json,
@@ -73,7 +77,7 @@ func (db *DB) ListPersonas() ([]PersonaRow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list personas: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]PersonaRow, 0)
 	for rows.Next() {
@@ -89,6 +93,7 @@ func (db *DB) ListPersonas() ([]PersonaRow, error) {
 	return out, nil
 }
 
+// GetPersona returns one persona row by id.
 func (db *DB) GetPersona(id string) (PersonaRow, error) {
 	row := db.sql.QueryRow(`
 		SELECT id, name, description, system_prompt, tone_json, mood_json,
@@ -101,6 +106,7 @@ func (db *DB) GetPersona(id string) (PersonaRow, error) {
 	return persona, err
 }
 
+// SavePersona inserts or updates one persona row.
 func (db *DB) SavePersona(id string, write PersonaWrite) (PersonaRow, error) {
 	name := strings.TrimSpace(write.Name)
 	systemPrompt := strings.TrimSpace(write.SystemPrompt)
@@ -160,6 +166,7 @@ func (db *DB) SavePersona(id string, write PersonaWrite) (PersonaRow, error) {
 	return db.GetPersona(id)
 }
 
+// DeletePersona removes one persona row by id.
 func (db *DB) DeletePersona(id string) error {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -178,6 +185,7 @@ func (db *DB) DeletePersona(id string) error {
 	})
 }
 
+// PersonaPayloadFromRow maps a DB row to the API persona document.
 func PersonaPayloadFromRow(row PersonaRow) PersonaPayload {
 	payload := PersonaPayload{
 		ID:           row.ID,

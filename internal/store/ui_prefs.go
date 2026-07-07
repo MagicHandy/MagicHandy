@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Supported locales for the React UI.
+// SupportedLocales lists UI locale codes accepted by the app.
 var SupportedLocales = []string{"en", "fr", "pt", "ru"}
 
 // UIPreferences stores durable UI choices for one app data directory.

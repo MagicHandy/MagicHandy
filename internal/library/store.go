@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // register pure-Go SQLite driver
 
 	"github.com/mapledaemon/MagicHandy/internal/funscript"
 )
@@ -277,7 +277,7 @@ func (s *Store) ListFunscriptFiles(ctx context.Context, limit int) ([]FunscriptF
 	if err != nil {
 		return nil, fmt.Errorf("list funscript files: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]FunscriptFile, 0, limit)
 	for rows.Next() {
@@ -458,7 +458,7 @@ func (s *Store) ListMotionBlocksByFileID(ctx context.Context, fileID string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("list motion blocks: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]MotionBlock, 0, 16)
 	for rows.Next() {
@@ -515,7 +515,7 @@ func (s *Store) ListMotionBlocks(ctx context.Context, filter BlockFilter) ([]Mot
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]MotionBlock, 0, filter.Limit)
 	for rows.Next() {
@@ -568,7 +568,7 @@ func (s *Store) ListMotionBlockContentHashes(ctx context.Context) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("list motion block hashes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]string, 0, 64)
 	for rows.Next() {
@@ -703,7 +703,7 @@ func (s *Store) queryMotionBlocks(ctx context.Context, filter BlockFilter, count
 	return s.db.QueryContext(ctx, query, args...)
 }
 
-func buildMotionBlockListSQL(filter BlockFilter, countOnly bool) (string, []any) {
+func buildMotionBlockListSQL(filter BlockFilter, countOnly bool) (string, []any) { //nolint:funlen // SQL builder mirrors filter matrix
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 24
@@ -793,12 +793,6 @@ func buildMotionBlockListSQL(filter BlockFilter, countOnly bool) (string, []any)
 	return strings.Join(parts, " "), args
 }
 
-func (s *Store) ensureLibraryColumns() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.ensureLibraryColumnsLocked()
-}
-
 func (s *Store) ensureLibraryColumnsLocked() error {
 	type column struct {
 		table string
@@ -828,7 +822,7 @@ func (s *Store) ensureLibraryColumnsLocked() error {
 			var notnull, pk int
 			var dflt sql.NullString
 			if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return err
 			}
 			if name == col.name {
@@ -836,7 +830,7 @@ func (s *Store) ensureLibraryColumnsLocked() error {
 				break
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 		if found {
 			continue
 		}

@@ -53,7 +53,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	result, err := store.ImportFromLSOWithOptions(db, *lsoPath, store.LSOImportOptions{
 		LSODataDir: store.ResolveLSODataDir(*lsoPath),

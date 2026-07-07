@@ -35,11 +35,11 @@ func (r ImportResult) Any() bool {
 
 // DB is the process-local SQLite datastore for one app data directory.
 type DB struct {
-	dataDir string
-	path    string
-	sql     *sql.DB
-	writeMu sync.Mutex
-	import_ ImportResult
+	dataDir      string
+	path         string
+	sql          *sql.DB
+	writeMu      sync.Mutex
+	importResult ImportResult
 }
 
 var (
@@ -88,7 +88,7 @@ func Open(dataDir string) (*DB, error) {
 		return nil, err
 	}
 	if created {
-		db.import_, err = importLegacyJSON(absDir, db)
+		db.importResult, err = importLegacyJSON(absDir, db)
 		if err != nil {
 			_ = sqlDB.Close()
 			return nil, err
@@ -114,7 +114,7 @@ func (db *DB) Path() string {
 // ImportResult returns the one-time JSON import outcome from open (empty when
 // the database already existed or no legacy files were present).
 func (db *DB) ImportResult() ImportResult {
-	return db.import_
+	return db.importResult
 }
 
 // Close releases the database connection.

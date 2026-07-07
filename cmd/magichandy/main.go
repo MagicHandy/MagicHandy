@@ -36,7 +36,7 @@ func main() {
 	}
 }
 
-func run(args []string, stdout io.Writer, stderr io.Writer) error {
+func run(args []string, stdout io.Writer, stderr io.Writer) error { //nolint:funlen // CLI wiring stays in one place for readability
 	defaults := config.Default()
 
 	flags := flag.NewFlagSet("magichandy", flag.ContinueOnError)

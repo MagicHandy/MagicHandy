@@ -90,7 +90,7 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	name := header.Filename
 	if strings.TrimSpace(name) == "" {
@@ -601,7 +601,7 @@ func patternSummaryFromRecord(block funscript.BlockRecord, sourceFilename string
 func storedToActions(stored []funscript.StoredAction) []funscript.Action {
 	out := make([]funscript.Action, len(stored))
 	for i, action := range stored {
-		out[i] = funscript.Action{At: action.At, Pos: action.Pos}
+		out[i] = funscript.Action(action)
 	}
 	return out
 }

@@ -18,8 +18,13 @@ type ActionSegment struct {
 	EndIndex   int
 }
 
+// StartMS returns the first action timestamp in milliseconds.
 func (s ActionSegment) StartMS() int { return s.Actions[0].At }
-func (s ActionSegment) EndMS() int   { return s.Actions[len(s.Actions)-1].At }
+
+// EndMS returns the last action timestamp in milliseconds.
+func (s ActionSegment) EndMS() int { return s.Actions[len(s.Actions)-1].At }
+
+// DurationMS returns the span from first to last action in milliseconds.
 func (s ActionSegment) DurationMS() int {
 	return s.EndMS() - s.StartMS()
 }
@@ -91,7 +96,7 @@ func isPause(actions []Action, index int) bool {
 	return posDelta < 3.0 || gap >= pauseGapMS*2
 }
 
-func shouldSplit(left, right []Action, forceMaxDuration bool) bool {
+func shouldSplit(left, right []Action, forceMaxDuration bool) bool { //nolint:gocyclo // segmentation heuristics are intentionally branchy
 	if len(left) < 2 || len(right) < 2 {
 		return false
 	}
@@ -104,7 +109,7 @@ func shouldSplit(left, right []Action, forceMaxDuration bool) bool {
 	leftAmp := segmentAmplitude(left)
 	rightAmp := segmentAmplitude(right)
 	if leftAmp >= 5 && rightAmp >= 5 {
-		ratio := max(leftAmp, rightAmp) / max(min(leftAmp, rightAmp), 1.0)
+		ratio := maxFloat(leftAmp, rightAmp) / maxFloat(min(leftAmp, rightAmp), 1.0)
 		if ratio >= amplitudeChangeRatio {
 			return true
 		}
@@ -116,7 +121,7 @@ func shouldSplit(left, right []Action, forceMaxDuration bool) bool {
 		leftAvg := mean(leftSpeeds)
 		rightAvg := mean(rightSpeeds)
 		if leftAvg > 0 && rightAvg > 0 {
-			speedRatio := max(leftAvg, rightAvg) / min(leftAvg, rightAvg)
+			speedRatio := maxFloat(leftAvg, rightAvg) / minFloat(leftAvg, rightAvg)
 			if speedRatio >= speedChangeRatio {
 				return true
 			}
@@ -350,14 +355,14 @@ func positions(actions []Action) []float64 {
 	return out
 }
 
-func min(a, b float64) float64 {
+func minFloat(a, b float64) float64 {
 	if a < b {
 		return a
 	}
 	return b
 }
 
-func max(a, b float64) float64 {
+func maxFloat(a, b float64) float64 {
 	if a > b {
 		return a
 	}

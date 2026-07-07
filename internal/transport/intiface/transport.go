@@ -78,7 +78,7 @@ func (t *Transport) SetStrokeWindow(ctx context.Context, command transport.Strok
 		Kind:         transport.CommandKindStrokeWindow,
 		StrokeWindow: &command,
 	}
-	result, err := t.record(ctx, recorded, func(ctx context.Context) error {
+	result, err := t.record(ctx, recorded, func(_ context.Context) error {
 		t.mu.Lock()
 		t.options.StrokeMinPercent = command.MinPercent
 		t.options.StrokeMaxPercent = command.MaxPercent
@@ -141,7 +141,7 @@ func (t *Transport) PlayHSP(ctx context.Context, command transport.HSPPlayComman
 		Kind:    transport.CommandKindHSPPlay,
 		HSPPlay: &command,
 	}
-	result, err := t.record(ctx, recorded, func(ctx context.Context) error {
+	result, err := t.record(ctx, recorded, func(_ context.Context) error {
 		t.setPlaybackState("playing")
 		return nil
 	})
@@ -224,13 +224,13 @@ func mapPosition(percent int, options TransportOptions) float64 {
 	if options.ReverseDirection {
 		percent = 100 - percent
 	}
-	min := options.StrokeMinPercent
-	max := options.StrokeMaxPercent
-	if max < min {
-		min, max = max, min
+	strokeMin := options.StrokeMinPercent
+	strokeMax := options.StrokeMaxPercent
+	if strokeMax < strokeMin {
+		strokeMin, strokeMax = strokeMax, strokeMin
 	}
-	span := float64(max - min)
-	mapped := float64(min) + span*(float64(percent)/100.0)
+	span := float64(strokeMax - strokeMin)
+	mapped := float64(strokeMin) + span*(float64(percent)/100.0)
 	return mapped / 100.0
 }
 

@@ -1,3 +1,4 @@
+// Command intiface-probe lists devices from a running Intiface Central instance.
 package main
 
 import (

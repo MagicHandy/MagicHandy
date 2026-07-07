@@ -148,7 +148,7 @@ func (s *Server) Handler() http.Handler {
 	return s.handler
 }
 
-func (s *Server) routes(mux *http.ServeMux) {
+func (s *Server) routes(mux *http.ServeMux) { //nolint:funlen // route table is intentionally explicit
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /health", s.handleHealthCompat)
 	mux.HandleFunc("GET /api/status", s.handleStatus)

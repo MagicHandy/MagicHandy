@@ -13,6 +13,7 @@ type AppState struct {
 	OperationMode   string `json:"operation_mode"`
 }
 
+// LoadAppState returns the persisted runtime persona and mode selections.
 func (db *DB) LoadAppState() (AppState, error) {
 	var activePersonaID, operationMode string
 	err := db.sql.QueryRow(
@@ -30,6 +31,7 @@ func (db *DB) LoadAppState() (AppState, error) {
 	}, nil
 }
 
+// SaveAppState persists runtime persona and mode selections.
 func (db *DB) SaveAppState(state AppState) (AppState, error) {
 	state.ActivePersonaID = strings.TrimSpace(state.ActivePersonaID)
 	state.OperationMode = normalizeOperationMode(state.OperationMode)
@@ -55,6 +57,7 @@ func (db *DB) SaveAppState(state AppState) (AppState, error) {
 	return state, nil
 }
 
+// SetActivePersonaID updates the active persona id in app state.
 func (db *DB) SetActivePersonaID(personaID string) error {
 	state, err := db.LoadAppState()
 	if err != nil {

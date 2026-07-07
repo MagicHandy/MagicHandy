@@ -188,7 +188,8 @@ func (s *Server) bootstrapIntiface(ctx context.Context) (map[string]any, error) 
 		select {
 		case <-ctx.Done():
 			scanErr = ctx.Err()
-			break
+			result["error"] = scanErr.Error()
+			return result, nil
 		case <-time.After(time.Duration(attempt+1) * time.Second):
 		}
 	}

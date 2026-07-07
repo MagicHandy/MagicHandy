@@ -86,13 +86,13 @@ func copyFile(src, dest string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
-	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- destination is under app data dir.
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return err
@@ -136,6 +136,7 @@ func DefaultLSODatabaseCandidates() []string {
 	return candidates
 }
 
+// ResolveLSODataDir returns the LSO data directory for a given app.sqlite path.
 func ResolveLSODataDir(lsoDBPath string) string {
 	abs, err := filepath.Abs(lsoDBPath)
 	if err != nil {

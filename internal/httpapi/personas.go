@@ -182,7 +182,7 @@ func (s *Server) handlePersonaAvatarUpload(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, errors.New("image file is required"))
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	data, err := io.ReadAll(io.LimitReader(file, maxPersonaAvatarBytes+1))
 	if err != nil {

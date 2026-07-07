@@ -32,7 +32,7 @@ type LSOImportOptions struct {
 }
 
 // ImportFromLSOWithOptions copies LSO rows and optional persona media files.
-func ImportFromLSOWithOptions(target *DB, lsoPath string, options LSOImportOptions) (LSOImportResult, error) {
+func ImportFromLSOWithOptions(target *DB, lsoPath string, options LSOImportOptions) (LSOImportResult, error) { //nolint:gocyclo,funlen // import mirrors LSO table layout
 	var result LSOImportResult
 	if target == nil {
 		return result, fmt.Errorf("target database is required")
@@ -49,7 +49,7 @@ func ImportFromLSOWithOptions(target *DB, lsoPath string, options LSOImportOptio
 	if err != nil {
 		return result, fmt.Errorf("open LSO database: %w", err)
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 
 	err = target.withWrite(func(tx *sql.Tx) error {
 		var copyErr error
@@ -149,12 +149,12 @@ func copyTable(tx *sql.Tx, source *sql.DB, table, insertSQL string, columns ...s
 	if !lsoTableExists(source, table) {
 		return 0, nil
 	}
-	query := "SELECT " + joinColumns(columns) + " FROM " + table
-	rows, err := source.Query(query) // #nosec G202 -- table name is fixed by caller.
+	query := "SELECT " + joinColumns(columns) + " FROM " + table // #nosec G202 -- table name is fixed by caller.
+	rows, err := source.Query(query)
 	if err != nil {
 		return 0, fmt.Errorf("read %s from LSO database: %w", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	count := 0
 	for rows.Next() {
@@ -184,12 +184,12 @@ func copyTableLenient(tx *sql.Tx, source *sql.DB, table, insertSQL string, colum
 	if !lsoTableExists(source, table) {
 		return 0, nil
 	}
-	query := "SELECT " + joinColumns(columns) + " FROM " + table
-	rows, err := source.Query(query) // #nosec G202 -- table name is fixed by caller.
+	query := "SELECT " + joinColumns(columns) + " FROM " + table // #nosec G202 -- table name is fixed by caller.
+	rows, err := source.Query(query)
 	if err != nil {
 		return 0, fmt.Errorf("read %s from LSO database: %w", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	count := 0
 	for rows.Next() {

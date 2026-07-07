@@ -129,7 +129,7 @@ func SemanticSummaryFromRecord(record BlockRecord) string {
 func storedToActions(stored []StoredAction) []Action {
 	out := make([]Action, len(stored))
 	for i, item := range stored {
-		out[i] = Action{At: item.At, Pos: item.Pos}
+		out[i] = Action(item)
 	}
 	return out
 }

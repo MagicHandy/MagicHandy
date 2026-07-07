@@ -19,7 +19,7 @@ func (db *DB) LoadPromptSets() ([]PromptSetRow, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("load prompt sets: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	sets := make([]PromptSetRow, 0)
 	for rows.Next() {

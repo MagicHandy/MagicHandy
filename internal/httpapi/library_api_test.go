@@ -63,7 +63,7 @@ func TestImportUploadPersistsFunscript(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	samplePath := filepath.Join("..", "funscript", "testdata", "sample.funscript")
-	sample, err := os.ReadFile(samplePath)
+	sample, err := os.ReadFile(samplePath) // #nosec G304 -- test fixture path is fixed.
 	if err != nil {
 		t.Fatalf("read sample: %v", err)
 	}

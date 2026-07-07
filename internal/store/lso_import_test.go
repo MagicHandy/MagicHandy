@@ -18,7 +18,7 @@ func TestImportFromLSO(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open target: %v", err)
 	}
-	defer target.Close()
+	defer func() { _ = target.Close() }()
 
 	result, err := ImportFromLSO(target, lsoPath)
 	if err != nil {
@@ -50,7 +50,7 @@ func seedLSODatabase(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("open LSO seed db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	stmts := []string{
 		`CREATE TABLE personas (

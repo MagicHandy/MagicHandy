@@ -12,8 +12,11 @@ type Action struct {
 type SourceFormat string
 
 const (
-	SourceFormatCSV       SourceFormat = "csv"
-	SourceFormatJSON      SourceFormat = "json"
+	// SourceFormatCSV is comma-separated funscript input.
+	SourceFormatCSV SourceFormat = "csv"
+	// SourceFormatJSON is JSON funscript input.
+	SourceFormatJSON SourceFormat = "json"
+	// SourceFormatFunscript is native .funscript input.
 	SourceFormatFunscript SourceFormat = "funscript"
 )
 

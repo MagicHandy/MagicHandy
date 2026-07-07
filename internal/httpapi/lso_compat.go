@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
-	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
@@ -39,7 +38,7 @@ func (s *Server) lsoStatusPayload() map[string]any {
 	s.manualQueue.mu.Unlock()
 
 	llmConnected := false
-	var llmError any = nil
+	var llmError any
 	if provider, err := s.newLLMProvider(settings.LLM); err == nil {
 		llmStatus := provider.Status(context.Background())
 		llmConnected = llmStatus.Available
@@ -53,7 +52,7 @@ func (s *Server) lsoStatusPayload() map[string]any {
 	appState, _ := s.store.DB().LoadAppState()
 	personaRow, personaID, _ := s.activePersonaSnapshot()
 	personaName := "MagicHandy"
-	var personaAvatar any = nil
+	var personaAvatar any
 	if personaRow.ID != "" {
 		personaName = personaRow.Name
 		personaAvatar = s.personaAvatarURLFor(personaID)
@@ -266,12 +265,4 @@ func trimSpace(value string) string {
 		value = value[:len(value)-1]
 	}
 	return value
-}
-
-func (s *Server) defaultDispatchOwner() string {
-	settings, _ := s.store.Snapshot()
-	if settings.Device.HSPDispatchOwner == "" {
-		return config.DispatchOwnerIntiface
-	}
-	return settings.Device.HSPDispatchOwner
 }

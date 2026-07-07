@@ -1,3 +1,4 @@
+// Package intiface implements a Buttplug websocket client for Intiface Central.
 package intiface
 
 import (
@@ -183,7 +184,7 @@ func (c *Client) Connect(ctx context.Context) error {
 }
 
 // Disconnect closes the websocket and optional device selection.
-func (c *Client) Disconnect(ctx context.Context, clearSelection bool) error {
+func (c *Client) Disconnect(_ context.Context, clearSelection bool) error {
 	c.stopReconnectLoop()
 	c.mu.Lock()
 	conn := c.conn
@@ -712,12 +713,12 @@ func mergeBody(body map[string]any, id int) map[string]any {
 	return merged
 }
 
-func clamp(value, min, max float64) float64 {
-	if value < min {
-		return min
+func clamp(value, lo, hi float64) float64 {
+	if value < lo {
+		return lo
 	}
-	if value > max {
-		return max
+	if value > hi {
+		return hi
 	}
 	return value
 }
