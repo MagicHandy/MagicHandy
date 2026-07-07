@@ -63,8 +63,8 @@ export function PresetModesRoute() {
         <p className="eyebrow">Autonomous motion</p>
         <div className="headline">
           <div>
-            <h2 className="section-title" style={{ marginBottom: 6 }}>Autopilot</h2>
-            <p className="hint-inline" style={{ display: "block", maxWidth: "52ch" }}>
+            <h2 className="section-title">Autopilot</h2>
+            <p className="hint-block narrow">
               Hands the wheel to the assistant: it changes direction, pattern, and intensity from the
               conversation — bounded by your quick-settings limits, fully traced, and interruptible by Stop
               and Pause.
@@ -77,17 +77,17 @@ export function PresetModesRoute() {
             </span>
           </label>
         </div>
-        <p className="coming-soon" style={{ marginTop: 12 }}>
+        <p className="coming-soon">
           Coming soon — needs the autopilot planner (a Phase 11 mode). Off by default and fail-safe when it lands.
         </p>
       </section>
 
       <section className="panel">
         <h2 className="section-title">Freestyle</h2>
-        <p className="hint-inline" style={{ display: "block", marginBottom: 12 }}>
+        <p className="hint-block">
           Deterministic autonomous motion across bounded arrangement segments.
         </p>
-        <div className="row-actions" style={{ marginBottom: 14 }}>
+        <div className="row-actions hint-block">
           {freestyleActive ? (
             <button type="button" className="btn btn-secondary" onClick={() => void stopModes()} disabled={!backendOnline || pending}>
               Stop Freestyle
@@ -114,12 +114,12 @@ export function PresetModesRoute() {
 
       <section className="panel">
         <h2 className="section-title">Preset arrangements</h2>
-        <p className="coming-soon" style={{ marginBottom: 12 }}>
+        <p className="coming-soon">
           Named bounded segment sets — arriving with the Pattern Library (Phase 14).
         </p>
         <div className="chip-row" aria-hidden="true">
           {["Slow build", "Waves", "Edge", "Steady", "Cooldown"].map((c) => (
-            <span key={c} className="chip">{c}</span>
+            <span key={c} className="chip chip-placeholder">{c}</span>
           ))}
         </div>
       </section>

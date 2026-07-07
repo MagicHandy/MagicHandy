@@ -35,10 +35,10 @@ export function ManualMotionTest() {
       <h3 className="group-title">
         Manual motion <span className="badge">testing</span>
       </h3>
-      <p className="hint-inline" style={{ display: "block", margin: "-4px 0 10px" }}>
+      <p className="hint-block">
         Drives the device directly to test the connection. Normal motion comes from chat and modes.
       </p>
-      <div className="row-actions" style={{ marginBottom: 10 }}>
+      <div className="row-actions hint-block">
         <button type="button" className="btn btn-start" onClick={() => void start()} disabled={locked}>
           {running ? "Restart test" : "Start test"}
         </button>

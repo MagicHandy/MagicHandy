@@ -11,13 +11,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <NavRail />
       <StatusBar />
-      {!backendOnline && (
-        <div className="backend-banner" role="alert">
-          <strong>Core connection lost.</strong>
-          <span>Backend-required controls are locked until the core responds.</span>
-        </div>
-      )}
       <main className="workspace" id="workspace">
+        {!backendOnline && (
+          <div className="backend-banner" role="alert">
+            <strong>Core connection lost.</strong>
+            <span>Backend-required controls are locked until the core responds.</span>
+          </div>
+        )}
         {children}
       </main>
     </div>

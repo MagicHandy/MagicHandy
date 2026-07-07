@@ -19,16 +19,16 @@ export function StatusBar() {
     <div className="status-bar" role="region" aria-label="Status">
       <span className="status-readout">
         <span className="status-dot" data-state={phaseState} />
-        {phaseLabel}
+        <span className="status-text">{phaseLabel}</span>
       </span>
       <span className="status-divider" aria-hidden="true" />
       <span className="status-readout">
         <span className="status-dot" data-state={backendOnline ? "ok" : "error"} />
-        {backendOnline ? "core · ok" : "core offline"}
+        <span className="status-text">{backendOnline ? "core ok" : "core offline"}</span>
       </span>
-      <span className="status-readout">
+      <span className="status-readout status-readout-controller">
         <span className="status-dot" data-state={readOnly ? "warn" : "ok"} />
-        {readOnly ? "read-only" : "controller: you"}
+        <span className="status-text">{readOnly ? "read-only" : "controller: you"}</span>
       </span>
       <span className="status-divider" aria-hidden="true" />
       <span className="status-timer">

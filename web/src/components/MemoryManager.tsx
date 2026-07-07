@@ -40,7 +40,7 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
   return (
     <div className="group">
       <h3 className="group-title">Long-term memory</h3>
-      <label className="toggle-line" style={{ marginBottom: 12 }}>
+      <label className="toggle-line hint-block">
         <span className="toggle">
           <input
             type="checkbox"
@@ -54,10 +54,10 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
         <span>Include saved memories in chat <span className="hint-inline">applies immediately</span></span>
       </label>
 
-      <ul style={{ listStyle: "none", margin: "0 0 12px", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+      <ul className="memory-list">
         {memories.length === 0 && <li className="form-status">No memories saved.</li>}
         {memories.map((m) => (
-          <li key={m.id} className="group" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}>
+          <li key={m.id} className="group memory-item">
             <label className="toggle">
               <input
                 type="checkbox"
@@ -69,7 +69,7 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
               />
               <span className="track" aria-hidden="true" />
             </label>
-            <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", color: "var(--text)" }}>{m.text}</span>
+            <span className="memory-text">{m.text}</span>
             <button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void run(() => api.removeMemory(m.id))}>
               Remove
             </button>

@@ -81,7 +81,7 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
 
   return (
     <>
-      <div className="row-actions" style={{ marginBottom: 14 }}>
+      <div className="row-actions hint-block">
         <button type="button" className="btn btn-secondary" onClick={() => void copy()}>Copy summary</button>
         <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>Export trace</button>
       </div>
@@ -96,7 +96,7 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
       <div className="divider" />
       <div className="group">
         <h3 className="group-title">Reset</h3>
-        <p className="hint-inline" style={{ display: "block", marginBottom: 10 }}>
+        <p className="hint-block">
           Restores every setting to factory defaults, including the connection key. Saved memories and prompt
           sets are not touched.
         </p>

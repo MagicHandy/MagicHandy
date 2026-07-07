@@ -202,6 +202,10 @@ textarea:disabled {
   font-size: 0.85rem;
   min-height: 1em;
 }
+.settings-actions {
+  min-height: 42px;
+  margin-top: 18px;
+}
 .row-actions {
   display: flex;
   align-items: center;
@@ -276,6 +280,10 @@ textarea:disabled {
   color: var(--muted);
   font-size: 0.82rem;
   cursor: default;
+}
+.chip-placeholder {
+  border-style: dashed;
+  opacity: 0.62;
 }
 .chip-row {
   display: flex;
@@ -355,6 +363,7 @@ textarea:disabled {
 /* ---- Chat ---- */
 .chat-log {
   min-height: 240px;
+  flex: 1 1 auto;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -372,6 +381,9 @@ textarea:disabled {
 }
 .chat-log-shell {
   position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .chat-jump {
   position: absolute;
@@ -460,6 +472,7 @@ textarea:disabled {
   animation: chat-cursor 1s steps(2, jump-none) infinite;
 }
 .chat-form {
+  flex: 0 0 auto;
   margin-top: 14px;
   display: grid;
   gap: 8px;
@@ -484,7 +497,20 @@ textarea:disabled {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(260px, 26vw, 320px);
   gap: var(--gap);
-  align-items: start;
+  align-items: stretch;
+}
+.split > .panel {
+  min-height: 0;
+}
+.chat-panel-shell {
+  display: flex;
+  flex-direction: column;
+}
+.chat {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
 }
 .split.reverse {
   grid-template-columns: clamp(260px, 26vw, 320px) minmax(0, 1fr);
@@ -505,11 +531,12 @@ textarea:disabled {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 .meta-grid {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
   gap: 12px;
 }
 .meta-grid > div {
@@ -533,7 +560,7 @@ textarea:disabled {
   margin: 0 0 14px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
 .bluetooth-summary {
@@ -552,8 +579,8 @@ textarea:disabled {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent);
 }
 .bluetooth-indicator[data-state="connected"] {
-  background: var(--go);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--go) 18%, transparent);
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent);
 }
 .bluetooth-indicator[data-state="connecting"] {
   background: var(--accent);
@@ -604,10 +631,37 @@ textarea:disabled {
   color: var(--text);
 }
 
+.quick-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.memory-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.memory-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
 /* ---- Toast ---- */
 .toast {
   position: fixed;
-  left: 50%;
+  left: calc(50% + var(--rail-width) / 2);
   bottom: 24px;
   transform: translate(-50%, 12px);
   padding: 12px 18px;
@@ -627,6 +681,12 @@ textarea:disabled {
 }
 .toast[data-tone="error"] {
   border-color: var(--danger);
+}
+
+@media (max-width: 860px) {
+  .toast {
+    left: 50%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
