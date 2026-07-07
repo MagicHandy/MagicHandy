@@ -1,6 +1,6 @@
 // Package memory owns the user-managed long-term memory store: short facts
 // the user chooses to keep, inject into chat, disable, or remove. Nothing in
-// here is model-written or hidden; the file is plain JSON in the data dir.
+// here is model-written or hidden; rows live in magichandy.db.
 package memory
 
 import (
@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 const (
@@ -46,44 +48,31 @@ type memoriesFile struct {
 	Memories []Memory `json:"memories"`
 }
 
-// Store owns the durable memory file and the global injection switch.
+// Store owns the durable memory rows and the global injection switch.
 type Store struct {
 	mu        sync.RWMutex
-	path      string
-	state     memoriesFile
+	db        *store.DB
 	recovered bool
+	state     memoriesFile
 }
 
-// Open loads the memory file from dataDir; a missing file starts enabled and
-// empty, and a corrupt file recovers to the same without failing startup.
+// Open loads memories from dataDir; a missing store starts enabled and empty,
+// and a corrupt legacy file recovers to the same without failing startup.
 func Open(dataDir string) (*Store, error) {
-	absDir, err := filepath.Abs(dataDir)
+	db, err := store.Open(dataDir)
 	if err != nil {
-		return nil, fmt.Errorf("resolve data directory: %w", err)
+		return nil, err
 	}
-	store := &Store{
-		path:  filepath.Join(absDir, memoriesFileName),
+
+	s := &Store{
+		db:    db,
 		state: memoriesFile{Version: memoriesVersion, Enabled: true},
 	}
-
-	data, err := os.ReadFile(store.path) // #nosec G304 -- resolved app data file.
-	if err != nil {
-		if !os.IsNotExist(err) {
-			store.recovered = true
-		}
-		return store, nil
-	}
-	file := memoriesFile{Version: memoriesVersion, Enabled: true}
-	if err := json.Unmarshal(data, &file); err != nil {
-		store.recovered = true
-		return store, nil
-	}
-	file = store.normalizeLoadedFile(file)
-	store.state = file
-	return store, nil
+	s.loadFromDatabase()
+	return s, nil
 }
 
-// Recovered reports whether an unreadable file was replaced by defaults.
+// Recovered reports whether an unreadable store was replaced by defaults.
 func (s *Store) Recovered() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -215,8 +204,61 @@ func (s *Store) SetEnabled(enabled bool) error {
 	return nil
 }
 
+func (s *Store) loadFromDatabase() {
+	enabled, rows, found, err := s.db.LoadMemories()
+	if err != nil {
+		s.recovered = true
+		return
+	}
+	if !found {
+		s.loadLegacyJSONFile()
+		return
+	}
+
+	file := memoriesFile{
+		Version:  memoriesVersion,
+		Enabled:  enabled,
+		Memories: make([]Memory, len(rows)),
+	}
+	for index, row := range rows {
+		file.Memories[index] = Memory{
+			ID:        row.ID,
+			Text:      row.Text,
+			Enabled:   row.Enabled,
+			CreatedAt: row.CreatedAt,
+		}
+	}
+	s.state = s.normalizeLoadedFile(file)
+}
+
+func (s *Store) loadLegacyJSONFile() {
+	path := filepath.Join(s.db.DataDir(), memoriesFileName)
+	data, err := os.ReadFile(path) // #nosec G304 -- resolved app data file.
+	if err != nil {
+		if !os.IsNotExist(err) {
+			s.recovered = true
+		}
+		return
+	}
+	file := memoriesFile{Version: memoriesVersion, Enabled: true}
+	if err := json.Unmarshal(data, &file); err != nil {
+		s.recovered = true
+		return
+	}
+	s.state = s.normalizeLoadedFile(file)
+}
+
 func (s *Store) persistLocked() error {
-	return writeJSONFileAtomic(s.path, s.state)
+	rows := make([]store.MemoryRow, len(s.state.Memories))
+	for index, item := range s.state.Memories {
+		rows[index] = store.MemoryRow{
+			ID:        item.ID,
+			Text:      item.Text,
+			Enabled:   item.Enabled,
+			CreatedAt: item.CreatedAt,
+		}
+	}
+	return s.db.SaveMemories(s.state.Enabled, rows)
 }
 
 func (s *Store) normalizeLoadedFile(file memoriesFile) memoriesFile {
@@ -251,36 +293,4 @@ func randomHex(bytes int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buffer)
-}
-
-// writeJSONFileAtomic mirrors the settings-store durability rule: temp file
-// plus rename so a crash cannot leave a truncated store.
-func writeJSONFileAtomic(path string, payload any) error {
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode store file: %w", err)
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create data directory: %w", err)
-	}
-	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp store file: %w", err)
-	}
-	tempName := temp.Name()
-	if _, err := temp.Write(append(data, '\n')); err != nil {
-		_ = temp.Close()
-		_ = os.Remove(tempName)
-		return fmt.Errorf("write temp store file: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		_ = os.Remove(tempName)
-		return fmt.Errorf("close temp store file: %w", err)
-	}
-	if err := os.Rename(tempName, path); err != nil {
-		_ = os.Remove(tempName)
-		return fmt.Errorf("replace store file: %w", err)
-	}
-	return nil
 }

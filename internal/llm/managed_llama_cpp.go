@@ -200,6 +200,9 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 		"--port", strconv.Itoa(port),
 		"-m", p.modelPath,
 	}
+	if alias := strings.TrimSpace(p.model); alias != "" {
+		args = append(args, "-a", alias)
+	}
 
 	// #nosec G204 -- runner path/model path are explicit local user settings and
 	// are passed directly to exec without shell expansion.

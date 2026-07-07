@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 func TestComposeSystemAlwaysAppendsContract(t *testing.T) {
@@ -46,7 +48,7 @@ func TestComposeSystemIncludesOnlyProvidedMemories(t *testing.T) {
 }
 
 func TestPromptLibraryCreateUpdateDeletePersists(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	library, err := OpenPromptLibrary(dir)
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
@@ -86,7 +88,7 @@ func TestPromptLibraryCreateUpdateDeletePersists(t *testing.T) {
 }
 
 func TestPromptLibraryProtectsBuiltins(t *testing.T) {
-	library, err := OpenPromptLibrary(t.TempDir())
+	library, err := OpenPromptLibrary(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
 	}
@@ -147,7 +149,7 @@ func TestLocalizedBuiltinPromptSets(t *testing.T) {
 }
 
 func TestPromptLibraryValidatesFieldsAndUnknownIDs(t *testing.T) {
-	library, err := OpenPromptLibrary(t.TempDir())
+	library, err := OpenPromptLibrary(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
 	}
@@ -169,7 +171,7 @@ func TestPromptLibraryValidatesFieldsAndUnknownIDs(t *testing.T) {
 }
 
 func TestPromptLibraryRecoversFromCorruptFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	if err := os.WriteFile(filepath.Join(dir, promptSetsFileName), []byte("{broken"), 0o600); err != nil {
 		t.Fatalf("write corrupt file: %v", err)
 	}
@@ -186,7 +188,7 @@ func TestPromptLibraryRecoversFromCorruptFile(t *testing.T) {
 }
 
 func TestPromptLibrarySkipsInvalidLoadedUserSets(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	file := promptSetsFile{
 		Version: promptSetsVersion,
 		Sets: []PromptSet{

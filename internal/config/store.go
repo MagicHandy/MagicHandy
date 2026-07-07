@@ -1,11 +1,14 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 const (
@@ -28,11 +31,12 @@ type LoadStatus struct {
 	LoadedAt      string `json:"loaded_at"`
 }
 
-// Store owns the process-local settings snapshot and durable settings file.
+// Store owns the process-local settings snapshot and durable settings document.
 type Store struct {
 	mu       sync.RWMutex
 	dataDir  string
 	path     string
+	db       *store.DB
 	settings Settings
 	status   LoadStatus
 }
@@ -60,12 +64,18 @@ func OpenStore(dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("resolve data directory: %w", err)
 	}
 
-	store := &Store{
-		dataDir: absDir,
-		path:    filepath.Join(absDir, settingsFileName),
+	db, err := store.Open(absDir)
+	if err != nil {
+		return nil, err
 	}
-	store.settings, store.status = loadSettingsFile(store.path, store.dataDir)
-	return store, nil
+
+	s := &Store{
+		dataDir: absDir,
+		path:    db.Path(),
+		db:      db,
+	}
+	s.settings, s.status = loadSettings(db)
+	return s, nil
 }
 
 // Snapshot returns the current settings and load status.
@@ -89,10 +99,16 @@ func (s *Store) Save(next Settings) (Settings, error) {
 		return Settings{}, err
 	}
 
+	data, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
+		return Settings{}, fmt.Errorf("encode settings: %w", err)
+	}
+	data = append(data, '\n')
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := writeSettingsFile(s.path, next); err != nil {
+	if err := s.db.SaveSettingsDocument(data); err != nil {
 		return Settings{}, err
 	}
 	s.settings = next
@@ -110,41 +126,81 @@ func (s *Store) DataDir() string {
 	return s.dataDir
 }
 
-// Path returns the durable settings file path.
+// Path returns the durable datastore path.
 func (s *Store) Path() string {
 	return s.path
 }
 
-func loadSettingsFile(path string, dataDir string) (Settings, LoadStatus) {
+// DB exposes the embedded SQLite datastore for UI and library features.
+func (s *Store) DB() *store.DB {
+	return s.db
+}
+
+// Close releases the embedded SQLite datastore.
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
+func loadSettings(db *store.DB) (Settings, LoadStatus) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	status := LoadStatus{
-		DataDir:      dataDir,
-		SettingsPath: path,
+		DataDir:      db.DataDir(),
+		SettingsPath: db.Path(),
 		LoadedAt:     now,
 	}
-
-	data, err := os.ReadFile(path) // #nosec G304 -- path is the resolved app settings file.
-	if err != nil {
-		status.Source = loadSourceDefault
-		status.UsingDefaults = true
-		if !os.IsNotExist(err) {
-			status.Source = loadSourceRecover
-			status.Recovered = true
-			status.Message = "settings file could not be read; defaults are active"
-		}
-		return DefaultSettings(), status
+	if db.ImportResult().SettingsImported {
+		status.Migrated = true
 	}
 
-	settings, migrated, err := loadSettingsFromBytes(data)
+	document, found, err := db.LoadSettingsDocument()
 	if err != nil {
 		status.Source = loadSourceRecover
 		status.UsingDefaults = true
 		status.Recovered = true
-		status.Message = "settings file could not be parsed; defaults are active"
+		status.Message = "settings could not be read; defaults are active"
+		return DefaultSettings(), status
+	}
+	if !found {
+		if recovered, message := recoverLegacySettings(db.DataDir()); recovered {
+			status.Source = loadSourceRecover
+			status.UsingDefaults = true
+			status.Recovered = true
+			status.Message = message
+		} else {
+			status.Source = loadSourceDefault
+			status.UsingDefaults = true
+		}
+		return DefaultSettings(), status
+	}
+
+	settings, migrated, err := loadSettingsFromBytes(document)
+	if err != nil {
+		status.Source = loadSourceRecover
+		status.UsingDefaults = true
+		status.Recovered = true
+		status.Message = "settings could not be parsed; defaults are active"
 		return DefaultSettings(), status
 	}
 
 	status.Source = loadSourceFile
-	status.Migrated = migrated
+	status.Migrated = status.Migrated || migrated
 	return settings, status
+}
+
+func recoverLegacySettings(dataDir string) (bool, string) {
+	path := filepath.Join(dataDir, settingsFileName)
+	if _, err := os.Stat(path); err != nil {
+		return false, ""
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- resolved app settings file.
+	if err != nil {
+		return true, "settings file could not be read; defaults are active"
+	}
+	if _, _, err := loadSettingsFromBytes(data); err != nil {
+		return true, "settings file could not be parsed; defaults are active"
+	}
+	return false, ""
 }

@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,14 +12,17 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/library"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/transport/intiface"
 )
 
 const serviceName = "magichandy"
@@ -39,6 +43,7 @@ type Runtime struct {
 	CloudBaseURL           string
 	CloudHTTPClient        *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
+	IntifaceClient         *intiface.Client
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -50,11 +55,17 @@ type Server struct {
 	transport       transport.DiagnosticsProvider
 	cloud           cloudRuntime
 	bluetooth       bluetoothRuntime
+	intiface        intifaceRuntime
 	motion          motionRuntime
 	llm             llmRuntime
 	controller      controllerRuntime
 	personalization personalizationRuntime
+	statusCompat    statusCompatRuntime
 	modes           *modes.Manager
+	library         *library.Service
+	direct          directRuntime
+	manualQueue     manualQueueRuntime
+	lsoCompat       lsoCompatRuntime
 	started         time.Time
 	version         VersionInfo
 	handler         http.Handler
@@ -97,6 +108,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		transport:       runtime.Transport,
 		cloud:           newCloudRuntime(runtime),
 		bluetooth:       newBluetoothRuntime(runtime),
+		intiface:        newIntifaceRuntime(runtime.IntifaceClient),
 		motion:          newMotionRuntime(runtime),
 		llm:             newLLMRuntime(runtime),
 		controller:      newControllerRuntime(),
@@ -111,9 +123,22 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	}
 	server.modes = manager
 
+	libraryStore, err := library.Open(filepath.Join(store.DataDir(), "magichandy.db"))
+	if err != nil {
+		return nil, fmt.Errorf("open pattern library: %w", err)
+	}
+	server.library = library.NewService(libraryStore)
+
 	mux := http.NewServeMux()
 	server.routes(mux)
 	server.handler = logRequests(logger, mux)
+
+	if runtime.IntifaceClient != nil {
+		server.startIntifaceReconnectLoop(context.Background())
+		server.startIntifaceBootstrapLoop(context.Background())
+	}
+
+	server.tryAutoImportLSO()
 
 	return server, nil
 }
@@ -125,6 +150,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
+	mux.HandleFunc("GET /health", s.handleHealthCompat)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
@@ -144,7 +170,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
+	mux.HandleFunc("GET /api/diagnostics", s.handleDiagnosticsCompat)
+	mux.HandleFunc("POST /api/diagnostics/ping-ollama", s.handlePingOllamaCompat)
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
+	mux.HandleFunc("GET /api/chat/messages", s.handleChatMessages)
+	mux.HandleFunc("POST /api/chat/send", s.handleChatSend)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
 	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)
 	mux.HandleFunc("POST /api/transport/cloud/check", s.handleCloudConnectionCheck)
@@ -168,6 +198,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/transport/bluetooth/hsp-add", s.handleBluetoothHSPAdd)
 	mux.HandleFunc("POST /api/transport/bluetooth/hsp-play", s.handleBluetoothHSPPlay)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
+	mux.HandleFunc("GET /api/device/transport", s.handleDeviceTransportGet)
+	mux.HandleFunc("POST /api/device/transport", s.handleDeviceTransportPost)
+	mux.HandleFunc("POST /api/device/connect", s.handleDeviceConnect)
+	mux.HandleFunc("POST /api/device/bootstrap", s.handleDeviceBootstrap)
+	mux.HandleFunc("POST /api/device/scan", s.handleDeviceScan)
+	mux.HandleFunc("POST /api/device/select", s.handleDeviceSelect)
+	mux.HandleFunc("POST /api/emergency-stop", s.handleEmergencyStop)
+	mux.HandleFunc("POST /api/emergency-stop/clear", s.handleEmergencyStopClear)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	mux.HandleFunc("POST /api/motion/start", s.handleMotionStart)
@@ -180,7 +218,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
-	mux.HandleFunc("GET /", s.handleStatic)
+	s.registerLibraryRoutes(mux)
+	s.registerPersonaRoutes(mux)
+	s.registerDirectRoutes(mux)
+	s.registerManualQueueRoutes(mux)
+	s.registerUIPreferenceRoutes(mux)
+	mux.HandleFunc("GET /{path...}", s.handleSPACatchAll)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -193,28 +236,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
-	settings, status := s.store.PublicSnapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"service":        serviceName,
-		"version":        s.version.Version,
-		"commit":         s.version.Commit,
-		"uptime_seconds": int64(time.Since(s.started).Seconds()),
-		"ui":             "embedded",
-		"settings": map[string]any{
-			"source":         status.Source,
-			"using_defaults": status.UsingDefaults,
-			"recovered":      status.Recovered,
-			"migrated":       status.Migrated,
-			"version":        settings.Version,
-		},
-		"features": map[string]string{
-			"chat":      "local_llm_streaming",
-			"motion":    "manual",
-			"transport": "cloud_rest_browser_bluetooth_manual",
-			"voice":     "not_implemented",
-		},
-	})
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if clientID := clientIDFromRequest(r); clientID != "" {
+		_ = s.controller.Touch(clientID)
+	}
+	writeJSON(w, http.StatusOK, s.lsoStatusPayload())
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
@@ -302,6 +328,14 @@ func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Reque
 
 func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.traces.Export())
+}
+
+func (s *Server) handleSPACatchAll(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		http.NotFound(w, r)
+		return
+	}
+	s.handleStatic(w, r)
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {

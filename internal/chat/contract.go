@@ -28,9 +28,10 @@ type AssistantResponse struct {
 
 // MotionCommand is semantic motion intent, not a transport command.
 type MotionCommand struct {
-	Action       string `json:"action"`
-	PatternID    string `json:"pattern_id,omitempty"`
-	SpeedPercent *int   `json:"speed_percent,omitempty"`
+	Action          string `json:"action"`
+	PatternID       string `json:"pattern_id,omitempty"`
+	LibraryBlockID  string `json:"library_block_id,omitempty"`
+	SpeedPercent    *int   `json:"speed_percent,omitempty"`
 }
 
 // ParseAssistantResponse validates one strict JSON response from the model.
@@ -74,6 +75,9 @@ func validateAssistantResponse(response *AssistantResponse) error {
 	}
 	if response.Motion.PatternID != "" && !validPatternID(response.Motion.PatternID) {
 		return fmt.Errorf("unknown motion pattern %q", response.Motion.PatternID)
+	}
+	if strings.TrimSpace(response.Motion.LibraryBlockID) != "" {
+		return nil
 	}
 	if response.Motion.SpeedPercent != nil {
 		speed := *response.Motion.SpeedPercent

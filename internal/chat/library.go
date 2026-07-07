@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 const (
@@ -34,74 +36,32 @@ type promptSetsFile struct {
 	Sets    []PromptSet `json:"sets"`
 }
 
-// PromptLibrary owns user-created prompt sets on disk. Built-in sets are
-// code-defined templates and never enter the file.
+// PromptLibrary owns user-created prompt sets in SQLite. Built-in sets are
+// code-defined templates and never enter the database.
 type PromptLibrary struct {
 	mu        sync.RWMutex
-	path      string
+	db        *store.DB
 	sets      map[string]PromptSet
 	recovered bool
 }
 
 // OpenPromptLibrary loads user prompt sets from dataDir, recovering to an
-// empty library if the file is unreadable or corrupt (defaults stay usable).
+// empty library if the store is unreadable or corrupt (defaults stay usable).
 func OpenPromptLibrary(dataDir string) (*PromptLibrary, error) {
-	absDir, err := filepath.Abs(dataDir)
+	db, err := store.Open(dataDir)
 	if err != nil {
-		return nil, fmt.Errorf("resolve data directory: %w", err)
-	}
-	library := &PromptLibrary{
-		path: filepath.Join(absDir, promptSetsFileName),
-		sets: map[string]PromptSet{},
+		return nil, err
 	}
 
-	data, err := os.ReadFile(library.path) // #nosec G304 -- resolved app data file.
-	if err != nil {
-		if !os.IsNotExist(err) {
-			library.recovered = true
-		}
-		return library, nil
+	library := &PromptLibrary{
+		db:   db,
+		sets: map[string]PromptSet{},
 	}
-	var file promptSetsFile
-	if err := json.Unmarshal(data, &file); err != nil {
-		library.recovered = true
-		return library, nil
-	}
-	seen := make(map[string]struct{}, len(file.Sets))
-	for _, set := range file.Sets {
-		id := strings.TrimSpace(set.ID)
-		if id == "" {
-			library.recovered = true
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			library.recovered = true
-			continue
-		}
-		seen[id] = struct{}{}
-		if _, builtin := BuiltinPromptSetByID(id); builtin {
-			library.recovered = true
-			continue
-		}
-		name, system, err := validatePromptSetFields(set.Name, set.System)
-		if err != nil {
-			library.recovered = true
-			continue
-		}
-		if len(library.sets) >= maxUserPromptSets {
-			library.recovered = true
-			break
-		}
-		set.ID = id
-		set.Name = name
-		set.System = system
-		set.Builtin = false
-		library.sets[set.ID] = set
-	}
+	library.loadFromDatabase()
 	return library, nil
 }
 
-// Recovered reports whether an unreadable file was replaced by an empty library.
+// Recovered reports whether an unreadable store was replaced by an empty library.
 func (l *PromptLibrary) Recovered() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -213,6 +173,78 @@ func (l *PromptLibrary) Delete(id string) error {
 	return nil
 }
 
+func (l *PromptLibrary) loadFromDatabase() {
+	rows, found, err := l.db.LoadPromptSets()
+	if err != nil {
+		l.recovered = true
+		return
+	}
+	if !found {
+		l.loadLegacyJSONFile()
+		return
+	}
+	l.ingestLoadedSets(rowsToPromptSets(rows))
+}
+
+func (l *PromptLibrary) loadLegacyJSONFile() {
+	path := filepath.Join(l.db.DataDir(), promptSetsFileName)
+	data, err := os.ReadFile(path) // #nosec G304 -- resolved app data file.
+	if err != nil {
+		if !os.IsNotExist(err) {
+			l.recovered = true
+		}
+		return
+	}
+	var file promptSetsFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		l.recovered = true
+		return
+	}
+	l.ingestLoadedSets(file.Sets)
+}
+
+func rowsToPromptSets(rows []store.PromptSetRow) []PromptSet {
+	sets := make([]PromptSet, len(rows))
+	for index, row := range rows {
+		sets[index] = PromptSet{ID: row.ID, Name: row.Name, System: row.System}
+	}
+	return sets
+}
+
+func (l *PromptLibrary) ingestLoadedSets(sets []PromptSet) {
+	seen := make(map[string]struct{}, len(sets))
+	for _, set := range sets {
+		id := strings.TrimSpace(set.ID)
+		if id == "" {
+			l.recovered = true
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			l.recovered = true
+			continue
+		}
+		seen[id] = struct{}{}
+		if _, builtin := BuiltinPromptSetByID(id); builtin {
+			l.recovered = true
+			continue
+		}
+		name, system, err := validatePromptSetFields(set.Name, set.System)
+		if err != nil {
+			l.recovered = true
+			continue
+		}
+		if len(l.sets) >= maxUserPromptSets {
+			l.recovered = true
+			break
+		}
+		set.ID = id
+		set.Name = name
+		set.System = system
+		set.Builtin = false
+		l.sets[set.ID] = set
+	}
+}
+
 func validatePromptSetFields(name string, system string) (string, string, error) {
 	name = strings.TrimSpace(name)
 	system = strings.TrimSpace(system)
@@ -232,16 +264,12 @@ func validatePromptSetFields(name string, system string) (string, string, error)
 }
 
 func (l *PromptLibrary) persistLocked() error {
-	sets := make([]PromptSet, 0, len(l.sets))
+	rows := make([]store.PromptSetRow, 0, len(l.sets))
 	for _, set := range l.sets {
-		sets = append(sets, set)
+		rows = append(rows, store.PromptSetRow{ID: set.ID, Name: set.Name, System: set.System})
 	}
-	sort.Slice(sets, func(i, j int) bool { return sets[i].ID < sets[j].ID })
-
-	return writeJSONFileAtomic(l.path, promptSetsFile{
-		Version: promptSetsVersion,
-		Sets:    sets,
-	})
+	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+	return l.db.SavePromptSets(rows)
 }
 
 func randomHex(bytes int) string {
@@ -250,36 +278,4 @@ func randomHex(bytes int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(buffer)
-}
-
-// writeJSONFileAtomic writes JSON with a temp-file rename so a crash cannot
-// leave a truncated store behind (same durability rule as settings.json).
-func writeJSONFileAtomic(path string, payload any) error {
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode store file: %w", err)
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create data directory: %w", err)
-	}
-	temp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp store file: %w", err)
-	}
-	tempName := temp.Name()
-	if _, err := temp.Write(append(data, '\n')); err != nil {
-		_ = temp.Close()
-		_ = os.Remove(tempName)
-		return fmt.Errorf("write temp store file: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		_ = os.Remove(tempName)
-		return fmt.Errorf("close temp store file: %w", err)
-	}
-	if err := os.Rename(tempName, path); err != nil {
-		_ = os.Remove(tempName)
-		return fmt.Errorf("replace store file: %w", err)
-	}
-	return nil
 }

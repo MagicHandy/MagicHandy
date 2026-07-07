@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
@@ -17,8 +19,8 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.Server.Port != DefaultServerPort {
 		t.Fatalf("server port = %d, want %d", settings.Server.Port, DefaultServerPort)
 	}
-	if settings.Device.HSPDispatchOwner != DispatchOwnerCloudREST {
-		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST)
+	if settings.Device.HSPDispatchOwner != DispatchOwnerIntiface {
+		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerIntiface)
 	}
 	if settings.Device.FirmwareAPIRequirement != FirmwareAPIRequirementRequired {
 		t.Fatalf("firmware requirement = %q, want %q", settings.Device.FirmwareAPIRequirement, FirmwareAPIRequirementRequired)
@@ -50,7 +52,7 @@ func TestBundledAPIApplicationIDUsesPublicV3ID(t *testing.T) {
 }
 
 func TestLoadMissingSettingsUsesDefaults(t *testing.T) {
-	store, err := OpenStore(t.TempDir())
+	store, err := OpenStore(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -65,7 +67,7 @@ func TestLoadMissingSettingsUsesDefaults(t *testing.T) {
 }
 
 func TestSaveAndLoadSettings(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	store, err := OpenStore(dir)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -150,7 +152,7 @@ func TestMigrationHookPromotesVersionZero(t *testing.T) {
 }
 
 func TestCorruptSettingsRecoverToDefaults(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	if err := os.WriteFile(filepath.Join(dir, settingsFileName), []byte("{broken"), 0o600); err != nil {
 		t.Fatalf("write corrupt settings: %v", err)
 	}
@@ -189,7 +191,7 @@ func TestPublicSettingsRedactsConnectionKey(t *testing.T) {
 }
 
 func TestSaveWritesAtomicallyNamedSettingsFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	store, err := OpenStore(dir)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -200,20 +202,13 @@ func TestSaveWritesAtomicallyNamedSettingsFile(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, settingsFileName)); err != nil {
-		t.Fatalf("settings file missing after save: %v", err)
-	}
-	matches, err := filepath.Glob(filepath.Join(dir, ".settings-*.tmp"))
-	if err != nil {
-		t.Fatalf("glob temp files: %v", err)
-	}
-	if len(matches) != 0 {
-		t.Fatalf("temporary settings files left behind: %v", matches)
+	if _, err := os.Stat(filepath.Join(dir, "magichandy.db")); err != nil {
+		t.Fatalf("database file missing after save: %v", err)
 	}
 }
 
 func TestSaveReplacesExistingSettingsFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	store, err := OpenStore(dir)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)

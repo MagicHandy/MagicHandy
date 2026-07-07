@@ -1,0 +1,11 @@
+{
+  "actions": [
+    {"at": 0, "pos": 15},
+    {"at": 800, "pos": 85},
+    {"at": 1600, "pos": 20}
+  ],
+  "metadata": {
+    "name": "sample-json",
+    "duration": 2.5
+  }
+}

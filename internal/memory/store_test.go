@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	store, err := Open(dir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -59,7 +61,7 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 }
 
 func TestPromptTextsHonorsItemAndGlobalSwitches(t *testing.T) {
-	store, err := Open(t.TempDir())
+	store, err := Open(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -93,7 +95,7 @@ func TestPromptTextsHonorsItemAndGlobalSwitches(t *testing.T) {
 }
 
 func TestStoreValidatesInputAndUnknownIDs(t *testing.T) {
-	store, err := Open(t.TempDir())
+	store, err := Open(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -112,7 +114,7 @@ func TestStoreValidatesInputAndUnknownIDs(t *testing.T) {
 }
 
 func TestStoreRecoversFromCorruptFileWithoutFailingStartup(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	if err := os.WriteFile(filepath.Join(dir, memoriesFileName), []byte("{not json"), 0o600); err != nil {
 		t.Fatalf("write corrupt file: %v", err)
 	}
@@ -134,7 +136,7 @@ func TestStoreRecoversFromCorruptFileWithoutFailingStartup(t *testing.T) {
 }
 
 func TestStoreNormalizesLoadedMemoryFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := store.TestDir(t)
 	file := struct {
 		Version  int      `json:"version"`
 		Memories []Memory `json:"memories"`

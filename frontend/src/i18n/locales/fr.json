@@ -1,0 +1,1333 @@
+{
+  "common": {
+    "loading": "Chargement…",
+    "error": "Erreur",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "ok": "OK",
+    "off": "Arrêt",
+    "previous": "Retour&#10;",
+    "next": "Prochaine&#10;",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "cancel": "Annuler",
+    "apply": "Appliquer",
+    "refresh": "Renouvellement",
+    "export": "Exporter",
+    "import": "Importer",
+    "edit": "editer",
+    "activate": "Activer",
+    "new": "Nouveau",
+    "use": "Utilisation",
+    "scan": "Scanner",
+    "connect": "Connecter",
+    "test": "Tester",
+    "play": "Jouer",
+    "pause": "Mettre en pause",
+    "clear": "Réinitialiser&#10;",
+    "min": "min",
+    "max": "max.",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "languageGate": {
+    "title": "Choisissez votre langue",
+    "hint": "Modifiable à tout moment dans Paramètres → Langue.",
+    "choose": "Sélectionner la langue",
+    "confirm": "Continuer"
+  },
+  "nav": {
+    "mainAria": "Navigation principale",
+    "control": "Contrôle",
+    "handsFree": "Mains libres",
+    "mouse": "Souris",
+    "library": "Bibliothèque",
+    "player": "Lecteur",
+    "settings": "Paramètres",
+    "queue": "File d’attente",
+    "queuePlaying": "Lecture : {{name}}",
+    "queueCount": "{{count}} élément(s) dans la file d'attente",
+    "group": {
+      "session": "Session",
+      "library": "Bibliothèque",
+      "system": "Système"
+    }
+  },
+  "layout": {
+    "apiUnavailable": "API indisponible — démarrer le backend :",
+    "waitingApi": "En attente de l'API…",
+    "reconnectingIntiface": "Reconnecting to Intiface…",
+    "emergencyStop": "Arrêt d'urgence",
+    "clearStop": "Arrêt clair.",
+    "uiVersion": "Version de l'interface",
+    "offline": {
+      "title": "API hors ligne",
+      "hint": "Démarrer le backend :"
+    },
+    "ollama": {
+      "connected": "Ollama connected",
+      "off": "Ollama off: {{error}}"
+    },
+    "topbar": {
+      "buffer": "Tampon",
+      "queue": "File d’attente",
+      "intensity": "intensif",
+      "intensityTitle": "Intensité de la session (0-100 %). Contrôle la force avec laquelle l'IA bloque les files d'attente.",
+      "phaseLocked": "verrouillé",
+      "advancePhase": "phase d'avance",
+      "autospeak": "autospeak",
+      "autospeakScheduled": "autospeak ·",
+      "ollama": "Ollama",
+      "localLlm": "LLM local",
+      "testConnection": "Tester la connexion"
+    },
+    "visualizer": {
+      "live": "Direct",
+      "position": "Poste",
+      "positionHandy": "Handy position",
+      "realtimeHint": "Position de course en temps réel à partir de l'appareil.",
+      "offsetSaved": "Décalage de synchronisation enregistré : {{ms}}ms (RTT {{rtt}}ms)"
+    }
+  },
+  "config": {
+    "title": "Configuration",
+    "navAria": "Sections de configuration",
+    "searchPlaceholder": "Rechercher…",
+    "searchAria": "Recherche configuration :",
+    "noSections": "Aucune section de trouvée",
+    "groups": {
+      "main": "Plats Principaux ",
+      "system": "Système",
+      "data": "Date"
+    },
+    "language": {
+      "label": "Langue de l’interface",
+      "hint": "Les modifications s'appliquent immédiatement et sont enregistrées dans vos préférences.",
+      "aria": "Langue de l’interface"
+    },
+    "sections": {
+      "language": {
+        "label": "Langue",
+        "hint": "Langue et paramètres régionaux de l'interface"
+      },
+      "personas": {
+        "label": "Personas ",
+        "hint": "Nom, invite et profil IA"
+      },
+      "session": {
+        "label": "Session & IA",
+        "hint": "Autospeak, scene, and persona rhythm"
+      },
+      "motion": {
+        "label": "Mouvement et file d'attente",
+        "hint": "Position, tampon, sécurité et planificateur"
+      },
+      "connections": {
+        "label": "Connexions",
+        "hint": "Ollama, Handy, Intiface, and sync"
+      },
+      "voice": {
+        "label": "Voix",
+        "hint": "TTS and microphone (STT)"
+      },
+      "logs": {
+        "label": "Journaux",
+        "hint": "Fichiers de diagnostic sur disque"
+      },
+      "advanced": {
+        "label": "Full JSON",
+        "hint": "Edit entire settings.json"
+      },
+      "sessions": {
+        "label": "Histoire",
+        "hint": "Sessions et évaluations passées"
+      },
+      "diagnostics": {
+        "label": "Diagnostic",
+        "hint": "État en direct et journaux récents"
+      }
+    },
+    "saved": "Options enregistrées",
+    "settings": {
+      "saved": "Paramètres enregistrés",
+      "saveSettings": "Enregistrer",
+      "saveBarHint": "Les modifications s'appliquent après l'enregistrement — certaines options nécessitent un redémarrage du backend.",
+      "session": {
+        "autospeak": {
+          "title": "Autospeak",
+          "hint": "Like StrokeGPT-ReVibed: the persona chooses when to speak again (autospeak_seconds in JSON). With Autospeak on, the fixed interval below is only a fallback when Autospeak is off.",
+          "enabled": "Autospeak enabled",
+          "minSeconds": "Minimum entre les discours",
+          "maxSeconds": "Maximum entre discours (s)",
+          "motionAutonomy": "Autonomie de mouvement (entre les discours)",
+          "chatOnly": "Discours uniquement",
+          "styleLight": "Lumière (intensité/phase)",
+          "fullMotion": "Mouvement complet"
+        },
+        "appLegacy": {
+          "title": "Application / Auto (hérité)",
+          "waitFirstMsg": "Attendez mon 1er message avant que le personnage ne parle (mode automatique)",
+          "waitHint": "Décoché : l'IA peut parler et mettre en file d'attente le mouvement dès que Auto démarre.",
+          "fixedInterval": "Fixed interval between speeches (s) — only without Autospeak"
+        },
+        "scene": {
+          "title": "Scène — L'IA contrôle la stimulation",
+          "aiPacing": "L'IA choisit la scène (pose), la phase et la durée (min–max ci-dessous)",
+          "aiPacingHint": "On : persona prévoit combien de temps rester dans chaque phase et n'avance que lorsque le temps est écoulé (ou que l'utilisateur saute). Désactivé : auto-escalade héritée par tour.",
+          "advanceLegacy": "Faire remonter la phase à chaque réponse (héritage — uniquement si la stimulation de l'IA est désactivée)",
+          "phaseMinMax": "Min / max par phase (secondes)"
+        },
+        "phases": {
+          "intro": "Introduction",
+          "warmup": "Échauffement",
+          "build_up": "Montée en pression",
+          "active": "Actif",
+          "peak": "Crête",
+          "recovery": "Récupération",
+          "cooldown": "Refroidir"
+        }
+      },
+      "motion": {
+        "title": "Mouvement",
+        "presetsHint": "Préréglages rapides (tampon + rythme cible pour le planificateur)",
+        "presetApplied": "Préréglage appliqué : {{preset}}",
+        "minPosition": "position \"<g id=\"2\">MIN</g>\".",
+        "maxPosition": "Position max",
+        "defaultIntensity": "une intensité de défaut",
+        "literalPositions": "Literal funscript positions (0–100, no remap to min/max)",
+        "literalHint": "Activé : les scripts importés utilisent pos 0–100 exactement comme dans le fichier. Off : les positions sont remappées à la plage min/max ci-dessus (par défaut 10–90).",
+        "maxEnqueueDuration": "Durée (s) maximale (s) de la file d'attente",
+        "smallPatternMax": "Petit motif max (s)",
+        "smallLoopMax": "Petite boucle max (s)",
+        "maxFullScript": "Durée (s) maximale (s) du script complet",
+        "targetBpm": "Target BPM (planner)",
+        "rosterMode": "Mode liste de sessions d'IA (scripts complets de la bibliothèque)",
+        "rosterHint": "When enabled, the AI can enqueue entire imported funscripts as a session script.",
+        "weightsTitle": "Poids des blocs du planificateur",
+        "weightsHint": "Dans quelle mesure chaque facteur influence-t-il la sélection des blocs (0–1).",
+        "weights": {
+          "tag_match": "Correspondance des tags",
+          "intensity_fit": "Ajustement d'intensité",
+          "persona_match": "Correspondance de persona",
+          "user_rating": "Note des visiteurs",
+          "success_score": "Score de réussite"
+        },
+        "safety": {
+          "title": "Sécurité",
+          "limitsEnabled": "Activer les limites d'intensité/vitesse",
+          "limitsHint": "Limite la force et la vitesse du mouvement indépendamment du script ou des commandes de l'IA.",
+          "maxIntensity": "Intensité maxi",
+          "maxSpeed": "Vitesse maximale (unités/s)",
+          "stopWords": "Mots d'arrêt (séparés par des virgules)"
+        },
+        "queue": {
+          "title": "Tampon de file d'attente",
+          "targetBuffer": "Tampon (s) cible (s)",
+          "minBuffer": "Tampon (s) minimum (s)"
+        }
+      },
+      "connections": {
+        "ollama": {
+          "title": "Ollama",
+          "url": "URL de base",
+          "model": "Modèle",
+          "responseLimit": "Limite de jeton de réponse",
+          "maxChatChars": "Nombre maximum de caractères de message de discussion",
+          "verboseHint": "Lower num_predict and max_message_chars speed up replies on weak GPUs."
+        },
+        "handy": {
+          "title": "Handy",
+          "defaultMode": "Transport par défaut",
+          "connectionKey": "Clé de connexion",
+          "keyPlaceholder": "Paste Handy connection key",
+          "apiBaseUrl": "API Base URL "
+        },
+        "intiface": {
+          "title": "Intiface",
+          "wsUrl": "WebSocket URL",
+          "preferredDevice": "Appareil préféré",
+          "autoConnect": "Connexion automatique au démarrage",
+          "autoScan": "Appareils d'analyse automatique",
+          "connectionTimeout": "Délai (s) de connexion dépassé (s)",
+          "sendLead": "Envoyer le prospect (ms)"
+        },
+        "sync": {
+          "title": "Décalage de synchronisation",
+          "offset": "Décalage (ms)",
+          "autoSyncOnConnect": "Synchronisation automatique lors de la connexion"
+        }
+      },
+      "voice": {
+        "tts": {
+          "title": "Text-to-speech (TTS)",
+          "installHint": "Nécessite un package vocal optionnel : pip install -e \".[voice]\"",
+          "enableTts": "Enable TTS",
+          "autoSpeak": "Auto-parler après la réponse du personnage",
+          "voiceId": "Identifiant vocal"
+        },
+        "stt": {
+          "title": "Speech-to-text (STT)",
+          "enableStt": "Enable STT",
+          "provider": "STT provider",
+          "local": "Local (faster-whisper)",
+          "browser": "Navigateur (API Web Speech)",
+          "autoSend": "Envoyer automatiquement la transcription au planificateur",
+          "model": "Whisper model",
+          "tiny": "Petit",
+          "base": "Assise",
+          "small": "Petite",
+          "language": "Code langue",
+          "langPlaceholder": "par exemple pt, en, auto"
+        }
+      },
+      "logs": {
+        "title": "Journaux de diagnostic",
+        "motionLog": "Log Handy motion commands",
+        "verboseLog": "Journal de mouvement verbeux",
+        "verboseHint": "Écrit les journaux détaillés par commande sur le disque (peut croître rapidement)."
+      },
+      "raw": {
+        "title": "Full settings JSON",
+        "hint": "Edit the entire settings.json. Invalid JSON cannot be saved.",
+        "applied": "JSON applied locally",
+        "invalid": "Invalid JSON",
+        "invalidBeforeSave": "Fix JSON before saving",
+        "applyJson": "Appliquer localement",
+        "saveServer": "﻿Sauvegarder les Modifications"
+      }
+    },
+    "motion": {
+      "presetApplied": "Préréglage appliqué : {{preset}}"
+    },
+    "raw": {
+      "apply": "Apply JSON",
+      "invalid": "Invalid JSON",
+      "invalidDetail": "Invalid JSON in this section",
+      "applied": "JSON applied locally",
+      "invalidBeforeSave": "Fix JSON before saving"
+    }
+  },
+  "chat": {
+    "toolbarAria": "Commandes de discussion",
+    "autospeakOn": "Autospeak enabled",
+    "autospeakOff": "Autospeak disabled",
+    "autospeakOnTitle": "Autospeak on — persona schedules next speech",
+    "autospeakOffTitle": "Enable autospeak (ReVibed style)",
+    "autospeakOnLabel": "Autospeak on",
+    "autospeakOffLabel": "Autospeak off",
+    "mode": "Mode",
+    "modeManual": "Manuel",
+    "modeAuto": "Automatique",
+    "modeHybrid": "Hybride",
+    "ctrlEnter": "Ctrl+Enter to send",
+    "stopWord": "Arrêté par mot d'arrêt",
+    "thinking": "Réflexion personnelle...",
+    "sent": "Message envoyé",
+    "panelAria": "Chatter avec un personnage",
+    "ready": "« Prêt à clavarder »",
+    "startSession": "Démarrer la session",
+    "noMessages": "Pas encore de message",
+    "startHint": "Envoyez le premier message — le personnage planifie la scène, la phase et la durée.",
+    "emptyHint": "Talk to the persona or use Autospeak for her to continue on her own.",
+    "placeholderFirst": "Message de bienvenue",
+    "placeholder": "Parlez-lui — le mouvement suit la scène",
+    "messageAria": "Message pour le personnage",
+    "typing": "{{name}} est en train de taper",
+    "title": "Discussion",
+    "operationMode": "Mode de fonctionnement",
+    "sendToPlanner": "Envoyer au planificateur",
+    "sending": "Envoi en cours...",
+    "transcribing": "Transcription",
+    "stopRecording": "Arrêter l'enregistrement",
+    "speakMic": "Parler (MIC)",
+    "playingNow": "A l'antenne ",
+    "enterMessage": "Saisissez un message",
+    "nothingRecognized": "Rien reconnu",
+    "voiceSent": "Voix envoyée au planificateur",
+    "transcriptReady": "Relevé de notes prêt",
+    "recordingTooShort": "Durée d'enregistrement trop courte",
+    "enableStt": "Enable STT in Settings",
+    "useChrome": "Utiliser Chrome/Edge ou HTTPS sur mobile",
+    "installVoice": "Install pip install -e \".[voice]\" or use browser STT in Settings",
+    "micUnavailable": "Microphone indisponible dans ce navigateur",
+    "micDenied": "MIC refusé",
+    "ttsError": "TTS error",
+    "sttBrowserError": "Browser STT error",
+    "sttError": "STT error",
+    "sendError": "Envoyer l'erreur",
+    "stopWordDetected": "Mot d'arrêt détecté — arrêté",
+    "sentBackground": "Envoyé — persona répondant en arrière-plan",
+    "sentPlanner": "Envoyé au planificateur",
+    "modeSet": "Mode : {{mode}}",
+    "feedbackError": "Erreur sur l’envoi de votre avis",
+    "personaResponse": "Réponse de la personne",
+    "speaking": "Prise de parole",
+    "listen": "Écouter",
+    "noResponse": "Aucune réponse pour l'instant",
+    "messageLabel": "Message",
+    "feedbackLike": "nom ;",
+    "feedbackDislike": "👎 note {{score}}",
+    "playbackFailed": "Échec de la lecture",
+    "roleAssistant": "assistante",
+    "roleUser": "utilisateur",
+    "roleSystem": "système",
+    "voice": {
+      "ttsError": "TTS error",
+      "sttError": "STT error",
+      "browserSttError": "Browser STT error",
+      "playbackFailed": "Échec de la lecture",
+      "stopWord": "Mot d'arrêt détecté — arrêté",
+      "sentPending": "Envoyé — persona répondant en arrière-plan",
+      "sentPlanner": "Envoyé au planificateur",
+      "sendError": "Envoyer l'erreur",
+      "emptyMessage": "Écrivez un message",
+      "nothingRecognized": "Rien reconnu",
+      "sentVoice": "Voix envoyée au planificateur",
+      "transcriptReady": "Relevé de notes prêt",
+      "recordingShort": "Durée d'enregistrement trop courte",
+      "enableStt": "Enable STT in Settings",
+      "browserUnsupported": "Utiliser Chrome/Edge ou HTTPS sur mobile",
+      "installVoice": "Install pip install -e \".[voice]\" or use browser STT in Settings",
+      "micUnavailable": "Microphone non disponible dans ce navigateur",
+      "micDenied": "Microphone refusé",
+      "modeSet": "Mode : {{mode}}",
+      "feedbackError": "Erreur sur l’envoi de votre avis",
+      "title": "Discussion",
+      "operationMode": "Mode de fonctionnement",
+      "sending": "Envoi en cours...",
+      "sendPlanner": "Envoyer au planner",
+      "transcribing": "Transcription",
+      "stopRecording": "Arrêter l'enregistrement",
+      "speakMic": "Parler (MIC)",
+      "nowPlaying": "A l'écoute",
+      "personaReply": "Réponse de la personne",
+      "speaking": "Prise de parole",
+      "listen": "Écouter",
+      "noReplyYet": "Aucune réponse à ce jour",
+      "messageLabel": "Message",
+      "sendShortcut": "Ctrl+Enter to send"
+    }
+  },
+  "session": {
+    "queueEmpty": "Vide — importer dans la bibliothèque ou demander dans le chat",
+    "railAria": "Mouvement et scène",
+    "menuLabel": "Session",
+    "rosterStarted": "Script on Handy ({{count}} segment(s)) · chat active",
+    "rosterPlanned": "Script prêt — voir le chat",
+    "detail": {
+      "roster": "Script IA + chat",
+      "autoPlayback": "Lecture automatique",
+      "auto": "Auto - Active//",
+      "playback": "Lecture active",
+      "stopped": "Stoppé"
+    },
+    "badge": {
+      "roster": "PA",
+      "autoPlayback": "A P",
+      "auto": "A",
+      "playback": "P"
+    },
+    "roster": {
+      "title": "Script AI",
+      "hint": "AI builds the script on the Handy (duration + intensity) and keeps talking in chat.",
+      "estopHint": "Arrêt d'urgence actif — cliquez sur « Effacer l'arrêt » dans le pied de page ou recommencez.",
+      "duration": "Durée de la session (min)",
+      "intensity": "Intensité",
+      "buildup": "Avec accumulation (accumulation d'→échauffement → intro)",
+      "optionalNote": "instruction d'arrêt facultatif",
+      "notePlaceholder": "par exemple, se concentrer sur les scripts de handjob rapides",
+      "generating": "Génération du script...",
+      "start": "Démarrer la session d'IA",
+      "playing": "Lecture · {{min}} min · {{intensity}}"
+    },
+    "autoPlayback": {
+      "title": "Et playback",
+      "hint": "General controls — Handy connection is in the Handy menu.",
+      "autoOn": "Auto-activé",
+      "autoOff": "Auto désactivé",
+      "auto": "Automatique",
+      "stopAuto": "Arrêter le mode automatique",
+      "playbackOn": "La lecture a commencé",
+      "playback": "Lecture",
+      "refillDone": "Recharge effectuée",
+      "refill": "Recharge",
+      "clearDone": "File d'attente effacée + recharge",
+      "clearQueue": "Effacer la file d'attente"
+    },
+    "waitFirst": "Attendre mon 1er message (auto)",
+    "waitFirstOn": "Auto : attend votre 1er message",
+    "waitFirstOff": "Auto : le personnage peut parler au démarrage",
+    "intensity": {
+      "leve": "Léger",
+      "medio": "Moyenne",
+      "rapido": "Rapides",
+      "intenso": "L’Intense"
+    },
+    "queue": {
+      "aria": "File d'attente de mouvement",
+      "title": "File d'attente de mouvement",
+      "bufferTitle": "Tampon restant",
+      "buf": "Tmp.",
+      "countTitle": "Blocs en file d'attente",
+      "queue": "File d’attente",
+      "refillTitle": "Recharge du planificateur",
+      "ok": "ok",
+      "loop": "boucle"
+    },
+    "scene": {
+      "aria": "État de la scène",
+      "label": "Scène",
+      "live": "Scène en direct",
+      "locked": "Verrouillé",
+      "lockedTitle": "L'IA retient la scène jusqu'à la fin du temps imparti",
+      "advance": "Phase d'avance",
+      "phaseTime": "Durée phase",
+      "motionBuffer": "Taille de tampon Motion",
+      "refill": "Recharge",
+      "active": "actif",
+      "idle": "inactif",
+      "ai": "PA",
+      "busy": "occupé"
+    }
+  },
+  "handsFree": {
+    "title": "Mains libres",
+    "subtitle": "Auto sans chat — intensité {{intensity}}%",
+    "favoritesOnly": "UNIQUEMENT FAVORIS",
+    "lastSignal": "Dernier signal :",
+    "stopAuto": "Arrêter le mode automatique",
+    "startAuto": "Démarrer le mode automatique",
+    "stopped": "Mains libres arrêtées",
+    "started": "Activé automatiquement — AI remplit la file d'attente sans chat",
+    "queueWaiting": "En attente de blocs — l'IA se remplit automatiquement",
+    "queueStart": "Démarrer auto pour commencer",
+    "signals": {
+      "title": "Signaux rapides",
+      "hint": "Bordure et point culminant effacer la file d'attente et appliquer immédiatement. L'intensité ajuste le niveau global.",
+      "moreIntensity": {
+        "title": "Plus d'intensité",
+        "hint": "Augmente le niveau global (+12%)"
+      },
+      "lessIntensity": {
+        "title": "Moins d'intensité",
+        "hint": "Baisse du niveau global (−12 %)"
+      },
+      "edging": {
+        "title": "Bordure",
+        "hint": "Près du bord — s'applique immédiatement, nouvelle file d'attente"
+      },
+      "climax": {
+        "title": "Je jouis ! ",
+        "hint": "Favoris seulement · rythme lent · récupération"
+      }
+    },
+    "edgingDone": "Bordure — {{count}} bloc(s) en file d'attente maintenant",
+    "climaxDone": "Climax — favoris · {{count}} bloc(s) · phase {{phase}}",
+    "intensitySet": "Valeur d'intensité"
+  },
+  "persona": {
+    "defaultName": "Persona",
+    "list": "Liste",
+    "new": "+ Nouveau",
+    "active": "activée",
+    "activate": "Activer",
+    "edit": "Modifier le personnage",
+    "create": "Nouveau personnage",
+    "name": "Nom ",
+    "description": "Description",
+    "systemPrompt": "invite système",
+    "avatar": "Icône de la personne",
+    "saveBeforeAvatar": "Enregistrez le personnage avant de télécharger une icône",
+    "avatarUpdated": "Icône de la personne mise à jour",
+    "requiredFields": "Nom et invite système requis",
+    "saved": "Persona enregistré",
+    "confirmDelete": "Supprimer ce personnage ?",
+    "deleted": "Supprimé",
+    "activated": "Personnage actif",
+    "sections": {
+      "tone": "Tonalité de la personne",
+      "toneHint": "Style, énergie et voix.",
+      "behavior": "Comportement",
+      "behaviorHint": "Comment elle agit dans l'auto et le chat.",
+      "rules": "Règles et limites",
+      "rulesHint": "Règles de sécurité et de contenu fixes."
+    },
+    "level": {
+      "low": "Faible",
+      "medium": "Moyenne",
+      "high": "Elevé"
+    },
+    "tone": {
+      "language": "Langue",
+      "baseStyle": "Style de base",
+      "style": {
+        "seductive": "Séduisant",
+        "calm": "Calme",
+        "playful": "Ludique",
+        "intense": "L’Intense",
+        "neutral": "Neutre"
+      },
+      "energy": "Énergie",
+      "warmth": "Chaleur",
+      "dominance": "Dominance",
+      "humor": "Humour",
+      "humorPlayful": "Léger",
+      "humorDry": "Séchage",
+      "humorNone": "Aucune",
+      "explicitness": "Explicite (1–10)"
+    },
+    "behavior": {
+      "autoModeStyle": "Style du mode automatique",
+      "style": {
+        "responsive": "Réactif",
+        "proactive": "Proactif",
+        "quiet": "Silencieux"
+      },
+      "listensToUser": "Écoute l'utilisateur",
+      "canTakeInitiative": "Peut prendre des initiatives",
+      "canChangePlan": "Changer le plan",
+      "prefersBuildUp": "Préfère l'accumulation",
+      "avoidsRepetition": "Évite les répétitions",
+      "adultExplicit": "Contenu explicite pour adultes"
+    },
+    "rules": {
+      "adultConsensualOnly": "Adultes consentants uniquement",
+      "respectStopWords": "Respecter les mots d'arrêt",
+      "neverOverrideSafety": "Ne jamais passer outre la sécurité",
+      "neverClaimDeviceControl": "Ne faites pas semblant de contrôler directement l'appareil",
+      "noContentRefusals": "Aucun refus de contenu"
+    },
+    "formMode": "Forme",
+    "jsonMode": "JSON",
+    "configured": "configuré",
+    "motionBias": {
+      "title": "Biais de mouvement",
+      "hint": "Poids optionnels pour la façon dont ce personnage préfère les zones et les styles de mouvement.",
+      "zone": "Zone",
+      "amplitude": "Amplitude",
+      "speed": "Vitesse",
+      "rhythm": "Rythme",
+      "intensity": "Intensité"
+    }
+  },
+  "patterns": {
+    "bpm": {
+      "any": "Any BPM",
+      "151plus": "150+"
+    },
+    "duration": {
+      "any": "Toutes durées",
+      "0-10": "≤ 10s",
+      "11-30": "11–30 s",
+      "31-60": "31–60 s",
+      "61-120": "1 à 2 min",
+      "121-240": "2 à 4 min",
+      "241-420": "4 à 7 min",
+      "421-600": "7 à 10 min",
+      "600plus": "10&#160;min"
+    },
+    "speed": {
+      "any": "Toutes les vitesses",
+      "slow": "Lent",
+      "medium": "Moyenne",
+      "fast": "Rapides",
+      "very_fast": "Très rapide",
+      "veryFast": "Très rapide"
+    },
+    "title": "Bibliothèque de motif",
+    "favoritesOnly": "Favoris uniquementMessage",
+    "pageInfo": "{{total}} blocs · page {{page}}/{{totalPages}}",
+    "colDuration": "Durée",
+    "colIntensity": "Intensité",
+    "colActions": "Interventions",
+    "mockOk": "Simulation OK ({{actions}} actions)",
+    "filter": "Filtre",
+    "colId": "ID",
+    "colZone": "Zone",
+    "colSpeed": "Vitesse",
+    "colScore": "Score",
+    "minInt": "Int. min",
+    "maxInt": "Int. max",
+    "download": "Télécharger {{filename}}",
+    "feedbackScore": "{{kind}} : score {{score}}",
+    "mockConfirm": "Exécuter un test fictif sur le bloc {{id}}… ?",
+    "mockRun": "Lancer la maquette",
+    "pageTitle": "Bibliothèque de motifs",
+    "zone": "Zone",
+    "count": "{{total}} blocs · page {{page}}/{{totalPages}}",
+    "col": {
+      "id": "ID",
+      "zone": "Zone",
+      "speed": "Vitesse",
+      "duration": "Durée",
+      "score": "Score",
+      "actions": "Interventions"
+    },
+    "mock": "moquer/maquette/imiter/fausse/faux/se moquer de/tourner en ridicule /défier avec méprise",
+    "export": "d’export",
+    "feedbackToast": "{{kind}} : score {{score}}",
+    "downloadToast": "Télécharger {{filename}}"
+  },
+  "player": {
+    "browser": {
+      "searchLabel": "Rechercher des blocs",
+      "searchPlaceholder": "Nom ou étiquette…",
+      "speed": "Vitesse",
+      "bpm": "BPM",
+      "duration": "Durée",
+      "loopOnAdd": "Boucle à l'ajout",
+      "clearFilters": "Supprimer les filtres",
+      "blockCount": "{{count}} blocs",
+      "filtered": "filtrée",
+      "page": "Page {{page}} sur {{total}}",
+      "empty": "Aucun bloc ne correspond aux filtres.",
+      "addTitle": "Ajouter {{name}} à la file d'attente"
+    },
+    "title": "Lecteur",
+    "toolbar": {
+      "blocks": "{{count}} bloc(s) · {{duration}} au total",
+      "playing": "Jeu avec les…",
+      "play": "Écouter",
+      "stop": "Arrêter",
+      "save": "Sauvegarder",
+      "exportTitle": "Exporter la file d'attente actuelle",
+      "export": "Exporter",
+      "clear": "Réinitialiser&#10;",
+      "saveNamePlaceholder": "Nom de la file d'attente enregistrée",
+      "confirm": "Confirmer"
+    },
+    "signals": {
+      "label": "Signaux",
+      "edging": "Bordure",
+      "milking": "La traite ",
+      "climax": "Orgasme",
+      "playTitle": "Lire {{label}} ({{name}})",
+      "configureTitle": "Configurer {{label}}",
+      "configure": "Configurer {{label}}",
+      "modalTitle": "Configurer {{label}}",
+      "searchScript": "Script de recherche",
+      "searchPlaceholder": "Numéro, nom ou identifiant…",
+      "noScripts": "Aucun script trouvé",
+      "loopDuration": "Durée (s)",
+      "play": "Écouter",
+      "chooseScript": "Choisir un script",
+      "fired": "{{label}} · {{sec}} s"
+    },
+    "live": {
+      "signal": "Signal : {{label}}",
+      "queue": "File d’attente",
+      "hsspMode": "HSSP mode (connection key) · ",
+      "block": "Bloquer {{current}}/{{total}} ·",
+      "pos": "pos",
+      "autoloop": "Boucle automatique",
+      "resume": "Reprendre",
+      "pause": "Mettre en pause",
+      "skip": "Bloc suivant",
+      "stop": "Arrêt",
+      "position": "pos {{pct}} %",
+      "nextBlock": "Bloc suivant",
+      "playStarted": "{{label}} a commencé{{sync}}",
+      "playError": "Erreur de lecture",
+      "skipOk": "Bloc suivant",
+      "added": "Ajouté à la file d'attente",
+      "buildFirst": "Créez la file d'attente avant de jouer",
+      "enterName": "Saisissez un nom",
+      "saved": "Enregistré : {{name}}",
+      "loaded": "File d'attente chargée",
+      "removed": "File d'attente supprimée"
+    },
+    "panels": {
+      "preview": "Aperçu",
+      "queue": "File",
+      "library": "Bibliothèque",
+      "visibleAria": "Panneaux visibles"
+    },
+    "preview": {
+      "playingNow": "A l'antenne ",
+      "actionsDuration": "{{count}} actions · {{duration}}",
+      "queueScript": "Queued funscript preview",
+      "empty": "Add blocks to the queue to generate the funscript preview."
+    },
+    "queue": {
+      "title": "Votre file d'attente",
+      "subtitle": "{{count}} articles · {{duration}} · faitesglisser",
+      "empty": "Ajoutez des blocs à partir de la bibliothèque. Cliquez sur la carte ou sur +.",
+      "saved": "Files d'attente enregistrées",
+      "load": "Chargement",
+      "export": "Exporter",
+      "dragAria": "File d'attente — faites glisser pour réorganiser",
+      "dragHandle": "Faites glisser pour réorganiser",
+      "duration": "Durée",
+      "minDuration": "Minimum {{sec}} s",
+      "loop": "Boucle",
+      "remove": "Supprimer de la file d'attente",
+      "segmentBarTitle": "Blocs dans l'ordre de la file d'attente"
+    },
+    "signalModal": {
+      "title": "Configurer {{label}}",
+      "searchScript": "Script de recherche",
+      "searchPlaceholder": "Numéro, nom ou identifiant…",
+      "noScripts": "Aucun script trouvé",
+      "loopDuration": "Durée (s)",
+      "play": "Écouter"
+    },
+    "toast": {
+      "added": "Ajouté à la file d'attente",
+      "nextBlock": "Bloc suivant",
+      "playStarted": "{{label}} a commencé{{sync}}",
+      "playSync": "· Sync {{ms}}ms",
+      "playError": "Erreur de lecture",
+      "queueDone": "File d'attente terminée",
+      "queueLoaded": "File d'attente chargée",
+      "queueRemoved": "File d'attente supprimée",
+      "signalFired": "{{label}} · {{sec}} s",
+      "pickScript": "Choisir un script",
+      "buildQueue": "Créez la file d'attente avant de jouer",
+      "enterName": "Saisissez un nom",
+      "savedAs": "Enregistré : {{name}}"
+    },
+    "downloaded": "{{filename}} téléchargé",
+    "library": {
+      "subtitle": "{{count}} blocs · page {{page}}/{{total}}"
+    },
+    "blocksCount": "{{count}} bloc(s) · {{duration}} au total",
+    "play": "▶ Lecture",
+    "playing": "Jeu avec les…",
+    "stop": "Arrêter",
+    "save": "Enregistrer",
+    "exportQueue": "Exporter la file d'attente actuelle",
+    "export": "Exporter",
+    "clear": "Réinitialiser&#10;",
+    "savePlaceholder": "Nom de la file d'attente enregistrée",
+    "panel": {
+      "previewTitle": "Aperçu",
+      "previewPlaying": "A l'antenne ",
+      "previewStats": "{{actions}} actions · {{duration}}",
+      "previewEmpty": "Funscript preview of the built queue",
+      "previewEmptyHint": "Add blocks to the queue to generate the funscript preview.",
+      "queueTitle": "Votre file d'attente",
+      "queueSubtitle": "{{count}} articles · {{duration}} · faitesglisser",
+      "queueEmptyHint": "Ajoutez des blocs à partir de la bibliothèque. Cliquez sur la carte ou sur +.",
+      "savedQueues": "Files d'attente enregistrées",
+      "load": "Chargement",
+      "libraryTitle": "Bibliothèque",
+      "librarySubtitle": "{{count}} blocs · page {{page}}/{{total}}"
+    }
+  },
+  "device": {
+    "pill": {
+      "detailTitle": "{{detail}} — cliquez pour actualiser",
+      "refreshTitle": "Cliquez pour actualiser la connexion"
+    },
+    "title": "Device / Intiface",
+    "useMock": "Utiliser un appareil factice",
+    "selected": "Nom sélectionné",
+    "connect": "Connect Intiface",
+    "scan": "Scanner",
+    "foundTitle": "Aucun appareil n’a été trouvé",
+    "select": "Sélectionner",
+    "mockOn": "Simulation active",
+    "mockOff": "Appareil réel",
+    "connected": "Connecté",
+    "scanCount": "{{count}} appareil(s)",
+    "selectedOk": "Machine sélectionnée",
+    "intifaceLocal": "Intiface (local)",
+    "handyKeyApi": "Handy connection key + API",
+    "linearYes": "oui",
+    "linearNo": "No",
+    "deviceId": "({{id}}) linéaire={{linear}}",
+    "handy": "Handy",
+    "handyApi": "Handy API",
+    "connection": "Connexion",
+    "mode": "Mode",
+    "modeIntiface": "Intiface (local)",
+    "modeHandyCloud": "Handy cloud API",
+    "connectionKey": "Clé de connexion",
+    "keyPlaceholder": "Coller la clé de connexion",
+    "connectApi": "Connexion via API",
+    "handyConnected": "Handy connected",
+    "cloud": "Cloud",
+    "saveKeyHint": "enregistrer la clé et se connecter",
+    "intiface": "Intiface",
+    "scanResult": "{{count}} appareil(s) trouvé (s)",
+    "use": "Utilisation",
+    "intifaceHint": "start Intiface Central",
+    "page": {
+      "title": "Device / Intiface",
+      "useMock": "Utiliser un appareil factice",
+      "selected": "Nom sélectionné",
+      "connect": "Connect Intiface",
+      "scan": "Numériser les appareils",
+      "foundTitle": "Aucun appareil n’a été trouvé",
+      "linear": "linéaire={{value}}",
+      "select": "Sélectionner",
+      "mockOn": "Simulation active",
+      "mockOff": "Appareil réel",
+      "connected": "Connecté",
+      "scanToast": "{{count}} appareil(s)",
+      "selectedToast": "Machine sélectionnée"
+    }
+  },
+  "playerPreview": {
+    "stats": {
+      "aria": "Statistiques du script",
+      "duration": "Durée",
+      "actions": "Interventions",
+      "maxSpeed": "Vitesse max",
+      "avgSpeed": "Vitesse moy."
+    }
+  },
+  "library": {
+    "toast": {
+      "addedToQueue": "Ajouté à la file d'attente · voir Joueur",
+      "deleted": "%{count} supprimée",
+      "blockDeleted": "Bloc supprimé.",
+      "mockOk": "OK · {{count}} action(s)",
+      "queueFull": "File d'attente pleine",
+      "downloaded": "{{filename}} téléchargé",
+      "score": "Score : %Score%",
+      "roleSet": "{{role}} {{state}}",
+      "reclassified": "Reclassifié : {{updated}} bloc(s) · {{skipped}} ignoré (s)",
+      "recalculating": "Nouveau calcul",
+      "recalculateTimings": "Recalculer les horaires",
+      "reclassifying": "Reclassification en cours...",
+      "reclassify": "Le reclasser",
+      "selectAll": "{{count}} blocs sélectionnés",
+      "selectAllLimited": "{{returned}} sélectionné (limite ; total filtré : {{total}})",
+      "roleMarked": "Marqué pour {{role}}",
+      "roleRemoved": "Supprimé de {{role}}"
+    },
+    "tabs": {
+      "blocks": "Blocs",
+      "import": "Importer"
+    },
+    "toolbar": {
+      "blocksHint": "Parcourez, filtrez et gérez les blocs de mouvement.",
+      "importHint": "Import funscripts and build an AI session roster."
+    },
+    "filters": {
+      "aria": "Filtres de bibliothèque",
+      "title": "Filtres",
+      "active": "{{count}} actifs",
+      "search": "Rechercher&#10;",
+      "name": "Nom ",
+      "searchPlaceholder": "Script ou blocage…",
+      "category": "Catégorie",
+      "categoryAria": "Catégorie",
+      "all": "Tous",
+      "zone": "Zone",
+      "zoneAria": "Zone",
+      "speed": "Vitesse",
+      "speedAria": "Vitesse",
+      "rhythm": "Rythme",
+      "rhythmAria": "Rythme",
+      "rhythmAll": "Tous les rythmes",
+      "strokeLength": "Amplitude",
+      "strokeAria": "Amplitude",
+      "sort": "Trier",
+      "sortAria": "Trier",
+      "sortScore": "Score",
+      "apply": "Appliquer les filtres",
+      "rating": "Evaluation",
+      "metrics": "Métriques",
+      "minDuration": "Durée min",
+      "maxDuration": "Durée maximale",
+      "minIntensity": "Int. min %",
+      "maxIntensity": "% int. max.",
+      "minBpm": "Min BPM",
+      "maxBpm": "Max BPM",
+      "display": "Affichage ;",
+      "myRecordings": "Mes enregistrements",
+      "favoritesOnly": "Favoris uniquementMessage",
+      "clear": "Effacer",
+      "searchGroup": "Rechercher&#10;",
+      "namePlaceholder": "Script ou blocage…",
+      "classification": "Classification",
+      "amplitude": "Amplitude",
+      "sortDurationDesc": "Durée",
+      "sortDurationAsc": "Durée",
+      "sortBpmDesc": "BPM ↓",
+      "sortBpmAsc": "BPM ↑",
+      "maintenance": "Maintenance",
+      "recalculateTimings": "Recalculer les horaires",
+      "recalculating": "Nouveau calcul",
+      "reclassify": "Le reclasser",
+      "reclassifying": "Reclassification en cours...",
+      "timingsToast": "Horaires : {{updated}} mis à jour · {{trimmed}} ajusté · {{unchanged}} ok · {{skipped}} ignoré",
+      "reclassifyToast": "Reclassifié : {{updated}} bloc(s) · {{skipped}} ignoré (s)"
+    },
+    "sort": {
+      "bpmDesc": "BPM ↓",
+      "bpmAsc": "BPM ↑",
+      "durationDesc": "Durée",
+      "durationAsc": "Durée"
+    },
+    "batch": {
+      "all": "Tous ({{count}})",
+      "selecting": "Choisir ",
+      "allFiltered": "Tous filtrés ({{count}})",
+      "deleteSelected": "Supprimer la sélection",
+      "clearSelection": "Effacer la sélection",
+      "allOnPage": "Tous ({{count}})"
+    },
+    "empty": {
+      "title": "Aucun bloc trouvé",
+      "hint": "Import a funscript in the Import tab or adjust filters."
+    },
+    "pagination": {
+      "previous": "← Précédent",
+      "next": "Suivant →"
+    },
+    "delete": {
+      "batchTitle": "Supprimer {{count}} blocs",
+      "batchHint": "Supprime définitivement de la bibliothèque.",
+      "batchConfirm": "Tout supprimer",
+      "title": "Supprimer le bloc",
+      "confirm": "Effacer",
+      "hint": "Supprime définitivement de la bibliothèque. Impossible d'annuler."
+    },
+    "test": {
+      "title": "Test on Handy",
+      "hint": "Sends the block to the device via Intiface (real motion)."
+    },
+    "import": {
+      "inserted": "Inséré",
+      "inFile": "Dans le fichier",
+      "format": "Format",
+      "duplicates": "Doublons",
+      "fullScript": "Script complet (bibliothèque)",
+      "generatedBlocks": "Blocs générés ({{count}})",
+      "enqueueFull": "Mettre en file d'attente le script complet",
+      "enqueued": "En file ({{count}} partie(s))",
+      "playNow": "Lire maintenant",
+      "playingFull": "Playing full funscript",
+      "refreshList": "Rafraîchir la liste",
+      "rosterTitle": "AI session roster (full funscripts)",
+      "enableRoster": "Activer la liste d'IA",
+      "buildingRoster": "CONSTRUIRE UN SCRIPT",
+      "buildRoster": "Construire un script d'IA",
+      "rosterEnabled": "Mode liste d'IA activé",
+      "rosterEnqueued": "Liste : {{count}} script(s) mis en file d'attente",
+      "rosterBuilt": "Script construit — voir le chat",
+      "filesTitle": "Fichiers importés ({{count}})",
+      "enqueue": "File d’attente :",
+      "play": "Jouer",
+      "playingScript": "Lecture du script complet",
+      "recentTitle": "Importations Recentes",
+      "processing": "Traitement en cours…",
+      "importing": "Importation en cours",
+      "dropHint": "StrokeGPT: funscriptORG (.csv) · jsonmodes (.json) · modes (.funscript)",
+      "invalidExt": "Use .csv, .json or .funscript",
+      "done": "{{files}} fichier(s) · {{blocks}} bloc(s) inséré (s)",
+      "stats": {
+        "inserted": "Inséré",
+        "inFile": "Dans le fichier",
+        "format": "Format",
+        "duplicates": "Doublons"
+      },
+      "fullScriptTitle": "Script complet (bibliothèque)",
+      "fullScriptDefault": "SCRIPT COMPLET",
+      "subtitleInLibrary": "dans librairie",
+      "sourceDefault": "Importer",
+      "badgeExists": "existe déjà",
+      "badgeFull": "Full funscript",
+      "sessionHint": "Crée une session en mettant en file d'attente des scripts complets à partir de la bibliothèque importée. Activez dans le → Planificateur de paramètres ou cliquez ci-dessous.",
+      "optionalInstruction": "Instruction facultative (par exemple, démarrer lentement)",
+      "fullSubtitle": "{{duration}}s · {{points}} pts{{bpmSuffix}}{{librarySuffix}}",
+      "bpmSuffix": " · {{bpm}} beats/min",
+      "blockSubtitle": "{{zone}} · {{speed}} · {{duration}} s · int. {{intensity}} % · {{points}} pts",
+      "fileMeta": "· {{duration}}s · {{blocks}} blocs · {{points}} pts",
+      "exportFmt": "Exporter .{{fmt}}",
+      "dropTitle": "Faites glisser ou cliquez — un ou plusieurs fichiers",
+      "doneToast": "{{files}} fichier(s) · {{blocks}} bloc(s) inséré (s)",
+      "rosterHint": "Crée une session en mettant en file d'attente des scripts entiers à partir de la bibliothèque importée. Activez dans le → Planificateur de paramètres ou cliquez ci-dessous.",
+      "planRoster": "Planifier la liste d'IA",
+      "planningRoster": "Planification de la liste...",
+      "rosterPlaceholder": "Instruction facultative (par exemple, démarrer lentement)",
+      "rosterPlanned": "Liste prévue — voir le chat",
+      "playFull": "Lire le script complet"
+    },
+    "zones": {
+      "top": "Tip Top !",
+      "middle": "Moyen / moyen",
+      "bottom": "Bas de la base",
+      "full": "Course complète",
+      "mixed": "Mixé"
+    },
+    "maintenance": {
+      "title": "Maintenance",
+      "timestamps": "Horodatages : {{updated}} mis à jour · {{trimmed}} rognés · {{unchanged}} ok · {{skipped}} ignorés"
+    },
+    "drop": {
+      "title": "Faites glisser ou cliquez — un ou plusieurs fichiers"
+    },
+    "modals": {
+      "batchDeleteTitle": "Supprimer {{count}} blocs",
+      "batchDeleteHint": "Supprime définitivement de la bibliothèque.",
+      "batchDeleteConfirm": "Tout supprimer",
+      "deleteTitle": "Supprimer le bloc",
+      "deleteHint": "Supprime définitivement de la bibliothèque. Ne peut pas être annulé.",
+      "testTitle": "Test on Handy",
+      "testHint": "Sends the block to the device via Intiface (real motion)."
+    },
+    "toasts": {
+      "roleMarked": "Marqué pour {{role}}",
+      "roleRemoved": "Supprimé de {{role}}",
+      "downloaded": "{{filename}} téléchargé",
+      "deleted": "Bloc supprimé.",
+      "batchDeleted": "%{count} supprimée",
+      "testOk": "OK · {{actions}} action(s)",
+      "addedToQueue": "Ajouté à la file d'attente"
+    }
+  },
+  "block": {
+    "roles": {
+      "edge": "Edge",
+      "milk": "Lait",
+      "climax": "Orgasme"
+    },
+    "stats": {
+      "aria": "Bloquer les statistiques",
+      "duration": "Durée",
+      "actions": "Interventions",
+      "intensity": "Intensité",
+      "maxSpeed": "Vitesse max",
+      "avgSpeed": "Vitesse moy."
+    },
+    "trim": "Découpe",
+    "heatmapTrimmer": {
+      "startAria": "Couper le début",
+      "endAria": "chute d'éboutage",
+      "cropLabel": "Recadrer : {{start}} – {{end}}",
+      "duration": "DURATION=Durée"
+    },
+    "select": "Sélectionner {{title}}",
+    "bpmMeta": "{{bpm}} BPM · {{duration}}s",
+    "successScore": "Score de réussite",
+    "recordedTitle": "Utilisateur qui enregistre :",
+    "myRecording": "« Mon enregistrement »",
+    "fullScriptTitle": "Full funscript",
+    "fullScript": "SCRIPT COMPLET",
+    "addToQueue": "Ajouter à la file",
+    "testOnHandy": "Test on Handy",
+    "test": "Tester",
+    "editTrim": "Modifier la Garniture",
+    "removeRole": "Supprimer le rôle {{role}}",
+    "saveForRole": "Enregistrer pour {{role}}",
+    "export": "Exporter",
+    "delete": "Supprimer",
+    "feedback": {
+      "like": "J'aime",
+      "dislike": "J’aime pas",
+      "favorite": "Favori",
+      "block": "Bloc"
+    },
+    "editor": {
+      "title": "Modifier le bloc",
+      "fullScriptWarn": "Blocs de script complet : le rognage affecte l'ensemble du fichier importé.",
+      "help": "Faites glisser les poignées sur la carte thermique pour couper. Aperçu des mises à jour en direct.",
+      "minTrimPoints": "Besoin d'au moins 2 points dans la plage de finition",
+      "trimApplied": "Ajuster appliqué ({{count}} actions)",
+      "minActions": "Nécessite au moins 2 actions",
+      "replaced": "Bloc remplacé ({{id}})",
+      "created": "Nouveau bloc créé ({{id}})",
+      "saveError": "Impossible d'enregistrer le bloc",
+      "applyTrim": "Appliquer la garniture",
+      "replace": "Remplacer l'original",
+      "saveAsNew": "Enregistrer en tant que nouveau"
+    }
+  },
+  "diagnostics": {
+    "pingOllama": "Ping Ollama",
+    "refresh": "Actualiser",
+    "pingTitle": "Ping Ollama",
+    "quickState": "État rapide",
+    "bufferQueue": "Tampon de file d'attente : {{buffer}}s · restant : {{remaining}}s",
+    "playback": "Lecture : {{state}} · file d'attente : {{count}} blocs",
+    "playbackActive": "actif",
+    "playbackStopped": "arrêté",
+    "planner": "Planificateur : {{status}}{{refill}}",
+    "plannerBusy": "occupé ({{source}})",
+    "plannerFree": "<span color=\"#24d6e2\">gratuit</span>",
+    "refillBusy": "· recharge en cours",
+    "estop": "Arrêt d'urgence : {{value}}",
+    "error": "Message d'erreur:",
+    "lastApply": "Dernière candidature (→file d'attente du planificateur)",
+    "enqueued": "En file d'attente : {{count}}",
+    "fallbackUsed": "· repli utilisé",
+    "whyBlocks": "Pourquoi ces blocs :",
+    "lastPlannerJson": "Last planner JSON",
+    "plannerAudit": "Audit du planificateur (récent)",
+    "handyCommands": "Handy — recent commands",
+    "ollamaOk": "Ollama OK",
+    "ollamaFail": "Ollama failed",
+    "estopYes": "OUI",
+    "estopNo": "No",
+    "playbackQueue": "Lecture : {{playback}} · file d'attente : {{count}} blocs",
+    "refillInProgress": "· recharge en cours",
+    "skipped": "Ignoré : {{count}}"
+  },
+  "sessions": {
+    "empty": "Aucune session enregistrée.",
+    "colStart": "Début",
+    "replayTitle": "Relecture de la session",
+    "noMessages": "Aucun message stocké pour cette session.",
+    "noBlocks": "Aucun bloc enregistré (démarrer la lecture dans cette session).",
+    "rateTitle": "Évaluer la session",
+    "colMode": "Mode",
+    "colRating": "Evaluation",
+    "replay": "Réessayer",
+    "loadingReplay": "Chargement de la relecture…",
+    "exportZip": "Exporter ZIP",
+    "close": "Fermer",
+    "chatSection": "Discussion",
+    "blocksPlayed": "Blocs joués",
+    "ratingLabel": "Note (1 à 5)",
+    "notes": "Remarques",
+    "saveFeedback": "Enregistrement de feedback",
+    "ratingRequired": "Note (1 à 5)",
+    "feedbackSaved": "Réaction enregistrée.",
+    "exported": "{{filename}} exporté",
+    "bpmSuffix": " · {{bpm}} BPM",
+    "durationSuffix": "Section S",
+    "col": {
+      "started": "Démarré",
+      "mode": "Mode",
+      "rating": "Evaluation"
+    },
+    "chat": "Discussion",
+    "notesLabel": "Remarques"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "apiUnavailable": "API indisponible : {{error}}",
+    "emergencyStop": "Arrêt d' urgence",
+    "queuePreview": "File d'attente (aperçu)",
+    "queueEmpty": "File d’attente vide",
+    "playbackFooter": "Lecture : {{playback}} · blocs dans la file d'attente : {{count}} · recharge : {{refill}}",
+    "playbackActive": "actif",
+    "playbackStopped": "arrêté",
+    "refillBusy": "occupé",
+    "refillFree": "<span color=\"#24d6e2\">gratuit</span>",
+    "card": {
+      "intiface": "Intiface",
+      "device": "Dispositif",
+      "persona": "Persona",
+      "ollama": "Ollama",
+      "mode": "Mode",
+      "intensity": "Intensité",
+      "range": "Plage",
+      "buffer": "Tampon"
+    },
+    "connected": "Connecté",
+    "disconnected": "Déconnecté",
+    "stopActive": "· ARRÊT ACTIF",
+    "emergencyActive": "Arrêt d'urgence actif",
+    "playbackStatus": "Lecture : {{playback}} · blocs dans la file d'attente : {{count}} · recharge : {{refill}}"
+  },
+  "autoMode": {
+    "startAuto": "Démarrer le mode automatique",
+    "stopAuto": "Arrêter le mode automatique",
+    "stopPlayback": "Arrêter la lecture",
+    "refillBuffer": "Tampon de recharge",
+    "started": "Lancé automatiquement",
+    "stopping": "Arrêt automatique",
+    "playbackActive": "Lecture active",
+    "playbackStopped": "Lecture arrêtée",
+    "refillRequested": "Recharge demandée",
+    "status": "Auto : {{auto}} · Lecture : {{playback}} · Recharge : {{refill}}",
+    "buffer": "Tampon : {{sec}}s",
+    "title": "Mode auto",
+    "hint": "The watchdog keeps the buffer full via Ollama; the executor plays without waiting for the model.",
+    "playbackOnly": "Lecture uniquement",
+    "on": "MARCHE",
+    "off": "ARRÊT",
+    "busy": "occupé",
+    "free": "<span color=\"#24d6e2\">gratuit</span>",
+    "start": "Démarrer l'auto",
+    "stop": "Arrêter l'auto",
+    "refill": "Tampon de recharge",
+    "playbackOn": "Lecture active",
+    "playbackOff": "Lecture arrêtée"
+  },
+  "mouse": {
+    "cylinder": {
+      "positionAria": "Position {{pct}} pour cent",
+      "padAria": "Commande verticale du vérin"
+    },
+    "title": "Contrôle souris",
+    "subtitle": "Contrôle vertical direct — lissage et enregistrement",
+    "active": "Actif",
+    "recording": "Enregistrement",
+    "starting": "Démarrage....",
+    "startControl": "Démarrer",
+    "stopControl": "Arrêter",
+    "keyframes": "Images clés",
+    "deviceOffline": "Appareil hors ligne",
+    "emergencyActive": "Arrêt d'urgence actif",
+    "smoothing": "Lissage",
+    "target": "Cibles",
+    "sent": "Envoyé",
+    "hintActive": "Déplacez le pointeur verticalement sur le cylindre.",
+    "hintIdle": "Connectez l'appareil et démarrez le contrôle.",
+    "startIdle": "Emplacement de démarrage :",
+    "startIdleHint": "Passe à mi-chemin avant de suivre le pointeur.",
+    "connectFirst": "Connectez d'abord l'appareil",
+    "controlActive": "Contrôle de la souris actif",
+    "startError": "Impossible de démarrer le contrôle",
+    "recordingSaved": "Enregistrement enregistré ({{actions}} actions, {{duration}})",
+    "recordingStarted": "L'enregistrement a commencé",
+    "recordError": "Erreur d’enregistrement",
+    "recordingSavedLib": "Enregistré dans la bibliothèque ({{actions}} actions)",
+    "saveRecordingError": "Impossible d'enregistrer l'enregistrement",
+    "response": {
+      "label": "La réaction",
+      "turbo": "Turbo",
+      "aria": "Vitesse de réponse",
+      "bounds": "Lisse ↔ rapidement"
+    },
+    "gestures": {
+      "record": "Maintenir pour enregistrer",
+      "hold": "maintenir",
+      "turbo": "Turbo",
+      "lessSmooth": "Moins lisse",
+      "moreSmooth": "Plus lisse"
+    }
+  },
+  "import": {
+    "page": {
+      "title": "Import funscripts",
+      "hint": "Upload .funscript, .json or .csv to extract blocks into the library.",
+      "processing": "Traitement en cours…",
+      "lastImport": "  *  Dernier import le",
+      "file": "Fichier :",
+      "blocksInserted": "Blocs insérés : {{count}} · ID :",
+      "exportFull": "Exporter le script complet :",
+      "imported": "Importé : {{count}} blocs",
+      "importFirst": "Importez d'abord un fichier",
+      "download": "Télécharger {{filename}}"
+    },
+    "title": "Importer des funscripts",
+    "hint": "Upload .funscript, .json or .csv to extract blocks into the library.",
+    "processing": "Traitement en cours…",
+    "lastTitle": "  *  Dernier import le",
+    "file": "Fichier :",
+    "blocksInserted": "Blocs insérés : {{count}} · ID :",
+    "exportFull": "Exporter le script complet :",
+    "invalidExt": "Use .funscript, .json or .csv",
+    "doneToast": "Importé : {{count}} blocs",
+    "importFirst": "Importez d'abord un fichier"
+  },
+  "browserStt": {
+    "micStartError": "Impossible de démarrer le micro",
+    "unsupported": "Le navigateur ne prend pas en charge la reconnaissance vocale",
+    "speechError": "Erreur de reconnaissance vocale"
+  },
+  "queue": {
+    "segmentBar": {
+      "title": "Blocs dans l'ordre de la file"
+    }
+  }
+}

@@ -245,10 +245,29 @@ func firstNonEmpty(values ...string) string {
 
 func modelListed(model string, models []string) bool {
 	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	want := normalizeModelToken(model)
 	for _, candidate := range models {
-		if strings.TrimSpace(candidate) == model {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == model {
+			return true
+		}
+		if want != "" && normalizeModelToken(candidate) == want {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizeModelToken(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.TrimSuffix(value, ".gguf")
+	value = strings.ReplaceAll(value, `\`, "/")
+	if index := strings.LastIndex(value, "/"); index >= 0 {
+		value = value[index+1:]
+	}
+	replacer := strings.NewReplacer("-", "", "_", "", ".", "", " ", "")
+	return replacer.Replace(value)
 }

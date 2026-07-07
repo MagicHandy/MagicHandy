@@ -117,10 +117,10 @@ func TestMotionUnavailableWithoutSelectedTransportPrerequisites(t *testing.T) {
 		t.Fatalf("decode motion state: %v", err)
 	}
 	if state.Available {
-		t.Fatalf("motion state should be unavailable without Cloud credentials: %s", stateRecorder.Body.String())
+		t.Fatalf("motion state should be unavailable without Intiface: %s", stateRecorder.Body.String())
 	}
-	if !strings.Contains(stateRecorder.Body.String(), "Handy connection key is required") {
-		t.Fatalf("state body = %s, want credential error", stateRecorder.Body.String())
+	if !strings.Contains(stateRecorder.Body.String(), "Intiface client is unavailable") {
+		t.Fatalf("state body = %s, want Intiface error", stateRecorder.Body.String())
 	}
 
 	startRecorder := httptest.NewRecorder()

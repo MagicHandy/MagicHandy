@@ -148,6 +148,34 @@ func (s *Server) handleLLMUnload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, loadable.Unload(r.Context()))
 }
 
+func (s *Server) ensureLLMReady(ctx context.Context) (llm.Provider, error) {
+	settings, _ := s.store.Snapshot()
+	provider, err := s.newLLMProvider(settings.LLM)
+	if err != nil {
+		return nil, err
+	}
+	if loadable, ok := provider.(llm.LoadableProvider); ok {
+		status := loadable.Load(ctx)
+		if !status.Available {
+			message := status.Message
+			if message == "" {
+				message = "LLM is not available"
+			}
+			return nil, fmt.Errorf("%s", message)
+		}
+		return provider, nil
+	}
+	status := provider.Status(ctx)
+	if !status.Available {
+		message := status.Message
+		if message == "" {
+			message = "LLM is not available"
+		}
+		return nil, fmt.Errorf("%s", message)
+	}
+	return provider, nil
+}
+
 func (s *Server) closeLLM() {
 	s.llm.mu.Lock()
 	provider := s.llm.cached

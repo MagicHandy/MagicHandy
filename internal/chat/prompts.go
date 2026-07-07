@@ -120,6 +120,11 @@ func BuiltinPromptSetByID(id string) (PromptSet, bool) {
 	return PromptSet{}, false
 }
 
+// PersonaMotionBridge tells imported LSO personas how MagicHandy actually drives motion.
+const PersonaMotionBridge = `MagicHandy controls the Handy through the "motion" object in your JSON reply.
+When the user asks to start, change speed/pattern, or stop the device, you MUST set motion.action in the same JSON response.
+Never say motion is handled elsewhere or by another planner.`
+
 // ComposeSystem builds the full system prompt: behavior text from the set,
 // then the code-owned contract, then enabled memories when present.
 func ComposeSystem(set PromptSet, memories []string) string {
@@ -130,6 +135,10 @@ func ComposeSystem(set PromptSet, memories []string) string {
 		behavior = fallback.System
 	}
 	builder.WriteString(behavior)
+	if strings.HasPrefix(strings.TrimSpace(set.ID), "persona:") {
+		builder.WriteString("\n\n")
+		builder.WriteString(PersonaMotionBridge)
+	}
 	builder.WriteString("\n\n")
 	builder.WriteString(ContractInstructions)
 
@@ -159,6 +168,9 @@ func memoryInstructionForPrompt(promptID string) string {
 	case PromptSetIDJapanese:
 		return "保存済みのユーザーメモリ（関連する場合だけ自然に参照し、一覧を読み上げないこと）:"
 	default:
+		if strings.HasPrefix(promptID, "persona:") {
+			return "Memórias salvas do usuário (use-as com naturalidade quando forem relevantes; nunca recite a lista):"
+		}
 		return "Saved user memories (reference naturally when relevant; never recite the list):"
 	}
 }

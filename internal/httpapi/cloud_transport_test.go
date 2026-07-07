@@ -13,6 +13,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/store"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -180,7 +181,7 @@ func newCloudTestServer(t *testing.T, runtime Runtime) *Server {
 	if runtime.Transport == nil {
 		runtime.Transport = transport.NewFake()
 	}
-	store, err := config.OpenStore(t.TempDir())
+	store, err := config.OpenStore(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -191,6 +192,7 @@ func newCloudTestServer(t *testing.T, runtime Runtime) *Server {
 	if err != nil {
 		t.Fatalf("New server: %v", err)
 	}
+	t.Cleanup(func() { server.Close() })
 	return server
 }
 
@@ -206,6 +208,7 @@ func saveCloudSettings(t *testing.T, server *Server) {
 	t.Helper()
 
 	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Device.HSPDispatchOwner = config.DispatchOwnerCloudREST
 		settings.Device.APIApplicationIDSource = config.ApplicationIDSourceDeveloperOverride
 		settings.Device.APIApplicationIDOverride = "dev-app-id"
 		settings.Device.HandyConnectionKey = cloudTestConnectionKey

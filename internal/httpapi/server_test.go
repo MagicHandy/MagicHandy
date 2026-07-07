@@ -12,6 +12,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/store"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -288,7 +289,7 @@ func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
 	if runtime.Transport == nil {
 		runtime.Transport = transport.NewFake()
 	}
-	store, err := config.OpenStore(t.TempDir())
+	store, err := config.OpenStore(store.TestDir(t))
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -303,6 +304,7 @@ func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
 	if err != nil {
 		t.Fatalf("New server: %v", err)
 	}
+	t.Cleanup(func() { server.Close() })
 	return server
 }
 

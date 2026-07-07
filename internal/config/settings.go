@@ -23,6 +23,11 @@ const (
 	DispatchOwnerCloudREST = "cloud_rest"
 	// DispatchOwnerBrowserBluetooth is the future browser-owned BLE dispatch owner.
 	DispatchOwnerBrowserBluetooth = "browser_bluetooth"
+	// DispatchOwnerIntiface is the local Intiface/Buttplug websocket dispatch owner.
+	DispatchOwnerIntiface = "intiface"
+
+	// DefaultIntifaceURL is the default Intiface Central websocket endpoint.
+	DefaultIntifaceURL = "ws://127.0.0.1:12345"
 
 	// FirmwareAPIRequirementRequired records the firmware v4/API v3 requirement.
 	FirmwareAPIRequirementRequired = "firmware_v4_api_v3_required"
@@ -66,7 +71,7 @@ const (
 	PromptSetMagicHandyMotionV1JA = "magichandy_motion_v1_ja"
 
 	// DefaultLlamaCPPBaseURL is the default llama-server OpenAI-compatible URL.
-	DefaultLlamaCPPBaseURL = "http://127.0.0.1:8080"
+	DefaultLlamaCPPBaseURL = "http://127.0.0.1:18080"
 	// DefaultOllamaBaseURL is the default local Ollama daemon URL.
 	DefaultOllamaBaseURL = "http://127.0.0.1:11434"
 	// DefaultLLMModel is a placeholder model name users replace with a local model.
@@ -97,6 +102,7 @@ type DeviceSettings struct {
 	APIApplicationIDSource   string `json:"api_application_id_source"`
 	APIApplicationIDOverride string `json:"api_application_id_override,omitempty"`
 	HandyConnectionKey       string `json:"handy_connection_key,omitempty"`
+	IntifaceURL              string `json:"intiface_url"`
 }
 
 // Motion style preferences bias the deterministic mode planners directly
@@ -156,6 +162,7 @@ type PublicDeviceSettings struct {
 	APIApplicationIDSource   string `json:"api_application_id_source"`
 	APIApplicationIDOverride string `json:"api_application_id_override,omitempty"`
 	ConnectionKeySet         bool   `json:"connection_key_set"`
+	IntifaceURL              string `json:"intiface_url"`
 }
 
 // PublicSettingsOptionHints exposes valid option values to the static UI.
@@ -196,9 +203,10 @@ func DefaultSettings() Settings {
 			Port: DefaultServerPort,
 		},
 		Device: DeviceSettings{
-			HSPDispatchOwner:       DispatchOwnerCloudREST,
+			HSPDispatchOwner:       DispatchOwnerIntiface,
 			FirmwareAPIRequirement: FirmwareAPIRequirementRequired,
 			APIApplicationIDSource: ApplicationIDSourceBundled,
+			IntifaceURL:            DefaultIntifaceURL,
 		},
 		Motion: MotionSettings{
 			SpeedMinPercent:  20,
@@ -233,6 +241,7 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDSource:   s.Device.APIApplicationIDSource,
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
+			IntifaceURL:              s.Device.IntifaceURL,
 		},
 		Motion:      s.Motion,
 		LLM:         s.LLM,
@@ -241,6 +250,7 @@ func (s Settings) Public() PublicSettings {
 			HSPDispatchOwners: []string{
 				DispatchOwnerCloudREST,
 				DispatchOwnerBrowserBluetooth,
+				DispatchOwnerIntiface,
 			},
 			APIApplicationIDSources: []string{
 				ApplicationIDSourceBundled,
@@ -401,7 +411,12 @@ func validateSettings(settings Settings) error {
 	if settings.Server.Port < 1 || settings.Server.Port > 65535 {
 		return fmt.Errorf("server port must be between 1 and 65535")
 	}
-	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth) {
+	if !oneOf(
+		settings.Device.HSPDispatchOwner,
+		DispatchOwnerCloudREST,
+		DispatchOwnerBrowserBluetooth,
+		DispatchOwnerIntiface,
+	) {
 		return fmt.Errorf("unknown HSP dispatch owner %q", settings.Device.HSPDispatchOwner)
 	}
 	if settings.Device.FirmwareAPIRequirement != FirmwareAPIRequirementRequired {
@@ -432,6 +447,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	}
 	if settings.Device.APIApplicationIDSource == "" {
 		settings.Device.APIApplicationIDSource = defaults.Device.APIApplicationIDSource
+	}
+	if settings.Device.IntifaceURL == "" {
+		settings.Device.IntifaceURL = defaults.Device.IntifaceURL
 	}
 	if settings.Motion.SpeedMinPercent == 0 {
 		settings.Motion.SpeedMinPercent = defaults.Motion.SpeedMinPercent

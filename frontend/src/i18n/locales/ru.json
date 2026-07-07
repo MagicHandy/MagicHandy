@@ -1,0 +1,1333 @@
+{
+  "common": {
+    "loading": "Загрузка…",
+    "error": "Ошибка",
+    "save": "Сохранить",
+    "delete": "Удалить",
+    "send": "Отправить",
+    "stop": "Стоп",
+    "ok": "OK",
+    "off": "Выкл.",
+    "previous": "Назад",
+    "next": "Далее",
+    "confirm": "Подтверждение",
+    "close": "Закрыть",
+    "cancel": "Отмена",
+    "apply": "Применить",
+    "refresh": "Обновление",
+    "export": "Экспорт",
+    "import": "Импорт",
+    "edit": "Правка",
+    "activate": "Активировать",
+    "new": "Создать",
+    "use": "Использование",
+    "scan": "Сканировать",
+    "connect": "Подключить",
+    "test": "Испыт.",
+    "play": "Воспроизведение",
+    "pause": "Пауза",
+    "clear": "Сбросить",
+    "min": "мин",
+    "max": "макс",
+    "yes": "Да",
+    "no": "Нет"
+  },
+  "languageGate": {
+    "title": "Выберите язык",
+    "hint": "Можно изменить в Настройки → Язык.",
+    "choose": "Выберите язык",
+    "confirm": "Продолжить"
+  },
+  "nav": {
+    "mainAria": "Включить стрелку подменю главной навигации",
+    "control": "Управление",
+    "handsFree": "Без рук",
+    "mouse": "Мыши",
+    "library": "Библиотека",
+    "player": "Плеер",
+    "settings": "Настройки",
+    "queue": "очередь",
+    "queuePlaying": "Играет: {{name}}",
+    "queueCount": "{{count}} элемент(ов) в очереди",
+    "group": {
+      "session": "Сессия",
+      "library": "Библиотека",
+      "system": "Система"
+    }
+  },
+  "layout": {
+    "apiUnavailable": "API недоступен — запустить бэкенд:",
+    "waitingApi": "Ожидание API...",
+    "reconnectingIntiface": "Reconnecting to Intiface…",
+    "emergencyStop": "Emergency stop (авар. остановка)",
+    "clearStop": "Очистить остановку",
+    "uiVersion": "Версия пользовательского интерфейса",
+    "offline": {
+      "title": "API в автономном режиме",
+      "hint": "Запустите бэкенд:"
+    },
+    "ollama": {
+      "connected": "Ollama connected",
+      "off": "Ollama off: {{error}}"
+    },
+    "topbar": {
+      "buffer": "Буфер",
+      "queue": "Очередь",
+      "intensity": "Интен.",
+      "intensityTitle": "Интенсивность сеанса (0–100%). Определяет, насколько сильно блокирует AI в очереди.",
+      "phaseLocked": "закрыт",
+      "advancePhase": "опережающая фаза",
+      "autospeak": "autospeak",
+      "autospeakScheduled": "autospeak ·",
+      "ollama": "Ollama",
+      "localLlm": "Локальный LLM",
+      "testConnection": "Тестовое соединение"
+    },
+    "visualizer": {
+      "live": "Действующая",
+      "position": "Должность",
+      "positionHandy": "Handy position",
+      "realtimeHint": "Положение хода устройства в реальном времени.",
+      "offsetSaved": "Смещение синхронизации сохранено: {{ms}}мс (RTT {{rtt}}мс)"
+    }
+  },
+  "config": {
+    "title": "Настройки",
+    "navAria": "Разделы конфигурации",
+    "searchPlaceholder": "Поиск…",
+    "searchAria": "Поиск конфигурации",
+    "noSections": "Не найдено ни одного раздела",
+    "groups": {
+      "main": "Основные",
+      "system": "Система",
+      "data": "Данные"
+    },
+    "language": {
+      "label": "Язык интерфейса",
+      "hint": "Изменения вступают в силу немедленно и сохраняются в настройках.",
+      "aria": "Язык интерфейса"
+    },
+    "sections": {
+      "language": {
+        "label": "Язык",
+        "hint": "Язык интерфейса и локаль"
+      },
+      "personas": {
+        "label": "Персоны",
+        "hint": "Имя, подсказка и профиль ИИ"
+      },
+      "session": {
+        "label": "Сеанс и ИИ",
+        "hint": "Autospeak, scene, and persona rhythm"
+      },
+      "motion": {
+        "label": "Движение и очередь",
+        "hint": "Позиция, буфер, безопасность и планировщик"
+      },
+      "connections": {
+        "label": "Подключения",
+        "hint": "Ollama, Handy, Intiface, and sync"
+      },
+      "voice": {
+        "label": "Голос",
+        "hint": "TTS and microphone (STT)"
+      },
+      "logs": {
+        "label": "Журналы",
+        "hint": "Диагностические файлы на диске"
+      },
+      "advanced": {
+        "label": "Full JSON",
+        "hint": "Edit entire settings.json"
+      },
+      "sessions": {
+        "label": "История",
+        "hint": "Прошлые сессии и рейтинги"
+      },
+      "diagnostics": {
+        "label": "Диагностика",
+        "hint": "Текущее состояние и последние журналы"
+      }
+    },
+    "saved": "Настройки сохранены",
+    "settings": {
+      "saved": "Настройки сохранены",
+      "saveSettings": "Сохранить",
+      "saveBarHint": "Изменения вступят в силу после сохранения — некоторые параметры требуют перезапуска бэкенда.",
+      "session": {
+        "autospeak": {
+          "title": "Autospeak",
+          "hint": "Like StrokeGPT-ReVibed: the persona chooses when to speak again (autospeak_seconds in JSON). With Autospeak on, the fixed interval below is only a fallback when Autospeak is off.",
+          "enabled": "Autospeak enabled",
+          "minSeconds": "Минимум между выступлениями",
+          "maxSeconds": "Максимум между выступлениями",
+          "motionAutonomy": "Автономия движения (между речами)",
+          "chatOnly": "Только речь",
+          "styleLight": "Свет (интенсивность/фаза)",
+          "fullMotion": "Движение в полном объеме. "
+        },
+        "appLegacy": {
+          "title": "App / Auto (устаревшее)",
+          "waitFirstMsg": "Дождитесь моего 1-го сообщения, прежде чем персонаж заговорит (автоматический режим)",
+          "waitHint": "Unchecked: AI может говорить и ставить в очередь движение, как только запускается Auto.",
+          "fixedInterval": "Fixed interval between speeches (s) — only without Autospeak"
+        },
+        "scene": {
+          "title": "Сцена — ИИ контролирует электрокардиостимуля",
+          "aiPacing": "AI выбирает сцену (позу), фазу и продолжительность (мин. -макс. ниже)",
+          "aiPacingHint": "Вкл.: персона планирует, как долго оставаться на каждом этапе, и продвигается только тогда, когда истекает время (или пользователь пропускает). ВЫКЛ: устаревшая автоматическая эскалация за ход.",
+          "advanceLegacy": "Эскалация фазы каждого ответа (унаследовано — только если стимуляция ИИ выключена)",
+          "phaseMinMax": "Мин / макс на фазу (секунды)"
+        },
+        "phases": {
+          "intro": "Вводная",
+          "warmup": "Разминка",
+          "build_up": "Создание",
+          "active": "Действующая",
+          "peak": "Пик",
+          "recovery": "добыча, извлечение",
+          "cooldown": "Охлаждение "
+        }
+      },
+      "motion": {
+        "title": "Движение",
+        "presetsHint": "Быстрые предустановки (буфер + целевой ритм для планировщика)",
+        "presetApplied": "Примененные предустановки: {{preset}}",
+        "minPosition": "Мин. положение",
+        "maxPosition": "Макс. позиция",
+        "defaultIntensity": "Интенсивность по умолчанию",
+        "literalPositions": "Literal funscript positions (0–100, no remap to min/max)",
+        "literalHint": "Вкл.: импортированные сценарии используют положение 0–100 точно так же, как в файле. Выкл.: позиции переназначаются в диапазон мин/макс выше (по умолчанию 10–90).",
+        "maxEnqueueDuration": "Максимальная продолжительность очереди (с)",
+        "smallPatternMax": "Небольшой узор макс.",
+        "smallLoopMax": "Макс. малая петля (и)",
+        "maxFullScript": "Максимальная продолжительность полного сценария (с)",
+        "targetBpm": "Target BPM (planner)",
+        "rosterMode": "Режим списка сеансов ИИ (полные скрипты из библиотеки)",
+        "rosterHint": "When enabled, the AI can enqueue entire imported funscripts as a session script.",
+        "weightsTitle": "Вес блоков планировщика",
+        "weightsHint": "Насколько сильно каждый фактор влияет на выбор блока (0–1).",
+        "weights": {
+          "tag_match": "Совпадение тегов",
+          "intensity_fit": "Подгонка по интенсивности",
+          "persona_match": "Соответствие персонажа",
+          "user_rating": "Рейтинг продвца",
+          "success_score": "ОЦЕНКА УСПЕХА"
+        },
+        "safety": {
+          "title": "Безопасность",
+          "limitsEnabled": "Включить ограничения интенсивности/скорости",
+          "limitsHint": "Сила и скорость движения Caps независимо от сценария или команд ИИ.",
+          "maxIntensity": "Макс. сила света**",
+          "maxSpeed": "Максимальная скорость (ед./с)",
+          "stopWords": "Стоп-слова (через запятую)"
+        },
+        "queue": {
+          "title": "Буфер очереди",
+          "targetBuffer": "Целевой буфер (ы)",
+          "minBuffer": "Минимальный буфер (ы)"
+        }
+      },
+      "connections": {
+        "ollama": {
+          "title": "Ollama",
+          "url": "Базовый URL",
+          "model": "Модель",
+          "responseLimit": "Лимит маркера ответа",
+          "maxChatChars": "Максимальное число символов сообщения чата",
+          "verboseHint": "Lower num_predict and max_message_chars speed up replies on weak GPUs."
+        },
+        "handy": {
+          "title": "Handy",
+          "defaultMode": "Транспорт по умолчанию",
+          "connectionKey": "Ключ подключения",
+          "keyPlaceholder": "Paste Handy connection key",
+          "apiBaseUrl": "Базовый URL API"
+        },
+        "intiface": {
+          "title": "Intiface",
+          "wsUrl": "WebSocket URL",
+          "preferredDevice": "Предпочтительное имя устройства",
+          "autoConnect": "Автоматическое подключение при запуске",
+          "autoScan": "Устройства автосканирования",
+          "connectionTimeout": "(Таймаут соединения)",
+          "sendLead": "Отправить отведение (мс)"
+        },
+        "sync": {
+          "title": "Смещение синхронизации",
+          "offset": "Смещение (мс)",
+          "autoSyncOnConnect": "Автоматическая синхронизация при подключении"
+        }
+      },
+      "voice": {
+        "tts": {
+          "title": "Text-to-speech (TTS)",
+          "installHint": "Требуется дополнительный голосовой пакет: pip install -e \".[голос]\"",
+          "enableTts": "Enable TTS",
+          "autoSpeak": "Автообщение после ответа персонажа",
+          "voiceId": "ID голоса"
+        },
+        "stt": {
+          "title": "Speech-to-text (STT)",
+          "enableStt": "Enable STT",
+          "provider": "STT provider",
+          "local": "Local (faster-whisper)",
+          "browser": "Браузер (API веб-речи)",
+          "autoSend": "Автоматическая отправка расшифровки в планировщик",
+          "model": "Whisper model",
+          "tiny": "Крошечный",
+          "base": "База",
+          "small": "Маленький",
+          "language": "Шифр языка",
+          "langPlaceholder": "например, pt, en, auto"
+        }
+      },
+      "logs": {
+        "title": "Диагностические журналы",
+        "motionLog": "Log Handy motion commands",
+        "verboseLog": "Подробный журнал движений",
+        "verboseHint": "Записывает подробные журналы команд на диск (может быстро расти)."
+      },
+      "raw": {
+        "title": "Full settings JSON",
+        "hint": "Edit the entire settings.json. Invalid JSON cannot be saved.",
+        "applied": "JSON applied locally",
+        "invalid": "Invalid JSON",
+        "invalidBeforeSave": "Fix JSON before saving",
+        "applyJson": "Применить локально",
+        "saveServer": "Сохранить на сервере"
+      }
+    },
+    "motion": {
+      "presetApplied": "Примененные предустановки: {{preset}}"
+    },
+    "raw": {
+      "apply": "Apply JSON",
+      "invalid": "Invalid JSON",
+      "invalidDetail": "Invalid JSON in this section",
+      "applied": "JSON applied locally",
+      "invalidBeforeSave": "Fix JSON before saving"
+    }
+  },
+  "chat": {
+    "toolbarAria": "Элементы управления чатом",
+    "autospeakOn": "Autospeak enabled",
+    "autospeakOff": "Autospeak disabled",
+    "autospeakOnTitle": "Autospeak on — persona schedules next speech",
+    "autospeakOffTitle": "Enable autospeak (ReVibed style)",
+    "autospeakOnLabel": "Autospeak on",
+    "autospeakOffLabel": "Autospeak off",
+    "mode": "Режим",
+    "modeManual": "вручную",
+    "modeAuto": "Автоматический режим",
+    "modeHybrid": "Гибридный",
+    "ctrlEnter": "Ctrl+Enter to send",
+    "stopWord": "Остановлено стоп-словом",
+    "thinking": "Мышление персоны...",
+    "sent": "Сообщение отправлено",
+    "panelAria": "Чат с персонажем",
+    "ready": "Готово к чату",
+    "startSession": "Начните сеанс.",
+    "noMessages": "Пока нет сообщений",
+    "startHint": "Отправьте первое сообщение — персонаж планирует сцену, фазу и продолжительность.",
+    "emptyHint": "Talk to the persona or use Autospeak for her to continue on her own.",
+    "placeholderFirst": "Ваше вступительное сообщение...",
+    "placeholder": "Поговорите с ней — движение следует за сценой",
+    "messageAria": "Сообщение для персонажа",
+    "typing": "{{name}} печатает",
+    "title": "Чат",
+    "operationMode": "Режим работы",
+    "sendToPlanner": "Отправить планировщику",
+    "sending": "отправка…",
+    "transcribing": "Расшифровка...",
+    "stopRecording": "Остановка записи",
+    "speakMic": "Speak (Mic)",
+    "playingNow": "Играть сейчас",
+    "enterMessage": "Enter a Message",
+    "nothingRecognized": "Ничего не распознано",
+    "voiceSent": "Голос отправлен планировщику",
+    "transcriptReady": "Транскрипт готов",
+    "recordingTooShort": "Запись слишком короткая",
+    "enableStt": "Enable STT in Settings",
+    "useChrome": "Используйте Chrome/Edge или HTTPS на мобильных устройствах",
+    "installVoice": "Install pip install -e \".[voice]\" or use browser STT in Settings",
+    "micUnavailable": "Микрофон недоступен в этом браузере",
+    "micDenied": "Микрофон отклонен",
+    "ttsError": "TTS error",
+    "sttBrowserError": "Browser STT error",
+    "sttError": "STT error",
+    "sendError": "Ошибка при отправлении.",
+    "stopWordDetected": "Стоп-слово обнаружено — остановлено",
+    "sentBackground": "Отправлено — персонаж отвечает в фоновом режиме",
+    "sentPlanner": "Отправлено планировщику",
+    "modeSet": "Режим: {{mode}}",
+    "feedbackError": "Ошибка обратной связи",
+    "personaResponse": "Ответ персонажа",
+    "speaking": "Говорение",
+    "listen": "Слушать",
+    "noResponse": "Нет ответов",
+    "messageLabel": "message",
+    "feedbackLike": "Наименование",
+    "feedbackDislike": "👎 оценка {{score}}",
+    "playbackFailed": "Сбой воспроизведения.",
+    "roleAssistant": "ассистент",
+    "roleUser": "пользователя",
+    "roleSystem": "системы.",
+    "voice": {
+      "ttsError": "TTS error",
+      "sttError": "STT error",
+      "browserSttError": "Browser STT error",
+      "playbackFailed": "Сбой воспроизведения.",
+      "stopWord": "Стоп-слово обнаружено — остановлено",
+      "sentPending": "Отправлено — персонаж отвечает в фоновом режиме",
+      "sentPlanner": "Отправлено планировщику",
+      "sendError": "Ошибка при отправлении.",
+      "emptyMessage": "Введите сообщение",
+      "nothingRecognized": "Ничего не распознано",
+      "sentVoice": "Голос отправлен планировщику",
+      "transcriptReady": "Транскрипт готов",
+      "recordingShort": "Запись слишком короткая",
+      "enableStt": "Enable STT in Settings",
+      "browserUnsupported": "Используйте Chrome/Edge или HTTPS на мобильных устройствах",
+      "installVoice": "Install pip install -e \".[voice]\" or use browser STT in Settings",
+      "micUnavailable": "Микрофон недоступен в этом браузере",
+      "micDenied": "Микрофон запрещен",
+      "modeSet": "Режим: {{mode}}",
+      "feedbackError": "Ошибка обратной связи",
+      "title": "Чат",
+      "operationMode": "Режим работы",
+      "sending": "отправка…",
+      "sendPlanner": "Отправить планировщику",
+      "transcribing": "Расшифровка...",
+      "stopRecording": "Остановка записи",
+      "speakMic": "Speak (Mic)",
+      "nowPlaying": "Сейчас играет",
+      "personaReply": "Персональный ответ",
+      "speaking": "Говорение",
+      "listen": "Слушать",
+      "noReplyYet": "Нет ответов",
+      "messageLabel": "message",
+      "sendShortcut": "Ctrl+Enter to send"
+    }
+  },
+  "session": {
+    "queueEmpty": "Пусто — импорт в библиотеку или запрос в чат",
+    "railAria": "Движение и сцена",
+    "menuLabel": "Сессия",
+    "rosterStarted": "Script on Handy ({{count}} segment(s)) · chat active",
+    "rosterPlanned": "Сценарий готов — см. чат",
+    "detail": {
+      "roster": "AI-скрипт + чат",
+      "autoPlayback": "Автовоспроизведение",
+      "auto": "Автоактивен",
+      "playback": "Воспроизведение активно",
+      "stopped": "Остановлено"
+    },
+    "badge": {
+      "roster": "ИИ",
+      "autoPlayback": "A-P",
+      "auto": "A",
+      "playback": "P"
+    },
+    "roster": {
+      "title": "Скрипт ИИ",
+      "hint": "AI builds the script on the Handy (duration + intensity) and keeps talking in chat.",
+      "estopHint": "Аварийная остановка активна — нажмите «Очистить остановку» в нижнем колонтитуле или начните снова.",
+      "duration": "Продолжительность сеанса (мин)",
+      "intensity": "Интенсивность",
+      "buildup": "С нарастанием (нарастание вводной → → разминки)",
+      "optionalNote": "Необязательная инструкция",
+      "notePlaceholder": "например, сосредоточиться на быстрых сценариях мастурбирования",
+      "generating": "Создание сценария...",
+      "start": "Начать сеанс ИИ",
+      "playing": "Игра · {{min}} мин · {{intensity}}"
+    },
+    "autoPlayback": {
+      "title": "Авто и воспроизведение",
+      "hint": "General controls — Handy connection is in the Handy menu.",
+      "autoOn": "Режим АВТО включен",
+      "autoOff": "Автоматически отключено",
+      "auto": "Автоматический режим",
+      "stopAuto": "Остановить Авто (автоматический режим)",
+      "playbackOn": "Воспроизведение.",
+      "playback": "Воспроизведение",
+      "refillDone": "Пополнение выполнено",
+      "refill": "Замена ленты",
+      "clearDone": "Очередь очищена + пополнение",
+      "clearQueue": "Очистить очередь"
+    },
+    "waitFirst": "Дождитесь моего 1-го сообщения (автоматически)",
+    "waitFirstOn": "Авто: ожидает вашего 1-го сообщения",
+    "waitFirstOff": "Авто: персонаж может говорить на старте",
+    "intensity": {
+      "leve": "Легкий",
+      "medio": "Средний",
+      "rapido": "Быстрый",
+      "intenso": "Интенсивный"
+    },
+    "queue": {
+      "aria": "Очередь движения",
+      "title": "Очередь движения",
+      "bufferTitle": "Оставшийся буфер",
+      "buf": "BUF",
+      "countTitle": "Блоки в очереди",
+      "queue": "Очередь",
+      "refillTitle": "Пополнение планировщика",
+      "ok": "OK",
+      "loop": "Цикл"
+    },
+    "scene": {
+      "aria": "Состояние сцены",
+      "label": "Сцена",
+      "live": "Живая сцена",
+      "locked": "Закреплен",
+      "lockedTitle": "ИИ удерживает сцену, пока не истечет время",
+      "advance": "Продвинутая фаза",
+      "phaseTime": "Время фазы",
+      "motionBuffer": "Ð Ð°Ð·Ð¼ÐµÑ motion- Ð±ÑÑÐµÑÐ°",
+      "refill": "Замена ленты",
+      "active": "действующее",
+      "idle": "неактивен",
+      "ai": "ИИ",
+      "busy": "занятой"
+    }
+  },
+  "handsFree": {
+    "title": "Громкая связь",
+    "subtitle": "Авто без чата — интенсивность {{intensity}}%",
+    "favoritesOnly": "только избранное",
+    "lastSignal": "последний: {{signal}}",
+    "stopAuto": "Остановить Авто (автоматический режим)",
+    "startAuto": "Запуск Авто (автоматический режим)",
+    "stopped": "Остановка громкой связи",
+    "started": "Автоматическое включение — ИИ заполняет очередь без чата",
+    "queueWaiting": "Ожидание блоков — ИИ заполняется автоматически",
+    "queueStart": "Запустите авто, чтобы начать",
+    "signals": {
+      "title": "Быстрые сигналы",
+      "hint": "Окантовка и кульминация очищают очередь и применяются немедленно. Интенсивность регулирует глобальный уровень.",
+      "moreIntensity": {
+        "title": "Больше интенсивности",
+        "hint": "Повышает общий уровень (+12%)"
+      },
+      "lessIntensity": {
+        "title": "Меньшая интенсивность",
+        "hint": "Снижает общий уровень (−12%)"
+      },
+      "edging": {
+        "title": "отделка кромок (бетонных плит) (Космин)",
+        "hint": "Рядом с краем — применяется немедленно, новая очередь"
+      },
+      "climax": {
+        "title": "    Кончаю!",
+        "hint": "Только избранное · медленный ритм · восстановление"
+      }
+    },
+    "edgingDone": "Окантовка — {{count}} блока(ов) в очереди",
+    "climaxDone": "Кульминация — избранное · {{count}} блок(-ы) · фаза {{phase}}",
+    "intensitySet": "Интенсивность {{value}}%"
+  },
+  "persona": {
+    "defaultName": "Персона",
+    "list": "Перечень",
+    "new": "+ Новый",
+    "active": "действующее",
+    "activate": "Активировать",
+    "edit": "Редактировать персону",
+    "create": "Новый персонаж",
+    "name": "Имя",
+    "description": "Описание",
+    "systemPrompt": "Системное уведомление",
+    "avatar": "Значок персонажа",
+    "saveBeforeAvatar": "Сохраните персонаж перед загрузкой значка",
+    "avatarUpdated": "Значок персонажа обновлен",
+    "requiredFields": "Требуется имя и системная подсказка",
+    "saved": "Персонаж сохранен",
+    "confirmDelete": "Удалить эту персону?",
+    "deleted": "Удалено",
+    "activated": "Активный персонаж",
+    "sections": {
+      "tone": "Тон персонажа",
+      "toneHint": "Стиль, энергия и голос.",
+      "behavior": "Поведение",
+      "behaviorHint": "Как она ведет себя в авто и чате.",
+      "rules": "Правила и границы",
+      "rulesHint": "Фиксированные правила безопасности и содержания."
+    },
+    "level": {
+      "low": "Низкий",
+      "medium": "Средний",
+      "high": "Высокий"
+    },
+    "tone": {
+      "language": "Язык",
+      "baseStyle": "Основной стиль",
+      "style": {
+        "seductive": "Соблазнение",
+        "calm": "Безветрие",
+        "playful": "Игривую",
+        "intense": "Интенсивный",
+        "neutral": "Нейтральный"
+      },
+      "energy": "Энергетика",
+      "warmth": "Тепло",
+      "dominance": "Доминирование",
+      "humor": "Юмор",
+      "humorPlayful": "Легкий",
+      "humorDry": "Сухой",
+      "humorNone": "Нет",
+      "explicitness": "Явный (1–10)"
+    },
+    "behavior": {
+      "autoModeStyle": "Стиль автоматического режима",
+      "style": {
+        "responsive": "Оперативность реагирования",
+        "proactive": "Предупреждающий",
+        "quiet": "Режим пониженной мощности"
+      },
+      "listensToUser": "Слушает пользователя",
+      "canTakeInitiative": "Может проявлять инициативу",
+      "canChangePlan": "Сменить план",
+      "prefersBuildUp": "Предпочитает наращивание",
+      "avoidsRepetition": "Избегает повторений",
+      "adultExplicit": "Явный контент для взрослых"
+    },
+    "rules": {
+      "adultConsensualOnly": "Только по обоюдному согласию взрослых",
+      "respectStopWords": "Уважайте стоп-слова",
+      "neverOverrideSafety": "Никогда не отменяйте безопасность",
+      "neverClaimDeviceControl": "Не притворяйтесь, что управляете устройством напрямую",
+      "noContentRefusals": "Нет отказов в контенте"
+    },
+    "formMode": "Форма",
+    "jsonMode": "JSON",
+    "configured": "настроенный",
+    "motionBias": {
+      "title": "Смещение движения",
+      "hint": "Необязательные веса для того, как этот персонаж предпочитает зоны и стили движения.",
+      "zone": "Зона",
+      "amplitude": "Амплитуда",
+      "speed": "Скорость движения воды",
+      "rhythm": "Ритм",
+      "intensity": "Интенсивность"
+    }
+  },
+  "patterns": {
+    "bpm": {
+      "any": "Any BPM",
+      "151plus": "в более 150"
+    },
+    "duration": {
+      "any": "Любая продолжительность.",
+      "0-10": "≤10 с",
+      "11-30": "11-30 с",
+      "31-60": "31-60 с",
+      "61-120": "1-2 мин.",
+      "121-240": "2–4 мин",
+      "241-420": "4-7 мин.",
+      "421-600": "7-10 min",
+      "600plus": "10 мин."
+    },
+    "speed": {
+      "any": "Все скорости",
+      "slow": "Медлительный",
+      "medium": "Средний",
+      "fast": "Быстрый",
+      "very_fast": "Очень быстро",
+      "veryFast": "Очень быстро"
+    },
+    "title": "Библиотека шаблонов",
+    "favoritesOnly": "Только Избранное",
+    "pageInfo": "{{total}} блоков · страница {{page}}/{{totalPages}}",
+    "colDuration": "Продолжительность",
+    "colIntensity": "Интенсивность",
+    "colActions": "Действия",
+    "mockOk": "Моделировать OK ({{actions}} действия)",
+    "filter": "Фильтр",
+    "colId": "&#8470;",
+    "colZone": "Зона",
+    "colSpeed": "Скорость движения воды",
+    "colScore": "Балл",
+    "minInt": "Мин. инт.",
+    "maxInt": "Макс. инт.",
+    "download": "Загрузить имя файла",
+    "feedbackScore": "{{kind}}: оценка {{score}}",
+    "mockConfirm": "Запустить пробный тест в блоке {{id}}…?",
+    "mockRun": "Запустить имитацию",
+    "pageTitle": "Библиотека паттернов",
+    "zone": "Зона",
+    "count": "{{total}} блоков · страница {{page}}/{{totalPages}}",
+    "col": {
+      "id": "&#8470;",
+      "zone": "Зона",
+      "speed": "Скорость движения воды",
+      "duration": "Продолжительность",
+      "score": "Балл",
+      "actions": "Действия"
+    },
+    "mock": "Имитация",
+    "export": "экспорт",
+    "feedbackToast": "{{kind}}: оценка {{score}}",
+    "downloadToast": "Загрузить имя файла"
+  },
+  "player": {
+    "browser": {
+      "searchLabel": "Поиск блоков",
+      "searchPlaceholder": "Имя или тег...",
+      "speed": "Скорость движения воды",
+      "bpm": "BPM",
+      "duration": "Продолжительность",
+      "loopOnAdd": "Цикл при добавлении",
+      "clearFilters": "Очистить фильтры",
+      "blockCount": "Количество блоков:",
+      "filtered": "отфильтровано",
+      "page": "Страница {{page}} / {{total}}",
+      "empty": "Нет блоков, соответствующих фильтрам.",
+      "addTitle": "Добавить {{name}} в очередь"
+    },
+    "title": "Плеер",
+    "toolbar": {
+      "blocks": "{{count}} блок(ов) · {{duration}} всего",
+      "playing": "Воспроизведение",
+      "play": "Марш",
+      "stop": "Остановить",
+      "save": "Сохранить",
+      "exportTitle": "Экспортировать текущую очередь",
+      "export": "Экспорт (Export)",
+      "clear": "Сбросить",
+      "saveNamePlaceholder": "Сохраненное имя очереди",
+      "confirm": "Подтверждение"
+    },
+    "signals": {
+      "label": "Сигналы",
+      "edging": "отделка кромок (бетонных плит) (Космин)",
+      "milking": "Доение",
+      "climax": "Кульминация",
+      "playTitle": "Воспроизвести {{label}} ({{name}})",
+      "configureTitle": "Настроить {{label}}",
+      "configure": "Настроить {{label}}",
+      "modalTitle": "Настроить {{label}}",
+      "searchScript": "Сценарий поиска",
+      "searchPlaceholder": "Номер, имя или идентификатор...",
+      "noScripts": "Поиск Скриптов не Найден",
+      "loopDuration": "Продолжительность (сек.)",
+      "play": "Марш",
+      "chooseScript": "Открытие сценария",
+      "fired": "{{label}} · {{sec}}с"
+    },
+    "live": {
+      "signal": "Сигнал: {{label}}",
+      "queue": "Очередь",
+      "hsspMode": "HSSP mode (connection key) · ",
+      "block": "Заблокировать {{current}}/{{total}} ·",
+      "pos": "поз.",
+      "autoloop": "Автоматический цикл",
+      "resume": "Возобновление",
+      "pause": "Пауза",
+      "skip": "0 >> следующий блок",
+      "stop": "останов",
+      "position": "поз. {{pct}}%",
+      "nextBlock": "0 >> следующий блок",
+      "playStarted": "{{label}} запущен{{sync}}",
+      "playError": "Ошибка воспроизведения",
+      "skipOk": "0 >> следующий блок",
+      "added": "%s добавлены в очередь!",
+      "buildFirst": "Постройте очередь перед игрой",
+      "enterName": "Введите имя",
+      "saved": "Сохранено :name",
+      "loaded": "Очередь загружена",
+      "removed": "Очередь удалена"
+    },
+    "panels": {
+      "preview": "Превью",
+      "queue": "Очередь",
+      "library": "Библиотека",
+      "visibleAria": "Видимые панели"
+    },
+    "preview": {
+      "playingNow": "Играть сейчас",
+      "actionsDuration": "{{count}} действия · {{duration}}",
+      "queueScript": "Queued funscript preview",
+      "empty": "Add blocks to the queue to generate the funscript preview."
+    },
+    "queue": {
+      "title": "Ваша очередь",
+      "subtitle": "{{count}} предметов · {{duration}} ·перетащить",
+      "empty": "Добавьте блоки из библиотеки. Нажмите на карточку или +.",
+      "saved": "Сохраненные очереди",
+      "load": "Загрузка",
+      "export": "Экспорт",
+      "dragAria": "Очередь — перетащите, чтобы изменить порядок",
+      "dragHandle": "Перетащите, чтобы изменить порядок",
+      "duration": "Продолжительность",
+      "minDuration": "Минимум {{sec}}с",
+      "loop": "Цикл",
+      "remove": "Удалить из очереди",
+      "segmentBarTitle": "Блоки в порядке очереди"
+    },
+    "signalModal": {
+      "title": "Настроить {{label}}",
+      "searchScript": "Сценарий поиска",
+      "searchPlaceholder": "Номер, имя или идентификатор...",
+      "noScripts": "Поиск Скриптов не Найден",
+      "loopDuration": "Продолжительность (сек.)",
+      "play": "Марш"
+    },
+    "toast": {
+      "added": "%s добавлены в очередь!",
+      "nextBlock": "0 >> следующий блок",
+      "playStarted": "{{label}} запущен{{sync}}",
+      "playSync": "· синхронизация {{ms}}мс",
+      "playError": "Ошибка воспроизведения",
+      "queueDone": "Очередь завершена",
+      "queueLoaded": "Очередь загружена",
+      "queueRemoved": "Очередь удалена",
+      "signalFired": "{{label}} · {{sec}}с",
+      "pickScript": "Выберите сценарий",
+      "buildQueue": "Постройте очередь перед игрой",
+      "enterName": "Введите имя",
+      "savedAs": "Сохранено :name"
+    },
+    "downloaded": "Загружен {{filename}}",
+    "library": {
+      "subtitle": "{{count}} блоков · страница {{page}}/{{total}}"
+    },
+    "blocksCount": "{{count}} блок(ов) · {{duration}} всего",
+    "play": "▶ Воспроизвести",
+    "playing": "Воспроизведение",
+    "stop": "Стоп",
+    "save": "Сохранить",
+    "exportQueue": "Экспортировать текущую очередь",
+    "export": "Экспорт (Export)",
+    "clear": "Сбросить",
+    "savePlaceholder": "Сохраненное имя очереди",
+    "panel": {
+      "previewTitle": "Предпросмотр",
+      "previewPlaying": "Играть сейчас",
+      "previewStats": "{{actions}} действия · {{duration}}",
+      "previewEmpty": "Funscript preview of the built queue",
+      "previewEmptyHint": "Add blocks to the queue to generate the funscript preview.",
+      "queueTitle": "Ваша очередь",
+      "queueSubtitle": "{{count}} предметов · {{duration}} ·перетащить",
+      "queueEmptyHint": "Добавьте блоки из библиотеки. Нажмите на карточку или +.",
+      "savedQueues": "Сохраненные очереди",
+      "load": "Загрузка",
+      "libraryTitle": "Библиотека",
+      "librarySubtitle": "{{count}} блоков · страница {{page}}/{{total}}"
+    }
+  },
+  "device": {
+    "pill": {
+      "detailTitle": "{{detail}} — нажмите, чтобы обновить",
+      "refreshTitle": "Нажмите, чтобы обновить подключение"
+    },
+    "title": "Device / Intiface",
+    "useMock": "Использовать имитацию устройства",
+    "selected": "Выбрано: {{name}}",
+    "connect": "Connect Intiface",
+    "scan": "Сканировать",
+    "foundTitle": "Найдены устройства",
+    "select": "Выберите",
+    "mockOn": "Модельный активный",
+    "mockOff": "Реальное устройство",
+    "connected": "Подключено",
+    "scanCount": "Устройств: {{count}}",
+    "selectedOk": "Устройство не выбрано",
+    "intifaceLocal": "Intiface (local)",
+    "handyKeyApi": "Handy connection key + API",
+    "linearYes": "да",
+    "linearNo": "нет",
+    "deviceId": "({{id}}) Linear={{Linear}}",
+    "handy": "Handy",
+    "handyApi": "Handy API",
+    "connection": "Подключение",
+    "mode": "Режим",
+    "modeIntiface": "Intiface (local)",
+    "modeHandyCloud": "Handy cloud API",
+    "connectionKey": "Ключ подключения",
+    "keyPlaceholder": "Вставить ключ подключения",
+    "connectApi": "Подключить API",
+    "handyConnected": "Handy connected",
+    "cloud": "Облачный",
+    "saveKeyHint": "сохранить ключ и подключиться",
+    "intiface": "Intiface",
+    "scanResult": "Найдено устройств: {{count}}",
+    "use": "Использование",
+    "intifaceHint": "start Intiface Central",
+    "page": {
+      "title": "Device / Intiface",
+      "useMock": "Использовать имитацию устройства",
+      "selected": "Выбрано: {{name}}",
+      "connect": "Connect Intiface",
+      "scan": "Сканирование устройств",
+      "foundTitle": "Найдены устройства",
+      "linear": "линейный={{value}}",
+      "select": "Выберите",
+      "mockOn": "Модельный активный",
+      "mockOff": "Реальное устройство",
+      "connected": "Подключено",
+      "scanToast": "Устройств: {{count}}",
+      "selectedToast": "Устройство не выбрано"
+    }
+  },
+  "playerPreview": {
+    "stats": {
+      "aria": "Статистика сценария",
+      "duration": "Продолжительность",
+      "actions": "Действия",
+      "maxSpeed": "Макс скорость полета",
+      "avgSpeed": "Средняя скорость"
+    }
+  },
+  "library": {
+    "toast": {
+      "addedToQueue": "Добавлено в очередь · см. Игрок",
+      "deleted": "%count% удален",
+      "blockDeleted": "Блокировка удалена",
+      "mockOk": "OK · {{count}} действия",
+      "queueFull": "Заполнить очередь",
+      "downloaded": "Загружен {{filename}}",
+      "score": "{Score:score}",
+      "roleSet": "{{role}} {{state}}",
+      "reclassified": "Реклассифицировано: {{updated}} блока(ов) · {{skipped}} пропущено",
+      "recalculating": "Пересчитывающий",
+      "recalculateTimings": "Пересчитать тайминги",
+      "reclassifying": "Переклассификация...",
+      "reclassify": "Переклассифицировать",
+      "selectAll": "Выбрано блоков: {{count}}",
+      "selectAllLimited": "Выбрано {{returned}} (лимит; отфильтрованная сумма: {{total}})",
+      "roleMarked": "Отмечено как {{role}}",
+      "roleRemoved": "Удалено из {{role}}"
+    },
+    "tabs": {
+      "blocks": "Блоки",
+      "import": "Импорт"
+    },
+    "toolbar": {
+      "blocksHint": "Просматривайте, фильтруйте и управляйте блоками движения.",
+      "importHint": "Import funscripts and build an AI session roster."
+    },
+    "filters": {
+      "aria": "Библиотечные фильтры",
+      "title": "Фильтры",
+      "active": "Активно: {{count}}",
+      "search": "Поиск",
+      "name": "Имя",
+      "searchPlaceholder": "Сценарий или блокировка...",
+      "category": "Категория",
+      "categoryAria": "Категория",
+      "all": "Все",
+      "zone": "Зона",
+      "zoneAria": "Зона",
+      "speed": "Скорость движения воды",
+      "speedAria": "Скорость движения воды",
+      "rhythm": "Ритм",
+      "rhythmAria": "Ритм",
+      "rhythmAll": "Все ритмы",
+      "strokeLength": "Амплитуда",
+      "strokeAria": "Амплитуда",
+      "sort": "Сортировка",
+      "sortAria": "Сортировка",
+      "sortScore": "Балл",
+      "apply": "Применить фильтры",
+      "rating": "Рейтинг",
+      "metrics": "Метрика",
+      "minDuration": "МИН продолжительность",
+      "maxDuration": "Максимальная длительность",
+      "minIntensity": "Мин. инт. %",
+      "maxIntensity": "Макс. вн. %",
+      "minBpm": "Min BPM",
+      "maxBpm": "Max BPM",
+      "display": "Дисплей",
+      "myRecordings": "Мои записи",
+      "favoritesOnly": "Только Избранное",
+      "clear": "Сбросить",
+      "searchGroup": "Поиск",
+      "namePlaceholder": "Сценарий или блокировка...",
+      "classification": "Классификация",
+      "amplitude": "Амплитуда",
+      "sortDurationDesc": "Продолжительность",
+      "sortDurationAsc": "Продолжительность",
+      "sortBpmDesc": "BPM ↓",
+      "sortBpmAsc": "BPM ↑",
+      "maintenance": "Техническое  обслуживание",
+      "recalculateTimings": "Пересчитать тайминги",
+      "recalculating": "Пересчитывающий",
+      "reclassify": "Переклассифицировать",
+      "reclassifying": "Переклассификация...",
+      "timingsToast": "Тайминги: {{updated}} обновлено · {{trimmed}} обрезано · {{unchanged}} ок · {{skipped}} пропущено",
+      "reclassifyToast": "Реклассифицировано: {{updated}} блока(ов) · {{skipped}} пропущено"
+    },
+    "sort": {
+      "bpmDesc": "BPM ↓",
+      "bpmAsc": "BPM ↑",
+      "durationDesc": "Продолжительность",
+      "durationAsc": "Продолжительность"
+    },
+    "batch": {
+      "all": "Все ({{count}})",
+      "selecting": "Выделение",
+      "allFiltered": "Все фильтры ({{count}})",
+      "deleteSelected": "Удалить выбранное",
+      "clearSelection": "Очистить выбор",
+      "allOnPage": "Все ({{count}})"
+    },
+    "empty": {
+      "title": "Блоки не найдены",
+      "hint": "Import a funscript in the Import tab or adjust filters."
+    },
+    "pagination": {
+      "previous": "Предыдущий",
+      "next": "Далее"
+    },
+    "delete": {
+      "batchTitle": "Удалить {{count}} блока (-ов)",
+      "batchHint": "Удаляется из библиотеки навсегда.",
+      "batchConfirm": "Удалить все",
+      "title": "Удалить блок",
+      "confirm": "Удалить",
+      "hint": "Удаляется из библиотеки навсегда. Невозможно отменить."
+    },
+    "test": {
+      "title": "Test on Handy",
+      "hint": "Sends the block to the device via Intiface (real motion)."
+    },
+    "import": {
+      "inserted": "Вставлено",
+      "inFile": "В файле",
+      "format": "Формат подачи",
+      "duplicates": "Дубликаты",
+      "fullScript": "Полный сценарий (библиотека)",
+      "generatedBlocks": "Сгенерированные блоки ({{count}})",
+      "enqueueFull": "Поставить в очередь полный сценарий",
+      "enqueued": "Поставлено в очередь ({{count}} деталей)",
+      "playNow": "Играть сейчас",
+      "playingFull": "Playing full funscript",
+      "refreshList": "Обновить список",
+      "rosterTitle": "AI session roster (full funscripts)",
+      "enableRoster": "Включить список ИИ",
+      "buildingRoster": "Сценарий сборки...",
+      "buildRoster": "Создайте скрипт ИИ",
+      "rosterEnabled": "Режим реестра ИИ включен",
+      "rosterEnqueued": "Ростер: {{count}} скрипт(ов) поставлены в очередь",
+      "rosterBuilt": "Сценарий построен — см. чат",
+      "filesTitle": "Импортированные файлы ({{count}})",
+      "enqueue": "Поставить в очередь",
+      "play": "Воспроизведение",
+      "playingScript": "Воспроизведение полного сценария",
+      "recentTitle": "Недавний импорт",
+      "processing": "Обработка…",
+      "importing": "Выполняется импорт",
+      "dropHint": "StrokeGPT: funscriptORG (.csv) · jsonmodes (.json) · modes (.funscript)",
+      "invalidExt": "Use .csv, .json or .funscript",
+      "done": "{{files}} файл(-ы) · {{blocks}} блок(-ы) вставлен (-ы)",
+      "stats": {
+        "inserted": "Вставлено",
+        "inFile": "В файле",
+        "format": "Формат подачи",
+        "duplicates": "Дубликаты"
+      },
+      "fullScriptTitle": "Полный сценарий (библиотека)",
+      "fullScriptDefault": "Инструмент скрипта всей страницы",
+      "subtitleInLibrary": "В библиотеке",
+      "sourceDefault": "Импорт",
+      "badgeExists": "уже существует",
+      "badgeFull": "Full funscript",
+      "sessionHint": "Построение сеанса путем постановки в очередь полных сценариев из импортированной библиотеки. Включите в → Планировщике настроек или нажмите ниже.",
+      "optionalInstruction": "Дополнительная инструкция (например, начать медленно)",
+      "fullSubtitle": "{{duration}}s · {{points}} pts{{bpmSuffix}}{{librarySuffix}}",
+      "bpmSuffix": " · {{bpm}} beats/min",
+      "blockSubtitle": "{{zone}} · {{speed}} · {{duration}}с · инт. {{intensity}}% · {{points}} очк.",
+      "fileMeta": "· {{duration}}с · {{blocks}} блоков · {{points}} очк.",
+      "exportFmt": "Экспорт .{{fmt}}",
+      "dropTitle": "Перетащите или щелкните — один или несколько файлов",
+      "doneToast": "{{files}} файл(-ы) · {{blocks}} блок(-ы) вставлен (-ы)",
+      "rosterHint": "Построение сеанса путем постановки в очередь целых сценариев из импортированной библиотеки. Включите в → Планировщике настроек или нажмите ниже.",
+      "planRoster": "Планирование реестра ИИ",
+      "planningRoster": "Планирование списка...",
+      "rosterPlaceholder": "Дополнительная инструкция (например, начать медленно)",
+      "rosterPlanned": "Запланированный список — см. чат",
+      "playFull": "Воспроизвести полный сценарий"
+    },
+    "zones": {
+      "top": "Подсказка / верх",
+      "middle": "Середина / середина",
+      "bottom": "Нижняя часть основания",
+      "full": "Полное использование емкости диска",
+      "mixed": "Смешанный"
+    },
+    "maintenance": {
+      "title": "Техническое  обслуживание",
+      "timestamps": "Временные метки: {{updated}} обновлено · {{trimmed}} обрезано · {{unchanged}} ок · {{skipped}} пропущено"
+    },
+    "drop": {
+      "title": "Перетащите или щелкните — один или несколько файлов"
+    },
+    "modals": {
+      "batchDeleteTitle": "Удалить {{count}} блока (-ов)",
+      "batchDeleteHint": "Удаляется из библиотеки навсегда.",
+      "batchDeleteConfirm": "Удалить все",
+      "deleteTitle": "Удалить блок",
+      "deleteHint": "Удаляется из библиотеки навсегда. Отмена невозможна.",
+      "testTitle": "Test on Handy",
+      "testHint": "Sends the block to the device via Intiface (real motion)."
+    },
+    "toasts": {
+      "roleMarked": "Отмечено как {{role}}",
+      "roleRemoved": "Удалено из {{role}}",
+      "downloaded": "Загружен {{filename}}",
+      "deleted": "Блокировка удалена",
+      "batchDeleted": "%count% удален",
+      "testOk": "OK · {{actions}} действия",
+      "addedToQueue": "%s добавлены в очередь!"
+    }
+  },
+  "block": {
+    "roles": {
+      "edge": "Ребро",
+      "milk": "Молоко",
+      "climax": "Кульминация"
+    },
+    "stats": {
+      "aria": "Статистика блока",
+      "duration": "Продолжительность",
+      "actions": "Действия",
+      "intensity": "Интенсивность",
+      "maxSpeed": "Макс скорость полета",
+      "avgSpeed": "Средняя скорость"
+    },
+    "trim": "Внутренняя оснастка клапана",
+    "heatmapTrimmer": {
+      "startAria": "Начало обрезки",
+      "endAria": "Конец затвора",
+      "cropLabel": "Обрезка: {{start}} – {{end}}",
+      "duration": "Срок действия/ Срок действия"
+    },
+    "select": "Выберите стиль заголовка",
+    "bpmMeta": "{{bpm}} BPM · {{duration}}s",
+    "successScore": "ОЦЕНКА УСПЕХА",
+    "recordedTitle": "Запись пользователя",
+    "myRecording": "Моя запись",
+    "fullScriptTitle": "Full funscript",
+    "fullScript": "Инструмент скрипта всей страницы",
+    "addToQueue": "В очередь",
+    "testOnHandy": "Test on Handy",
+    "test": "Испыт.",
+    "editTrim": "Редактировать опцию",
+    "removeRole": "Удалить роль {{role}}",
+    "saveForRole": "Сэкономьте на {{role}}",
+    "export": "Экспорт",
+    "delete": "Удалить",
+    "feedback": {
+      "like": "Нравится",
+      "dislike": "Не нравится",
+      "favorite": "Избранное",
+      "block": "Заблокировать"
+    },
+    "editor": {
+      "title": "Редактировать",
+      "fullScriptWarn": "Блоки полного сценария: обрезка влияет на весь импортированный файл.",
+      "help": "Перетащите ручки на тепловой карте для обрезки. Предварительный просмотр обновлений в реальном времени.",
+      "minTrimPoints": "Требуется не менее 2 точек в диапазоне отделки",
+      "trimApplied": "Обрезка применена ({{count}} действий)",
+      "minActions": "Нужно как минимум 2 действия",
+      "replaced": "Блок заменен ({{id}})",
+      "created": "Создан новый блок ({{id}})",
+      "saveError": "Не удалось сохранить блок",
+      "applyTrim": "Применить обрезку",
+      "replace": "Заменить оригинал",
+      "saveAsNew": "Сохранить новый"
+    }
+  },
+  "diagnostics": {
+    "pingOllama": "Ping Ollama",
+    "refresh": "Обновить",
+    "pingTitle": "Ping Ollama",
+    "quickState": "Быстрое состояние",
+    "bufferQueue": "Буфер очереди: {{buffer}}с · осталось: {{remaining}}с",
+    "playback": "Воспроизведение: {{state}} · очередь: {{count}} блоков",
+    "playbackActive": "действующее",
+    "playbackStopped": "остановлен",
+    "planner": "Планировщик: {{status}}{{refill}}",
+    "plannerBusy": "занято ({{source}})",
+    "plannerFree": "бесплатно",
+    "refillBusy": "· выполняется пополнение",
+    "estop": "Аварийная остановка: {{value}}",
+    "error": "Сообщение об ошибке:",
+    "lastApply": "Последнее применение (→очередь планировщика)",
+    "enqueued": "Поставлено в очередь: {{count}}",
+    "fallbackUsed": "· используется запасной вариант",
+    "whyBlocks": "Почему эти блоки:",
+    "lastPlannerJson": "Last planner JSON",
+    "plannerAudit": "Аудит планировщика (недавний)",
+    "handyCommands": "Handy — recent commands",
+    "ollamaOk": "Ollama OK",
+    "ollamaFail": "Ollama failed",
+    "estopYes": "ДА",
+    "estopNo": "нет",
+    "playbackQueue": "Воспроизведение: {{playback}} · очередь: {{count}} блоков",
+    "refillInProgress": "· выполняется пополнение",
+    "skipped": "Пропущено: {{count}}"
+  },
+  "sessions": {
+    "empty": "Сеансы не записаны.",
+    "colStart": "Запуск",
+    "replayTitle": "Повтор сеанса",
+    "noMessages": "Нет сообщений, сохраненных для этого сеанса.",
+    "noBlocks": "Блоки не записаны (начните воспроизведение в этом сеансе).",
+    "rateTitle": "Оценить сессию",
+    "colMode": "Режим",
+    "colRating": "Рейтинг",
+    "replay": "Повтор",
+    "loadingReplay": "Загрузка воспроизведения...",
+    "exportZip": "Экспорт ZIP",
+    "close": "Закрыть",
+    "chatSection": "Чат",
+    "blocksPlayed": "Сыгранные блоки",
+    "ratingLabel": "Рейтинг (1-5)",
+    "notes": "Комментарий",
+    "saveFeedback": "Сохранить отзыв",
+    "ratingRequired": "Рейтинг (1-5)",
+    "feedbackSaved": "Отзыв сохранен",
+    "exported": "Экспортировано {{filename}}",
+    "bpmSuffix": " · {{bpm}} BPM",
+    "durationSuffix": "Секунд / с",
+    "col": {
+      "started": "начала",
+      "mode": "Режим",
+      "rating": "Рейтинг"
+    },
+    "chat": "Чат",
+    "notesLabel": "Комментарий"
+  },
+  "dashboard": {
+    "title": "Панель",
+    "apiUnavailable": "API недоступен: {{error}}",
+    "emergencyStop": "Аварийный останов",
+    "queuePreview": "Очередь (предварительный просмотр)",
+    "queueEmpty": "Очередь пуста",
+    "playbackFooter": "Воспроизведение: {{playback}} · блоки в очереди: {{count}} · пополнение: {{refill}}",
+    "playbackActive": "действующее",
+    "playbackStopped": "остановлен",
+    "refillBusy": "занятой",
+    "refillFree": "бесплатно",
+    "card": {
+      "intiface": "Intiface",
+      "device": "Устройство",
+      "persona": "Персона",
+      "ollama": "Ollama",
+      "mode": "Режим",
+      "intensity": "Интенсивность",
+      "range": "Дальность плавания",
+      "buffer": "Буфер"
+    },
+    "connected": "Подключено",
+    "disconnected": "Отключено",
+    "stopActive": "· STOP ACTIVE",
+    "emergencyActive": "Аварийный останов активен",
+    "playbackStatus": "Воспроизведение: {{playback}} · блоки в очереди: {{count}} · пополнение: {{refill}}"
+  },
+  "autoMode": {
+    "startAuto": "Запуск Авто (автоматический режим)",
+    "stopAuto": "Остановить Авто (автоматический режим)",
+    "stopPlayback": "Остановить воспроизведение",
+    "refillBuffer": "Пополнить буфер",
+    "started": "Автоматический запуск",
+    "stopping": "Автоматическая остановка",
+    "playbackActive": "Воспроизведение активно",
+    "playbackStopped": "Воспроизведение остановлено.",
+    "refillRequested": "Запрошено пополнение",
+    "status": "Авто: {{auto}} · Воспроизведение: {{playback}} · Пополнение: {{refill}}",
+    "buffer": "Буфер: {{sec}}s",
+    "title": "Авто-режим",
+    "hint": "The watchdog keeps the buffer full via Ollama; the executor plays without waiting for the model.",
+    "playbackOnly": "Только воспроизведение",
+    "on": "ВКЛ",
+    "off": "ВЫКЛ",
+    "busy": "занятой",
+    "free": "бесплатно",
+    "start": "Запустить авто",
+    "stop": "Остановить авто",
+    "refill": "Пополнить буфер",
+    "playbackOn": "Воспроизведение активно",
+    "playbackOff": "Воспроизведение остановлено."
+  },
+  "mouse": {
+    "cylinder": {
+      "positionAria": "Позиция {{pct}} процентов",
+      "padAria": "Вертикальное управление цилиндром"
+    },
+    "title": "Управление мышью",
+    "subtitle": "Прямое вертикальное управление — сглаживание и запись",
+    "active": "Действующая",
+    "recording": "Запись",
+    "starting": "Запуск…",
+    "startControl": "Старт",
+    "stopControl": "Стоп",
+    "keyframes": "Ключевые кадры (Keyframes)",
+    "deviceOffline": "Устройство не в сети",
+    "emergencyActive": "Аварийный останов активен",
+    "smoothing": "Сглаживание",
+    "target": "Цель",
+    "sent": "Отправлено",
+    "hintActive": "Переместите указатель вертикально на цилиндр.",
+    "hintIdle": "Подключите устройство и запустите управление.",
+    "startIdle": "Запуск в положении холостого хода",
+    "startIdleHint": "Переход к среднему ходу, прежде чем следовать указателю.",
+    "connectFirst": "Сначала подключите устройство",
+    "controlActive": "Управление мышью активно",
+    "startError": "Не удалось запустить управление",
+    "recordingSaved": "Запись сохранена ({{actions}} действия, {{duration}})",
+    "recordingStarted": "Запись началась",
+    "recordError": "Ошибка записи",
+    "recordingSavedLib": "Сохранено в библиотеке ({{actions}} действий)",
+    "saveRecordingError": "Не удалось сохранить запись",
+    "response": {
+      "label": "Противодействие",
+      "turbo": "Турбо",
+      "aria": "Скорость отклика",
+      "bounds": "Гладкая ↔ быстрая"
+    },
+    "gestures": {
+      "record": "Удерживайте, чтобы записать",
+      "hold": "держать",
+      "turbo": "Турбо",
+      "lessSmooth": "Менее гладкий",
+      "moreSmooth": "Большая плавность"
+    }
+  },
+  "import": {
+    "page": {
+      "title": "Import funscripts",
+      "hint": "Upload .funscript, .json or .csv to extract blocks into the library.",
+      "processing": "Обработка…",
+      "lastImport": "Прошлый импорт: ",
+      "file": "Файл:",
+      "blocksInserted": "Блоки вставлены: {{count}} · ID:",
+      "exportFull": "Экспортировать полный сценарий:",
+      "imported": "Импортировано: {{count}} блоков",
+      "importFirst": "Сначала импортируйте файл",
+      "download": "Загрузить имя файла"
+    },
+    "title": "Импорт funscripts",
+    "hint": "Upload .funscript, .json or .csv to extract blocks into the library.",
+    "processing": "Обработка…",
+    "lastTitle": "Прошлый импорт: ",
+    "file": "Файл:",
+    "blocksInserted": "Блоки вставлены: {{count}} · ID:",
+    "exportFull": "Экспортировать полный сценарий:",
+    "invalidExt": "Use .funscript, .json or .csv",
+    "doneToast": "Импортировано: {{count}} блоков",
+    "importFirst": "Сначала импортируйте файл"
+  },
+  "browserStt": {
+    "micStartError": "Не удалось запустить микрофон",
+    "unsupported": "Браузер не поддерживает распознавание речи",
+    "speechError": "Ошибка распознавания речи"
+  },
+  "queue": {
+    "segmentBar": {
+      "title": "Блоки в порядке очереди"
+    }
+  }
+}

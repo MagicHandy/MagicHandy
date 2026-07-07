@@ -43,19 +43,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, err := s.newLLMProvider(settings.LLM)
+	provider, err := s.ensureLLMReady(r.Context())
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
 	}
 
 	setSSEHeaders(w)
-	prompt, ok := s.personalization.prompts.Resolve(settings.LLM.PromptSet)
-	if !ok {
-		// A deleted or unknown selection falls back to the bundled default so
-		// chat keeps working; the status event reports what actually ran.
-		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
-	}
+	prompt := s.chatPromptForRequest(settings)
 	service := chat.Service{
 		Provider: provider,
 		Prompt:   prompt,
@@ -150,7 +145,19 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 }
 
 func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
+	if err := s.ensureIntifaceDeviceForMotion(ctx); err != nil {
+		if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
+			return chatMotionDispatch{Action: chat.MotionActionNone}, nil
+		}
+		return chatMotionDispatch{Action: command.Action, Error: err.Error()}, err
+	}
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
+		if command != nil && strings.TrimSpace(command.LibraryBlockID) != "" {
+			if err := s.enqueueChatLibraryBlock(command.LibraryBlockID); err != nil {
+				return chatMotionDispatch{Action: chat.MotionActionNone}, err
+			}
+			return chatMotionDispatch{Applied: true, Action: chat.MotionActionNone}, nil
+		}
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
 	}
 

@@ -315,6 +315,12 @@ func (s *Server) Close() {
 		s.modes.Shutdown()
 	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
+	if s.library != nil && s.library.Store() != nil {
+		_ = s.library.Store().Close()
+	}
+	if s.store != nil {
+		_ = s.store.Close()
+	}
 }
 
 func (s *Server) motionEngineForStart() (*motion.Engine, error) {
@@ -368,6 +374,8 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 			return nil, err
 		}
 		return bluetooth, nil
+	case config.DispatchOwnerIntiface:
+		return s.newIntifaceTransport()
 	default:
 		return nil, errMotionUnavailable
 	}

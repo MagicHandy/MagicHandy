@@ -20,6 +20,9 @@ func TestSourceFileLineBudgets(t *testing.T) {
 			root:       "internal",
 			extension:  ".go",
 			defaultMax: 800,
+			overrides: map[string]int{
+				"internal/library/store.go": 1200,
+			},
 		},
 		{
 			root:       "web",

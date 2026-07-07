@@ -1,0 +1,1333 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "error": "Error",
+    "save": "Save",
+    "delete": "Delete",
+    "send": "Send",
+    "stop": "Stop",
+    "ok": "OK",
+    "off": "Off",
+    "previous": "Previous",
+    "next": "Next",
+    "confirm": "Confirm",
+    "close": "Close",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "refresh": "Refresh",
+    "export": "Export",
+    "import": "Import",
+    "edit": "Edit",
+    "activate": "Activate",
+    "new": "New",
+    "use": "Use",
+    "scan": "Scan",
+    "connect": "Connect",
+    "test": "Test",
+    "play": "Play",
+    "pause": "Pause",
+    "clear": "Clear",
+    "min": "min",
+    "max": "max",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "languageGate": {
+    "title": "Choose your language",
+    "hint": "You can change this anytime in Settings → Language.",
+    "choose": "Select language",
+    "confirm": "Continue"
+  },
+  "nav": {
+    "mainAria": "Main navigation",
+    "control": "Control",
+    "handsFree": "Hands-free",
+    "mouse": "Mouse",
+    "library": "Library",
+    "player": "Player",
+    "settings": "Settings",
+    "queue": "queue",
+    "queuePlaying": "Playing: {{name}}",
+    "queueCount": "{{count}} item(s) in queue",
+    "group": {
+      "session": "Session",
+      "library": "Library",
+      "system": "System"
+    }
+  },
+  "layout": {
+    "apiUnavailable": "API unavailable — start the backend:",
+    "waitingApi": "Waiting for API…",
+    "reconnectingIntiface": "Reconnecting to Intiface…",
+    "emergencyStop": "Emergency stop",
+    "clearStop": "Clear stop",
+    "uiVersion": "UI version",
+    "offline": {
+      "title": "API offline",
+      "hint": "Start the backend:"
+    },
+    "ollama": {
+      "connected": "Ollama connected",
+      "off": "Ollama off: {{error}}"
+    },
+    "topbar": {
+      "buffer": "Buffer",
+      "queue": "Queue",
+      "intensity": "Intens.",
+      "intensityTitle": "Session intensity (0–100%). Controls how strong blocks the AI enqueues.",
+      "phaseLocked": "locked",
+      "advancePhase": "advance phase",
+      "autospeak": "autospeak",
+      "autospeakScheduled": "autospeak ·",
+      "ollama": "Ollama",
+      "localLlm": "Local LLM",
+      "testConnection": "Test connection"
+    },
+    "visualizer": {
+      "live": "Live",
+      "position": "Position",
+      "positionHandy": "Handy position",
+      "realtimeHint": "Real-time stroke position from the device.",
+      "offsetSaved": "Sync offset saved: {{ms}}ms (RTT {{rtt}}ms)"
+    }
+  },
+  "config": {
+    "title": "Configuration",
+    "navAria": "Configuration sections",
+    "searchPlaceholder": "Search…",
+    "searchAria": "Search configuration",
+    "noSections": "No sections found.",
+    "groups": {
+      "main": "Main",
+      "system": "System",
+      "data": "Data"
+    },
+    "language": {
+      "label": "Interface language",
+      "hint": "Changes apply immediately and are saved to your preferences.",
+      "aria": "Interface language"
+    },
+    "sections": {
+      "language": {
+        "label": "Language",
+        "hint": "Interface language and locale"
+      },
+      "personas": {
+        "label": "Personas",
+        "hint": "Name, prompt, and AI profile"
+      },
+      "session": {
+        "label": "Session & AI",
+        "hint": "Autospeak, scene, and persona rhythm"
+      },
+      "motion": {
+        "label": "Motion & queue",
+        "hint": "Position, buffer, safety, and planner"
+      },
+      "connections": {
+        "label": "Connections",
+        "hint": "Ollama, Handy, Intiface, and sync"
+      },
+      "voice": {
+        "label": "Voice",
+        "hint": "TTS and microphone (STT)"
+      },
+      "logs": {
+        "label": "Logs",
+        "hint": "Diagnostic files on disk"
+      },
+      "advanced": {
+        "label": "Full JSON",
+        "hint": "Edit entire settings.json"
+      },
+      "sessions": {
+        "label": "History",
+        "hint": "Past sessions and ratings"
+      },
+      "diagnostics": {
+        "label": "Diagnostics",
+        "hint": "Live state and recent logs"
+      }
+    },
+    "saved": "Settings saved",
+    "settings": {
+      "saved": "Settings saved",
+      "saveSettings": "Save settings",
+      "saveBarHint": "Changes apply after you save — some options need a backend restart.",
+      "session": {
+        "autospeak": {
+          "title": "Autospeak",
+          "hint": "Like StrokeGPT-ReVibed: the persona chooses when to speak again (autospeak_seconds in JSON). With Autospeak on, the fixed interval below is only a fallback when Autospeak is off.",
+          "enabled": "Autospeak enabled",
+          "minSeconds": "Minimum between speeches (s)",
+          "maxSeconds": "Maximum between speeches (s)",
+          "motionAutonomy": "Motion autonomy (between speeches)",
+          "chatOnly": "Speech only",
+          "styleLight": "Light (intensity/phase)",
+          "fullMotion": "Full motion"
+        },
+        "appLegacy": {
+          "title": "App / Auto (legacy)",
+          "waitFirstMsg": "Wait for my 1st message before persona speaks (auto mode)",
+          "waitHint": "Unchecked: the AI can speak and enqueue motion as soon as Auto starts.",
+          "fixedInterval": "Fixed interval between speeches (s) — only without Autospeak"
+        },
+        "scene": {
+          "title": "Scene — AI controls pacing",
+          "aiPacing": "AI chooses scene (pose), phase, and duration (min–max below)",
+          "aiPacingHint": "On: persona plans how long to stay in each phase and only advances when time runs out (or user skips). Off: legacy auto-escalation per turn.",
+          "advanceLegacy": "Escalate phase each reply (legacy — only if AI pacing is off)",
+          "phaseMinMax": "Min / max per phase (seconds)"
+        },
+        "phases": {
+          "intro": "Intro",
+          "warmup": "Warmup",
+          "build_up": "Build-up",
+          "active": "Active",
+          "peak": "Peak",
+          "recovery": "Recovery",
+          "cooldown": "Cooldown"
+        }
+      },
+      "motion": {
+        "title": "Motion",
+        "presetsHint": "Quick presets (buffer + target rhythm for the planner)",
+        "presetApplied": "Preset applied: {{preset}}",
+        "minPosition": "Min position",
+        "maxPosition": "Max position",
+        "defaultIntensity": "Default intensity",
+        "literalPositions": "Literal funscript positions (0–100, no remap to min/max)",
+        "literalHint": "On: imported scripts use pos 0–100 exactly as in the file. Off: positions are remapped to the min/max range above (default 10–90).",
+        "maxEnqueueDuration": "Max enqueue duration (s)",
+        "smallPatternMax": "Small pattern max (s)",
+        "smallLoopMax": "Small loop max (s)",
+        "maxFullScript": "Max full-script duration (s)",
+        "targetBpm": "Target BPM (planner)",
+        "rosterMode": "AI session roster mode (full scripts from library)",
+        "rosterHint": "When enabled, the AI can enqueue entire imported funscripts as a session script.",
+        "weightsTitle": "Planner block weights",
+        "weightsHint": "How strongly each factor influences block selection (0–1).",
+        "weights": {
+          "tag_match": "Tag match",
+          "intensity_fit": "Intensity fit",
+          "persona_match": "Persona match",
+          "user_rating": "User rating",
+          "success_score": "Success score"
+        },
+        "safety": {
+          "title": "Safety",
+          "limitsEnabled": "Enable intensity/speed limits",
+          "limitsHint": "Caps motion strength and speed regardless of script or AI commands.",
+          "maxIntensity": "Max intensity",
+          "maxSpeed": "Max speed (units/s)",
+          "stopWords": "Stop words (comma-separated)"
+        },
+        "queue": {
+          "title": "Queue buffer",
+          "targetBuffer": "Target buffer (s)",
+          "minBuffer": "Minimum buffer (s)"
+        }
+      },
+      "connections": {
+        "ollama": {
+          "title": "Ollama",
+          "url": "Base URL",
+          "model": "Model",
+          "responseLimit": "Response token limit",
+          "maxChatChars": "Max chat message chars",
+          "verboseHint": "Lower num_predict and max_message_chars speed up replies on weak GPUs."
+        },
+        "handy": {
+          "title": "Handy",
+          "defaultMode": "Default transport",
+          "connectionKey": "Connection key",
+          "keyPlaceholder": "Paste Handy connection key",
+          "apiBaseUrl": "API base URL"
+        },
+        "intiface": {
+          "title": "Intiface",
+          "wsUrl": "WebSocket URL",
+          "preferredDevice": "Preferred device name",
+          "autoConnect": "Auto-connect on start",
+          "autoScan": "Auto-scan devices",
+          "connectionTimeout": "Connection timeout (s)",
+          "sendLead": "Send lead (ms)"
+        },
+        "sync": {
+          "title": "Sync offset",
+          "offset": "Offset (ms)",
+          "autoSyncOnConnect": "Auto-sync on connect"
+        }
+      },
+      "voice": {
+        "tts": {
+          "title": "Text-to-speech (TTS)",
+          "installHint": "Requires optional voice package: pip install -e \".[voice]\"",
+          "enableTts": "Enable TTS",
+          "autoSpeak": "Auto-speak after persona reply",
+          "voiceId": "Voice ID"
+        },
+        "stt": {
+          "title": "Speech-to-text (STT)",
+          "enableStt": "Enable STT",
+          "provider": "STT provider",
+          "local": "Local (faster-whisper)",
+          "browser": "Browser (Web Speech API)",
+          "autoSend": "Auto-send transcript to planner",
+          "model": "Whisper model",
+          "tiny": "Tiny",
+          "base": "Base",
+          "small": "Small",
+          "language": "Language code",
+          "langPlaceholder": "e.g. pt, en, auto"
+        }
+      },
+      "logs": {
+        "title": "Diagnostic logs",
+        "motionLog": "Log Handy motion commands",
+        "verboseLog": "Verbose motion log",
+        "verboseHint": "Writes detailed per-command logs to disk (can grow quickly)."
+      },
+      "raw": {
+        "title": "Full settings JSON",
+        "hint": "Edit the entire settings.json. Invalid JSON cannot be saved.",
+        "applied": "JSON applied locally",
+        "invalid": "Invalid JSON",
+        "invalidBeforeSave": "Fix JSON before saving",
+        "applyJson": "Apply locally",
+        "saveServer": "Save to server"
+      }
+    },
+    "motion": {
+      "presetApplied": "Preset applied: {{preset}}"
+    },
+    "raw": {
+      "apply": "Apply JSON",
+      "invalid": "Invalid JSON",
+      "invalidDetail": "Invalid JSON in this section",
+      "applied": "JSON applied locally",
+      "invalidBeforeSave": "Fix JSON before saving"
+    }
+  },
+  "chat": {
+    "toolbarAria": "Chat controls",
+    "autospeakOn": "Autospeak enabled",
+    "autospeakOff": "Autospeak disabled",
+    "autospeakOnTitle": "Autospeak on — persona schedules next speech",
+    "autospeakOffTitle": "Enable autospeak (ReVibed style)",
+    "autospeakOnLabel": "Autospeak on",
+    "autospeakOffLabel": "Autospeak off",
+    "mode": "Mode",
+    "modeManual": "Manual",
+    "modeAuto": "Auto",
+    "modeHybrid": "Hybrid",
+    "ctrlEnter": "Ctrl+Enter to send",
+    "stopWord": "Stopped by stop word",
+    "thinking": "Persona thinking…",
+    "sent": "Message sent",
+    "panelAria": "Chat with persona",
+    "ready": "Ready to chat",
+    "startSession": "Start the session",
+    "noMessages": "No messages yet",
+    "startHint": "Send the first message — the persona plans scene, phase, and duration.",
+    "emptyHint": "Talk to the persona or use Autospeak for her to continue on her own.",
+    "placeholderFirst": "Your opening message…",
+    "placeholder": "Talk to her — motion follows the scene",
+    "messageAria": "Message for persona",
+    "typing": "{{name}} is typing",
+    "title": "Chat",
+    "operationMode": "Operation mode",
+    "sendToPlanner": "Send to planner",
+    "sending": "Sending…",
+    "transcribing": "Transcribing…",
+    "stopRecording": "Stop recording",
+    "speakMic": "Speak (mic)",
+    "playingNow": "Playing now",
+    "enterMessage": "Enter a message",
+    "nothingRecognized": "Nothing recognized",
+    "voiceSent": "Voice sent to planner",
+    "transcriptReady": "Transcript ready",
+    "recordingTooShort": "Recording too short",
+    "enableStt": "Enable STT in Settings",
+    "useChrome": "Use Chrome/Edge or HTTPS on mobile",
+    "installVoice": "Install pip install -e \".[voice]\" or use browser STT in Settings",
+    "micUnavailable": "Microphone unavailable in this browser",
+    "micDenied": "Mic denied",
+    "ttsError": "TTS error",
+    "sttBrowserError": "Browser STT error",
+    "sttError": "STT error",
+    "sendError": "Send error",
+    "stopWordDetected": "Stop word detected — stopped",
+    "sentBackground": "Sent — persona responding in background",
+    "sentPlanner": "Sent to planner",
+    "modeSet": "Mode: {{mode}}",
+    "feedbackError": "Feedback error",
+    "personaResponse": "Persona response",
+    "speaking": "Speaking…",
+    "listen": "Listen",
+    "noResponse": "No response yet",
+    "messageLabel": "Message",
+    "feedbackLike": "👍 {{name}}",
+    "feedbackDislike": "👎 score {{score}}",
+    "playbackFailed": "Playback failed",
+    "roleAssistant": "assistant",
+    "roleUser": "user",
+    "roleSystem": "system",
+    "voice": {
+      "ttsError": "TTS error",
+      "sttError": "STT error",
+      "browserSttError": "Browser STT error",
+      "playbackFailed": "Playback failed",
+      "stopWord": "Stop word detected — stopped",
+      "sentPending": "Sent — persona replying in background",
+      "sentPlanner": "Sent to planner",
+      "sendError": "Send error",
+      "emptyMessage": "Type a message",
+      "nothingRecognized": "Nothing recognized",
+      "sentVoice": "Voice sent to planner",
+      "transcriptReady": "Transcript ready",
+      "recordingShort": "Recording too short",
+      "enableStt": "Enable STT in Settings",
+      "browserUnsupported": "Use Chrome/Edge or HTTPS on mobile",
+      "installVoice": "Install pip install -e \".[voice]\" or use browser STT in Settings",
+      "micUnavailable": "Microphone not available in this browser",
+      "micDenied": "Microphone denied",
+      "modeSet": "Mode: {{mode}}",
+      "feedbackError": "Feedback error",
+      "title": "Chat",
+      "operationMode": "Operation mode",
+      "sending": "Sending…",
+      "sendPlanner": "Send to planner",
+      "transcribing": "Transcribing…",
+      "stopRecording": "Stop recording",
+      "speakMic": "Speak (mic)",
+      "nowPlaying": "Now playing",
+      "personaReply": "Persona reply",
+      "speaking": "Speaking…",
+      "listen": "Listen",
+      "noReplyYet": "No reply yet",
+      "messageLabel": "Message",
+      "sendShortcut": "Ctrl+Enter to send"
+    }
+  },
+  "session": {
+    "queueEmpty": "Empty — import in Library or ask in chat",
+    "railAria": "Motion and scene",
+    "menuLabel": "Session",
+    "rosterStarted": "Script on Handy ({{count}} segment(s)) · chat active",
+    "rosterPlanned": "Script ready — see chat",
+    "detail": {
+      "roster": "AI script + chat",
+      "autoPlayback": "Auto + playback",
+      "auto": "Auto active",
+      "playback": "Playback active",
+      "stopped": "Stopped"
+    },
+    "badge": {
+      "roster": "AI",
+      "autoPlayback": "A+P",
+      "auto": "A",
+      "playback": "P"
+    },
+    "roster": {
+      "title": "AI script",
+      "hint": "AI builds the script on the Handy (duration + intensity) and keeps talking in chat.",
+      "estopHint": "Emergency stop active — click \"Clear stop\" in the footer or start again.",
+      "duration": "Session duration (min)",
+      "intensity": "Intensity",
+      "buildup": "With buildup (intro → warmup → build-up)",
+      "optionalNote": "Optional instruction",
+      "notePlaceholder": "e.g. focus on fast handjob scripts",
+      "generating": "Generating script…",
+      "start": "Start AI session",
+      "playing": "Playing · {{min}} min · {{intensity}}"
+    },
+    "autoPlayback": {
+      "title": "Auto and playback",
+      "hint": "General controls — Handy connection is in the Handy menu.",
+      "autoOn": "Auto enabled",
+      "autoOff": "Auto disabled",
+      "auto": "Auto",
+      "stopAuto": "Stop auto",
+      "playbackOn": "Playback started",
+      "playback": "Playback",
+      "refillDone": "Refill done",
+      "refill": "Refill",
+      "clearDone": "Queue cleared + refill",
+      "clearQueue": "Clear queue"
+    },
+    "waitFirst": "Wait for my 1st message (auto)",
+    "waitFirstOn": "Auto: waits for your 1st message",
+    "waitFirstOff": "Auto: persona can speak on start",
+    "intensity": {
+      "leve": "Light",
+      "medio": "Medium",
+      "rapido": "Fast",
+      "intenso": "Intense"
+    },
+    "queue": {
+      "aria": "Motion queue",
+      "title": "Motion queue",
+      "bufferTitle": "Buffer remaining",
+      "buf": "Buf",
+      "countTitle": "Blocks in queue",
+      "queue": "Queue",
+      "refillTitle": "Planner refill",
+      "ok": "ok",
+      "loop": "loop"
+    },
+    "scene": {
+      "aria": "Scene state",
+      "label": "Scene",
+      "live": "Live scene",
+      "locked": "Locked",
+      "lockedTitle": "AI holds scene until time runs out",
+      "advance": "Advance phase",
+      "phaseTime": "Phase time",
+      "motionBuffer": "Motion buffer",
+      "refill": "Refill",
+      "active": "active",
+      "idle": "idle",
+      "ai": "AI",
+      "busy": "busy"
+    }
+  },
+  "handsFree": {
+    "title": "Hands-free",
+    "subtitle": "Auto without chat — intensity {{intensity}}%",
+    "favoritesOnly": "favorites only",
+    "lastSignal": "last: {{signal}}",
+    "stopAuto": "Stop auto",
+    "startAuto": "Start auto",
+    "stopped": "Hands-free stopped",
+    "started": "Auto on — AI fills queue without chat",
+    "queueWaiting": "Waiting for blocks — AI fills automatically",
+    "queueStart": "Start auto to begin",
+    "signals": {
+      "title": "Quick signals",
+      "hint": "Edging and climax clear the queue and apply immediately. Intensity adjusts the global level.",
+      "moreIntensity": {
+        "title": "More intensity",
+        "hint": "Raises overall level (+12%)"
+      },
+      "lessIntensity": {
+        "title": "Less intensity",
+        "hint": "Lowers overall level (−12%)"
+      },
+      "edging": {
+        "title": "Edging",
+        "hint": "Near the edge — applies immediately, new queue"
+      },
+      "climax": {
+        "title": "I'm cumming",
+        "hint": "Favorites only · slow rhythm · recovery"
+      }
+    },
+    "edgingDone": "Edging — {{count}} block(s) queued now",
+    "climaxDone": "Climax — favorites · {{count}} block(s) · phase {{phase}}",
+    "intensitySet": "Intensity {{value}}%"
+  },
+  "persona": {
+    "defaultName": "Persona",
+    "list": "List",
+    "new": "+ New",
+    "active": "active",
+    "activate": "Activate",
+    "edit": "Edit persona",
+    "create": "New persona",
+    "name": "Name",
+    "description": "Description",
+    "systemPrompt": "System prompt",
+    "avatar": "Persona icon",
+    "saveBeforeAvatar": "Save the persona before uploading an icon",
+    "avatarUpdated": "Persona icon updated",
+    "requiredFields": "Name and system prompt required",
+    "saved": "Persona saved",
+    "confirmDelete": "Delete this persona?",
+    "deleted": "Deleted",
+    "activated": "Active persona",
+    "sections": {
+      "tone": "Persona tone",
+      "toneHint": "Style, energy, and voice.",
+      "behavior": "Behavior",
+      "behaviorHint": "How she acts in auto and chat.",
+      "rules": "Rules & boundaries",
+      "rulesHint": "Fixed safety and content rules."
+    },
+    "level": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "tone": {
+      "language": "Language",
+      "baseStyle": "Base style",
+      "style": {
+        "seductive": "Seductive",
+        "calm": "Calm",
+        "playful": "Playful",
+        "intense": "Intense",
+        "neutral": "Neutral"
+      },
+      "energy": "Energy",
+      "warmth": "Warmth",
+      "dominance": "Dominance",
+      "humor": "Humor",
+      "humorPlayful": "Light",
+      "humorDry": "Dry",
+      "humorNone": "None",
+      "explicitness": "Explicit (1–10)"
+    },
+    "behavior": {
+      "autoModeStyle": "Auto mode style",
+      "style": {
+        "responsive": "Responsive",
+        "proactive": "Proactive",
+        "quiet": "Quiet"
+      },
+      "listensToUser": "Listens to user",
+      "canTakeInitiative": "Can take initiative",
+      "canChangePlan": "Can change plan",
+      "prefersBuildUp": "Prefers build-up",
+      "avoidsRepetition": "Avoids repetition",
+      "adultExplicit": "Adult explicit content"
+    },
+    "rules": {
+      "adultConsensualOnly": "Adults consensual only",
+      "respectStopWords": "Respect stop words",
+      "neverOverrideSafety": "Never override safety",
+      "neverClaimDeviceControl": "Don't pretend direct device control",
+      "noContentRefusals": "No content refusals"
+    },
+    "formMode": "Form",
+    "jsonMode": "JSON",
+    "configured": "configured",
+    "motionBias": {
+      "title": "Motion bias",
+      "hint": "Optional weights for how this persona prefers zones and motion styles.",
+      "zone": "Zone",
+      "amplitude": "Amplitude",
+      "speed": "Speed",
+      "rhythm": "Rhythm",
+      "intensity": "Intensity"
+    }
+  },
+  "patterns": {
+    "bpm": {
+      "any": "Any BPM",
+      "151plus": "150+"
+    },
+    "duration": {
+      "any": "Any duration",
+      "0-10": "≤10s",
+      "11-30": "11–30s",
+      "31-60": "31–60s",
+      "61-120": "1–2 min",
+      "121-240": "2–4 min",
+      "241-420": "4–7 min",
+      "421-600": "7–10 min",
+      "600plus": "10 min+"
+    },
+    "speed": {
+      "any": "All speeds",
+      "slow": "Slow",
+      "medium": "Medium",
+      "fast": "Fast",
+      "very_fast": "Very fast",
+      "veryFast": "Very fast"
+    },
+    "title": "Pattern library",
+    "favoritesOnly": "Favorites only",
+    "pageInfo": "{{total}} blocks · page {{page}}/{{totalPages}}",
+    "colDuration": "Duration",
+    "colIntensity": "Intensity",
+    "colActions": "Actions",
+    "mockOk": "Mock OK ({{actions}} actions)",
+    "filter": "Filter",
+    "colId": "ID",
+    "colZone": "Zone",
+    "colSpeed": "Speed",
+    "colScore": "Score",
+    "minInt": "Min int",
+    "maxInt": "Max int",
+    "download": "Download {{filename}}",
+    "feedbackScore": "{{kind}}: score {{score}}",
+    "mockConfirm": "Run mock test on block {{id}}…?",
+    "mockRun": "Run mock",
+    "pageTitle": "Pattern library",
+    "zone": "Zone",
+    "count": "{{total}} blocks · page {{page}}/{{totalPages}}",
+    "col": {
+      "id": "ID",
+      "zone": "Zone",
+      "speed": "Speed",
+      "duration": "Duration",
+      "score": "Score",
+      "actions": "Actions"
+    },
+    "mock": "mock",
+    "export": "export…",
+    "feedbackToast": "{{kind}}: score {{score}}",
+    "downloadToast": "Download {{filename}}"
+  },
+  "player": {
+    "browser": {
+      "searchLabel": "Search blocks",
+      "searchPlaceholder": "Name or tag…",
+      "speed": "Speed",
+      "bpm": "BPM",
+      "duration": "Duration",
+      "loopOnAdd": "Loop on add",
+      "clearFilters": "Clear filters",
+      "blockCount": "{{count}} blocks",
+      "filtered": "filtered",
+      "page": "Page {{page}} / {{total}}",
+      "empty": "No blocks match filters.",
+      "addTitle": "Add {{name}} to queue"
+    },
+    "title": "Player",
+    "toolbar": {
+      "blocks": "{{count}} block(s) · {{duration}} total",
+      "playing": "Playing…",
+      "play": "▶ Play",
+      "stop": "Stop",
+      "save": "Save",
+      "exportTitle": "Export current queue",
+      "export": "↓ Export",
+      "clear": "Clear",
+      "saveNamePlaceholder": "Saved queue name",
+      "confirm": "Confirm"
+    },
+    "signals": {
+      "label": "Signals",
+      "edging": "Edging",
+      "milking": "Milking",
+      "climax": "Climax",
+      "playTitle": "Play {{label}} ({{name}})",
+      "configureTitle": "Configure {{label}}",
+      "configure": "Configure {{label}}",
+      "modalTitle": "Configure {{label}}",
+      "searchScript": "Search script",
+      "searchPlaceholder": "Number, name or id…",
+      "noScripts": "No scripts found",
+      "loopDuration": "Loop duration (s)",
+      "play": "▶ Play",
+      "chooseScript": "Choose a script",
+      "fired": "{{label}} · {{sec}}s"
+    },
+    "live": {
+      "signal": "Signal: {{label}}",
+      "queue": "Queue",
+      "hsspMode": "HSSP mode (connection key) · ",
+      "block": "Block {{current}}/{{total}} · ",
+      "pos": "pos",
+      "autoloop": "Auto-loop",
+      "resume": "▶ Resume",
+      "pause": "⏸ Pause",
+      "skip": "⏭ Next block",
+      "stop": "⏹ Stop",
+      "position": "pos {{pct}}%",
+      "nextBlock": "⏭ Next block",
+      "playStarted": "{{label}} started{{sync}}",
+      "playError": "Playback error",
+      "skipOk": "Next block",
+      "added": "Added to queue",
+      "buildFirst": "Build the queue before playing",
+      "enterName": "Enter a name",
+      "saved": "Saved: {{name}}",
+      "loaded": "Queue loaded",
+      "removed": "Queue removed"
+    },
+    "panels": {
+      "preview": "Preview",
+      "queue": "Queue",
+      "library": "Library",
+      "visibleAria": "Visible panels"
+    },
+    "preview": {
+      "playingNow": "Playing now",
+      "actionsDuration": "{{count}} actions · {{duration}}",
+      "queueScript": "Queued funscript preview",
+      "empty": "Add blocks to the queue to generate the funscript preview."
+    },
+    "queue": {
+      "title": "Your queue",
+      "subtitle": "{{count}} items · {{duration}} · drag ⋮⋮",
+      "empty": "Add blocks from the library. Click the card or +.",
+      "saved": "Saved queues",
+      "load": "Load",
+      "export": "Export",
+      "dragAria": "Queue — drag to reorder",
+      "dragHandle": "Drag to reorder",
+      "duration": "Duration",
+      "minDuration": "Minimum {{sec}}s",
+      "loop": "Loop",
+      "remove": "Remove from queue",
+      "segmentBarTitle": "Blocks in queue order"
+    },
+    "signalModal": {
+      "title": "Configure {{label}}",
+      "searchScript": "Search script",
+      "searchPlaceholder": "Number, name, or id…",
+      "noScripts": "No scripts found",
+      "loopDuration": "Loop duration (s)",
+      "play": "▶ Play"
+    },
+    "toast": {
+      "added": "Added to queue",
+      "nextBlock": "Next block",
+      "playStarted": "{{label}} started{{sync}}",
+      "playSync": " · sync {{ms}}ms",
+      "playError": "Playback error",
+      "queueDone": "Queue finished",
+      "queueLoaded": "Queue loaded",
+      "queueRemoved": "Queue removed",
+      "signalFired": "{{label}} · {{sec}}s",
+      "pickScript": "Pick a script",
+      "buildQueue": "Build the queue before playing",
+      "enterName": "Enter a name",
+      "savedAs": "Saved: {{name}}"
+    },
+    "downloaded": "Downloaded {{filename}}",
+    "library": {
+      "subtitle": "{{count}} blocks · page {{page}}/{{total}}"
+    },
+    "blocksCount": "{{count}} block(s) · {{duration}} total",
+    "play": "▶ Play",
+    "playing": "Playing…",
+    "stop": "Stop",
+    "save": "Save",
+    "exportQueue": "Export current queue",
+    "export": "↓ Export",
+    "clear": "Clear",
+    "savePlaceholder": "Saved queue name",
+    "panel": {
+      "previewTitle": "Preview",
+      "previewPlaying": "Playing now",
+      "previewStats": "{{actions}} actions · {{duration}}",
+      "previewEmpty": "Funscript preview of the built queue",
+      "previewEmptyHint": "Add blocks to the queue to generate the funscript preview.",
+      "queueTitle": "Your queue",
+      "queueSubtitle": "{{count}} items · {{duration}} · drag ⋮⋮",
+      "queueEmptyHint": "Add blocks from the library. Click the card or +.",
+      "savedQueues": "Saved queues",
+      "load": "Load",
+      "libraryTitle": "Library",
+      "librarySubtitle": "{{count}} blocks · page {{page}}/{{total}}"
+    }
+  },
+  "device": {
+    "pill": {
+      "detailTitle": "{{detail}} — click to refresh",
+      "refreshTitle": "Click to refresh connection"
+    },
+    "title": "Device / Intiface",
+    "useMock": "Use mock device",
+    "selected": "Selected: {{name}}",
+    "connect": "Connect Intiface",
+    "scan": "Scan",
+    "foundTitle": "Devices found",
+    "select": "Select",
+    "mockOn": "Mock active",
+    "mockOff": "Real device",
+    "connected": "Connected",
+    "scanCount": "{{count}} device(s)",
+    "selectedOk": "Device selected",
+    "intifaceLocal": "Intiface (local)",
+    "handyKeyApi": "Handy connection key + API",
+    "linearYes": "yes",
+    "linearNo": "no",
+    "deviceId": "({{id}}) linear={{linear}}",
+    "handy": "Handy",
+    "handyApi": "Handy API",
+    "connection": "Connection",
+    "mode": "Mode",
+    "modeIntiface": "Intiface (local)",
+    "modeHandyCloud": "Handy cloud API",
+    "connectionKey": "Connection key",
+    "keyPlaceholder": "Paste connection key",
+    "connectApi": "Connect API",
+    "handyConnected": "Handy connected",
+    "cloud": "Cloud",
+    "saveKeyHint": "save key and connect",
+    "intiface": "Intiface",
+    "scanResult": "{{count}} device(s) found",
+    "use": "Use",
+    "intifaceHint": "start Intiface Central",
+    "page": {
+      "title": "Device / Intiface",
+      "useMock": "Use mock device",
+      "selected": "Selected: {{name}}",
+      "connect": "Connect Intiface",
+      "scan": "Scan devices",
+      "foundTitle": "Devices found",
+      "linear": "linear={{value}}",
+      "select": "Select",
+      "mockOn": "Mock active",
+      "mockOff": "Real device",
+      "connected": "Connected",
+      "scanToast": "{{count}} device(s)",
+      "selectedToast": "Device selected"
+    }
+  },
+  "playerPreview": {
+    "stats": {
+      "aria": "Script statistics",
+      "duration": "Duration",
+      "actions": "Actions",
+      "maxSpeed": "Max speed",
+      "avgSpeed": "Avg speed"
+    }
+  },
+  "library": {
+    "toast": {
+      "addedToQueue": "Added to queue · see Player",
+      "deleted": "{{count}} deleted",
+      "blockDeleted": "Block deleted",
+      "mockOk": "OK · {{count}} actions",
+      "queueFull": "Queue full",
+      "downloaded": "Downloaded {{filename}}",
+      "score": "Score {{score}}",
+      "roleSet": "{{role}} {{state}}",
+      "reclassified": "Reclassified: {{updated}} block(s) · {{skipped}} skipped",
+      "recalculating": "Recalculating…",
+      "recalculateTimings": "Recalculate timings",
+      "reclassifying": "Reclassifying…",
+      "reclassify": "Reclassify",
+      "selectAll": "{{count}} blocks selected",
+      "selectAllLimited": "{{returned}} selected (limit; filtered total: {{total}})",
+      "roleMarked": "Marked for {{role}}",
+      "roleRemoved": "Removed from {{role}}"
+    },
+    "tabs": {
+      "blocks": "Blocks",
+      "import": "Import"
+    },
+    "toolbar": {
+      "blocksHint": "Browse, filter, and manage motion blocks.",
+      "importHint": "Import funscripts and build an AI session roster."
+    },
+    "filters": {
+      "aria": "Library filters",
+      "title": "Filters",
+      "active": "{{count}} active",
+      "search": "Search",
+      "name": "Name",
+      "searchPlaceholder": "Script or block…",
+      "category": "Category",
+      "categoryAria": "Category",
+      "all": "All",
+      "zone": "Zone",
+      "zoneAria": "Zone",
+      "speed": "Speed",
+      "speedAria": "Speed",
+      "rhythm": "Rhythm",
+      "rhythmAria": "Rhythm",
+      "rhythmAll": "All rhythms",
+      "strokeLength": "Amplitude",
+      "strokeAria": "Amplitude",
+      "sort": "Sort",
+      "sortAria": "Sort",
+      "sortScore": "Score",
+      "apply": "Apply filters",
+      "rating": "Rating",
+      "metrics": "Metrics",
+      "minDuration": "Min duration",
+      "maxDuration": "Max duration",
+      "minIntensity": "Min int. %",
+      "maxIntensity": "Max int. %",
+      "minBpm": "Min BPM",
+      "maxBpm": "Max BPM",
+      "display": "Display",
+      "myRecordings": "My recordings",
+      "favoritesOnly": "Favorites only",
+      "clear": "Clear",
+      "searchGroup": "Search",
+      "namePlaceholder": "Script or block…",
+      "classification": "Classification",
+      "amplitude": "Amplitude",
+      "sortDurationDesc": "Duration ↓",
+      "sortDurationAsc": "Duration ↑",
+      "sortBpmDesc": "BPM ↓",
+      "sortBpmAsc": "BPM ↑",
+      "maintenance": "Maintenance",
+      "recalculateTimings": "Recalculate timings",
+      "recalculating": "Recalculating…",
+      "reclassify": "Reclassify",
+      "reclassifying": "Reclassifying…",
+      "timingsToast": "Timings: {{updated}} updated · {{trimmed}} trimmed · {{unchanged}} ok · {{skipped}} skipped",
+      "reclassifyToast": "Reclassified: {{updated}} block(s) · {{skipped}} skipped"
+    },
+    "sort": {
+      "bpmDesc": "BPM ↓",
+      "bpmAsc": "BPM ↑",
+      "durationDesc": "Duration ↓",
+      "durationAsc": "Duration ↑"
+    },
+    "batch": {
+      "all": "All ({{count}})",
+      "selecting": "Selecting…",
+      "allFiltered": "All filtered ({{count}})",
+      "deleteSelected": "Delete selected",
+      "clearSelection": "Clear selection",
+      "allOnPage": "All ({{count}})"
+    },
+    "empty": {
+      "title": "No blocks found",
+      "hint": "Import a funscript in the Import tab or adjust filters."
+    },
+    "pagination": {
+      "previous": "← Previous",
+      "next": "Next →"
+    },
+    "delete": {
+      "batchTitle": "Delete {{count}} blocks",
+      "batchHint": "Removes from library permanently.",
+      "batchConfirm": "Delete all",
+      "title": "Delete block",
+      "confirm": "Delete",
+      "hint": "Removes from library permanently. Cannot undo."
+    },
+    "test": {
+      "title": "Test on Handy",
+      "hint": "Sends the block to the device via Intiface (real motion)."
+    },
+    "import": {
+      "inserted": "Inserted",
+      "inFile": "In file",
+      "format": "Format",
+      "duplicates": "Duplicates",
+      "fullScript": "Full script (library)",
+      "generatedBlocks": "Generated blocks ({{count}})",
+      "enqueueFull": "Enqueue full script",
+      "enqueued": "Enqueued ({{count}} part(s))",
+      "playNow": "Play now",
+      "playingFull": "Playing full funscript",
+      "refreshList": "Refresh list",
+      "rosterTitle": "AI session roster (full funscripts)",
+      "enableRoster": "Enable AI roster",
+      "buildingRoster": "Building script…",
+      "buildRoster": "Build AI script",
+      "rosterEnabled": "AI roster mode enabled",
+      "rosterEnqueued": "Roster: {{count}} script(s) enqueued",
+      "rosterBuilt": "Script built — see chat",
+      "filesTitle": "Imported files ({{count}})",
+      "enqueue": "Enqueue",
+      "play": "Play",
+      "playingScript": "Playing full script",
+      "recentTitle": "Recent imports",
+      "processing": "Processing…",
+      "importing": "Importing {{progress}}…",
+      "dropHint": "StrokeGPT: funscriptORG (.csv) · jsonmodes (.json) · modes (.funscript)",
+      "invalidExt": "Use .csv, .json or .funscript",
+      "done": "{{files}} file(s) · {{blocks}} block(s) inserted",
+      "stats": {
+        "inserted": "Inserted",
+        "inFile": "In file",
+        "format": "Format",
+        "duplicates": "Duplicates"
+      },
+      "fullScriptTitle": "Full script (library)",
+      "fullScriptDefault": "Full script",
+      "subtitleInLibrary": " · in library",
+      "sourceDefault": "Import",
+      "badgeExists": "already exists",
+      "badgeFull": "Full funscript",
+      "sessionHint": "Builds a session by enqueueing full scripts from the imported library. Enable in Settings → Planner or click below.",
+      "optionalInstruction": "Optional instruction (e.g. start slow)",
+      "fullSubtitle": "{{duration}}s · {{points}} pts{{bpmSuffix}}{{librarySuffix}}",
+      "bpmSuffix": " · {{bpm}} beats/min",
+      "blockSubtitle": "{{zone}} · {{speed}} · {{duration}}s · int. {{intensity}}% · {{points}} pts",
+      "fileMeta": " · {{duration}}s · {{blocks}} blocks · {{points}} pts",
+      "exportFmt": "Export .{{fmt}}",
+      "dropTitle": "Drag or click — one or more files",
+      "doneToast": "{{files}} file(s) · {{blocks}} block(s) inserted",
+      "rosterHint": "Builds a session by enqueueing whole scripts from the imported library. Enable in Settings → Planner or click below.",
+      "planRoster": "Plan AI roster",
+      "planningRoster": "Planning roster…",
+      "rosterPlaceholder": "Optional instruction (e.g. start slow)",
+      "rosterPlanned": "Roster planned — see chat",
+      "playFull": "Play full script"
+    },
+    "zones": {
+      "top": "Tip / top",
+      "middle": "Mid / middle",
+      "bottom": "Base / bottom",
+      "full": "Full stroke",
+      "mixed": "Mixed"
+    },
+    "maintenance": {
+      "title": "Maintenance",
+      "timestamps": "Timestamps: {{updated}} updated · {{trimmed}} trimmed · {{unchanged}} ok · {{skipped}} skipped"
+    },
+    "drop": {
+      "title": "Drag or click — one or more files"
+    },
+    "modals": {
+      "batchDeleteTitle": "Delete {{count}} blocks",
+      "batchDeleteHint": "Removes from the library permanently.",
+      "batchDeleteConfirm": "Delete all",
+      "deleteTitle": "Delete block",
+      "deleteHint": "Removes from the library permanently. Cannot be undone.",
+      "testTitle": "Test on Handy",
+      "testHint": "Sends the block to the device via Intiface (real motion)."
+    },
+    "toasts": {
+      "roleMarked": "Marked for {{role}}",
+      "roleRemoved": "Removed from {{role}}",
+      "downloaded": "Downloaded {{filename}}",
+      "deleted": "Block deleted",
+      "batchDeleted": "{{count}} deleted",
+      "testOk": "OK · {{actions}} actions",
+      "addedToQueue": "Added to queue"
+    }
+  },
+  "block": {
+    "roles": {
+      "edge": "Edge",
+      "milk": "Milk",
+      "climax": "Climax"
+    },
+    "stats": {
+      "aria": "Block statistics",
+      "duration": "Duration",
+      "actions": "Actions",
+      "intensity": "Intensity",
+      "maxSpeed": "Max speed",
+      "avgSpeed": "Avg speed"
+    },
+    "trim": "Trim",
+    "heatmapTrimmer": {
+      "startAria": "Trim start",
+      "endAria": "Trim end",
+      "cropLabel": "Crop: {{start}} – {{end}}",
+      "duration": "Duration: {{duration}}"
+    },
+    "select": "Select {{title}}",
+    "bpmMeta": "{{bpm}} BPM · {{duration}}s",
+    "successScore": "Success score",
+    "recordedTitle": "User recording",
+    "myRecording": "My recording",
+    "fullScriptTitle": "Full funscript",
+    "fullScript": "Full script",
+    "addToQueue": "Add to queue",
+    "testOnHandy": "Test on Handy",
+    "test": "Test",
+    "editTrim": "Edit / trim",
+    "removeRole": "Remove {{role}} role",
+    "saveForRole": "Save for {{role}}",
+    "export": "Export",
+    "delete": "Delete",
+    "feedback": {
+      "like": "Like",
+      "dislike": "Dislike",
+      "favorite": "Favorite",
+      "block": "Block"
+    },
+    "editor": {
+      "title": "Edit block",
+      "fullScriptWarn": "Full-script blocks: trimming affects the entire imported file.",
+      "help": "Drag handles on the heatmap to trim. Preview updates live.",
+      "minTrimPoints": "Need at least 2 points in the trim range",
+      "trimApplied": "Trim applied ({{count}} actions)",
+      "minActions": "Need at least 2 actions",
+      "replaced": "Block replaced ({{id}})",
+      "created": "New block created ({{id}})",
+      "saveError": "Could not save block",
+      "applyTrim": "Apply trim",
+      "replace": "Replace original",
+      "saveAsNew": "Save as new"
+    }
+  },
+  "diagnostics": {
+    "pingOllama": "Ping Ollama",
+    "refresh": "Refresh",
+    "pingTitle": "Ping Ollama",
+    "quickState": "Quick state",
+    "bufferQueue": "Queue buffer: {{buffer}}s · remaining: {{remaining}}s",
+    "playback": "Playback: {{state}} · queue: {{count}} blocks",
+    "playbackActive": "active",
+    "playbackStopped": "stopped",
+    "planner": "Planner: {{status}}{{refill}}",
+    "plannerBusy": "busy ({{source}})",
+    "plannerFree": "free",
+    "refillBusy": " · refill in progress",
+    "estop": "E-stop: {{value}}",
+    "error": "Error: {{message}}",
+    "lastApply": "Last apply (planner → queue)",
+    "enqueued": "Enqueued: {{count}}",
+    "fallbackUsed": " · fallback used",
+    "whyBlocks": "Why these blocks:",
+    "lastPlannerJson": "Last planner JSON",
+    "plannerAudit": "Planner audit (recent)",
+    "handyCommands": "Handy — recent commands",
+    "ollamaOk": "Ollama OK",
+    "ollamaFail": "Ollama failed",
+    "estopYes": "YES",
+    "estopNo": "no",
+    "playbackQueue": "Playback: {{playback}} · queue: {{count}} blocks",
+    "refillInProgress": " · refill in progress",
+    "skipped": "Skipped: {{count}}"
+  },
+  "sessions": {
+    "empty": "No sessions recorded.",
+    "colStart": "Start",
+    "replayTitle": "Session replay",
+    "noMessages": "No messages stored for this session.",
+    "noBlocks": "No blocks recorded (start playback in this session).",
+    "rateTitle": "Rate session",
+    "colMode": "Mode",
+    "colRating": "Rating",
+    "replay": "Replay",
+    "loadingReplay": "Loading replay…",
+    "exportZip": "Export ZIP",
+    "close": "Close",
+    "chatSection": "Chat",
+    "blocksPlayed": "Blocks played",
+    "ratingLabel": "Rating 1–5",
+    "notes": "Notes",
+    "saveFeedback": "Save feedback",
+    "ratingRequired": "Rating 1–5",
+    "feedbackSaved": "Feedback saved",
+    "exported": "Exported {{filename}}",
+    "bpmSuffix": " · {{bpm}} BPM",
+    "durationSuffix": " · {{sec}}s",
+    "col": {
+      "started": "Started",
+      "mode": "Mode",
+      "rating": "Rating"
+    },
+    "chat": "Chat",
+    "notesLabel": "Notes"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "apiUnavailable": "API unavailable: {{error}}",
+    "emergencyStop": " · EMERGENCY STOP",
+    "queuePreview": "Queue (preview)",
+    "queueEmpty": "Queue empty",
+    "playbackFooter": "Playback: {{playback}} · blocks in queue: {{count}} · refill: {{refill}}",
+    "playbackActive": "active",
+    "playbackStopped": "stopped",
+    "refillBusy": "busy",
+    "refillFree": "free",
+    "card": {
+      "intiface": "Intiface",
+      "device": "Device",
+      "persona": "Persona",
+      "ollama": "Ollama",
+      "mode": "Mode",
+      "intensity": "Intensity",
+      "range": "Range",
+      "buffer": "Buffer"
+    },
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "stopActive": " · STOP ACTIVE",
+    "emergencyActive": "Emergency stop active",
+    "playbackStatus": "Playback: {{playback}} · blocks in queue: {{count}} · refill: {{refill}}"
+  },
+  "autoMode": {
+    "startAuto": "Start auto",
+    "stopAuto": "Stop auto",
+    "stopPlayback": "Stop playback",
+    "refillBuffer": "Refill buffer",
+    "started": "Auto started",
+    "stopping": "Auto stopping",
+    "playbackActive": "Playback active",
+    "playbackStopped": "Playback stopped",
+    "refillRequested": "Refill requested",
+    "status": "Auto: {{auto}} · Playback: {{playback}} · Refill: {{refill}}",
+    "buffer": "Buffer: {{sec}}s",
+    "title": "Auto mode",
+    "hint": "The watchdog keeps the buffer full via Ollama; the executor plays without waiting for the model.",
+    "playbackOnly": "Playback only",
+    "on": "ON",
+    "off": "OFF",
+    "busy": "busy",
+    "free": "free",
+    "start": "Start auto",
+    "stop": "Stop auto",
+    "refill": "Refill buffer",
+    "playbackOn": "Playback active",
+    "playbackOff": "Playback stopped"
+  },
+  "mouse": {
+    "cylinder": {
+      "positionAria": "Position {{pct}} percent",
+      "padAria": "Vertical cylinder control"
+    },
+    "title": "Mouse control",
+    "subtitle": "Direct vertical control — smoothing and recording",
+    "active": "Active",
+    "recording": "Recording",
+    "starting": "Starting…",
+    "startControl": "Start control",
+    "stopControl": "Stop control",
+    "keyframes": "keyframes",
+    "deviceOffline": "Device offline",
+    "emergencyActive": "Emergency stop active",
+    "smoothing": "Smoothing",
+    "target": "Target",
+    "sent": "Sent",
+    "hintActive": "Move the pointer vertically on the cylinder.",
+    "hintIdle": "Connect the device and start control.",
+    "startIdle": "Start at idle position",
+    "startIdleHint": "Moves to mid-stroke before following the pointer.",
+    "connectFirst": "Connect the device first",
+    "controlActive": "Mouse control active",
+    "startError": "Could not start control",
+    "recordingSaved": "Recording saved ({{actions}} actions, {{duration}})",
+    "recordingStarted": "Recording started",
+    "recordError": "Recording error",
+    "recordingSavedLib": "Saved to library ({{actions}} actions)",
+    "saveRecordingError": "Could not save recording",
+    "response": {
+      "label": "Response",
+      "turbo": "Turbo",
+      "aria": "Response speed",
+      "bounds": "Smooth ↔ fast"
+    },
+    "gestures": {
+      "record": "Hold to record",
+      "hold": "hold",
+      "turbo": "Turbo",
+      "lessSmooth": "Less smooth",
+      "moreSmooth": "More smooth"
+    }
+  },
+  "import": {
+    "page": {
+      "title": "Import funscripts",
+      "hint": "Upload .funscript, .json or .csv to extract blocks into the library.",
+      "processing": "Processing…",
+      "lastImport": "Last import",
+      "file": "File:",
+      "blocksInserted": "Blocks inserted: {{count}} · ID:",
+      "exportFull": "Export full script:",
+      "imported": "Imported: {{count}} blocks",
+      "importFirst": "Import a file first",
+      "download": "Download {{filename}}"
+    },
+    "title": "Import funscripts",
+    "hint": "Upload .funscript, .json or .csv to extract blocks into the library.",
+    "processing": "Processing…",
+    "lastTitle": "Last import",
+    "file": "File:",
+    "blocksInserted": "Blocks inserted: {{count}} · ID:",
+    "exportFull": "Export full script:",
+    "invalidExt": "Use .funscript, .json or .csv",
+    "doneToast": "Imported: {{count}} blocks",
+    "importFirst": "Import a file first"
+  },
+  "browserStt": {
+    "micStartError": "Could not start microphone",
+    "unsupported": "Browser does not support speech recognition",
+    "speechError": "Speech recognition error"
+  },
+  "queue": {
+    "segmentBar": {
+      "title": "Blocks in queue order"
+    }
+  }
+}

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +19,8 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/httpapi"
 	"github.com/mapledaemon/MagicHandy/internal/logging"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/transport/intiface"
+	"github.com/mapledaemon/MagicHandy/uibuild"
 	"github.com/mapledaemon/MagicHandy/web"
 )
 
@@ -76,9 +79,18 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	runtime := httpapi.Runtime{
 		Traces:    diagnostics.NewTraceRing(512),
 		Transport: transport.NewFake(),
+		IntifaceClient: intiface.NewClient(intiface.ClientOptions{
+			ServerURL: settings.Device.IntifaceURL,
+			Logger:    logger,
+		}),
 	}
 
-	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
+	staticFS, err := loadStaticUI()
+	if err != nil {
+		return err
+	}
+
+	api, err := httpapi.New(staticFS, logger, store, runtime, httpapi.VersionInfo{
 		Version: version,
 		Commit:  commit,
 	})
@@ -130,4 +142,13 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	logger.Info("server stopped")
 
 	return nil
+}
+
+func loadStaticUI() (fs.FS, error) {
+	if ui, err := uibuild.FS(); err == nil {
+		if _, err := fs.Stat(ui, "index.html"); err == nil {
+			return ui, nil
+		}
+	}
+	return web.FS(), nil
 }

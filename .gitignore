@@ -6,6 +6,10 @@
 *.so
 *.dylib
 
+# React frontend
+frontend/node_modules/
+frontend/dist/
+
 # Go test and coverage artifacts
 *.test
 *.cover
@@ -16,6 +20,7 @@ coverage.out
 .env
 .env.*
 !.env.example
+.local-data/
 
 # Logs and diagnostics generated locally
 *.log
