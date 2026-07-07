@@ -1,11 +1,11 @@
 package funscript
 
 const (
-	minActions      = 2
-	maxActions      = 500_000
-	maxTimestampMS  = 86_400_000
-	minPos          = 0
-	maxPos          = 100
+	minActions     = 2
+	maxActions     = 500_000
+	maxTimestampMS = 86_400_000
+	minPos         = 0
+	maxPos         = 100
 )
 
 // ValidateActions validates and coerces a list of raw action maps.

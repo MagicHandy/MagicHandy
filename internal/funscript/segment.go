@@ -1,13 +1,13 @@
 package funscript
 
 const (
-	minBlockMS        = 1500
-	targetMaxBlockMS  = 30000
-	absMaxBlockMS     = 45000
-	pauseGapMS        = 1500
-	zoneTop           = 67.0
-	zoneBottom        = 33.0
-	speedChangeRatio  = 2.0
+	minBlockMS           = 1500
+	targetMaxBlockMS     = 30000
+	absMaxBlockMS        = 45000
+	pauseGapMS           = 1500
+	zoneTop              = 67.0
+	zoneBottom           = 33.0
+	speedChangeRatio     = 2.0
 	amplitudeChangeRatio = 1.8
 )
 

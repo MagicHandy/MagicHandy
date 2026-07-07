@@ -8,13 +8,13 @@ import (
 
 // BlockBounds holds original-script bounds for a block.
 type BlockBounds struct {
-	SourceStartMS      int
-	SourceEndMS        int
-	MotionEndMS        int
+	SourceStartMS       int
+	SourceEndMS         int
+	MotionEndMS         int
 	EffectiveDurationMS int
-	SourceTimeRange    string
-	MotionTimeRange    string
-	SourceRangeSlug    string
+	SourceTimeRange     string
+	MotionTimeRange     string
+	SourceRangeSlug     string
 }
 
 func formatSourceTimestampMS(ms int) string {
@@ -62,9 +62,9 @@ func SourceRangeTag(startMS, endMS int) string {
 func blockSourceBounds(actions []Action, metadata map[string]any, isFullScript bool) BlockBounds {
 	if len(actions) == 0 {
 		return BlockBounds{
-			SourceStartMS: 0,
-			SourceEndMS:   0,
-			MotionEndMS:   0,
+			SourceStartMS:   0,
+			SourceEndMS:     0,
+			MotionEndMS:     0,
 			SourceTimeRange: "0s–0s",
 		}
 	}

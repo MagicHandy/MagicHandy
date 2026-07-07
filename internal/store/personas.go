@@ -13,16 +13,16 @@ import (
 
 // PersonaRow is one persisted persona profile.
 type PersonaRow struct {
-	ID              string
-	Name            string
-	Description     sql.NullString
-	SystemPrompt    string
-	ToneJSON        sql.NullString
-	MoodJSON        sql.NullString
-	BoundariesJSON  sql.NullString
-	MotionBiasJSON  sql.NullString
-	CreatedAt       sql.NullString
-	UpdatedAt       sql.NullString
+	ID             string
+	Name           string
+	Description    sql.NullString
+	SystemPrompt   string
+	ToneJSON       sql.NullString
+	MoodJSON       sql.NullString
+	BoundariesJSON sql.NullString
+	MotionBiasJSON sql.NullString
+	CreatedAt      sql.NullString
+	UpdatedAt      sql.NullString
 }
 
 // PersonaPayload is the API-facing persona document.

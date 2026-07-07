@@ -42,13 +42,13 @@ func (s *Server) registerDirectRoutes(mux *http.ServeMux) {
 func (s *Server) handleMotionVisual(w http.ResponseWriter, _ *http.Request) {
 	settings, _ := s.store.Snapshot()
 	payload := map[string]any{
-		"position_pct":     50.0,
-		"target_pct":       50.0,
-		"offset_ms":        0,
-		"stroke_min_pct":   float64(settings.Motion.StrokeMinPercent),
-		"stroke_max_pct":   float64(settings.Motion.StrokeMaxPercent),
-		"playback_active":  s.direct.active,
-		"recent":           []map[string]any{},
+		"position_pct":      50.0,
+		"target_pct":        50.0,
+		"offset_ms":         0,
+		"stroke_min_pct":    float64(settings.Motion.StrokeMinPercent),
+		"stroke_max_pct":    float64(settings.Motion.StrokeMaxPercent),
+		"playback_active":   s.direct.active,
+		"recent":            []map[string]any{},
 		"live_position_pct": s.direct.lastPositionPct,
 	}
 	if engine := s.currentMotionEngine(); engine != nil {
@@ -86,10 +86,10 @@ func (s *Server) handleDirectStart(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":             true,
-		"min_pct":          0,
-		"max_pct":          100,
-		"transport":        commandTransport.Diagnostics().Name,
-		"limits_enabled":   true,
+		"min_pct":        0,
+		"max_pct":        100,
+		"transport":      commandTransport.Diagnostics().Name,
+		"limits_enabled": true,
 	})
 }
 
@@ -98,8 +98,8 @@ func (s *Server) handleDirectMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Normalized  float64 `json:"normalized"`
-		DurationMS  int     `json:"duration_ms"`
+		Normalized float64 `json:"normalized"`
+		DurationMS int     `json:"duration_ms"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -151,7 +151,7 @@ func (s *Server) handleDirectMove(w http.ResponseWriter, r *http.Request) {
 		StreamID: streamID,
 		Points: []transport.TimedPoint{{
 			PositionPercent: int(positionPct + 0.5),
-			TimeMillis:    0,
+			TimeMillis:      0,
 		}},
 	})
 	if err != nil {
@@ -167,9 +167,9 @@ func (s *Server) handleDirectMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":            true,
-		"position_pct":  positionPct,
-		"duration_ms":   body.DurationMS,
+		"ok":           true,
+		"position_pct": positionPct,
+		"duration_ms":  body.DurationMS,
 	})
 }
 

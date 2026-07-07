@@ -1,10 +1,10 @@
 package funscript
 
 const (
-	minSegmentDurationMS       = 1500
-	maxSegmentDurationMS       = 45000
-	minAmplitude               = 3
-	maxHoldRatioWithoutTag     = 0.6
+	minSegmentDurationMS   = 1500
+	maxSegmentDurationMS   = 45000
+	minAmplitude           = 3
+	maxHoldRatioWithoutTag = 0.6
 )
 
 // ImportQAResult reports whether a segmented block should be persisted.

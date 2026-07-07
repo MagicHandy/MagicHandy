@@ -1,14 +1,14 @@
 package funscript
 
 const (
-	minDelta          = 3.0
-	minHalfStrokeMS   = 40
-	minHalfStrokeAmp  = 2.0
+	minDelta         = 3.0
+	minHalfStrokeMS  = 40
+	minHalfStrokeAmp = 2.0
 )
 
 type halfStrokeSegment struct {
-	amplitude   float64
-	durationMS  int
+	amplitude  float64
+	durationMS int
 }
 
 func halfStrokeSegments(actions []Action, minDeltaThreshold float64) []halfStrokeSegment {

@@ -206,9 +206,9 @@ func (s *Server) handleManualQueuePlay(w http.ResponseWriter, r *http.Request) {
 	s.manualQueue.paused = false
 	s.manualQueue.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":      true,
-		"started": true,
-		"items":   draft["count"],
+		"ok":       true,
+		"started":  true,
+		"items":    draft["count"],
 		"autoloop": s.manualQueue.autoloop,
 	})
 }

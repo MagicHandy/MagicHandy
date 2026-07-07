@@ -43,8 +43,8 @@ type DB struct {
 }
 
 var (
-	trackMu  sync.Mutex
-	tracked  []*DB
+	trackMu sync.Mutex
+	tracked []*DB
 )
 
 // Open connects to magichandy.db under dataDir, runs migrations, and performs a

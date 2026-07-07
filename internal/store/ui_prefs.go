@@ -37,16 +37,17 @@ func (db *DB) LoadUIPreferences() (UIPreferences, error) {
 
 // SaveUIPreferences persists UI preferences.
 func (db *DB) SaveUIPreferences(prefs UIPreferences) (UIPreferences, error) {
-	prefs.Locale = NormalizeLocale(prefs.Locale)
-	if !LocaleSupported(prefs.Locale) {
-		return UIPreferences{}, fmt.Errorf("unsupported locale %q", prefs.Locale)
+	locale, err := localeForSave(prefs.Locale)
+	if err != nil {
+		return UIPreferences{}, err
 	}
+	prefs.Locale = locale
 	dismissed := 0
 	if prefs.LocalePromptDismissed {
 		dismissed = 1
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	err := db.withWrite(func(tx *sql.Tx) error {
+	err = db.withWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
 			`INSERT INTO ui_preferences (id, locale, locale_prompt_dismissed, updated_at)
 			 VALUES (1, ?, ?, ?)
@@ -95,4 +96,23 @@ func LocaleSupported(locale string) bool {
 		}
 	}
 	return false
+}
+
+func localeForSave(locale string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(locale))
+	switch normalized {
+	case "en", "en-us", "en-gb":
+		return "en", nil
+	case "fr", "fr-fr":
+		return "fr", nil
+	case "pt", "pt-br", "pt-pt":
+		return "pt", nil
+	case "ru", "ru-ru":
+		return "ru", nil
+	default:
+		if LocaleSupported(normalized) {
+			return normalized, nil
+		}
+		return "", fmt.Errorf("unsupported locale %q", locale)
+	}
 }

@@ -28,10 +28,10 @@ type AssistantResponse struct {
 
 // MotionCommand is semantic motion intent, not a transport command.
 type MotionCommand struct {
-	Action          string `json:"action"`
-	PatternID       string `json:"pattern_id,omitempty"`
-	LibraryBlockID  string `json:"library_block_id,omitempty"`
-	SpeedPercent    *int   `json:"speed_percent,omitempty"`
+	Action         string `json:"action"`
+	PatternID      string `json:"pattern_id,omitempty"`
+	LibraryBlockID string `json:"library_block_id,omitempty"`
+	SpeedPercent   *int   `json:"speed_percent,omitempty"`
 }
 
 // ParseAssistantResponse validates one strict JSON response from the model.

@@ -18,9 +18,9 @@ type chatMessageRecord struct {
 }
 
 type lsoCompatRuntime struct {
-	mu                  sync.RWMutex
-	messages            []chatMessageRecord
-	lastPersonaMessage  string
+	mu                 sync.RWMutex
+	messages           []chatMessageRecord
+	lastPersonaMessage string
 }
 
 func (s *Server) lsoStatusPayload() map[string]any {

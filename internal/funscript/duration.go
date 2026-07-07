@@ -1,16 +1,16 @@
 package funscript
 
 const (
-	gapThresholdMS        = 5000
-	positionEPS           = 0.5
-	maxTailHoldMS         = 800
-	activeWindowMS        = 1200
-	activeWindowMinAmp    = 4.0
-	meaningfulStepPos     = 3.0
-	meaningfulStepSpeed   = 6.0
-	flatGapMinMS          = 1500
-	maxFlatHoldMS         = 900
-	flatPosMax            = 1.5
+	gapThresholdMS      = 5000
+	positionEPS         = 0.5
+	maxTailHoldMS       = 800
+	activeWindowMS      = 1200
+	activeWindowMinAmp  = 4.0
+	meaningfulStepPos   = 3.0
+	meaningfulStepSpeed = 6.0
+	flatGapMinMS        = 1500
+	maxFlatHoldMS       = 900
+	flatPosMax          = 1.5
 )
 
 type heatmapAction struct {

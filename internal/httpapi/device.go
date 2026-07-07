@@ -273,6 +273,9 @@ func (s *Server) ensureIntifaceDeviceForMotion(ctx context.Context) error {
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerIntiface {
 		return nil
 	}
+	if s.motion.transport != nil {
+		return nil
+	}
 	client := s.intifaceClient()
 	if client == nil {
 		return errors.New("Intiface client is unavailable")

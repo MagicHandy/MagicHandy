@@ -55,8 +55,8 @@ func (s *Server) handlePersonasList(w http.ResponseWriter, _ *http.Request) {
 		payload = append(payload, store.PersonaPayloadFromRow(row))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"personas":            payload,
-		"active_persona_id":   activeID,
+		"personas":          payload,
+		"active_persona_id": activeID,
 	})
 }
 

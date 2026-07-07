@@ -492,21 +492,21 @@ func (s *Store) DeleteMotionBlock(ctx context.Context, id string) error {
 
 // BlockFilter selects motion blocks for library listing APIs.
 type BlockFilter struct {
-	Zone            string
-	Speed           string
-	Rhythm          string
-	StrokeLength    string
-	MinIntensity    *float64
-	MaxIntensity    *float64
-	MinDurationMS   *int
-	MaxDurationMS   *int
-	MinRating       *int
-	FavoritesOnly   bool
-	HideBlocked     bool
-	Query           string
-	Sort            string
-	Offset          int
-	Limit           int
+	Zone          string
+	Speed         string
+	Rhythm        string
+	StrokeLength  string
+	MinIntensity  *float64
+	MaxIntensity  *float64
+	MinDurationMS *int
+	MaxDurationMS *int
+	MinRating     *int
+	FavoritesOnly bool
+	HideBlocked   bool
+	Query         string
+	Sort          string
+	Offset        int
+	Limit         int
 }
 
 // ListMotionBlocks returns motion blocks matching the filter.

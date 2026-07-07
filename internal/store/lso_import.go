@@ -10,13 +10,13 @@ import (
 
 // LSOImportResult counts rows copied from a legacy LSO app.sqlite database.
 type LSOImportResult struct {
-	Personas           int
-	FunscriptFiles     int
-	MotionBlocks       int
-	SavedQueues        int
-	PersonaMediaFiles  int
-	ActivePersonaID    string
-	SkippedExisting    bool
+	Personas          int
+	FunscriptFiles    int
+	MotionBlocks      int
+	SavedQueues       int
+	PersonaMediaFiles int
+	ActivePersonaID   string
+	SkippedExisting   bool
 }
 
 // ImportFromLSO copies library tables from an LSO SQLite file into an open
