@@ -3,6 +3,7 @@
 // and stop motion through the backend contract; the frontend sends only text.
 import { useEffect, useRef, useState } from "react";
 import { streamChat } from "../api/client";
+import type { ChatHistoryMessage } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 
 interface Msg {
@@ -14,6 +15,7 @@ interface Msg {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const MAX_HISTORY = 12;
 
 export function ChatPanel() {
   const { backendOnline, readOnly } = useAppState();
@@ -24,6 +26,7 @@ export function ChatPanel() {
   const [showJump, setShowJump] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const history = useRef<ChatHistoryMessage[]>([]);
 
   useEffect(() => {
     if (stick.current) {
@@ -59,24 +62,45 @@ export function ChatPanel() {
       { id: assistantId, role: "assistant", text: "", streaming: true },
     ]);
     setBusy(true);
+    let raw = "";
+    let repairRaw = "";
+    let finalReply = "";
+    let finalMotion: Record<string, unknown> = { action: "none" };
     try {
-      // Multi-turn history is a follow-up port; each turn stands alone for now,
-      // with the backend supplying system prompt and memory.
-      await streamChat(text, [], (ev) => {
+      await streamChat(text, history.current, (ev) => {
         if (ev.event === "delta" || ev.event === "repair_delta") {
           const phase = (ev.data as { phase?: string }).phase;
           const chunk = (ev.data as { text?: string }).text ?? "";
-          if (phase === undefined || phase === "" || phase === "reply") {
-            setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text + chunk } : x)));
-          }
+          if (ev.event === "repair_delta" || phase === "repair") repairRaw += chunk;
+          else raw += chunk;
+          const draftReply = extractReplyDraft(ev.event === "repair_delta" ? repairRaw : raw);
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: draftReply || x.text || "..." } : x)));
+        } else if (ev.event === "message") {
+          finalReply = String(ev.data.reply ?? "");
+          finalMotion = (ev.data.motion ?? { action: "none" }) as Record<string, unknown>;
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: finalReply || "...", warning: Boolean(ev.data.initial_malformed) } : x)));
         } else if (ev.event === "malformed") {
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, warning: true } : x)));
         } else if (ev.event === "error") {
-          show(String((ev.data as { message?: string }).message ?? "Chat error"), "error");
+          const message = String((ev.data as { message?: string }).message ?? "Chat error");
+          show(message, "error");
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
+        } else if (ev.event === "done" && ev.data.ok === false && !finalReply) {
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || "Malformed model response.", warning: true } : x)));
         }
       });
+      if (finalReply) {
+        const nextHistory: ChatHistoryMessage[] = [
+          ...history.current,
+          { role: "user", content: text },
+          { role: "assistant", content: JSON.stringify({ reply: finalReply, motion: finalMotion }) },
+        ];
+        history.current = nextHistory.slice(-MAX_HISTORY);
+      }
     } catch (e) {
-      show(e instanceof Error ? e.message : "Chat failed.", "error");
+      const message = e instanceof Error ? e.message : "Chat failed.";
+      show(message, "error");
+      setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
     } finally {
       setBusy(false);
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, streaming: false } : x)));
@@ -132,4 +156,47 @@ export function ChatPanel() {
       </form>
     </div>
   );
+}
+
+function extractReplyDraft(raw: string): string {
+  const key = raw.indexOf('"reply"');
+  if (key === -1) return "";
+  const colon = raw.indexOf(":", key + 7);
+  if (colon === -1) return "";
+  const quote = raw.indexOf('"', colon + 1);
+  if (quote === -1) return "";
+  let value = "";
+  let escaping = false;
+  for (let index = quote + 1; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (escaping) {
+      value += decodeEscape(character);
+      escaping = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (character === '"') return value;
+    value += character;
+  }
+  return value;
+}
+
+function decodeEscape(character: string): string {
+  switch (character) {
+    case "n":
+      return "\n";
+    case "r":
+      return "\r";
+    case "t":
+      return "\t";
+    case '"':
+    case "\\":
+    case "/":
+      return character;
+    default:
+      return character;
+  }
 }

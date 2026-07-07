@@ -5,10 +5,14 @@
 import type {
   AppState,
   ChatStreamEvent,
-  MemoryItem,
   MemoryState,
   MotionStyle,
-  PromptSet,
+  BluetoothAckPayload,
+  BluetoothClientStatus,
+  BluetoothCommandsResponse,
+  BluetoothStatusResponse,
+  ChatHistoryMessage,
+  PromptSetsPayload,
   PublicSettings,
   SettingsUpdate,
 } from "./types";
@@ -31,7 +35,7 @@ export const clientId: string = (() => {
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { [CLIENT_HEADER]: clientId };
+  const headers: Record<string, string> = { Accept: "application/json", [CLIENT_HEADER]: clientId };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
     method,
@@ -39,7 +43,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
-  const parsed = text ? (JSON.parse(text) as unknown) : null;
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     if (parsed && typeof parsed === "object" && "error" in parsed) {
@@ -83,7 +94,7 @@ export const api = {
 
   // Memory.
   getMemory: () => request<MemoryState>("GET", "/api/memory"),
-  addMemory: (text: string) => request<MemoryItem>("POST", "/api/memory", { text }),
+  addMemory: (text: string) => request<MemoryState>("POST", "/api/memory", { text }),
   setMemoryEnabled: (enabled: boolean) => request("POST", "/api/memory/enabled", { enabled }),
   setMemoryItemEnabled: (id: string, enabled: boolean) =>
     request("PATCH", `/api/memory/${encodeURIComponent(id)}`, { enabled }),
@@ -91,12 +102,12 @@ export const api = {
   clearMemory: () => request("POST", "/api/memory/clear", {}),
 
   // Prompt sets.
-  getPromptSets: () => request<{ sets: PromptSet[]; active?: string }>("GET", "/api/prompt-sets"),
+  getPromptSets: () => request<PromptSetsPayload>("GET", "/api/prompt-sets"),
   createPromptSet: (name: string, system: string) =>
-    request<PromptSet>("POST", "/api/prompt-sets", { name, system }),
+    request<PromptSetsPayload>("POST", "/api/prompt-sets", { name, system }),
   updatePromptSet: (id: string, name: string, system: string) =>
-    request<PromptSet>("PUT", `/api/prompt-sets/${encodeURIComponent(id)}`, { name, system }),
-  deletePromptSet: (id: string) => request("DELETE", `/api/prompt-sets/${encodeURIComponent(id)}`),
+    request<PromptSetsPayload>("PUT", `/api/prompt-sets/${encodeURIComponent(id)}`, { name, system }),
+  deletePromptSet: (id: string) => request<PromptSetsPayload>("DELETE", `/api/prompt-sets/${encodeURIComponent(id)}`),
 
   // LLM runtime.
   llmStatus: () => request("GET", "/api/llm/status"),
@@ -112,13 +123,52 @@ export const api = {
   connectionCheck: (owner: "cloud" | "bluetooth") =>
     request(`POST`, `/api/transport/${owner}/check`, {}),
 
+  // Browser Bluetooth bridge. React owns only the browser/device session; all
+  // motion commands still come from backend bridge commands.
+  bluetoothStatus: () => request<BluetoothStatusResponse>("GET", "/api/transport/bluetooth/status"),
+  postBluetoothStatus: (status: BluetoothClientStatus) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/status", status),
+  bluetoothConnect: (status: BluetoothClientStatus) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/connect", status),
+  bluetoothDisconnect: (client_id: string, message?: string) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/disconnect", { client_id, message }),
+  bluetoothCommands: (bridgeClientId: string, waitSeconds: number, signal?: AbortSignal) =>
+    requestWithSignal<BluetoothCommandsResponse>(
+      "GET",
+      `/api/transport/bluetooth/commands?client_id=${encodeURIComponent(bridgeClientId)}&wait=${waitSeconds}`,
+      signal,
+    ),
+  bluetoothAck: (bridgeClientId: string, payload: BluetoothAckPayload) =>
+    request<{ status: string; bluetooth: BluetoothStatusResponse["bluetooth"] }>("POST", "/api/transport/bluetooth/ack", {
+      client_id: bridgeClientId,
+      ...payload,
+    }),
+
   exportTrace: () => request("GET", "/api/traces"),
 };
+
+async function requestWithSignal<T>(method: string, path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(path, { method, headers: { Accept: "application/json", [CLIENT_HEADER]: clientId }, signal });
+  const text = await res.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
+  if (!res.ok) {
+    const message = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : `Request failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed as T;
+}
 
 // Chat is a POST SSE stream; parse named events off the response body.
 export async function streamChat(
   message: string,
-  history: unknown[],
+  history: ChatHistoryMessage[],
   onEvent: (e: ChatStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -128,6 +178,16 @@ export async function streamChat(
     body: JSON.stringify({ message, history }),
     signal,
   });
+  if (!res.ok) {
+    let message = `Chat request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body && typeof body === "object" && "error" in body) message = String((body as { error: unknown }).error);
+    } catch {
+      // Keep the status-based fallback.
+    }
+    throw new ApiError(message, res.status, null);
+  }
   if (!res.body) throw new ApiError("chat stream unavailable", res.status, null);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

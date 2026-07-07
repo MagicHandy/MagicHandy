@@ -19,7 +19,7 @@ function download(name: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export function DiagnosticsPanel() {
+export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
   const { state, backendOnline, refresh } = useAppState();
   const { show } = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
@@ -100,7 +100,7 @@ export function DiagnosticsPanel() {
           Restores every setting to factory defaults, including the connection key. Saved memories and prompt
           sets are not touched.
         </p>
-        <button type="button" className="btn btn-danger-outline" disabled={!backendOnline} onClick={() => void reset()}>
+        <button type="button" className="btn btn-danger-outline" disabled={locked} onClick={() => void reset()}>
           {confirmReset ? "Confirm reset all settings" : "Reset all settings"}
         </button>
       </div>

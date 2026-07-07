@@ -14,14 +14,10 @@ export function QuickSettings() {
   const motion = state?.settings?.motion;
   const locked = !backendOnline || readOnly;
   const [vals, setVals] = useState<MotionSettings | null>(null);
-  const seeded = useRef(false);
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    if (!seeded.current && motion) {
-      setVals({ ...motion });
-      seeded.current = true;
-    }
+    if (motion) setVals({ ...motion });
   }, [motion]);
 
   function push(patch: Record<string, unknown>) {

@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
+import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { streamChat } from "./api/client";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
 
 // These tests guard the safety-critical UI invariants from
@@ -17,7 +19,14 @@ const baseState = {
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000 },
     diagnostics: { verbosity: "normal" },
-    options: {},
+    options: {
+      hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth"],
+      api_application_id_sources: ["bundled", "developer_override"],
+      diagnostics_verbosities: ["normal", "debug", "trace"],
+      llm_providers: ["llama_cpp", "ollama"],
+      llama_cpp_modes: ["managed", "external"],
+      prompt_sets: ["default"],
+    },
   },
   controller: { active: true, read_only: false },
   motion: { available: true },
@@ -29,13 +38,14 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: unknown; fail?: boolean } = {}) {
-  const state = opts.state ?? baseState;
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean } = {}) {
+  const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
   const fn = vi.fn(async (input: RequestInfo | URL) => {
     if (opts.fail) throw new Error("offline");
     const u = String(input);
-    if (u.includes("/api/settings")) return jsonRes({ settings: baseState.settings });
-    if (u.includes("/api/memory")) return jsonRes(baseState.memory);
+    if (u.includes("/api/transport/bluetooth/status")) return jsonRes({ status: "success", dispatch_owner: state.settings.device.hsp_dispatch_owner, bluetooth: state.bluetooth_bridge ?? {} });
+    if (u.includes("/api/settings")) return jsonRes({ settings: state.settings });
+    if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
     if (u.includes("/api/state")) return jsonRes(state);
     return jsonRes({});
@@ -51,8 +61,10 @@ class FakeEventSource {
 }
 
 function go(hash: string) {
-  window.location.hash = hash;
-  window.dispatchEvent(new Event("hashchange"));
+  act(() => {
+    window.location.hash = hash;
+    window.dispatchEvent(new Event("hashchange"));
+  });
 }
 
 function renderApp() {
@@ -117,11 +129,69 @@ describe("app shell safety invariants", () => {
     expect(screen.getByRole("heading", { name: /^settings$/i })).toBeInTheDocument();
   });
 
+  it("renders every settings section without blanking the app", async () => {
+    installFetch({ memory: { enabled: true } });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    for (const hash of ["#/settings/device", "#/settings/model", "#/settings/prompts", "#/settings/diagnostics"]) {
+      go(hash);
+      expect(await screen.findByRole("navigation", { name: /settings sections/i })).toBeInTheDocument();
+      expect(screen.queryByText(/this view could not render/i)).toBeNull();
+    }
+  });
+
+  it("locks settings, prompt, and memory mutations for read-only clients", async () => {
+    installFetch({ state: { ...baseState, controller: { active: false, read_only: true } } });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/device");
+    expect(await screen.findByRole("button", { name: /save settings/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /check connection/i })).toBeDisabled();
+    go("#/settings/prompts");
+    expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: /add memory/i })).toBeDisabled();
+  });
+
+  it("shows browser Bluetooth bridge controls when that dispatch owner is selected", async () => {
+    installFetch({
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, hsp_dispatch_owner: "browser_bluetooth" } },
+        bluetooth_bridge: { connected: false, ready: false, status: "disconnected", message: "Bluetooth disconnected" },
+      },
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/device");
+    expect(await screen.findByText(/bluetooth disconnected/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
+  });
+
   it("labels the visualizer as an engine-state image (commanded estimate)", async () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     expect(screen.getAllByRole("img", { name: /motion/i }).length).toBeGreaterThan(0);
     expect(screen.getByText(/commanded position estimate/i)).toBeInTheDocument();
+  });
+});
+
+describe("chat stream API", () => {
+  it("throws JSON error responses before trying to read an SSE body", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ error: "read-only client" }) } as Response)));
+    await expect(streamChat("hello", [], () => undefined)).rejects.toThrow("read-only client");
+  });
+
+  it("parses final message events", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: message\ndata: {"reply":"Hi","motion":{"action":"none"}}\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
+    const events: Array<{ event: string }> = [];
+    await streamChat("hello", [], (event) => events.push(event));
+    expect(events).toEqual([expect.objectContaining({ event: "message" })]);
   });
 });
