@@ -134,7 +134,7 @@ export function SettingsRoute() {
             <label className="field"><span className="label">API application ID source</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
             <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>
             <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => setNewKey(e.target.value)} /></label>
-            <label className="toggle-line" style={{ marginBottom: 12 }}><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
+            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
             <BluetoothBridge visible={s.device.hsp_dispatch_owner.toLowerCase().includes("blue")} locked={locked} backendOnline={backendOnline} initial={state?.bluetooth_bridge} />
             <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
             <div className="row-actions"><button type="button" className="btn btn-secondary" onClick={() => void checkConnection()} disabled={locked}>Check connection</button></div>
@@ -176,12 +176,10 @@ export function SettingsRoute() {
           </>
         )}
 
-        {section !== "diagnostics" && (
-          <div className="row-actions" style={{ marginTop: 18 }}>
-            <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked}>Save settings</button>
-            {locked && <span className="form-status">{backendOnline ? "Read-only client" : "Core offline"}</span>}
-          </div>
-        )}
+        <div className="row-actions settings-actions">
+          <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked}>Save settings</button>
+          {locked && <span className="form-status">{backendOnline ? "Read-only client" : "Core offline"}</span>}
+        </div>
       </section>
     </>
   );

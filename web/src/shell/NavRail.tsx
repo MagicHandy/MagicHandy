@@ -18,8 +18,8 @@ export function routeBase(hash: string): string {
 export function NavRail() {
   const active = routeBase(useHashRoute());
   const { state } = useAppState();
-  const provider = state?.settings?.llm?.provider ?? "llama.cpp";
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "cloud";
+  const ownerLabel = owner.replace(/_/g, " ");
 
   return (
     <nav className="nav-rail" aria-label="Primary navigation">
@@ -27,7 +27,7 @@ export function NavRail() {
         <span className="nav-avatar" aria-hidden="true">M</span>
         <span className="nav-identity">
           <span className="name">MagicHandy</span>
-          <span className="sub">local · {provider} · {owner}</span>
+          <span className="sub">local / {ownerLabel}</span>
         </span>
       </a>
       <div className="nav-divider" aria-hidden="true" />

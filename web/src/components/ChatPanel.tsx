@@ -113,7 +113,7 @@ export function ChatPanel() {
         <div className="chat-log" ref={logRef} onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions">
           {messages.map((m) => (
             <div key={m.id} className="chat-message" data-role={m.role} data-streaming={m.streaming || undefined} data-state={m.warning ? "warning" : undefined}>
-              <span className="chat-avatar" aria-hidden="true">{m.role === "user" ? "You" : "M"}</span>
+              <span className="chat-avatar" aria-hidden="true">{m.role === "user" ? "Y" : "M"}</span>
               <div className="chat-body">
                 <span className="chat-speaker">{m.role === "user" ? "You" : "MagicHandy"}</span>
                 <div className="chat-bubble">{m.text || (m.warning ? "Malformed model JSON — the reply could not be parsed." : "")}</div>

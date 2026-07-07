@@ -14,7 +14,7 @@ export function ChatRoute() {
     <>
       <WorkspaceHead title="Chat" lede="Message MagicHandy — chat can start, adjust, and stop motion." />
       <div className="split">
-        <section className="panel" aria-label="Conversation">
+        <section className="panel chat-panel-shell" aria-label="Conversation">
           <ChatPanel />
         </section>
         <aside className="panel" aria-label="Motion controls" data-requires-backend>

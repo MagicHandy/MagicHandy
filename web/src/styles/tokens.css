@@ -32,6 +32,8 @@
   --gap: 16px;
   --rail-width: clamp(212px, 18vw, 236px);
   --status-h: 48px;
+  --content-max: 980px;
+  --content-wide-max: 1180px;
   font-family: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
   color-scheme: dark;
 }
@@ -100,4 +102,14 @@ body {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 400;
+}
+.hint-block {
+  display: block;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.hint-block.narrow {
+  max-width: 52ch;
 }
