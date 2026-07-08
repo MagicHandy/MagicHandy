@@ -1,15 +1,27 @@
 # Contributing to MagicHandy (humans and agents)
 
-This file is the shared floor for **everyone** who changes this repository —
+This file is the shared reference for **everyone** who changes this repository —
 people and AI agents alike, whatever editor or model they use. It applies to
 every branch. `main` is the release line; changes reach it by pull request with
 green CI and review. Different contributors bring different tastes in structure
-and styling, and that is welcome — but the requirements below are the invariants
-that keep MagicHandy safe, efficient, and maintainable, and they are not
-negotiable per-branch.
+and styling, and that's welcome — the point is shared **outcomes** (a device
+that's safe, an app that stays lean, code the next person can follow), not one
+house style.
 
-If a change cannot meet a requirement here, that is a discussion to have in the
-PR (and possibly a recorded decision), not a gate to quietly relax.
+Two kinds of expectations live here, and it helps to keep them apart:
+
+- **Non-negotiable** — safety, correctness, and security. These are enforced by
+  CI and block a merge, because getting them wrong hurts users or the device:
+  §1 and §2 (motion safety and backend-authoritative UI invariants), §3
+  (pure-Go / `CGO_ENABLED=0` core), the import boundaries in §4, and §5's
+  secret/data-hygiene rules.
+- **Guidelines** — structure, file size, and style. These are advisory: CI
+  surfaces them, reviewers weigh them, and reasonable exceptions are a normal PR
+  conversation, not a fight with a gate. Most of §4 is here.
+
+If a non-negotiable is genuinely in the way, that's a decision to record (an
+ADR), not a gate to quietly disable. If a guideline is in the way, use judgment
+and move on — no ceremony required.
 
 ## 1. Device safety is the first requirement
 
@@ -63,17 +75,27 @@ The rewrite exists to be efficient and shippable. Protect that:
 
 ## 4. Maintainability
 
-- **Split before you exceed the size norm.** The soft cap is ~800 lines per core
-  source file. When a file grows past it, **split it**; raising a file's
-  line-budget override is a last resort that needs a stated reason and reviewer
-  sign-off, not a default way to make the check pass.
-- **Import boundaries are enforced** (`depguard` + `internal/architecture`
-  tests): `chat`/`llm`/`modes` never import `transport`; `motion` depends on the
-  transport interface, not internals; nothing depends on `httpapi`. Keep them
-  green.
-- **No god-modules.** Packages match the target architecture in
-  `IMPLEMENTATION_PLAN.md`. One struct owning unrelated state is the failure mode
-  this project is rewriting away from.
+Mostly guidelines — good defaults applied with judgment, not gates to game. The
+one exception (import boundaries) is called out as non-negotiable because it
+encodes the safety architecture, not taste.
+
+- **Keep files and functions focused (guideline).** ~800 lines is a good ceiling
+  to *aim* for; past it, splitting usually helps and is worth a look. The size
+  check is deliberately advisory — it notes oversized files without failing CI up
+  to a generous hard ceiling — so it stays a nudge rather than a rule to route
+  around. A genuinely huge file is a smell to raise in review, not an automatic
+  block, and bumping a file's advisory override is fine when splitting would hurt
+  readability.
+- **No god-modules (guideline).** One struct owning unrelated state is the
+  failure mode this project is rewriting away from — the reason for the size
+  guideline above. Packages track the target architecture in
+  `IMPLEMENTATION_PLAN.md`.
+- **Import boundaries are enforced (non-negotiable).** `depguard` +
+  `internal/architecture` tests keep `chat`/`llm`/`modes` off `transport`,
+  `motion` on the transport interface (not internals), and nothing depending on
+  `httpapi`. This is the structural form of the motion/transport contract
+  (ADR 0002) — it prevents parallel motion paths (R14), so it fails CI on
+  purpose. Keep it green.
 
 ## 5. Repository hygiene
 
@@ -95,11 +117,15 @@ The rewrite exists to be efficient and shippable. Protect that:
 
 ## 6. CI and review
 
-- **CI gates stay green and are not weakened to pass a change.** The gates are
-  `gofmt`/`go vet`/`golangci-lint`, `go test ./...`, `go test -race ./...`, the
-  `CGO_ENABLED=0` build, the import-boundary and line-budget tests, and the
-  frontend build/test. If a gate blocks you, fix the code or record an explicit,
-  reviewed exception — do not silently disable, downgrade, or skip a gate.
+- **The hard gates stay green and aren't disabled to sneak a change past.** They
+  are the safety/correctness/security ones: `gofmt`/`go vet`/`golangci-lint`,
+  `go test ./...`, `go test -race ./...`, the `CGO_ENABLED=0` build, the
+  import-boundary tests, and the frontend build/test. If one blocks you, fix the
+  code or record an explicit, reviewed exception (an ADR) — don't quietly
+  downgrade or skip it. The size check is intentionally advisory (see §4), not a
+  hard gate; changing an advisory check into a hard one, or vice versa, is a
+  deliberate reviewed policy change, not something to do mid-PR to unblock
+  yourself.
 - **Docs move with the code.** A change to behavior or architecture updates the
   relevant doc in the same PR (`IMPLEMENTATION_PLAN.md`, ADRs under
   `docs/decisions/`, `docs/ui-design*.md`, `docs/risk-register.md`), and a change

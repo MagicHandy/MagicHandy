@@ -1,191 +1,143 @@
 # MagicHandy
 
-MagicHandy is a Go-first rewrite of StrokeGPT-ReVibed. The current application
-starts a local HTTP server, serves an embedded single-page UI, exposes
-health/state/settings endpoints, writes structured logs, runs local LLM chat
-through provider adapters, and sends chat motion intent through the motion
-engine.
+**MagicHandy is a free, open-source, local-first app that lets a local AI
+control your [Handy](https://www.thehandy.com/).** You chat with an assistant —
+or let it take over — and it moves your device in real time. Everything runs on
+your own machine: your conversations, settings, and device key stay local. No
+account, no third party in the middle, no tracking.
 
-## Current Scope
+> **Status:** early and under active development. It already works — local chat
+> drives real device motion — but it isn't packaged for one-click install yet
+> and some features are still in progress. Expect rough edges, and see
+> [what's coming](#roadmap-highlights).
 
-Implemented:
+## What it does
 
-- pure-Go module and application entrypoint
-- embedded static assets from `web/`
-- `GET /healthz`, `GET /api/status`, `GET /api/state`, and settings API routes
-- fake Handy transport contracts, safe transport diagnostics, and `GET /api/traces`
-- Cloud REST HSP v4/API v3 transport code, request-shape tests, and invariant tests
-- semantic motion engine with active retargeting, latency-aware buffer lead,
-  phase-preserving same-pattern changes, low-jump cross-pattern handoff, and
-  retarget trace export fields
-- Phase 7 retarget validation runner for safe real-device trace exports
-- local LLM provider layer with llama.cpp as the primary HTTP path and Ollama as
-  the secondary path, including managed llama-server setup fields and explicit
-  load/unload endpoints
-- streaming chat endpoint with strict JSON response validation, one repair pass,
-  malformed-response UI indication, prompt sets, and motion-engine dispatch
-- user-managed long-term memory (`/api/memory`): add, enable/disable
-  individually or globally, remove, clear; enabled memories are injected into
-  the chat system prompt, and chat works identically with memory off
-- editable prompt sets (`/api/prompt-sets`) with protected built-in templates
-  (duplicate to edit); the motion JSON contract is appended by code and can
-  never be edited out of a prompt
-- explicit settings factory reset (`POST /api/settings/reset`) behind a
-  double-confirm control in Settings > Diagnostics
-- autonomous modes as motion-engine clients (`/api/modes`): Freestyle drives
-  bounded arrangement segments through deterministic style scoring (gentle /
-  balanced / intense, a quick setting), with every planner decision — seed,
-  score table, segment — recorded as trace rows; chat keepalive restarts the
-  last chat target only after transport recovery, never after a user stop or
-  pause
-- JSON structured logging
-- graceful shutdown
-- SQLite persistence (`magichandy.db`) for settings, user memories, and editable
-  prompt sets, with schema migrations, legacy JSON import, and redacted API
-  views
-- minimal browser settings UI for server, device placeholders, motion defaults,
-  and diagnostics verbosity
-- baseline tests, race-test compatible packages, and goroutine leak-test
-  harnesses for future motion/transport loops
-- CI for formatting, `go vet`, `golangci-lint`, tests, race tests, and a
-  `CGO_ENABLED=0` build
-
-Not implemented yet (see the status table in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)):
-
-- voice workers and providers (Phases 12-13)
-- pattern library, authoring, and migration (Phases 14-15)
-- release packaging (Phase 16)
+- **Chat that moves the device.** Talk to a local LLM (llama.cpp or Ollama); it
+  replies *and* drives motion through one shared, safe motion engine.
+- **Hands-free modes.** Freestyle keeps things going on its own; an LLM-driven
+  Autopilot (letting the assistant change things up from the conversation) is on
+  the way.
+- **You stay in control.** Live speed / stroke / direction controls apply
+  instantly, and an emergency **Stop** is always one click (or `Esc`) away on
+  every screen.
+- **Local and private.** A single lightweight app; your data lives in a local
+  database on your computer, not a cloud.
+- **Runs light.** It's a Go rewrite built for efficiency — the core idles in tens
+  of megabytes, not hundreds.
 
 ## Requirements
 
-- Go 1.25 or newer (tested locally with Go 1.26.4)
-- No Python or CGO dependency is required for the core app; the runtime is a
-  single Go binary with the browser UI embedded
-- Node.js 20+ and npm are needed only to build the `web/` React UI
-  (development/CI), never to run the compiled binary
+- A **Handy** with firmware v4 and API v3 access.
+- **Windows** is the primary platform today; Linux and macOS builds are
+  best-effort.
+- A **local LLM** for chat — [llama.cpp](https://github.com/ggml-org/llama.cpp)
+  (recommended for NVIDIA GPUs) or [Ollama](https://ollama.com/). MagicHandy
+  talks to these; it doesn't bundle a model, so you pick and download one you
+  like.
 
-## Run From Source
+## Get started
+
+**The easy way (Windows).** From the project folder, in PowerShell:
+
+```powershell
+.\install.ps1
+```
+
+The installer checks for [Go](https://go.dev/dl/), builds MagicHandy, sets up
+your data folder, and can help you get a local LLM running. When it's done it
+opens the app in your browser at <http://127.0.0.1:49717>.
+
+**Prefer to do it by hand?** See [Build from source](#build-from-source).
+
+One-click packaging, guided model download, and GPU/CUDA setup are being brought
+up to the polish of the original StrokeGPT app — see the plan in
+[docs/installation-automation.md](docs/installation-automation.md).
+
+## Privacy and safety
+
+- **Local-first.** Chat, memories, prompts, and settings live in a local SQLite
+  database on your machine. Your Handy connection key is a private credential —
+  it is never shown back in the UI, logs, diagnostics, or exports.
+- **Emergency Stop, always reachable.** It's on every screen, works even for a
+  read-only second tab or when the backend hiccups, and stops the device even if
+  a network call fails.
+- **You set the limits.** Live controls apply immediately, and hands-free modes
+  stay inside the speed/stroke limits you choose and stop the instant you say so.
+- **Adults only.** MagicHandy controls an intimate device. Use it responsibly and
+  at your own risk.
+
+## Build from source
+
+Requires [Go](https://go.dev/dl/) 1.25 or newer.
 
 ```powershell
 go run ./cmd/magichandy
 ```
 
-By default the app listens on `127.0.0.1:49717`.
+The app serves its UI at <http://127.0.0.1:49717>. The browser UI ships
+prebuilt, so you don't need Node just to run it. Your data lives under your OS
+config directory (`MagicHandy/magichandy.db`); pass `-data-dir .\.local-data` to
+keep it somewhere else, or `-addr 127.0.0.1:PORT` to change the port.
 
-Useful flags:
+To work on the UI itself (Vite + React + TypeScript, built at build time and
+embedded in the binary), see [`web/`](web/) and
+[ADR 0009](docs/decisions/0009-react-frontend.md).
 
-```powershell
-go run ./cmd/magichandy -addr 127.0.0.1:49718
-go run ./cmd/magichandy -data-dir .\.local-data
-go run ./cmd/magichandy -log-level debug
-go run ./cmd/magichandy -version
-```
+## Roadmap highlights
 
-Settings, saved memories, and user prompt sets are stored in `magichandy.db`
-under the resolved app data directory. By default this is the OS user config
-directory plus `MagicHandy`; use `-data-dir` or `MAGICHANDY_DATA_DIR` for local
-development and tests. Legacy `settings.json`, `memories.json`, and
-`prompt_sets.json` files are imported once and renamed to `*.migrated`.
+MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working today: local
+chat driving real motion (Cloud REST and browser Bluetooth), live controls,
+Freestyle, long-term memory, editable prompt sets, and the new React UI. In
+progress or planned: Autopilot, a pattern/program library and authoring, voice
+in/out, guided setup and model management, and packaged releases. The full
+picture is in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-Health checks:
+MagicHandy and [LSO (Local Stroke Orchestrator)](docs/lso-merge-integration.md)
+are being combined into one project on this Go core.
 
-```powershell
-Invoke-WebRequest http://127.0.0.1:49717/healthz
-Invoke-WebRequest http://127.0.0.1:49717/api/status
-Invoke-WebRequest http://127.0.0.1:49717/api/state
-Invoke-WebRequest http://127.0.0.1:49717/api/settings
-Invoke-WebRequest http://127.0.0.1:49717/api/llm/status
-Invoke-WebRequest -Method POST http://127.0.0.1:49717/api/llm/load
-Invoke-WebRequest -Method POST http://127.0.0.1:49717/api/llm/unload
-Invoke-WebRequest http://127.0.0.1:49717/api/transport/diagnostics
-Invoke-WebRequest http://127.0.0.1:49717/api/traces
-```
+## For contributors
 
-`GET /api/settings` and `GET /api/state` return redacted settings. The Handy
-connection key can be saved through `PUT /api/settings`, but it is not returned
-by diagnostics or settings reads.
+Contributions are welcome, from people and AI coding tools alike.
 
-Chat uses the selected local LLM provider from settings. The default provider is
-managed llama.cpp at `http://127.0.0.1:8080`: configure a `llama-server`
-executable path and a GGUF model path, then load it through `/api/llm/load` or
-the UI. External llama.cpp mode connects to an already-running OpenAI-compatible
-server at the configured base URL. Ollama is available at
-`http://127.0.0.1:11434` through Ollama's own native `/api/chat` endpoint (the
-MagicHandy browser route is `POST /api/chat/stream`). The core does not
-download models automatically and does not link libllama.
+- **Start here:** [AGENTS.md](AGENTS.md) — the shared standards for everyone. It
+  separates what's non-negotiable (device safety, the pure-Go core, import
+  boundaries, secret/data hygiene) from what's a guideline you apply with
+  judgment.
+- **The plan and architecture:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+- Work happens on feature branches and merges to `main` by pull request with
+  green CI and review.
 
-The Phase 7 real-device retarget workflow uses the dedicated validation command:
-
-```powershell
-$env:MAGICHANDY_HANDY_CONNECTION_KEY = "<private Handy connection key>"
-go run ./cmd/retarget-validate -max-speed 35
-Remove-Item Env:\MAGICHANDY_HANDY_CONNECTION_KEY
-```
-
-Trace exports are written under `traces/` by default. The public Handy API v3
-application ID is bundled; the private connection key is not returned by
-diagnostics, trace exports, or settings reads.
-
-## Browser UI (React)
-
-The browser UI is a Vite + React + TypeScript app under `web/`, built to
-`web/dist` and embedded by the Go binary (ADR 0009). The build output is
-committed so `go run`/`go build` work without Node. To change the UI:
-
-```powershell
-cd web
-npm ci
-npm run build      # regenerate web/dist (commit it)
-npm run test       # Vitest component/safety tests
-npm run typecheck
-npm run dev        # optional Vite dev server on :5173 (proxy API to the Go app)
-```
-
-The previous vanilla-JS UI is kept for reference under `web/legacy/` and is not
-embedded; it will be removed once React reaches parity.
-
-## Validate
+Validate a change before you push:
 
 ```powershell
 gofmt -w cmd internal web
 go vet ./...
 go test ./...
-go test -race ./...
+go test -race ./...          # needs a C compiler; CI also runs it on Linux
 $env:CGO_ENABLED = "0"; go build ./cmd/magichandy
 (cd web; npm ci; npm run typecheck; npm run test; npm run build)
 ```
 
-`go test -race` requires CGO and a local C compiler. CI runs the race test on
-Ubuntu so the gate is enforced even when a Windows workstation does not have
-MinGW/GCC installed.
-
-`golangci-lint run` is part of CI. Local developers can install
-`golangci-lint` to run the same static checks before pushing.
-
-## Planning Docs
+### Docs
 
 - [Contributing standards (humans and agents)](AGENTS.md)
+- [Installation automation plan](docs/installation-automation.md)
 - [MagicHandy + LSO integration plan](docs/lso-merge-integration.md)
 - [MagicHandy + LSO merge alternatives](docs/lso-merge-alternatives.md)
-
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 - [Goals and guardrails](docs/goals-and-guardrails.md)
 - [Goal scorecard](docs/goal-scorecard.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
-- [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
-- [React frontend migration](docs/decisions/0009-react-frontend.md)
-- [React UI implementation handoff](docs/react-ui-implementation-handoff.md)
-- [SQLite persistence (ADR 0008)](docs/decisions/0008-sqlite-persistence.md)
-- [UI design](docs/ui-design.md)
-- [UI navigation redesign (sidebar shell)](docs/ui-navigation-redesign.md)
-- [UI design guidelines](docs/ui-design-guidelines.md)
-- [Localization wording](docs/localization-wording.md)
-- [Prompt localization strategy](docs/prompt-localization-strategy.md)
-- [StrokeGPT-ReVibed prompt inventory](docs/stgpt-rv-prompt-inventory.md)
+- [Frontend strategy](docs/decisions/0004-frontend-strategy.md) ·
+  [React frontend migration](docs/decisions/0009-react-frontend.md)
+- [SQLite persistence](docs/decisions/0008-sqlite-persistence.md)
+- [UI design](docs/ui-design.md) ·
+  [UI design guidelines](docs/ui-design-guidelines.md) ·
+  [UI navigation redesign](docs/ui-navigation-redesign.md)
 - [HSP v4 invariants](docs/hsp-v4-invariants.md)
-- [Risk register](docs/risk-register.md)
-- [Performance baseline](docs/perf-baseline.md)
+- [Risk register](docs/risk-register.md) ·
+  [Performance baseline](docs/perf-baseline.md)
 
 ## License
 
