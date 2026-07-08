@@ -45,7 +45,7 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 11B SQLite stripped build idles at 54.13 MB after `/healthz`; pre-SQLite baseline was 8.96 MB. Waiver recorded for pure-Go SQLite cost. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 11B SQLite stripped build idles at 54.13 MB after `/healthz` (54.36 after DB reads); pre-SQLite baseline was 8.96 MB. The +45 MB reads as a fixed pure-Go SQLite runtime baseline (idle ≈ post-read, not data-proportional; `cache_size` bounded to 2 MB) and is still ~1/10 of the 525 MB Python core. Waived for Phase 11B; if the absolute target matters, `GOMEMLIMIT`/`GOGC` tuning or a lighter datastore are the levers. A SQLite-path soak would confirm it does not drift; re-evaluate if idle climbs past ~60 MB. |
 | Go core active RSS | < 80 MB | **Met** | Phase 11B SQLite API-read sample is 54.36 MB; pre-SQLite real-device active samples were 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth. Re-measure real-device active path after SQLite if a later phase changes transport/motion memory. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
 

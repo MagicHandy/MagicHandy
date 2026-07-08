@@ -416,6 +416,10 @@ Mitigation:
 - preserve the redaction contract: the connection key is never returned by
   reads, diagnostics, or exports; the `.db` file carries the same at-rest
   sensitivity as `settings.json` did
+- corrupt-store startup: a corrupt legacy JSON file still recovers to defaults,
+  but a corrupt `magichandy.db` currently fails at open rather than recovering
+  (the JSON stores never failed startup). Restoring never-fail startup — back up
+  the bad DB, start fresh, and report it in load status — is a tracked follow-up
 
 Exit evidence:
 
