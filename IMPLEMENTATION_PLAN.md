@@ -165,7 +165,18 @@ Each phase below is written so a future `/goal` can complete it end-to-end. A ph
 - a PR opened unless the phase is explicitly local-only planning
 - clear notes about what was intentionally not implemented
 
-Use branch prefix `codex/` when Codex submits and `claude/` when Claude submits.
+Use branch prefix `codex/` when Codex submits and `claude/` when Claude submits;
+other contributors and tools use their own clear branch names. Every branch —
+whoever or whatever authored it — meets the shared floor in
+[AGENTS.md](AGENTS.md) and passes green CI before it merges to `main`.
+
+The project is being combined with LSO (Local Stroke Orchestrator) on this Go
+core. Integration is planned in
+[docs/lso-merge-integration.md](docs/lso-merge-integration.md), with the open
+architectural decisions and their trade-offs in
+[docs/lso-merge-alternatives.md](docs/lso-merge-alternatives.md). Merge work
+lands on feature branches and reaches `main` by PR under the same standards and
+gates as the rest of the project.
 
 When a phase changes visible UI, verify against the live rendered DOM (run the
 app headless and inspect/screenshot), not source-only reasoning; source-only

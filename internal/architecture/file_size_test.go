@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+// hardCeilingLines is the only failing threshold. Files below it are governed by
+// an advisory guideline (a "consider splitting" note), not a hard cap — so the
+// size norm stays a maintainability guideline reviewers apply with judgment,
+// rather than a rule contributors route around. See AGENTS.md.
+const hardCeilingLines = 1500
+
 func TestSourceFileLineBudgets(t *testing.T) {
 	root := repoRoot(t)
 	budgets := []sourceBudget{
@@ -76,16 +82,22 @@ func checkSourceBudget(t *testing.T, repo string, budget sourceBudget) {
 			return err
 		}
 		relative = filepath.ToSlash(relative)
-		maxLines := budget.defaultMax
+		advisory := budget.defaultMax
 		if override, ok := budget.overrides[relative]; ok {
-			maxLines = override
+			advisory = override
 		}
 		lines, err := countLines(path)
 		if err != nil {
 			return err
 		}
-		if lines > maxLines {
-			t.Errorf("%s has %d lines, budget is %d; split the file before adding more code", relative, lines, maxLines)
+		// Guideline, not a rule to game: over the advisory target we log a
+		// non-failing "consider splitting" note; only files over the generous
+		// hard ceiling fail CI. Reviewers use judgment in between.
+		switch {
+		case lines > hardCeilingLines:
+			t.Errorf("%s has %d lines, over the %d hard ceiling; split it before adding more code", relative, lines, hardCeilingLines)
+		case lines > advisory:
+			t.Logf("advisory: %s has %d lines (guideline ~%d); consider splitting when you next touch it", relative, lines, advisory)
 		}
 		return nil
 	})

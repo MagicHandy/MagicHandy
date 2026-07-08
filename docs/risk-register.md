@@ -425,3 +425,46 @@ Exit evidence:
   still pass
 
 Relates to R8 (user migration) and R11 (goals unmeasured).
+
+## R20: MagicHandy + LSO Merge Integration Risk
+
+Level: High
+
+Description:
+Merging LSO's feature set (Intiface/Buttplug transport, motion blocks/queue,
+personas, a feature-rich frontend, localization) onto the Go core brings large,
+fast-moving surface from a different lineage and different structure/style
+preferences. Without shared, enforced standards a merge of this size can erode
+the properties that justify the rewrite: a second motion path or a transport
+that bypasses the engine (R14), duplicated personalization/content systems that
+drift, a heavier browser footprint than the efficiency goal allows, oversized
+files or weakened CI gates slipped in to "make it pass," and committed runtime
+data or duplicated build artifacts. Two parallel frontends or two motion-content
+models shipping at once is the concrete failure mode.
+
+Mitigation:
+
+- one shared floor for every contributor and agent (`AGENTS.md`), enforced by CI
+  on every branch before it merges to `main`; gates are strengthened, not
+  weakened, as the surface grows
+- new transports (e.g., Intiface) implement the `transport` interface only and
+  are covered by the motion safety gate; every motion source produces semantic
+  targets for the shared engine (no parallel path, R14)
+- converge duplicated systems: one canonical frontend, one personalization
+  model, one motion-content model — decided deliberately and recorded as ADRs
+  (`docs/lso-merge-integration.md`, `docs/lso-merge-alternatives.md`), not
+  defaulted-into by merge order
+- re-measure RSS, binary size, and browser bundle cost as capability lands, and
+  record it in `docs/goal-scorecard.md`; heavy UI features must earn their weight
+- repository hygiene: no committed `*.db`/`-wal`/`-shm`, caches, `node_modules`,
+  `.scratch/`, or duplicated large binaries; split oversized files rather than
+  raising the budget by default
+
+Exit evidence:
+
+- the merged app ships one frontend, one motion path, and one personalization
+  model; CI (Go + frontend) is green with no weakened gates; budgets are
+  re-measured and recorded; the open merge decisions are settled as ADRs
+
+Relates to R14 (per-source motion divergence), R11 (goals unmeasured), R9 (UI
+regression), and R8 (user migration).
