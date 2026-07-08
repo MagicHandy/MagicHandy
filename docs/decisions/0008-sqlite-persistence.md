@@ -150,6 +150,15 @@ Negative / deliberate trade-offs:
 - Pure-Go SQLite is slower than the C build. For this workload (small
   settings/memory/prompt data and a local chat log) it is far more than
   adequate; the app is a single local operator, not a high-QPS service.
+- Startup on a *corrupted store* changes behavior. The JSON stores recovered a
+  corrupt or unreadable file to safe defaults and never failed startup (a
+  hard-won StrokeGPT lesson). A corrupt/unreadable `magichandy.db` currently
+  fails at open instead, because `store.Open` propagates the error. WAL plus
+  `synchronous=NORMAL` make corruption unlikely, and failing clearly beats
+  silently discarding a user's data — but restoring "never fail startup" (back up
+  the bad DB, start fresh, report it in load status) is a tracked follow-up, not
+  yet implemented. Recovery of a corrupt *legacy JSON* file during the one-time
+  import is preserved (it is recorded as `recovered` and defaults stay active).
 
 ## Alternatives considered
 

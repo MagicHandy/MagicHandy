@@ -37,7 +37,7 @@ Updated 2026-07-06. Phases 0 through 11 are merged to `main`. Phase 11B
 | 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
-| 11B | SQLite persistence foundation (ADR 0008) | **Complete** | pending |
+| 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12-17 | Voice, patterns, migration, packaging, parity | Not started | — |
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
