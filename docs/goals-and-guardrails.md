@@ -118,10 +118,26 @@ These are enforced in CI from Phase 1, not aspirational.
 
 ### Size and complexity norms
 
-- soft cap: no core source file over ~600-800 lines; split before exceeding
+- soft cap: no core source file over ~600-800 lines; split before exceeding. A
+  per-file line-budget override is a last resort with a stated reason and
+  reviewer sign-off, not the default way to pass the check
 - no single struct acting as a god-object (the `motion.py` failure mode)
 - function complexity within the configured `gocyclo`/`funlen` thresholds
 - these surface as lint findings to track, not silent drift
+- CI gates are strengthened as the surface grows, never weakened to pass a
+  change; a blocked gate is fixed in code or given an explicit, reviewed
+  exception
+
+### Repository hygiene
+
+- never commit generated or runtime files: SQLite databases and sidecars
+  (`*.db`, `*.db-wal`, `*.db-shm`), logs, traces, `node_modules`, build/tool
+  caches, `.scratch/`, or local data dirs — add them to `.gitignore`
+- commit build output only where the binary deliberately embeds it (the single
+  shipping UI `dist`), one canonical copy; no accumulated stale bundles or
+  parallel build trees
+- large binary assets live in one place, referenced, not duplicated across
+  directories; secrets never enter git, logs, diagnostics, or exports
 
 ### Frontend
 

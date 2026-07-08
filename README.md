@@ -165,6 +165,10 @@ MinGW/GCC installed.
 
 ## Planning Docs
 
+- [Contributing standards (humans and agents)](AGENTS.md)
+- [MagicHandy + LSO integration plan](docs/lso-merge-integration.md)
+- [MagicHandy + LSO merge alternatives](docs/lso-merge-alternatives.md)
+
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 - [Goals and guardrails](docs/goals-and-guardrails.md)
 - [Goal scorecard](docs/goal-scorecard.md)
