@@ -3,6 +3,8 @@ package chat
 import (
 	"fmt"
 	"strings"
+
+	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
 // PromptSet contains the behavior instructions for one chat profile. The
@@ -128,6 +130,11 @@ Never say motion is handled elsewhere or by another planner.`
 // ComposeSystem builds the full system prompt: behavior text from the set,
 // then the code-owned contract, then enabled memories when present.
 func ComposeSystem(set PromptSet, memories []string) string {
+	return ComposeSystemForMode(set, memories, config.MotionGenerationModeProcedural)
+}
+
+// ComposeSystemForMode appends motion instructions that match the configured generation mode.
+func ComposeSystemForMode(set PromptSet, memories []string, motionGenerationMode string) string {
 	var builder strings.Builder
 	behavior := strings.TrimSpace(set.System)
 	if behavior == "" {
@@ -140,7 +147,7 @@ func ComposeSystem(set PromptSet, memories []string) string {
 		builder.WriteString(PersonaMotionBridge)
 	}
 	builder.WriteString("\n\n")
-	builder.WriteString(ContractInstructions)
+	builder.WriteString(motionInstructionsForMode(motionGenerationMode))
 
 	if len(memories) > 0 {
 		builder.WriteString("\n\n")

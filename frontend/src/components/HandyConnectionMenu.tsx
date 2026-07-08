@@ -74,9 +74,10 @@ export function HandyConnectionMenu({ snap, onRefresh }: HandyConnectionMenuProp
             onChange={async (e) => {
               const nextTransport = e.target.value as DeviceTransport;
               try {
+                const key = handyKey.trim();
                 await api.setDeviceTransport(
                   nextTransport,
-                  nextTransport === "handy_cloud" ? handyKey : undefined,
+                  nextTransport === "handy_cloud" && key ? key : undefined,
                 );
                 notify(
                   nextTransport === "handy_cloud"
@@ -113,8 +114,16 @@ export function HandyConnectionMenu({ snap, onRefresh }: HandyConnectionMenuProp
                 type="button"
                 className="btn btn-sm btn-primary"
                 onClick={async () => {
+                  const key = handyKey.trim();
+                  if (!key && !snap.handy_key_configured) {
+                    notify(t("device.keyPlaceholder"), "error");
+                    return;
+                  }
                   try {
-                    await api.setDeviceTransport("handy_cloud", handyKey);
+                    await api.setDeviceTransport(
+                      "handy_cloud",
+                      key || undefined,
+                    );
                     await api.connectDevice();
                     notify(t("device.handyConnected"), "ok");
                     await onRefresh();

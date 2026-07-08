@@ -6,7 +6,7 @@ import { StopButton } from "./StopButton";
 
 const LINKS = [
   { base: "chat", href: "#/chat", label: "Chat", Icon: ChatIcon },
-  { base: "modes", href: "#/modes", label: "Preset modes", Icon: ModesIcon },
+  { base: "modes", href: "#/modes", label: "Freestyle", Icon: ModesIcon },
   { base: "library", href: "#/library", label: "Pattern library", Icon: LibraryIcon },
   { base: "settings", href: "#/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;

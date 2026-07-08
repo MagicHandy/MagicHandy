@@ -23,7 +23,7 @@ export function Sidebar({
 
   const navSession = [
     { to: "/", label: t("nav.control"), Icon: IconControl },
-    { to: "/hands-free", label: t("nav.handsFree"), Icon: IconHandsFree },
+    { to: "/freestyle", label: t("nav.freestyle"), Icon: IconHandsFree },
     { to: "/controle-mouse", label: t("nav.mouse"), Icon: IconMouse },
   ] as const;
 

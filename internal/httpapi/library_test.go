@@ -117,7 +117,8 @@ func TestManualQueueDraftCRUD(t *testing.T) {
 	}
 
 	playRecorder := httptest.NewRecorder()
-	server.Handler().ServeHTTP(playRecorder, httptest.NewRequest(http.MethodPost, "/api/manual-queue/play", nil))
+	playRequest := withController(httptest.NewRequest(http.MethodPost, "/api/manual-queue/play", nil))
+	server.Handler().ServeHTTP(playRecorder, playRequest)
 	if playRecorder.Code != http.StatusOK {
 		t.Fatalf("play queue status = %d: %s", playRecorder.Code, playRecorder.Body.String())
 	}

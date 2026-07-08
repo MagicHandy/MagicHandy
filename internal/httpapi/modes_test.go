@@ -180,7 +180,7 @@ func TestUserStopEndsFreestyleThroughMotionStop(t *testing.T) {
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+		if server.freestyleChaosActive() || countModeCommands(fake.Commands()).plays > 0 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -196,8 +196,8 @@ func TestUserStopEndsFreestyleThroughMotionStop(t *testing.T) {
 		t.Fatal("freestyle survived the user stop")
 	}
 	time.Sleep(50 * time.Millisecond)
-	if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
-		t.Fatal("motion restarted after user stop")
+	if server.freestyleChaosActive() {
+		t.Fatal("procedural freestyle restarted after user stop")
 	}
 }
 

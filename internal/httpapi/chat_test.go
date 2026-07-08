@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -77,10 +78,10 @@ func TestChatStreamRepairsMalformedJSONAndReportsIndicator(t *testing.T) {
 	}
 }
 
-func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
+func TestChatStreamStartsChaoticMotionThroughManualQueue(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"Starting.","motion":{"action":"start","pattern_id":"pulse","speed_percent":30}}`,
+		`{"reply":"Starting.","motion":{"action":"start","velocidade":60,"intensidade":70,"regiao":"meio","tipo_batida":"simples"}}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{
 		Transport:       fake,
@@ -89,7 +90,7 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	body := postChatStream(t, server, `{"message":"start a pulse at 30 percent"}`)
+	body := postChatStream(t, server, `{"message":"start motion"}`)
 	if !strings.Contains(body, `"reply":"Starting."`) {
 		t.Fatalf("chat stream missing assistant message:\n%s", body)
 	}
@@ -97,15 +98,28 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 		t.Fatalf("chat stream missing motion event:\n%s", body)
 	}
 
-	commands := fake.Commands()
-	if len(commands) < 3 {
-		t.Fatalf("motion engine commands = %d, want at least 3: %+v", len(commands), commands)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		commands := fake.Commands()
+		if hasManualQueueHSPDispatch(commands) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
-	if commands[0].Kind != transport.CommandKindStrokeWindow ||
-		commands[1].Kind != transport.CommandKindHSPAdd ||
-		commands[2].Kind != transport.CommandKindHSPPlay {
-		t.Fatalf("commands did not flow through motion engine: %+v", commands[:3])
+	t.Fatalf("manual queue HSP dispatch missing: %+v", fake.Commands())
+}
+
+func hasManualQueueHSPDispatch(commands []transport.Command) bool {
+	var sawAdd, sawPlay bool
+	for _, command := range commands {
+		switch command.Kind {
+		case transport.CommandKindHSPAdd:
+			sawAdd = true
+		case transport.CommandKindHSPPlay:
+			sawPlay = true
+		}
 	}
+	return sawAdd && sawPlay
 }
 
 func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {

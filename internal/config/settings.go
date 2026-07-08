@@ -112,16 +112,26 @@ const (
 	MotionStyleBalanced = "balanced"
 	// MotionStyleIntense favors pulse patterns, higher speeds, faster changes.
 	MotionStyleIntense = "intense"
+
+	// MotionGenerationModeProcedural uses mathematical motion planning from semantic intent.
+	MotionGenerationModeProcedural = "procedural"
+	// MotionGenerationModeLibrary selects imported pattern blocks by physical tag.
+	MotionGenerationModeLibrary = "library"
 )
 
 // MotionSettings contains transport-neutral motion control defaults.
 type MotionSettings struct {
-	SpeedMinPercent  int    `json:"speed_min_percent"`
-	SpeedMaxPercent  int    `json:"speed_max_percent"`
-	StrokeMinPercent int    `json:"stroke_min_percent"`
-	StrokeMaxPercent int    `json:"stroke_max_percent"`
-	ReverseDirection bool   `json:"reverse_direction"`
-	Style            string `json:"style"`
+	SpeedMinPercent      int    `json:"speed_min_percent"`
+	SpeedMaxPercent      int    `json:"speed_max_percent"`
+	StrokeMinPercent     int    `json:"stroke_min_percent"`
+	StrokeMaxPercent     int    `json:"stroke_max_percent"`
+	ReverseDirection     bool   `json:"reverse_direction"`
+	Style                string `json:"style"`
+	MotionGenerationMode string `json:"motion_generation_mode"`
+	// HardwareSafetyLock clamps chaotic timing to protect device/connection
+	// stability. When enabled, the chaotic generator enforces a minimum
+	// timestamp delta of 30ms.
+	HardwareSafetyLock bool `json:"hardware_safety_lock"`
 }
 
 // LLMSettings contains local model provider settings.
@@ -169,6 +179,7 @@ type PublicSettingsOptionHints struct {
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
 	MotionStyles            []string `json:"motion_styles"`
+	MotionGenerationModes   []string `json:"motion_generation_modes"`
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
 	PromptSets              []string `json:"prompt_sets"`
@@ -201,17 +212,19 @@ func DefaultSettings() Settings {
 			Port: DefaultServerPort,
 		},
 		Device: DeviceSettings{
-			HSPDispatchOwner:       DispatchOwnerIntiface,
+			HSPDispatchOwner:       DispatchOwnerCloudREST,
 			FirmwareAPIRequirement: FirmwareAPIRequirementRequired,
 			APIApplicationIDSource: ApplicationIDSourceBundled,
 			IntifaceURL:            DefaultIntifaceURL,
 		},
 		Motion: MotionSettings{
-			SpeedMinPercent:  20,
-			SpeedMaxPercent:  80,
-			StrokeMinPercent: 0,
-			StrokeMaxPercent: 100,
-			Style:            MotionStyleBalanced,
+			SpeedMinPercent:      20,
+			SpeedMaxPercent:      80,
+			StrokeMinPercent:     0,
+			StrokeMaxPercent:     100,
+			Style:                MotionStyleBalanced,
+			MotionGenerationMode: MotionGenerationModeProcedural,
+			HardwareSafetyLock:   true,
 		},
 		LLM: LLMSettings{
 			Provider:             LLMProviderLlamaCPP,
@@ -258,6 +271,10 @@ func (s Settings) Public() PublicSettings {
 				MotionStyleGentle,
 				MotionStyleBalanced,
 				MotionStyleIntense,
+			},
+			MotionGenerationModes: []string{
+				MotionGenerationModeProcedural,
+				MotionGenerationModeLibrary,
 			},
 			DiagnosticsVerbosities: []string{
 				DiagnosticsVerbosityNormal,
@@ -411,6 +428,11 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.Style == "" {
 		settings.Motion.Style = defaults.Motion.Style
 	}
+	if settings.Motion.MotionGenerationMode == "" {
+		settings.Motion.MotionGenerationMode = defaults.Motion.MotionGenerationMode
+	}
+	// bool fields cannot be distinguished from explicit false, so DB
+	// migrations must populate defaults for older rows.
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
@@ -457,6 +479,9 @@ func validateMotionSettings(settings MotionSettings) error {
 	}
 	if !oneOf(settings.Style, MotionStyleGentle, MotionStyleBalanced, MotionStyleIntense) {
 		return fmt.Errorf("unknown motion style %q", settings.Style)
+	}
+	if !oneOf(settings.MotionGenerationMode, MotionGenerationModeProcedural, MotionGenerationModeLibrary) {
+		return fmt.Errorf("unknown motion generation mode %q", settings.MotionGenerationMode)
 	}
 	return nil
 }

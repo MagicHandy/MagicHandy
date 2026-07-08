@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
+import { isOllamaProvider, llmProviderFromSnap } from "../lib/llmStatus";
+import { useStatus } from "../contexts/StatusContext";
 import { useToast } from "../contexts/ToastContext";
 
 type PlannerApply = {
@@ -18,6 +20,7 @@ type PlannerApply = {
 
 export function DiagnosticsPanel() {
   const { t } = useTranslation();
+  const { snap } = useStatus();
   const { notify } = useToast();
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [ping, setPing] = useState<Record<string, unknown> | null>(null);
@@ -37,7 +40,18 @@ export function DiagnosticsPanel() {
     try {
       const r = await api.pingOllama();
       setPing(r);
-      notify(r.ok ? t("diagnostics.ollamaOk") : t("diagnostics.ollamaFail"), r.ok ? "ok" : "error");
+      const provider = r.llm_provider ?? r.provider ?? "llama_cpp";
+      const ok = Boolean(r.llm_connected ?? r.ollama_connected ?? r.ok);
+      notify(
+        ok
+          ? isOllamaProvider(provider)
+            ? t("diagnostics.ollamaOk")
+            : t("diagnostics.llamaCppOk")
+          : isOllamaProvider(provider)
+            ? t("diagnostics.ollamaFail")
+            : t("diagnostics.llamaCppFail"),
+        ok ? "ok" : "error",
+      );
     } catch (e) {
       notify(e instanceof Error ? e.message : t("common.error"), "error");
     }
@@ -51,11 +65,19 @@ export function DiagnosticsPanel() {
     ? t("diagnostics.plannerBusy", { source: String(data.planner_busy_source ?? "?") })
     : t("diagnostics.plannerFree");
 
+  const llmProvider = snap ? llmProviderFromSnap(snap) : "llama_cpp";
+  const pingLabel = isOllamaProvider(llmProvider)
+    ? t("diagnostics.pingOllama")
+    : t("diagnostics.pingLlamaCpp");
+  const pingTitle = isOllamaProvider(llmProvider)
+    ? t("diagnostics.pingTitle")
+    : t("diagnostics.pingLlamaCppTitle");
+
   return (
     <div className="diag-layout">
       <div className="btn-row">
         <button type="button" className="btn btn-primary" onClick={doPing}>
-          {t("diagnostics.pingOllama")}
+          {pingLabel}
         </button>
         <button type="button" className="btn btn-ghost" onClick={load}>
           {t("diagnostics.refresh")}
@@ -64,7 +86,7 @@ export function DiagnosticsPanel() {
 
       {ping && (
         <section className="glass">
-          <h3>{t("diagnostics.pingTitle")}</h3>
+          <h3>{pingTitle}</h3>
           <pre className="json-preview mono">{JSON.stringify(ping, null, 2)}</pre>
         </section>
       )}

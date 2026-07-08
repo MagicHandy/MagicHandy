@@ -56,6 +56,11 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
   const safety = (settings.safety ?? {}) as Record<string, unknown>;
   const queue = (settings.queue ?? {}) as Record<string, number>;
   const ollama = (settings.ollama ?? {}) as Record<string, string>;
+  const llm = (settings.llm ?? {}) as Record<string, string>;
+  const llmProvider = str(llm.provider, "llama_cpp");
+  const llmIsOllama = llmProvider === "ollama";
+  const llmDefaultURL = llmIsOllama ? "http://127.0.0.1:11434" : "http://127.0.0.1:18080";
+  const llmDefaultModel = llmIsOllama ? "llama3.2" : str(llm.model, "");
   const intiface = (settings.intiface ?? {}) as Record<string, unknown>;
   const sync = (settings.sync ?? {}) as Record<string, unknown>;
   const handy = (settings.handy ?? {}) as Record<string, string>;
@@ -314,16 +319,16 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
             <label className="check-label">
               <input
                 type="checkbox"
-                checked={motion.literal_funscript_positions === true}
+                checked={motion.hardware_safety_lock !== false}
                 onChange={(e) =>
                   updateSection("motion", {
-                    literal_funscript_positions: e.target.checked,
+                    hardware_safety_lock: e.target.checked,
                   })
                 }
               />
-              {t("config.settings.motion.literalPositions")}
+              {t("config.settings.motion.hardwareSafetyLock")}
             </label>
-            <p className="hint">{t("config.settings.motion.literalHint")}</p>
+            <p className="hint">{t("config.settings.motion.hardwareSafetyLockHint")}</p>
             <div className="form-grid three">
               <label className="field">
                 <span>{t("config.settings.motion.maxEnqueueDuration")}</span>
@@ -389,19 +394,6 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
                 }
               />
             </label>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={planner.session_roster_enabled === true}
-                onChange={(e) =>
-                  updateSection("planner", {
-                    session_roster_enabled: e.target.checked,
-                  })
-                }
-              />
-              {t("config.settings.motion.rosterMode")}
-            </label>
-            <p className="hint">{t("config.settings.motion.rosterHint")}</p>
             <h4 className="settings-sub">{t("config.settings.motion.weightsTitle")}</h4>
             <p className="hint">{t("config.settings.motion.weightsHint")}</p>
             <div className="form-grid two">
@@ -516,18 +508,33 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
       {section === "connections" && (
         <>
           <section className="glass settings-card">
-            <h3>{t("config.settings.connections.ollama.title")}</h3>
+            <h3>
+              {llmIsOllama
+                ? t("config.settings.connections.ollama.title")
+                : t("config.settings.connections.llamaCpp.title")}
+            </h3>
+            {!llmIsOllama && llm.llama_cpp_mode === "managed" && (
+              <p className="hint">{t("config.settings.connections.llamaCpp.managedHint")}</p>
+            )}
             <label className="field">
-              <span>{t("config.settings.connections.ollama.url")}</span>
+              <span>
+                {llmIsOllama
+                  ? t("config.settings.connections.ollama.url")
+                  : t("config.settings.connections.llamaCpp.url")}
+              </span>
               <input
-                value={str(ollama.base_url, "http://127.0.0.1:11434")}
+                value={str(ollama.base_url, llmDefaultURL)}
                 onChange={(e) => updateSection("ollama", { base_url: e.target.value })}
               />
             </label>
             <label className="field">
-              <span>{t("config.settings.connections.ollama.model")}</span>
+              <span>
+                {llmIsOllama
+                  ? t("config.settings.connections.ollama.model")
+                  : t("config.settings.connections.llamaCpp.model")}
+              </span>
               <input
-                value={str(ollama.model, "llama3.2")}
+                value={str(ollama.model, llmDefaultModel)}
                 onChange={(e) => updateSection("ollama", { model: e.target.value })}
               />
             </label>
@@ -565,7 +572,7 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
             <label className="field">
               <span>{t("config.settings.connections.handy.defaultMode")}</span>
               <select
-                value={str(handy.transport, "intiface")}
+                value={str(handy.transport, "handy_cloud")}
                 onChange={(e) => updateSection("handy", { transport: e.target.value })}
               >
                 <option value="intiface">{t("device.intifaceLocal")}</option>

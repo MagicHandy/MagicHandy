@@ -27,6 +27,7 @@ type cloudRuntime struct {
 	client      *http.Client
 	mu          sync.Mutex
 	diagnostics transport.TransportDiagnostics
+	transport   *transport.CloudRESTTransport
 }
 
 type cloudCommandResponse struct {
@@ -214,12 +215,20 @@ func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) newCloudTransport() (*transport.CloudRESTTransport, error) {
+	s.cloud.mu.Lock()
+	if s.cloud.transport != nil {
+		cached := s.cloud.transport
+		s.cloud.mu.Unlock()
+		return cached, nil
+	}
+	s.cloud.mu.Unlock()
+
 	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerCloudREST {
 		return nil, errors.New("cloud REST dispatch owner is not selected")
 	}
 
-	return transport.NewCloudRESTTransport(
+	cloud, err := transport.NewCloudRESTTransport(
 		transport.CloudPrerequisites{
 			ApplicationID: resolveCloudApplicationID(settings),
 			ConnectionKey: settings.Device.HandyConnectionKey,
@@ -231,6 +240,19 @@ func (s *Server) newCloudTransport() (*transport.CloudRESTTransport, error) {
 		transport.CloudEndpointConfig{BaseURL: s.cloud.baseURL},
 		s.cloud.client,
 	)
+	if err != nil {
+		return nil, err
+	}
+	s.cloud.mu.Lock()
+	s.cloud.transport = cloud
+	s.cloud.mu.Unlock()
+	return cloud, nil
+}
+
+func (s *Server) resetCloudTransport() {
+	s.cloud.mu.Lock()
+	s.cloud.transport = nil
+	s.cloud.mu.Unlock()
 }
 
 func (s *Server) writeCloudCommandResponse(

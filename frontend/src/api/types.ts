@@ -38,6 +38,22 @@ export interface StatusSnapshot {
   handy_key_configured?: boolean;
   ollama_connected?: boolean;
   ollama_error?: string | null;
+  llm_provider?: string;
+  llm_connected?: boolean;
+  llm_error?: string | null;
+  llm_model?: string;
+  llm_base_url?: string;
+  llm_cpp_mode?: string;
+  llm?: {
+    provider?: string;
+    connected?: boolean;
+    error?: string | null;
+    model?: string;
+    base_url?: string;
+    llama_cpp_mode?: string;
+    managed?: boolean;
+    loaded?: boolean;
+  };
   device_label: string;
   device_connected: boolean;
   use_mock: boolean;

@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import type { StatusSnapshot } from "../api/types";
+import {
+  isOllamaProvider,
+  llmBaseURLFromSnap,
+  llmModelFromSnap,
+  llmProviderFromSnap,
+} from "../lib/llmStatus";
 
 export function Dashboard() {
   const { t } = useTranslation();
@@ -40,6 +46,11 @@ export function Dashboard() {
 
   if (!snap) return <p className="muted">{t("common.loading")}</p>;
 
+  const llmProvider = llmProviderFromSnap(snap);
+  const llmCardLabel = isOllamaProvider(llmProvider)
+    ? t("dashboard.card.ollama")
+    : t("dashboard.card.llamaCpp");
+
   const cards = [
     {
       label: t("dashboard.card.intiface"),
@@ -58,8 +69,8 @@ export function Dashboard() {
       value: `${snap.persona_name} (${snap.persona_id})`,
     },
     {
-      label: t("dashboard.card.ollama"),
-      value: `${snap.ollama_model} @ ${snap.ollama_url}`,
+      label: llmCardLabel,
+      value: `${llmModelFromSnap(snap)} @ ${llmBaseURLFromSnap(snap)}`,
     },
     {
       label: t("dashboard.card.mode"),

@@ -42,6 +42,7 @@
     "mainAria": "Navegação principal",
     "control": "Controle",
     "handsFree": "Mãos livres",
+    "freestyle": "Freestyle",
     "mouse": "Mouse",
     "library": "Biblioteca",
     "player": "Reprodutor",
@@ -70,6 +71,10 @@
       "connected": "Ollama conectado",
       "off": "Ollama off: {{error}}"
     },
+    "llamaCpp": {
+      "connected": "llama.cpp conectado",
+      "off": "llama.cpp off: {{error}}"
+    },
     "topbar": {
       "buffer": "Buffer",
       "queue": "Fila",
@@ -80,8 +85,10 @@
       "autospeak": "autospeak",
       "autospeakScheduled": "autospeak ·",
       "ollama": "Ollama",
+      "llamaCpp": "llama.cpp",
       "localLlm": "LLM local",
-      "testConnection": "Testar conexão"
+      "testConnection": "Testar conexão",
+      "llmIdle": "pronto — carrega no primeiro chat"
     },
     "visualizer": {
       "live": "Ao vivo",
@@ -192,6 +199,8 @@
       "motion": {
         "title": "Movimento",
         "presetsHint": "Presets rápidos (buffer + ritmo alvo para o planner)",
+        "hardwareSafetyLock": "Ativar Trava de Segurança de Hardware (30ms)",
+        "hardwareSafetyLockHint": "Desligar a trava permite movimentos caóticos extremos (densidade de Funscript) com zero latência artificial, mas pode causar desconexões por sobrecarga dependendo do limite físico da sua rede/dispositivo.",
         "presetApplied": "Preset aplicado: {{preset}}",
         "minPosition": "Posição mínima",
         "maxPosition": "Posição máxima",
@@ -236,6 +245,12 @@
           "responseLimit": "Limite de tokens na resposta",
           "maxChatChars": "Máx. caracteres no chat",
           "verboseHint": "num_predict e max_message_chars menores aceleram respostas em GPU fraca."
+        },
+        "llamaCpp": {
+          "title": "llama.cpp",
+          "url": "URL base do llama-server",
+          "model": "Alias do modelo",
+          "managedHint": "No modo gerenciado, o llama-server sobe no primeiro chat ou teste de conexão."
         },
         "handy": {
           "title": "Handy",
@@ -490,6 +505,22 @@
       "idle": "ocioso",
       "ai": "IA",
       "busy": "ocupado"
+    }
+  },
+  "freestyle": {
+    "title": "Freestyle",
+    "subtitle": "Movimento autônomo determinístico via motor de modos.",
+    "panelTitle": "Freestyle",
+    "panelHint": "Segmentos autônomos com pacing limitado pelas configurações rápidas.",
+    "start": "Iniciar Freestyle",
+    "stop": "Parar Freestyle",
+    "started": "Freestyle iniciado",
+    "stopped": "Freestyle parado",
+    "styleLabel": "Estilo",
+    "styles": {
+      "gentle": "Suave",
+      "balanced": "Equilibrado",
+      "intense": "Intenso"
     }
   },
   "handsFree": {
@@ -847,6 +878,7 @@
     "modeHandyCloud": "Handy cloud API",
     "connectionKey": "Connection key",
     "keyPlaceholder": "Cole a connection key",
+    "keyTooShort": "Connection key curta demais — cole a chave completa do app Handy",
     "connectApi": "Conectar API",
     "handyConnected": "Handy conectado",
     "cloud": "Nuvem",
@@ -1142,8 +1174,10 @@
   },
   "diagnostics": {
     "pingOllama": "Ping Ollama",
+    "pingLlamaCpp": "Ping llama.cpp",
     "refresh": "Atualizar",
     "pingTitle": "Ping Ollama",
+    "pingLlamaCppTitle": "Ping llama.cpp",
     "quickState": "Estado rápido",
     "bufferQueue": "Buffer fila: {{buffer}}s · restante: {{remaining}}s",
     "playback": "Playback: {{state}} · fila: {{count}} blocos",
@@ -1164,6 +1198,8 @@
     "handyCommands": "Handy — últimos comandos",
     "ollamaOk": "Ollama OK",
     "ollamaFail": "Ollama falhou",
+    "llamaCppOk": "llama.cpp OK",
+    "llamaCppFail": "llama.cpp falhou",
     "estopYes": "SIM",
     "estopNo": "não",
     "playbackQueue": "Playback: {{playback}} · fila: {{count}} blocos",
@@ -1217,6 +1253,7 @@
       "device": "Dispositivo",
       "persona": "Persona",
       "ollama": "Ollama",
+      "llamaCpp": "llama.cpp",
       "mode": "Modo",
       "intensity": "Intensidade",
       "range": "Faixa",

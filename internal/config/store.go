@@ -89,6 +89,12 @@ func OpenStore(dataDir string) (*Store, error) {
 		return nil, err
 	}
 	store.settings, store.status = store.loadSettings(context.Background(), importStatus, importedStatus)
+	if merged, mergeErr := store.mergeLegacyLLMPaths(context.Background()); mergeErr == nil && merged {
+		if store.status.Message != "" {
+			store.status.Message += "; "
+		}
+		store.status.Message += "merged llm paths from settings.json"
+	}
 	return store, nil
 }
 
@@ -303,4 +309,52 @@ func marshalSettingsDocument(settings Settings) ([]byte, error) {
 
 func isNoRows(err error) bool {
 	return err == sql.ErrNoRows
+}
+
+func (s *Store) mergeLegacyLLMPaths(ctx context.Context) (bool, error) {
+	data, err := os.ReadFile(s.legacyPath) // #nosec G304 -- resolved legacy app settings file.
+	if err != nil {
+		return false, nil
+	}
+	legacy, _, err := loadSettingsFromBytes(data)
+	if err != nil {
+		return false, nil
+	}
+
+	s.mu.Lock()
+	next := s.settings
+	changed := false
+	if next.LLM.LlamaCPPRunnerPath == "" && legacy.LLM.LlamaCPPRunnerPath != "" {
+		next.LLM.LlamaCPPRunnerPath = legacy.LLM.LlamaCPPRunnerPath
+		changed = true
+	}
+	if next.LLM.LlamaCPPModelPath == "" && legacy.LLM.LlamaCPPModelPath != "" {
+		next.LLM.LlamaCPPModelPath = legacy.LLM.LlamaCPPModelPath
+		changed = true
+	}
+	if legacy.LLM.LlamaCPPBaseURL != "" && next.LLM.LlamaCPPBaseURL != legacy.LLM.LlamaCPPBaseURL {
+		next.LLM.LlamaCPPBaseURL = legacy.LLM.LlamaCPPBaseURL
+		changed = true
+	}
+	if legacy.LLM.Model != "" && next.LLM.Model != legacy.LLM.Model {
+		next.LLM.Model = legacy.LLM.Model
+		changed = true
+	}
+	if !changed {
+		s.mu.Unlock()
+		return false, nil
+	}
+
+	normalized, err := NormalizeSettings(next)
+	if err != nil {
+		s.mu.Unlock()
+		return false, err
+	}
+	if err := s.writeSettings(ctx, normalized); err != nil {
+		s.mu.Unlock()
+		return false, err
+	}
+	s.settings = normalized
+	s.mu.Unlock()
+	return true, nil
 }

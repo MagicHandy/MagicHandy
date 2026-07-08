@@ -57,7 +57,7 @@ export function PresetModesRoute() {
 
   return (
     <>
-      <WorkspaceHead title="Preset modes" lede="Autonomous motion — every mode is a client of the one motion engine." />
+      <WorkspaceHead title="Freestyle" lede="Autonomous motion — every mode is a client of the one motion engine." />
 
       <section className="panel autopilot">
         <p className="eyebrow">Autonomous motion</p>

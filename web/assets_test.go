@@ -34,7 +34,7 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 		"/api/motion/stop",
 		"/api/chat/stream",
 		"/api/motion/events",
-		"Preset modes",
+		"Freestyle",
 		"Pattern library",
 		"Autopilot",
 		"Commanded position estimate",

@@ -139,6 +139,30 @@ export const api = {
     }),
   stopHandsFree: () =>
     request<{ ok: boolean }>("/hands-free/stop", { method: "POST" }),
+
+  getModes: () =>
+    request<{
+      active?: boolean;
+      running?: boolean;
+      mode?: string;
+      active_mode?: string;
+      style?: string;
+    }>("/modes"),
+  startMode: (mode: string) =>
+    request("/modes/start", {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    }),
+  stopMode: () =>
+    request("/modes/stop", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  applyQuick: (patch: { style?: string }) =>
+    request("/motion/quick", {
+      method: "POST",
+      body: JSON.stringify(patch),
+    }),
   handsFreeSignal: (signal: string) =>
     request<{
       ok: boolean;
@@ -523,8 +547,14 @@ export const api = {
       ok: boolean;
       error?: string;
       body_preview?: string;
+      provider?: string;
+      llm_provider?: string;
+      llm_connected?: boolean;
+      llm_error?: string | null;
       ollama_connected?: boolean;
       ollama_error?: string | null;
+      loaded?: boolean;
+      managed?: boolean;
     }>("/diagnostics/ping-ollama", { method: "POST" }),
 
   getMotionVisual: () => request<MotionVisual>("/motion/visual"),

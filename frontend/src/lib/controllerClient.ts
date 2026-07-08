@@ -19,5 +19,6 @@ export function controllerClientID(): string {
 export function controllerHeaders(): Record<string, string> {
   return {
     "X-MagicHandy-Client-ID": controllerClientID(),
+    "X-MagicHandy-UI": "lso",
   };
 }

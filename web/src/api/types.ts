@@ -12,6 +12,7 @@ export interface MotionSettings {
   stroke_max_percent: number;
   reverse_direction: boolean;
   style: string;
+  motion_generation_mode?: "procedural" | "library";
 }
 
 export interface MotionSample {
@@ -137,6 +138,7 @@ export interface OptionHints {
   api_application_id_sources?: string[];
   diagnostics_verbosities?: string[];
   motion_styles?: string[];
+  motion_generation_modes?: string[];
   llm_providers?: string[];
   llama_cpp_modes?: string[];
   prompt_sets?: string[];

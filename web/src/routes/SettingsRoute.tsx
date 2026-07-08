@@ -49,6 +49,9 @@ export function SettingsRoute() {
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
   }
+  function patchMotion(p: Partial<PublicSettings["motion"]>) {
+    setS((cur) => (cur ? { ...cur, motion: { ...cur.motion, ...p } } : cur));
+  }
 
   async function save() {
     if (!s) return;
@@ -104,6 +107,7 @@ export function SettingsRoute() {
     api_application_id_sources: [],
     diagnostics_verbosities: [],
     motion_styles: [],
+    motion_generation_modes: [],
     llm_providers: [],
     llama_cpp_modes: [],
     prompt_sets: [],
@@ -137,6 +141,22 @@ export function SettingsRoute() {
             <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
             <BluetoothBridge visible={s.device.hsp_dispatch_owner.toLowerCase().includes("blue")} locked={locked} backendOnline={backendOnline} initial={state?.bluetooth_bridge} />
             <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
+            <label className="field">
+              <span className="label">Hardware safety lock (30ms)</span>
+              <label className="toggle-line hint-block">
+                <span className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={s.motion.hardware_safety_lock !== false}
+                    disabled={locked}
+                    onChange={(e) => patchMotion({ hardware_safety_lock: e.target.checked })}
+                  />
+                  <span className="track" aria-hidden="true" />
+                </span>
+                <span>Enable hardware safety lock</span>
+              </label>
+            </label>
+            <p className="hint-block">Disabling the lock allows extreme chaotic motion (funscript-level density) with zero artificial latency, but may cause disconnections from network/device overload depending on your hardware limits.</p>
             <div className="row-actions"><button type="button" className="btn btn-secondary" onClick={() => void checkConnection()} disabled={locked}>Check connection</button></div>
           </>
         )}

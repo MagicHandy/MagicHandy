@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
@@ -36,7 +37,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 	settings, _ := s.store.Snapshot()
 	if isChatStopMessage(body.Message) {
-		s.handleChatStopFastPath(w, r, settings.LLM.Provider, settings.LLM.Model)
+		s.handleChatStopFastPath(w, r, settings)
 		return
 	}
 	if !s.requireController(w, r) {
@@ -52,10 +53,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	setSSEHeaders(w)
 	prompt := s.chatPromptForRequest(settings)
 	service := chat.Service{
-		Provider: provider,
-		Prompt:   prompt,
-		Model:    settings.LLM.Model,
-		Memories: s.personalization.memory.PromptTexts(),
+		Provider:             provider,
+		Prompt:               prompt,
+		Model:                settings.LLM.Model,
+		Memories:             s.personalization.memory.PromptTexts(),
+		MotionGenerationMode: settings.Motion.MotionGenerationMode,
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -91,12 +93,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 	})
-	s.emitChatCompletionResult(r, emit, result, err, settings.LLM.Provider)
+	s.emitChatCompletionResult(r, emit, result, err, settings)
 }
 
-func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, result chat.Result, err error, provider string) {
+func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, result chat.Result, err error, settings config.Settings) {
 	if err != nil {
-		s.logger.Warn("chat stream failed", "provider", provider, "error", err)
+		s.logger.Warn("chat stream failed", "provider", settings.LLM.Provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})
 		_ = emit("done", map[string]any{"ok": false})
 		return
@@ -127,7 +129,7 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 		return
 	}
 
-	dispatch, motionErr := s.dispatchChatMotion(r.Context(), result.Response.Motion)
+	dispatch, motionErr := s.dispatchChatMotionForResult(r.Context(), result.Response.Motion, settings)
 	if motionErr != nil {
 		dispatch.Error = motionErr.Error()
 		s.logger.Warn("chat motion dispatch failed", "action", dispatch.Action, "error", motionErr)
@@ -144,64 +146,109 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 	})
 }
 
+func (s *Server) dispatchChatMotionForResult(
+	ctx context.Context,
+	command *chat.MotionCommand,
+	settings config.Settings,
+) (chatMotionDispatch, error) {
+	if s.shouldUseChaoticChatMotion(command, settings) {
+		return s.dispatchChatChaoticMotionAsync(ctx, command, settings), nil
+	}
+	return s.dispatchChatMotion(ctx, command)
+}
+
 func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
 	if err := s.ensureIntifaceDeviceForMotion(ctx); err != nil {
-		if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
-			return chatMotionDispatch{Action: chat.MotionActionNone}, nil
-		}
-		return chatMotionDispatch{Action: command.Action, Error: err.Error()}, err
+		return s.dispatchChatMotionIntifaceUnavailable(command, err)
 	}
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
-		if command != nil && strings.TrimSpace(command.LibraryBlockID) != "" {
-			if err := s.enqueueChatLibraryBlock(command.LibraryBlockID); err != nil {
-				return chatMotionDispatch{Action: chat.MotionActionNone}, err
-			}
-			return chatMotionDispatch{Applied: true, Action: chat.MotionActionNone}, nil
-		}
-		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
+		return s.dispatchChatMotionNoActionOrLibrary(ctx, command)
 	}
 
+	settings, _ := s.store.Snapshot()
 	switch command.Action {
 	case chat.MotionActionStart:
-		engine, err := s.motionEngineForStart()
-		if err != nil {
-			return chatMotionDispatch{Action: command.Action}, err
-		}
-		current := engine.Snapshot()
-		target := chatMotionTarget(command, current)
-		s.notifyChatTarget(target)
-		if current.Running {
-			state, err := engine.ApplyTarget(ctx, target, "chat_start_retarget")
-			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
-		}
-		settings, _ := s.store.Snapshot()
-		state, err := engine.Start(ctx, target, settings.Motion)
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+		return s.dispatchChatMotionStart(ctx, command, settings)
 	case chat.MotionActionTarget:
-		engine := s.currentMotionEngine()
-		if engine == nil || !engine.Snapshot().Running {
-			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running")
-		}
-		current := engine.Snapshot()
-		target := chatMotionTarget(command, current)
-		s.notifyChatTarget(target)
-		state, err := engine.ApplyTarget(ctx, target, "chat_target")
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+		return s.dispatchChatMotionTarget(ctx, command)
 	case chat.MotionActionStop:
-		// A chat stop is a user stop: modes end and keepalive stands down.
-		if s.modes != nil {
-			s.modes.NotifyChatStop()
-			s.modes.NotifyUserStop()
-		}
-		engine := s.currentMotionEngine()
-		if engine == nil {
-			return chatMotionDispatch{Applied: true, Action: command.Action}, nil
-		}
-		state, err := engine.Stop(ctx, "chat_stop")
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+		return s.dispatchChatMotionStop(ctx, command)
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
 	}
+}
+
+func (s *Server) dispatchChatMotionIntifaceUnavailable(command *chat.MotionCommand, err error) (chatMotionDispatch, error) {
+	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
+		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
+	}
+	return chatMotionDispatch{Action: command.Action, Error: err.Error()}, err
+}
+
+func (s *Server) dispatchChatMotionNoActionOrLibrary(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
+	if command == nil {
+		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
+	}
+	if strings.TrimSpace(command.LibraryBlockID) != "" {
+		if err := s.enqueueChatLibraryBlock(command.LibraryBlockID); err != nil {
+			return chatMotionDispatch{Action: chat.MotionActionNone}, err
+		}
+		return chatMotionDispatch{Applied: true, Action: chat.MotionActionNone}, nil
+	}
+	if strings.TrimSpace(command.PadraoID) != "" {
+		blockID, err := s.resolveLibraryBlockByPatternTag(ctx, command.PadraoID)
+		if err != nil {
+			return chatMotionDispatch{Action: chat.MotionActionNone}, err
+		}
+		if err := s.enqueueChatLibraryBlock(blockID); err != nil {
+			return chatMotionDispatch{Action: chat.MotionActionNone}, err
+		}
+		return chatMotionDispatch{Applied: true, Action: chat.MotionActionNone}, nil
+	}
+	return chatMotionDispatch{Action: chat.MotionActionNone}, nil
+}
+
+func (s *Server) dispatchChatMotionStart(ctx context.Context, command *chat.MotionCommand, settings config.Settings) (chatMotionDispatch, error) {
+	engine, err := s.motionEngineForStart()
+	if err != nil {
+		return chatMotionDispatch{Action: command.Action}, err
+	}
+	current := engine.Snapshot()
+	target := chatMotionTarget(command, current, settings.Motion.MotionGenerationMode)
+	s.notifyChatTarget(target)
+	if current.Running {
+		state, err := engine.ApplyTarget(ctx, target, "chat_start_retarget")
+		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+	}
+	state, err := engine.Start(ctx, target, settings.Motion)
+	return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+}
+
+func (s *Server) dispatchChatMotionTarget(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
+	engine := s.currentMotionEngine()
+	if engine == nil || !engine.Snapshot().Running {
+		return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running")
+	}
+	current := engine.Snapshot()
+	settings, _ := s.store.Snapshot()
+	target := chatMotionTarget(command, current, settings.Motion.MotionGenerationMode)
+	s.notifyChatTarget(target)
+	state, err := engine.ApplyTarget(ctx, target, "chat_target")
+	return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+}
+
+func (s *Server) dispatchChatMotionStop(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
+	// A chat stop is a user stop: modes end and keepalive stands down.
+	if s.modes != nil {
+		s.modes.NotifyChatStop()
+		s.modes.NotifyUserStop()
+	}
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		return chatMotionDispatch{Applied: true, Action: command.Action}, nil
+	}
+	state, err := engine.Stop(ctx, "chat_stop")
+	return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 }
 
 func (s *Server) notifyChatTarget(target motion.MotionTarget) {
@@ -210,15 +257,15 @@ func (s *Server) notifyChatTarget(target motion.MotionTarget) {
 	}
 }
 
-func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, provider string, model string) {
+func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, settings config.Settings) {
 	setSSEHeaders(w)
 	emit := func(event string, payload any) error {
 		return writeSSE(w, event, payload)
 	}
 	if err := emit("status", map[string]any{
 		"state":    "deterministic_stop",
-		"provider": provider,
-		"model":    model,
+		"provider": settings.LLM.Provider,
+		"model":    settings.LLM.Model,
 	}); err != nil {
 		return
 	}
@@ -231,7 +278,7 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	}); err != nil {
 		return
 	}
-	dispatch, motionErr := s.dispatchChatMotion(r.Context(), command)
+	dispatch, motionErr := s.dispatchChatMotionForResult(r.Context(), command, settings)
 	if motionErr != nil {
 		dispatch.Error = motionErr.Error()
 		s.logger.Warn("chat deterministic stop failed", "error", motionErr)
@@ -244,26 +291,8 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
-func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
-	patternID := motion.PatternID(command.PatternID)
-	speedPercent := 0
-	if command.SpeedPercent != nil {
-		speedPercent = *command.SpeedPercent
-	}
-	if current.Running {
-		if patternID == "" {
-			patternID = current.Target.PatternID
-		}
-		if speedPercent == 0 {
-			speedPercent = current.Target.SpeedPercent
-		}
-	}
-	return motion.MotionTarget{
-		Label:        "Chat",
-		Source:       "chat",
-		PatternID:    patternID,
-		SpeedPercent: speedPercent,
-	}
+func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState, generationMode string) motion.MotionTarget {
+	return chat.MotionTargetFromCommand(command, current, generationMode)
 }
 
 func isChatStopMessage(message string) bool {

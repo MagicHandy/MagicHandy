@@ -43,10 +43,18 @@ type Options struct {
 	Current func() Engine
 	// Settings returns the current motion settings snapshot.
 	Settings func() config.MotionSettings
-	Traces   *diagnostics.TraceRing
-	Now      func() time.Time
-	Tick     time.Duration
-	Seed     int64
+	// UsesProceduralGeneration reports whether freestyle should use chaotic HSP.
+	UsesProceduralGeneration func() bool
+	// ProceduralFreestyleActive reports whether a freestyle chaos segment is playing.
+	ProceduralFreestyleActive func() bool
+	// StartProceduralFreestyleSegment dispatches one procedural freestyle segment.
+	StartProceduralFreestyleSegment func(ctx context.Context, segment ProceduralFreestyleSegment) error
+	// StopProceduralFreestyle stops active freestyle procedural playback.
+	StopProceduralFreestyle func(ctx context.Context)
+	Traces                  *diagnostics.TraceRing
+	Now                     func() time.Time
+	Tick                    time.Duration
+	Seed                    int64
 	// MaxSegmentDuration caps armed segment deadlines. It exists for tests
 	// that need many segment boundaries quickly; production leaves it zero.
 	MaxSegmentDuration time.Duration
@@ -162,6 +170,9 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 // Stop deactivates the mode loop. It never stops the engine itself — callers
 // own that decision (user Stop already stops the engine through its own path).
 func (m *Manager) Stop(reason string) {
+	if m.options.StopProceduralFreestyle != nil {
+		m.options.StopProceduralFreestyle(context.Background())
+	}
 	m.mu.Lock()
 	if m.mode == "" {
 		m.mu.Unlock()
@@ -234,6 +245,10 @@ func (m *Manager) run(ctx context.Context, mode string) {
 }
 
 func (m *Manager) tickFreestyle(ctx context.Context) {
+	if m.usesProceduralGeneration() {
+		m.tickFreestyleProcedural(ctx)
+		return
+	}
 	engine := m.options.Current()
 	var snapshot motion.ActiveMotionState
 	if engine != nil {
@@ -293,6 +308,112 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 	if now.After(deadline) {
 		m.applyNextSegment(ctx, engine, "freestyle_segment")
 	}
+}
+
+func (m *Manager) tickFreestyleProcedural(ctx context.Context) {
+	if m.options.StartProceduralFreestyleSegment == nil {
+		return
+	}
+
+	active := m.proceduralFreestyleActive()
+	m.mu.Lock()
+	stopped := m.userStopped
+	retryAt := m.nextRetry
+	m.mu.Unlock()
+
+	if !active {
+		if stopped {
+			go m.Stop("user_stop_observed")
+			return
+		}
+		if m.options.Now().Before(retryAt) {
+			return
+		}
+		m.startNextProceduralSegment(ctx, "freestyle_start")
+		return
+	}
+
+	now := m.options.Now()
+	m.mu.Lock()
+	deadline := m.deadline
+	m.mu.Unlock()
+	if now.After(deadline) {
+		m.applyNextProceduralSegment(ctx, "freestyle_segment")
+	}
+}
+
+func (m *Manager) usesProceduralGeneration() bool {
+	if m.options.UsesProceduralGeneration == nil {
+		return false
+	}
+	return m.options.UsesProceduralGeneration()
+}
+
+func (m *Manager) proceduralFreestyleActive() bool {
+	if m.options.ProceduralFreestyleActive == nil {
+		return false
+	}
+	return m.options.ProceduralFreestyleActive()
+}
+
+func (m *Manager) startNextProceduralSegment(ctx context.Context, reason string) {
+	engineCtx := context.WithoutCancel(ctx)
+	segment := m.nextProceduralSegment()
+	if err := m.options.StartProceduralFreestyleSegment(engineCtx, segment); err != nil {
+		m.backoff(ModeFreestyle, reason+"_failed", err)
+		return
+	}
+	m.armProceduralSegment(segment)
+	m.traceProcedural(reason, segment)
+}
+
+func (m *Manager) applyNextProceduralSegment(ctx context.Context, reason string) {
+	m.startNextProceduralSegment(ctx, reason)
+}
+
+func (m *Manager) nextProceduralSegment() ProceduralFreestyleSegment {
+	m.mu.Lock()
+	planner := m.planner
+	m.mu.Unlock()
+	if planner == nil {
+		planner = NewPlanner(m.options.Seed)
+		m.mu.Lock()
+		m.planner = planner
+		m.mu.Unlock()
+	}
+	return NextProceduralFreestyleSegment(planner, m.options.Settings())
+}
+
+func (m *Manager) armProceduralSegment(segment ProceduralFreestyleSegment) {
+	duration := time.Duration(segment.DurationMillis) * time.Millisecond
+	if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
+		duration = m.options.MaxSegmentDuration
+	}
+	now := m.options.Now()
+	m.mu.Lock()
+	m.segmentIdx++
+	m.deadline = now.Add(duration)
+	m.nextRetry = time.Time{}
+	m.mu.Unlock()
+}
+
+func (m *Manager) traceProcedural(reason string, segment ProceduralFreestyleSegment) {
+	planner := m.plannerSnapshot()
+	row := &diagnostics.MotionTracePlanner{
+		Mode:              ModeFreestyle,
+		Event:             reason,
+		Style:             m.options.Settings().Style,
+		SpeedPercent:      segment.Physics.Velocidade,
+		DriftToPercent:    segment.Physics.Intensidade,
+		DurationMillis:    segment.DurationMillis,
+		PatternIdentifier: segment.Physics.TipoBatida,
+		Note:              segment.Physics.Regiao,
+	}
+	if planner != nil {
+		row.Seed = planner.Seed()
+		row.SegmentIndex = planner.SegmentIndex()
+	}
+	m.trace(ModeFreestyle, reason, row, "")
 }
 
 // startNextSegment starts the engine on a fresh planner segment (first start

@@ -1,5 +1,14 @@
 import { useTranslation } from "react-i18next";
 import type { StatusSnapshot } from "../api/types";
+import {
+  isOllamaProvider,
+  llmBaseURLFromSnap,
+  llmConnectedFromSnap,
+  llmErrorFromSnap,
+  llmIdleFromSnap,
+  llmModelFromSnap,
+  llmProviderFromSnap,
+} from "../lib/llmStatus";
 import { HandyConnectionMenu } from "./HandyConnectionMenu";
 import { SessionControls } from "./SessionControls";
 import { StatusChip } from "./StatusChip";
@@ -21,6 +30,18 @@ export function ShellTopbar({
   const { t } = useTranslation();
   const buffer = snap.buffer_remaining_sec ?? snap.buffer_sec ?? 0;
   const lowBuffer = buffer < 10;
+  const llmProvider = llmProviderFromSnap(snap);
+  const llmLabel = isOllamaProvider(llmProvider)
+    ? t("layout.topbar.ollama")
+    : t("layout.topbar.llamaCpp");
+  const llmConnected = llmConnectedFromSnap(snap);
+  const llmIdle = llmIdleFromSnap(snap);
+  const llmError = llmErrorFromSnap(snap);
+  const llmModel = llmModelFromSnap(snap);
+  const llmBaseURL = llmBaseURLFromSnap(snap);
+  const llmDetail = llmIdle
+    ? t("layout.topbar.llmIdle")
+    : (llmError ?? llmModel);
 
   return (
     <header className="topbar topbar--v2">
@@ -69,15 +90,21 @@ export function ShellTopbar({
       <div className="topbar-zone topbar-zone--actions">
         <div className="topbar-menus">
           <TopbarMenu
-            label={t("layout.topbar.ollama")}
-            connected={Boolean(snap.ollama_connected)}
-            detail={snap.ollama_error ?? snap.ollama_model}
+            label={llmLabel}
+            connected={llmConnected}
+            detail={llmDetail}
             align="left"
           >
             <div className="menu-panel-section">
               <span className="section-label">{t("layout.topbar.localLlm")}</span>
               <p className="hint menu-hint">
-                <span className="mono">{snap.ollama_model}</span>
+                <span className="mono">{llmModel}</span>
+                {llmBaseURL ? (
+                  <>
+                    <br />
+                    <span className="mono">{llmBaseURL}</span>
+                  </>
+                ) : null}
               </p>
               <button
                 type="button"

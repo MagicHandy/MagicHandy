@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/manualqueue"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 type chatMessageRecord struct {
@@ -22,85 +25,233 @@ type lsoCompatRuntime struct {
 	lastPersonaMessage string
 }
 
-func (s *Server) lsoStatusPayload() map[string]any {
-	settings, _ := s.store.Snapshot()
-	intiface := s.intifaceDiagnostics()
-
-	playbackActive := false
+func (s *Server) lsoPlaybackActive() bool {
 	if engine := s.currentMotionEngine(); engine != nil {
-		playbackActive = engine.Snapshot().Running
+		return engine.Snapshot().Running
 	}
+	return false
+}
 
+func (s *Server) lsoManualQueueStatus() (mqCount int, mqPlaying, mqPaused, mqAutoloop bool, playerSnap manualqueue.Snapshot) {
 	s.manualQueue.mu.Lock()
-	mqCount := len(s.manualQueue.items)
-	mqPlaying := s.manualQueue.playing
-	mqPaused := s.manualQueue.paused
+	mqCount = len(s.manualQueue.items)
+	mqPlaying = s.manualQueue.playing
+	mqPaused = s.manualQueue.paused
+	mqAutoloop = s.manualQueue.autoloop
 	s.manualQueue.mu.Unlock()
 
-	llmConnected := false
-	var llmError any
-	if provider, err := s.newLLMProvider(settings.LLM); err == nil {
-		llmStatus := provider.Status(context.Background())
-		llmConnected = llmStatus.Available
-		if !llmConnected && llmStatus.Message != "" {
-			llmError = llmStatus.Message
-		}
-	} else {
-		llmError = err.Error()
-	}
+	playerSnap, _ = s.manualQueuePlayerSnapshot()
+	return mqCount, mqPlaying, mqPaused, mqAutoloop, playerSnap
+}
 
-	appState, _ := s.store.DB().LoadAppState()
+func (s *Server) lsoLLMStatus(settings config.Settings) (connected bool, errVal any) {
+	provider, err := s.newLLMProvider(settings.LLM)
+	if err != nil {
+		return false, err.Error()
+	}
+	llmStatus := provider.Status(context.Background())
+	if llmStatus.Managed && !llmStatus.Loaded {
+		if llmStatus.Message != "" && llmStatus.Message != "llama.cpp runner is not loaded" {
+			return false, llmStatus.Message
+		}
+		return true, nil
+	}
+	if !llmStatus.Available && llmStatus.Message != "" {
+		return llmStatus.Available, llmStatus.Message
+	}
+	return llmStatus.Available, nil
+}
+
+func (s *Server) lsoLLMPayload(settings config.Settings) map[string]any {
+	provider, err := s.newLLMProvider(settings.LLM)
+	connected, errVal := s.lsoLLMStatus(settings)
+	payload := map[string]any{
+		"provider":       settings.LLM.Provider,
+		"connected":      connected,
+		"error":          errVal,
+		"model":          settings.LLM.Model,
+		"base_url":       selectedLLMBaseURL(settings.LLM),
+		"llama_cpp_mode": settings.LLM.LlamaCPPMode,
+		"managed":        settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged,
+		"loaded":         false,
+	}
+	if err == nil {
+		status := provider.Status(context.Background())
+		payload["loaded"] = status.Loaded
+		payload["available"] = status.Available
+	}
+	return payload
+}
+
+func (s *Server) lsoPersonaStatus() (personaID string, personaName string, personaAvatar any) {
 	personaRow, personaID, _ := s.activePersonaSnapshot()
-	personaName := "MagicHandy"
-	var personaAvatar any
+	personaName = "MagicHandy"
 	if personaRow.ID != "" {
 		personaName = personaRow.Name
 		personaAvatar = s.personaAvatarURLFor(personaID)
 	}
+	return personaID, personaName, personaAvatar
+}
+
+func (s *Server) lsoDirectActive() bool {
+	s.direct.mu.Lock()
+	active := s.direct.active
+	s.direct.mu.Unlock()
+	return active
+}
+
+func (s *Server) lsoVisualSyncPrefs() (syncOffset int64, measuredRTT any) {
+	s.visual.mu.Lock()
+	syncOffset = int64(s.visual.syncPrefs.OffsetMS)
+	if s.visual.syncPrefs.MeasuredRTTMS != nil {
+		measuredRTT = *s.visual.syncPrefs.MeasuredRTTMS
+	}
+	s.visual.mu.Unlock()
+	return syncOffset, measuredRTT
+}
+
+func (s *Server) lsoMotionPosition(playerSnap manualqueue.Snapshot) float64 {
+	motionPos := 50.0
+	if playerSnap.Running {
+		motionPos = playerSnap.PositionPct
+	} else if engine := s.currentMotionEngine(); engine != nil {
+		if snap := engine.Snapshot(); snap.LastSample != nil {
+			motionPos = float64(snap.LastSample.PositionPercent)
+		}
+	}
+	s.direct.mu.Lock()
+	if s.direct.lastPositionPct > 0 {
+		motionPos = s.direct.lastPositionPct
+	}
+	s.direct.mu.Unlock()
+	return motionPos
+}
+
+func (s *Server) lsoStatusPayload() map[string]any {
+	settings, _ := s.store.Snapshot()
+	intiface := s.intifaceDiagnostics()
+	cloud := s.cloudDiagnostics()
+	deviceState := resolveLsoDeviceStatus(settings, intiface, cloud, s.cloud.baseURL)
+
+	playbackActive := s.lsoPlaybackActive()
+	mqCount, mqPlaying, mqPaused, mqAutoloop, playerSnap := s.lsoManualQueueStatus()
+	llmConnected, llmError := s.lsoLLMStatus(settings)
+	llm := s.lsoLLMPayload(settings)
+	appState, _ := s.store.DB().LoadAppState()
+	personaID, personaName, personaAvatar := s.lsoPersonaStatus()
+	directActive := s.lsoDirectActive()
+	syncOffset, measuredRTT := s.lsoVisualSyncPrefs()
+	motionPos := s.lsoMotionPosition(playerSnap)
 
 	payload := map[string]any{
-		"service":              serviceName,
-		"version":              s.version.Version,
-		"device_transport":     mapOwnerToDeviceTransport(settings.Device.HSPDispatchOwner),
-		"intiface_connected":   intiface.Connected,
-		"intiface_url":         settings.Device.IntifaceURL,
-		"intiface_error":       intiface.Error,
-		"device_label":         intiface.DeviceLabel,
-		"device_connected":     intiface.DeviceReady,
-		"use_mock":             false,
-		"persona_id":           personaID,
-		"persona_name":         personaName,
-		"persona_avatar_url":   personaAvatar,
-		"ollama_connected":     llmConnected,
-		"ollama_error":         llmError,
-		"ollama_model":         settings.LLM.Model,
-		"ollama_url":           settings.LLM.LlamaCPPBaseURL,
-		"operation_mode":       appState.OperationMode,
-		"intensity":            50,
-		"min_position":         settings.Motion.StrokeMinPercent,
-		"max_position":         settings.Motion.StrokeMaxPercent,
-		"buffer_sec":           0,
-		"queue_preview":        []any{},
-		"phase":                "idle",
-		"playback_active":      playbackActive,
-		"emergency_stop":       s.emergencyStopActive(),
-		"chat_pending":         false,
-		"planner_busy":         false,
-		"auto_running":         false,
-		"user_session_engaged": len(s.lsoCompat.messages) > 0,
-		"manual_queue_count":   mqCount,
-		"manual_queue_playing": mqPlaying,
-		"manual_queue_paused":  mqPaused,
-		"footer_status":        "MagicHandy unified",
-		"ui":                   "embedded",
+		"service":                            serviceName,
+		"version":                            s.version.Version,
+		"device_transport":                   mapOwnerToDeviceTransport(settings.Device.HSPDispatchOwner),
+		"intiface_connected":                 intiface.Connected,
+		"intiface_url":                       settings.Device.IntifaceURL,
+		"intiface_error":                     intiface.Error,
+		"device_label":                       deviceState.Label,
+		"device_connected":                   deviceState.Connected,
+		"handy_connected":                    deviceState.HandyConnected,
+		"handy_error":                        deviceState.HandyError,
+		"handy_base_url":                     deviceState.HandyBaseURL,
+		"handy_key_configured":               settings.Device.HandyConnectionKey != "",
+		"use_mock":                           false,
+		"persona_id":                         personaID,
+		"persona_name":                       personaName,
+		"persona_avatar_url":                 personaAvatar,
+		"ollama_connected":                   llmConnected,
+		"ollama_error":                       llmError,
+		"ollama_model":                       settings.LLM.Model,
+		"ollama_url":                         selectedLLMBaseURL(settings.LLM),
+		"llm":                                llm,
+		"llm_provider":                       settings.LLM.Provider,
+		"llm_connected":                      llmConnected,
+		"llm_error":                          llmError,
+		"llm_model":                          settings.LLM.Model,
+		"llm_base_url":                       selectedLLMBaseURL(settings.LLM),
+		"llm_cpp_mode":                       settings.LLM.LlamaCPPMode,
+		"operation_mode":                     appState.OperationMode,
+		"intensity":                          50,
+		"min_position":                       settings.Motion.StrokeMinPercent,
+		"max_position":                       settings.Motion.StrokeMaxPercent,
+		"buffer_sec":                         0,
+		"queue_preview":                      []any{},
+		"phase":                              "idle",
+		"playback_active":                    playbackActive || mqPlaying,
+		"direct_control_active":              directActive,
+		"sync_offset_ms":                     syncOffset,
+		"measured_rtt_ms":                    measuredRTT,
+		"motion_position_pct":                motionPos,
+		"emergency_stop":                     s.emergencyStopActive(),
+		"chat_pending":                       false,
+		"planner_busy":                       false,
+		"auto_running":                       false,
+		"user_session_engaged":               len(s.lsoCompat.messages) > 0,
+		"manual_queue_count":                 mqCount,
+		"manual_queue_playing":               mqPlaying,
+		"manual_queue_paused":                mqPaused,
+		"manual_queue_autoloop":              mqAutoloop,
+		"manual_queue_playhead_ms":           playerSnap.PlayheadMS,
+		"manual_queue_duration_sec":          float64(playerSnap.DurationMS) / 1000.0,
+		"manual_queue_progress_pct":          manualQueueProgressPct(playerSnap),
+		"manual_queue_current_segment_index": playerSnap.CurrentSegment,
+		"manual_queue_playback_mode":         manualQueuePlaybackMode(playerSnap),
+		"footer_status":                      "MagicHandy unified",
+		"ui":                                 "embedded",
 		"features": map[string]string{
 			"motion":   "manual",
 			"chat":     "llama.cpp",
 			"library":  "sqlite",
-			"intiface": "required",
+			"intiface": deviceState.IntifaceFeature,
 		},
 	}
 	return payload
+}
+
+type lsoDeviceState struct {
+	Connected       bool
+	Label           string
+	HandyConnected  bool
+	HandyError      any
+	HandyBaseURL    string
+	IntifaceFeature string
+}
+
+func resolveLsoDeviceStatus(
+	settings config.Settings,
+	intiface intifaceDiag,
+	cloud transport.TransportDiagnostics,
+	cloudBaseURL string,
+) lsoDeviceState {
+	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerCloudREST:
+		state := lsoDeviceState{
+			Connected:       cloud.Connected,
+			HandyConnected:  cloud.Connected,
+			HandyBaseURL:    cloudBaseURL,
+			IntifaceFeature: "optional",
+			Label:           "Handy Cloud API",
+		}
+		if cloud.LastError != "" {
+			state.HandyError = cloud.LastError
+		} else if settings.Device.HandyConnectionKey == "" {
+			state.HandyError = "connection key not configured"
+		}
+		return state
+	case config.DispatchOwnerIntiface:
+		return lsoDeviceState{
+			Connected:       intiface.DeviceReady,
+			Label:           intiface.DeviceLabel,
+			IntifaceFeature: "required",
+		}
+	default:
+		return lsoDeviceState{
+			Connected:       intiface.DeviceReady,
+			Label:           intiface.DeviceLabel,
+			IntifaceFeature: "optional",
+		}
+	}
 }
 
 type intifaceDiag struct {
@@ -150,16 +301,21 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	text := trimSpace(body.Text)
+	// #region agent log
+	agentDebugLog("D", "lso_compat.go:handleChatSend", "chat send received", map[string]any{
+		"textLen": len(text), "clientID": clientIDFromRequest(r),
+	})
+	// #endregion
 	if text == "" {
 		writeError(w, http.StatusBadRequest, errEmptyChatMessage)
 		return
 	}
 	if isChatStopMessage(text) {
+		if !s.requireController(w, r) {
+			return
+		}
 		s.stopAndClearMotionEngine(r.Context(), "chat_stop")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "stopped": true})
-		return
-	}
-	if !s.requireController(w, r) {
 		return
 	}
 
@@ -167,16 +323,24 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 	settings, _ := s.store.Snapshot()
 	provider, err := s.ensureLLMReady(r.Context())
+	// #region agent log
+	agentDebugLog("A", "lso_compat.go:handleChatSend", "ensureLLMReady", map[string]any{
+		"ok": err == nil, "err": errString(err),
+		"provider": settings.LLM.Provider, "mode": settings.LLM.LlamaCPPMode,
+		"runnerPath": settings.LLM.LlamaCPPRunnerPath, "modelPath": settings.LLM.LlamaCPPModelPath,
+	})
+	// #endregion
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
 	}
 	prompt := s.chatPromptForRequest(settings)
 	service := chat.Service{
-		Provider: provider,
-		Prompt:   prompt,
-		Model:    settings.LLM.Model,
-		Memories: s.personalization.memory.PromptTexts(),
+		Provider:             provider,
+		Prompt:               prompt,
+		Model:                settings.LLM.Model,
+		Memories:             s.personalization.memory.PromptTexts(),
+		MotionGenerationMode: settings.Motion.MotionGenerationMode,
 	}
 
 	history := s.chatHistoryForLLM()
@@ -184,6 +348,14 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		Message: text,
 		History: history,
 	}, nil)
+	// #region agent log
+	agentDebugLog("B", "lso_compat.go:handleChatSend", "chat complete", map[string]any{
+		"ok": err == nil, "err": errString(err),
+		"malformed": result.Malformed, "malformedErr": result.MalformedError,
+		"repaired": result.Repaired, "rawLen": len(result.Raw), "repairRawLen": len(result.RepairRaw),
+		"rawPreview": truncateForLog(result.Raw, 200),
+	})
+	// #endregion
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
@@ -206,7 +378,25 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	s.lsoCompat.lastPersonaMessage = reply
 	s.lsoCompat.mu.Unlock()
 
-	motionDispatch, motionErr := s.dispatchChatMotion(r.Context(), result.Response.Motion)
+	clientID := clientIDFromRequest(r)
+	controllerActive := s.controller.Touch(clientID).Active
+	var motionDispatch chatMotionDispatch
+	var motionErr error
+	if controllerActive {
+		motionDispatch, motionErr = s.dispatchChatMotionForResult(r.Context(), result.Response.Motion, settings)
+	} else if result.Response.Motion != nil && result.Response.Motion.Action != "" && result.Response.Motion.Action != chat.MotionActionNone {
+		motionDispatch = chatMotionDispatch{
+			Action: result.Response.Motion.Action,
+			Error:  "this client is read-only; motion was not applied",
+		}
+	}
+	// #region agent log
+	agentDebugLog("C", "lso_compat.go:handleChatSend", "motion dispatch", map[string]any{
+		"clientID": clientID, "controllerActive": controllerActive,
+		"action": motionActionName(result.Response.Motion), "applied": motionDispatch.Applied,
+		"motionErr": errString(motionErr), "procedural": settings.Motion.MotionGenerationMode == config.MotionGenerationModeProcedural,
+	})
+	// #endregion
 	response := map[string]any{
 		"ok":      true,
 		"reply":   reply,
@@ -265,4 +455,46 @@ func trimSpace(value string) string {
 		value = value[:len(value)-1]
 	}
 	return value
+}
+
+func manualQueueProgressPct(snap manualqueue.Snapshot) float64 {
+	if snap.DurationMS <= 0 {
+		return 0
+	}
+	pct := float64(snap.PlayheadMS) * 100 / float64(snap.DurationMS)
+	if pct < 0 {
+		return 0
+	}
+	if pct > 100 {
+		return 100
+	}
+	return pct
+}
+
+func manualQueuePlaybackMode(snap manualqueue.Snapshot) any {
+	if !snap.Running {
+		return nil
+	}
+	return "script"
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func truncateForLog(value string, max int) string {
+	if max <= 0 || len(value) <= max {
+		return value
+	}
+	return value[:max] + "..."
+}
+
+func motionActionName(command *chat.MotionCommand) string {
+	if command == nil {
+		return ""
+	}
+	return command.Action
 }

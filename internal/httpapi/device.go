@@ -57,7 +57,9 @@ func (s *Server) handleDeviceTransportPost(w http.ResponseWriter, r *http.Reques
 	}
 	next.Device.HSPDispatchOwner = owner
 	if body.ConnectionKey != nil {
-		next.Device.HandyConnectionKey = strings.TrimSpace(*body.ConnectionKey)
+		if key := strings.TrimSpace(*body.ConnectionKey); key != "" {
+			next.Device.HandyConnectionKey = key
+		}
 	}
 
 	saved, err := s.store.Save(next)
@@ -78,10 +80,27 @@ func (s *Server) handleDeviceTransportPost(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
+	if saved.Device.HSPDispatchOwner == config.DispatchOwnerCloudREST {
+		if bootstrap, err := s.bootstrapCloud(r.Context()); err == nil {
+			for key, value := range bootstrap {
+				response[key] = value
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleDeviceConnect(w http.ResponseWriter, r *http.Request) {
+	settings, _ := s.store.Snapshot()
+	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerCloudREST:
+		s.handleDeviceCloudConnect(w, r)
+	default:
+		s.handleDeviceIntifaceConnect(w, r)
+	}
+}
+
+func (s *Server) handleDeviceIntifaceConnect(w http.ResponseWriter, r *http.Request) {
 	result, err := s.bootstrapIntiface(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
@@ -99,8 +118,37 @@ func (s *Server) handleDeviceConnect(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleDeviceCloudConnect(w http.ResponseWriter, r *http.Request) {
+	result, err := s.bootstrapCloud(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err)
+		return
+	}
+	if result["error"] != nil && result["connected"] != true {
+		writeError(w, http.StatusBadGateway, errors.New(stringValue(result["error"])))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":              true,
+		"use_mock":        false,
+		"connected":       result["connected"],
+		"device_label":    result["device_label"],
+		"handy_connected": result["connected"],
+	})
+}
+
 func (s *Server) handleDeviceBootstrap(w http.ResponseWriter, r *http.Request) {
-	result, err := s.bootstrapIntiface(r.Context())
+	settings, _ := s.store.Snapshot()
+	var (
+		result map[string]any
+		err    error
+	)
+	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerCloudREST:
+		result, err = s.bootstrapCloud(r.Context())
+	default:
+		result, err = s.bootstrapIntiface(r.Context())
+	}
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return
@@ -212,6 +260,37 @@ func (s *Server) bootstrapIntiface(ctx context.Context) (map[string]any, error) 
 	return result, nil
 }
 
+func (s *Server) bootstrapCloud(ctx context.Context) (map[string]any, error) {
+	result := map[string]any{
+		"use_mock":     false,
+		"transport":    "handy_cloud",
+		"connected":    false,
+		"device_label": "Handy Cloud API",
+	}
+	cloud, err := s.newCloudTransport()
+	if err != nil {
+		result["error"] = err.Error()
+		return result, nil
+	}
+	check, err := cloud.CheckConnection(ctx)
+	s.saveCloudDiagnostics(cloud.Diagnostics())
+	connected := check.OK && check.HSPAvailable
+	result["connected"] = connected
+	result["handy_connected"] = connected
+	if err != nil && !isHSPUnavailable(err) {
+		result["error"] = safeCloudErrorMessage(err)
+		return result, nil
+	}
+	if !connected {
+		message := strings.TrimSpace(check.Status)
+		if message == "" {
+			message = "Handy Cloud connection check failed"
+		}
+		result["error"] = message
+	}
+	return result, nil
+}
+
 func (s *Server) startIntifaceBootstrapLoop(ctx context.Context) {
 	if s.intifaceClient() == nil {
 		return
@@ -248,17 +327,24 @@ func (s *Server) startIntifaceBootstrapLoop(ctx context.Context) {
 
 func (s *Server) deviceTransportPayload(settings config.Settings) map[string]any {
 	client := s.intifaceClient()
+	intifaceDiag := s.intifaceDiagnostics()
+	cloud := s.cloudDiagnostics()
+	deviceState := resolveLsoDeviceStatus(settings, intifaceDiag, cloud, s.cloud.baseURL)
+
 	payload := map[string]any{
 		"transport":            mapOwnerToDeviceTransport(settings.Device.HSPDispatchOwner),
 		"handy_key_configured": settings.Device.HandyConnectionKey != "",
 		"intiface_url":         settings.Device.IntifaceURL,
+		"device_connected":     deviceState.Connected,
+		"device_label":         deviceState.Label,
+		"handy_connected":      deviceState.HandyConnected,
+		"handy_error":          deviceState.HandyError,
+		"handy_base_url":       deviceState.HandyBaseURL,
 	}
 	if client != nil {
 		payload["intiface_connected"] = client.Connected()
 		payload["intiface_error"] = client.LastError()
 		payload["intiface_reconnecting"] = client.Reconnecting()
-		payload["device_connected"] = client.Connected() && client.SelectedDeviceID() != ""
-		payload["device_label"] = client.SelectedDeviceName()
 	}
 	return payload
 }

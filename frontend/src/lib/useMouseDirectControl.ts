@@ -152,6 +152,21 @@ export function useMouseDirectControl({
 
         const res = await api.sendDirectControlMove(norm, durationRef.current);
 
+        // #region agent log
+        fetch("http://127.0.0.1:7754/ingest/6a8fd47b-60f9-4a35-a0cd-8c5a35f2a945", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "745bf8" },
+          body: JSON.stringify({
+            sessionId: "745bf8",
+            hypothesisId: res.skipped ? "H5" : "H1",
+            location: "useMouseDirectControl.ts:flushMove",
+            message: res.skipped ? "client_move_skipped" : "client_move_sent",
+            data: { norm, skipped: res.skipped, position_pct: res.position_pct },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+
         if (!res.skipped && res.position_pct != null) {
 
           setSentPct(res.position_pct);
@@ -159,6 +174,21 @@ export function useMouseDirectControl({
         }
 
       } catch (e) {
+
+        // #region agent log
+        fetch("http://127.0.0.1:7754/ingest/6a8fd47b-60f9-4a35-a0cd-8c5a35f2a945", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "745bf8" },
+          body: JSON.stringify({
+            sessionId: "745bf8",
+            hypothesisId: "H2",
+            location: "useMouseDirectControl.ts:flushMove",
+            message: "client_move_error",
+            data: { norm, error: e instanceof Error ? e.message : String(e) },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
 
         onError(e instanceof Error ? e.message : "Erro ao enviar movimento");
 

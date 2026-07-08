@@ -44,10 +44,11 @@ type Result struct {
 // Prompt is the resolved behavior profile; Memories are the enabled memory
 // texts (empty when the memory switch is off — chat must work without them).
 type Service struct {
-	Provider llm.Provider
-	Prompt   PromptSet
-	Model    string
-	Memories []string
+	Provider             llm.Provider
+	Prompt               PromptSet
+	Model                string
+	Memories             []string
+	MotionGenerationMode string
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -67,7 +68,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if strings.TrimSpace(prompt.ID) == "" {
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
-	systemPrompt := ComposeSystem(prompt, s.Memories)
+	systemPrompt := ComposeSystemForMode(prompt, s.Memories, s.MotionGenerationMode)
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
@@ -81,9 +82,12 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return Result{}, err
 	}
 
-	response, parseErr := ParseAssistantResponse(raw)
+	response, parseErr := ParseAssistantResponseForMode(raw, s.MotionGenerationMode)
 	if parseErr == nil {
 		return Result{Response: response, Raw: raw}, nil
+	}
+	if wrapped, wrapErr := parsePlainTextAssistantResponse(raw, s.MotionGenerationMode); wrapErr == nil {
+		return Result{Response: wrapped, Raw: raw}, nil
 	}
 
 	result := Result{
@@ -113,7 +117,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, nil
 	}
 
-	repaired, repairParseErr := ParseAssistantResponse(repairRaw)
+	repaired, repairParseErr := ParseAssistantResponseForMode(repairRaw, s.MotionGenerationMode)
 	if repairParseErr != nil {
 		result.MalformedError = repairParseErr.Error()
 		return result, nil
@@ -179,4 +183,29 @@ func emitEvent(emit func(StreamEvent) error, event StreamEvent) error {
 		return nil
 	}
 	return emit(event)
+}
+
+func parsePlainTextAssistantResponse(raw string, motionGenerationMode string) (AssistantResponse, error) {
+	trimmed := strings.TrimSpace(raw)
+	if !looksLikePlainLanguageReply(trimmed) {
+		return AssistantResponse{}, errors.New("not plain text")
+	}
+	payload, err := json.Marshal(AssistantResponse{
+		Reply:  trimmed,
+		Motion: &MotionCommand{Action: MotionActionNone},
+	})
+	if err != nil {
+		return AssistantResponse{}, err
+	}
+	return ParseAssistantResponseForMode(string(payload), motionGenerationMode)
+}
+
+func looksLikePlainLanguageReply(trimmed string) bool {
+	if trimmed == "" || strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return false
+	}
+	if strings.ContainsAny(trimmed, ".,!?;:") {
+		return true
+	}
+	return len(trimmed) >= 40
 }

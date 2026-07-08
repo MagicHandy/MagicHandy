@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/manualqueue"
 )
 
 type manualQueueItem struct {
@@ -18,11 +19,13 @@ type manualQueueItem struct {
 }
 
 type manualQueueRuntime struct {
-	mu       sync.Mutex
-	items    []manualQueueItem
-	playing  bool
-	paused   bool
-	autoloop bool
+	mu          sync.Mutex
+	items       []manualQueueItem
+	playing     bool
+	paused      bool
+	autoloop    bool
+	playStarted time.Time
+	player      *manualqueue.Player
 }
 
 func (s *Server) registerManualQueueRoutes(mux *http.ServeMux) {
@@ -39,6 +42,7 @@ func (s *Server) registerManualQueueRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/manual-queue/player/resume", s.handleManualQueueResume)
 	mux.HandleFunc("POST /api/manual-queue/player/stop", s.handleManualQueueStop)
 	mux.HandleFunc("POST /api/manual-queue/player/skip", s.handleManualQueueSkip)
+	mux.HandleFunc("POST /api/manual-queue/player/options", s.handleManualQueuePlayerOptions)
 }
 
 func (s *Server) handleManualQueueGet(w http.ResponseWriter, _ *http.Request) {
@@ -183,7 +187,12 @@ func (s *Server) handleManualQueuePreview(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	preview, segments, durationMS, actionCount := s.buildManualQueuePreview(r, draft["items"].([]map[string]any))
+	session, err := s.prepareManualQueueSession(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	preview, segments, durationMS, actionCount := s.buildManualQueuePreviewFromSession(session)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":                 true,
 		"preview":            preview,
@@ -195,65 +204,143 @@ func (s *Server) handleManualQueuePreview(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (s *Server) handleManualQueuePlay(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleManualQueuePlay(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	draft := s.manualQueueDraft()
 	if draft["count"].(int) == 0 {
 		writeError(w, http.StatusBadRequest, errors.New("manual queue is empty"))
 		return
 	}
+	s.stopManualQueuePlayer(r.Context())
+	syncInfo := s.autoSyncOffset(r)
+	session, err := s.startManualQueuePlayback(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	s.manualQueue.mu.Lock()
-	s.manualQueue.playing = true
-	s.manualQueue.paused = false
+	autoloop := s.manualQueue.autoloop
 	s.manualQueue.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
-		"started":  true,
-		"items":    draft["count"],
-		"autoloop": s.manualQueue.autoloop,
+		"ok":          true,
+		"started":     true,
+		"items":       draft["count"],
+		"autoloop":    autoloop,
+		"duration_ms": session.DurationMS,
+		"sync":        syncInfo,
 	})
 }
 
-func (s *Server) handleManualQueuePause(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleManualQueuePause(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	s.manualQueue.mu.Lock()
-	defer s.manualQueue.mu.Unlock()
-	if !s.manualQueue.playing {
+	player := s.manualQueue.player
+	playing := s.manualQueue.playing
+	s.manualQueue.mu.Unlock()
+	if !playing || player == nil {
 		writeError(w, http.StatusConflict, errors.New("manual queue player is not active"))
 		return
 	}
+	if err := player.Pause(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.manualQueue.mu.Lock()
 	s.manualQueue.paused = true
+	s.manualQueue.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "paused": true})
 }
 
-func (s *Server) handleManualQueueResume(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleManualQueueResume(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	s.manualQueue.mu.Lock()
-	defer s.manualQueue.mu.Unlock()
-	if !s.manualQueue.playing {
+	player := s.manualQueue.player
+	playing := s.manualQueue.playing
+	paused := s.manualQueue.paused
+	s.manualQueue.mu.Unlock()
+	if !playing || !paused || player == nil {
 		writeError(w, http.StatusConflict, errors.New("manual queue player is not active"))
 		return
 	}
+	if err := player.Resume(r.Context()); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	s.manualQueue.mu.Lock()
+	s.manualQueue.player = player
 	s.manualQueue.paused = false
+	s.manualQueue.playStarted = time.Now()
+	s.manualQueue.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "paused": false})
 }
 
 func (s *Server) handleManualQueueStop(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	s.manualQueue.mu.Lock()
 	s.manualQueue.playing = false
 	s.manualQueue.paused = false
+	s.manualQueue.playStarted = time.Time{}
 	s.manualQueue.mu.Unlock()
-	if commandTransport, err := s.newSelectedMotionTransport(); err == nil {
-		_, _ = commandTransport.Stop(r.Context(), transport.StopCommand{Reason: "manual_queue_stop"})
-	}
+	s.stopManualQueuePlayer(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "stopped": true})
 }
 
-func (s *Server) handleManualQueueSkip(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleManualQueueSkip(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	s.manualQueue.mu.Lock()
-	defer s.manualQueue.mu.Unlock()
-	if !s.manualQueue.playing {
+	player := s.manualQueue.player
+	playing := s.manualQueue.playing
+	s.manualQueue.mu.Unlock()
+	if !playing || player == nil {
 		writeError(w, http.StatusConflict, errors.New("manual queue player is not active"))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "skip_to_ms": 0})
+	skipTo, err := player.SkipSegment(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	s.manualQueue.mu.Lock()
+	s.manualQueue.player = player
+	s.manualQueue.playing = player.Snapshot().Running
+	s.manualQueue.paused = false
+	if s.manualQueue.playing {
+		s.manualQueue.playStarted = time.Now()
+	}
+	s.manualQueue.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "skip_to_ms": skipTo})
+}
+
+func (s *Server) handleManualQueuePlayerOptions(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body struct {
+		Autoloop *bool `json:"autoloop"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.Autoloop == nil {
+		writeError(w, http.StatusBadRequest, errors.New("autoloop is required"))
+		return
+	}
+	s.manualQueue.mu.Lock()
+	s.manualQueue.autoloop = *body.Autoloop
+	autoloop := s.manualQueue.autoloop
+	s.manualQueue.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "autoloop": autoloop})
 }
 
 func (s *Server) manualQueueDraft() map[string]any {
@@ -293,42 +380,6 @@ func (s *Server) resolveManualQueueItem(_ *http.Request, blockID string, duratio
 	return s.resolveManualQueueItemCtx(blockID, durationSec)
 }
 
-func (s *Server) buildManualQueuePreview(r *http.Request, items []map[string]any) ([]map[string]any, []map[string]any, int, int) {
-	preview := make([]map[string]any, 0, 128)
-	segments := make([]map[string]any, 0, len(items))
-	offsetMS := 0
-	actionCount := 0
-	for index, item := range items {
-		blockID, _ := item["block_id"].(string)
-		durationSec, _ := item["duration_sec"].(float64)
-		durationMS := int(durationSec * 1000)
-		if s.library == nil {
-			continue
-		}
-		block, err := s.library.Store().GetMotionBlock(r.Context(), blockID)
-		if err != nil {
-			continue
-		}
-		displayName := blockDisplayName(block.ID, "", block.Zone, block.Speed, block.DurationMS, "")
-		segments = append(segments, map[string]any{
-			"index":        index,
-			"start_ms":     offsetMS,
-			"duration_ms":  durationMS,
-			"display_name": displayName,
-			"block_id":     blockID,
-		})
-		for _, action := range block.Actions {
-			preview = append(preview, map[string]any{
-				"t_ms": offsetMS + action.At,
-				"pos":  action.Pos,
-			})
-		}
-		actionCount += len(block.Actions)
-		offsetMS += durationMS
-	}
-	return preview, segments, offsetMS, actionCount
-}
-
 func manualQueueIndex(r *http.Request) (int, error) {
 	raw := strings.TrimSpace(r.PathValue("index"))
 	if raw == "" {
@@ -360,10 +411,9 @@ func (s *Server) enqueueChatLibraryBlock(blockID string) error {
 	}
 	s.manualQueue.mu.Lock()
 	s.manualQueue.items = append(s.manualQueue.items, item)
-	s.manualQueue.playing = true
-	s.manualQueue.paused = false
 	s.manualQueue.mu.Unlock()
-	return nil
+	_, err = s.startManualQueuePlayback(contextBackground())
+	return err
 }
 
 func (s *Server) resolveManualQueueItemCtx(blockID string, durationSec float64) (manualQueueItem, error) {

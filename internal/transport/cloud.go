@@ -16,6 +16,9 @@ const (
 	cloudPathHSPStop      = "hsp/stop"
 	cloudPathHSPState     = "hsp/state"
 	cloudPathHSPEvents    = "sse"
+	cloudPathMode2        = "mode2"
+	cloudPathHAMPStop     = "hamp/stop"
+	cloudPathHSSPStop     = "hssp/stop"
 )
 
 // CloudPrerequisites describes the Cloud REST prerequisites needed before live dispatch.
@@ -101,8 +104,8 @@ func BuildCloudAuthMetadata(prerequisites CloudPrerequisites) (CloudAuthMetadata
 		return CloudAuthMetadata{}, hspUnavailable("invalid_application_id", "application_id", "API v3 Application ID is malformed")
 	case key == "":
 		return CloudAuthMetadata{}, hspUnavailable("missing_connection_key", "connection_key", "Handy connection key is required")
-	case strings.ContainsAny(key, " \t\r\n") || len(key) < 8:
-		return CloudAuthMetadata{}, hspUnavailable("malformed_connection_key", "connection_key", "Handy connection key is malformed")
+	case strings.ContainsAny(key, " \t\r\n"):
+		return CloudAuthMetadata{}, hspUnavailable("malformed_connection_key", "connection_key", "Handy connection key cannot contain spaces")
 	case prerequisites.FirmwareMajor != 4:
 		return CloudAuthMetadata{}, hspUnavailable("firmware_v4_required", "firmware_major", "Handy firmware v4 is required for HSP")
 	case prerequisites.APIMajor != 3:

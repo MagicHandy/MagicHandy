@@ -32,7 +32,16 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.Motion
 		},
-		Traces: s.traces,
+		UsesProceduralGeneration: func() bool {
+			settings, _ := s.store.Snapshot()
+			return s.usesProceduralFreestyle(settings.Motion)
+		},
+		ProceduralFreestyleActive: s.freestyleChaosActive,
+		StartProceduralFreestyleSegment: func(ctx context.Context, segment modes.ProceduralFreestyleSegment) error {
+			return s.startFreestyleChaosSegment(ctx, segment)
+		},
+		StopProceduralFreestyle: s.stopFreestyleChaosPlayer,
+		Traces:                  s.traces,
 	})
 }
 
@@ -81,6 +90,7 @@ func (s *Server) handleModeStop(w http.ResponseWriter, r *http.Request) {
 	}
 	s.modes.Stop("mode_stop_requested")
 	if stopMotion {
+		s.cancelFreestyleChaosMotion(r.Context())
 		if engine := s.currentMotionEngine(); engine != nil {
 			if _, err := engine.Stop(r.Context(), "mode_stopped"); err != nil {
 				writeError(w, http.StatusBadGateway, errors.New("mode stopped, but the motion stop failed: "+err.Error()))

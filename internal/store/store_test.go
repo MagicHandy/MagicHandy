@@ -109,7 +109,7 @@ func TestRockfireTablesExistAfterOpen(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	for _, table := range []string{"personas", "ui_preferences", "app_state", "funscript_files"} {
+	for _, table := range []string{"personas", "ui_preferences", "app_state", "funscript_files", "legacy_imports"} {
 		var name string
 		err := db.SQL().QueryRow(
 			`SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
@@ -118,5 +118,63 @@ func TestRockfireTablesExistAfterOpen(t *testing.T) {
 		if err != nil {
 			t.Fatalf("table %q missing: %v", table, err)
 		}
+	}
+}
+
+func TestRepairRockfireDatastore(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, DatabaseFileName)
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	if _, err := raw.Exec(`
+		CREATE TABLE settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			document TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
+		INSERT INTO settings(id, document, updated_at)
+		VALUES (1, '{"version":1,"server":{"port":49717}}', '2026-01-01T00:00:00Z');
+		PRAGMA user_version = 3;
+	`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("seed Rockfire datastore: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	var version int
+	if err := db.SQL().QueryRowContext(context.Background(), "PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if version != CurrentSchemaVersion {
+		t.Fatalf("user_version = %d, want %d", version, CurrentSchemaVersion)
+	}
+
+	var settingsID string
+	if err := db.SQL().QueryRowContext(context.Background(), `
+		SELECT id FROM settings
+	`).Scan(&settingsID); err != nil {
+		t.Fatalf("read migrated settings id: %v", err)
+	}
+	if settingsID != "current" {
+		t.Fatalf("settings id = %q, want current", settingsID)
+	}
+
+	var legacyTable string
+	if err := db.SQL().QueryRowContext(context.Background(), `
+		SELECT name FROM sqlite_master WHERE type='table' AND name='legacy_imports'
+	`).Scan(&legacyTable); err != nil {
+		t.Fatalf("legacy_imports table missing: %v", err)
 	}
 }

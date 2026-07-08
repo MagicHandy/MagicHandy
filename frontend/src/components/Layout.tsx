@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import { api } from "../api/client";
+import {
+  isOllamaProvider,
+  llmProviderFromSnap,
+} from "../lib/llmStatus";
 import { Sidebar } from "./Sidebar";
 import { ShellTopbar } from "./ShellTopbar";
 import { useStatus } from "../contexts/StatusContext";
@@ -33,12 +37,24 @@ export function Layout() {
     try {
       const r = await api.pingOllama();
       await refresh();
-      notify(
-        r.ollama_connected
-          ? t("layout.ollama.connected")
-          : t("layout.ollama.off", { error: r.ollama_error ?? r.error ?? "?" }),
-        r.ollama_connected ? "ok" : "error",
-      );
+      const connected = Boolean(r.llm_connected ?? r.ollama_connected);
+      const provider = r.llm_provider ?? r.provider ?? llmProviderFromSnap(snap ?? {});
+      const err = String(r.llm_error ?? r.ollama_error ?? r.error ?? "?");
+      if (connected) {
+        notify(
+          isOllamaProvider(provider)
+            ? t("layout.ollama.connected")
+            : t("layout.llamaCpp.connected"),
+          "ok",
+        );
+      } else {
+        notify(
+          isOllamaProvider(provider)
+            ? t("layout.ollama.off", { error: err })
+            : t("layout.llamaCpp.off", { error: err }),
+          "error",
+        );
+      }
     } catch (e) {
       notify(e instanceof Error ? e.message : t("common.error"), "error");
     }

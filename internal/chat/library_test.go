@@ -18,8 +18,8 @@ func TestComposeSystemAlwaysAppendsContract(t *testing.T) {
 	if !strings.Contains(composed, "Speak like a pirate.") {
 		t.Fatalf("composed system missing behavior text:\n%s", composed)
 	}
-	if !strings.Contains(composed, ContractInstructions) {
-		t.Fatalf("composed system missing the code-owned contract:\n%s", composed)
+	if !strings.Contains(composed, proceduralMotionInstructions()) {
+		t.Fatalf("composed system missing the procedural contract:\n%s", composed)
 	}
 	// The contract always follows the editable text so it cannot be overridden
 	// by earlier instructions being "closer" to the end of the prompt.
@@ -42,7 +42,7 @@ func TestComposeSystemIncludesOnlyProvidedMemories(t *testing.T) {
 		!strings.Contains(with, "- Prefers tease.") {
 		t.Fatalf("memory block missing entries:\n%s", with)
 	}
-	if !strings.Contains(with, ContractInstructions) {
+	if !strings.Contains(with, proceduralMotionInstructions()) {
 		t.Fatal("contract missing when memories are present")
 	}
 }
@@ -180,7 +180,7 @@ func TestLocalizedBuiltinPromptSets(t *testing.T) {
 			t.Fatalf("prompt %q missing protocol-preservation cue:\n%s", id, set.System)
 		}
 		composed := ComposeSystem(set, nil)
-		if !strings.Contains(composed, ContractInstructions) {
+		if !strings.Contains(composed, proceduralMotionInstructions()) {
 			t.Fatalf("prompt %q did not compose with the contract", id)
 		}
 	}

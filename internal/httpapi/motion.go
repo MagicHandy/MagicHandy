@@ -217,6 +217,8 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	if s.modes != nil {
 		s.modes.NotifyUserStop()
 	}
+	s.cancelFreestyleChaosMotion(r.Context())
+	s.cancelChatChaosMotion(r.Context())
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		writeJSON(w, http.StatusOK, s.motionState())
@@ -287,7 +289,11 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 			s.modes.Stop("dispatch_owner_changed")
 		}
 		s.stopAndClearMotionEngine(ctx, "dispatch_owner_changed")
+		s.resetCloudTransport()
 		return
+	}
+	if previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey {
+		s.resetCloudTransport()
 	}
 	s.refreshActiveMotion(ctx, next.Motion)
 }
@@ -315,6 +321,8 @@ func (s *Server) Close() {
 		s.modes.Shutdown()
 	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
+	s.stopManualQueuePlayer(context.Background())
+	s.cancelChatChaosMotion(context.Background())
 	s.personalization.Close()
 	if s.library != nil && s.library.Store() != nil {
 		_ = s.library.Store().Close()

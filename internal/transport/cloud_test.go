@@ -152,10 +152,10 @@ func TestHSPUnavailableErrorsAreSpecificAndNoFallback(t *testing.T) {
 		},
 		{
 			name:          "malformed connection key",
-			prerequisite:  validCloudPrerequisites(func(p *CloudPrerequisites) { p.ConnectionKey = "bad" }),
+			prerequisite:  validCloudPrerequisites(func(p *CloudPrerequisites) { p.ConnectionKey = "bad key" }),
 			wantCode:      "malformed_connection_key",
 			wantField:     "connection_key",
-			wantSubstring: "connection key",
+			wantSubstring: "spaces",
 		},
 		{
 			name:          "firmware v4 required",

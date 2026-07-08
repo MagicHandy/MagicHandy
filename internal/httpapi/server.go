@@ -64,7 +64,10 @@ type Server struct {
 	modes           *modes.Manager
 	library         *library.Service
 	direct          directRuntime
+	visual          motionVisualRuntime
 	manualQueue     manualQueueRuntime
+	chatChaos       chatChaosRuntime
+	freestyleChaos  freestyleChaosRuntime
 	lsoCompat       lsoCompatRuntime
 	started         time.Time
 	version         VersionInfo
@@ -139,6 +142,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	}
 
 	server.tryAutoImportLSO()
+	server.loadSyncPrefs()
 
 	return server, nil
 }
@@ -285,7 +289,11 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	if isLsoUIRequest(r) {
+		s.handleLsoGetSettings(w, r)
+		return
+	}
 	settings, status := s.store.PublicSnapshot()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"settings": settings,
@@ -294,6 +302,10 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
+	if isLsoUIRequest(r) {
+		s.handleLsoPutSettings(w, r)
+		return
+	}
 	if !s.requireController(w, r) {
 		return
 	}

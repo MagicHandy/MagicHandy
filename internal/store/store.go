@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ const (
 	DBFileName = DatabaseFileName
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 3
+	CurrentSchemaVersion = 7
 	// SchemaVersion is a Rockfire-era alias kept for tests.
 	SchemaVersion = CurrentSchemaVersion
 
@@ -287,6 +288,22 @@ func (db *DB) migrate(ctx context.Context) error {
 				if err := migrateV3(ctx, tx); err != nil {
 					return err
 				}
+			case 4:
+				if err := migrateV4(ctx, tx); err != nil {
+					return err
+				}
+			case 5:
+				if err := migrateV5(ctx, tx); err != nil {
+					return err
+				}
+			case 6:
+				if err := migrateV6(ctx, tx); err != nil {
+					return err
+				}
+			case 7:
+				if err := migrateV7(ctx, tx); err != nil {
+					return err
+				}
 			default:
 				return fmt.Errorf("unknown migration version %d", next)
 			}
@@ -436,6 +453,124 @@ func migrateV3(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("apply SQLite migration v3: %w", err)
 		}
+	}
+	return nil
+}
+
+func migrateV4(ctx context.Context, tx *sql.Tx) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS legacy_imports (
+			domain TEXT PRIMARY KEY,
+			source_path TEXT NOT NULL,
+			archived_path TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL,
+			message TEXT NOT NULL DEFAULT '',
+			imported_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS app_kv (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("apply SQLite migration v4: %w", err)
+		}
+	}
+	return migrateRockfireSettingsRow(ctx, tx)
+}
+
+func migrateRockfireSettingsRow(ctx context.Context, tx *sql.Tx) error {
+	var ddl string
+	err := tx.QueryRowContext(ctx, `
+		SELECT sql FROM sqlite_master WHERE type='table' AND name='settings'
+	`).Scan(&ddl)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect settings table: %w", err)
+	}
+	if !strings.Contains(ddl, "id = 1") {
+		return nil
+	}
+
+	var document, updatedAt string
+	err = tx.QueryRowContext(ctx, `
+		SELECT document, updated_at FROM settings WHERE id = 1
+	`).Scan(&document, &updatedAt)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		updatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	case err != nil:
+		return fmt.Errorf("read Rockfire settings row: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DROP TABLE settings`); err != nil {
+		return fmt.Errorf("drop Rockfire settings table: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TABLE settings (
+			id TEXT PRIMARY KEY CHECK (id = 'current'),
+			document TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`); err != nil {
+		return fmt.Errorf("create main settings table: %w", err)
+	}
+	if strings.TrimSpace(document) == "" {
+		return nil
+	}
+	document = strings.Replace(
+		document,
+		`"hsp_dispatch_owner": "intiface"`,
+		`"hsp_dispatch_owner": "cloud_rest"`,
+		1,
+	)
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO settings(id, document, updated_at) VALUES('current', ?, ?)
+	`, document, updatedAt); err != nil {
+		return fmt.Errorf("migrate Rockfire settings row: %w", err)
+	}
+	return nil
+}
+
+func migrateV5(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE settings
+		SET document = REPLACE(document, '"hsp_dispatch_owner": "intiface"', '"hsp_dispatch_owner": "cloud_rest"')
+		WHERE id = 'current'
+		  AND document LIKE '%"hsp_dispatch_owner": "intiface"%'
+	`)
+	if err != nil {
+		return fmt.Errorf("apply SQLite migration v5: %w", err)
+	}
+	return nil
+}
+
+func migrateV6(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE settings
+		SET document = json_set(document, '$.motion.motion_generation_mode', 'procedural')
+		WHERE id = 'current'
+		  AND json_extract(document, '$.motion.motion_generation_mode') IS NULL
+	`)
+	if err != nil {
+		return fmt.Errorf("apply SQLite migration v6: %w", err)
+	}
+	return nil
+}
+
+func migrateV7(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE settings
+		SET document = json_set(document, '$.motion.hardware_safety_lock', true)
+		WHERE id = 'current'
+		  AND json_extract(document, '$.motion.hardware_safety_lock') IS NULL
+	`)
+	if err != nil {
+		return fmt.Errorf("apply SQLite migration v7: %w", err)
 	}
 	return nil
 }

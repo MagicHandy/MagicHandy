@@ -65,6 +65,13 @@ type CloudRESTTransport struct {
 	hspPointCount          int
 	serverTimeOffsetMillis int64
 	serverTimeSyncedAt     time.Time
+
+	hdspMu       sync.Mutex
+	hdspReady    bool
+	hdspMoves    chan hdspMoveRequest
+	hdspCancel   context.CancelFunc
+	hdspDone     chan struct{}
+	lastHDSPNorm float64
 }
 
 // NewCloudRESTTransport validates prerequisites and creates a live Cloud REST transport.
@@ -161,6 +168,9 @@ func (t *CloudRESTTransport) AddHSP(ctx context.Context, command HSPAddCommand) 
 	}
 	result, err := t.dispatch(ctx, request)
 	if err == nil {
+		// #region agent log
+		agentDebugLog("M3", "cloud_client.go:AddHSP", "hsp points dispatched", summarizeHSPPoints(command.Points))
+		// #endregion
 		t.hspPointCount = tailPointStreamIndex
 	}
 	return result, err
@@ -176,7 +186,54 @@ func (t *CloudRESTTransport) PlayHSP(ctx context.Context, command HSPPlayCommand
 	if err != nil {
 		return t.recordBuildError(CommandKindHSPPlay, err), err
 	}
-	return t.dispatch(ctx, request)
+	result, err := t.dispatch(ctx, request)
+	if err == nil {
+		// #region agent log
+		agentDebugLog("M4", "cloud_client.go:PlayHSP", "hsp play dispatched", map[string]any{
+			"stream_id":   command.StreamID,
+			"start_time":  command.StartTimeMillis,
+			"server_time": command.ServerTimeMillis,
+		})
+		// #endregion
+	}
+	return result, err
+}
+
+func summarizeHSPPoints(points []TimedPoint) map[string]any {
+	if len(points) == 0 {
+		return map[string]any{"count": 0}
+	}
+	minX, maxX := points[0].PositionPercent, points[0].PositionPercent
+	minT, maxT := points[0].TimeMillis, points[0].TimeMillis
+	preview := make([]map[string]any, 0, 4)
+	for i, point := range points {
+		if point.PositionPercent < minX {
+			minX = point.PositionPercent
+		}
+		if point.PositionPercent > maxX {
+			maxX = point.PositionPercent
+		}
+		if point.TimeMillis < minT {
+			minT = point.TimeMillis
+		}
+		if point.TimeMillis > maxT {
+			maxT = point.TimeMillis
+		}
+		if i < 4 {
+			preview = append(preview, map[string]any{
+				"x": point.PositionPercent,
+				"t": point.TimeMillis,
+			})
+		}
+	}
+	return map[string]any{
+		"count":   len(points),
+		"x_min":   minX,
+		"x_max":   maxX,
+		"t_min":   minT,
+		"t_max":   maxT,
+		"preview": preview,
+	}
 }
 
 // CheckConnection probes Cloud REST HSP state without sending motion.
@@ -314,6 +371,11 @@ func (t *CloudRESTTransport) dispatchWithBody(ctx context.Context, request Cloud
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		err := fmt.Errorf("cloud REST %s returned HTTP %d: %s", request.Operation, response.StatusCode, strings.TrimSpace(string(body)))
+		result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
+		t.rememberPlaybackState(body)
+		return result, body, err
+	}
+	if err := cloudDeviceResponseError(body); err != nil {
 		result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
 		t.rememberPlaybackState(body)
 		return result, body, err

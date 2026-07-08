@@ -20,26 +20,35 @@ func (s *Server) handlePingOllamaCompat(w http.ResponseWriter, r *http.Request) 
 			"error":            err.Error(),
 			"ollama_connected": false,
 			"ollama_error":     err.Error(),
+			"llm_provider":     settings.LLM.Provider,
+			"llm_connected":    false,
+			"llm_error":        err.Error(),
 		})
 		return
 	}
 	status := provider.Status(r.Context())
+	errMessage := func() any {
+		if status.Available {
+			return nil
+		}
+		if status.Message != "" {
+			return status.Message
+		}
+		return "LLM is not available"
+	}()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":               status.Available,
 		"status":           http.StatusOK,
 		"ollama_connected": status.Available,
-		"ollama_error": func() any {
-			if status.Available {
-				return nil
-			}
-			if status.Message != "" {
-				return status.Message
-			}
-			return "LLM is not available"
-		}(),
-		"provider": settings.LLM.Provider,
-		"model":    settings.LLM.Model,
-		"base_url": selectedLLMBaseURL(settings.LLM),
-		"message":  status.Message,
+		"ollama_error":     errMessage,
+		"llm_provider":     settings.LLM.Provider,
+		"llm_connected":    status.Available,
+		"llm_error":        errMessage,
+		"provider":         settings.LLM.Provider,
+		"model":            settings.LLM.Model,
+		"base_url":         selectedLLMBaseURL(settings.LLM),
+		"message":          status.Message,
+		"loaded":           status.Loaded,
+		"managed":          status.Managed,
 	})
 }

@@ -172,6 +172,31 @@ func TestCloudEventsEndpointProxiesSSE(t *testing.T) {
 	}
 }
 
+func TestDeviceConnectUsesCloudWhenCloudOwnerSelected(t *testing.T) {
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"hsp_available":true,"playback_state":"buffered"}`))
+	}))
+	defer cloudServer.Close()
+
+	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
+	saveCloudSettings(t, server)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/device/connect", nil)
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "Intiface dispatch owner is not selected") {
+		t.Fatalf("device connect should use cloud transport: %s", recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"connected":true`) {
+		t.Fatalf("device connect body = %s, want connected cloud device", recorder.Body.String())
+	}
+}
+
 func newCloudTestServer(t *testing.T, runtime Runtime) *Server {
 	t.Helper()
 

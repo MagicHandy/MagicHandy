@@ -19,8 +19,8 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.Server.Port != DefaultServerPort {
 		t.Fatalf("server port = %d, want %d", settings.Server.Port, DefaultServerPort)
 	}
-	if settings.Device.HSPDispatchOwner != DispatchOwnerIntiface {
-		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerIntiface)
+	if settings.Device.HSPDispatchOwner != DispatchOwnerCloudREST {
+		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST)
 	}
 	if settings.Device.FirmwareAPIRequirement != FirmwareAPIRequirementRequired {
 		t.Fatalf("firmware requirement = %q, want %q", settings.Device.FirmwareAPIRequirement, FirmwareAPIRequirementRequired)
@@ -141,6 +141,59 @@ func TestOpenStoreImportsLegacySettingsFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, settingsFileName+".migrated")); err != nil {
 		t.Fatalf("archived legacy settings missing: %v", err)
+	}
+}
+
+func TestMergeLegacyLLMPathsUpdatesSQLiteRow(t *testing.T) {
+	dir := t.TempDir()
+
+	store, err := OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	settings, _ := store.Snapshot()
+	settings.LLM.LlamaCPPRunnerPath = ""
+	settings.LLM.LlamaCPPModelPath = ""
+	settings.LLM.Model = "local-model"
+	if _, err := store.Save(settings); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	legacy := DefaultSettings()
+	legacy.LLM.LlamaCPPRunnerPath = `C:\llama\llama-server.exe`
+	legacy.LLM.LlamaCPPModelPath = `C:\llama\model.gguf`
+	legacy.LLM.Model = "Qwen2.5-7B-Instruct-Q4_K_M"
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy settings: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, settingsFileName), data, 0o600); err != nil {
+		t.Fatalf("write legacy settings: %v", err)
+	}
+
+	store, err = OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore reload: %v", err)
+	}
+	defer func() {
+		_ = store.Close()
+	}()
+
+	got, status := store.Snapshot()
+	if got.LLM.LlamaCPPRunnerPath != legacy.LLM.LlamaCPPRunnerPath {
+		t.Fatalf("runner path = %q, want %q", got.LLM.LlamaCPPRunnerPath, legacy.LLM.LlamaCPPRunnerPath)
+	}
+	if got.LLM.LlamaCPPModelPath != legacy.LLM.LlamaCPPModelPath {
+		t.Fatalf("model path = %q, want %q", got.LLM.LlamaCPPModelPath, legacy.LLM.LlamaCPPModelPath)
+	}
+	if got.LLM.Model != legacy.LLM.Model {
+		t.Fatalf("model = %q, want %q", got.LLM.Model, legacy.LLM.Model)
+	}
+	if !strings.Contains(status.Message, "merged llm paths") {
+		t.Fatalf("status message = %q, want llm path merge note", status.Message)
 	}
 }
 

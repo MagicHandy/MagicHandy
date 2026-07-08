@@ -3,7 +3,7 @@ import { StatusProvider } from "./contexts/StatusContext";
 import { Layout } from "./components/Layout";
 import { ConfigHub } from "./pages/ConfigHub";
 import { ControlRoom } from "./pages/ControlRoom";
-import { HandsFree } from "./pages/HandsFree";
+import { Freestyle } from "./pages/Freestyle";
 import { Library } from "./pages/Library";
 import { ManualQueue } from "./pages/ManualQueue";
 import { MouseControl } from "./pages/MouseControl";
@@ -20,7 +20,8 @@ export default function App() {
           }
         >
           <Route index element={<ControlRoom />} />
-          <Route path="hands-free" element={<HandsFree />} />
+          <Route path="freestyle" element={<Freestyle />} />
+          <Route path="hands-free" element={<Navigate to="/freestyle" replace />} />
           <Route path="controle-mouse" element={<MouseControl />} />
           <Route path="biblioteca" element={<Library />} />
           <Route path="fila" element={<ManualQueue />} />
