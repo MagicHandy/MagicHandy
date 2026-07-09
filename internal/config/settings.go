@@ -146,6 +146,35 @@ type VoiceSettings struct {
 	// SpeakReplies enqueues each displayed chat reply to the running TTS
 	// worker in lockstep (ADR 0003: a spoken reply is always also shown).
 	SpeakReplies bool `json:"speak_replies"`
+	// ElevenLabsAPIKey is a private credential like the Handy connection
+	// key: stored at rest, handed to the TTS worker process only via a
+	// private environment variable, never returned by any read API.
+	ElevenLabsAPIKey string `json:"elevenlabs_api_key,omitempty"`
+}
+
+// PublicVoiceSettings is the API-safe voice view; the ElevenLabs key is
+// reduced to a set/unset flag.
+type PublicVoiceSettings struct {
+	Enabled          bool     `json:"enabled"`
+	TTSWorkerPath    string   `json:"tts_worker_path,omitempty"`
+	TTSWorkerArgs    []string `json:"tts_worker_args,omitempty"`
+	ASRWorkerPath    string   `json:"asr_worker_path,omitempty"`
+	ASRWorkerArgs    []string `json:"asr_worker_args,omitempty"`
+	SpeakReplies     bool     `json:"speak_replies"`
+	ElevenLabsKeySet bool     `json:"elevenlabs_key_set"`
+}
+
+// VoiceUpdate is the API write payload for voice settings. A nil API key
+// keeps the stored secret; ClearElevenLabsKey removes it.
+type VoiceUpdate struct {
+	Enabled            bool     `json:"enabled"`
+	TTSWorkerPath      string   `json:"tts_worker_path"`
+	TTSWorkerArgs      []string `json:"tts_worker_args"`
+	ASRWorkerPath      string   `json:"asr_worker_path"`
+	ASRWorkerArgs      []string `json:"asr_worker_args"`
+	SpeakReplies       bool     `json:"speak_replies"`
+	ElevenLabsAPIKey   *string  `json:"elevenlabs_api_key,omitempty"`
+	ClearElevenLabsKey bool     `json:"clear_elevenlabs_key"`
 }
 
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
@@ -160,7 +189,7 @@ type PublicSettings struct {
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
 	LLM         LLMSettings               `json:"llm"`
-	Voice       VoiceSettings             `json:"voice"`
+	Voice       PublicVoiceSettings       `json:"voice"`
 	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
 	Options     PublicSettingsOptionHints `json:"options"`
 }
@@ -191,7 +220,7 @@ type SettingsUpdate struct {
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMSettings         `json:"llm"`
-	Voice              VoiceSettings       `json:"voice"`
+	Voice              VoiceUpdate         `json:"voice"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
@@ -251,9 +280,17 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
-		Motion:      s.Motion,
-		LLM:         s.LLM,
-		Voice:       s.Voice,
+		Motion: s.Motion,
+		LLM:    s.LLM,
+		Voice: PublicVoiceSettings{
+			Enabled:          s.Voice.Enabled,
+			TTSWorkerPath:    s.Voice.TTSWorkerPath,
+			TTSWorkerArgs:    s.Voice.TTSWorkerArgs,
+			ASRWorkerPath:    s.Voice.ASRWorkerPath,
+			ASRWorkerArgs:    s.Voice.ASRWorkerArgs,
+			SpeakReplies:     s.Voice.SpeakReplies,
+			ElevenLabsKeySet: s.Voice.ElevenLabsAPIKey != "",
+		},
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -304,8 +341,23 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
 	next.LLM = normalizeLLMStrings(update.LLM)
-	next.Voice = normalizeVoiceStrings(update.Voice)
+	next.Voice = normalizeVoiceStrings(VoiceSettings{
+		Enabled:       update.Voice.Enabled,
+		TTSWorkerPath: update.Voice.TTSWorkerPath,
+		TTSWorkerArgs: update.Voice.TTSWorkerArgs,
+		ASRWorkerPath: update.Voice.ASRWorkerPath,
+		ASRWorkerArgs: update.Voice.ASRWorkerArgs,
+		SpeakReplies:  update.Voice.SpeakReplies,
+		// The stored key survives unless explicitly replaced or cleared.
+		ElevenLabsAPIKey: s.Voice.ElevenLabsAPIKey,
+	})
 	next.Diagnostics = update.Diagnostics
+
+	if update.Voice.ClearElevenLabsKey {
+		next.Voice.ElevenLabsAPIKey = ""
+	} else if update.Voice.ElevenLabsAPIKey != nil {
+		next.Voice.ElevenLabsAPIKey = strings.TrimSpace(*update.Voice.ElevenLabsAPIKey)
+	}
 
 	if update.ClearConnectionKey {
 		next.Device.HandyConnectionKey = ""

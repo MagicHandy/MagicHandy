@@ -31,16 +31,28 @@ const (
 )
 
 // WorkerConfig is the per-role launch configuration derived from settings.
+// Env carries provider credentials (e.g. the ElevenLabs API key) to the
+// worker process privately — never on the command line, never in status.
 type WorkerConfig struct {
 	Enabled bool
 	Command string
 	Args    []string
+	Env     map[string]string
 }
 
 func (c WorkerConfig) equal(other WorkerConfig) bool {
-	return c.Enabled == other.Enabled &&
-		c.Command == other.Command &&
-		strings.Join(c.Args, "\x00") == strings.Join(other.Args, "\x00")
+	if c.Enabled != other.Enabled ||
+		c.Command != other.Command ||
+		strings.Join(c.Args, "\x00") != strings.Join(other.Args, "\x00") ||
+		len(c.Env) != len(other.Env) {
+		return false
+	}
+	for key, value := range c.Env {
+		if other.Env[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 // WorkerStatus is the JSON status snapshot for one worker. It never contains
@@ -226,6 +238,12 @@ func (s *Supervisor) spawn(stderr *tailBuffer) (*exec.Cmd, *conn, error) {
 	// managed llama.cpp runner path).
 	command := exec.Command(s.config.Command, s.config.Args...)
 	command.Stderr = stderr
+	if len(s.config.Env) > 0 {
+		command.Env = os.Environ()
+		for key, value := range s.config.Env {
+			command.Env = append(command.Env, key+"="+value)
+		}
+	}
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %s worker stdin: %w", s.role, err)

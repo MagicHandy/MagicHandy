@@ -328,7 +328,7 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 		Device:      DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
 		Motion:      current.Motion,
 		LLM:         current.LLM,
-		Voice:       VoiceSettings{Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"}},
+		Voice:       VoiceUpdate{Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"}},
 		Diagnostics: current.Diagnostics,
 	}
 	next, err := current.ApplyUpdate(update)
@@ -346,5 +346,59 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	got, _ := reloaded.Snapshot()
 	if !got.Voice.Enabled || got.Voice.ASRWorkerPath == "" || len(got.Voice.ASRWorkerArgs) != 2 {
 		t.Fatalf("voice settings did not survive reload: %+v", got.Voice)
+	}
+}
+
+func TestElevenLabsKeyIsRedactedAndWriteOnly(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Voice.ElevenLabsAPIKey = "el-secret"
+
+	public := settings.Public()
+	if !public.Voice.ElevenLabsKeySet {
+		t.Fatal("public view must report the key as set")
+	}
+	encoded, err := json.Marshal(public)
+	if err != nil {
+		t.Fatalf("marshal public settings: %v", err)
+	}
+	if strings.Contains(string(encoded), "el-secret") {
+		t.Fatal("the ElevenLabs key leaked into the public settings view")
+	}
+
+	// An update without the key keeps the stored secret.
+	update := SettingsUpdate{
+		Server:      settings.Server,
+		Device:      DeviceUpdate{HSPDispatchOwner: settings.Device.HSPDispatchOwner, FirmwareAPIRequirement: settings.Device.FirmwareAPIRequirement, APIApplicationIDSource: settings.Device.APIApplicationIDSource},
+		Motion:      settings.Motion,
+		LLM:         settings.LLM,
+		Voice:       VoiceUpdate{Enabled: true},
+		Diagnostics: settings.Diagnostics,
+	}
+	next, err := settings.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate: %v", err)
+	}
+	if next.Voice.ElevenLabsAPIKey != "el-secret" {
+		t.Fatalf("stored key must survive a keyless update, got %q", next.Voice.ElevenLabsAPIKey)
+	}
+
+	// Replacing and clearing both work.
+	replacement := " el-new "
+	update.Voice.ElevenLabsAPIKey = &replacement
+	next, err = settings.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate replace: %v", err)
+	}
+	if next.Voice.ElevenLabsAPIKey != "el-new" {
+		t.Fatalf("key replace = %q, want trimmed el-new", next.Voice.ElevenLabsAPIKey)
+	}
+	update.Voice.ElevenLabsAPIKey = nil
+	update.Voice.ClearElevenLabsKey = true
+	next, err = settings.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate clear: %v", err)
+	}
+	if next.Voice.ElevenLabsAPIKey != "" {
+		t.Fatalf("key clear left %q", next.Voice.ElevenLabsAPIKey)
 	}
 }
