@@ -180,7 +180,8 @@ export function SettingsRoute() {
             <label className="field"><span className="label">TTS worker arguments</span><input type="text" value={joinArgs(s.voice?.tts_worker_args)} disabled={locked} onChange={(e) => patchVoice({ tts_worker_args: splitArgs(e.target.value) })} placeholder="-role tts" /></label>
             <label className="field"><span className="label">ASR worker path</span><input type="text" value={s.voice?.asr_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ asr_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
             <label className="field"><span className="label">ASR worker arguments</span><input type="text" value={joinArgs(s.voice?.asr_worker_args)} disabled={locked} onChange={(e) => patchVoice({ asr_worker_args: splitArgs(e.target.value) })} placeholder="-role asr" /></label>
-            <p className="form-status">Worker paths and the enable switch apply on Save settings; workers never start on their own.</p>
+            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.speak_replies ?? false} disabled={locked} onChange={(e) => patchVoice({ speak_replies: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies — each displayed reply is enqueued to the running TTS worker; the controller tab plays it</span></label>
+            <p className="form-status">Worker paths and the switches apply on Save settings; workers never start on their own.</p>
             <div className="divider" />
             <VoiceWorkers locked={locked} />
           </>

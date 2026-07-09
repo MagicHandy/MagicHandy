@@ -48,6 +48,10 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 		"/api/voice/status",
 		"/api/voice/workers/",
 		"not configured",
+		// Shared chat log + lockstep TTS (Phase 13 foundation, ADR 0003).
+		"/api/chat/messages",
+		"/api/chat/cursor",
+		"Speak chat replies",
 	} {
 		if !strings.Contains(js, fragment) {
 			t.Fatalf("built bundle missing critical string %q", fragment)

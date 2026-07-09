@@ -125,6 +125,22 @@ export interface ChatHistoryMessage {
   content: string;
 }
 
+// One row of the server-side shared chat log (the canonical history; each
+// client reads via its own cursor and reads are never destructive).
+export interface ChatLogMessage {
+  seq: number;
+  role: "user" | "assistant";
+  content: string;
+  client_id?: string;
+  created_at: string;
+}
+
+export interface ChatMessagesResponse {
+  messages: ChatLogMessage[];
+  latest_seq: number;
+  cursor: number;
+}
+
 export interface ModesStatus {
   running?: boolean;
   mode?: string;
@@ -138,6 +154,7 @@ export interface VoiceSettings {
   tts_worker_args?: string[];
   asr_worker_path?: string;
   asr_worker_args?: string[];
+  speak_replies?: boolean;
 }
 
 export type VoiceWorkerState =
@@ -180,6 +197,8 @@ export interface VoiceRequestSnapshot {
   state: string;
   created_at: string;
   audio_chunks?: number;
+  audio_bytes?: number;
+  audio_truncated?: boolean;
   transcript?: { text: string; confidence: number }[];
   rejected?: string;
   error?: { code: string; message: string; retryable?: boolean };
@@ -254,6 +273,7 @@ export interface AppState {
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
+  chat?: { latest_seq?: number };
   transport?: Record<string, unknown>;
   cloud_transport?: Record<string, unknown>;
   bluetooth_transport?: Record<string, unknown>;
@@ -268,9 +288,10 @@ export interface MotionTarget {
 }
 
 export type ChatStreamEvent =
-  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string } }
+  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; user_seq?: number } }
   | { event: "delta" | "repair_delta"; data: { phase?: string; text?: string } }
-  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; initial_malformed?: boolean } }
+  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; initial_malformed?: boolean; seq?: number } }
+  | { event: "speech"; data: { request_id?: string } }
   | { event: "motion"; data: { applied?: boolean; action?: string; error?: string } }
   | { event: "malformed"; data: { repaired?: boolean; recoverable?: boolean; phase?: string; error?: string } }
   | { event: "error"; data: { message?: string } }

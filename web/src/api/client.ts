@@ -12,6 +12,7 @@ import type {
   BluetoothCommandsResponse,
   BluetoothStatusResponse,
   ChatHistoryMessage,
+  ChatMessagesResponse,
   PromptSetsPayload,
   PublicSettings,
   SettingsUpdate,
@@ -147,6 +148,12 @@ export const api = {
       ...payload,
     }),
 
+  // Shared chat log: the canonical history. Reads are non-destructive; each
+  // client advances only its own cursor.
+  getChatMessages: (after = 0) =>
+    request<ChatMessagesResponse>("GET", `/api/chat/messages${after > 0 ? `?after=${after}` : ""}`),
+  advanceChatCursor: (seq: number) => request<{ cursor: number }>("POST", "/api/chat/cursor", { seq }),
+
   // Voice workers (optional; the app runs fully without them).
   voiceStatus: () =>
     request<{ voice: VoiceState; requests?: VoiceRequestSnapshot[] }>("GET", "/api/voice/status"),
@@ -164,6 +171,14 @@ export const api = {
     request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`),
   voiceRequestCancel: (id: string) =>
     request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/cancel`),
+  // Lease-gated audio: only the active controller may fetch a clip.
+  voiceRequestAudio: async (id: string): Promise<Blob> => {
+    const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {
+      headers: { [CLIENT_HEADER]: clientId },
+    });
+    if (!res.ok) throw new ApiError(`Audio fetch failed (${res.status})`, res.status, null);
+    return res.blob();
+  },
 
   exportTrace: () => request("GET", "/api/traces"),
 };

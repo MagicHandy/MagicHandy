@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
 type chatStreamRequest struct {
@@ -36,7 +38,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 	settings, _ := s.store.Snapshot()
 	if isChatStopMessage(body.Message) {
-		s.handleChatStopFastPath(w, r, settings.LLM.Provider, settings.LLM.Model)
+		s.handleChatStopFastPath(w, r, body.Message, settings.LLM.Provider, settings.LLM.Model)
 		return
 	}
 	if !s.requireController(w, r) {
@@ -66,11 +68,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return writeSSE(w, event, payload)
 	})
 
+	// The user message enters the shared log once streaming actually starts;
+	// its seq rides the status event so the sending client can track what it
+	// has already displayed.
+	userSeq := s.appendChatMessage(chat.MessageRoleUser, body.Message, clientIDFromRequest(r))
+
 	if err := emit("status", map[string]any{
 		"state":      "streaming",
 		"provider":   settings.LLM.Provider,
 		"model":      settings.LLM.Model,
 		"prompt_set": prompt.ID,
+		"user_seq":   userSeq,
 	}); err != nil {
 		return
 	}
@@ -123,13 +131,24 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 		})
 	}
 
+	// Lockstep delivery ordering (ADR 0003): the reply enters the shared log
+	// (displayed) before any TTS enqueue, so a spoken reply is always also
+	// shown. Error and malformed paths returned above — they never reach the
+	// log or TTS.
+	replySeq := s.appendChatMessage(chat.MessageRoleAssistant, result.Response.Reply, "")
+
 	if err := emit("message", map[string]any{
 		"reply":             result.Response.Reply,
 		"repaired":          result.Repaired,
 		"initial_malformed": result.InitialMalformed,
 		"motion":            result.Response.Motion,
+		"seq":               replySeq,
 	}); err != nil {
 		return
+	}
+
+	if speech := s.enqueueSpeech(result.Response.Reply); speech != nil {
+		_ = emit("speech", map[string]any{"request_id": speech.ID})
 	}
 
 	dispatch, motionErr := s.dispatchChatMotion(r.Context(), result.Response.Motion)
@@ -203,24 +222,31 @@ func (s *Server) notifyChatTarget(target motion.MotionTarget) {
 	}
 }
 
-func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, provider string, model string) {
+func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, message string, provider string, model string) {
 	setSSEHeaders(w)
 	emit := func(event string, payload any) error {
 		return writeSSE(w, event, payload)
 	}
+	userSeq := s.appendChatMessage(chat.MessageRoleUser, message, clientIDFromRequest(r))
 	if err := emit("status", map[string]any{
 		"state":    "deterministic_stop",
 		"provider": provider,
 		"model":    model,
+		"user_seq": userSeq,
 	}); err != nil {
 		return
 	}
+	// The deterministic reply is displayed, so it enters the shared log like
+	// any other reply; a stop confirmation is deliberately never spoken —
+	// physical Stop must not wait on TTS.
+	replySeq := s.appendChatMessage(chat.MessageRoleAssistant, "Stopping motion.", "")
 	command := &chat.MotionCommand{Action: chat.MotionActionStop}
 	if err := emit("message", map[string]any{
 		"reply":             "Stopping motion.",
 		"repaired":          false,
 		"initial_malformed": false,
 		"motion":            command,
+		"seq":               replySeq,
 	}); err != nil {
 		return
 	}
@@ -235,6 +261,121 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	_ = emit("done", map[string]any{
 		"ok": motionErr == nil,
 	})
+}
+
+// appendChatMessage adds one message to the shared log; a log failure is a
+// diagnostics problem, never a chat outage (returns 0).
+func (s *Server) appendChatMessage(role string, content string, clientID string) int64 {
+	if s.chatLog == nil {
+		return 0
+	}
+	seq, err := s.chatLog.Append(role, content, clientID)
+	if err != nil {
+		s.logger.Warn("chat log append failed", "role", role, "error", err)
+		return 0
+	}
+	return seq
+}
+
+// enqueueSpeech submits the displayed reply to the TTS worker when the
+// speak-replies setting is on. It runs strictly after the log append, and
+// its failures stay in the voice request log — never in chat.
+func (s *Server) enqueueSpeech(reply string) *voice.PendingRequest {
+	settings, _ := s.store.Snapshot()
+	if !settings.Voice.Enabled || !settings.Voice.SpeakReplies {
+		return nil
+	}
+	pending, err := s.voice.Worker(voice.RoleTTS).Submit(voice.Request{
+		Type: voice.RequestSpeak,
+		Text: reply,
+	})
+	if err != nil {
+		s.logger.Warn("TTS enqueue skipped", "error", err)
+		return nil
+	}
+	s.voice.Track(pending)
+	return pending
+}
+
+// chatState is the /api/state block other tabs poll for continuity.
+func (s *Server) chatState() map[string]any {
+	var latest int64
+	if s.chatLog != nil {
+		if seq, err := s.chatLog.LatestSeq(); err == nil {
+			latest = seq
+		}
+	}
+	return map[string]any{"latest_seq": latest}
+}
+
+// handleChatMessages reads the shared log non-destructively. Reads never
+// consume anything: cursors only move via the explicit cursor endpoint.
+func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
+	after := int64(0)
+	if value := r.URL.Query().Get("after"); value != "" {
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || parsed < 0 {
+			writeError(w, http.StatusBadRequest, errors.New("after must be a non-negative integer"))
+			return
+		}
+		after = parsed
+	}
+	limit := 0
+	if value := r.URL.Query().Get("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			writeError(w, http.StatusBadRequest, errors.New("limit must be a positive integer"))
+			return
+		}
+		limit = parsed
+	}
+
+	messages, err := s.chatLog.After(after, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	latest, err := s.chatLog.LatestSeq()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	cursor, err := s.chatLog.Cursor(clientIDFromRequest(r))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if messages == nil {
+		messages = []chat.LogMessage{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages":   messages,
+		"latest_seq": latest,
+		"cursor":     cursor,
+	})
+}
+
+// handleChatCursor advances the caller's own cursor (monotonic). Each client
+// owns exactly one cursor, so no controller lease is involved.
+func (s *Server) handleChatCursor(w http.ResponseWriter, r *http.Request) {
+	clientID := clientIDFromRequest(r)
+	if clientID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("a client id header is required to advance a chat cursor"))
+		return
+	}
+	var body struct {
+		Seq int64 `json:"seq"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	cursor, err := s.chatLog.AdvanceCursor(clientID, body.Seq)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cursor": cursor})
 }
 
 func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {

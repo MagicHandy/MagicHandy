@@ -39,13 +39,17 @@ Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
-| 13-17 | Voice providers, patterns, migration, packaging, parity | Not started | — |
+| 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | pending |
+| 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet) | In progress | — |
+| 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
-Phase 12 note: the ADR 0003 delivery-ordering trio (shared chat log with
-per-client cursors, lockstep chat-emit/TTS-enqueue, single-owner audio lease)
-is deliberately not in the Phase 12 PR — there is no audio playback or real
-TTS provider yet to order against. It lands at the start of Phase 13,
-before the first provider is wired to chat (see the Phase 12/13 sections).
+Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
+before any provider — the SQLite `messages`/`client_cursors` tables (schema
+v2) are the canonical chat history (closing parity row 9: history survives
+reload and reaches every tab), chat-emit and TTS-enqueue are lockstep (the
+enqueued text is byte-identical to the logged reply; error/malformed paths
+never reach either), and retained speak audio is served only to the active
+controller (the single-owner audio lease), bounded per request and count.
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
 the fake transport (one continuous stream across many segment retargets, one
@@ -595,7 +599,9 @@ One provider per PR/subphase, in this order:
    risk R15): the shared chat message log with per-client cursors (the ADR
    0008 `messages`/`client_cursors` tables), lockstep chat-emit/TTS-enqueue,
    and the single-owner audio lease — landed before any provider speaks a
-   chat reply, so spoken-equals-shown is guaranteed from the first provider
+   chat reply, so spoken-equals-shown is guaranteed from the first provider.
+   **Done** (schema v2; `speak_replies` setting; lease-gated audio endpoint;
+   spoken-equals-shown, cursor-isolation, and model-error tests).
 1. **NeuTTS Air spike first** (risk R17): prove the non-Python NeuCodec
    decode path and cloning quality/latency before the full integration; if the
    spike fails, document the fallback (F5-TTS ONNX or optional Python worker)

@@ -357,10 +357,12 @@ learned the hard way. They are scheduled (Phase 9B unless noted):
 8. **Stop shortcut visibility.** Escape triggers Stop but nothing in the UI
    says so; this document requires the shortcut to be documented and visible.
 9. **Chat continuity.** The old app kept a server-side message log with
-   per-client cursors; MagicHandy chat history is a 12-turn client array lost
-   on reload and invisible to a second tab. The shared-log architecture is
-   deferred to Phase 12 (ADR 0003) — acceptable, but chat shipped in Phase 9,
-   so the retrofit must not be forgotten.
+   per-client cursors; MagicHandy chat history was a 12-turn client array
+   lost on reload and invisible to a second tab. **Closed by the Phase 13
+   delivery-ordering foundation** (ADR 0003): the SQLite `messages` log is
+   the canonical history, the panel seeds from it on load, other tabs pick
+   up new rows via the state poll, and each client advances only its own
+   cursor (reads are never destructive).
 
 ### Post-Phase-10 shell pass
 
@@ -369,8 +371,8 @@ Pause/Resume (`/api/motion/pause`, `/api/motion/resume`) with a run clock
 (`running_ms`) that freezes on pause and resets on stop, surfaced as the
 Pause/Resume control in the sidebar panel and the stopwatch in the status
 bar. Chat-driven pause maps to the deterministic stop fast-path until Phase
-11 wires planners. Only row 9 (server-side chat continuity, Phase 12)
-remains.
+11 wires planners. Row 9 (server-side chat continuity) closed with the Phase
+13 delivery-ordering foundation, completing the parity baseline.
 
 ### Phase 10 parity implementation
 

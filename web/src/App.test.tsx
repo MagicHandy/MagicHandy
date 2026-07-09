@@ -38,12 +38,15 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[] } = {}) {
   const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
+  const chatLog = opts.chatLog ?? [];
   const fn = vi.fn(async (input: RequestInfo | URL) => {
     if (opts.fail) throw new Error("offline");
     const u = String(input);
     if (u.includes("/api/transport/bluetooth/status")) return jsonRes({ status: "success", dispatch_owner: state.settings.device.hsp_dispatch_owner, bluetooth: state.bluetooth_bridge ?? {} });
+    if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0 });
+    if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
     if (u.includes("/api/settings")) return jsonRes({ settings: state.settings });
     if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
@@ -182,6 +185,18 @@ describe("app shell safety invariants", () => {
     go("#/settings/device");
     expect(await screen.findByText(/bluetooth disconnected/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
+  });
+
+  it("seeds chat history from the shared server log", async () => {
+    installFetch({
+      chatLog: [
+        { seq: 1, role: "user", content: "hello from another tab", created_at: "2026-07-09T00:00:00Z" },
+        { seq: 2, role: "assistant", content: "reply preserved across reloads", created_at: "2026-07-09T00:00:01Z" },
+      ],
+    });
+    renderApp();
+    expect(await screen.findByText(/hello from another tab/i)).toBeInTheDocument();
+    expect(screen.getByText(/reply preserved across reloads/i)).toBeInTheDocument();
   });
 
   it("labels the visualizer as an engine-state image (commanded estimate)", async () => {

@@ -102,6 +102,10 @@ enter chat history, TTS playback, or motion (ADR 0003).
 - `POST /api/voice/workers/{role}/test` — `{"text": "...", "delay_ms": n}`;
   submits a stub-scale request, returns its ID.
 - `GET /api/voice/requests/{id}` / `POST /api/voice/requests/{id}/cancel`.
+- `GET /api/voice/requests/{id}/audio` — retained clip bytes; gated by the
+  single-owner audio lease (the active controller), so two tabs never speak
+  the same clip. Retention is bounded (per request and to the newest few
+  requests).
 
 ## Trying It
 

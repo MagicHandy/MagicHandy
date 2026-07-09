@@ -143,6 +143,9 @@ type VoiceSettings struct {
 	TTSWorkerArgs []string `json:"tts_worker_args,omitempty"`
 	ASRWorkerPath string   `json:"asr_worker_path,omitempty"`
 	ASRWorkerArgs []string `json:"asr_worker_args,omitempty"`
+	// SpeakReplies enqueues each displayed chat reply to the running TTS
+	// worker in lockstep (ADR 0003: a spoken reply is always also shown).
+	SpeakReplies bool `json:"speak_replies"`
 }
 
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
