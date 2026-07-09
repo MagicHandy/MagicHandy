@@ -38,7 +38,7 @@ Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
-| 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | pending |
+| 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13-17 | Voice providers, patterns, migration, packaging, parity | Not started | — |
 
 Phase 12 note: the ADR 0003 delivery-ordering trio (shared chat log with
