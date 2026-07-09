@@ -39,7 +39,7 @@ Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
-| 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | pending |
+| 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
 | 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet) | In progress | — |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
