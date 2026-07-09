@@ -1,8 +1,7 @@
 // Package parakeetworker implements the ADR 0003 worker protocol for ASR by
-// proxying to an OpenAI-compatible transcription server — per ADR 0007,
-// Parakeet-TDT through achetronic/parakeet is the recommended engine, but
-// any server exposing POST /v1/audio/transcriptions works (sherpa-onnx,
-// speaches, whisper servers). Pure Go, no Python, no CGo: the model runtime
+// proxying to an OpenAI-compatible transcription server. Managed mode runs
+// parakeet.cpp; external mode remains compatible with other servers exposing
+// POST /v1/audio/transcriptions. Pure Go, no Python, no CGo: the model runtime
 // stays in the external server, exactly like the llama.cpp LLM runner.
 package parakeetworker
 
@@ -28,20 +27,32 @@ const (
 	providerName    = "parakeet-openai-asr"
 	providerVersion = "1.0.0"
 
-	requestTimeout = 60 * time.Second
-	queueCapacity  = 8
-	maxAudioBytes  = 32 << 20 // refuse absurd uploads before they hit the server
+	requestTimeout       = 60 * time.Second
+	loadTimeout          = 30 * time.Second
+	managedProbeInterval = 100 * time.Millisecond
+	queueCapacity        = 8
+	maxAudioBytes        = 32 << 20 // refuse absurd uploads before they hit the server
 )
 
-// Options configure one worker session.
+// Options configure one worker session. Exactly one server mode is used:
+// external (BaseURL points at an existing OpenAI-compatible server) or managed
+// (ServerPath + ServerModel starts the bundled parakeet.cpp server on loopback).
 type Options struct {
-	// BaseURL of the OpenAI-compatible server (e.g. achetronic/parakeet).
-	// Required: there is no safe default port to guess.
+	// BaseURL of an externally managed OpenAI-compatible server.
 	BaseURL string
-	// Model is the server-side model name; empty omits the field (most
-	// local servers have exactly one model loaded).
+	// Model is the server-side model name; empty omits the form field. Most
+	// local servers have one model loaded, including parakeet.cpp.
 	Model      string
 	HTTPClient *http.Client
+
+	// ServerPath is the parakeet-server executable for managed mode.
+	ServerPath string
+	// ServerModel is the local GGUF file loaded by a managed server. Downloads
+	// stay an explicit installer action; a worker never fetches an alias.
+	ServerModel string
+	// ServerPort is the managed server's loopback port. Zero uses
+	// DefaultServerPort.
+	ServerPort int
 }
 
 // Run speaks the worker protocol over reader/writer until EOF or shutdown.
@@ -50,12 +61,21 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	if options.HTTPClient == nil {
 		options.HTTPClient = &http.Client{Timeout: requestTimeout}
 	}
+	setupErr := validateOptions(options)
+
+	var runner *managedServer
+	if usesManagedServer(options) {
+		runner = newManagedServer(options.ServerPath, options.ServerModel, options.ServerPort)
+		options.BaseURL = runner.BaseURL()
+	}
 
 	s := &session{
-		options: options,
-		writer:  writer,
-		queue:   make(chan protocol.Request, queueCapacity),
-		cancels: make(map[string]context.CancelFunc),
+		options:  options,
+		writer:   writer,
+		queue:    make(chan protocol.Request, queueCapacity),
+		cancels:  make(map[string]context.CancelFunc),
+		runner:   runner,
+		setupErr: setupErr,
 	}
 
 	workDone := make(chan struct{})
@@ -65,6 +85,7 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	}()
 
 	readErr := s.readLoop(reader)
+	s.shutdown()
 	close(s.queue)
 	<-workDone
 	return readErr
@@ -83,6 +104,9 @@ type session struct {
 	cancels  map[string]context.CancelFunc
 
 	queue chan protocol.Request
+
+	runner   *managedServer
+	setupErr error
 }
 
 func (s *session) readLoop(reader io.Reader) error {
@@ -108,8 +132,7 @@ func (s *session) readLoop(reader io.Reader) error {
 		case protocol.RequestLoad:
 			s.handleLoad(request)
 		case protocol.RequestUnload:
-			s.setLoaded(false)
-			s.send(s.healthResponse(request.ID))
+			s.handleUnload(request)
 		case protocol.RequestCancel:
 			s.markCanceled(request.TargetID)
 		case protocol.RequestShutdown:
@@ -146,34 +169,116 @@ func (s *session) handleHello(request protocol.Request) {
 // handleLoad checks the transcription server is reachable so "server not
 // running" is an immediate, clear state instead of a failed first dictation.
 func (s *session) handleLoad(request protocol.Request) {
-	if s.options.BaseURL == "" {
+	if s.setupErr != nil {
 		s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
-			"no ASR server configured; pass -base-url pointing at an OpenAI-compatible transcription server", false)
+			s.setupErr.Error(), false)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if s.runner != nil {
+		if err := s.runner.Start(); err != nil {
+			s.sendError(request.ID, protocol.ErrorCodeMissingDependency, err.Error(), true)
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
 	defer cancel()
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, s.options.BaseURL+"/v1/models", nil)
-	if err != nil {
-		s.sendError(request.ID, protocol.ErrorCodeInternal, "build server check request", false)
-		return
-	}
-	response, err := s.options.HTTPClient.Do(httpRequest)
-	if err != nil {
-		s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
-			"ASR server is unreachable at "+s.options.BaseURL+": "+err.Error(), true)
-		return
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode >= 500 {
-		s.sendError(request.ID, protocol.ErrorCodeInternal,
-			fmt.Sprintf("ASR server check failed with status %d", response.StatusCode), true)
+	if err := s.waitForServer(ctx); err != nil {
+		if s.runner != nil {
+			_ = s.runner.Stop()
+		}
+		s.sendError(request.ID, protocol.ErrorCodeMissingDependency, err.Error(), true)
 		return
 	}
 
 	s.setLoaded(true)
 	s.send(s.healthResponse(request.ID))
+}
+
+func (s *session) handleUnload(request protocol.Request) {
+	s.setLoaded(false)
+	s.cancelAll()
+	if s.runner != nil {
+		if err := s.runner.Stop(); err != nil {
+			s.sendError(request.ID, protocol.ErrorCodeInternal,
+				"stop managed ASR server: "+err.Error(), true)
+			return
+		}
+	}
+	s.send(s.healthResponse(request.ID))
+}
+
+// waitForServer waits only for a server this worker owns. External servers are
+// checked once so Load stays an immediate configuration/readiness signal.
+func (s *session) waitForServer(ctx context.Context) error {
+	if s.runner == nil {
+		return s.checkServer(ctx)
+	}
+
+	var lastErr error
+	for {
+		probeCtx, cancel := context.WithTimeout(ctx, time.Second)
+		err := s.checkServer(probeCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !s.runner.Running() {
+			return s.runner.failureMessage(err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("managed ASR server did not become ready: %w", lastErr)
+		case <-time.After(managedProbeInterval):
+		}
+	}
+}
+
+// checkServer accepts the two small readiness surfaces used by the supported
+// runners. parakeet.cpp exposes /health; many other OpenAI-compatible servers
+// expose /v1/models instead. A transcription request is deliberately never
+// used as a health probe because it could create a false chat input.
+func (s *session) checkServer(ctx context.Context) error {
+	healthStatus, err := s.endpointStatus(ctx, "/health")
+	if err != nil {
+		return fmt.Errorf("ASR server is unreachable at %s: %w", s.options.BaseURL, err)
+	}
+	if isSuccessStatus(healthStatus) {
+		return nil
+	}
+	if healthStatus != http.StatusNotFound && healthStatus != http.StatusMethodNotAllowed {
+		return fmt.Errorf("ASR server health check failed with status %d", healthStatus)
+	}
+
+	modelsStatus, err := s.endpointStatus(ctx, "/v1/models")
+	if err != nil {
+		return fmt.Errorf("ASR server is unreachable at %s: %w", s.options.BaseURL, err)
+	}
+	if isSuccessStatus(modelsStatus) {
+		return nil
+	}
+	return fmt.Errorf("ASR server at %s does not expose a ready /health or /v1/models endpoint (statuses %d and %d)",
+		s.options.BaseURL, healthStatus, modelsStatus)
+}
+
+func (s *session) endpointStatus(ctx context.Context, endpoint string) (int, error) {
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, s.options.BaseURL+endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("build readiness request: %w", err)
+	}
+	response, err := s.options.HTTPClient.Do(httpRequest)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	return response.StatusCode, nil
+}
+
+func isSuccessStatus(status int) bool {
+	return status >= http.StatusOK && status < http.StatusMultipleChoices
 }
 
 func (s *session) enqueue(request protocol.Request) {
@@ -281,6 +386,9 @@ func (s *session) loadAudio(request protocol.Request) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("audio_b64 is not valid base64")
 		}
+		if len(audio) > maxAudioBytes {
+			return nil, fmt.Errorf("audio_b64 exceeds %d MiB", maxAudioBytes>>20)
+		}
 		return audio, nil
 	}
 	if request.AudioRef != "" {
@@ -364,6 +472,26 @@ func (s *session) markCanceled(id string) {
 	s.mu.Unlock()
 }
 
+func (s *session) cancelAll() {
+	s.mu.Lock()
+	if s.canceled == nil {
+		s.canceled = make(map[string]bool)
+	}
+	for id, cancel := range s.cancels {
+		s.canceled[id] = true
+		cancel()
+	}
+	s.mu.Unlock()
+}
+
+func (s *session) shutdown() {
+	s.setLoaded(false)
+	s.cancelAll()
+	if s.runner != nil {
+		_ = s.runner.Stop()
+	}
+}
+
 func (s *session) isCanceled(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -419,4 +547,31 @@ func (s *session) send(response protocol.Response) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	_, _ = s.writer.Write(data)
+}
+
+func usesManagedServer(options Options) bool {
+	return strings.TrimSpace(options.ServerPath) != "" || strings.TrimSpace(options.ServerModel) != ""
+}
+
+func validateOptions(options Options) error {
+	managed := usesManagedServer(options)
+	if managed && strings.TrimSpace(options.BaseURL) != "" {
+		return fmt.Errorf("choose either -base-url or -server-path with -server-model, not both")
+	}
+	if managed {
+		if strings.TrimSpace(options.ServerPath) == "" {
+			return fmt.Errorf("managed ASR requires -server-path for parakeet-server")
+		}
+		if strings.TrimSpace(options.ServerModel) == "" {
+			return fmt.Errorf("managed ASR requires -server-model pointing at a local GGUF file")
+		}
+		if options.ServerPort < 0 || options.ServerPort > 65535 {
+			return fmt.Errorf("-server-port must be between 1 and 65535")
+		}
+		return nil
+	}
+	if strings.TrimSpace(options.BaseURL) == "" {
+		return fmt.Errorf("no ASR server configured; pass -base-url or -server-path with -server-model")
+	}
+	return nil
 }

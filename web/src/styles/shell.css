@@ -242,7 +242,7 @@
   }
 }
 
-/* ---- Mobile: rail becomes a bottom tab bar; Stop pins above it ---- */
+/* ---- Mobile: Stop and tabs share a reserved footer, never overlay content. ---- */
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
@@ -255,18 +255,19 @@
   .workspace {
     grid-column: 1;
     grid-row: 2;
-    padding-bottom: 84px;
+    padding-bottom: 18px;
   }
   .nav-rail {
     grid-column: 1;
     grid-row: 3;
+    position: relative;
     flex-direction: row;
     align-items: center;
     gap: 4px;
-    padding: 6px 8px;
+    padding: 52px 8px 6px;
     border-right: 0;
     border-top: 1px solid var(--line);
-    overflow-x: auto;
+    overflow-x: hidden;
   }
   .nav-profile,
   .nav-divider,
@@ -275,9 +276,12 @@
   }
   .nav-links {
     flex-direction: row;
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
   }
   .nav-link {
+    flex: 1 1 0;
+    min-width: 0;
     height: 44px;
     justify-content: center;
   }
@@ -287,11 +291,16 @@
   .nav-link .label {
     display: none;
   }
-  .nav-stop {
-    position: fixed;
+  .nav-spacer {
+    display: none;
+  }
+  .stop-button.nav-stop {
+    position: absolute;
     left: 8px;
     right: 8px;
-    bottom: 60px;
+    width: auto;
+    top: 6px;
+    bottom: auto;
     z-index: 30;
   }
 }

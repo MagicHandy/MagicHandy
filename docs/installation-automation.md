@@ -31,9 +31,11 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
   no pip.
 - **Interactive installer (`install.ps1`, this repo):** checks for Go and offers
   to install it (winget), builds the binary, sets up a data folder, detects an
-  NVIDIA GPU, gives guided LLM setup (Ollama pull or llama.cpp pointers) with
-  **explicit, consented** downloads, optionally writes a `Start-MagicHandy.ps1`
-  launcher, and opens the app.
+  NVIDIA GPU, gives guided LLM setup, and offers an optional local Parakeet ASR
+  setup. The Parakeet path downloads a pinned CPU runner and model only after
+  consent, shows size and license, verifies SHA-256, builds the worker, and
+  leaves voice disabled. The installer can also write a
+  `Start-MagicHandy.ps1` launcher and open the app.
 - **External LLM by design:** the app talks to llama.cpp or Ollama; model paths
   and provider are set in Settings > Model. The core never downloads a model on
   startup.
@@ -50,7 +52,9 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
    runner and a model that fits your VRAM" flow.
 5. No in-app first-run setup wizard (the installer script is the current
    stand-in).
-6. Voice (ASR/TTS) setup and any LAN/HTTPS story are not built (Phases 12-13; R18).
+6. Voice setup is partial: Parakeet ASR has an installer path, but in-app
+   provider provisioning, microphone UI, local cloning TTS, and any LAN/HTTPS
+   story remain open (Phase 13; R17/R18).
 
 ## Roadmap to parity
 
@@ -77,8 +81,10 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    milestone for non-technical users: connect the Handy (enter key, test),
    choose a provider, pick/download a model, and confirm — all in the browser UI,
    superseding the script for most people.
-7. **Voice setup (Phases 12-13).** ASR/TTS providers and their model downloads
-   behind the worker boundary, optional and off the core install path (ADR 0007).
+7. **Voice setup (Phase 13).** Parakeet ASR's explicit installer path is the
+   first slice. Add an in-app guided profile, local TTS provisioning, and
+   microphone calibration only after real-device and microphone evidence;
+   providers stay optional and off the core install path (ADR 0007).
 8. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
 
@@ -106,10 +112,10 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | Planned | R13, model-management |
 | Model selection + download UI | Planned | catalog + Settings > Model |
-| GPU/VRAM-aware recommendations | Detection + advice today | install.ps1 → step 5 |
+| GPU/VRAM-aware recommendations | Detection + advice today | install.ps1 GPU detection |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 6 |
-| Voice model setup | Planned | Phases 12-13 |
+| Voice model setup | Partial - opt-in Parakeet ASR installer path | Phase 13.4 |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 8 |
 
 ## Related docs

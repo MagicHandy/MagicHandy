@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"net/http"
 	"strings"
@@ -176,10 +178,10 @@ func (s *Server) handleVoiceWorkerModel(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// handleVoiceWorkerTest submits a stub-scale request so the queue,
-// cancellation, and error paths can be exercised end to end without a real
-// provider. Results stay in the request log — they never touch chat or
-// motion (ADR 0003).
+// handleVoiceWorkerTest submits a small valid request so the queue,
+// cancellation, and error paths can be exercised without touching chat or
+// motion (ADR 0003). ASR gets a valid silent WAV because real ASR servers
+// reject the old arbitrary-byte stub before their model path is exercised.
 func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
@@ -200,10 +202,10 @@ func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 	request := voice.Request{DelayMillis: body.DelayMillis}
 	if worker.Status().Role == voice.RoleASR {
 		request.Type = voice.RequestTranscribe
-		// Test audio is synthetic: any text marks it as "speech", empty
-		// exercises the no-speech rejection.
+		// A non-empty test request checks format handling and inference. Empty
+		// remains a no-audio rejection check, matching the worker contract.
 		if strings.TrimSpace(body.Text) != "" {
-			request.AudioB64 = "c3R1Yg=="
+			request.AudioB64 = silentTestWAVBase64()
 			request.AudioFormat = "wav"
 		}
 	} else {
@@ -221,6 +223,30 @@ func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 	}
 	s.voice.Track(pending)
 	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
+}
+
+func silentTestWAVBase64() string {
+	// 100 ms of 16 kHz mono PCM silence. The compact fixture is valid WAV and
+	// intentionally contains no spoken content that could enter a transcript.
+	const sampleRate = 16000
+	const sampleCount = sampleRate / 10
+	const bytesPerSample = 2
+	dataSize := sampleCount * bytesPerSample
+	data := make([]byte, 44+dataSize)
+	copy(data[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(data[4:8], uint32(36+dataSize))
+	copy(data[8:12], "WAVE")
+	copy(data[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(data[16:20], 16)
+	binary.LittleEndian.PutUint16(data[20:22], 1)
+	binary.LittleEndian.PutUint16(data[22:24], 1)
+	binary.LittleEndian.PutUint32(data[24:28], sampleRate)
+	binary.LittleEndian.PutUint32(data[28:32], sampleRate*bytesPerSample)
+	binary.LittleEndian.PutUint16(data[32:34], bytesPerSample)
+	binary.LittleEndian.PutUint16(data[34:36], bytesPerSample*8)
+	copy(data[36:40], "data")
+	binary.LittleEndian.PutUint32(data[40:44], uint32(dataSize))
+	return base64.StdEncoding.EncodeToString(data)
 }
 
 func (s *Server) handleVoiceRequestGet(w http.ResponseWriter, r *http.Request) {

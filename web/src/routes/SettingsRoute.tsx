@@ -21,10 +21,10 @@ const SECTIONS = [
   { id: "diagnostics", label: "Diagnostics" },
 ] as const;
 
-// Worker args are edited as one space-separated line; paths keep their own
-// field so spaces in the executable path survive.
-const joinArgs = (args?: string[]) => (args ?? []).join(" ");
-const splitArgs = (value: string) => value.split(/\s+/).filter(Boolean);
+// One argument per line preserves Windows paths with spaces without guessing at
+// shell quoting. The backend already receives the structured string slice.
+const joinArgs = (args?: string[]) => (args ?? []).join("\n");
+const splitArgs = (value: string) => value.split(/\r?\n/).map((arg) => arg.trim()).filter(Boolean);
 
 export function SettingsRoute() {
   const { backendOnline, readOnly, state, refresh } = useAppState();
@@ -186,15 +186,13 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">Voice workers</h2>
             <p className="form-status">
-              Voice is optional. Workers are separate local programs speaking the versioned worker
-              protocol; the app runs fully without them. No models ship with MagicHandy yet — the
-              stub worker exists for testing the plumbing.
+              Voice is optional and stays off until explicitly started.
             </p>
             <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.enabled ?? false} disabled={locked} onChange={(e) => patchVoice({ enabled: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Enable voice workers</span></label>
             <label className="field"><span className="label">TTS worker path</span><input type="text" value={s.voice?.tts_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ tts_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
-            <label className="field"><span className="label">TTS worker arguments</span><input type="text" value={joinArgs(s.voice?.tts_worker_args)} disabled={locked} onChange={(e) => patchVoice({ tts_worker_args: splitArgs(e.target.value) })} placeholder="-role tts" /></label>
+            <label className="field"><span className="label">TTS worker arguments</span><textarea rows={2} value={joinArgs(s.voice?.tts_worker_args)} disabled={locked} onChange={(e) => patchVoice({ tts_worker_args: splitArgs(e.target.value) })} placeholder={"-voice-id\nvoice-id"} aria-label="TTS worker arguments, one argument per line" /></label>
             <label className="field"><span className="label">ASR worker path</span><input type="text" value={s.voice?.asr_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ asr_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
-            <label className="field"><span className="label">ASR worker arguments</span><input type="text" value={joinArgs(s.voice?.asr_worker_args)} disabled={locked} onChange={(e) => patchVoice({ asr_worker_args: splitArgs(e.target.value) })} placeholder="-role asr" /></label>
+            <label className="field"><span className="label">ASR worker arguments</span><textarea rows={4} value={joinArgs(s.voice?.asr_worker_args)} disabled={locked} onChange={(e) => patchVoice({ asr_worker_args: splitArgs(e.target.value) })} placeholder={"-server-path\nC:\\path\\to\\parakeet-server.exe\n-server-model\nC:\\path\\to\\model.gguf"} aria-label="ASR worker arguments, one argument per line" /></label>
             <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.speak_replies ?? false} disabled={locked} onChange={(e) => patchVoice({ speak_replies: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies — each displayed reply is enqueued to the running TTS worker; the controller tab plays it</span></label>
             <label className="field"><span className="label">ElevenLabs API key {s.voice?.elevenlabs_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.voice?.elevenlabs_key_set ? "set (leave blank to keep)" : "Paste key for the ElevenLabs worker"} value={newElevenLabsKey} disabled={locked} onChange={(e) => setNewElevenLabsKey(e.target.value)} /></label>
             <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearElevenLabsKey} disabled={locked} onChange={(e) => setClearElevenLabsKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear ElevenLabs API key on save</span></label>

@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +18,75 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
 )
+
+func TestMain(m *testing.M) {
+	if os.Getenv("MAGICHANDY_TEST_PARAKEET_SERVER") == "1" {
+		runManagedServerHelper()
+		return
+	}
+	os.Exit(m.Run())
+}
+
+// runManagedServerHelper accepts the same launcher arguments as
+// parakeet-server but implements only the endpoints needed to prove that the
+// worker owns start, readiness, and teardown. It runs in a child test process.
+func runManagedServerHelper() {
+	host, port, ok := managedServerAddress(os.Args[1:])
+	if !ok {
+		os.Exit(2)
+	}
+	if countPath := os.Getenv("MAGICHANDY_TEST_PARAKEET_SERVER_COUNT"); countPath != "" {
+		file, err := os.OpenFile(countPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304,G703 -- test helper writes a parent-owned temp path.
+		if err == nil {
+			_, _ = file.WriteString("start\n")
+			_ = file.Close()
+		}
+	}
+
+	listener, err := net.Listen("tcp4", net.JoinHostPort(host, strconv.Itoa(port)))
+	if err != nil {
+		os.Exit(1)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	mux.HandleFunc("POST /v1/audio/transcriptions", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"text":"managed response"}`))
+	})
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: time.Second,
+		IdleTimeout:       time.Second,
+	}
+	_ = server.Serve(listener)
+}
+
+func managedServerAddress(args []string) (string, int, bool) {
+	host := "127.0.0.1"
+	port := 0
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--host":
+			if i+1 >= len(args) {
+				return "", 0, false
+			}
+			i++
+			host = args[i]
+		case "--port":
+			if i+1 >= len(args) {
+				return "", 0, false
+			}
+			i++
+			value, err := strconv.Atoi(args[i])
+			if err != nil {
+				return "", 0, false
+			}
+			port = value
+		}
+	}
+	return host, port, port > 0
+}
 
 type driver struct {
 	stdin  *io.PipeWriter
@@ -161,6 +232,24 @@ func TestLoadWithoutBaseURLIsAClearError(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsParakeetHealthEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	d := startWorker(t, Options{BaseURL: server.URL})
+	d.send(t, protocol.Request{Type: protocol.RequestLoad, ID: "l"})
+	response := d.next(t)
+	if response.Type != protocol.ResponseHealth || response.ModelState != protocol.ModelStateReady {
+		t.Fatalf("parakeet /health must make load ready, got %+v", response)
+	}
+}
+
 func TestTranscribeForwardsAudioAndReturnsCandidates(t *testing.T) {
 	mock := &mockASR{reply: "start something gentle"}
 	d := newLoadedWorker(t, mock, "parakeet-tdt-0.6b-v3")
@@ -274,5 +363,129 @@ func TestTranscribeBeforeLoadFails(t *testing.T) {
 	if response.Type != protocol.ResponseError || response.Error == nil ||
 		response.Error.Code != protocol.ErrorCodeModelNotLoaded {
 		t.Fatalf("transcribe before load must be model_not_loaded, got %+v", response)
+	}
+}
+
+func TestManagedServerLoadsOnceAndStopsOnUnload(t *testing.T) {
+	modelPath := filepath.Join(t.TempDir(), "parakeet.gguf")
+	if err := os.WriteFile(modelPath, []byte("test model"), 0o600); err != nil {
+		t.Fatalf("write model fixture: %v", err)
+	}
+	port := freeLoopbackPort(t)
+	countPath := filepath.Join(t.TempDir(), "starts.txt")
+	t.Setenv("MAGICHANDY_TEST_PARAKEET_SERVER", "1")
+	t.Setenv("MAGICHANDY_TEST_PARAKEET_SERVER_COUNT", countPath)
+
+	d := startWorker(t, Options{
+		ServerPath:  os.Args[0],
+		ServerModel: modelPath,
+		ServerPort:  port,
+	})
+	d.send(t, protocol.Request{Type: protocol.RequestLoad, ID: "l1"})
+	if response := d.next(t); response.Type != protocol.ResponseHealth || response.ModelState != protocol.ModelStateReady {
+		t.Fatalf("managed load = %+v, want ready health", response)
+	}
+	d.send(t, protocol.Request{Type: protocol.RequestLoad, ID: "l2"})
+	if response := d.next(t); response.Type != protocol.ResponseHealth || response.ModelState != protocol.ModelStateReady {
+		t.Fatalf("second managed load = %+v, want ready health", response)
+	}
+	if starts := waitForStartCount(t, countPath); starts != 1 {
+		t.Fatalf("managed parakeet starts = %d, want 1", starts)
+	}
+
+	d.send(t, protocol.Request{Type: protocol.RequestUnload, ID: "u"})
+	if response := d.next(t); response.Type != protocol.ResponseHealth || response.ModelState != protocol.ModelStateUnloaded {
+		t.Fatalf("managed unload = %+v, want unloaded health", response)
+	}
+	waitForFreeLoopbackPort(t, port)
+}
+
+func TestManagedServerStopsOnWorkerShutdown(t *testing.T) {
+	modelPath := filepath.Join(t.TempDir(), "parakeet.gguf")
+	if err := os.WriteFile(modelPath, []byte("test model"), 0o600); err != nil {
+		t.Fatalf("write model fixture: %v", err)
+	}
+	port := freeLoopbackPort(t)
+	t.Setenv("MAGICHANDY_TEST_PARAKEET_SERVER", "1")
+
+	d := startWorker(t, Options{ServerPath: os.Args[0], ServerModel: modelPath, ServerPort: port})
+	d.send(t, protocol.Request{Type: protocol.RequestLoad, ID: "l"})
+	if response := d.next(t); response.ModelState != protocol.ModelStateReady {
+		t.Fatalf("managed load = %+v, want ready health", response)
+	}
+	d.send(t, protocol.Request{Type: protocol.RequestShutdown, ID: "s"})
+	if response := d.next(t); response.Type != protocol.ResponseDone {
+		t.Fatalf("shutdown = %+v, want done", response)
+	}
+	waitForFreeLoopbackPort(t, port)
+}
+
+func TestManagedServerReportsBusyPortBeforeStarting(t *testing.T) {
+	modelPath := filepath.Join(t.TempDir(), "parakeet.gguf")
+	if err := os.WriteFile(modelPath, []byte("test model"), 0o600); err != nil {
+		t.Fatalf("write model fixture: %v", err)
+	}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve loopback port: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	d := startWorker(t, Options{ServerPath: os.Args[0], ServerModel: modelPath, ServerPort: port})
+	d.send(t, protocol.Request{Type: protocol.RequestLoad, ID: "l"})
+	response := d.next(t)
+	if response.Type != protocol.ResponseError || response.Error == nil ||
+		response.Error.Code != protocol.ErrorCodeMissingDependency {
+		t.Fatalf("busy managed port must be a clear load error, got %+v", response)
+	}
+	if !strings.Contains(response.Error.Message, "port") {
+		t.Fatalf("busy managed port error = %q, want port context", response.Error.Message)
+	}
+}
+
+func freeLoopbackPort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve loopback port: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
+func waitForFreeLoopbackPort(t *testing.T, port int) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err == nil {
+			_ = listener.Close()
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("managed server still owns port %d: %v", port, err)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func waitForStartCount(t *testing.T, path string) int {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		data, err := os.ReadFile(path) // #nosec G304 -- parent test owns this temp path.
+		if err == nil {
+			count := strings.Count(string(data), "start\n")
+			if count > 0 || time.Now().After(deadline) {
+				return count
+			}
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("read start count: %v", err)
+		}
+		if time.Now().After(deadline) {
+			return 0
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 }
