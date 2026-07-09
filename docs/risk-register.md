@@ -362,6 +362,16 @@ Exit evidence:
 - a Phase 13 spike shows acceptable NeuTTS Air cloning quality and latency with a
   non-Python decoder, or a documented fallback is chosen
 
+Status 2026-07-09: the spike ran (`docs/neutts-air-spike.md`). Non-Python
+decode is proven twice over (official ONNX NeuCodec decoder; independent
+pure-Rust FSQ+Vocos+ISTFT decoder in the `neutts` crate). Measured on this
+project's Windows dev machine, CPU-only, Q4 GGUF via llama.cpp: RTF
+0.51-0.62 (faster than real time), ~2 s first-sentence latency, one-time
+14 s reference encode. Cloned-output WAVs await subjective listening, and
+the worker integration (Rust-crate host preferred; Go+onnxruntime as the
+alternate) is the follow-on 13.1 PR — the risk drops from "unproven tech"
+to ordinary integration work.
+
 ## R18: LAN And Mobile Secure-Context Requirements
 
 Level: Medium
