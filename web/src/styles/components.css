@@ -702,3 +702,43 @@ textarea:disabled {
     opacity: 0.6;
   }
 }
+
+/* Voice workers (settings): stacked rows, dot+text status, no pills. */
+.voice-workers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.voice-worker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.voice-worker-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.voice-worker-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.voice-worker-error {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.voice-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.voice-request-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}

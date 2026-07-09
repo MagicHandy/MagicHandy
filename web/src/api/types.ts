@@ -132,6 +132,59 @@ export interface ModesStatus {
   [k: string]: unknown;
 }
 
+export interface VoiceSettings {
+  enabled: boolean;
+  tts_worker_path?: string;
+  tts_worker_args?: string[];
+  asr_worker_path?: string;
+  asr_worker_args?: string[];
+}
+
+export type VoiceWorkerState =
+  | "disabled"
+  | "not_configured"
+  | "stopped"
+  | "starting"
+  | "running"
+  | "crashed"
+  | string;
+
+export interface VoiceWorkerStatus {
+  role: "tts" | "asr" | string;
+  state: VoiceWorkerState;
+  configured: boolean;
+  command?: string;
+  provider?: string;
+  provider_version?: string;
+  protocol_version?: number;
+  capabilities?: string[];
+  model_state?: string;
+  worker_queue_depth: number;
+  queue_depth: number;
+  active_request_id?: string;
+  started_at?: string;
+  last_error?: string;
+  stderr_tail?: string;
+}
+
+export interface VoiceState {
+  enabled: boolean;
+  protocol_version: number;
+  workers?: Record<string, VoiceWorkerStatus>;
+}
+
+export interface VoiceRequestSnapshot {
+  id: string;
+  role: string;
+  type: string;
+  state: string;
+  created_at: string;
+  audio_chunks?: number;
+  transcript?: { text: string; confidence: number }[];
+  rejected?: string;
+  error?: { code: string; message: string; retryable?: boolean };
+}
+
 export interface OptionHints {
   hsp_dispatch_owners?: string[];
   api_application_id_sources?: string[];
@@ -164,6 +217,7 @@ export interface PublicSettings {
     prompt_set: string;
     request_timeout_ms: number;
   };
+  voice: VoiceSettings;
   diagnostics: { verbosity: string };
   options: OptionHints;
 }
@@ -181,6 +235,7 @@ export interface SettingsUpdate {
   };
   motion: MotionSettings;
   llm: PublicSettings["llm"];
+  voice: VoiceSettings;
   diagnostics: { verbosity: string };
   clear_connection_key: boolean;
 }
@@ -198,6 +253,7 @@ export interface AppState {
   modes?: ModesStatus;
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
+  voice?: VoiceState;
   transport?: Record<string, unknown>;
   cloud_transport?: Record<string, unknown>;
   bluetooth_transport?: Record<string, unknown>;

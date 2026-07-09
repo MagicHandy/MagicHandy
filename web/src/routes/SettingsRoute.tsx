@@ -8,6 +8,7 @@ import { BluetoothBridge } from "../components/BluetoothBridge";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { MemoryManager } from "../components/MemoryManager";
 import { PromptSetEditor } from "../components/PromptSetEditor";
+import { VoiceWorkers } from "../components/VoiceWorkers";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 
@@ -15,9 +16,15 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 const SECTIONS = [
   { id: "device", label: "Device" },
   { id: "model", label: "Model" },
+  { id: "voice", label: "Voice" },
   { id: "prompts", label: "Prompts & memory" },
   { id: "diagnostics", label: "Diagnostics" },
 ] as const;
+
+// Worker args are edited as one space-separated line; paths keep their own
+// field so spaces in the executable path survive.
+const joinArgs = (args?: string[]) => (args ?? []).join(" ");
+const splitArgs = (value: string) => value.split(/\s+/).filter(Boolean);
 
 export function SettingsRoute() {
   const { backendOnline, readOnly, state, refresh } = useAppState();
@@ -49,6 +56,9 @@ export function SettingsRoute() {
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
   }
+  function patchVoice(p: Partial<PublicSettings["voice"]>) {
+    setS((cur) => (cur ? { ...cur, voice: { ...cur.voice, ...p } } : cur));
+  }
 
   async function save() {
     if (!s) return;
@@ -63,6 +73,7 @@ export function SettingsRoute() {
       },
       motion: s.motion,
       llm: s.llm,
+      voice: s.voice ?? { enabled: false },
       diagnostics: s.diagnostics,
       clear_connection_key: clearKey,
     };
@@ -153,6 +164,25 @@ export function SettingsRoute() {
             <label className="field"><span className="label">Ollama URL</span><input type="text" value={s.llm.ollama_base_url} disabled={locked} onChange={(e) => patchLLM({ ollama_base_url: e.target.value })} /></label>
             <label className="field"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={s.llm.request_timeout_ms} disabled={locked} onChange={(e) => patchLLM({ request_timeout_ms: Number(e.target.value) })} /></label>
             <div className="row-actions"><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("load")}>Load</button><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("unload")}>Unload</button></div>
+          </>
+        )}
+
+        {section === "voice" && (
+          <>
+            <h2 className="section-title">Voice workers</h2>
+            <p className="form-status">
+              Voice is optional. Workers are separate local programs speaking the versioned worker
+              protocol; the app runs fully without them. No models ship with MagicHandy yet — the
+              stub worker exists for testing the plumbing.
+            </p>
+            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.enabled ?? false} disabled={locked} onChange={(e) => patchVoice({ enabled: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Enable voice workers</span></label>
+            <label className="field"><span className="label">TTS worker path</span><input type="text" value={s.voice?.tts_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ tts_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
+            <label className="field"><span className="label">TTS worker arguments</span><input type="text" value={joinArgs(s.voice?.tts_worker_args)} disabled={locked} onChange={(e) => patchVoice({ tts_worker_args: splitArgs(e.target.value) })} placeholder="-role tts" /></label>
+            <label className="field"><span className="label">ASR worker path</span><input type="text" value={s.voice?.asr_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ asr_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
+            <label className="field"><span className="label">ASR worker arguments</span><input type="text" value={joinArgs(s.voice?.asr_worker_args)} disabled={locked} onChange={(e) => patchVoice({ asr_worker_args: splitArgs(e.target.value) })} placeholder="-role asr" /></label>
+            <p className="form-status">Worker paths and the enable switch apply on Save settings; workers never start on their own.</p>
+            <div className="divider" />
+            <VoiceWorkers locked={locked} />
           </>
         )}
 

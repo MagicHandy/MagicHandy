@@ -42,6 +42,12 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 		"controller: you",
 		"#/settings",
 		"X-MagicHandy-Client-ID",
+		// Voice worker status UI (Phase 12): the optional-worker states must
+		// stay visible readouts, and the API paths must survive minification.
+		"Voice workers",
+		"/api/voice/status",
+		"/api/voice/workers/",
+		"not configured",
 	} {
 		if !strings.Contains(js, fragment) {
 			t.Fatalf("built bundle missing critical string %q", fragment)

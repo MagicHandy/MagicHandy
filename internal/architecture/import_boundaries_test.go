@@ -40,12 +40,12 @@ func TestInternalImportBoundaries(t *testing.T) {
 		{
 			name: "semantic clients do not import transport",
 			appliesTo: func(importPath string) bool {
-				return hasAnyPrefix(importPath, internal+"chat", internal+"llm", internal+"modes")
+				return hasAnyPrefix(importPath, internal+"chat", internal+"llm", internal+"modes", internal+"voice")
 			},
 			forbidden: []string{internal + "transport"},
 		},
 		{
-			name: "motion stays above HTTP, chat, LLM, and modes",
+			name: "motion stays above HTTP, chat, LLM, modes, and voice",
 			appliesTo: func(importPath string) bool {
 				return strings.HasPrefix(importPath, internal+"motion")
 			},
@@ -54,6 +54,7 @@ func TestInternalImportBoundaries(t *testing.T) {
 				internal + "httpapi",
 				internal + "llm",
 				internal + "modes",
+				internal + "voice",
 			},
 		},
 		{
@@ -64,6 +65,19 @@ func TestInternalImportBoundaries(t *testing.T) {
 			forbidden: []string{
 				internal + "chat",
 				internal + "httpapi",
+				internal + "llm",
+				internal + "modes",
+				internal + "motion",
+				internal + "voice",
+			},
+		},
+		{
+			name: "voice never touches motion or the semantic planners (ADR 0003)",
+			appliesTo: func(importPath string) bool {
+				return strings.HasPrefix(importPath, internal+"voice")
+			},
+			forbidden: []string{
+				internal + "chat",
 				internal + "llm",
 				internal + "modes",
 				internal + "motion",

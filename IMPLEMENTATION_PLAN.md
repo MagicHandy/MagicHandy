@@ -18,8 +18,8 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-06. Phases 0 through 11 are merged to `main`. Phase 11B
-(SQLite persistence foundation, ADR 0008) is implemented on the current branch.
+Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
+(voice worker boundary) is implemented on the current branch.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -38,7 +38,14 @@ Updated 2026-07-06. Phases 0 through 11 are merged to `main`. Phase 11B
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
-| 12-17 | Voice, patterns, migration, packaging, parity | Not started | — |
+| 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | pending |
+| 13-17 | Voice providers, patterns, migration, packaging, parity | Not started | — |
+
+Phase 12 note: the ADR 0003 delivery-ordering trio (shared chat log with
+per-client cursors, lockstep chat-emit/TTS-enqueue, single-owner audio lease)
+is deliberately not in the Phase 12 PR — there is no audio playback or real
+TTS provider yet to order against. It lands at the start of Phase 13,
+before the first provider is wired to chat (see the Phase 12/13 sections).
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
 the fake transport (one continuous stream across many segment retargets, one
@@ -503,6 +510,12 @@ still pass; budgets are re-measured.
 
 # Phase 12: Voice Worker Boundary
 
+Status: **implemented.** The protocol spec lives in
+[docs/voice-worker-protocol.md](docs/voice-worker-protocol.md); the wire
+format is `internal/voice/protocol`, lifecycle and the core-owned queue are
+`internal/voice`, and the model-free stub is `cmd/voice-stub-worker` +
+`internal/voice/stubworker`.
+
 ## Suggested `/goal`
 
 `/goal Complete MagicHandy Phase 12: implement the optional voice worker protocol, worker lifecycle management, voice status UI, and stub workers; do not bundle heavy ML models yet.`
@@ -514,18 +527,30 @@ core.
 
 ## Scope
 
-Implement:
+Implemented:
 
-- versioned worker protocol: request/response envelope, health/status,
-  cancellation, timeouts, queue depth, crash reporting
-- worker process lifecycle (start/stop/restart) and missing-worker behavior
-- stub TTS and ASR workers used by protocol tests
-- UI status for missing/unloaded workers
+- versioned worker protocol (v1): NDJSON request/response envelopes over
+  stdio, hello negotiation, health/status with model state and queue depth,
+  cancellation by request ID, per-request timeouts, structured error codes,
+  no-speech rejection (never an empty transcript into chat)
+- worker process lifecycle: settings-driven configure (never autostart),
+  start/stop/restart, handshake teardown on version mismatch, crash detection
+  with stderr tail, deliberate-stop vs crash distinction, goleak-gated
+  goroutine teardown; missing/disabled/unconfigured are visible states
+- core-owned serialized request queue (bounded; rejects when full) with a
+  tracked recent-request log
+- stub TTS and ASR workers (one binary, `-role`) used by protocol tests,
+  process-lifecycle tests, and manual checks; supports delay, crash, and
+  fail-start injection — no ML models
+- voice settings section + worker status UI (dot+text states, provider
+  identity, queue depth, last error, start/stop/restart/load/test/cancel)
 
-Delivery-ordering rules (ADR 0003, risk R15): chat-emit and TTS-enqueue are
-lockstep; per-client cursors over one shared message log; a single-owner audio
-lease so two tabs never speak the same clip; model errors never enter history,
-TTS, or motion.
+Delivery-ordering rules (ADR 0003, risk R15) — the parts that need audio
+playback and a real provider (lockstep chat-emit/TTS-enqueue, per-client
+cursors over one shared message log, the single-owner audio lease) are the
+**first work item of Phase 13**, before any provider is wired to chat. Model
+errors already stay out of history, TTS, and motion: worker failures terminate
+in the voice request log.
 
 ## Validation
 
@@ -534,17 +559,21 @@ go test ./...
 go test -race ./...
 ```
 
-Manual checks: app runs without workers; stub worker starts/stops; crash is
-visible; cancellation works.
+Manual checks (all verified live against the stub): app runs without workers;
+stub worker starts/stops; startup crash and mid-request crash are visible with
+stderr; cancellation interrupts an active request; model load/unload; settings
+save reconfigures without autostart.
 
 ## Done Criteria
 
 - Voice is optional; the protocol is versioned and tested; the core app
-  remains usable without Python.
+  remains usable without Python. Met: the stub stack is pure Go, workers are
+  separate processes, and every voice state is a readout, never a blocker.
 
 ## Out Of Scope
 
-- real providers (Phase 13)
+- real providers, audio playback, and the delivery-ordering trio above
+  (Phase 13)
 - CUDA setup scripts
 
 # Phase 13: Voice Feature Implementations
@@ -562,6 +591,11 @@ boundary (ADR 0007).
 
 One provider per PR/subphase, in this order:
 
+0. **Delivery-ordering foundation first** (carried from Phase 12, ADR 0003,
+   risk R15): the shared chat message log with per-client cursors (the ADR
+   0008 `messages`/`client_cursors` tables), lockstep chat-emit/TTS-enqueue,
+   and the single-owner audio lease — landed before any provider speaks a
+   chat reply, so spoken-equals-shown is guaranteed from the first provider
 1. **NeuTTS Air spike first** (risk R17): prove the non-Python NeuCodec
    decode path and cloning quality/latency before the full integration; if the
    spike fails, document the fallback (F5-TTS ONNX or optional Python worker)

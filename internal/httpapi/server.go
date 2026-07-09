@@ -19,6 +19,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
 const serviceName = "magichandy"
@@ -55,6 +56,7 @@ type Server struct {
 	controller      controllerRuntime
 	personalization personalizationRuntime
 	modes           *modes.Manager
+	voice           *voice.Manager
 	started         time.Time
 	version         VersionInfo
 	handler         http.Handler
@@ -110,6 +112,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		return nil, err
 	}
 	server.modes = manager
+
+	settings, _ := store.Snapshot()
+	server.voice = newVoiceManager(settings.Voice)
 
 	mux := http.NewServeMux()
 	server.routes(mux)
@@ -179,6 +184,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/modes", s.handleModesGet)
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
+	s.voiceRoutes(mux)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
@@ -213,7 +219,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"chat":      "local_llm_streaming",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
-			"voice":     "not_implemented",
+			"voice":     "optional_worker_protocol_v1",
 		},
 	})
 }
@@ -245,12 +251,13 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"chat":      "local_llm_streaming",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
-			"voice":     "not_implemented",
+			"voice":     "optional_worker_protocol_v1",
 		},
 		"llm":                 s.llmState(r.Context()),
 		"controller":          s.controllerState(r),
 		"memory":              s.memoryState(),
 		"modes":               s.modes.Status(),
+		"voice":               s.voiceState(),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),
