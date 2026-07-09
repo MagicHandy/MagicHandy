@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +11,33 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
+
+func TestSilentTestWAVBase64ProducesValidPCMSilence(t *testing.T) {
+	audio, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
+	if err != nil {
+		t.Fatalf("decode test WAV: %v", err)
+	}
+	if len(audio) < 44 || string(audio[0:4]) != "RIFF" || string(audio[8:12]) != "WAVE" || string(audio[12:16]) != "fmt " || string(audio[36:40]) != "data" {
+		t.Fatalf("test payload is not a canonical WAV header")
+	}
+	if got := binary.LittleEndian.Uint32(audio[24:28]); got != 16000 {
+		t.Fatalf("sample rate = %d, want 16000", got)
+	}
+	if got := binary.LittleEndian.Uint16(audio[22:24]); got != 1 {
+		t.Fatalf("channels = %d, want 1", got)
+	}
+	if got := binary.LittleEndian.Uint16(audio[34:36]); got != 16 {
+		t.Fatalf("bit depth = %d, want 16", got)
+	}
+	if got, want := int(binary.LittleEndian.Uint32(audio[40:44])), len(audio)-44; got != want {
+		t.Fatalf("data length = %d, want %d", got, want)
+	}
+	for _, sample := range audio[44:] {
+		if sample != 0 {
+			t.Fatal("test WAV must contain silence")
+		}
+	}
+}
 
 func TestVoiceStatusDefaultsToDisabled(t *testing.T) {
 	server := newTestServer(t)

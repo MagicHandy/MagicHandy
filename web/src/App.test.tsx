@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -18,6 +18,7 @@ const baseState = {
     device: { hsp_dispatch_owner: "cloud_rest", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000 },
+    voice: { enabled: false, tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], speak_replies: false, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth"],
@@ -41,7 +42,7 @@ function jsonRes(data: unknown) {
 function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[] } = {}) {
   const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
-  const fn = vi.fn(async (input: RequestInfo | URL) => {
+  const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     if (opts.fail) throw new Error("offline");
     const u = String(input);
     if (u.includes("/api/transport/bluetooth/status")) return jsonRes({ status: "success", dispatch_owner: state.settings.device.hsp_dispatch_owner, bluetooth: state.bluetooth_bridge ?? {} });
@@ -143,7 +144,7 @@ describe("app shell safety invariants", () => {
     }
   });
 
-  it("shows voice worker status as readouts and keeps controls inert while disabled", async () => {
+  it("shows voice worker status as readouts and hides unavailable controls", async () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
@@ -153,11 +154,35 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/speech output \(tts\)/i)).toBeInTheDocument();
     expect(screen.getByText(/speech input \(asr\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
-    // A missing/disabled worker never blocks the app; its controls are inert.
-    for (const button of screen.getAllByRole("button", { name: /^start$/i })) {
-      expect(button).toBeDisabled();
-    }
+    // A missing/disabled worker never blocks the app or adds a row of unusable controls.
+    expect(screen.queryByRole("button", { name: /^(start|stop|restart|load model|unload model|send test)$/i })).toBeNull();
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
+  });
+
+  it("preserves Windows paths in one-argument-per-line worker settings", async () => {
+    const fetch = installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+
+    fireEvent.change(await screen.findByRole("textbox", { name: /asr worker arguments/i }), {
+      target: {
+        value: "-server-path\nC:\\Program Files\\MagicHandy\\parakeet-server.exe\n-server-model\nC:\\Users\\Test User\\AppData\\Roaming\\MagicHandy\\voice\\parakeet\\model.gguf",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => {
+      expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true);
+    });
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body));
+    expect(payload.voice.asr_worker_args).toEqual([
+      "-server-path",
+      "C:\\Program Files\\MagicHandy\\parakeet-server.exe",
+      "-server-model",
+      "C:\\Users\\Test User\\AppData\\Roaming\\MagicHandy\\voice\\parakeet\\model.gguf",
+    ]);
   });
 
   it("locks settings, prompt, and memory mutations for read-only clients", async () => {

@@ -1,6 +1,8 @@
 # Build outputs
 /bin/
 /dist/
+/.gocache/
+/.tmp-*/
 *.exe
 *.dll
 *.so
@@ -22,6 +24,7 @@ coverage.out
 *.log
 /diagnostics/
 /traces/
+/.scratch/
 
 # Editor and OS metadata
 .idea/

@@ -5,8 +5,9 @@
 
 .DESCRIPTION
     Checks for the Go toolchain (offers to install it), builds MagicHandy, sets up
-    a data folder, optionally helps you get a local LLM running (with CUDA
-    detection and explicit, consented model downloads), and launches the app.
+    a data folder, optionally helps you get a local LLM running, can provision
+    offline Parakeet speech input, and launches the app. Model downloads are
+    always explicit, consented, and checksum-verified.
 
     The runtime is a single Go binary that serves an embedded browser UI on
     localhost. Nothing here downloads a model or installs software without asking.
@@ -58,6 +59,37 @@ function Confirm-YesNo([string]$Question, [bool]$Default = $true) {
     $answer = Read-Host "$Question [$hint]"
     if ([string]::IsNullOrWhiteSpace($answer)) { return $Default }
     return $answer -match '^(y|yes)$'
+}
+function Get-SHA256([string]$Path) {
+    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+}
+function Install-VerifiedDownload([string]$Uri, [string]$Destination, [string]$ExpectedSHA256) {
+    $expected = $ExpectedSHA256.ToLowerInvariant()
+    $parent = Split-Path -Parent $Destination
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+
+    if (Test-Path -LiteralPath $Destination) {
+        if ((Get-SHA256 $Destination) -eq $expected) {
+            Write-Host "Verified existing $(Split-Path -Leaf $Destination)." -ForegroundColor Green
+            return
+        }
+        Write-Warning "Existing $(Split-Path -Leaf $Destination) did not match its published SHA-256; replacing it."
+        Remove-Item -LiteralPath $Destination -Force
+    }
+
+    $partial = "$Destination.partial"
+    if (Test-Path -LiteralPath $partial) {
+        Remove-Item -LiteralPath $partial -Recurse -Force
+    }
+    Write-Host "Downloading $(Split-Path -Leaf $Destination)..."
+    Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $partial
+    $actual = Get-SHA256 $partial
+    if ($actual -ne $expected) {
+        Remove-Item -LiteralPath $partial -Force
+        throw "SHA-256 verification failed for $(Split-Path -Leaf $Destination)."
+    }
+    Move-Item -LiteralPath $partial -Destination $Destination -Force
+    Write-Host "Verified $(Split-Path -Leaf $Destination)." -ForegroundColor Green
 }
 
 Write-Host ''
@@ -115,6 +147,11 @@ if ($DataDir) {
     Write-Host 'Data will be stored under your Windows profile (…\AppData\Roaming\MagicHandy).'
 }
 Write-Host 'Your settings, chat memory, and Handy connection key are stored locally only.'
+$voiceDataDir = if ($DataDir) {
+    [System.IO.Path]::GetFullPath($DataDir)
+} else {
+    Join-Path $env:APPDATA 'MagicHandy'
+}
 
 # --- 4. Local LLM (optional) -------------------------------------------------
 Write-Head '4. Local LLM (for chat)'
@@ -146,8 +183,70 @@ if (Confirm-YesNo 'Set up a local LLM now? (you can always do this later in Sett
     }
 }
 
-# --- 5. Launch ---------------------------------------------------------------
-Write-Head '5. Launch'
+# --- 5. Offline speech input (optional) -------------------------------------
+Write-Head '5. Offline speech input (optional)'
+$parakeetRoot = Join-Path $voiceDataDir 'voice\parakeet'
+$runnerDir = Join-Path $parakeetRoot 'runner'
+$serverExe = Join-Path $runnerDir 'parakeet-server.exe'
+$modelPath = Join-Path $parakeetRoot 'tdt-0.6b-v3-q4_k.gguf'
+$workerExe = Join-Path $Repo 'voice-parakeet-worker.exe'
+
+Write-Host 'Parakeet adds private, offline speech recognition. It is optional and never starts on its own.'
+Write-Host 'The CPU setup downloads parakeet.cpp v0.4.0 (MIT, 1.4 MB) and the multilingual'
+Write-Host 'Parakeet TDT 0.6B v3 Q4_K model (CC-BY-4.0, 644 MiB). Both files are SHA-256 verified.'
+if (Confirm-YesNo 'Install offline Parakeet speech input now?' $false) {
+    $runnerArchive = Join-Path $parakeetRoot 'parakeet-v0.4.0-bin-win-cpu-x64.zip'
+    if (-not (Test-Path -LiteralPath $serverExe)) {
+        Install-VerifiedDownload `
+            'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip' `
+            $runnerArchive `
+            '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
+        $stage = Join-Path $parakeetRoot 'runner.partial'
+        if (Test-Path -LiteralPath $stage) {
+            Remove-Item -LiteralPath $stage -Recurse -Force
+        }
+        Expand-Archive -LiteralPath $runnerArchive -DestinationPath $stage -Force
+        $candidate = Get-ChildItem -LiteralPath $stage -Filter 'parakeet-server.exe' -File -Recurse | Select-Object -First 1
+        if ($null -eq $candidate) {
+            throw 'The parakeet.cpp archive did not contain parakeet-server.exe.'
+        }
+        if (Test-Path -LiteralPath $runnerDir) {
+            Write-Warning "Replacing incomplete Parakeet runner directory at $runnerDir."
+            Remove-Item -LiteralPath $runnerDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Force -Path $runnerDir | Out-Null
+        Get-ChildItem -LiteralPath $candidate.Directory.FullName -Force | Move-Item -Destination $runnerDir -Force
+        Remove-Item -LiteralPath $stage -Recurse -Force
+        Remove-Item -LiteralPath $runnerArchive -Force
+        Write-Host "Installed parakeet-server at $serverExe" -ForegroundColor Green
+    } else {
+        Write-Host "Using existing parakeet-server at $serverExe" -ForegroundColor Green
+    }
+
+    Install-VerifiedDownload `
+        'https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v3-q4_k.gguf?download=true' `
+        $modelPath `
+        '993d73feb4206dadda865ab25bd64b50c48dc4d013c3bf6126a721f28b1d5ee8'
+
+    Write-Host 'Building the small Go ASR worker...'
+    & go build -o $workerExe ./cmd/voice-parakeet-worker
+    if ($LASTEXITCODE -ne 0) { throw 'Parakeet worker build failed. See the output above.' }
+    Write-Host "Built $workerExe" -ForegroundColor Green
+    Write-Host ''
+    Write-Host 'In Settings > Voice, enable voice workers and set the ASR worker path to:' -ForegroundColor White
+    Write-Host "  $workerExe"
+    Write-Host 'Enter these ASR worker arguments one per line:' -ForegroundColor White
+    Write-Host '  -server-path'
+    Write-Host "  $serverExe"
+    Write-Host '  -server-model'
+    Write-Host "  $modelPath"
+    Write-Host 'Save settings, then Start and Load the Speech input worker. The managed server stays on 127.0.0.1.'
+} else {
+    Write-Host 'Skipping offline speech input. It can be installed by re-running this script later.'
+}
+
+# --- 6. Launch ---------------------------------------------------------------
+Write-Head '6. Launch'
 $startArgs = @('-addr', "127.0.0.1:$Port")
 if ($DataDir) { $startArgs += @('-data-dir', $DataDir) }
 $url = "http://127.0.0.1:$Port"

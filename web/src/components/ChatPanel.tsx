@@ -50,7 +50,9 @@ export function ChatPanel() {
         const res = await api.getChatMessages();
         if (cancelled || seeded.current) return;
         seeded.current = true;
-        setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content })));
+        if (res.messages.length > 0) {
+          setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content })));
+        }
         history.current = res.messages.slice(-MAX_HISTORY).map(toLlmHistory);
         lastSeq.current = res.latest_seq;
         if (res.latest_seq > res.cursor) void api.advanceChatCursor(res.latest_seq).catch(() => undefined);

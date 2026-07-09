@@ -41,7 +41,8 @@ Phase 13 providers follow one per PR.
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
-| 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet) | In progress | — |
+| 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet proxy) | In progress | — |
+| 13.4 | Managed Parakeet runner and interactive installer | In progress | — |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -608,8 +609,37 @@ One provider per PR/subphase, in this order:
    spike fails, document the fallback (F5-TTS ONNX or optional Python worker)
    and continue with the other providers
 2. ElevenLabs cloud TTS (HTTP; expressive + high-fidelity cloning premium)
-3. Parakeet-TDT ASR via sherpa-onnx (Go) or achetronic/parakeet
-   (OpenAI-compatible server); Whisper optional alternate later
+3. Parakeet-TDT ASR through an external OpenAI-compatible proxy; external
+   server choices remain interchangeable, with Whisper an optional alternate
+   later
+4. **Managed Parakeet runner + installer**: use the existing parakeet.cpp
+   `parakeet-server` as a worker-owned, loopback-only process with a local GGUF
+   model; add an explicit, checksum-verified installer path. Do not introduce a
+   second inference loop, CGo into the core, automatic downloads, or a new
+   motion path.
+
+### Slice 13.4: Managed Parakeet Runner And Installer
+
+Status: **in progress on the current branch.**
+
+- Select parakeet.cpp over a direct sherpa-onnx binding for the first Windows
+  path: its release already contains `parakeet-server`, local GGUF support,
+  `/health`, and an OpenAI-compatible transcription endpoint.
+- Extend `voice-parakeet-worker` with an external mode and a mutually exclusive
+  managed mode (`-server-path`, `-server-model`, optional `-server-port`). The
+  worker owns only the process it starts; unload, shutdown, and EOF cancel work
+  and stop that child.
+- Extend `install.ps1` with an opt-in CPU runner/model download showing size,
+  license, and checksum. Install under the local data directory, build the Go
+  worker, and leave voice disabled until the user explicitly saves and starts it.
+- Keep the ordinary Voice settings surface minimal. Worker arguments are
+  structured one-per-line values so Windows paths with spaces survive without a
+  homemade shell parser. Lifecycle actions are state-specific rather than a row
+  of disabled controls.
+- Validate the external `/v1/models` fallback, parakeet.cpp `/health` readiness,
+  managed startup-once behavior, port conflict, unload, EOF cleanup, and the
+  valid-WAV test request. A real model/microphone measurement remains required
+  before push-to-talk or hands-free UI ships.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

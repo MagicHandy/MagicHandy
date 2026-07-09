@@ -94,6 +94,8 @@ export function VoiceWorkers({ locked }: { locked: boolean }) {
         const state = worker?.state ?? "disabled";
         const canControl = !locked && busyRole !== role && state !== "disabled" && state !== "not_configured";
         const modelLoaded = worker?.model_state === "ready";
+        const isRunning = state === "running";
+        const isStarting = state === "starting";
         return (
           <div key={role} className="voice-worker-row">
             <div className="voice-worker-head">
@@ -114,13 +116,15 @@ export function VoiceWorkers({ locked }: { locked: boolean }) {
             {worker?.last_error && state !== "running" && (
               <p className="form-status voice-worker-error">{worker.last_error}</p>
             )}
-            <div className="row-actions">
-              <button type="button" className="btn btn-secondary" disabled={!canControl || state === "running" || state === "starting"} onClick={() => void run(role, () => api.voiceWorkerStart(role), "Start")}>Start</button>
-              <button type="button" className="btn btn-secondary" disabled={!canControl || (state !== "running" && state !== "starting" && state !== "crashed")} onClick={() => void run(role, () => api.voiceWorkerStop(role), "Stop")}>Stop</button>
-              <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerRestart(role), "Restart")}>Restart</button>
-              <button type="button" className="btn btn-secondary" disabled={!canControl || state !== "running"} onClick={() => void run(role, () => api.voiceWorkerModel(role, !modelLoaded), modelLoaded ? "Unload model" : "Load model")}>{modelLoaded ? "Unload model" : "Load model"}</button>
-              <button type="button" className="btn btn-secondary" disabled={!canControl || state !== "running" || !modelLoaded} onClick={() => void run(role, () => api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 }), "Test request")}>Send test</button>
-            </div>
+            {state !== "disabled" && state !== "not_configured" && (
+              <div className="row-actions">
+                {state === "stopped" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStart(role), "Start")}>Start</button>}
+                {state === "crashed" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerRestart(role), "Restart")}>Restart</button>}
+                {(isRunning || isStarting) && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStop(role), "Stop")}>Stop</button>}
+                {isRunning && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerModel(role, !modelLoaded), modelLoaded ? "Unload model" : "Load model")}>{modelLoaded ? "Unload model" : "Load model"}</button>}
+                {isRunning && modelLoaded && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 }), "Test request")}>Send test</button>}
+              </div>
+            )}
           </div>
         );
       })}
