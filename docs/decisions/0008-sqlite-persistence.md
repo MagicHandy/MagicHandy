@@ -24,7 +24,7 @@ safe defaults without failing startup. Three separate implementations of the
 same durability, versioning, and recovery logic.
 
 That pattern is fine at the current bounds but is the wrong shape for what is
-coming. The Phase 12 shared chat message log with per-client cursors (ADR 0003)
+coming. The shared chat message log with per-client cursors (ADR 0003, Phase 13 foundation)
 and the Phase 14 pattern/program library with tags, enable/disable, and
 feedback weights are append-heavy and query-shaped. Rewriting an entire growing
 log on every append, and re-reading it wholesale to answer a cursor or filter
@@ -63,7 +63,8 @@ only their durability substrate moves from JSON files to DB tables.
     injection switch as a settings/kv value.
   - `prompt_sets(id TEXT PRIMARY KEY, name, system, created_at)` — user sets
     only; built-ins remain code-defined and never enter the DB.
-  - (Phase 12) a `messages` shared chat log and `client_cursors` per-client
+  - (landed with the Phase 13 delivery-ordering foundation, schema v2) a
+    `messages` shared chat log and `client_cursors` per-client
     cursors (ADR 0003).
   - (Phase 14) `patterns`, `programs`, and `pattern_feedback`.
 - **Settings stays a versioned document**, stored as one row in a `settings`
@@ -128,7 +129,7 @@ Positive:
 - One transactional store: atomic multi-row operations, one durability
   mechanism, one migration runner, one file to back up — replacing three
   bespoke atomic-write + version + recovery implementations.
-- The Phase 12 chat log and Phase 14 library get a store shaped for them from
+- The chat log (now landed) and Phase 14 library get a store shaped for them from
   day one, so those phases do not each reinvent persistence.
 - Still fully embedded and offline; still `CGO_ENABLED=0`; still one binary;
   cross-builds stay free.
@@ -185,7 +186,7 @@ Negative / deliberate trade-offs:
 - ADR 0001 (Go-first core): keeps the single-binary, pure-Go promise.
 - ADR 0003 (voice worker boundary / message-and-audio delivery ordering): the
   shared chat message log with per-client cursors becomes a table in this store.
-- `IMPLEMENTATION_PLAN.md`: introduced in Phase 11B; consumed by Phase 12 (chat
+- `IMPLEMENTATION_PLAN.md`: introduced in Phase 11B; consumed by the Phase 13 foundation (chat
   log) and Phase 14 (pattern library); Phase 15 (StrokeGPT-ReVibed import)
   targets the same schema.
 - `docs/risk-register.md`: R19 (datastore migration and budget) tracks migration

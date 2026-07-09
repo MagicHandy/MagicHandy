@@ -44,6 +44,7 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/voice/workers/{role}/model", s.handleVoiceWorkerModel)
 	mux.HandleFunc("POST /api/voice/workers/{role}/test", s.handleVoiceWorkerTest)
 	mux.HandleFunc("GET /api/voice/requests/{id}", s.handleVoiceRequestGet)
+	mux.HandleFunc("GET /api/voice/requests/{id}/audio", s.handleVoiceRequestAudio)
 	mux.HandleFunc("POST /api/voice/requests/{id}/cancel", s.handleVoiceRequestCancel)
 }
 
@@ -221,6 +222,45 @@ func (s *Server) handleVoiceRequestGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"request": pending.Snapshot()})
+}
+
+// handleVoiceRequestAudio serves retained speak audio. The single-owner
+// audio lease rides the controller lease (ADR 0003): only the active
+// controller can fetch a clip, so two tabs never speak the same audio.
+func (s *Server) handleVoiceRequestAudio(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	pending, ok := s.voice.Request(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, errors.New("unknown voice request"))
+		return
+	}
+	audio, format := pending.Audio()
+	if len(audio) == 0 {
+		writeError(w, http.StatusNotFound, errors.New("no audio is retained for this request"))
+		return
+	}
+	w.Header().Set("Content-Type", audioContentType(format))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	// #nosec G705 -- binary audio from the local worker process, served with
+	// an explicit audio/* content type and nosniff; never rendered as HTML.
+	_, _ = w.Write(audio)
+}
+
+func audioContentType(format string) string {
+	switch strings.ToLower(format) {
+	case "wav":
+		return "audio/wav"
+	case "mp3":
+		return "audio/mpeg"
+	case "ogg", "opus":
+		return "audio/ogg"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request) {

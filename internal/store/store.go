@@ -21,7 +21,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 1
+	CurrentSchemaVersion = 2
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -223,6 +223,60 @@ func (db *DB) configure(ctx context.Context) error {
 	return nil
 }
 
+// migrations are forward-only steps; index i migrates user_version i to i+1.
+// Never edit a shipped step — append a new one.
+var migrations = [][]string{
+	// v0 -> v1: the Phase 11B foundation tables.
+	{
+		`CREATE TABLE IF NOT EXISTS settings (
+			id TEXT PRIMARY KEY CHECK (id = 'current'),
+			document TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS app_kv (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS memories (
+			id TEXT PRIMARY KEY,
+			text TEXT NOT NULL,
+			enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS prompt_sets (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			system TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS legacy_imports (
+			domain TEXT PRIMARY KEY,
+			source_path TEXT NOT NULL,
+			archived_path TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL,
+			message TEXT NOT NULL DEFAULT '',
+			imported_at TEXT NOT NULL
+		)`,
+	},
+	// v1 -> v2: the shared chat message log with per-client cursors
+	// (ADR 0003 delivery ordering; ADR 0008 planned these tables).
+	{
+		`CREATE TABLE IF NOT EXISTS messages (
+			seq INTEGER PRIMARY KEY AUTOINCREMENT,
+			role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+			content TEXT NOT NULL,
+			client_id TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS client_cursors (
+			client_id TEXT PRIMARY KEY,
+			last_seq INTEGER NOT NULL DEFAULT 0,
+			updated_at TEXT NOT NULL
+		)`,
+	},
+}
+
 func (db *DB) migrate(ctx context.Context) error {
 	version, err := db.schemaVersion(ctx)
 	if err != nil {
@@ -235,47 +289,24 @@ func (db *DB) migrate(ctx context.Context) error {
 		return nil
 	}
 
-	return db.WithTx(ctx, func(tx *sql.Tx) error {
-		statements := []string{
-			`CREATE TABLE IF NOT EXISTS settings (
-				id TEXT PRIMARY KEY CHECK (id = 'current'),
-				document TEXT NOT NULL,
-				updated_at TEXT NOT NULL
-			)`,
-			`CREATE TABLE IF NOT EXISTS app_kv (
-				key TEXT PRIMARY KEY,
-				value TEXT NOT NULL,
-				updated_at TEXT NOT NULL
-			)`,
-			`CREATE TABLE IF NOT EXISTS memories (
-				id TEXT PRIMARY KEY,
-				text TEXT NOT NULL,
-				enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
-				created_at TEXT NOT NULL
-			)`,
-			`CREATE TABLE IF NOT EXISTS prompt_sets (
-				id TEXT PRIMARY KEY,
-				name TEXT NOT NULL,
-				system TEXT NOT NULL,
-				created_at TEXT NOT NULL
-			)`,
-			`CREATE TABLE IF NOT EXISTS legacy_imports (
-				domain TEXT PRIMARY KEY,
-				source_path TEXT NOT NULL,
-				archived_path TEXT NOT NULL DEFAULT '',
-				status TEXT NOT NULL,
-				message TEXT NOT NULL DEFAULT '',
-				imported_at TEXT NOT NULL
-			)`,
-			`PRAGMA user_version = 1`,
-		}
-		for _, statement := range statements {
-			if _, err := tx.ExecContext(ctx, statement); err != nil {
-				return fmt.Errorf("apply SQLite migration: %w", err)
+	for next := version; next < CurrentSchemaVersion; next++ {
+		step := migrations[next]
+		err := db.WithTx(ctx, func(tx *sql.Tx) error {
+			for _, statement := range step {
+				if _, err := tx.ExecContext(ctx, statement); err != nil {
+					return fmt.Errorf("apply SQLite migration to v%d: %w", next+1, err)
+				}
 			}
+			if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", next+1)); err != nil {
+				return fmt.Errorf("record SQLite schema version %d: %w", next+1, err)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 func (db *DB) schemaVersion(ctx context.Context) (int, error) {

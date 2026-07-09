@@ -99,3 +99,65 @@ func TestArchiveLegacyJSONPreservesContents(t *testing.T) {
 		t.Fatalf("legacy path stat error = %v, want not exists", err)
 	}
 }
+
+func TestMigrationUpgradesV1DatabaseInPlace(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	path := db.Path()
+	// Preserve a v1-era row so the upgrade provably keeps existing data.
+	if _, err := db.SQL().Exec(
+		`INSERT INTO memories(id, text, enabled, created_at) VALUES('m1', 'keep me', 1, '2026-01-01T00:00:00Z')`,
+	); err != nil {
+		t.Fatalf("seed memory: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Rewind the file to schema v1 by dropping the v2 tables.
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	for _, statement := range []string{
+		"DROP TABLE messages",
+		"DROP TABLE client_cursors",
+		"PRAGMA user_version = 1",
+	} {
+		if _, err := raw.Exec(statement); err != nil {
+			_ = raw.Close()
+			t.Fatalf("rewind %q: %v", statement, err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	upgraded, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen v1 database: %v", err)
+	}
+	defer func() {
+		_ = upgraded.Close()
+	}()
+
+	var version int
+	if err := upgraded.SQL().QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if version != CurrentSchemaVersion {
+		t.Fatalf("user_version = %d, want %d", version, CurrentSchemaVersion)
+	}
+	if _, err := upgraded.SQL().Exec(
+		`INSERT INTO messages(role, content, client_id, created_at) VALUES('user', 'hi', 'c', '2026-01-01T00:00:00Z')`,
+	); err != nil {
+		t.Fatalf("v2 messages table missing after upgrade: %v", err)
+	}
+	var kept string
+	if err := upgraded.SQL().QueryRow(`SELECT text FROM memories WHERE id = 'm1'`).Scan(&kept); err != nil || kept != "keep me" {
+		t.Fatalf("v1 data lost across upgrade: %q, %v", kept, err)
+	}
+}

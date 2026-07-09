@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -306,4 +307,45 @@ func TestConfigChangeStopsRunningWorker(t *testing.T) {
 
 	supervisor.SetConfig(WorkerConfig{Enabled: false})
 	waitForState(t, supervisor, StateDisabled)
+}
+
+func TestCompletedSpeakRetainsBoundedAudio(t *testing.T) {
+	supervisor := newTestSupervisor(t, RoleTTS, "-start-loaded")
+
+	if err := supervisor.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitForState(t, supervisor, StateRunning)
+
+	pending, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "retain me"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	snapshot := waitForRequestState(t, pending, RequestStateDone)
+	if snapshot.AudioBytes == 0 {
+		t.Fatalf("completed speak retained no audio: %+v", snapshot)
+	}
+	audio, format := pending.Audio()
+	if len(audio) != snapshot.AudioBytes || format != "wav" {
+		t.Fatalf("Audio() = %d bytes %q, want %d bytes wav", len(audio), format, snapshot.AudioBytes)
+	}
+
+	// The manager keeps audio only for the newest few requests.
+	manager := NewManager()
+	tracked := make([]*PendingRequest, 0, audioRetainCount+3)
+	for i := 0; i < audioRetainCount+3; i++ {
+		request := &PendingRequest{ID: strconv.Itoa(i), audio: []byte{1, 2, 3}}
+		manager.Track(request)
+		tracked = append(tracked, request)
+	}
+	for i, request := range tracked {
+		audio, _ := request.Audio()
+		wantAudio := i >= len(tracked)-audioRetainCount
+		if wantAudio && len(audio) == 0 {
+			t.Fatalf("request %d should retain audio", i)
+		}
+		if !wantAudio && len(audio) != 0 {
+			t.Fatalf("request %d should have dropped audio", i)
+		}
+	}
 }

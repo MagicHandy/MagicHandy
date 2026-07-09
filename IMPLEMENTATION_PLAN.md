@@ -18,8 +18,9 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
-(voice worker boundary) is implemented on the current branch.
+Updated 2026-07-09. Phases 0 through 12 are merged to `main`. Phase 13.0
+(delivery-ordering foundation) is implemented on the current branch; the
+Phase 13 providers follow one per PR.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -39,13 +40,17 @@ Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
-| 13-17 | Voice providers, patterns, migration, packaging, parity | Not started | — |
+| 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
+| 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet) | In progress | — |
+| 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
-Phase 12 note: the ADR 0003 delivery-ordering trio (shared chat log with
-per-client cursors, lockstep chat-emit/TTS-enqueue, single-owner audio lease)
-is deliberately not in the Phase 12 PR — there is no audio playback or real
-TTS provider yet to order against. It lands at the start of Phase 13,
-before the first provider is wired to chat (see the Phase 12/13 sections).
+Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
+before any provider — the SQLite `messages`/`client_cursors` tables (schema
+v2) are the canonical chat history (closing parity row 9: history survives
+reload and reaches every tab), chat-emit and TTS-enqueue are lockstep (the
+enqueued text is byte-identical to the logged reply; error/malformed paths
+never reach either), and retained speak audio is served only to the active
+controller (the single-owner audio lease), bounded per request and count.
 
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
 the fake transport (one continuous stream across many segment retargets, one
@@ -58,11 +63,10 @@ deterministic chat — full app-path evidence for both dispatch owners lives in
 `docs/perf-baseline.md`.
 
 Phase 10 decision (2026-07-02): **chat history stays client-side for now.**
-Server-side history is deliberately deferred to Phase 12, where ADR 0003's
-shared message log with per-client cursors introduces it as the single
-canonical history; building a separate Phase 10 history store would create a
-second source of truth that Phase 12 would immediately replace. Parity row 9
-tracks it.
+Server-side history was deliberately deferred so ADR 0003's shared message
+log with per-client cursors could introduce it as the single canonical
+history; building a separate Phase 10 history store would have created a
+second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 
 ### What Exists On Main
 
@@ -94,9 +98,10 @@ line-budget checks.)
 (Also closed since: Browser Bluetooth full app-path validation — PR #22;
 editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 
-1. **Open parity rows**: only server-side chat continuity (Phase 12) remains;
-   pause/resume shipped early in the post-Phase-10 shell pass. See
-   `docs/ui-design.md`, "Functional Parity Baseline".
+1. **Open parity rows**: none — the last one (server-side chat continuity,
+   row 9) closed with Phase 13.0; pause/resume shipped early in the
+   post-Phase-10 shell pass. See `docs/ui-design.md`, "Functional Parity
+   Baseline".
 2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
    one-hour soak ran on Cloud REST only (scorecard watch list).
 
@@ -595,7 +600,9 @@ One provider per PR/subphase, in this order:
    risk R15): the shared chat message log with per-client cursors (the ADR
    0008 `messages`/`client_cursors` tables), lockstep chat-emit/TTS-enqueue,
    and the single-owner audio lease — landed before any provider speaks a
-   chat reply, so spoken-equals-shown is guaranteed from the first provider
+   chat reply, so spoken-equals-shown is guaranteed from the first provider.
+   **Done** (schema v2; `speak_replies` setting; lease-gated audio endpoint;
+   spoken-equals-shown, cursor-isolation, and model-error tests).
 1. **NeuTTS Air spike first** (risk R17): prove the non-Python NeuCodec
    decode path and cloning quality/latency before the full integration; if the
    spike fails, document the fallback (F5-TTS ONNX or optional Python worker)

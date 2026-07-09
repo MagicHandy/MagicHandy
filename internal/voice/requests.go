@@ -1,10 +1,19 @@
 package voice
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
+)
+
+// Audio retention bounds: completed speak audio is kept in memory for the
+// lease-gated playback endpoint, capped per request and to the most recent
+// few requests so retained audio cannot grow without bound.
+const (
+	maxRetainedAudioBytes = 2 << 20 // per request
+	audioRetainCount      = 4       // most recent requests keeping audio
 )
 
 // Request lifecycle states shown to the API and UI.
@@ -16,9 +25,10 @@ const (
 	RequestStateFailed   = "failed"
 )
 
-// PendingRequest tracks one queued or completed work request. Result fields
-// summarize outcomes (chunk counts, transcript text) — raw audio payloads are
-// never retained, logged, or exposed through status.
+// PendingRequest tracks one queued or completed work request. Snapshots and
+// logs carry only metadata (chunk counts, byte counts, transcript text);
+// retained audio is served exclusively through the lease-gated audio
+// endpoint and is bounded by the retention constants above.
 type PendingRequest struct {
 	mu sync.Mutex
 
@@ -31,23 +41,28 @@ type PendingRequest struct {
 	request  Request
 	canceled bool
 
-	chunks     int
-	transcript []TranscriptCandidate
-	rejected   string
-	failure    *WorkerError
+	chunks         int
+	audio          []byte
+	audioFormat    string
+	audioTruncated bool
+	transcript     []TranscriptCandidate
+	rejected       string
+	failure        *WorkerError
 }
 
 // RequestSnapshot is the JSON view of one request's progress.
 type RequestSnapshot struct {
-	ID          string                `json:"id"`
-	Role        Role                  `json:"role"`
-	Type        string                `json:"type"`
-	State       string                `json:"state"`
-	CreatedAt   string                `json:"created_at"`
-	AudioChunks int                   `json:"audio_chunks,omitempty"`
-	Transcript  []TranscriptCandidate `json:"transcript,omitempty"`
-	Rejected    string                `json:"rejected,omitempty"`
-	Error       *WorkerError          `json:"error,omitempty"`
+	ID             string                `json:"id"`
+	Role           Role                  `json:"role"`
+	Type           string                `json:"type"`
+	State          string                `json:"state"`
+	CreatedAt      string                `json:"created_at"`
+	AudioChunks    int                   `json:"audio_chunks,omitempty"`
+	AudioBytes     int                   `json:"audio_bytes,omitempty"`
+	AudioTruncated bool                  `json:"audio_truncated,omitempty"`
+	Transcript     []TranscriptCandidate `json:"transcript,omitempty"`
+	Rejected       string                `json:"rejected,omitempty"`
+	Error          *WorkerError          `json:"error,omitempty"`
 }
 
 // Snapshot returns a copy safe to serialize.
@@ -55,16 +70,47 @@ func (p *PendingRequest) Snapshot() RequestSnapshot {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return RequestSnapshot{
-		ID:          p.ID,
-		Role:        p.Role,
-		Type:        p.Type,
-		State:       p.state,
-		CreatedAt:   p.createdAt.Format(time.RFC3339),
-		AudioChunks: p.chunks,
-		Transcript:  p.transcript,
-		Rejected:    p.rejected,
-		Error:       p.failure,
+		ID:             p.ID,
+		Role:           p.Role,
+		Type:           p.Type,
+		State:          p.state,
+		CreatedAt:      p.createdAt.Format(time.RFC3339),
+		AudioChunks:    p.chunks,
+		AudioBytes:     len(p.audio),
+		AudioTruncated: p.audioTruncated,
+		Transcript:     p.transcript,
+		Rejected:       p.rejected,
+		Error:          p.failure,
 	}
+}
+
+// Text returns the submitted speak text (empty for other request types).
+// The speak text is the same reply already visible in the chat log, so
+// exposing it to in-process callers reveals nothing new; it still never
+// enters status snapshots or logs.
+func (p *PendingRequest) Text() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.request.Text
+}
+
+// Audio returns a copy of the retained audio and its format ("" when none
+// is retained). Raw audio never appears in snapshots, traces, or logs.
+func (p *PendingRequest) Audio() ([]byte, string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.audio) == 0 {
+		return nil, ""
+	}
+	audio := make([]byte, len(p.audio))
+	copy(audio, p.audio)
+	return audio, p.audioFormat
+}
+
+func (p *PendingRequest) dropAudio() {
+	p.mu.Lock()
+	p.audio = nil
+	p.mu.Unlock()
 }
 
 func (p *PendingRequest) setState(state string) {
@@ -210,6 +256,16 @@ func (s *Supervisor) applyResponse(pending *PendingRequest, response Response) b
 	case ResponseAudioChunk:
 		pending.mu.Lock()
 		pending.chunks++
+		if data, err := base64.StdEncoding.DecodeString(response.AudioB64); err == nil && len(data) > 0 {
+			if pending.audioFormat == "" {
+				pending.audioFormat = response.AudioFormat
+			}
+			if len(pending.audio)+len(data) <= maxRetainedAudioBytes {
+				pending.audio = append(pending.audio, data...)
+			} else {
+				pending.audioTruncated = true
+			}
+		}
 		pending.mu.Unlock()
 		return false
 	case ResponseTranscript:
@@ -283,13 +339,17 @@ func (m *Manager) Status() map[Role]WorkerStatus {
 	return status
 }
 
-// Track adds a request to the recent-request log, evicting the oldest.
+// Track adds a request to the recent-request log, evicting the oldest and
+// dropping retained audio beyond the newest few (metadata stays visible).
 func (m *Manager) Track(pending *PendingRequest) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.requests = append(m.requests, pending)
 	if len(m.requests) > requestLogLimit {
 		m.requests = m.requests[len(m.requests)-requestLogLimit:]
+	}
+	for i := 0; i < len(m.requests)-audioRetainCount; i++ {
+		m.requests[i].dropAudio()
 	}
 }
 

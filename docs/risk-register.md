@@ -308,8 +308,12 @@ Mitigation:
 Exit evidence:
 
 - tests cover spoken-equals-shown, multi-client cursor isolation, and the
-  model-error path (Phase 12 covers the model-error and rejection paths;
-  the rest lands with the Phase 13 foundation item)
+  model-error path — **all three landed with the Phase 13 delivery-ordering
+  foundation**: `TestSpokenReplyAlwaysMatchesDisplayedReply` (the enqueued
+  TTS text is byte-identical to the logged reply, and only the controller
+  can fetch the clip), `TestChatCursorsAreIsolatedAndMonotonicOverHTTP`, and
+  `TestModelErrorsNeverEnterHistoryOrTTS`. The risk stays listed until a
+  real provider (not the stub) has exercised the same path end to end.
 
 ## R16: Firmware v4 / API v3 Only
 

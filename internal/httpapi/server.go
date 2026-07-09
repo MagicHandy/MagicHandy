@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
@@ -57,6 +58,7 @@ type Server struct {
 	personalization personalizationRuntime
 	modes           *modes.Manager
 	voice           *voice.Manager
+	chatLog         *chat.MessageLog
 	started         time.Time
 	version         VersionInfo
 	handler         http.Handler
@@ -116,6 +118,12 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	server.voice = newVoiceManager(settings.Voice)
 
+	chatLog, err := chat.OpenMessageLog(store.DataDir())
+	if err != nil {
+		return nil, err
+	}
+	server.chatLog = chatLog
+
 	mux := http.NewServeMux()
 	server.routes(mux)
 	server.handler = logRequests(logger, mux)
@@ -150,6 +158,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
+	mux.HandleFunc("GET /api/chat/messages", s.handleChatMessages)
+	mux.HandleFunc("POST /api/chat/cursor", s.handleChatCursor)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
 	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)
 	mux.HandleFunc("POST /api/transport/cloud/check", s.handleCloudConnectionCheck)
@@ -258,6 +268,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"memory":              s.memoryState(),
 		"modes":               s.modes.Status(),
 		"voice":               s.voiceState(),
+		"chat":                s.chatState(),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),

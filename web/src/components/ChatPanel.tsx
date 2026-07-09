@@ -1,9 +1,13 @@
-// Streaming chat. Keeps near-bottom scroll stickiness with a jump-to-latest
-// affordance and surfaces the malformed-response state. Chat can start, adjust,
-// and stop motion through the backend contract; the frontend sends only text.
+// Streaming chat over the server-side shared message log (ADR 0003): history
+// loads from the canonical log, other tabs' messages arrive via the state
+// poll, and this client advances only its own cursor. Keeps near-bottom
+// scroll stickiness with a jump-to-latest affordance and surfaces the
+// malformed-response state. Chat can start, adjust, and stop motion through
+// the backend contract; the frontend sends only text. When speak-replies is
+// on, the controller tab (the audio-lease owner) plays completed TTS clips.
 import { useEffect, useRef, useState } from "react";
-import { streamChat } from "../api/client";
-import type { ChatHistoryMessage } from "../api/types";
+import { api, streamChat } from "../api/client";
+import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 
 interface Msg {
@@ -17,8 +21,14 @@ interface Msg {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const MAX_HISTORY = 12;
 
+// The LLM context convention wraps assistant turns as the JSON contract body.
+function toLlmHistory(message: ChatLogMessage): ChatHistoryMessage {
+  if (message.role === "user") return { role: "user", content: message.content };
+  return { role: "assistant", content: JSON.stringify({ reply: message.content, motion: { action: "none" } }) };
+}
+
 export function ChatPanel() {
-  const { backendOnline, readOnly } = useAppState();
+  const { backendOnline, readOnly, state } = useAppState();
   const { show } = useToast();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
@@ -27,6 +37,84 @@ export function ChatPanel() {
   const logRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const history = useRef<ChatHistoryMessage[]>([]);
+  const lastSeq = useRef(0);
+  const seeded = useRef(false);
+  const speechQueue = useRef<string[]>([]);
+  const speaking = useRef(false);
+
+  // Seed the panel from the canonical server log once.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.getChatMessages();
+        if (cancelled || seeded.current) return;
+        seeded.current = true;
+        setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content })));
+        history.current = res.messages.slice(-MAX_HISTORY).map(toLlmHistory);
+        lastSeq.current = res.latest_seq;
+        if (res.latest_seq > res.cursor) void api.advanceChatCursor(res.latest_seq).catch(() => undefined);
+      } catch {
+        // Core offline: the shell banner reports it; the panel stays empty.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Continuity with other tabs: when the shared log advances beyond what
+  // this tab has displayed (and it is not mid-exchange), pull the tail.
+  const latestSeq = state?.chat?.latest_seq ?? 0;
+  useEffect(() => {
+    if (busy || !seeded.current || latestSeq <= lastSeq.current) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await api.getChatMessages(lastSeq.current);
+        if (cancelled || busy) return;
+        const fresh = res.messages.filter((m) => m.seq > lastSeq.current);
+        if (!fresh.length) return;
+        setMessages((m) => [...m, ...fresh.map((x) => ({ id: `log-${x.seq}`, role: x.role, text: x.content }))]);
+        history.current = [...history.current, ...fresh.map(toLlmHistory)].slice(-MAX_HISTORY);
+        lastSeq.current = res.latest_seq;
+        void api.advanceChatCursor(res.latest_seq).catch(() => undefined);
+      } catch {
+        // Retried on the next state poll.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [latestSeq, busy]);
+
+  // Sequential playback of completed TTS clips. Only this (controller) tab
+  // receives speech events, and the backend lease refuses everyone else, so
+  // two tabs never speak the same clip.
+  function queueSpeech(requestId: string) {
+    speechQueue.current.push(requestId);
+    void drainSpeech();
+  }
+  async function drainSpeech() {
+    if (speaking.current) return;
+    speaking.current = true;
+    try {
+      while (speechQueue.current.length) {
+        const id = speechQueue.current.shift();
+        if (!id) continue;
+        const done = await waitForSpeechDone(id);
+        if (!done) continue;
+        try {
+          const blob = await api.voiceRequestAudio(id);
+          await playBlob(blob);
+        } catch {
+          // Missing/denied audio is not a chat failure.
+        }
+      }
+    } finally {
+      speaking.current = false;
+    }
+  }
 
   useEffect(() => {
     if (stick.current) {
@@ -68,7 +156,13 @@ export function ChatPanel() {
     let finalMotion: Record<string, unknown> = { action: "none" };
     try {
       await streamChat(text, history.current, (ev) => {
-        if (ev.event === "delta" || ev.event === "repair_delta") {
+        if (ev.event === "status") {
+          const userSeq = Number((ev.data as { user_seq?: number }).user_seq ?? 0);
+          if (userSeq > lastSeq.current) lastSeq.current = userSeq;
+        } else if (ev.event === "speech") {
+          const requestId = String((ev.data as { request_id?: string }).request_id ?? "");
+          if (requestId) queueSpeech(requestId);
+        } else if (ev.event === "delta" || ev.event === "repair_delta") {
           const phase = (ev.data as { phase?: string }).phase;
           const chunk = (ev.data as { text?: string }).text ?? "";
           if (ev.event === "repair_delta" || phase === "repair") repairRaw += chunk;
@@ -78,6 +172,8 @@ export function ChatPanel() {
         } else if (ev.event === "message") {
           finalReply = String(ev.data.reply ?? "");
           finalMotion = (ev.data.motion ?? { action: "none" }) as Record<string, unknown>;
+          const replySeq = Number((ev.data as { seq?: number }).seq ?? 0);
+          if (replySeq > lastSeq.current) lastSeq.current = replySeq;
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: finalReply || "...", warning: Boolean(ev.data.initial_malformed) } : x)));
         } else if (ev.event === "malformed") {
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, warning: true } : x)));
@@ -97,6 +193,7 @@ export function ChatPanel() {
         ];
         history.current = nextHistory.slice(-MAX_HISTORY);
       }
+      if (lastSeq.current > 0) void api.advanceChatCursor(lastSeq.current).catch(() => undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Chat failed.";
       show(message, "error");
@@ -156,6 +253,38 @@ export function ChatPanel() {
       </form>
     </div>
   );
+}
+
+// waitForSpeechDone polls a TTS request until it completes; false means it
+// failed, was canceled, or timed out (nothing to play).
+async function waitForSpeechDone(requestId: string): Promise<boolean> {
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    try {
+      const res = await api.voiceRequest(requestId);
+      const state = res.request?.state;
+      if (state === "done") return (res.request?.audio_bytes ?? 0) > 0;
+      if (state === "failed" || state === "canceled") return false;
+    } catch {
+      return false;
+    }
+    if (Date.now() > deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}
+
+function playBlob(blob: Blob): Promise<void> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    const finish = () => {
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    audio.onended = finish;
+    audio.onerror = finish;
+    void audio.play().catch(finish);
+  });
 }
 
 function extractReplyDraft(raw: string): string {
