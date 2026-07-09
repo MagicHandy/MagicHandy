@@ -22,11 +22,19 @@ func newVoiceManager(settings config.VoiceSettings) *voice.Manager {
 }
 
 func voiceManagerConfig(settings config.VoiceSettings) voice.Config {
+	// Provider credentials travel to the worker process privately via its
+	// environment — never on the command line (visible in process listings)
+	// and never through any status or protocol frame.
+	var ttsEnv map[string]string
+	if settings.ElevenLabsAPIKey != "" {
+		ttsEnv = map[string]string{"ELEVENLABS_API_KEY": settings.ElevenLabsAPIKey}
+	}
 	return voice.Config{
 		TTS: voice.WorkerConfig{
 			Enabled: settings.Enabled,
 			Command: settings.TTSWorkerPath,
 			Args:    settings.TTSWorkerArgs,
+			Env:     ttsEnv,
 		},
 		ASR: voice.WorkerConfig{
 			Enabled: settings.Enabled,

@@ -2,6 +2,8 @@ package voice
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -348,4 +350,80 @@ func TestCompletedSpeakRetainsBoundedAudio(t *testing.T) {
 			t.Fatalf("request %d should have dropped audio", i)
 		}
 	}
+}
+
+// TestWorkerEnvCarriesCredentialsPrivately proves a provider credential set
+// via WorkerConfig.Env reaches the child process (the ElevenLabs worker
+// validates it against a mock API) without ever appearing in the command
+// line or any status snapshot.
+func TestWorkerEnvCarriesCredentialsPrivately(t *testing.T) {
+	const secret = "el-env-secret-42" // #nosec G101 -- synthetic test credential, not a real key
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/user" && r.Header.Get("xi-api-key") == secret {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(mock.Close)
+
+	binary := buildWorkerBinary(t, "./cmd/voice-elevenlabs-worker", "voice-elevenlabs-worker")
+	supervisor := NewSupervisor(RoleTTS)
+	supervisor.SetConfig(WorkerConfig{
+		Enabled: true,
+		Command: binary,
+		Args:    []string{"-base-url", mock.URL},
+		Env:     map[string]string{"ELEVENLABS_API_KEY": secret},
+	})
+	t.Cleanup(supervisor.Shutdown)
+
+	if err := supervisor.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitForState(t, supervisor, StateRunning)
+
+	health, err := supervisor.SetModelLoaded(context.Background(), true)
+	if err != nil {
+		t.Fatalf("load with env credential failed: %v", err)
+	}
+	if health.ModelState != ModelStateReady {
+		t.Fatalf("model state = %q, want ready (key must reach the child via env)", health.ModelState)
+	}
+
+	status := supervisor.Status()
+	if strings.Contains(status.Command, secret) || strings.Contains(strings.Join(status.Capabilities, " "), secret) ||
+		strings.Contains(status.LastError, secret) || strings.Contains(status.StderrTail, secret) {
+		t.Fatalf("credential leaked into worker status: %+v", status)
+	}
+}
+
+// buildWorkerBinary builds one cmd/ worker into a temp dir (cached per path).
+var (
+	workerBuildMu    sync.Mutex
+	workerBuildCache = map[string]string{}
+)
+
+func buildWorkerBinary(t *testing.T, packagePath string, name string) string {
+	t.Helper()
+	workerBuildMu.Lock()
+	defer workerBuildMu.Unlock()
+	if cached, ok := workerBuildCache[packagePath]; ok {
+		return cached
+	}
+	dir, err := os.MkdirTemp("", "voice-worker-build")
+	if err != nil {
+		t.Fatalf("mkdtemp: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	output := filepath.Join(dir, name)
+	// #nosec G204 -- test-only: builds an in-repo worker into a temp dir.
+	build := exec.Command("go", "build", "-o", output, packagePath)
+	build.Dir = repoRoot()
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build %s: %v\n%s", packagePath, err, out)
+	}
+	workerBuildCache[packagePath] = output
+	return output
 }

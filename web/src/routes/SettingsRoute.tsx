@@ -35,6 +35,8 @@ export function SettingsRoute() {
   const [s, setS] = useState<PublicSettings | null>(null);
   const [newKey, setNewKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
+  const [newElevenLabsKey, setNewElevenLabsKey] = useState("");
+  const [clearElevenLabsKey, setClearElevenLabsKey] = useState(false);
   const locked = !backendOnline || readOnly;
 
   async function load() {
@@ -73,7 +75,18 @@ export function SettingsRoute() {
       },
       motion: s.motion,
       llm: s.llm,
-      voice: s.voice ?? { enabled: false },
+      // Exact write shape: the ElevenLabs key is write-only (sent only when
+      // newly typed); elevenlabs_key_set never goes back to the server.
+      voice: {
+        enabled: s.voice?.enabled ?? false,
+        tts_worker_path: s.voice?.tts_worker_path ?? "",
+        tts_worker_args: s.voice?.tts_worker_args ?? [],
+        asr_worker_path: s.voice?.asr_worker_path ?? "",
+        asr_worker_args: s.voice?.asr_worker_args ?? [],
+        speak_replies: s.voice?.speak_replies ?? false,
+        ...(newElevenLabsKey.trim() ? { elevenlabs_api_key: newElevenLabsKey } : {}),
+        clear_elevenlabs_key: clearElevenLabsKey,
+      },
       diagnostics: s.diagnostics,
       clear_connection_key: clearKey,
     };
@@ -81,6 +94,8 @@ export function SettingsRoute() {
       await api.saveSettings(update);
       setNewKey("");
       setClearKey(false);
+      setNewElevenLabsKey("");
+      setClearElevenLabsKey(false);
       show("Settings saved.");
       refresh();
       await load();
@@ -181,7 +196,9 @@ export function SettingsRoute() {
             <label className="field"><span className="label">ASR worker path</span><input type="text" value={s.voice?.asr_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ asr_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
             <label className="field"><span className="label">ASR worker arguments</span><input type="text" value={joinArgs(s.voice?.asr_worker_args)} disabled={locked} onChange={(e) => patchVoice({ asr_worker_args: splitArgs(e.target.value) })} placeholder="-role asr" /></label>
             <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.speak_replies ?? false} disabled={locked} onChange={(e) => patchVoice({ speak_replies: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies — each displayed reply is enqueued to the running TTS worker; the controller tab plays it</span></label>
-            <p className="form-status">Worker paths and the switches apply on Save settings; workers never start on their own.</p>
+            <label className="field"><span className="label">ElevenLabs API key {s.voice?.elevenlabs_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.voice?.elevenlabs_key_set ? "set (leave blank to keep)" : "Paste key for the ElevenLabs worker"} value={newElevenLabsKey} disabled={locked} onChange={(e) => setNewElevenLabsKey(e.target.value)} /></label>
+            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearElevenLabsKey} disabled={locked} onChange={(e) => setClearElevenLabsKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear ElevenLabs API key on save</span></label>
+            <p className="form-status">The key is stored privately and handed only to the TTS worker process; it is never shown again. Worker paths and the switches apply on Save settings; workers never start on their own.</p>
             <div className="divider" />
             <VoiceWorkers locked={locked} />
           </>

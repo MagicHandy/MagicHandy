@@ -155,6 +155,22 @@ export interface VoiceSettings {
   asr_worker_path?: string;
   asr_worker_args?: string[];
   speak_replies?: boolean;
+  // Read side only: the stored ElevenLabs key is never returned, just a flag.
+  elevenlabs_key_set?: boolean;
+}
+
+// Write payload for voice settings: the key is write-only (omit to keep the
+// stored secret; clear_elevenlabs_key removes it). Exact shape — the strict
+// backend decoder rejects unknown fields like elevenlabs_key_set.
+export interface VoiceSettingsUpdate {
+  enabled: boolean;
+  tts_worker_path: string;
+  tts_worker_args: string[];
+  asr_worker_path: string;
+  asr_worker_args: string[];
+  speak_replies: boolean;
+  elevenlabs_api_key?: string;
+  clear_elevenlabs_key: boolean;
 }
 
 export type VoiceWorkerState =
@@ -254,7 +270,7 @@ export interface SettingsUpdate {
   };
   motion: MotionSettings;
   llm: PublicSettings["llm"];
-  voice: VoiceSettings;
+  voice: VoiceSettingsUpdate;
   diagnostics: { verbosity: string };
   clear_connection_key: boolean;
 }
