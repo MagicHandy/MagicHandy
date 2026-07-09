@@ -1,0 +1,244 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
+)
+
+// voiceHealthTimeout bounds the live health probe on the status endpoint so
+// a wedged worker cannot stall the settings page.
+const voiceHealthTimeout = 3 * time.Second
+
+func newVoiceManager(settings config.VoiceSettings) *voice.Manager {
+	manager := voice.NewManager()
+	manager.Configure(voiceManagerConfig(settings))
+	return manager
+}
+
+func voiceManagerConfig(settings config.VoiceSettings) voice.Config {
+	return voice.Config{
+		TTS: voice.WorkerConfig{
+			Enabled: settings.Enabled,
+			Command: settings.TTSWorkerPath,
+			Args:    settings.TTSWorkerArgs,
+		},
+		ASR: voice.WorkerConfig{
+			Enabled: settings.Enabled,
+			Command: settings.ASRWorkerPath,
+			Args:    settings.ASRWorkerArgs,
+		},
+	}
+}
+
+func (s *Server) voiceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/voice/status", s.handleVoiceStatus)
+	mux.HandleFunc("POST /api/voice/workers/{role}/start", s.handleVoiceWorkerStart)
+	mux.HandleFunc("POST /api/voice/workers/{role}/stop", s.handleVoiceWorkerStop)
+	mux.HandleFunc("POST /api/voice/workers/{role}/restart", s.handleVoiceWorkerRestart)
+	mux.HandleFunc("POST /api/voice/workers/{role}/model", s.handleVoiceWorkerModel)
+	mux.HandleFunc("POST /api/voice/workers/{role}/test", s.handleVoiceWorkerTest)
+	mux.HandleFunc("GET /api/voice/requests/{id}", s.handleVoiceRequestGet)
+	mux.HandleFunc("POST /api/voice/requests/{id}/cancel", s.handleVoiceRequestCancel)
+}
+
+// voiceState is the /api/state block: lifecycle snapshots only, no live IPC
+// on the polling path.
+func (s *Server) voiceState() map[string]any {
+	settings, _ := s.store.Snapshot()
+	status := s.voice.Status()
+	return map[string]any{
+		"enabled":          settings.Voice.Enabled,
+		"protocol_version": voice.ProtocolVersion,
+		"workers":          status,
+	}
+}
+
+// handleVoiceStatus returns both workers with a live health probe for
+// running ones (model state and worker queue depth stay fresh).
+func (s *Server) handleVoiceStatus(w http.ResponseWriter, r *http.Request) {
+	for _, role := range voice.Roles() {
+		worker := s.voice.Worker(role)
+		if worker.Status().State == voice.StateRunning {
+			ctx, cancel := context.WithTimeout(r.Context(), voiceHealthTimeout)
+			_, _ = worker.Health(ctx)
+			cancel()
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"voice":    s.voiceState(),
+		"requests": s.voice.Requests(),
+	})
+}
+
+func (s *Server) voiceWorkerFromPath(w http.ResponseWriter, r *http.Request) (*voice.Supervisor, bool) {
+	role, err := voice.ParseRole(r.PathValue("role"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return nil, false
+	}
+	return s.voice.Worker(role), true
+}
+
+func (s *Server) handleVoiceWorkerStart(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	worker, ok := s.voiceWorkerFromPath(w, r)
+	if !ok {
+		return
+	}
+	if err := worker.Start(r.Context()); err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  err.Error(),
+			"worker": worker.Status(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
+}
+
+func (s *Server) handleVoiceWorkerStop(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	worker, ok := s.voiceWorkerFromPath(w, r)
+	if !ok {
+		return
+	}
+	if err := worker.Stop(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
+}
+
+func (s *Server) handleVoiceWorkerRestart(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	worker, ok := s.voiceWorkerFromPath(w, r)
+	if !ok {
+		return
+	}
+	if err := worker.Restart(r.Context()); err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  err.Error(),
+			"worker": worker.Status(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
+}
+
+func (s *Server) handleVoiceWorkerModel(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	worker, ok := s.voiceWorkerFromPath(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Loaded bool `json:"loaded"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), voiceHealthTimeout)
+	defer cancel()
+	health, err := worker.SetModelLoaded(ctx, body.Loaded)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  err.Error(),
+			"worker": worker.Status(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"model_state": health.ModelState,
+		"worker":      worker.Status(),
+	})
+}
+
+// handleVoiceWorkerTest submits a stub-scale request so the queue,
+// cancellation, and error paths can be exercised end to end without a real
+// provider. Results stay in the request log — they never touch chat or
+// motion (ADR 0003).
+func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	worker, ok := s.voiceWorkerFromPath(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Text        string `json:"text"`
+		DelayMillis int    `json:"delay_ms"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	request := voice.Request{DelayMillis: body.DelayMillis}
+	if worker.Status().Role == voice.RoleASR {
+		request.Type = voice.RequestTranscribe
+		// Test audio is synthetic: any text marks it as "speech", empty
+		// exercises the no-speech rejection.
+		if strings.TrimSpace(body.Text) != "" {
+			request.AudioB64 = "c3R1Yg=="
+			request.AudioFormat = "wav"
+		}
+	} else {
+		request.Type = voice.RequestSpeak
+		request.Text = body.Text
+	}
+
+	pending, err := worker.Submit(request)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  err.Error(),
+			"worker": worker.Status(),
+		})
+		return
+	}
+	s.voice.Track(pending)
+	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
+}
+
+func (s *Server) handleVoiceRequestGet(w http.ResponseWriter, r *http.Request) {
+	pending, ok := s.voice.Request(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, errors.New("unknown voice request"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"request": pending.Snapshot()})
+}
+
+func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	pending, ok := s.voice.Request(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, errors.New("unknown voice request"))
+		return
+	}
+	s.voice.Worker(pending.Role).Cancel(pending)
+	writeJSON(w, http.StatusOK, map[string]any{"request": pending.Snapshot()})
+}
+
+// applyVoiceSettingsTransition reconfigures workers after a settings save.
+// A changed command or a disable stops the affected worker; nothing starts
+// implicitly. Unchanged configs are a no-op inside SetConfig.
+func (s *Server) applyVoiceSettingsTransition(next config.Settings) {
+	s.voice.Configure(voiceManagerConfig(next.Voice))
+}

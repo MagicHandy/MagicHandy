@@ -287,3 +287,64 @@ func TestSaveReplacesExistingSettingsFile(t *testing.T) {
 func containsString(value string, fragment string) bool {
 	return strings.Contains(value, fragment)
 }
+
+func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
+	defaults := DefaultSettings()
+	if defaults.Voice.Enabled {
+		t.Fatal("voice must default to disabled")
+	}
+	if defaults.Voice.TTSWorkerPath != "" || defaults.Voice.ASRWorkerPath != "" {
+		t.Fatal("voice worker paths must default to empty")
+	}
+
+	settings := defaults
+	settings.Voice = VoiceSettings{
+		Enabled:       true,
+		TTSWorkerPath: `  C:\workers\stub.exe  `,
+		TTSWorkerArgs: []string{" -role ", "tts", "  "},
+	}
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Voice.TTSWorkerPath != `C:\workers\stub.exe` {
+		t.Fatalf("tts worker path = %q, want trimmed", normalized.Voice.TTSWorkerPath)
+	}
+	if len(normalized.Voice.TTSWorkerArgs) != 2 {
+		t.Fatalf("tts worker args = %v, want blank entries dropped", normalized.Voice.TTSWorkerArgs)
+	}
+}
+
+func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
+	dir := t.TempDir()
+	store, err := OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+
+	current, _ := store.Snapshot()
+	update := SettingsUpdate{
+		Server:      current.Server,
+		Device:      DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
+		Motion:      current.Motion,
+		LLM:         current.LLM,
+		Voice:       VoiceSettings{Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"}},
+		Diagnostics: current.Diagnostics,
+	}
+	next, err := current.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate: %v", err)
+	}
+	if _, err := store.Save(next); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	reloaded, err := OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore reload: %v", err)
+	}
+	got, _ := reloaded.Snapshot()
+	if !got.Voice.Enabled || got.Voice.ASRWorkerPath == "" || len(got.Voice.ASRWorkerArgs) != 2 {
+		t.Fatalf("voice settings did not survive reload: %+v", got.Voice)
+	}
+}

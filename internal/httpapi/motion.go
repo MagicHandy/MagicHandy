@@ -281,6 +281,7 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 }
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) {
+	s.applyVoiceSettingsTransition(next)
 	if previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner {
 		// Owner switches stop first — including any autonomous mode.
 		if s.modes != nil {
@@ -313,6 +314,9 @@ func (s *Server) Close() {
 	s.closeLLM()
 	if s.modes != nil {
 		s.modes.Shutdown()
+	}
+	if s.voice != nil {
+		s.voice.Shutdown()
 	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
 	s.personalization.Close()

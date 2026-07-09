@@ -297,11 +297,19 @@ Mitigation:
 - lockstep chat-emit and TTS-enqueue; per-client cursors over a shared log;
   single-owner audio lease; model-error path kept out of history/TTS/motion
   (see ADR 0003, "Message And Audio Delivery Ordering")
+- Phase 12 landed the substrate: versioned worker protocol with cancellation
+  and queue-depth reporting, a core-owned serialized bounded queue, no-speech
+  rejection (never an empty transcript into chat), and worker errors that
+  terminate in the voice request log — never in history, TTS, or motion.
+  The ordering trio itself (shared log + cursors, lockstep emit/enqueue,
+  audio lease) is the first Phase 13 work item, before any real provider is
+  wired to chat, because there is no audio playback to order against yet.
 
 Exit evidence:
 
 - tests cover spoken-equals-shown, multi-client cursor isolation, and the
-  model-error path
+  model-error path (Phase 12 covers the model-error and rejection paths;
+  the rest lands with the Phase 13 foundation item)
 
 ## R16: Firmware v4 / API v3 Only
 

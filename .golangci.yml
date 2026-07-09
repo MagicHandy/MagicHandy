@@ -20,6 +20,7 @@ linters:
             - internal/chat/**/*.go
             - internal/llm/**/*.go
             - internal/modes/**/*.go
+            - internal/voice/**/*.go
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
               desc: HTTP API is an edge adapter; core packages must not depend on it.
@@ -28,9 +29,22 @@ linters:
             - internal/chat/**/*.go
             - internal/llm/**/*.go
             - internal/modes/**/*.go
+            - internal/voice/**/*.go
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/transport
-              desc: Chat, LLM, and modes produce semantic targets and must not call transport.
+              desc: Chat, LLM, modes, and voice produce semantic outputs and must not call transport.
+        voice-never-touches-motion:
+          files:
+            - internal/voice/**/*.go
+          deny:
+            - pkg: github.com/mapledaemon/MagicHandy/internal/motion
+              desc: Voice worker failures must stay out of the motion path (ADR 0003).
+            - pkg: github.com/mapledaemon/MagicHandy/internal/chat
+              desc: Voice integrates with chat at the HTTP edge, not by importing it.
+            - pkg: github.com/mapledaemon/MagicHandy/internal/llm
+              desc: Voice workers are separate processes; the LLM client is not their concern.
+            - pkg: github.com/mapledaemon/MagicHandy/internal/modes
+              desc: Voice must not drive autonomous modes directly.
         pure-go-core:
           files:
             - $all

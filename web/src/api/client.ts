@@ -15,6 +15,9 @@ import type {
   PromptSetsPayload,
   PublicSettings,
   SettingsUpdate,
+  VoiceRequestSnapshot,
+  VoiceState,
+  VoiceWorkerStatus,
 } from "./types";
 
 const CLIENT_ID_KEY = "magichandy-client-id";
@@ -143,6 +146,24 @@ export const api = {
       client_id: bridgeClientId,
       ...payload,
     }),
+
+  // Voice workers (optional; the app runs fully without them).
+  voiceStatus: () =>
+    request<{ voice: VoiceState; requests?: VoiceRequestSnapshot[] }>("GET", "/api/voice/status"),
+  voiceWorkerStart: (role: "tts" | "asr") =>
+    request<{ worker: VoiceWorkerStatus }>("POST", `/api/voice/workers/${role}/start`),
+  voiceWorkerStop: (role: "tts" | "asr") =>
+    request<{ worker: VoiceWorkerStatus }>("POST", `/api/voice/workers/${role}/stop`),
+  voiceWorkerRestart: (role: "tts" | "asr") =>
+    request<{ worker: VoiceWorkerStatus }>("POST", `/api/voice/workers/${role}/restart`),
+  voiceWorkerModel: (role: "tts" | "asr", loaded: boolean) =>
+    request<{ model_state?: string; worker: VoiceWorkerStatus }>("POST", `/api/voice/workers/${role}/model`, { loaded }),
+  voiceWorkerTest: (role: "tts" | "asr", body: { text: string; delay_ms: number }) =>
+    request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/workers/${role}/test`, body),
+  voiceRequest: (id: string) =>
+    request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`),
+  voiceRequestCancel: (id: string) =>
+    request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/cancel`),
 
   exportTrace: () => request("GET", "/api/traces"),
 };

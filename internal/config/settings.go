@@ -80,6 +80,7 @@ type Settings struct {
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
 	LLM         LLMSettings         `json:"llm"`
+	Voice       VoiceSettings       `json:"voice"`
 	Diagnostics DiagnosticsSettings `json:"diagnostics"`
 }
 
@@ -131,6 +132,19 @@ type LLMSettings struct {
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
 }
 
+// VoiceSettings configures the optional voice worker processes (ADR 0003).
+// Voice is off by default; worker commands point at local executables that
+// speak the versioned worker protocol (Phase 12 ships only the stub worker;
+// real providers arrive in Phase 13). Paths are not secrets — the same trust
+// model as the llama.cpp runner path.
+type VoiceSettings struct {
+	Enabled       bool     `json:"enabled"`
+	TTSWorkerPath string   `json:"tts_worker_path,omitempty"`
+	TTSWorkerArgs []string `json:"tts_worker_args,omitempty"`
+	ASRWorkerPath string   `json:"asr_worker_path,omitempty"`
+	ASRWorkerArgs []string `json:"asr_worker_args,omitempty"`
+}
+
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
 type DiagnosticsSettings struct {
 	Verbosity string `json:"verbosity"`
@@ -143,6 +157,7 @@ type PublicSettings struct {
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
 	LLM         LLMSettings               `json:"llm"`
+	Voice       VoiceSettings             `json:"voice"`
 	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
 	Options     PublicSettingsOptionHints `json:"options"`
 }
@@ -173,6 +188,7 @@ type SettingsUpdate struct {
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMSettings         `json:"llm"`
+	Voice              VoiceSettings       `json:"voice"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
@@ -234,6 +250,7 @@ func (s Settings) Public() PublicSettings {
 		},
 		Motion:      s.Motion,
 		LLM:         s.LLM,
+		Voice:       s.Voice,
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -284,6 +301,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
 	next.LLM = normalizeLLMStrings(update.LLM)
+	next.Voice = normalizeVoiceStrings(update.Voice)
 	next.Diagnostics = update.Diagnostics
 
 	if update.ClearConnectionKey {
@@ -418,6 +436,7 @@ func applyMissingDefaults(settings Settings) Settings {
 		settings.LLM.RequestTimeoutMillis = defaults.LLM.RequestTimeoutMillis
 	}
 	settings.LLM = normalizeLLMStrings(settings.LLM)
+	settings.Voice = normalizeVoiceStrings(settings.Voice)
 	if settings.Diagnostics.Verbosity == "" {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
 	}
@@ -469,6 +488,28 @@ func validateLLMSettings(settings LLMSettings) error {
 		return errors.New("LLM request timeout must be between 1000 and 300000 milliseconds")
 	}
 	return nil
+}
+
+func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
+	settings.TTSWorkerPath = strings.TrimSpace(settings.TTSWorkerPath)
+	settings.ASRWorkerPath = strings.TrimSpace(settings.ASRWorkerPath)
+	settings.TTSWorkerArgs = trimArgs(settings.TTSWorkerArgs)
+	settings.ASRWorkerArgs = trimArgs(settings.ASRWorkerArgs)
+	return settings
+}
+
+func trimArgs(args []string) []string {
+	trimmed := make([]string, 0, len(args))
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if arg != "" {
+			trimmed = append(trimmed, arg)
+		}
+	}
+	if len(trimmed) == 0 {
+		return nil
+	}
+	return trimmed
 }
 
 func normalizeLLMStrings(settings LLMSettings) LLMSettings {

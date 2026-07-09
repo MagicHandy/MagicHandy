@@ -133,11 +133,28 @@ describe("app shell safety invariants", () => {
     installFetch({ memory: { enabled: true } });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    for (const hash of ["#/settings/device", "#/settings/model", "#/settings/prompts", "#/settings/diagnostics"]) {
+    for (const hash of ["#/settings/device", "#/settings/model", "#/settings/voice", "#/settings/prompts", "#/settings/diagnostics"]) {
       go(hash);
       expect(await screen.findByRole("navigation", { name: /settings sections/i })).toBeInTheDocument();
       expect(screen.queryByText(/this view could not render/i)).toBeNull();
     }
+  });
+
+  it("shows voice worker status as readouts and keeps controls inert while disabled", async () => {
+    installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+    expect(await screen.findByRole("heading", { name: /voice workers/i })).toBeInTheDocument();
+    // Both roles are visible with a dot+text state, even with voice off.
+    expect(screen.getByText(/speech output \(tts\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/speech input \(asr\)/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
+    // A missing/disabled worker never blocks the app; its controls are inert.
+    for (const button of screen.getAllByRole("button", { name: /^start$/i })) {
+      expect(button).toBeDisabled();
+    }
+    expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
   });
 
   it("locks settings, prompt, and memory mutations for read-only clients", async () => {
