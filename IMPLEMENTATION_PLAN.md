@@ -18,8 +18,9 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-08. Phases 0 through 11B are merged to `main`. Phase 12
-(voice worker boundary) is implemented on the current branch.
+Updated 2026-07-09. Phases 0 through 12 are merged to `main`. Phase 13.0
+(delivery-ordering foundation) is implemented on the current branch; the
+Phase 13 providers follow one per PR.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -62,11 +63,10 @@ deterministic chat — full app-path evidence for both dispatch owners lives in
 `docs/perf-baseline.md`.
 
 Phase 10 decision (2026-07-02): **chat history stays client-side for now.**
-Server-side history is deliberately deferred to Phase 12, where ADR 0003's
-shared message log with per-client cursors introduces it as the single
-canonical history; building a separate Phase 10 history store would create a
-second source of truth that Phase 12 would immediately replace. Parity row 9
-tracks it.
+Server-side history was deliberately deferred so ADR 0003's shared message
+log with per-client cursors could introduce it as the single canonical
+history; building a separate Phase 10 history store would have created a
+second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 
 ### What Exists On Main
 
@@ -98,9 +98,10 @@ line-budget checks.)
 (Also closed since: Browser Bluetooth full app-path validation — PR #22;
 editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 
-1. **Open parity rows**: only server-side chat continuity (Phase 12) remains;
-   pause/resume shipped early in the post-Phase-10 shell pass. See
-   `docs/ui-design.md`, "Functional Parity Baseline".
+1. **Open parity rows**: none — the last one (server-side chat continuity,
+   row 9) closed with Phase 13.0; pause/resume shipped early in the
+   post-Phase-10 shell pass. See `docs/ui-design.md`, "Functional Parity
+   Baseline".
 2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
    one-hour soak ran on Cloud REST only (scorecard watch list).
 
