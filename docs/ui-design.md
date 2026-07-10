@@ -403,6 +403,20 @@ enforcement (Phase 9B — stronger than the old app's warning banner), the
 bounded speed-test button and live device-position layer (post-parity
 backlog).
 
+### Second parity sweep (2026-07-09)
+
+A re-read of the legacy working notes and StrokeGPT-ReVibed PRs #319–#333
+after Phase 13.4 added a small UI backlog, each with a design-conforming
+placement decided up front (`docs/legacy-parity-sweep-2026-07.md` §E/§F):
+
+- a speak-replies quick toggle in the **Chat control column** (the status
+  bar stays status-only, so the legacy "top-bar voice toggle" moves there);
+- a scrolling motion-history readout fed by the trace ring — a readout,
+  never a control, revisited with the Phase 14 library UI;
+- a per-slider "test this speed for ~3 s" affordance on the speed bounds;
+- raw-LLM-output visibility at the highest diagnostics verbosity
+  (display-only, never persisted into history).
+
 ### Improved — keep these wins
 
 One authoritative visualizer driven by engine state; Stop in a persistent bar
