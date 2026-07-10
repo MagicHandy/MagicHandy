@@ -35,7 +35,3 @@ coverage.out
 *.swo
 .DS_Store
 Thumbs.db
-
-# Frontend (Vite/React) — build output web/dist is committed for Go embed
-/web/node_modules/
-/web/.vite/

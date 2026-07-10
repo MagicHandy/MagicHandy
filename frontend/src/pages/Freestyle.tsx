@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import { SessionRail } from "../components/SessionRail";
+import { PageHeader } from "../components/PageHeader";
 import { useStatus } from "../contexts/StatusContext";
 import { useToast } from "../contexts/ToastContext";
 
@@ -76,16 +77,17 @@ export function Freestyle() {
   return (
     <div className="freestyle-workspace">
       <SessionRail snap={snap} queueEmptyMessage={t("session.queueEmpty")} />
-      <header className="page-head">
-        <div>
-          <h1>{t("freestyle.title")}</h1>
-          <p className="hint">{t("freestyle.subtitle")}</p>
-        </div>
-      </header>
+      <div className="workspace-main">
+        <PageHeader
+          title={t("freestyle.title")}
+          subtitle={t("freestyle.subtitle")}
+          intro={t("freestyle.intro")}
+          compact
+        />
 
-      <section className="panel">
-        <h2 className="section-title">{t("freestyle.panelTitle")}</h2>
-        <p className="hint">{t("freestyle.panelHint")}</p>
+        <section className="panel">
+          <h2 className="section-title">{t("freestyle.panelTitle")}</h2>
+          <p className="hint">{t("freestyle.panelHint")}</p>
         <div className="row-actions">
           <button
             type="button"
@@ -114,6 +116,7 @@ export function Freestyle() {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }

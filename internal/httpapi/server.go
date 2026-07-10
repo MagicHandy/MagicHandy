@@ -68,6 +68,7 @@ type Server struct {
 	manualQueue     manualQueueRuntime
 	chatChaos       chatChaosRuntime
 	freestyleChaos  freestyleChaosRuntime
+	chatAuto        chatAutoRuntime
 	lsoCompat       lsoCompatRuntime
 	started         time.Time
 	version         VersionInfo
@@ -140,6 +141,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		server.startIntifaceReconnectLoop(context.Background())
 		server.startIntifaceBootstrapLoop(context.Background())
 	}
+	server.startCloudBootstrapLoop(context.Background())
 
 	server.tryAutoImportLSO()
 	server.loadSyncPrefs()

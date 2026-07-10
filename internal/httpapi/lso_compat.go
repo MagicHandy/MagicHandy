@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,9 @@ type lsoCompatRuntime struct {
 }
 
 func (s *Server) lsoPlaybackActive() bool {
+	if s.chatAutoActive() || s.freestyleChaosActive() || s.chatChaosActive() {
+		return true
+	}
 	if engine := s.currentMotionEngine(); engine != nil {
 		return engine.Snapshot().Running
 	}
@@ -135,6 +139,10 @@ func (s *Server) lsoStatusPayload() map[string]any {
 
 	playbackActive := s.lsoPlaybackActive()
 	mqCount, mqPlaying, mqPaused, mqAutoloop, playerSnap := s.lsoManualQueueStatus()
+	if proceduralSnap, ok := s.activeProceduralPlayerSnapshot(); ok {
+		playerSnap = proceduralSnap
+		mqPlaying = true
+	}
 	llmConnected, llmError := s.lsoLLMStatus(settings)
 	llm := s.lsoLLMPayload(settings)
 	appState, _ := s.store.DB().LoadAppState()
@@ -142,6 +150,16 @@ func (s *Server) lsoStatusPayload() map[string]any {
 	directActive := s.lsoDirectActive()
 	syncOffset, measuredRTT := s.lsoVisualSyncPrefs()
 	motionPos := s.lsoMotionPosition(playerSnap)
+
+	phase := "idle"
+	activePose := ""
+	if s.chatAutoActive() {
+		autoState := s.chatAutoStateSnapshot()
+		phase = "auto"
+		activePose = string(autoState.Posicao)
+	} else if mqPlaying {
+		phase = "motion"
+	}
 
 	payload := map[string]any{
 		"service":                            serviceName,
@@ -177,7 +195,8 @@ func (s *Server) lsoStatusPayload() map[string]any {
 		"max_position":                       settings.Motion.StrokeMaxPercent,
 		"buffer_sec":                         0,
 		"queue_preview":                      []any{},
-		"phase":                              "idle",
+		"phase":                              phase,
+		"active_pose":                        activePose,
 		"playback_active":                    playbackActive || mqPlaying,
 		"direct_control_active":              directActive,
 		"sync_offset_ms":                     syncOffset,
@@ -186,8 +205,9 @@ func (s *Server) lsoStatusPayload() map[string]any {
 		"emergency_stop":                     s.emergencyStopActive(),
 		"chat_pending":                       false,
 		"planner_busy":                       false,
-		"auto_running":                       false,
+		"auto_running":                       s.chatAutoActive(),
 		"user_session_engaged":               len(s.lsoCompat.messages) > 0,
+		"chat_auto":                          s.chatAutoPublicState(),
 		"manual_queue_count":                 mqCount,
 		"manual_queue_playing":               mqPlaying,
 		"manual_queue_paused":                mqPaused,
@@ -314,12 +334,32 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		if !s.requireController(w, r) {
 			return
 		}
+		s.stopChatAutoLoop(r.Context())
 		s.stopAndClearMotionEngine(r.Context(), "chat_stop")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "stopped": true})
 		return
 	}
 
 	s.appendChatMessage("user", text)
+
+	if s.operationModeAuto() {
+		if _, err := s.ensureLLMReady(r.Context()); err != nil {
+			writeError(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		if s.chatAutoActive() {
+			s.enqueueChatAutoUserText(text)
+		} else {
+			s.startChatAutoLoop(r.Context())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":      true,
+			"pending": true,
+			"reply":   "",
+			"stopped": false,
+		})
+		return
+	}
 
 	settings, _ := s.store.Snapshot()
 	provider, err := s.ensureLLMReady(r.Context())
@@ -411,10 +451,23 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		response["motion_error"] = motionErr.Error()
 		s.logger.Warn("chat motion dispatch failed", "error", motionErr, "action", result.Response.Motion)
 	}
+	if s.operationModeAuto() {
+		s.startChatAutoLoop(r.Context())
+	} else {
+		s.stopChatAutoLoop(r.Context())
+	}
 	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) appendChatMessage(role, content string) {
+	trimmed := strings.TrimSpace(content)
+	if role == "assistant" && (strings.HasPrefix(trimmed, "{") || strings.Contains(trimmed, `"motion_`)) {
+		// #region agent log
+		agentDebugLog("CA3", "lso_compat.go:appendChatMessage", "suspicious_assistant_content", map[string]any{
+			"preview": truncateForLog(trimmed, 250), "len": len(trimmed),
+		})
+		// #endregion
+	}
 	s.lsoCompat.mu.Lock()
 	defer s.lsoCompat.mu.Unlock()
 	s.lsoCompat.messages = append(s.lsoCompat.messages, chatMessageRecord{

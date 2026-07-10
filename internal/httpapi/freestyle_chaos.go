@@ -41,7 +41,7 @@ func (s *Server) startFreestyleChaosSegment(
 		return nil
 	}
 
-	commandTransport, err := s.newSelectedMotionTransport()
+	commandTransport, err := s.newMotionCommandTransport()
 	if err != nil {
 		return err
 	}

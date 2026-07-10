@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LanguageSelector } from "../components/LanguageSelector";
+import { PageHeader } from "../components/PageHeader";
+import { PromptSetEditor } from "../components/PromptSetEditor";
+import { useStatus } from "../contexts/StatusContext";
 import {
   getConfigNav,
   type ConfigSectionId,
@@ -37,6 +40,7 @@ export function ConfigHub() {
   const [filter, setFilter] = useState("");
 
   const configNav = useMemo(() => getConfigNav(t), [t]);
+  const { readOnly } = useStatus();
 
   useEffect(() => {
     const hash = location.hash.replace("#", "");
@@ -73,6 +77,11 @@ export function ConfigHub() {
 
   return (
     <div className="page page--fill config-page">
+      <PageHeader
+        title={t("config.title")}
+        intro={t("config.intro")}
+        compact
+      />
       <div className="config-workspace">
         <aside className="glass config-nav" aria-label={t("config.navAria")}>
           <div className="config-nav-head">
@@ -125,7 +134,12 @@ export function ConfigHub() {
             )}
             {section === "personas" && <PersonasPanel />}
             {isSettingsSection(section) && <SettingsPanel section={section} />}
-            {section === "advanced" && <SettingsRawPanel />}
+            {section === "advanced" && (
+              <>
+                <PromptSetEditor locked={readOnly} />
+                <SettingsRawPanel />
+              </>
+            )}
             {section === "sessions" && <SessionsPanel />}
             {section === "diagnostics" && <DiagnosticsPanel />}
           </div>

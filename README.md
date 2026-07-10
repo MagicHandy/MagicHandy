@@ -11,7 +11,7 @@ engine.
 Implemented:
 
 - pure-Go module and application entrypoint
-- embedded static assets from `web/`
+- embedded static assets from `uibuild/dist` (built from `frontend/`)
 - `GET /healthz`, `GET /api/status`, `GET /api/state`, and settings API routes
 - fake Handy transport contracts, safe transport diagnostics, and `GET /api/traces`
 - Cloud REST HSP v4/API v3 transport code, request-shape tests, and invariant tests
@@ -62,7 +62,7 @@ Not implemented yet (see the status table in
 - Go 1.25 or newer (tested locally with Go 1.26.4)
 - No Python or CGO dependency is required for the core app; the runtime is a
   single Go binary with the browser UI embedded
-- Node.js 20+ and npm are needed only to build the `web/` React UI
+- Node.js 20+ and npm are needed only to build the `frontend/` React UI
   (development/CI), never to run the compiled binary
 
 ## Run From Source
@@ -129,31 +129,28 @@ diagnostics, trace exports, or settings reads.
 
 ## Browser UI (React)
 
-The browser UI is a Vite + React + TypeScript app under `web/`, built to
-`web/dist` and embedded by the Go binary (ADR 0009). The build output is
-committed so `go run`/`go build` work without Node. To change the UI:
+The browser UI is a Vite + React + TypeScript app under `frontend/`, built to
+`frontend/dist` and copied into `uibuild/dist` for Go embed (`uibuild/embed.go`).
+Use `scripts/start_stack.ps1` or `Iniciar-MagicHandy.bat` to build UI + binary together.
 
 ```powershell
-cd web
+cd frontend
 npm ci
-npm run build      # regenerate web/dist (commit it)
+npm run build      # frontend/dist → copy to uibuild/dist before go build
 npm run test       # Vitest component/safety tests
 npm run typecheck
-npm run dev        # optional Vite dev server on :5173 (proxy API to the Go app)
+npm run dev        # Vite dev server on :5173 (proxies API to the Go app)
 ```
-
-The previous vanilla-JS UI is kept for reference under `web/legacy/` and is not
-embedded; it will be removed once React reaches parity.
 
 ## Validate
 
 ```powershell
-gofmt -w cmd internal web
+gofmt -w cmd internal uibuild
 go vet ./...
 go test ./...
 go test -race ./...
 $env:CGO_ENABLED = "0"; go build ./cmd/magichandy
-(cd web; npm ci; npm run typecheck; npm run test; npm run build)
+(cd frontend; npm ci; npm run typecheck; npm run test; npm run build)
 ```
 
 `go test -race` requires CGO and a local C compiler. CI runs the race test on

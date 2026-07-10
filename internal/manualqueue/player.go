@@ -57,6 +57,8 @@ type Player struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 
+	nextIndex int
+
 	onFinished func()
 }
 
@@ -99,6 +101,7 @@ func (p *Player) startLoop(ctx context.Context, session Session, playheadMS int)
 	p.startedAt = time.Now()
 	p.cancel = cancel
 	p.done = done
+	p.nextIndex = 0
 	p.mu.Unlock()
 
 	go p.runLoop(loopCtx)
@@ -220,6 +223,113 @@ func (p *Player) Snapshot() Snapshot {
 	return snap
 }
 
+// AppendExtension queues additional points after the current session timeline.
+// Safe while the player is running; extension times are shifted by the pre-append duration.
+func (p *Player) AppendExtension(extension Session) error {
+	if len(extension.Points) == 0 {
+		return fmt.Errorf("extension has no points")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.running || p.paused {
+		return fmt.Errorf("manual queue player is not running")
+	}
+
+	// Do not compact here — runLoop already compacts, and compacting during append
+	// jumps baseMS past the shortened DurationMS and kills playback.
+	offset := int64(p.session.DurationMS)
+	if n := len(p.session.Points); n > 0 {
+		if tail := p.session.Points[n-1].TimeMillis + 1; tail > offset {
+			offset = tail
+		}
+	}
+	newPoints := make([]transport.TimedPoint, len(extension.Points))
+	for index, point := range extension.Points {
+		newPoints[index] = transport.TimedPoint{
+			TimeMillis:      point.TimeMillis + offset,
+			PositionPercent: point.PositionPercent,
+		}
+	}
+	newActions := make([]Action, len(extension.Actions))
+	for index, action := range extension.Actions {
+		newActions[index] = Action{
+			At:  action.At + int(offset),
+			Pos: action.Pos,
+		}
+	}
+
+	p.session.Points = append(p.session.Points, newPoints...)
+	p.session.Actions = append(p.session.Actions, newActions...)
+	if len(extension.SegmentStarts) > 0 {
+		for _, start := range extension.SegmentStarts {
+			p.session.SegmentStarts = append(p.session.SegmentStarts, int(offset)+start)
+		}
+	} else {
+		p.session.SegmentStarts = append(p.session.SegmentStarts, int(offset))
+	}
+	p.session.DurationMS += extension.DurationMS
+	return nil
+}
+
+// compactTimelineLocked drops dispatched points and shifts the remaining timeline to t=0.
+// Caller must hold p.mu.
+func (p *Player) compactTimelineLocked() {
+	const keepMargin = 2
+	if p.nextIndex <= keepMargin || len(p.session.Points) <= keepMargin {
+		return
+	}
+	keepFrom := p.nextIndex - keepMargin
+	if keepFrom <= 0 || keepFrom >= len(p.session.Points) {
+		return
+	}
+	shift := p.session.Points[keepFrom].TimeMillis
+	if shift <= 0 {
+		return
+	}
+
+	p.session.Points = append([]transport.TimedPoint(nil), p.session.Points[keepFrom:]...)
+	for index := range p.session.Points {
+		p.session.Points[index].TimeMillis -= shift
+	}
+
+	trimmedActions := make([]Action, 0, len(p.session.Actions))
+	cutoff := int(shift)
+	for _, action := range p.session.Actions {
+		if action.At >= cutoff {
+			trimmedActions = append(trimmedActions, Action{
+				At:  action.At - cutoff,
+				Pos: action.Pos,
+			})
+		}
+	}
+	p.session.Actions = trimmedActions
+
+	if p.session.DurationMS > int(shift) {
+		p.session.DurationMS -= int(shift)
+	} else {
+		p.session.DurationMS = 0
+	}
+	p.baseMS += int(shift)
+	p.nextIndex = keepMargin
+}
+
+// Running reports whether playback is active.
+func (p *Player) Running() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.running && !p.paused
+}
+
+// TimelineEndMS returns the current session duration in milliseconds.
+func (p *Player) TimelineEndMS() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.session.DurationMS > 0 {
+		return p.session.DurationMS
+	}
+	return DurationMS(p.session.Actions)
+}
+
 // Actions returns the active script actions for UI curves.
 func (p *Player) Actions() []Action {
 	p.mu.Lock()
@@ -253,7 +363,6 @@ func (p *Player) runLoop(ctx context.Context) {
 	}
 	_, _ = p.transport.Stop(ctx, transport.StopCommand{Reason: "manual_queue_prepare"})
 
-	nextIndex := 0
 	played := false
 	startAt := time.Now()
 	ticker := time.NewTicker(playerDispatchTick)
@@ -273,11 +382,10 @@ func (p *Player) runLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			p.mu.Lock()
-			elapsed := int(time.Since(startAt).Milliseconds()) + baseMS
+			session = p.session
+			elapsed := p.elapsedMSLocked()
 			p.playheadMS = elapsed
-			if len(session.Actions) > 0 {
-				// position tracked via Snapshot for HTTP handlers
-			}
+			nextIndex := p.nextIndex
 			p.mu.Unlock()
 
 			for nextIndex < len(session.Points) {
@@ -317,14 +425,32 @@ func (p *Player) runLoop(ctx context.Context) {
 				}
 			}
 
-			durationMS := session.DurationMS
-			if durationMS <= 0 {
-				durationMS = DurationMS(session.Actions)
+			p.mu.Lock()
+			p.nextIndex = nextIndex
+			if len(p.session.Points) > 180 {
+				p.compactTimelineLocked()
+				nextIndex = p.nextIndex
 			}
-			if played && nextIndex >= len(session.Points) && elapsed > durationMS+playerFinishTailMS {
+			durationMS := p.session.DurationMS
+			if durationMS <= 0 {
+				durationMS = DurationMS(p.session.Actions)
+			}
+			timelineEndMS := durationMS
+			if n := len(p.session.Points); n > 0 {
+				if last := int(p.session.Points[n-1].TimeMillis); last > timelineEndMS {
+					timelineEndMS = last
+				}
+			}
+			// Use p.session.Points — a stale local copy misses AppendExtension reallocations.
+			shouldFinish := played && nextIndex >= len(p.session.Points) && elapsed > timelineEndMS+playerFinishTailMS
+			p.mu.Unlock()
+
+			if shouldFinish {
 				if autoloop {
 					_, _ = p.transport.Stop(ctx, transport.StopCommand{Reason: "manual_queue_loop"})
-					nextIndex = 0
+					p.mu.Lock()
+					p.nextIndex = 0
+					p.mu.Unlock()
 					played = false
 					baseMS = 0
 					startAt = time.Now()

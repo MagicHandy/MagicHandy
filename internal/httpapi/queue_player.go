@@ -91,7 +91,7 @@ func (s *Server) startManualQueuePlayback(ctx context.Context) (manualqueue.Sess
 		return manualqueue.Session{}, err
 	}
 
-	commandTransport, err := s.newSelectedMotionTransport()
+	commandTransport, err := s.newMotionCommandTransport()
 	if err != nil {
 		return manualqueue.Session{}, err
 	}

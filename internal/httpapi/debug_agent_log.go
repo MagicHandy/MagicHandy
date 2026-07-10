@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-const agentDebugLogPath = `c:\dev\git\Handy\debug-d9c091.log`
+const agentDebugLogPath = `c:\dev\git\Handy\debug-324442.log`
 
 // #region agent log
 func agentDebugLog(hypothesisID, location, message string, data map[string]any) {
 	payload := map[string]any{
-		"sessionId":    "d9c091",
+		"sessionId":    "324442",
 		"hypothesisId": hypothesisID,
 		"location":     location,
 		"message":      message,

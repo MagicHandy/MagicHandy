@@ -124,7 +124,7 @@ func (s *Server) playChatChaoticMotion(
 		return nil
 	}
 
-	commandTransport, err := s.newSelectedMotionTransport()
+	commandTransport, err := s.newMotionCommandTransport()
 	if err != nil {
 		return err
 	}
@@ -141,17 +141,20 @@ func (s *Server) playChatChaoticMotion(
 	}
 	s.chatChaos.mu.Unlock()
 
-	session := buildChaosSessionFromPosition(
-		motion.ChaoticPhysics{
-			Velocidade:  command.Velocidade,
-			Intensidade: command.Intensidade,
-			Regiao:      command.Regiao,
-			TipoBatida:  command.TipoBatida,
-			AtrasoMS:    command.AtrasoMS,
-		},
+	physics := motion.ChaoticPhysics{
+		Velocidade:  command.Velocidade,
+		Intensidade: command.Intensidade,
+		Regiao:      command.Regiao,
+		TipoBatida:  command.TipoBatida,
+		AtrasoMS:    command.AtrasoMS,
+	}
+	durationMS := int64(motion.EstimateChatMotionDurationMS(physics))
+	session := buildChaosSessionForDurationFromPosition(
+		physics,
 		settings.Motion,
 		settings.Motion.HardwareSafetyLock,
 		rng,
+		durationMS,
 		continueFrom,
 	)
 	if len(session.Points) == 0 {
@@ -163,7 +166,8 @@ func (s *Server) playChatChaoticMotion(
 		agentDebugLog("M2", "chat_chaos.go:playChatChaoticMotion", "session built", map[string]any{
 			"continue_from": continueFrom,
 			"point_count":   len(session.Points),
-			"duration_ms": session.DurationMS,
+			"duration_ms":   session.DurationMS,
+			"target_ms":     durationMS,
 			"first_x":       session.Points[0].PositionPercent,
 			"first_t":       session.Points[0].TimeMillis,
 			"last_x":        last.PositionPercent,

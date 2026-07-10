@@ -169,6 +169,7 @@ func (s *Server) handleDirectMove(w http.ResponseWriter, r *http.Request) {
 			writeDirectError(w, err)
 			return
 		}
+		s.outgoingSchedule().RecordDirectMove(positionPct, body.DurationMS)
 		writeDirectMoveOK(w, positionPct, body.DurationMS, "hdsp")
 		return
 	}
@@ -286,6 +287,7 @@ func (s *Server) handleDirectStop(w http.ResponseWriter, r *http.Request) {
 			_, _ = commandTransport.Stop(r.Context(), transport.StopCommand{Reason: "direct_stop"})
 		}
 	}
+	s.outgoingSchedule().Reset()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

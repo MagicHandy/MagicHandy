@@ -43,6 +43,7 @@
     "control": "Control",
     "handsFree": "Hands-free",
     "freestyle": "Freestyle",
+    "autodom": "AutoDom",
     "mouse": "Mouse",
     "library": "Library",
     "player": "Player",
@@ -63,6 +64,11 @@
     "emergencyStop": "Emergency stop",
     "clearStop": "Clear stop",
     "uiVersion": "UI version",
+    "controller": {
+      "readOnly": "Read-only — another tab owns device control",
+      "readOnlyShort": "Read-only",
+      "active": "Active controller"
+    },
     "offline": {
       "title": "API offline",
       "hint": "Start the backend:"
@@ -100,6 +106,7 @@
   },
   "config": {
     "title": "Configuration",
+    "intro": "Personas, connections, motion, and diagnostics — grouped by topic. Use search to jump quickly.",
     "navAria": "Configuration sections",
     "searchPlaceholder": "Search…",
     "searchAria": "Search configuration",
@@ -178,6 +185,13 @@
           "waitFirstMsg": "Wait for my 1st message before persona speaks (auto mode)",
           "waitHint": "Unchecked: the AI can speak and enqueue motion as soon as Auto starts.",
           "fixedInterval": "Fixed interval between speeches (s) — only without Autospeak"
+        },
+        "chatAuto": {
+          "title": "Chat Auto",
+          "hint": "Mood ramps progressively toward dominatrix over the session.",
+          "allowDominatrix": "Allow dominatrix stage",
+          "rampMinutes": "Time to dominatrix (min)",
+          "rampHint": "Maximum 10 minutes. Mood and pace rise throughout the session."
         },
         "scene": {
           "title": "Scene — AI controls pacing",
@@ -323,6 +337,35 @@
       "applied": "JSON applied locally",
       "invalidBeforeSave": "Fix JSON before saving"
     }
+  },
+  "errorBoundary": {
+    "title": "This view could not render",
+    "retry": "Try again"
+  },
+  "memory": {
+    "title": "Long-term memory",
+    "enabled": "Include saved memories in chat",
+    "empty": "No memories saved.",
+    "newLabel": "New memory",
+    "newPlaceholder": "A short fact the assistant should remember",
+    "add": "Add memory",
+    "clearAll": "Clear all",
+    "confirmClear": "Confirm clear all",
+    "readOnly": "Read-only client."
+  },
+  "promptSets": {
+    "title": "Prompt sets",
+    "select": "Edit set",
+    "name": "Name",
+    "instructions": "Behavior instructions",
+    "builtin": "built-in",
+    "builtinReadOnly": "Built-in — read-only",
+    "duplicate": "Duplicate as new",
+    "saved": "Prompt set saved.",
+    "duplicated": "Duplicated.",
+    "deleted": "Deleted.",
+    "defaultName": "Prompt set",
+    "defaultSystem": "You are a helpful assistant."
   },
   "chat": {
     "toolbarAria": "Chat controls",
@@ -521,6 +564,61 @@
       "gentle": "Gentle",
       "balanced": "Balanced",
       "intense": "Intense"
+    },
+    "intro": "Pick a style and tap Start. Motion runs on its own — use Stop anytime."
+  },
+  "autodom": {
+    "title": "AutoDom",
+    "subtitle": "Autonomous AI-driven session — humor, stamina, and procedural motion.",
+    "start": "Start AutoDom",
+    "stop": "Stop AutoDom",
+    "started": "AutoDom started",
+    "stopped": "AutoDom stopped",
+    "stamina": "Stamina",
+    "humor": "Mood",
+    "posicao": "Position",
+    "dialog": "AI dialogue",
+    "dialogEmpty": "AI replies show up here.",
+    "thinking": "AI thinking…",
+    "llmOff": "Local model not loaded. Load the LLM in Settings.",
+    "openConfig": "Open settings",
+    "intro": "AI drives the session with visible mood and stamina. Connect the LLM in Settings before starting."
+  },
+  "chatAuto": {
+    "railAria": "Auto session status",
+    "stamina": "Stamina",
+    "humor": "Mood",
+    "posicao": "Position",
+    "thinking": "AI thinking…",
+    "imageSoon": "Image coming soon",
+    "idleHint": "Auto mode: the AI keeps talking and generating motion after your message.",
+    "moods": {
+      "desejando": "Wanting",
+      "tesao": "Aroused",
+      "intensa": "Intense",
+      "dominatrix": "Dominatrix"
+    },
+    "poses": {
+      "handjob": "Handjob",
+      "oral": "Oral",
+      "cavalgando": "Riding",
+      "deepthroat": "Deepthroat"
+    },
+    "motion": {
+      "title": "AI motion",
+      "speed": "Speed",
+      "intensity": "Intensity",
+      "delay": "Delay"
+    },
+    "regions": {
+      "cabeca": "Tip",
+      "meio_cabeca": "Mid + tip"
+    },
+    "curves": {
+      "fluido": "Fluid",
+      "lento": "Slow",
+      "moderado": "Moderate",
+      "alto": "High"
     }
   },
   "handsFree": {

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import type { ChatMessage, OperationMode } from "../api/types";
+import { ChatAutoStatusPanel } from "../components/chat-auto/ChatAutoStatusPanel";
 import { ChatToolbar } from "../components/ChatToolbar";
 import { PersonaAvatar } from "../components/PersonaAvatar";
-import { SessionRail } from "../components/SessionRail";
 import { TypingIndicator } from "../components/TypingIndicator";
 import { useStatus } from "../contexts/StatusContext";
 import { useToast } from "../contexts/ToastContext";
@@ -19,9 +19,6 @@ export function ControlRoom() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [awaitingReply, setAwaitingReply] = useState(false);
-  const [queueDetail, setQueueDetail] = useState<
-    Awaited<ReturnType<typeof api.getQueue>> | null
-  >(null);
 
   const isThinking =
     sending ||
@@ -67,15 +64,6 @@ export function ControlRoom() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
 
-  useEffect(() => {
-    const loadQ = () => {
-      api.getQueue().then(setQueueDetail).catch(() => setQueueDetail(null));
-    };
-    loadQ();
-    const id = setInterval(loadQ, 4000);
-    return () => clearInterval(id);
-  }, [snap?.playback_active, snap?.queue_blocks]);
-
   const send = async () => {
     const msg = text.trim();
     if (!msg || sending || awaitingReply) return;
@@ -112,11 +100,7 @@ export function ControlRoom() {
   return (
     <div className="page control-room page--fill">
       <div className="session-workspace">
-        <SessionRail
-          snap={snap}
-          queueBlocks={queueDetail?.blocks}
-          queueEmptyMessage={t("session.queueEmpty")}
-        />
+        <ChatAutoStatusPanel snap={snap} />
 
         <section className="glass chat-panel" aria-label={t("chat.panelAria")}>
           <div className="chat-header">

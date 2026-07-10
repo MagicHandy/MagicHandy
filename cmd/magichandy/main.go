@@ -21,7 +21,6 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/transport/intiface"
 	"github.com/mapledaemon/MagicHandy/uibuild"
-	"github.com/mapledaemon/MagicHandy/web"
 )
 
 var (
@@ -145,10 +144,12 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error { //nolint:fun
 }
 
 func loadStaticUI() (fs.FS, error) {
-	if ui, err := uibuild.FS(); err == nil {
-		if _, err := fs.Stat(ui, "index.html"); err == nil {
-			return ui, nil
-		}
+	ui, err := uibuild.FS()
+	if err != nil {
+		return nil, fmt.Errorf("embedded UI missing: run frontend build (see frontend/README.md): %w", err)
 	}
-	return web.FS(), nil
+	if _, err := fs.Stat(ui, "index.html"); err != nil {
+		return nil, fmt.Errorf("embedded UI index.html missing: %w", err)
+	}
+	return ui, nil
 }

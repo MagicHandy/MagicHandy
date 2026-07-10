@@ -1,0 +1,208 @@
+/* Page layouts v12 */
+
+body {
+  background:
+    radial-gradient(ellipse 70% 45% at 15% -5%, rgba(99, 102, 241, 0.14), transparent),
+    radial-gradient(ellipse 50% 35% at 95% 5%, rgba(167, 139, 250, 0.08), transparent),
+    var(--bg);
+}
+
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page--fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  margin: 0;
+}
+
+/* Workspace grids */
+.session-workspace,
+.freestyle-workspace,
+.autodom-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  gap: var(--space-3);
+}
+
+.workspace-main > .panel {
+  flex-shrink: 0;
+}
+
+.workspace-main > .panel.autodom-dialog {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-workspace > .workspace-main,
+.freestyle-workspace > .workspace-main,
+.autodom-workspace > .workspace-main,
+.control-room .session-workspace > .chat-panel {
+  min-height: 0;
+}
+
+/* Control room fills viewport */
+.control-room {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.control-room .session-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Library page */
+.library-page--pro {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.library-toolbar {
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+}
+
+.library-toolbar-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.library-toolbar-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.library-body {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .library-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+/* Player page */
+.player-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.player-toolbar {
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+}
+
+.player-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 1000px) {
+  .player-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+/* Mouse control */
+.mouse-control-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-4);
+}
+
+.mouse-control-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .mouse-control-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(280px, 1fr) auto;
+  }
+}
+
+/* Autodom rings */
+.autodom-rings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-5);
+  align-items: start;
+  justify-items: center;
+}
+
+/* Row actions */
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Page toolbar */
+.page-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+}
+
+/* Reconnect banner */
+.reconnect-banner {
+  flex-shrink: 0;
+  margin: 0 var(--content-pad);
+}

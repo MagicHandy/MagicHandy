@@ -7,21 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mapledaemon/MagicHandy/internal/manualqueue"
 	"github.com/mapledaemon/MagicHandy/internal/store"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
-
-type visualSample struct {
-	TMS    int64   `json:"t_ms"`
-	PosPct float64 `json:"pos_pct"`
-	At     time.Time
-}
 
 type motionVisualRuntime struct {
 	mu        sync.Mutex
-	origin    time.Time
-	recent    []visualSample
 	syncPrefs store.SyncPrefs
+	schedule  *transport.OutgoingSchedule
 }
 
 func (s *Server) loadSyncPrefs() {
@@ -141,13 +134,75 @@ func (s *Server) handleDirectStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+func (s *Server) outgoingSchedule() *transport.OutgoingSchedule {
+	s.visual.mu.Lock()
+	defer s.visual.mu.Unlock()
+	if s.visual.schedule == nil {
+		s.visual.schedule = transport.NewOutgoingSchedule()
+	}
+	return s.visual.schedule
+}
+
 func (s *Server) motionVisualPayload(_ *http.Request) map[string]any {
 	settings, _ := s.store.Snapshot()
-	positionPct := s.direct.lastPositionPct
-	if positionPct == 0 {
-		positionPct = 50
+	now := time.Now()
+
+	s.visual.mu.Lock()
+	prefs := s.visual.syncPrefs
+	s.visual.mu.Unlock()
+
+	positionPct := 50.0
+	playbackActive := false
+	scheduleView := s.outgoingSchedule().VisualSnapshot(now, prefs.OffsetMS)
+
+	if scheduleView != nil {
+		if pos, ok := scheduleView["position_pct"].(float64); ok {
+			positionPct = pos
+		}
+		playbackActive = true
+	} else {
+		positionPct, playbackActive = s.motionVisualFallbackPosition()
 	}
-	playbackActive := s.direct.active
+
+	payload := map[string]any{
+		"position_pct":      positionPct,
+		"target_pct":        positionPct,
+		"offset_ms":         prefs.OffsetMS,
+		"stroke_min_pct":    float64(settings.Motion.StrokeMinPercent),
+		"stroke_max_pct":    float64(settings.Motion.StrokeMaxPercent),
+		"playback_active":   playbackActive,
+		"live_position_pct": positionPct,
+		"recent":            []map[string]any{},
+	}
+	if prefs.MeasuredRTTMS != nil {
+		payload["measured_rtt_ms"] = *prefs.MeasuredRTTMS
+	}
+	if prefs.DeviceLatencyMS != nil {
+		payload["device_latency_ms"] = *prefs.DeviceLatencyMS
+	}
+	if prefs.ClientLatencyMS != nil {
+		payload["client_latency_ms"] = *prefs.ClientLatencyMS
+	}
+	if scheduleView != nil {
+		for key, value := range scheduleView {
+			payload[key] = value
+		}
+	}
+	return payload
+}
+
+func (s *Server) motionVisualFallbackPosition() (float64, bool) {
+	positionPct := 50.0
+	playbackActive := false
+
+	s.direct.mu.Lock()
+	if s.direct.active {
+		playbackActive = true
+		if s.direct.lastPositionPct != 0 {
+			positionPct = s.direct.lastPositionPct
+		}
+	}
+	s.direct.mu.Unlock()
 
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
@@ -159,130 +214,20 @@ func (s *Server) motionVisualPayload(_ *http.Request) map[string]any {
 		}
 	}
 
+	playerSnap, _ := s.manualQueuePlayerSnapshot()
+	if proceduralSnap, ok := s.activeProceduralPlayerSnapshot(); ok {
+		playerSnap = proceduralSnap
+	}
+	if playerSnap.Running && !playerSnap.Paused {
+		playbackActive = true
+		positionPct = playerSnap.PositionPct
+	}
+
 	s.manualQueue.mu.Lock()
-	mqPlaying := s.manualQueue.playing && !s.manualQueue.paused
+	if s.manualQueue.playing && !s.manualQueue.paused {
+		playbackActive = true
+	}
 	s.manualQueue.mu.Unlock()
 
-	playerSnap, playerActions := s.manualQueuePlayerSnapshot()
-	if playerSnap.Running {
-		playbackActive = true
-		if !playerSnap.Paused {
-			positionPct = playerSnap.PositionPct
-		}
-	} else if mqPlaying {
-		playbackActive = true
-	}
-
-	s.visual.mu.Lock()
-	prefs := s.visual.syncPrefs
-	if s.visual.origin.IsZero() {
-		s.visual.origin = time.Now()
-	}
-	s.recordVisualSampleLocked(positionPct)
-	recent := s.visualRecentLocked(6000)
-	s.visual.mu.Unlock()
-
-	payload := map[string]any{
-		"position_pct":      positionPct,
-		"target_pct":        positionPct,
-		"offset_ms":         prefs.OffsetMS,
-		"stroke_min_pct":    float64(settings.Motion.StrokeMinPercent),
-		"stroke_max_pct":    float64(settings.Motion.StrokeMaxPercent),
-		"playback_active":   playbackActive,
-		"recent":            recent,
-		"live_position_pct": positionPct,
-	}
-	if prefs.MeasuredRTTMS != nil {
-		payload["measured_rtt_ms"] = *prefs.MeasuredRTTMS
-	}
-	if prefs.DeviceLatencyMS != nil {
-		payload["device_latency_ms"] = *prefs.DeviceLatencyMS
-	}
-	if prefs.ClientLatencyMS != nil {
-		payload["client_latency_ms"] = *prefs.ClientLatencyMS
-	}
-	if curve := s.motionVisualCurveFromPlayer(playerSnap, playerActions); curve != nil {
-		for key, value := range curve {
-			payload[key] = value
-		}
-	}
-	return payload
+	return positionPct, playbackActive
 }
-
-func (s *Server) motionVisualCurveFromPlayer(snap manualqueue.Snapshot, actions []manualqueue.Action) map[string]any {
-	if !snap.Running || snap.Paused || len(actions) == 0 {
-		return nil
-	}
-	curveActions := make([]map[string]int, len(actions))
-	for i, action := range actions {
-		curveActions[i] = map[string]int{"at": action.At, "pos": action.Pos}
-	}
-	return map[string]any{
-		"curve_actions":     curveActions,
-		"curve_elapsed_ms":  snap.PlayheadMS,
-		"curve_duration_ms": snap.DurationMS,
-	}
-}
-
-func (s *Server) recordVisualSampleLocked(positionPct float64) {
-	now := time.Now()
-	if len(s.visual.recent) > 0 {
-		last := s.visual.recent[len(s.visual.recent)-1]
-		if now.Sub(last.At) < 40*time.Millisecond && almostEqual(last.PosPct, positionPct) {
-			return
-		}
-	}
-	tms := now.Sub(s.visual.origin).Milliseconds()
-	s.visual.recent = append(s.visual.recent, visualSample{
-		TMS:    tms,
-		PosPct: positionPct,
-		At:     now,
-	})
-	cutoff := now.Add(-6 * time.Second)
-	trim := 0
-	for i, sample := range s.visual.recent {
-		if sample.At.After(cutoff) {
-			trim = i
-			break
-		}
-	}
-	if trim > 0 && trim < len(s.visual.recent) {
-		s.visual.recent = s.visual.recent[trim:]
-	}
-	if len(s.visual.recent) > 512 {
-		s.visual.recent = s.visual.recent[len(s.visual.recent)-512:]
-	}
-}
-
-func (s *Server) visualRecentLocked(windowMS int64) []map[string]any {
-	if len(s.visual.recent) == 0 {
-		return []map[string]any{}
-	}
-	end := s.visual.recent[len(s.visual.recent)-1].TMS
-	start := end - windowMS
-	if start < 0 {
-		start = 0
-	}
-	out := make([]map[string]any, 0, len(s.visual.recent))
-	for _, sample := range s.visual.recent {
-		if sample.TMS < start {
-			continue
-		}
-		out = append(out, map[string]any{
-			"t_ms":    sample.TMS - start,
-			"pos_pct": sample.PosPct,
-		})
-	}
-	return out
-}
-
-func almostEqual(a, b float64) bool {
-	diff := a - b
-	if diff < 0 {
-		diff = -diff
-	}
-	return diff < 0.25
-}
-
-// NOTE: Go 1.25+ provides built-in `min`/`max` for ordered types, so we
-// intentionally avoid helper functions with those names.

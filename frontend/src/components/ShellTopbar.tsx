@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { StatusSnapshot } from "../api/types";
+import type { ControllerSnapshot, StatusSnapshot } from "../api/types";
 import {
   isOllamaProvider,
   llmBaseURLFromSnap,
@@ -16,12 +16,14 @@ import { TopbarMenu } from "./TopbarMenu";
 
 export function ShellTopbar({
   snap,
+  controller,
   emergency,
   onStop,
   onRecheckOllama,
   onRefresh,
 }: {
   snap: StatusSnapshot;
+  controller?: ControllerSnapshot | null;
   emergency?: boolean;
   onStop: () => void;
   onRecheckOllama: () => void;
@@ -46,6 +48,12 @@ export function ShellTopbar({
   return (
     <header className="topbar topbar--v2">
       <div className="topbar-zone topbar-zone--scene">
+        {controller?.read_only && (
+          <StatusChip label={t("layout.controller.readOnlyShort")} variant="warn" />
+        )}
+        {controller?.active && (
+          <StatusChip label={t("layout.controller.active")} variant="success" />
+        )}
         <StatusChip label={snap.phase} variant="accent" />
         {snap.active_pose && snap.active_pose !== "none" && (
           <StatusChip

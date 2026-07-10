@@ -12,11 +12,13 @@ $llamaDir = Join-Path $dataDir "llama"
 $runnerPath = Join-Path $llamaDir "llama-server.exe"
 $modelDir = Join-Path $dataDir "models\gguf\qwen2.5-7b-instruct-q4_k_m"
 $modelPath = Join-Path $modelDir "model.gguf"
+$legacyDolphinDir = Join-Path $dataDir "models\gguf\dolphin-2.9.3-mistral-nemo-12b-q4_k_m"
 $settingsPath = Join-Path $dataDir "settings.json"
 $llamaPort = if ($env:MAGICHANDY_LLAMA_PORT) { [int]$env:MAGICHANDY_LLAMA_PORT.Trim() } else { 18080 }
 $llamaBaseUrl = "http://127.0.0.1:${llamaPort}"
 $modelName = "Qwen2.5-7B-Instruct-Q4_K_M"
 $modelUrl = "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+$modelMinBytes = 4.2GB
 $llamaRelease = "b9886"
 
 function Ensure-Directory([string]$Path) {
@@ -93,6 +95,13 @@ if (-not (Test-Path $runnerPath)) {
     Write-Host "llama-server OK: $runnerPath"
 }
 
+if (Test-Path $modelPath) {
+    $size = (Get-Item $modelPath).Length
+    if ($size -lt $modelMinBytes) {
+        Write-Host "Incomplete GGUF ($([math]::Round($size / 1GB, 2)) GB) - re-downloading..."
+        Remove-Item $modelPath -Force
+    }
+}
 if (-not (Test-Path $modelPath)) {
     Ensure-Directory $modelDir
     Download-FileIfMissing `
@@ -101,6 +110,11 @@ if (-not (Test-Path $modelPath)) {
         -Label "Qwen2.5-7B-Instruct Q4_K_M GGUF (~4.7 GB, one-time)"
 } else {
     Write-Host "GGUF model OK: $modelPath"
+}
+
+if (Test-Path $legacyDolphinDir) {
+    Remove-Item $legacyDolphinDir -Recurse -Force
+    Write-Host "Removed legacy Dolphin model (~7.5 GB freed)"
 }
 
 $llmBlock = @{

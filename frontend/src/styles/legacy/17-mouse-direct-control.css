@@ -1,0 +1,58 @@
+/* —— Mouse direct control —— */
+
+.mouse-control-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.mouse-control-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.mouse-control-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.mouse-control-sub {
+  margin: 0.25rem 0 0;
+  max-width: 42rem;
+}
+
+.mouse-control-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mouse-control-alert {
+  flex-shrink: 0;
+}
+
+.mouse-control-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+.mouse-control-panel {
+  padding: 0.85rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(12, 15, 28, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  align-self: start;
+}

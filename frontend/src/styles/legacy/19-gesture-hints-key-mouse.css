@@ -1,0 +1,138 @@
+/* —— Gesture hints (key + mouse) —— */
+
+.mc-gesture-list {
+  margin: 0;
+  padding: 0.55rem 0.5rem;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.mc-gesture-list--dimmed {
+  opacity: 0.55;
+}
+
+.mc-gesture-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mc-gesture-keys {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+
+.mc-gesture-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  padding: 0.18rem 0.42rem;
+  font-family: var(--mono, monospace);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+  background: linear-gradient(180deg, rgba(55, 65, 90, 0.95) 0%, rgba(30, 35, 52, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-bottom-width: 2px;
+  border-bottom-color: rgba(15, 18, 28, 0.9);
+  border-radius: 5px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.mc-gesture-plus {
+  font-size: 0.68rem;
+  color: rgba(148, 163, 184, 0.55);
+  line-height: 1;
+}
+
+.mc-gesture-hold {
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(134, 239, 172, 0.85);
+}
+
+.mc-gesture-desc {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: rgba(203, 213, 225, 0.82);
+}
+
+.mc-gesture-mouse {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.mc-gesture-mouse-svg {
+  width: 1.15rem;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.mc-gesture-mouse-zone {
+  fill: transparent;
+  stroke: transparent;
+  transition: fill 0.15s, stroke 0.15s;
+}
+
+.mc-gesture-mouse-zone.is-active {
+  fill: rgba(168, 85, 247, 0.55);
+  stroke: rgba(232, 121, 249, 0.95);
+  stroke-width: 0.8;
+}
+
+.mc-gesture-mouse-zone--scroll.is-active {
+  fill: rgba(248, 113, 113, 0.65);
+  stroke: rgba(252, 165, 165, 0.95);
+}
+
+.mc-gesture-mouse-hold-dot {
+  fill: #86efac;
+  filter: drop-shadow(0 0 3px rgba(74, 222, 128, 0.8));
+}
+
+.mouse-control-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.mouse-control-stat {
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+}
+
+.mouse-control-stat-label {
+  display: block;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+
+.mouse-control-stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.mouse-control-hint {
+  margin: 0;
+  font-size: 0.75rem;
+}

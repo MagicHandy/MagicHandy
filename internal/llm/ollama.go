@@ -46,9 +46,10 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 		Model:    firstNonEmpty(request.Model, p.model),
 		Messages: request.Messages,
 		Stream:   true,
-		Format:   "json",
+		Format:   ollamaFormatFromRequest(request.ResponseFormat),
 		Options: map[string]any{
 			"temperature": request.Temperature,
+			"num_predict": request.MaxTokens,
 		},
 	}
 	payload, err := json.Marshal(body)
@@ -127,8 +128,21 @@ type ollamaChatRequest struct {
 	Model    string         `json:"model"`
 	Messages []Message      `json:"messages"`
 	Stream   bool           `json:"stream"`
-	Format   string         `json:"format"`
+	Format   any            `json:"format,omitempty"`
 	Options  map[string]any `json:"options,omitempty"`
+}
+
+func ollamaFormatFromRequest(format *ResponseFormat) any {
+	if format == nil {
+		return "json"
+	}
+	if format.JSONSchema != nil {
+		return format.JSONSchema
+	}
+	if format.Type == "json_object" || format.Type == "" {
+		return "json"
+	}
+	return "json"
 }
 
 type ollamaChatChunk struct {

@@ -89,7 +89,7 @@ $go = Find-GoExecutable
 $feDir = Join-Path $root "frontend"
 $uiDist = Join-Path $root "uibuild\dist"
 if (Test-Path (Join-Path $feDir "package.json")) {
-    Write-Host "npm install (frontend)..."
+    Write-Host "npm install (frontend UI)..."
     Push-Location $feDir
     & npm install --no-fund --no-audit
     if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
@@ -100,7 +100,7 @@ if (Test-Path (Join-Path $feDir "package.json")) {
     if (Test-Path (Join-Path $feDir "dist\index.html")) {
         New-Item -ItemType Directory -Force -Path $uiDist | Out-Null
         robocopy (Join-Path $feDir "dist") $uiDist /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
-        Write-Host "React UI copied to uibuild/dist"
+        Write-Host "React UI (frontend) copied to uibuild/dist"
     }
 }
 
@@ -138,7 +138,7 @@ if (-not $healthy) {
 
 Write-Host "Loading managed llama.cpp model (first run may take ~30s)..."
 try {
-    $llmStatus = Invoke-RestMethod -Uri ($url + "/api/llm/load") -Method POST -TimeoutSec 180
+    $llmStatus = Invoke-RestMethod -Uri ($url + "/api/llm/load") -Method POST -TimeoutSec 240
     if ($llmStatus.available) {
         Write-Host "LLM ready: $($llmStatus.message)"
     } else {

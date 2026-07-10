@@ -17,6 +17,10 @@ export default defineConfig({
       },
     },
   ],
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/vitest.setup.ts"],
+  },
   server: {
     port: 5173,
     proxy: {

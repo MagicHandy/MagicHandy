@@ -43,6 +43,7 @@
     "control": "Controle",
     "handsFree": "Mãos livres",
     "freestyle": "Freestyle",
+    "autodom": "AutoDom",
     "mouse": "Mouse",
     "library": "Biblioteca",
     "player": "Reprodutor",
@@ -63,6 +64,11 @@
     "emergencyStop": "Parada de emergência",
     "clearStop": "Limpar parada",
     "uiVersion": "Versão da UI",
+    "controller": {
+      "readOnly": "Somente leitura — outra aba controla o dispositivo",
+      "readOnlyShort": "Somente leitura",
+      "active": "Controlador ativo"
+    },
     "offline": {
       "title": "API fora do ar",
       "hint": "Inicie o backend:"
@@ -100,6 +106,7 @@
   },
   "config": {
     "title": "Configuração",
+    "intro": "Personas, conexões, movimento e diagnóstico — tudo agrupado por tema. Use a busca para achar rápido.",
     "navAria": "Seções de configuração",
     "searchPlaceholder": "Buscar…",
     "searchAria": "Buscar configuração",
@@ -178,6 +185,13 @@
           "waitFirstMsg": "Esperar minha 1ª mensagem antes da persona falar (modo auto)",
           "waitHint": "Desmarcado: a IA pode falar e enfileirar movimento logo ao ligar o Auto.",
           "fixedInterval": "Intervalo fixo entre falas (s) — só sem Autospeak"
+        },
+        "chatAuto": {
+          "title": "Chat Auto",
+          "hint": "O humor sobe progressivamente até dominatrix conforme o tempo da sessão.",
+          "allowDominatrix": "Permitir estágio dominatrix",
+          "rampMinutes": "Tempo até dominatrix (min)",
+          "rampHint": "Máximo 10 minutos. O humor e o ritmo sobem ao longo da sessão."
         },
         "scene": {
           "title": "Cena — IA controla ritmo",
@@ -323,6 +337,35 @@
       "applied": "JSON aplicado localmente",
       "invalidBeforeSave": "Corrija o JSON antes de salvar"
     }
+  },
+  "errorBoundary": {
+    "title": "Esta tela não carregou",
+    "retry": "Tentar de novo"
+  },
+  "memory": {
+    "title": "Memória de longo prazo",
+    "enabled": "Incluir memórias salvas no chat",
+    "empty": "Nenhuma memória salva.",
+    "newLabel": "Nova memória",
+    "newPlaceholder": "Um fato curto que a assistente deve lembrar",
+    "add": "Adicionar memória",
+    "clearAll": "Limpar tudo",
+    "confirmClear": "Confirmar limpeza",
+    "readOnly": "Cliente somente leitura."
+  },
+  "promptSets": {
+    "title": "Conjuntos de prompt",
+    "select": "Editar conjunto",
+    "name": "Nome",
+    "instructions": "Instruções de comportamento",
+    "builtin": "built-in",
+    "builtinReadOnly": "Built-in — somente leitura",
+    "duplicate": "Duplicar como novo",
+    "saved": "Conjunto salvo.",
+    "duplicated": "Duplicado.",
+    "deleted": "Excluído.",
+    "defaultName": "Conjunto de prompt",
+    "defaultSystem": "Você é uma assistente prestativa."
   },
   "chat": {
     "toolbarAria": "Controles do chat",
@@ -521,6 +564,61 @@
       "gentle": "Suave",
       "balanced": "Equilibrado",
       "intense": "Intenso"
+    },
+    "intro": "Escolha um estilo e toque em Iniciar. O movimento roda sozinho — use Parar a qualquer momento."
+  },
+  "autodom": {
+    "title": "AutoDom",
+    "subtitle": "Sessão autônoma guiada por IA — humor, stamina e movimento procedural.",
+    "start": "Iniciar AutoDom",
+    "stop": "Parar AutoDom",
+    "started": "AutoDom iniciado",
+    "stopped": "AutoDom parado",
+    "stamina": "Stamina",
+    "humor": "Humor",
+    "posicao": "Posição",
+    "dialog": "Diálogo da IA",
+    "dialogEmpty": "As respostas da IA aparecem aqui.",
+    "thinking": "IA pensando…",
+    "llmOff": "Modelo local não carregado. Carregue o LLM em Configuração.",
+    "openConfig": "Abrir configuração",
+    "intro": "A IA conduz a sessão com humor e stamina visíveis. Conecte o LLM em Configuração antes de iniciar."
+  },
+  "chatAuto": {
+    "railAria": "Status da sessão automática",
+    "stamina": "Stamina",
+    "humor": "Humor",
+    "posicao": "Posição",
+    "thinking": "IA pensando…",
+    "imageSoon": "Imagem em breve",
+    "idleHint": "Modo Auto: a IA continua falando e gerando movimento após sua mensagem.",
+    "moods": {
+      "desejando": "Desejando",
+      "tesao": "Tesão",
+      "intensa": "Intensa",
+      "dominatrix": "Dominatrix"
+    },
+    "poses": {
+      "handjob": "Handjob",
+      "oral": "Oral",
+      "cavalgando": "Cavalgando",
+      "deepthroat": "Deepthroat"
+    },
+    "motion": {
+      "title": "Movimento IA",
+      "speed": "Velocidade",
+      "intensity": "Intensidade",
+      "delay": "Atraso"
+    },
+    "regions": {
+      "cabeca": "Cabeça",
+      "meio_cabeca": "Meio + cabeça"
+    },
+    "curves": {
+      "fluido": "Fluido",
+      "lento": "Lento",
+      "moderado": "Moderado",
+      "alto": "Alto"
     }
   },
   "handsFree": {

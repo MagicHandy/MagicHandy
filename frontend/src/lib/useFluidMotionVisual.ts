@@ -100,7 +100,7 @@ export function useFluidMotionVisual(
       visual?.live_position_pct ?? visual?.position_pct ?? null;
 
     const actions = visual?.curve_actions;
-    if (actions?.length && visual?.curve_elapsed_ms != null) {
+    if (visual?.schedule_active && actions?.length && visual.curve_elapsed_ms != null) {
       const prev = curveRef.current;
       const serverElapsed = visual.curve_elapsed_ms;
       const durationMs = visual.curve_duration_ms ?? prev?.durationMs ?? 0;

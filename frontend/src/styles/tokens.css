@@ -1,0 +1,95 @@
+/* MagicHandy design tokens — instrument-grade dark UI (v12) */
+:root {
+  /* Surfaces */
+  --bg: #07080f;
+  --bg-2: #0c0e17;
+  --bg-inset: #0a0c14;
+  --surface: #121624;
+  --surface-2: #181d2e;
+  --surface-3: #1f2538;
+  --surface-glass: rgba(18, 22, 36, 0.92);
+  --border: rgba(156, 166, 182, 0.2);
+  --border-strong: rgba(156, 166, 182, 0.32);
+
+  /* Text — tuned for WCAG AA on --surface (#121624) */
+  --text: #e8ecf4;
+  --text-muted: #b0bac9;
+  --text-subtle: #96a2b6;
+  --text-placeholder: #8a97ab;
+
+  /* Focus ring — visible on dark surfaces */
+  --focus-ring: #c4b5fd;
+
+  /* Brand accent */
+  --accent: #a78bfa;
+  --accent-2: #6366f1;
+  --accent-soft: rgba(99, 102, 241, 0.18);
+  --accent-glow: rgba(167, 139, 250, 0.32);
+
+  /* Semantic */
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.16);
+  --success: #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.14);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, 0.14);
+  --info: #a8c8f0;
+  --info-bg: rgba(147, 197, 253, 0.12);
+
+  /* Typography */
+  --font: "DM Sans", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --text-xs: 0.72rem;
+  --text-sm: 0.82rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: 1.65rem;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* Radii */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.42);
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+
+  /* Shell layout */
+  --shell-rail: clamp(220px, 17vw, 256px);
+  --shell-gap: 0;
+  --content-pad: clamp(0.75rem, 2vw, 1.35rem);
+  --content-max: 1440px;
+  --nav-mobile-h: 58px;
+  --statusbar-h: 36px;
+
+  /* Z-index scale */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur-normal: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-normal: 0ms;
+  }
+}

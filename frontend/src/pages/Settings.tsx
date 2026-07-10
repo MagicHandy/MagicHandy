@@ -4,6 +4,9 @@ import { api } from "../api/client";
 import type { AppSettings } from "../api/types";
 import type { ConfigSectionId } from "../config/configNav";
 import { UiCheckbox } from "../components/UiCheckbox";
+import { MemoryManager } from "../components/MemoryManager";
+import { BluetoothBridge } from "../components/BluetoothBridge";
+import { useStatus } from "../contexts/StatusContext";
 import { useToast } from "../contexts/ToastContext";
 
 type SettingsSection = Extract<
@@ -31,6 +34,7 @@ const PLANNER_WEIGHT_KEYS = [
 
 export function SettingsPanel({ section }: { section: SettingsSection }) {
   const { t } = useTranslation();
+  const { readOnly, error } = useStatus();
   const { notify } = useToast();
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
@@ -68,6 +72,7 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
   const diagnostics = (settings.diagnostics ?? {}) as Record<string, unknown>;
   const scene = (settings.scene ?? {}) as Record<string, unknown>;
   const scenePhases = (scene.phases ?? {}) as Record<string, Record<string, unknown>>;
+  const autodom = (settings.autodom ?? {}) as Record<string, unknown>;
 
   const updateSection = (key: keyof AppSettings, patch: Record<string, unknown>) => {
     setSettings({
@@ -91,6 +96,7 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
         sync: settings.sync,
         voice: settings.voice,
         autospeak: settings.autospeak,
+        autodom: settings.autodom,
       });
       notify(t("config.settings.saved"), "ok");
     } catch (e) {
@@ -157,6 +163,37 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
                 <option value="full">{t("config.settings.session.autospeak.fullMotion")}</option>
               </select>
             </label>
+          </section>
+
+          <section className="glass settings-card">
+            <h3>{t("config.settings.session.chatAuto.title")}</h3>
+            <p className="hint">{t("config.settings.session.chatAuto.hint")}</p>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={bool(autodom.allow_dominatrix, true)}
+                onChange={(e) =>
+                  updateSection("autodom", { allow_dominatrix: e.target.checked })
+                }
+              />
+              {t("config.settings.session.chatAuto.allowDominatrix")}
+            </label>
+            <label className="field">
+              <span>{t("config.settings.session.chatAuto.rampMinutes")}</span>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                value={num(autodom.dominatrix_ramp_minutes as number, 10)}
+                onChange={(e) =>
+                  updateSection("autodom", {
+                    dominatrix_ramp_minutes: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <p className="hint">{t("config.settings.session.chatAuto.rampHint")}</p>
           </section>
 
           <section className="glass settings-card">
@@ -253,6 +290,7 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
               ))}
             </div>
           </section>
+          <MemoryManager locked={readOnly} />
         </>
       )}
 
@@ -690,6 +728,8 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
               </label>
             </div>
           </section>
+
+          <BluetoothBridge visible locked={readOnly} backendOnline={!error} />
         </>
       )}
 

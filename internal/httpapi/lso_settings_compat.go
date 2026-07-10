@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -46,6 +47,10 @@ func (s *Server) handleLsoPutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if raw, ok := body.Updates["app"]; ok {
+		s.applyLsoAppStateUpdate(r.Context(), raw)
+	}
+
 	s.applySettingsRuntimeTransition(r.Context(), current, next)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":       true,
@@ -86,6 +91,10 @@ func lsoSettingsFromConfig(settings config.Settings) map[string]any {
 		"diagnostics": map[string]any{
 			"verbosity": settings.Diagnostics.Verbosity,
 		},
+		"autodom": map[string]any{
+			"allow_dominatrix":        settings.AutoDom.AllowDominatrix,
+			"dominatrix_ramp_minutes": settings.AutoDom.DominatrixRampMinutes,
+		},
 	}
 }
 
@@ -106,6 +115,9 @@ func applyLsoSettingsUpdate(current config.Settings, updates map[string]json.Raw
 		},
 		"diagnostics": func(s config.Settings, raw json.RawMessage) (config.Settings, error) {
 			return applyLsoDiagnosticsSettingsUpdate(s, raw)
+		},
+		"autodom": func(s config.Settings, raw json.RawMessage) (config.Settings, error) {
+			return applyLsoAutoDomSettingsUpdate(s, raw)
 		},
 	}
 
@@ -199,6 +211,45 @@ func applyLsoDiagnosticsSettingsUpdate(current config.Settings, raw json.RawMess
 	return next, nil
 }
 
+func applyLsoAutoDomSettingsUpdate(current config.Settings, raw json.RawMessage) (config.Settings, error) {
+	next := current
+	var patch map[string]any
+	if err := json.Unmarshal(raw, &patch); err != nil {
+		return config.Settings{}, err
+	}
+	if allow, ok := patch["allow_dominatrix"].(bool); ok {
+		next.AutoDom.AllowDominatrix = allow
+	}
+	if ramp, ok := patch["dominatrix_ramp_minutes"].(float64); ok {
+		next.AutoDom.DominatrixRampMinutes = int(ramp)
+	}
+	return next, nil
+}
+
 func defaultHandyCloudBaseURL() string {
 	return "https://www.handyfeeling.com/api/handy-rest/v3/"
+}
+
+func (s *Server) applyLsoAppStateUpdate(ctx context.Context, raw json.RawMessage) {
+	var app map[string]any
+	if err := json.Unmarshal(raw, &app); err != nil {
+		return
+	}
+	state, err := s.store.DB().LoadAppState()
+	if err != nil {
+		return
+	}
+	previousMode := state.OperationMode
+	if mode, ok := app["operation_mode"].(string); ok && strings.TrimSpace(mode) != "" {
+		state.OperationMode = strings.ToLower(strings.TrimSpace(mode))
+	}
+	if _, err := s.store.DB().SaveAppState(state); err != nil {
+		return
+	}
+	if state.OperationMode == "auto" && previousMode != "auto" {
+		s.startChatAutoLoop(ctx)
+	}
+	if state.OperationMode != "auto" && previousMode == "auto" {
+		s.stopChatAutoLoop(ctx)
+	}
 }

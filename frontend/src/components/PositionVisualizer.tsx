@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client";
 import type { MotionVisual } from "../api/types";
 import { useStatus } from "../contexts/StatusContext";
 import { useToast } from "../contexts/ToastContext";
 import { IconChevron } from "./icons/NavIcons";
+import { mergeMotionVisual } from "../lib/mergeMotionVisual";
 import { useFluidMotionVisual } from "../lib/useFluidMotionVisual";
-
-const VISUAL_POLL_MS = 80;
-const VISUAL_POLL_IDLE_MS = 280;
+import { useMotionEvents } from "../lib/useMotionEvents";
 
 const OFFSET_PRESETS = [
   { label: "−160", ms: -160 },
   { label: "0", ms: 0 },
   { label: "+160", ms: 160 },
 ] as const;
+
+function isPlaybackActive(
+  visual: MotionVisual | null,
+  snap: ReturnType<typeof useStatus>["snap"],
+): boolean {
+  return Boolean(
+    visual?.playback_active ||
+      snap?.manual_queue_playing ||
+      snap?.playback_active ||
+      snap?.direct_control_active,
+  );
+}
 
 export function PositionVisualizer({
   variant = "panel",
@@ -24,26 +35,21 @@ export function PositionVisualizer({
   const { t } = useTranslation();
   const { notify } = useToast();
   const { snap } = useStatus();
-  const [visual, setVisual] = useState<MotionVisual | null>(null);
+  const liveMotion = useMotionEvents();
+  const [cachedVisual, setCachedVisual] = useState<MotionVisual | null>(null);
   const [offset, setOffset] = useState(-160);
   const [saving, setSaving] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const loadingRef = useRef(false);
+  const playbackWasActiveRef = useRef(false);
   const isSidebar = variant === "sidebar";
 
-  const playbackActive = Boolean(
-    visual?.playback_active ||
-      snap?.manual_queue_playing ||
-      snap?.playback_active ||
-      snap?.direct_control_active,
-  );
-
-  const load = useCallback(async () => {
+  const loadVisual = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
       const v = await api.getMotionVisual();
-      setVisual(v);
+      setCachedVisual(v);
       setOffset(v.offset_ms);
     } catch {
       /* */
@@ -53,17 +59,29 @@ export function PositionVisualizer({
   }, []);
 
   useEffect(() => {
-    load();
-    const pollMs = playbackActive ? VISUAL_POLL_MS : VISUAL_POLL_IDLE_MS;
-    const id = window.setInterval(load, pollMs);
-    return () => clearInterval(id);
-  }, [load, playbackActive]);
+    void loadVisual();
+  }, [loadVisual]);
+
+  const visual = useMemo(
+    () => mergeMotionVisual({ cached: cachedVisual, motion: liveMotion, snap }),
+    [cachedVisual, liveMotion, snap],
+  );
+
+  const playbackActive = isPlaybackActive(visual, snap);
+
+  useEffect(() => {
+    const wasActive = playbackWasActiveRef.current;
+    playbackWasActiveRef.current = playbackActive;
+    if (playbackActive && !wasActive) {
+      void loadVisual();
+    }
+  }, [playbackActive, loadVisual]);
 
   const saveOffset = async (ms: number) => {
     setSaving(true);
     try {
       await api.setSyncOffset(ms);
-      await load();
+      await loadVisual();
     } catch (e) {
       notify(e instanceof Error ? e.message : t("common.error"), "error");
     } finally {
@@ -75,7 +93,7 @@ export function PositionVisualizer({
     try {
       const r = await api.autoSync();
       notify(t("layout.visualizer.offsetSaved", { ms: r.offset_ms, rtt: r.measured_rtt_ms }), "ok");
-      await load();
+      await loadVisual();
     } catch (e) {
       notify(e instanceof Error ? e.message : t("common.error"), "error");
     }

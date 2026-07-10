@@ -1,0 +1,335 @@
+/* —— UI refresh v8: scene status, chips, chat toolbar —— */
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ui-chip--accent {
+  color: #e9d5ff;
+  border-color: rgba(167, 139, 250, 0.45);
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.ui-chip--success {
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.4);
+  background: var(--success-bg);
+}
+
+.ui-chip--warn {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.ui-chip--danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: var(--danger-bg);
+}
+
+.ui-chip--muted {
+  opacity: 0.92;
+}
+
+.ui-chip--pulse {
+  animation: nav-badge-pulse 1.4s ease-in-out infinite;
+}
+
+.topbar-scene-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(42vw, 520px);
+}
+
+.sidebar-persona {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.page-head-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.scene-status-card {
+  padding: 0.75rem 0.85rem;
+}
+
+.scene-status-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.scene-status-phase {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #e9d5ff;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+
+.scene-status-pose {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.scene-status-pose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.scene-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+
+.scene-status-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+
+.scene-meter-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 0.28rem;
+}
+
+.buffer-bar--thin {
+  height: 4px;
+  margin-bottom: 0;
+}
+
+.buffer-fill--urgent {
+  background: linear-gradient(90deg, #f59e0b, #ef4444) !important;
+}
+
+.buffer-fill--buffer {
+  background: linear-gradient(90deg, #22d3ee, #6366f1);
+}
+
+.scene-status-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.scene-stat {
+  padding: 0.35rem 0.45rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border);
+}
+
+.scene-stat-label {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.scene-stat-value {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 0.1rem;
+  text-transform: capitalize;
+}
+
+.scene-stat--accent .scene-stat-value {
+  color: #c4b5fd;
+}
+
+.scene-stat--warn .scene-stat-value {
+  color: #fde68a;
+}
+
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chat-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.chat-tool-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.chat-tool-btn.is-on,
+.autospeak-toggle.is-on {
+  border-color: rgba(167, 139, 250, 0.65);
+  background: rgba(99, 102, 241, 0.22);
+  color: #e9d5ff;
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.15);
+}
+
+.chat-tool-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-tool-icon {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.chat-tool-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.chat-tool-select .section-label {
+  font-size: 0.62rem;
+}
+
+.chat-toolbar-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+.messages-empty {
+  margin: auto;
+  text-align: center;
+  padding: 2rem 1rem;
+  max-width: 22rem;
+}
+
+.messages-empty-title {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.queue-list--rich .queue-id {
+  font-size: 0.75rem;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.queue-empty {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.control-room .chat-compose textarea {
+  min-height: 2.75rem;
+  max-height: none;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.control-room .chat-compose textarea:focus {
+  outline: none;
+  border-color: rgba(167, 139, 250, 0.55);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
+}
+
+.btn-send {
+  min-width: 5.5rem;
+  padding: 0.55rem 1rem;
+}
+
+.inline-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.inline-range input {
+  width: 100%;
+}
+
+.glass {
+  transition: border-color 0.2s ease;
+}
+
+.glass:hover {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.btn:focus-visible,
+.chat-tool-btn:focus-visible,
+.nav-link:focus-visible,
+.tab:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.65);
+  outline-offset: 2px;
+}
+
+.bubble.assistant {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.bubble.user {
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.12);
+}
+
+@media (max-width: 720px) {
+  .scene-status-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .topbar-zone--scene {
+    display: none;
+  }
+
+  .chat-toolbar-hint {
+    display: none;
+  }
+}

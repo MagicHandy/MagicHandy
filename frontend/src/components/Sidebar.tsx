@@ -37,7 +37,7 @@ export function Sidebar({
   ] as const;
 
   return (
-    <aside className="sidebar sidebar--pro">
+    <aside className="sidebar sidebar--v12" aria-label={t("nav.mainAria")}>
       <header className="sidebar-header">
         <div className="sidebar-brand">
           <div className="sidebar-brand-mark">
@@ -48,11 +48,14 @@ export function Sidebar({
               decoding="async"
             />
           </div>
-          <strong className="sidebar-brand-name">MagicHandy</strong>
+          <div className="sidebar-brand-text">
+            <strong className="sidebar-brand-name">MagicHandy</strong>
+            <span className="sidebar-brand-tag">{t("nav.group.session")} · Local</span>
+          </div>
         </div>
       </header>
 
-      <nav className="sidebar-nav" aria-label={t("nav.mainAria")}>
+      <nav className="sidebar-nav">
         <NavGroup label={t("nav.group.session")} items={navSession} snap={snap} t={t} />
         <NavGroup label={t("nav.group.library")} items={navLibrary} snap={snap} t={t} />
         <NavGroup label={t("nav.group.system")} items={navSystem} snap={snap} t={t} />
@@ -104,6 +107,7 @@ function NavGroup({
             className={({ isActive }) =>
               `nav-link nav-link--pro${isActive ? " active" : ""}${queuePlaying && item.to === "/fila" ? " nav-link--playing" : ""}`
             }
+            title={item.label}
           >
             <span className="nav-link-icon-wrap">
               <Icon className="nav-link-icon" />

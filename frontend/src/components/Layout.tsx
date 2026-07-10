@@ -8,13 +8,16 @@ import {
 } from "../lib/llmStatus";
 import { Sidebar } from "./Sidebar";
 import { ShellTopbar } from "./ShellTopbar";
+import { ControllerBanner } from "./ControllerBanner";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { useStatus } from "../contexts/StatusContext";
 import { useToast } from "../contexts/ToastContext";
+import { useGlobalEscStop } from "../hooks/useGlobalEscStop";
 import { UI_VERSION } from "../version";
 
 export function Layout() {
   const { t } = useTranslation();
-  const { snap, error, refresh } = useStatus();
+  const { snap, controller, error, refresh } = useStatus();
   const { notify } = useToast();
   const [buildLabel, setBuildLabel] = useState<string | null>(null);
 
@@ -63,21 +66,23 @@ export function Layout() {
   const onStop = async () => {
     try {
       await api.emergencyStop("ui_stop");
+      await api.stopMotion().catch(() => {});
     } catch {
       /* footer poll will update */
     }
   };
 
+  useGlobalEscStop(onStop);
+
   const emergency = snap?.emergency_stop;
 
   return (
-    <div className="shell shell--pro">
-      <Sidebar snap={snap} error={error} />
-
-      <div className="main-col">
+    <div className="shell shell--v12">
+      <div className="shell-main">
         {snap && !error ? (
           <ShellTopbar
             snap={snap}
+            controller={controller}
             emergency={emergency}
             onStop={onStop}
             onRecheckOllama={recheckOllama}
@@ -103,8 +108,12 @@ export function Layout() {
           </div>
         )}
 
+        <ControllerBanner controller={controller} />
+
         <main className="content">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <footer className={`statusbar${emergency ? " emergency" : ""}`}>
@@ -128,6 +137,18 @@ export function Layout() {
           )}
         </footer>
       </div>
+
+      <Sidebar snap={snap} error={error} />
+
+      <button
+        type="button"
+        className={`btn-stop mobile-stop-fab${emergency ? " active" : ""}`}
+        onClick={onStop}
+        title={t("layout.emergencyStop")}
+        aria-label={t("layout.emergencyStop")}
+      >
+        {t("common.stop")}
+      </button>
     </div>
   );
 }

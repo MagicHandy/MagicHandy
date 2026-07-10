@@ -43,13 +43,12 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 	defer cancel()
 
 	body := openAIChatRequest{
-		Model:       firstNonEmpty(request.Model, p.model),
-		Messages:    request.Messages,
-		Stream:      true,
-		Temperature: request.Temperature,
-		ResponseFormat: &openAIResponseFormat{
-			Type: "json_object",
-		},
+		Model:          firstNonEmpty(request.Model, p.model),
+		Messages:       request.Messages,
+		Stream:         true,
+		Temperature:    request.Temperature,
+		MaxTokens:      request.MaxTokens,
+		ResponseFormat: openAIResponseFormatFromRequest(request.ResponseFormat),
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -166,11 +165,51 @@ type openAIChatRequest struct {
 	Messages       []Message             `json:"messages"`
 	Stream         bool                  `json:"stream"`
 	Temperature    float64               `json:"temperature,omitempty"`
+	MaxTokens      int                   `json:"max_tokens,omitempty"`
 	ResponseFormat *openAIResponseFormat `json:"response_format,omitempty"`
 }
 
 type openAIResponseFormat struct {
-	Type string `json:"type"`
+	Type       string                 `json:"type"`
+	JSONSchema *openAIJSONSchemaBlock `json:"json_schema,omitempty"`
+}
+
+type openAIJSONSchemaBlock struct {
+	Name   string         `json:"name"`
+	Strict bool           `json:"strict"`
+	Schema map[string]any `json:"schema"`
+}
+
+func openAIResponseFormatFromRequest(format *ResponseFormat) *openAIResponseFormat {
+	if format == nil {
+		return &openAIResponseFormat{Type: "json_object"}
+	}
+	switch format.Type {
+	case "json_schema":
+		if format.JSONSchema == nil {
+			return &openAIResponseFormat{Type: "json_object"}
+		}
+		return &openAIResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &openAIJSONSchemaBlock{
+				Name:   firstNonEmpty(format.Name, "response"),
+				Strict: format.Strict,
+				Schema: format.JSONSchema,
+			},
+		}
+	case "json_object":
+		return &openAIResponseFormat{Type: "json_object"}
+	default:
+		if format.JSONSchema != nil {
+			return openAIResponseFormatFromRequest(&ResponseFormat{
+				Type:       "json_schema",
+				Name:       format.Name,
+				Strict:     format.Strict,
+				JSONSchema: format.JSONSchema,
+			})
+		}
+		return &openAIResponseFormat{Type: "json_object"}
+	}
 }
 
 type openAIChatChunk struct {

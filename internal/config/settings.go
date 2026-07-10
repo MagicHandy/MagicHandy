@@ -75,7 +75,16 @@ const (
 	// DefaultLLMModel is a placeholder model name users replace with a local model.
 	DefaultLLMModel = "local-model"
 	// DefaultLLMRequestTimeoutMillis caps one chat or repair pass.
-	DefaultLLMRequestTimeoutMillis = 120000
+	DefaultLLMRequestTimeoutMillis = 60000
+
+	// PromptSetAutoDomV1PTBR is the built-in AutoDom behavior profile.
+	PromptSetAutoDomV1PTBR = "autodom_v1_pt_br"
+	// DefaultAutoDomRequestTimeoutMillis caps one AutoDom LLM turn.
+	DefaultAutoDomRequestTimeoutMillis = 35000
+	// DefaultDominatrixRampMinutes is the default time to reach peak mood.
+	DefaultDominatrixRampMinutes = 10
+	// MaxDominatrixRampMinutes caps the dominatrix ramp setting.
+	MaxDominatrixRampMinutes = 10
 )
 
 // Settings is the versioned on-disk application settings schema.
@@ -85,6 +94,7 @@ type Settings struct {
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
 	LLM         LLMSettings         `json:"llm"`
+	AutoDom     AutoDomSettings     `json:"autodom"`
 	Diagnostics DiagnosticsSettings `json:"diagnostics"`
 }
 
@@ -147,6 +157,14 @@ type LLMSettings struct {
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
 }
 
+// AutoDomSettings contains autonomous AutoDom session preferences.
+type AutoDomSettings struct {
+	PromptSet               string `json:"prompt_set"`
+	AllowDominatrix         bool   `json:"allow_dominatrix"`
+	DominatrixRampMinutes   int    `json:"dominatrix_ramp_minutes"`
+	RequestTimeoutMillis    int    `json:"request_timeout_ms"`
+}
+
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
 type DiagnosticsSettings struct {
 	Verbosity string `json:"verbosity"`
@@ -159,6 +177,7 @@ type PublicSettings struct {
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
 	LLM         LLMSettings               `json:"llm"`
+	AutoDom     AutoDomSettings           `json:"autodom"`
 	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
 	Options     PublicSettingsOptionHints `json:"options"`
 }
@@ -191,6 +210,7 @@ type SettingsUpdate struct {
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMSettings         `json:"llm"`
+	AutoDom            AutoDomSettings     `json:"autodom"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
@@ -235,6 +255,12 @@ func DefaultSettings() Settings {
 			PromptSet:            PromptSetMagicHandyMotionV1,
 			RequestTimeoutMillis: DefaultLLMRequestTimeoutMillis,
 		},
+		AutoDom: AutoDomSettings{
+			PromptSet:              PromptSetAutoDomV1PTBR,
+			AllowDominatrix:        true,
+			DominatrixRampMinutes:  DefaultDominatrixRampMinutes,
+			RequestTimeoutMillis:   DefaultAutoDomRequestTimeoutMillis,
+		},
 		Diagnostics: DiagnosticsSettings{
 			Verbosity: DiagnosticsVerbosityNormal,
 		},
@@ -256,6 +282,7 @@ func (s Settings) Public() PublicSettings {
 		},
 		Motion:      s.Motion,
 		LLM:         s.LLM,
+		AutoDom:     s.AutoDom,
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -295,6 +322,7 @@ func (s Settings) Public() PublicSettings {
 				PromptSetMagicHandyMotionV1PTBR,
 				PromptSetMagicHandyMotionV1ZHHans,
 				PromptSetMagicHandyMotionV1JA,
+				PromptSetAutoDomV1PTBR,
 			},
 		},
 	}
@@ -311,6 +339,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
 	next.LLM = normalizeLLMStrings(update.LLM)
+	next.AutoDom = normalizeAutoDomSettings(update.AutoDom)
 	next.Diagnostics = update.Diagnostics
 
 	if update.ClearConnectionKey {
@@ -399,7 +428,10 @@ func validateSettings(settings Settings) error {
 	if err := validateMotionSettings(settings.Motion); err != nil {
 		return err
 	}
-	return validateLLMSettings(settings.LLM)
+	if err := validateLLMSettings(settings.LLM); err != nil {
+		return err
+	}
+	return validateAutoDomSettings(settings.AutoDom)
 }
 
 func applyMissingDefaults(settings Settings) Settings {
@@ -457,6 +489,14 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.LLM.RequestTimeoutMillis == 0 {
 		settings.LLM.RequestTimeoutMillis = defaults.LLM.RequestTimeoutMillis
 	}
+	settings.LLM = migrateLegacyLLMModel(settings.LLM)
+	if settings.AutoDom.PromptSet == "" {
+		settings.AutoDom.PromptSet = defaults.AutoDom.PromptSet
+	}
+	if settings.AutoDom.RequestTimeoutMillis == 0 {
+		settings.AutoDom.RequestTimeoutMillis = defaults.AutoDom.RequestTimeoutMillis
+	}
+	settings.AutoDom = normalizeAutoDomSettings(settings.AutoDom)
 	settings.LLM = normalizeLLMStrings(settings.LLM)
 	if settings.Diagnostics.Verbosity == "" {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
@@ -524,6 +564,48 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
 	return settings
+}
+
+func migrateLegacyLLMModel(settings LLMSettings) LLMSettings {
+	lowerPath := strings.ToLower(settings.LlamaCPPModelPath)
+	lowerModel := strings.ToLower(settings.Model)
+	if strings.Contains(lowerPath, "dolphin") || strings.Contains(lowerPath, "nemo") {
+		settings.LlamaCPPModelPath = ""
+	}
+	if strings.Contains(lowerModel, "dolphin") || strings.Contains(lowerModel, "nemo") {
+		settings.Model = DefaultLLMModel
+	}
+	return settings
+}
+
+func normalizeAutoDomSettings(settings AutoDomSettings) AutoDomSettings {
+	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
+	if settings.PromptSet == "" {
+		settings.PromptSet = PromptSetAutoDomV1PTBR
+	}
+	if settings.RequestTimeoutMillis == 0 {
+		settings.RequestTimeoutMillis = DefaultAutoDomRequestTimeoutMillis
+	}
+	if settings.DominatrixRampMinutes == 0 {
+		settings.DominatrixRampMinutes = DefaultDominatrixRampMinutes
+	}
+	if settings.DominatrixRampMinutes > MaxDominatrixRampMinutes {
+		settings.DominatrixRampMinutes = MaxDominatrixRampMinutes
+	}
+	return settings
+}
+
+func validateAutoDomSettings(settings AutoDomSettings) error {
+	if settings.PromptSet == "" {
+		return errors.New("autodom prompt set is required")
+	}
+	if settings.RequestTimeoutMillis < 1000 || settings.RequestTimeoutMillis > 120000 {
+		return errors.New("autodom request timeout must be between 1000 and 120000 milliseconds")
+	}
+	if settings.DominatrixRampMinutes < 1 || settings.DominatrixRampMinutes > MaxDominatrixRampMinutes {
+		return fmt.Errorf("autodom dominatrix ramp must be between 1 and %d minutes", MaxDominatrixRampMinutes)
+	}
+	return nil
 }
 
 func oneOf(value string, allowed ...string) bool {

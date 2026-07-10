@@ -235,9 +235,10 @@ func (m *Manager) run(ctx context.Context, mode string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if mode == ModeFreestyle {
+			switch mode {
+			case ModeFreestyle:
 				m.tickFreestyle(ctx)
-			} else {
+			default:
 				m.tickChat(ctx)
 			}
 		}

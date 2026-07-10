@@ -25,17 +25,12 @@ func TestSourceFileLineBudgets(t *testing.T) {
 			},
 		},
 		{
-			root:       "web",
-			extension:  ".js",
-			defaultMax: 800,
-		},
-		{
-			root:       "web",
+			root:       "frontend",
 			extension:  ".ts",
 			defaultMax: 800,
 		},
 		{
-			root:       "web",
+			root:       "frontend",
 			extension:  ".tsx",
 			defaultMax: 800,
 		},

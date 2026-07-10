@@ -145,6 +145,30 @@ export interface StatusSnapshot {
     success_score?: number;
     duration_ms?: number;
   } | null;
+  chat_auto?: ChatAutoState;
+}
+
+export interface ChatAutoMotion {
+  action?: string;
+  velocidade?: number;
+  intensidade?: number;
+  regiao?: string;
+  tipo_batida?: string;
+  atraso_ms?: number;
+}
+
+export interface ChatAutoState {
+  active?: boolean;
+  stamina?: number;
+  humor?: string;
+  mood_progress?: number;
+  posicao?: string;
+  motion?: ChatAutoMotion;
+  last_reply?: string;
+  reply_partial?: string;
+  segment_ends_in_ms?: number;
+  llm_busy?: boolean;
+  error?: string;
 }
 
 export interface ChatMessage {
@@ -313,6 +337,32 @@ export interface AppSettings {
   [key: string]: unknown;
 }
 
+export interface MotionSample {
+  position_percent: number;
+  time_millis: number;
+}
+
+export interface EngineSnapshot {
+  running: boolean;
+  paused: boolean;
+  running_ms?: number;
+  phase?: string;
+  target?: { label?: string; speed_percent?: number; pattern_identifier?: string };
+  last_sample?: MotionSample;
+  settings?: {
+    stroke_min_percent?: number;
+    stroke_max_percent?: number;
+    [key: string]: unknown;
+  };
+  last_error?: string;
+}
+
+export interface MotionInfo {
+  available: boolean;
+  error?: string;
+  engine?: EngineSnapshot;
+}
+
 export interface MotionVisual {
   position_pct: number;
   target_pct: number;
@@ -329,6 +379,8 @@ export interface MotionVisual {
   curve_duration_ms?: number;
   live_position_pct?: number;
   live_sample_mono?: number;
+  schedule_active?: boolean;
+  stream_elapsed_ms?: number;
 }
 
 export interface ImportBlockSummary {
@@ -398,4 +450,101 @@ export interface FunscriptFileEntry {
   action_count: number;
   block_count: number;
   source_format?: string | null;
+}
+
+export interface ControllerSnapshot {
+  client_id?: string;
+  active: boolean;
+  read_only: boolean;
+  reason?: string;
+  active_client_id?: string;
+  active_client_age_ms?: number;
+  lease_expires_in_ms?: number;
+}
+
+export interface MemoryItem {
+  id: string;
+  text: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface MemoryState {
+  enabled: boolean;
+  memories?: MemoryItem[];
+}
+
+export interface PromptSet {
+  id: string;
+  name: string;
+  system: string;
+  builtin?: boolean;
+}
+
+export interface PromptSetsPayload {
+  selected?: string;
+  default?: string;
+  sets?: PromptSet[];
+  set?: PromptSet;
+}
+
+export interface BluetoothBridgeSnapshot {
+  connected?: boolean;
+  supported?: boolean;
+  ready?: boolean;
+  status?: string;
+  message?: string;
+  device_name?: string;
+  pending?: number;
+  inflight?: number;
+  last_ack?: { ok?: boolean; status?: string; error?: string };
+}
+
+export interface BluetoothClientStatus {
+  client_id: string;
+  connected: boolean;
+  supported: boolean;
+  device_name?: string;
+  protocol?: string;
+  status?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface BluetoothStatusResponse {
+  status: string;
+  dispatch_owner?: string;
+  bluetooth: BluetoothBridgeSnapshot;
+  diagnostics?: Record<string, unknown>;
+}
+
+export interface BluetoothCommand {
+  id: string;
+  path: string;
+  body?: Record<string, unknown>;
+}
+
+export interface BluetoothCommandsResponse {
+  status: string;
+  commands?: BluetoothCommand[];
+  bluetooth: BluetoothBridgeSnapshot;
+}
+
+export interface BluetoothAckPayload {
+  id: string;
+  ok: boolean;
+  status?: string;
+  elapsed_ms?: number;
+  error?: string;
+  response?: Record<string, unknown>;
+}
+
+export interface ChatStreamEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
+export interface ChatHistoryMessage {
+  role: string;
+  content: string;
 }

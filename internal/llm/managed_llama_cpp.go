@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const managedLlamaLoadTimeout = 30 * time.Second
+const managedLlamaLoadTimeout = 90 * time.Second
 
 // ManagedLlamaCPPOptions configures a managed llama-server process.
 type ManagedLlamaCPPOptions struct {

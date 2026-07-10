@@ -1,15 +1,25 @@
 import type {
   AppSettings,
+  BluetoothAckPayload,
+  BluetoothBridgeSnapshot,
+  BluetoothClientStatus,
+  BluetoothCommandsResponse,
+  BluetoothStatusResponse,
+  ChatHistoryMessage,
   ChatMessage,
+  ChatStreamEvent,
+  ControllerSnapshot,
   DeviceTransport,
   FunscriptFileEntry,
   ImportResult,
   ManualQueueDraft,
   ManualQueuePreview,
+  MemoryState,
   MotionBlock,
   MotionVisual,
   OperationMode,
   Persona,
+  PromptSetsPayload,
   SavedQueueSummary,
   SessionRow,
   SignalPreset,
@@ -81,6 +91,85 @@ async function request<T>(
   }
 
   return data as T;
+}
+
+async function bluetoothRequest<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const url = path.startsWith("/") ? `${API_BASE}${path}` : `${API_BASE}/${path}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { Accept: "application/json", ...controllerHeaders() },
+    signal,
+  });
+  const text = await res.text();
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+  if (!res.ok) {
+    throw new ApiError(extractErrorMessage(data, res.status), res.status, data);
+  }
+  return data as T;
+}
+
+/** POST SSE chat stream from /api/chat/stream */
+export async function streamChat(
+  message: string,
+  history: ChatHistoryMessage[],
+  onEvent: (e: ChatStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      ...controllerHeaders(),
+    },
+    body: JSON.stringify({ message, history }),
+    signal,
+  });
+  if (!res.ok) {
+    let errMsg = `Chat request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body && typeof body === "object" && "error" in body) {
+        errMsg = String((body as { error: unknown }).error);
+      }
+    } catch {
+      /* keep fallback */
+    }
+    throw new ApiError(errMsg, res.status);
+  }
+  if (!res.body) throw new ApiError("chat stream unavailable", res.status);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let event = "message";
+      const dataLines: string[] = [];
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      if (!dataLines.length) continue;
+      try {
+        onEvent({ event, data: JSON.parse(dataLines.join("\n")) } as ChatStreamEvent);
+      } catch {
+        /* ignore malformed frame */
+      }
+    }
+  }
 }
 
 export const api = {
@@ -818,6 +907,74 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+
+  getController: () => request<ControllerSnapshot>("/controller"),
+
+  stopMotion: () =>
+    request<{ ok: boolean }>("/motion/stop", { method: "POST", body: JSON.stringify({}) }),
+
+  getMemory: () => request<MemoryState>("/memory"),
+  addMemory: (text: string) =>
+    request<MemoryState>("/memory", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  setMemoryEnabled: (enabled: boolean) =>
+    request("/memory/enabled", { method: "POST", body: JSON.stringify({ enabled }) }),
+  setMemoryItemEnabled: (id: string, enabled: boolean) =>
+    request(`/memory/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+  removeMemory: (id: string) =>
+    request(`/memory/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  clearMemory: () => request("/memory/clear", { method: "POST", body: JSON.stringify({}) }),
+
+  getPromptSets: () => request<PromptSetsPayload>("/prompt-sets"),
+  createPromptSet: (name: string, system: string) =>
+    request<PromptSetsPayload>("/prompt-sets", {
+      method: "POST",
+      body: JSON.stringify({ name, system }),
+    }),
+  updatePromptSet: (id: string, name: string, system: string) =>
+    request<PromptSetsPayload>(`/prompt-sets/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ name, system }),
+    }),
+  deletePromptSet: (id: string) =>
+    request<PromptSetsPayload>(`/prompt-sets/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  bluetoothStatus: () => request<BluetoothStatusResponse>("/transport/bluetooth/status"),
+  postBluetoothStatus: (status: BluetoothClientStatus) =>
+    request<BluetoothStatusResponse>("/transport/bluetooth/status", {
+      method: "POST",
+      body: JSON.stringify(status),
+    }),
+  bluetoothConnect: (status: BluetoothClientStatus) =>
+    request<BluetoothStatusResponse>("/transport/bluetooth/connect", {
+      method: "POST",
+      body: JSON.stringify(status),
+    }),
+  bluetoothDisconnect: (client_id: string, message?: string) =>
+    request<BluetoothStatusResponse>("/transport/bluetooth/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ client_id, message }),
+    }),
+  bluetoothCommands: (bridgeClientId: string, waitSeconds: number, signal?: AbortSignal) =>
+    bluetoothRequest<BluetoothCommandsResponse>(
+      `/transport/bluetooth/commands?client_id=${encodeURIComponent(bridgeClientId)}&wait=${waitSeconds}`,
+      signal,
+    ),
+  bluetoothAck: (bridgeClientId: string, payload: BluetoothAckPayload) =>
+    request<{ status: string; bluetooth: BluetoothBridgeSnapshot }>(
+      "/transport/bluetooth/ack",
+      {
+        method: "POST",
+        body: JSON.stringify({ client_id: bridgeClientId, ...payload }),
+      },
+    ),
 
 };
 

@@ -101,19 +101,44 @@ func (c *controllerRuntime) Touch(clientID string) controllerSnapshot {
 	now := c.nowLocked()
 	c.expireLocked(now)
 	if clientID == "" {
-		return c.snapshotLocked(clientID, "missing controller client id", now)
+		snap := c.snapshotLocked(clientID, "missing controller client id", now)
+		// #region agent log
+		agentDebugLog("H2", "controller.go:Touch", "missing_client_id", map[string]any{
+			"read_only": snap.ReadOnly, "reason": snap.Reason,
+		})
+		// #endregion
+		return snap
 	}
 	if c.activeClientID == "" {
 		c.activeClientID = clientID
 		c.activeSince = now
 		c.lastSeenAt = now
-		return c.snapshotLocked(clientID, "", now)
+		snap := c.snapshotLocked(clientID, "", now)
+		// #region agent log
+		agentDebugLog("H1", "controller.go:Touch", "lease_acquired", map[string]any{
+			"client_id": clientID, "active": snap.Active, "read_only": snap.ReadOnly,
+		})
+		// #endregion
+		return snap
 	}
 	if c.activeClientID == clientID {
 		c.lastSeenAt = now
-		return c.snapshotLocked(clientID, "", now)
+		snap := c.snapshotLocked(clientID, "", now)
+		// #region agent log
+		agentDebugLog("H1", "controller.go:Touch", "lease_renewed", map[string]any{
+			"client_id": clientID, "active": snap.Active, "read_only": snap.ReadOnly,
+		})
+		// #endregion
+		return snap
 	}
-	return c.snapshotLocked(clientID, "another browser tab is the active controller", now)
+	snap := c.snapshotLocked(clientID, "another browser tab is the active controller", now)
+	// #region agent log
+	agentDebugLog("H1", "controller.go:Touch", "lease_denied", map[string]any{
+		"client_id": clientID, "active_client_id": c.activeClientID,
+		"read_only": snap.ReadOnly, "reason": snap.Reason,
+	})
+	// #endregion
+	return snap
 }
 
 func (c *controllerRuntime) Release(clientID string) {

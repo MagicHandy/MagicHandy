@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/manualqueue"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
@@ -357,37 +358,105 @@ func (s *Server) motionEngineForStart() (*motion.Engine, error) {
 }
 
 func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
+	var inner transport.Transport
 	if s.motion.transport != nil {
-		return s.motion.transport, nil
+		inner = s.motion.transport
+	} else {
+		settings, _ := s.store.Snapshot()
+		var err error
+		switch settings.Device.HSPDispatchOwner {
+		case config.DispatchOwnerCloudREST:
+			inner, err = s.newCloudTransport()
+		case config.DispatchOwnerBrowserBluetooth:
+			snapshot := s.bluetooth.bridge.Snapshot()
+			if !snapshot.Ready {
+				message := snapshot.Message
+				if message == "" {
+					message = "Bluetooth is not connected."
+				}
+				return nil, fmt.Errorf("browser Bluetooth is not ready: %s", message)
+			}
+			inner, err = s.newBluetoothTransport()
+		case config.DispatchOwnerIntiface:
+			inner, err = s.newIntifaceTransport()
+		default:
+			return nil, errMotionUnavailable
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return transport.NewRecordingTransport(inner, s.outgoingSchedule()), nil
+}
+
+// newMotionCommandTransport drives procedural/manual-queue players. When the
+// configured device is not connected it falls back to an in-memory transport so
+// the live visualizer still mirrors outgoing HSP.
+func (s *Server) newMotionCommandTransport() (transport.Transport, error) {
+	settings, _ := s.store.Snapshot()
+	if !s.deviceMotionReady(settings) {
+		return transport.NewRecordingTransport(transport.NewFake(), s.outgoingSchedule()), nil
+	}
+	return s.newSelectedMotionTransport()
+}
+
+func (s *Server) deviceMotionReady(settings config.Settings) bool {
+	intiface := s.intifaceDiagnostics()
+	cloud := s.cloudDiagnostics()
+	state := resolveLsoDeviceStatus(settings, intiface, cloud, s.cloud.baseURL)
+	return state.Connected
+}
+
+func (s *Server) activeProceduralPlayerSnapshot() (manualqueue.Snapshot, bool) {
+	s.chatAuto.mu.Lock()
+	autoPlayer := s.chatAuto.player
+	s.chatAuto.mu.Unlock()
+	if snap, ok := snapshotIfRunning(autoPlayer); ok {
+		return snap, true
 	}
 
-	settings, _ := s.store.Snapshot()
-	switch settings.Device.HSPDispatchOwner {
-	case config.DispatchOwnerCloudREST:
-		cloud, err := s.newCloudTransport()
-		if err != nil {
-			return nil, err
-		}
-		return cloud, nil
-	case config.DispatchOwnerBrowserBluetooth:
-		snapshot := s.bluetooth.bridge.Snapshot()
-		if !snapshot.Ready {
-			message := snapshot.Message
-			if message == "" {
-				message = "Bluetooth is not connected."
-			}
-			return nil, fmt.Errorf("browser Bluetooth is not ready: %s", message)
-		}
-		bluetooth, err := s.newBluetoothTransport()
-		if err != nil {
-			return nil, err
-		}
-		return bluetooth, nil
-	case config.DispatchOwnerIntiface:
-		return s.newIntifaceTransport()
-	default:
-		return nil, errMotionUnavailable
+	s.chatChaos.mu.Lock()
+	chatPlayer := s.chatChaos.player
+	s.chatChaos.mu.Unlock()
+	if snap, ok := snapshotIfRunning(chatPlayer); ok {
+		return snap, true
 	}
+
+	s.freestyleChaos.mu.Lock()
+	freestylePlayer := s.freestyleChaos.player
+	s.freestyleChaos.mu.Unlock()
+	if snap, ok := snapshotIfRunning(freestylePlayer); ok {
+		return snap, true
+	}
+
+	s.manualQueue.mu.Lock()
+	manualPlayer := s.manualQueue.player
+	s.manualQueue.mu.Unlock()
+	if snap, ok := snapshotIfRunning(manualPlayer); ok {
+		return snap, true
+	}
+	return manualqueue.Snapshot{}, false
+}
+
+func snapshotIfRunning(player *manualqueue.Player) (manualqueue.Snapshot, bool) {
+	if player == nil {
+		return manualqueue.Snapshot{}, false
+	}
+	snap := player.Snapshot()
+	if snap.Running && !snap.Paused {
+		return snap, true
+	}
+	return manualqueue.Snapshot{}, false
+}
+
+func (s *Server) chatChaosActive() bool {
+	s.chatChaos.mu.Lock()
+	player := s.chatChaos.player
+	s.chatChaos.mu.Unlock()
+	if player == nil {
+		return false
+	}
+	return player.Snapshot().Running
 }
 
 func (s *Server) currentMotionEngine() *motion.Engine {

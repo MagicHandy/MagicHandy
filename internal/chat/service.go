@@ -75,6 +75,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		Messages:    messages,
 		Model:       s.Model,
 		Temperature: 0.2,
+		MaxTokens:   256,
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
@@ -108,6 +109,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		Messages:    repairMessages,
 		Model:       s.Model,
 		Temperature: 0,
+		MaxTokens:   256,
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "repair_delta", Phase: "repair", Text: text})
 	})

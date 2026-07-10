@@ -92,6 +92,13 @@ func (s *Server) handleDeviceTransportPost(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleDeviceConnect(w http.ResponseWriter, r *http.Request) {
 	settings, _ := s.store.Snapshot()
+	// #region agent log
+	agentDebugLog("H3", "device.go:handleDeviceConnect", "connect_requested", map[string]any{
+		"transport":            mapOwnerToDeviceTransport(settings.Device.HSPDispatchOwner),
+		"handy_key_configured": settings.Device.HandyConnectionKey != "",
+		"client_id":            clientIDFromRequest(r),
+	})
+	// #endregion
 	switch settings.Device.HSPDispatchOwner {
 	case config.DispatchOwnerCloudREST:
 		s.handleDeviceCloudConnect(w, r)
@@ -288,6 +295,16 @@ func (s *Server) bootstrapCloud(ctx context.Context) (map[string]any, error) {
 		}
 		result["error"] = message
 	}
+	// #region agent log
+	agentDebugLog("H4", "device.go:bootstrapCloud", "cloud_check", map[string]any{
+		"connected": connected, "check_ok": check.OK, "hsp_available": check.HSPAvailable,
+		"status": check.Status, "error": result["error"],
+		"key_configured": func() bool {
+			st, _ := s.store.Snapshot()
+			return st.Device.HandyConnectionKey != ""
+		}(),
+	})
+	// #endregion
 	return result, nil
 }
 
@@ -318,6 +335,42 @@ func (s *Server) startIntifaceBootstrapLoop(ctx context.Context) {
 				_, _ = s.bootstrapIntiface(bootstrapCtx)
 				cancel()
 				if client.Connected() && client.SelectedDeviceID() != "" {
+					return
+				}
+			}
+		}
+	}()
+}
+
+func (s *Server) startCloudBootstrapLoop(ctx context.Context) {
+	go func() { //nolint:gosec // bootstrap loop outlives individual HTTP requests
+		tryConnect := func() (stop bool) {
+			settings, _ := s.store.Snapshot()
+			if settings.Device.HSPDispatchOwner != config.DispatchOwnerCloudREST {
+				return true
+			}
+			if strings.TrimSpace(settings.Device.HandyConnectionKey) == "" {
+				return true
+			}
+			if s.cloudDiagnostics().Connected {
+				return true
+			}
+			bootstrapCtx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			_, _ = s.bootstrapCloud(bootstrapCtx)
+			cancel()
+			return s.cloudDiagnostics().Connected
+		}
+		if tryConnect() {
+			return
+		}
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if tryConnect() {
 					return
 				}
 			}

@@ -17,9 +17,11 @@ type Message struct {
 
 // ChatRequest is the provider-neutral streaming chat request.
 type ChatRequest struct {
-	Messages    []Message
-	Model       string
-	Temperature float64
+	Messages       []Message
+	Model          string
+	Temperature    float64
+	MaxTokens      int
+	ResponseFormat *ResponseFormat
 }
 
 // Provider streams text from one local LLM runtime.
