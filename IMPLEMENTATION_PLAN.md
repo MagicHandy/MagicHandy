@@ -52,7 +52,7 @@ voice-UX and stacked-layout defects.
 | 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | #49 |
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | #49 |
-| 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | Planned | — |
+| 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -716,9 +716,12 @@ Status: **complete** for the supported localhost browser path.
 
 ### Slice 13.8: Voice UX Hardening
 
-Status: planned. Source: the 2026-07-10 live UI/UX pass over merged
+Status: **complete**. Source: the 2026-07-10 live UI/UX pass over merged
 13.5-13.7 ([docs/ui-ux-review.md](docs/ui-ux-review.md)); fix order and
-file/line anchors live there.
+file/line anchors live there. The slice also replaced the sidebar's active
+link treatment: the inset accent bar (clipped into a hook by the corner
+radius) became a soft azure fill (`--accent-tint`), with hover staying
+neutral graphite.
 
 - Stacked-layout (≤900px) chat fix: the log's `min-height` overflows its
   collapsed shell and paints over the composer; bound the log height at the

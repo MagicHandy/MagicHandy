@@ -17,6 +17,9 @@ const PROVIDER_LABELS: Record<string, string> = {
 interface Props {
   settings: PublicSettings;
   locked: boolean;
+  // Unsaved voice edits: worker controls act on the saved config, so they
+  // lock until the form is saved.
+  dirty: boolean;
   patch: (next: Partial<PublicSettings["voice"]>) => void;
   newKey: string;
   setNewKey: Dispatch<SetStateAction<string>>;
@@ -24,7 +27,7 @@ interface Props {
   setClearKey: Dispatch<SetStateAction<boolean>>;
 }
 
-export function VoiceSettingsPanel({ settings: s, locked, patch, newKey, setNewKey, clearKey, setClearKey }: Props) {
+export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, setNewKey, clearKey, setClearKey }: Props) {
   const voice = s.voice;
   const providerSelect = (value: string, options: string[] | undefined, onChange: (value: string) => void) => (
     <select value={value} disabled={locked} onChange={(event) => onChange(event.target.value)}>
@@ -54,7 +57,7 @@ export function VoiceSettingsPanel({ settings: s, locked, patch, newKey, setNewK
         <label className="field"><span className="label">Worker arguments</span><textarea rows={4} value={joinArgs(voice.asr_worker_args)} disabled={locked} onChange={(event) => patch({ asr_worker_args: splitArgs(event.target.value) })} /></label>
       </>}
       {voice.asr_provider !== "none" && voice.asr_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ asr_worker_path: event.target.value })} /></label></details>}
-      <VoiceWorkers locked={locked} role="asr" />
+      <VoiceWorkers locked={locked} role="asr" dirty={dirty} />
 
       <div className="divider" />
       <h3 className="group-title">Speech output (TTS)</h3>
@@ -78,7 +81,7 @@ export function VoiceSettingsPanel({ settings: s, locked, patch, newKey, setNewK
       </>}
       {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ tts_worker_path: event.target.value })} /></label></details>}
       {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies</span></label>}
-      <VoiceWorkers locked={locked} role="tts" />
+      <VoiceWorkers locked={locked} role="tts" dirty={dirty} />
     </>
   );
 }

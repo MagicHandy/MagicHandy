@@ -10,6 +10,9 @@ import { api, streamChat } from "../api/client";
 import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
 import { MicrophoneIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
+import { playBlob } from "../util/audio";
+
+const RECORDING_LIMIT_SECONDS = 30;
 
 interface Msg {
   id: string;
@@ -48,7 +51,9 @@ export function ChatPanel() {
   const microphoneChunks = useRef<Blob[]>([]);
   const wantsRecording = useRef(false);
   const recordingTimer = useRef<number | null>(null);
+  const countdownTimer = useRef<number | null>(null);
   const [recording, setRecording] = useState(false);
+  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState(RECORDING_LIMIT_SECONDS);
   const [transcribing, setTranscribing] = useState(false);
   const mounted = useRef(true);
 
@@ -81,6 +86,7 @@ export function ChatPanel() {
       mounted.current = false;
       wantsRecording.current = false;
       if (recordingTimer.current !== null) window.clearTimeout(recordingTimer.current);
+      if (countdownTimer.current !== null) window.clearInterval(countdownTimer.current);
       if (recorder.current?.state === "recording") recorder.current.stop();
       microphoneStream.current?.getTracks().forEach((track) => track.stop());
     };
@@ -161,6 +167,13 @@ export function ChatPanel() {
   }
 
   const locked = !backendOnline || readOnly;
+
+  // Speech input shows only when it can work: voice on and an ASR provider
+  // selected. A configured-but-stopped worker leaves the button disabled with
+  // a pointer to Settings — workers are never started implicitly from here.
+  const voiceSettings = state?.settings?.voice;
+  const asrConfigured = Boolean(voiceSettings?.enabled && voiceSettings.asr_provider && voiceSettings.asr_provider !== "none");
+  const asrRunning = state?.voice?.workers?.asr?.state === "running";
 
   async function sendText(input: string) {
     const text = input.trim();
@@ -257,7 +270,14 @@ export function ChatPanel() {
       nextRecorder.onstop = () => void finishRecording(nextRecorder.mimeType || preferred || "audio/webm");
       nextRecorder.start(250);
       setRecording(true);
-      recordingTimer.current = window.setTimeout(stopRecording, 30000);
+      // The recording cap is visible: the button counts the seconds down.
+      setRecordingSecondsLeft(RECORDING_LIMIT_SECONDS);
+      const startedAt = Date.now();
+      countdownTimer.current = window.setInterval(() => {
+        const left = RECORDING_LIMIT_SECONDS - Math.floor((Date.now() - startedAt) / 1000);
+        setRecordingSecondsLeft(Math.max(0, left));
+      }, 1000);
+      recordingTimer.current = window.setTimeout(stopRecording, RECORDING_LIMIT_SECONDS * 1000);
     } catch (error) {
       wantsRecording.current = false;
       show(error instanceof Error ? error.message : "Microphone permission was denied.", "error");
@@ -269,6 +289,10 @@ export function ChatPanel() {
     if (recordingTimer.current !== null) {
       window.clearTimeout(recordingTimer.current);
       recordingTimer.current = null;
+    }
+    if (countdownTimer.current !== null) {
+      window.clearInterval(countdownTimer.current);
+      countdownTimer.current = null;
     }
     if (recorder.current?.state === "recording") {
       // Lock out a second recording until this recorder's asynchronous stop
@@ -349,18 +373,21 @@ export function ChatPanel() {
           }}
         />
         <div className="chat-actions">
-          <button
-            type="button"
-            className="btn btn-secondary mic-button"
-            data-recording={recording || undefined}
-            disabled={locked || busy || transcribing}
-            aria-pressed={recording}
-            onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void startRecording(); }}
-            onPointerUp={(event) => { event.preventDefault(); stopRecording(); }}
-            onPointerCancel={stopRecording}
-            onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); void startRecording(); } }}
-            onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); stopRecording(); } }}
-          ><MicrophoneIcon />{recording ? "Listening" : transcribing ? "Transcribing" : "Hold to talk"}</button>
+          {asrConfigured && (
+            <button
+              type="button"
+              className="btn btn-secondary mic-button"
+              data-recording={recording || undefined}
+              disabled={locked || busy || transcribing || !asrRunning}
+              aria-pressed={recording}
+              title={asrRunning ? `Records up to ${RECORDING_LIMIT_SECONDS} seconds` : "Start the speech-input worker in Settings → Voice"}
+              onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void startRecording(); }}
+              onPointerUp={(event) => { event.preventDefault(); stopRecording(); }}
+              onPointerCancel={stopRecording}
+              onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); void startRecording(); } }}
+              onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); stopRecording(); } }}
+            ><MicrophoneIcon />{recording ? `Listening ${recordingSecondsLeft}s` : transcribing ? "Transcribing" : "Hold to talk"}</button>
+          )}
           <button type="submit" className="btn btn-primary" disabled={locked || busy || recording || transcribing || !draft.trim()}>Send</button>
           <span className="form-status">{busy ? "Streaming…" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
           <span className="hint-inline" aria-hidden="true">Ctrl+Enter to send</span>
@@ -415,20 +442,6 @@ function blobBase64(blob: Blob): Promise<string> {
       else resolve(value.slice(comma + 1));
     };
     reader.readAsDataURL(blob);
-  });
-}
-
-function playBlob(blob: Blob): Promise<void> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    const finish = () => {
-      URL.revokeObjectURL(url);
-      resolve();
-    };
-    audio.onended = finish;
-    audio.onerror = finish;
-    void audio.play().catch(finish);
   });
 }
 

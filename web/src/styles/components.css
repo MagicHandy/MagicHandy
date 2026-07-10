@@ -490,6 +490,14 @@ textarea:disabled {
   min-height: 32px;
   margin-bottom: 2px;
 }
+.voice-quick-warning {
+  display: flex;
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+}
+.voice-quick-warning .status-text {
+  white-space: normal;
+}
 
 @keyframes chat-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -527,6 +535,14 @@ textarea:disabled {
   .split,
   .split.reverse {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* Stacked panels are content-sized, so the log must carry its own bounded
+     height; the desktop min-height would overflow the collapsed shell and
+     paint over the composer (docs/ui-ux-review.md H1). */
+  .chat-log {
+    min-height: 0;
+    height: 45vh;
+    height: clamp(240px, 45dvh, 480px);
   }
 }
 

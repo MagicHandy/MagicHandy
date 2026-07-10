@@ -41,7 +41,7 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[] } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown } = {}) {
   const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
@@ -50,6 +50,7 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
     if (u.includes("/api/transport/bluetooth/status")) return jsonRes({ status: "success", dispatch_owner: state.settings.device.hsp_dispatch_owner, bluetooth: state.bluetooth_bridge ?? {} });
     if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0 });
     if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
+    if (u.includes("/api/voice/status")) return jsonRes(opts.voiceStatus ?? {});
     if (u.includes("/api/settings")) return jsonRes({ settings: state.settings });
     if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
@@ -152,9 +153,11 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
     expect(await screen.findByRole("heading", { name: /^voice$/i })).toBeInTheDocument();
-    // Both roles are visible with a dot+text state, even with voice off.
-    expect(screen.getAllByText(/speech output \(tts\)/i).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText(/speech input \(asr\)/i).length).toBeGreaterThanOrEqual(2);
+    // Both roles are visible with a dot+text state, even with voice off. The
+    // worker rows sit inside the role sections, so they are labeled "Worker".
+    expect(screen.getAllByText(/speech output \(tts\)/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/speech input \(asr\)/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/^worker$/i).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
     // A missing/disabled worker never blocks the app or adds a row of unusable controls.
     expect(screen.queryByRole("button", { name: /^(start|stop|restart|load model|unload model|send test)$/i })).toBeNull();
@@ -207,6 +210,75 @@ describe("app shell safety invariants", () => {
     expect(screen.getByLabelText(/reference transcript/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^api key/i)).toBeNull();
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("hides the chat voice controls when voice is not configured", async () => {
+    installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    expect(screen.queryByRole("button", { name: /hold to talk/i })).toBeNull();
+    expect(screen.queryByText(/speak replies/i)).toBeNull();
+  });
+
+  it("disables the mic button when the ASR worker is not running", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: true, asr_provider: "parakeet_managed" } },
+      voice: { enabled: true, protocol_version: 1, workers: { asr: { role: "asr", state: "stopped", configured: true, worker_queue_depth: 0, queue_depth: 0 } } },
+    };
+    installFetch({ state });
+    renderApp();
+    const mic = await screen.findByRole("button", { name: /hold to talk/i });
+    expect(mic).toBeDisabled();
+    expect(mic.getAttribute("title")).toMatch(/settings/i);
+  });
+
+  it("keeps the speak-replies toggle hidden while voice workers are globally disabled", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: false, tts_provider: "elevenlabs" } },
+    };
+    installFetch({ state });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    expect(screen.queryByText(/speak replies/i)).toBeNull();
+  });
+
+  it("shows a status-bar voice readout only when speak-replies cannot deliver", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: true, tts_provider: "elevenlabs", speak_replies: true } },
+      voice: { enabled: true, protocol_version: 1, workers: { tts: { role: "tts", state: "stopped", configured: true, worker_queue_depth: 0, queue_depth: 0 } } },
+    };
+    installFetch({ state });
+    renderApp();
+    expect(await screen.findByText(/voice not ready/i)).toBeInTheDocument();
+    // The readout stays status-only: no controls join the bar with it.
+    const status = screen.getByRole("region", { name: /status/i });
+    expect(within(status).queryByRole("button")).toBeNull();
+  });
+
+  it("locks worker controls behind unsaved voice edits", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: true, tts_provider: "custom", tts_worker_path: "C:/workers/tts.exe" } },
+    };
+    installFetch({
+      state,
+      voiceStatus: {
+        voice: { enabled: true, protocol_version: 1, workers: { tts: { role: "tts", state: "stopped", configured: true, worker_queue_depth: 0, queue_depth: 0 }, asr: { role: "asr", state: "disabled", configured: false, worker_queue_depth: 0, queue_depth: 0 } } },
+        requests: [],
+      },
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+    const start = await screen.findByRole("button", { name: /^start$/i });
+    expect(start).toBeEnabled();
+    const providers = screen.getAllByRole("combobox", { name: /provider/i });
+    fireEvent.change(providers[1], { target: { value: "elevenlabs" } });
+    expect(await screen.findByText(/save settings to apply/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^start$/i })).toBeDisabled();
   });
 
   it("locks settings, prompt, and memory mutations for read-only clients", async () => {
