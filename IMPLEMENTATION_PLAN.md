@@ -18,9 +18,12 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-09. Phases 0 through 12 are merged to `main`. Phase 13.0
-(delivery-ordering foundation) is implemented on the current branch; the
-Phase 13 providers follow one per PR.
+Updated 2026-07-09. Phases 0 through 13.4 are merged to `main`: the voice
+worker boundary, the delivery-ordering foundation, the NeuTTS Air spike
+(go), the ElevenLabs and Parakeet workers, and the managed Parakeet runner
+with installer provisioning. Remaining Phase 13 items before Phase 14: the
+NeuTTS Air worker implementation (spike verdict: go), microphone capture UI,
+and the follow-ups in `docs/legacy-parity-sweep-2026-07.md`.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -41,8 +44,10 @@ Phase 13 providers follow one per PR.
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
-| 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet proxy) | In progress | — |
-| 13.4 | Managed Parakeet runner and interactive installer | In progress | — |
+| 13.1 | NeuTTS Air spike — non-Python decode proven, RTF ~0.5 CPU (R17) | **Complete** | #43 |
+| 13.2 | ElevenLabs cloud TTS worker | **Complete** | #44 |
+| 13.3 | Parakeet ASR worker (OpenAI-compatible proxy) | **Complete** | #45 |
+| 13.4 | Managed Parakeet runner and interactive installer | **Complete** | #46 |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -105,6 +110,13 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    Baseline".
 2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
    one-hour soak ran on Cloud REST only (scorecard watch list).
+3. **Second parity sweep (2026-07-09)**: a re-read of the legacy notes and
+   StrokeGPT-ReVibed PRs #319–#333 produced a tracked backlog in
+   `docs/legacy-parity-sweep-2026-07.md` — chiefly the June 2026 hardware
+   motion lessons folded into Phase 14, a latency-aware dwell floor for
+   mode planners, an inheritance regression test for non-action chat
+   (empty target fields must preserve the active pattern/speed exactly),
+   Handy 2 scope review on R16, and small diagnostics/UI follow-ups.
 
 ### UI Shell Redesign (Sidebar Navigation)
 
@@ -716,6 +728,28 @@ Implement:
   used as pattern examples — those gaps are media timing, not motion intent
 - feedback (thumbs) that adjusts weights/enablement only visibly and
   reversibly; auto-disable is opt-in
+- **training module**: the device auditions enabled patterns (including
+  generated ones) and the user rates them; ratings feed the same visible
+  weights; user patterns live as individual shareable files with
+  import/export (browse-to-file)
+
+Motion-feel requirements carried from StrokeGPT-ReVibed's June 2026
+hardware iteration (`docs/legacy-parity-sweep-2026-07.md` §A — these were
+paid for on a real device; do not rediscover them):
+
+- patterns are authored on a 0–100 **relative span** and projected into the
+  stroke window exactly once at dispatch (double projection collapses
+  amplitude into twitches)
+- the catalog is **generated parametrically** with wall-clock acceleration
+  and reversal-gap budgets enforced by the generator, not hand keyframes
+- sampling is **time-parameterized monotone cubic** (PCHIP-style): C1 in
+  wall time, no overshoot, zero-velocity reversals
+- routine pattern cycles get a **~6.6 s floor** (time-only stretch; burst
+  shapes exempt) — shorter cycles stuttered on hardware and the signal was
+  invisible in synthetic analysis
+- mode planners (Freestyle, Autopilot) hold each applied target for at
+  least the recent measured command latency plus padding (**latency-aware
+  dwell floor**) so latency spikes never cause replace-thrash
 
 Deeper editing (undo/redo history, mirror/repeat/variation transforms,
 multi-pattern sequencing) is a stretch goal; sequencing belongs to the Phase
@@ -754,6 +788,15 @@ programs/funscripts, and selected safe assets. Include dry-run mode, a
 compatibility report, an unsupported-field report, and non-destructive
 behavior. Secrets (connection key, API keys) are imported into the redacted
 settings store, never echoed in the report.
+
+Personalization carried from the legacy notes
+(`docs/legacy-parity-sweep-2026-07.md` §G):
+
+- legacy personas map onto prompt sets; the GLaDOS persona ships as an
+  importable example, not a bundled default
+- an optional user identity/interest selector (self-ID, interests, custom
+  entries) feeds the prompt/memory system — off by default, stored locally
+  like all personal data, editable and removable like any memory
 
 ## Validation
 
