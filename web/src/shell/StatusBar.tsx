@@ -6,8 +6,22 @@ import { formatClock } from "../util/format";
 import { ClockIcon } from "./icons";
 
 export function StatusBar() {
-  const { backendOnline, motion, readOnly } = useAppState();
+  const { backendOnline, motion, readOnly, state } = useAppState();
   const engine = motion?.engine;
+
+  // Voice earns a readout only when it is enabled and unhealthy: a crashed
+  // worker, or speak-replies promised while the TTS worker cannot deliver.
+  // Healthy or disabled voice stays out of the bar entirely.
+  const voiceSettings = state?.settings?.voice;
+  const voiceWorkers = state?.voice?.workers;
+  const voiceCrashed = Boolean(voiceSettings?.enabled && (voiceWorkers?.tts?.state === "crashed" || voiceWorkers?.asr?.state === "crashed"));
+  const speakNotReady = Boolean(
+    voiceSettings?.enabled &&
+      voiceSettings.speak_replies &&
+      voiceSettings.tts_provider &&
+      voiceSettings.tts_provider !== "none" &&
+      !(voiceWorkers?.tts?.state === "running" && voiceWorkers?.tts?.model_state === "ready"),
+  );
   const phaseState = engine?.paused ? "paused" : engine?.running ? "running" : "idle";
   const phaseLabel = engine?.paused
     ? "paused"
@@ -26,10 +40,20 @@ export function StatusBar() {
         <span className="status-dot" data-state={backendOnline ? "ok" : "error"} />
         <span className="status-text">{backendOnline ? "core ok" : "core offline"}</span>
       </span>
-      <span className="status-readout status-readout-controller">
+      <span
+        className="status-readout status-readout-controller"
+        title={readOnly ? "Read-only client" : "This tab is the controller"}
+        aria-label={readOnly ? "Read-only client" : "This tab is the controller"}
+      >
         <span className="status-dot" data-state={readOnly ? "warn" : "ok"} />
         <span className="status-text">{readOnly ? "read-only" : "controller: you"}</span>
       </span>
+      {(voiceCrashed || speakNotReady) && (
+        <span className="status-readout">
+          <span className="status-dot" data-state={voiceCrashed ? "error" : "warn"} />
+          <span className="status-text">{voiceCrashed ? "voice crashed" : "voice not ready"}</span>
+        </span>
+      )}
       <span className="status-divider" aria-hidden="true" />
       <span className="status-timer">
         <ClockIcon />

@@ -181,6 +181,40 @@ func TestVoiceStateAppearsInAppState(t *testing.T) {
 	}
 }
 
+func TestVoiceWorkerStartAutoLoadsModel(t *testing.T) {
+	server := newTestServer(t)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.Enabled = true
+		settings.Voice.TTSProvider = config.VoiceProviderCustom
+		settings.Voice.TTSWorkerPath = chatStubBinary(t)
+		settings.Voice.TTSWorkerArgs = []string{"-role", "tts"}
+		return settings
+	})
+	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/tts/start", nil)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("start = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var payload struct {
+		LoadError string `json:"load_error"`
+		Worker    struct {
+			State      string `json:"state"`
+			ModelState string `json:"model_state"`
+		} `json:"worker"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode start response: %v", err)
+	}
+	if payload.LoadError != "" {
+		t.Fatalf("auto-load reported an error: %s", payload.LoadError)
+	}
+	if payload.Worker.State != "running" || payload.Worker.ModelState != "ready" {
+		t.Fatalf("start must leave the worker running with the model ready, got state=%q model=%q", payload.Worker.State, payload.Worker.ModelState)
+	}
+}
+
 func TestVoiceWorkerStartRequiresController(t *testing.T) {
 	server := newTestServer(t)
 

@@ -28,6 +28,9 @@ export function SettingsRoute() {
   const requestedSection = hash.split("/")[2] || "device";
   const section = SECTIONS.some((item) => item.id === requestedSection) ? requestedSection : "device";
   const [s, setS] = useState<PublicSettings | null>(null);
+  // The last-saved snapshot, kept to detect unsaved voice edits: worker
+  // controls act on the saved config and lock while the form is dirty.
+  const [saved, setSaved] = useState<PublicSettings | null>(null);
   const [newKey, setNewKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
   const [newElevenLabsKey, setNewElevenLabsKey] = useState("");
@@ -38,6 +41,7 @@ export function SettingsRoute() {
     try {
       const res = await api.getSettings();
       setS(res.settings);
+      setSaved(res.settings);
     } catch (e) {
       show(msg(e), "error");
     }
@@ -200,6 +204,7 @@ export function SettingsRoute() {
         {section === "voice" && <VoiceSettingsPanel
           settings={s}
           locked={locked}
+          dirty={JSON.stringify(s.voice) !== JSON.stringify(saved?.voice)}
           patch={patchVoice}
           newKey={newElevenLabsKey}
           setNewKey={setNewElevenLabsKey}

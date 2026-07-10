@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { useToast } from "../state/app-state";
+import { playBlob } from "../util/audio";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
@@ -35,7 +36,9 @@ function dotState(state: string): string {
 
 const ROLE_LABEL: Record<string, string> = { tts: "Speech output (TTS)", asr: "Speech input (ASR)" };
 
-export function VoiceWorkers({ locked, role: selectedRole }: { locked: boolean; role?: "tts" | "asr" }) {
+// dirty means the surrounding settings form has unsaved voice changes; the
+// controls act on the *saved* config, so they lock until the form is saved.
+export function VoiceWorkers({ locked, role: selectedRole, dirty }: { locked: boolean; role?: "tts" | "asr"; dirty?: boolean }) {
   const { show } = useToast();
   const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
   const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
@@ -84,6 +87,35 @@ export function VoiceWorkers({ locked, role: selectedRole }: { locked: boolean; 
     void refresh();
   }
 
+  // A test is only useful with a visible outcome: follow the request to its
+  // terminal state and, for TTS, play the produced clip (this tab holds the
+  // controller lease whenever the button is enabled).
+  async function sendTest(role: "tts" | "asr") {
+    setBusyRole(role);
+    try {
+      const res = await api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 });
+      const id = res.request?.id;
+      const deadline = Date.now() + 15000;
+      while (id) {
+        const poll = await api.voiceRequest(id);
+        const state = poll.request?.state;
+        if (state === "done") {
+          if (role === "tts" && (poll.request?.audio_bytes ?? 0) > 0) {
+            await playBlob(await api.voiceRequestAudio(id)).catch(() => undefined);
+          }
+          break;
+        }
+        if (state === "failed" || state === "canceled" || Date.now() > deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    } catch (e) {
+      show(`Test request failed: ${msg(e)}`, "error");
+    } finally {
+      setBusyRole(null);
+      void refresh();
+    }
+  }
+
   const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
   const activeRequests = requests.filter((r) => r.state === "queued" || r.state === "active");
 
@@ -92,14 +124,17 @@ export function VoiceWorkers({ locked, role: selectedRole }: { locked: boolean; 
       {roles.map((role) => {
         const worker = workers[role];
         const state = worker?.state ?? "disabled";
-        const canControl = !locked && busyRole !== role && state !== "disabled" && state !== "not_configured";
+        const canControl = !locked && !dirty && busyRole !== role && state !== "disabled" && state !== "not_configured";
         const modelLoaded = worker?.model_state === "ready";
         const isRunning = state === "running";
         const isStarting = state === "starting";
+        const lastResult = requests.find(
+          (request) => request.role === role && (request.state === "done" || request.state === "failed" || request.state === "canceled"),
+        );
         return (
           <div key={role} className="voice-worker-row">
             <div className="voice-worker-head">
-              <span className="voice-worker-name">{ROLE_LABEL[role]}</span>
+              <span className="voice-worker-name">{selectedRole ? "Worker" : ROLE_LABEL[role]}</span>
               <span className="status-readout">
                 <span className="status-dot" data-state={dotState(state)} />
                 <span className="status-text">{STATE_LABEL[state] ?? state}</span>
@@ -116,13 +151,24 @@ export function VoiceWorkers({ locked, role: selectedRole }: { locked: boolean; 
             {worker?.last_error && state !== "running" && (
               <p className="form-status voice-worker-error">{worker.last_error}</p>
             )}
+            {lastResult && (
+              <p className="form-status voice-last-result">
+                {`Last request ${lastResult.state}`}
+                {lastResult.state === "done" && lastResult.transcript?.[0]?.text ? ` — “${lastResult.transcript[0].text}”` : ""}
+                {lastResult.state === "done" && (lastResult.audio_bytes ?? 0) > 0 ? ` — ${lastResult.audio_bytes} bytes of audio` : ""}
+                {lastResult.state === "failed" && lastResult.error ? ` — ${lastResult.error.code}: ${lastResult.error.message}` : ""}
+              </p>
+            )}
+            {state !== "disabled" && state !== "not_configured" && dirty && (
+              <p className="form-status">Save settings to apply the selection above before controlling this worker.</p>
+            )}
             {state !== "disabled" && state !== "not_configured" && (
               <div className="row-actions">
                 {state === "stopped" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStart(role), "Start")}>Start</button>}
                 {state === "crashed" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerRestart(role), "Restart")}>Restart</button>}
                 {(isRunning || isStarting) && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStop(role), "Stop")}>Stop</button>}
                 {isRunning && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerModel(role, !modelLoaded), modelLoaded ? "Unload model" : "Load model")}>{modelLoaded ? "Unload model" : "Load model"}</button>}
-                {isRunning && modelLoaded && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 }), "Test request")}>Send test</button>}
+                {isRunning && modelLoaded && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void sendTest(role)}>Send test</button>}
               </div>
             )}
           </div>

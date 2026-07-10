@@ -24,6 +24,10 @@ import (
 // a wedged worker cannot stall the settings page.
 const voiceHealthTimeout = 3 * time.Second
 
+// voiceModelLoadTimeout bounds the automatic load that follows a
+// user-initiated start; managed providers may boot a local server inside it.
+const voiceModelLoadTimeout = 30 * time.Second
+
 const (
 	maxVoiceAudioBase64Bytes = 44 << 20
 	maxVoiceRequestBytes     = maxVoiceAudioBase64Bytes + 1024
@@ -172,7 +176,25 @@ func (s *Server) handleVoiceWorkerStart(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
+	s.writeStartedWorker(w, worker)
+}
+
+// writeStartedWorker follows every user-initiated start with a model load:
+// starting a role means making it ready to serve, so replies never fail
+// silently with model_not_loaded. Workers are still never started
+// implicitly. A load failure keeps the worker running and is reported
+// alongside the status instead of failing the start.
+func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervisor) {
+	// Detached context: an impatient client disconnect must not abort the load.
+	ctx, cancel := context.WithTimeout(context.Background(), voiceModelLoadTimeout)
+	defer cancel()
+	payload := map[string]any{}
+	if _, err := worker.SetModelLoaded(ctx, true); err != nil {
+		s.logger.Warn("voice model auto-load failed", "role", worker.Status().Role, "error", err)
+		payload["load_error"] = err.Error()
+	}
+	payload["worker"] = worker.Status()
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleVoiceWorkerStop(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +227,7 @@ func (s *Server) handleVoiceWorkerRestart(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
+	s.writeStartedWorker(w, worker)
 }
 
 func (s *Server) handleVoiceWorkerModel(w http.ResponseWriter, r *http.Request) {
