@@ -6,6 +6,10 @@ the built binary headless and inspecting the **live rendered DOM** at
 1680×940, 1038×1018, and 375×812. Findings carry file/line references against
 that commit.
 
+Status: H1, M1–M6, and L1–L3 were fixed by Slice 13.8 (PR #51), which also
+replaced the sidebar's active-link accent bar with a soft azure fill. L4
+(recording level feedback) stays deferred to the hands-free capture slice.
+
 A previous review dated 2026-07-08 lived at this path (never committed). All
 of its findings (C1–C3, H1–H4, M1–M9, L1–L6) were consumed by the
 `claude/react-frontend` fix commit and later merges; this pass spot-checked

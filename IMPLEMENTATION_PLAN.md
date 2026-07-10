@@ -52,7 +52,7 @@ voice-UX and stacked-layout defects.
 | 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | #49 |
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | #49 |
-| 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | current branch |
+| 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
