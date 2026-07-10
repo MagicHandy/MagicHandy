@@ -2,11 +2,10 @@
 
 ## Status
 
-Planned 2026-07-09 (this document is the design). Implementation is tracked
-as Slice 13.5 in [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md). It
-changes the Settings **presentation and the voice settings schema**; the
-worker protocol, the worker binaries, and the safety rules in
-[ui-design.md](ui-design.md) are untouched.
+Implemented 2026-07-09 as Slice 13.5 in
+[IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md). It changes the Settings
+**presentation and voice settings schema** without changing the worker
+protocol or safety rules in [ui-design.md](ui-design.md).
 
 ## Problem
 
@@ -51,7 +50,7 @@ Provider: [ None ▾ | Parakeet (managed, local) | OpenAI-compatible server | Cu
 <worker status row: dot+text, Start/Stop/Restart/Load/Test controls>
 
 ── Speech output (TTS) ─────────────────────────────
-Provider: [ None ▾ | ElevenLabs (cloud) | NeuTTS Air (local, planned) | Custom worker ]
+Provider: [ None ▾ | ElevenLabs (cloud) | NeuTTS Air (local) | Custom worker ]
 <provider-scoped fields>
 [x] Speak chat replies            (only rendered when a TTS provider is set)
 <worker status row>
@@ -78,7 +77,7 @@ of in a combined block at the bottom.
 | --- | --- |
 | None | none |
 | ElevenLabs (cloud) | API key (write-only, set-badge, clear toggle — existing secret handling unchanged) · voice ID (default Rachel) · model ID (default `eleven_multilingual_v2`) |
-| NeuTTS Air (local) | listed disabled with a "planned" note until the 13.x worker ships (spike verdict: go); reference WAV + transcript fields when it does |
+| NeuTTS Air (local) | `stream_pcm` runner path · reference WAV provenance · pre-encoded `.npy` codes · reference transcript |
 | Custom worker | worker path · worker args (one per line) |
 
 "Custom worker" is the escape hatch that keeps the general ADR 0003 worker
@@ -95,7 +94,7 @@ args back into fields), and violate backend-authoritative state. Instead:
    (additive, settings version stays 1; absent fields default):
 
    ```
-   tts_provider:  none | elevenlabs | custom        (neutts_air later)
+   tts_provider:  none | elevenlabs | neutts_air | custom
    asr_provider:  none | parakeet_managed | openai_compatible | custom
    elevenlabs_voice_id, elevenlabs_model_id
    parakeet_server_path, parakeet_model_path, parakeet_port
@@ -150,8 +149,7 @@ args back into fields), and violate backend-authoritative state. Instead:
 
 ## Out of scope
 
-- New providers (NeuTTS Air worker is its own slice; this design only
-  reserves its dropdown entry).
+- Additional voice providers beyond the four documented selections.
 - Any change to worker protocol, lifecycle, the audio lease, or lockstep
   delivery ordering.
 - Immediate-apply for worker config (worker configuration stays on Save;

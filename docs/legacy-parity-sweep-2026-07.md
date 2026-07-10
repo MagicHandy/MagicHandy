@@ -81,7 +81,9 @@ catalog and the mode planners, not retrofits to the shipped engine.
 13. **Voice on/off toggle in the top bar** (notes). *Adopted, amended*: the
     MagicHandy status bar is status-only by design (no controls), so the
     speak-replies quick toggle belongs in the Chat control column next to
-    the other immediate-apply controls. Settings toggle exists today.
+    the other immediate-apply controls. **Covered**: the Chat control column
+    now has an immediate speak-replies toggle; the status bar remains
+    status-only.
 14. **Stop guards vs. deliberate LLM stops** (notes). Mode-start decisions
     were once guarded against local-model stop actions. *Covered*:
     stop-intent is deterministic (chat stop fast-path bypasses the LLM);

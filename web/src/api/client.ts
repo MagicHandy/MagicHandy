@@ -171,6 +171,10 @@ export const api = {
     request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`),
   voiceRequestCancel: (id: string) =>
     request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/cancel`),
+  voiceTranscribe: (audio_b64: string, audio_format: string) =>
+    request<{ request: VoiceRequestSnapshot }>("POST", "/api/voice/transcriptions", { audio_b64, audio_format }),
+  saveVoicePreferences: (speak_replies: boolean) =>
+    request<{ speak_replies: boolean }>("PUT", "/api/voice/preferences", { speak_replies }),
   // Lease-gated audio: only the active controller may fetch a clip.
   voiceRequestAudio: async (id: string): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {

@@ -2,6 +2,7 @@ package voice
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"strconv"
 	"sync"
@@ -104,7 +105,31 @@ func (p *PendingRequest) Audio() ([]byte, string) {
 	}
 	audio := make([]byte, len(p.audio))
 	copy(audio, p.audio)
+	if p.audioFormat == "pcm_s16le_24000" {
+		return pcmS16LEToWAV(audio, 24000), "wav"
+	}
 	return audio, p.audioFormat
+}
+
+func pcmS16LEToWAV(pcm []byte, sampleRate uint32) []byte {
+	wav := make([]byte, 44+len(pcm))
+	copy(wav[0:4], "RIFF")
+	// #nosec G115 -- retained request audio is capped at 2 MiB.
+	binary.LittleEndian.PutUint32(wav[4:8], uint32(36+len(pcm)))
+	copy(wav[8:12], "WAVE")
+	copy(wav[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(wav[16:20], 16)
+	binary.LittleEndian.PutUint16(wav[20:22], 1)
+	binary.LittleEndian.PutUint16(wav[22:24], 1)
+	binary.LittleEndian.PutUint32(wav[24:28], sampleRate)
+	binary.LittleEndian.PutUint32(wav[28:32], sampleRate*2)
+	binary.LittleEndian.PutUint16(wav[32:34], 2)
+	binary.LittleEndian.PutUint16(wav[34:36], 16)
+	copy(wav[36:40], "data")
+	// #nosec G115 -- retained request audio is capped at 2 MiB.
+	binary.LittleEndian.PutUint32(wav[40:44], uint32(len(pcm)))
+	copy(wav[44:], pcm)
+	return wav
 }
 
 func (p *PendingRequest) dropAudio() {

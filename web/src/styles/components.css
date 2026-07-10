@@ -482,6 +482,14 @@ textarea:disabled {
   align-items: center;
   gap: 12px;
 }
+.mic-button[data-recording="true"] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.voice-quick-toggle {
+  min-height: 32px;
+  margin-bottom: 2px;
+}
 
 @keyframes chat-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -741,4 +749,19 @@ textarea:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.advanced-fields {
+  margin: 10px 0 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.advanced-fields summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+}
+.advanced-fields[open] summary {
+  margin-bottom: 10px;
 }

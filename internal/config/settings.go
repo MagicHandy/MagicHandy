@@ -73,6 +73,29 @@ const (
 	DefaultLLMRequestTimeoutMillis = 120000
 )
 
+const (
+	// VoiceProviderNone disables one voice role.
+	VoiceProviderNone = "none"
+	// VoiceProviderCustom runs the stored raw worker command unchanged.
+	VoiceProviderCustom = "custom"
+	// VoiceTTSProviderElevenLabs selects the bundled ElevenLabs worker.
+	VoiceTTSProviderElevenLabs = "elevenlabs"
+	// VoiceTTSProviderNeuTTSAir selects the bundled NeuTTS adapter.
+	VoiceTTSProviderNeuTTSAir = "neutts_air"
+	// VoiceASRProviderParakeet selects managed local Parakeet.
+	VoiceASRProviderParakeet = "parakeet_managed"
+	// VoiceASRProviderOpenAICompat selects an external compatible ASR server.
+	VoiceASRProviderOpenAICompat = "openai_compatible"
+	// DefaultParakeetServerPort is the managed local ASR port.
+	DefaultParakeetServerPort = 8990
+	// DefaultElevenLabsVoiceID is the stock Rachel voice.
+	DefaultElevenLabsVoiceID = "21m00Tcm4TlvDq8ikWAM"
+	// DefaultElevenLabsModelID is the default multilingual model.
+	DefaultElevenLabsModelID = "eleven_multilingual_v2"
+	// DefaultNeuTTSBackbone is the reviewed Q4 local runner model.
+	DefaultNeuTTSBackbone = "neuphonic/neutts-air-q4-gguf"
+)
+
 // Settings is the versioned on-disk application settings schema.
 type Settings struct {
 	Version     int                 `json:"version"`
@@ -138,11 +161,31 @@ type LLMSettings struct {
 // real providers arrive in Phase 13). Paths are not secrets — the same trust
 // model as the llama.cpp runner path.
 type VoiceSettings struct {
-	Enabled       bool     `json:"enabled"`
+	Enabled     bool   `json:"enabled"`
+	TTSProvider string `json:"tts_provider"`
+	ASRProvider string `json:"asr_provider"`
+
+	// The raw command fields remain the lossless custom-provider escape hatch
+	// and act as explicit worker-binary overrides for first-party providers.
 	TTSWorkerPath string   `json:"tts_worker_path,omitempty"`
 	TTSWorkerArgs []string `json:"tts_worker_args,omitempty"`
 	ASRWorkerPath string   `json:"asr_worker_path,omitempty"`
 	ASRWorkerArgs []string `json:"asr_worker_args,omitempty"`
+
+	ElevenLabsVoiceID string `json:"elevenlabs_voice_id,omitempty"`
+	ElevenLabsModelID string `json:"elevenlabs_model_id,omitempty"`
+
+	ParakeetServerPath string `json:"parakeet_server_path,omitempty"`
+	ParakeetModelPath  string `json:"parakeet_model_path,omitempty"`
+	ParakeetServerPort int    `json:"parakeet_port,omitempty"`
+	ASRBaseURL         string `json:"asr_base_url,omitempty"`
+	ASRModel           string `json:"asr_model,omitempty"`
+
+	NeuTTSRunnerPath     string `json:"neutts_runner_path,omitempty"`
+	NeuTTSReferenceWAV   string `json:"neutts_reference_wav,omitempty"`
+	NeuTTSReferenceCodes string `json:"neutts_reference_codes,omitempty"`
+	NeuTTSReferenceText  string `json:"neutts_reference_text,omitempty"`
+	NeuTTSBackbone       string `json:"neutts_backbone,omitempty"`
 	// SpeakReplies enqueues each displayed chat reply to the running TTS
 	// worker in lockstep (ADR 0003: a spoken reply is always also shown).
 	SpeakReplies bool `json:"speak_replies"`
@@ -155,26 +198,54 @@ type VoiceSettings struct {
 // PublicVoiceSettings is the API-safe voice view; the ElevenLabs key is
 // reduced to a set/unset flag.
 type PublicVoiceSettings struct {
-	Enabled          bool     `json:"enabled"`
-	TTSWorkerPath    string   `json:"tts_worker_path,omitempty"`
-	TTSWorkerArgs    []string `json:"tts_worker_args,omitempty"`
-	ASRWorkerPath    string   `json:"asr_worker_path,omitempty"`
-	ASRWorkerArgs    []string `json:"asr_worker_args,omitempty"`
-	SpeakReplies     bool     `json:"speak_replies"`
-	ElevenLabsKeySet bool     `json:"elevenlabs_key_set"`
+	Enabled              bool     `json:"enabled"`
+	TTSProvider          string   `json:"tts_provider"`
+	ASRProvider          string   `json:"asr_provider"`
+	TTSWorkerPath        string   `json:"tts_worker_path,omitempty"`
+	TTSWorkerArgs        []string `json:"tts_worker_args,omitempty"`
+	ASRWorkerPath        string   `json:"asr_worker_path,omitempty"`
+	ASRWorkerArgs        []string `json:"asr_worker_args,omitempty"`
+	SpeakReplies         bool     `json:"speak_replies"`
+	ElevenLabsVoiceID    string   `json:"elevenlabs_voice_id,omitempty"`
+	ElevenLabsModelID    string   `json:"elevenlabs_model_id,omitempty"`
+	ParakeetServerPath   string   `json:"parakeet_server_path,omitempty"`
+	ParakeetModelPath    string   `json:"parakeet_model_path,omitempty"`
+	ParakeetServerPort   int      `json:"parakeet_port,omitempty"`
+	ASRBaseURL           string   `json:"asr_base_url,omitempty"`
+	ASRModel             string   `json:"asr_model,omitempty"`
+	NeuTTSRunnerPath     string   `json:"neutts_runner_path,omitempty"`
+	NeuTTSReferenceWAV   string   `json:"neutts_reference_wav,omitempty"`
+	NeuTTSReferenceCodes string   `json:"neutts_reference_codes,omitempty"`
+	NeuTTSReferenceText  string   `json:"neutts_reference_text,omitempty"`
+	NeuTTSBackbone       string   `json:"neutts_backbone,omitempty"`
+	ElevenLabsKeySet     bool     `json:"elevenlabs_key_set"`
 }
 
 // VoiceUpdate is the API write payload for voice settings. A nil API key
 // keeps the stored secret; ClearElevenLabsKey removes it.
 type VoiceUpdate struct {
-	Enabled            bool     `json:"enabled"`
-	TTSWorkerPath      string   `json:"tts_worker_path"`
-	TTSWorkerArgs      []string `json:"tts_worker_args"`
-	ASRWorkerPath      string   `json:"asr_worker_path"`
-	ASRWorkerArgs      []string `json:"asr_worker_args"`
-	SpeakReplies       bool     `json:"speak_replies"`
-	ElevenLabsAPIKey   *string  `json:"elevenlabs_api_key,omitempty"`
-	ClearElevenLabsKey bool     `json:"clear_elevenlabs_key"`
+	Enabled              bool     `json:"enabled"`
+	TTSProvider          string   `json:"tts_provider"`
+	ASRProvider          string   `json:"asr_provider"`
+	TTSWorkerPath        string   `json:"tts_worker_path"`
+	TTSWorkerArgs        []string `json:"tts_worker_args"`
+	ASRWorkerPath        string   `json:"asr_worker_path"`
+	ASRWorkerArgs        []string `json:"asr_worker_args"`
+	SpeakReplies         bool     `json:"speak_replies"`
+	ElevenLabsVoiceID    string   `json:"elevenlabs_voice_id"`
+	ElevenLabsModelID    string   `json:"elevenlabs_model_id"`
+	ParakeetServerPath   string   `json:"parakeet_server_path"`
+	ParakeetModelPath    string   `json:"parakeet_model_path"`
+	ParakeetServerPort   int      `json:"parakeet_port"`
+	ASRBaseURL           string   `json:"asr_base_url"`
+	ASRModel             string   `json:"asr_model"`
+	NeuTTSRunnerPath     string   `json:"neutts_runner_path"`
+	NeuTTSReferenceWAV   string   `json:"neutts_reference_wav"`
+	NeuTTSReferenceCodes string   `json:"neutts_reference_codes"`
+	NeuTTSReferenceText  string   `json:"neutts_reference_text"`
+	NeuTTSBackbone       string   `json:"neutts_backbone"`
+	ElevenLabsAPIKey     *string  `json:"elevenlabs_api_key,omitempty"`
+	ClearElevenLabsKey   bool     `json:"clear_elevenlabs_key"`
 }
 
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
@@ -212,6 +283,8 @@ type PublicSettingsOptionHints struct {
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
 	PromptSets              []string `json:"prompt_sets"`
+	TTSProviders            []string `json:"tts_providers"`
+	ASRProviders            []string `json:"asr_providers"`
 }
 
 // SettingsUpdate is the payload accepted by the settings API.
@@ -262,6 +335,14 @@ func DefaultSettings() Settings {
 			PromptSet:            PromptSetMagicHandyMotionV1,
 			RequestTimeoutMillis: DefaultLLMRequestTimeoutMillis,
 		},
+		Voice: VoiceSettings{
+			TTSProvider:        VoiceProviderNone,
+			ASRProvider:        VoiceProviderNone,
+			ElevenLabsVoiceID:  DefaultElevenLabsVoiceID,
+			ElevenLabsModelID:  DefaultElevenLabsModelID,
+			ParakeetServerPort: DefaultParakeetServerPort,
+			NeuTTSBackbone:     DefaultNeuTTSBackbone,
+		},
 		Diagnostics: DiagnosticsSettings{
 			Verbosity: DiagnosticsVerbosityNormal,
 		},
@@ -283,13 +364,27 @@ func (s Settings) Public() PublicSettings {
 		Motion: s.Motion,
 		LLM:    s.LLM,
 		Voice: PublicVoiceSettings{
-			Enabled:          s.Voice.Enabled,
-			TTSWorkerPath:    s.Voice.TTSWorkerPath,
-			TTSWorkerArgs:    s.Voice.TTSWorkerArgs,
-			ASRWorkerPath:    s.Voice.ASRWorkerPath,
-			ASRWorkerArgs:    s.Voice.ASRWorkerArgs,
-			SpeakReplies:     s.Voice.SpeakReplies,
-			ElevenLabsKeySet: s.Voice.ElevenLabsAPIKey != "",
+			Enabled:              s.Voice.Enabled,
+			TTSProvider:          s.Voice.TTSProvider,
+			ASRProvider:          s.Voice.ASRProvider,
+			TTSWorkerPath:        s.Voice.TTSWorkerPath,
+			TTSWorkerArgs:        s.Voice.TTSWorkerArgs,
+			ASRWorkerPath:        s.Voice.ASRWorkerPath,
+			ASRWorkerArgs:        s.Voice.ASRWorkerArgs,
+			SpeakReplies:         s.Voice.SpeakReplies,
+			ElevenLabsVoiceID:    s.Voice.ElevenLabsVoiceID,
+			ElevenLabsModelID:    s.Voice.ElevenLabsModelID,
+			ParakeetServerPath:   s.Voice.ParakeetServerPath,
+			ParakeetModelPath:    s.Voice.ParakeetModelPath,
+			ParakeetServerPort:   s.Voice.ParakeetServerPort,
+			ASRBaseURL:           s.Voice.ASRBaseURL,
+			ASRModel:             s.Voice.ASRModel,
+			NeuTTSRunnerPath:     s.Voice.NeuTTSRunnerPath,
+			NeuTTSReferenceWAV:   s.Voice.NeuTTSReferenceWAV,
+			NeuTTSReferenceCodes: s.Voice.NeuTTSReferenceCodes,
+			NeuTTSReferenceText:  s.Voice.NeuTTSReferenceText,
+			NeuTTSBackbone:       s.Voice.NeuTTSBackbone,
+			ElevenLabsKeySet:     s.Voice.ElevenLabsAPIKey != "",
 		},
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
@@ -326,6 +421,18 @@ func (s Settings) Public() PublicSettings {
 				PromptSetMagicHandyMotionV1ZHHans,
 				PromptSetMagicHandyMotionV1JA,
 			},
+			TTSProviders: []string{
+				VoiceProviderNone,
+				VoiceTTSProviderElevenLabs,
+				VoiceTTSProviderNeuTTSAir,
+				VoiceProviderCustom,
+			},
+			ASRProviders: []string{
+				VoiceProviderNone,
+				VoiceASRProviderParakeet,
+				VoiceASRProviderOpenAICompat,
+				VoiceProviderCustom,
+			},
 		},
 	}
 }
@@ -342,12 +449,26 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Motion = update.Motion
 	next.LLM = normalizeLLMStrings(update.LLM)
 	next.Voice = normalizeVoiceStrings(VoiceSettings{
-		Enabled:       update.Voice.Enabled,
-		TTSWorkerPath: update.Voice.TTSWorkerPath,
-		TTSWorkerArgs: update.Voice.TTSWorkerArgs,
-		ASRWorkerPath: update.Voice.ASRWorkerPath,
-		ASRWorkerArgs: update.Voice.ASRWorkerArgs,
-		SpeakReplies:  update.Voice.SpeakReplies,
+		Enabled:              update.Voice.Enabled,
+		TTSProvider:          update.Voice.TTSProvider,
+		ASRProvider:          update.Voice.ASRProvider,
+		TTSWorkerPath:        update.Voice.TTSWorkerPath,
+		TTSWorkerArgs:        update.Voice.TTSWorkerArgs,
+		ASRWorkerPath:        update.Voice.ASRWorkerPath,
+		ASRWorkerArgs:        update.Voice.ASRWorkerArgs,
+		SpeakReplies:         update.Voice.SpeakReplies,
+		ElevenLabsVoiceID:    update.Voice.ElevenLabsVoiceID,
+		ElevenLabsModelID:    update.Voice.ElevenLabsModelID,
+		ParakeetServerPath:   update.Voice.ParakeetServerPath,
+		ParakeetModelPath:    update.Voice.ParakeetModelPath,
+		ParakeetServerPort:   update.Voice.ParakeetServerPort,
+		ASRBaseURL:           update.Voice.ASRBaseURL,
+		ASRModel:             update.Voice.ASRModel,
+		NeuTTSRunnerPath:     update.Voice.NeuTTSRunnerPath,
+		NeuTTSReferenceWAV:   update.Voice.NeuTTSReferenceWAV,
+		NeuTTSReferenceCodes: update.Voice.NeuTTSReferenceCodes,
+		NeuTTSReferenceText:  update.Voice.NeuTTSReferenceText,
+		NeuTTSBackbone:       update.Voice.NeuTTSBackbone,
 		// The stored key survives unless explicitly replaced or cleared.
 		ElevenLabsAPIKey: s.Voice.ElevenLabsAPIKey,
 	})
@@ -407,7 +528,8 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 
 	var header struct {
-		Version int `json:"version"`
+		Version int                        `json:"version"`
+		Voice   map[string]json.RawMessage `json:"voice"`
 	}
 	if err := json.Unmarshal(data, &header); err != nil {
 		return Settings{}, false, err
@@ -416,6 +538,16 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	settings := DefaultSettings()
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return Settings{}, false, err
+	}
+	// Defaults are unmarshaled first, so an absent provider discriminator
+	// would otherwise look identical to an explicit "none". Clear only absent
+	// fields here so applyMissingDefaults can classify legacy raw commands as
+	// custom while preserving an intentional none selection with hidden data.
+	if _, present := header.Voice["tts_provider"]; !present {
+		settings.Voice.TTSProvider = ""
+	}
+	if _, present := header.Voice["asr_provider"]; !present {
+		settings.Voice.ASRProvider = ""
 	}
 
 	return MigrateSettings(settings, header.Version)
@@ -440,7 +572,10 @@ func validateSettings(settings Settings) error {
 	if err := validateMotionSettings(settings.Motion); err != nil {
 		return err
 	}
-	return validateLLMSettings(settings.LLM)
+	if err := validateLLMSettings(settings.LLM); err != nil {
+		return err
+	}
+	return validateVoiceSettings(settings.Voice)
 }
 
 func applyMissingDefaults(settings Settings) Settings {
@@ -490,10 +625,41 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.LLM.RequestTimeoutMillis == 0 {
 		settings.LLM.RequestTimeoutMillis = defaults.LLM.RequestTimeoutMillis
 	}
+	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
 	settings.LLM = normalizeLLMStrings(settings.LLM)
 	settings.Voice = normalizeVoiceStrings(settings.Voice)
 	if settings.Diagnostics.Verbosity == "" {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
+	}
+	return settings
+}
+
+func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {
+	// Settings version 1 originally had only raw worker paths and arguments.
+	// Preserve those commands exactly by classifying them as custom providers.
+	if settings.TTSProvider == "" {
+		settings.TTSProvider = defaults.TTSProvider
+		if settings.TTSWorkerPath != "" || len(settings.TTSWorkerArgs) > 0 {
+			settings.TTSProvider = VoiceProviderCustom
+		}
+	}
+	if settings.ASRProvider == "" {
+		settings.ASRProvider = defaults.ASRProvider
+		if settings.ASRWorkerPath != "" || len(settings.ASRWorkerArgs) > 0 {
+			settings.ASRProvider = VoiceProviderCustom
+		}
+	}
+	if settings.ElevenLabsVoiceID == "" {
+		settings.ElevenLabsVoiceID = defaults.ElevenLabsVoiceID
+	}
+	if settings.ElevenLabsModelID == "" {
+		settings.ElevenLabsModelID = defaults.ElevenLabsModelID
+	}
+	if settings.ParakeetServerPort == 0 {
+		settings.ParakeetServerPort = defaults.ParakeetServerPort
+	}
+	if settings.NeuTTSBackbone == "" {
+		settings.NeuTTSBackbone = defaults.NeuTTSBackbone
 	}
 	return settings
 }
@@ -546,11 +712,37 @@ func validateLLMSettings(settings LLMSettings) error {
 }
 
 func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
+	settings.TTSProvider = strings.TrimSpace(settings.TTSProvider)
+	settings.ASRProvider = strings.TrimSpace(settings.ASRProvider)
 	settings.TTSWorkerPath = strings.TrimSpace(settings.TTSWorkerPath)
 	settings.ASRWorkerPath = strings.TrimSpace(settings.ASRWorkerPath)
 	settings.TTSWorkerArgs = trimArgs(settings.TTSWorkerArgs)
 	settings.ASRWorkerArgs = trimArgs(settings.ASRWorkerArgs)
+	settings.ElevenLabsVoiceID = strings.TrimSpace(settings.ElevenLabsVoiceID)
+	settings.ElevenLabsModelID = strings.TrimSpace(settings.ElevenLabsModelID)
+	settings.ParakeetServerPath = strings.TrimSpace(settings.ParakeetServerPath)
+	settings.ParakeetModelPath = strings.TrimSpace(settings.ParakeetModelPath)
+	settings.ASRBaseURL = strings.TrimRight(strings.TrimSpace(settings.ASRBaseURL), "/")
+	settings.ASRModel = strings.TrimSpace(settings.ASRModel)
+	settings.NeuTTSRunnerPath = strings.TrimSpace(settings.NeuTTSRunnerPath)
+	settings.NeuTTSReferenceWAV = strings.TrimSpace(settings.NeuTTSReferenceWAV)
+	settings.NeuTTSReferenceCodes = strings.TrimSpace(settings.NeuTTSReferenceCodes)
+	settings.NeuTTSReferenceText = strings.TrimSpace(settings.NeuTTSReferenceText)
+	settings.NeuTTSBackbone = strings.TrimSpace(settings.NeuTTSBackbone)
 	return settings
+}
+
+func validateVoiceSettings(settings VoiceSettings) error {
+	if !oneOf(settings.TTSProvider, VoiceProviderNone, VoiceTTSProviderElevenLabs, VoiceTTSProviderNeuTTSAir, VoiceProviderCustom) {
+		return fmt.Errorf("unknown TTS provider %q", settings.TTSProvider)
+	}
+	if !oneOf(settings.ASRProvider, VoiceProviderNone, VoiceASRProviderParakeet, VoiceASRProviderOpenAICompat, VoiceProviderCustom) {
+		return fmt.Errorf("unknown ASR provider %q", settings.ASRProvider)
+	}
+	if settings.ParakeetServerPort < 1 || settings.ParakeetServerPort > 65535 {
+		return errors.New("parakeet server port must be between 1 and 65535")
+	}
+	return nil
 }
 
 func trimArgs(args []string) []string {

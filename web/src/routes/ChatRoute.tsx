@@ -6,6 +6,7 @@ import { ManualMotionTest } from "../components/ManualMotionTest";
 import { MotionVisualizer } from "../components/MotionVisualizer";
 import { QuickSettings } from "../components/QuickSettings";
 import { WorkspaceHead } from "../components/WorkspaceHead";
+import { VoiceQuickControls } from "../components/VoiceQuickControls";
 import { useAppState } from "../state/app-state";
 
 export function ChatRoute() {
@@ -18,6 +19,9 @@ export function ChatRoute() {
           <ChatPanel />
         </section>
         <aside className="panel" aria-label="Motion controls" data-requires-backend>
+          <h2 className="section-title">Controls</h2>
+          <VoiceQuickControls />
+          <div className="divider" />
           <h2 className="section-title">
             Quick settings <span className="hint-inline">applies immediately</span>
           </h2>

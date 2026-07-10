@@ -35,7 +35,7 @@ function dotState(state: string): string {
 
 const ROLE_LABEL: Record<string, string> = { tts: "Speech output (TTS)", asr: "Speech input (ASR)" };
 
-export function VoiceWorkers({ locked }: { locked: boolean }) {
+export function VoiceWorkers({ locked, role: selectedRole }: { locked: boolean; role?: "tts" | "asr" }) {
   const { show } = useToast();
   const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
   const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
@@ -84,7 +84,7 @@ export function VoiceWorkers({ locked }: { locked: boolean }) {
     void refresh();
   }
 
-  const roles: ("tts" | "asr")[] = ["tts", "asr"];
+  const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
   const activeRequests = requests.filter((r) => r.state === "queued" || r.state === "active");
 
   return (

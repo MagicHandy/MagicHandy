@@ -8,7 +8,7 @@ import { BluetoothBridge } from "../components/BluetoothBridge";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { MemoryManager } from "../components/MemoryManager";
 import { PromptSetEditor } from "../components/PromptSetEditor";
-import { VoiceWorkers } from "../components/VoiceWorkers";
+import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 
@@ -20,11 +20,6 @@ const SECTIONS = [
   { id: "prompts", label: "Prompts & memory" },
   { id: "diagnostics", label: "Diagnostics" },
 ] as const;
-
-// One argument per line preserves Windows paths with spaces without guessing at
-// shell quoting. The backend already receives the structured string slice.
-const joinArgs = (args?: string[]) => (args ?? []).join("\n");
-const splitArgs = (value: string) => value.split(/\r?\n/).map((arg) => arg.trim()).filter(Boolean);
 
 export function SettingsRoute() {
   const { backendOnline, readOnly, state, refresh } = useAppState();
@@ -79,11 +74,25 @@ export function SettingsRoute() {
       // newly typed); elevenlabs_key_set never goes back to the server.
       voice: {
         enabled: s.voice?.enabled ?? false,
+        tts_provider: s.voice?.tts_provider ?? "none",
+        asr_provider: s.voice?.asr_provider ?? "none",
         tts_worker_path: s.voice?.tts_worker_path ?? "",
         tts_worker_args: s.voice?.tts_worker_args ?? [],
         asr_worker_path: s.voice?.asr_worker_path ?? "",
         asr_worker_args: s.voice?.asr_worker_args ?? [],
         speak_replies: s.voice?.speak_replies ?? false,
+        elevenlabs_voice_id: s.voice?.elevenlabs_voice_id ?? "",
+        elevenlabs_model_id: s.voice?.elevenlabs_model_id ?? "",
+        parakeet_server_path: s.voice?.parakeet_server_path ?? "",
+        parakeet_model_path: s.voice?.parakeet_model_path ?? "",
+        parakeet_port: s.voice?.parakeet_port ?? 8990,
+        asr_base_url: s.voice?.asr_base_url ?? "",
+        asr_model: s.voice?.asr_model ?? "",
+        neutts_runner_path: s.voice?.neutts_runner_path ?? "",
+        neutts_reference_wav: s.voice?.neutts_reference_wav ?? "",
+        neutts_reference_codes: s.voice?.neutts_reference_codes ?? "",
+        neutts_reference_text: s.voice?.neutts_reference_text ?? "",
+        neutts_backbone: s.voice?.neutts_backbone ?? "",
         ...(newElevenLabsKey.trim() ? { elevenlabs_api_key: newElevenLabsKey } : {}),
         clear_elevenlabs_key: clearElevenLabsKey,
       },
@@ -133,6 +142,8 @@ export function SettingsRoute() {
     llm_providers: [],
     llama_cpp_modes: [],
     prompt_sets: [],
+    tts_providers: [],
+    asr_providers: [],
   };
   const sel = (value: string, onChange: (v: string) => void, options: string[] = []) => (
     <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
@@ -158,7 +169,7 @@ export function SettingsRoute() {
             <label className="field"><span className="label">HSP dispatch owner</span>{sel(s.device.hsp_dispatch_owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
             <label className="field"><span className="label">Firmware / API requirement</span><input type="text" value={s.device.firmware_api_requirement} readOnly /></label>
             <label className="field"><span className="label">API application ID source</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
-            <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>
+            {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
             <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => setNewKey(e.target.value)} /></label>
             <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
             <BluetoothBridge visible={s.device.hsp_dispatch_owner.toLowerCase().includes("blue")} locked={locked} backendOnline={backendOnline} initial={state?.bluetooth_bridge} />
@@ -171,36 +182,30 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">Local LLM</h2>
             <label className="field"><span className="label">Provider</span>{sel(s.llm.provider, (v) => patchLLM({ provider: v }), opt.llm_providers)}</label>
-            <label className="field"><span className="label">llama.cpp mode</span>{sel(s.llm.llama_cpp_mode, (v) => patchLLM({ llama_cpp_mode: v }), opt.llama_cpp_modes)}</label>
             <label className="field"><span className="label">Model</span><input type="text" value={s.llm.model} disabled={locked} onChange={(e) => patchLLM({ model: e.target.value })} /></label>
-            <label className="field"><span className="label">llama.cpp URL</span><input type="text" value={s.llm.llama_cpp_base_url} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_base_url: e.target.value })} /></label>
-            <label className="field"><span className="label">llama-server path</span><input type="text" value={s.llm.llama_cpp_runner_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_runner_path: e.target.value })} /></label>
-            <label className="field"><span className="label">GGUF model path</span><input type="text" value={s.llm.llama_cpp_model_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_model_path: e.target.value })} /></label>
-            <label className="field"><span className="label">Ollama URL</span><input type="text" value={s.llm.ollama_base_url} disabled={locked} onChange={(e) => patchLLM({ ollama_base_url: e.target.value })} /></label>
+            {s.llm.provider === "llama_cpp" && <>
+              <label className="field"><span className="label">llama.cpp mode</span>{sel(s.llm.llama_cpp_mode, (v) => patchLLM({ llama_cpp_mode: v }), opt.llama_cpp_modes)}</label>
+              {s.llm.llama_cpp_mode === "external" && <label className="field"><span className="label">llama.cpp URL</span><input type="text" value={s.llm.llama_cpp_base_url} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_base_url: e.target.value })} /></label>}
+              {s.llm.llama_cpp_mode === "managed" && <>
+                <label className="field"><span className="label">llama-server path</span><input type="text" value={s.llm.llama_cpp_runner_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_runner_path: e.target.value })} /></label>
+                <label className="field"><span className="label">GGUF model path</span><input type="text" value={s.llm.llama_cpp_model_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_model_path: e.target.value })} /></label>
+              </>}
+            </>}
+            {s.llm.provider === "ollama" && <label className="field"><span className="label">Ollama URL</span><input type="text" value={s.llm.ollama_base_url} disabled={locked} onChange={(e) => patchLLM({ ollama_base_url: e.target.value })} /></label>}
             <label className="field"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={s.llm.request_timeout_ms} disabled={locked} onChange={(e) => patchLLM({ request_timeout_ms: Number(e.target.value) })} /></label>
             <div className="row-actions"><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("load")}>Load</button><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("unload")}>Unload</button></div>
           </>
         )}
 
-        {section === "voice" && (
-          <>
-            <h2 className="section-title">Voice workers</h2>
-            <p className="form-status">
-              Voice is optional and stays off until explicitly started.
-            </p>
-            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.enabled ?? false} disabled={locked} onChange={(e) => patchVoice({ enabled: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Enable voice workers</span></label>
-            <label className="field"><span className="label">TTS worker path</span><input type="text" value={s.voice?.tts_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ tts_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
-            <label className="field"><span className="label">TTS worker arguments</span><textarea rows={2} value={joinArgs(s.voice?.tts_worker_args)} disabled={locked} onChange={(e) => patchVoice({ tts_worker_args: splitArgs(e.target.value) })} placeholder={"-voice-id\nvoice-id"} aria-label="TTS worker arguments, one argument per line" /></label>
-            <label className="field"><span className="label">ASR worker path</span><input type="text" value={s.voice?.asr_worker_path ?? ""} disabled={locked} onChange={(e) => patchVoice({ asr_worker_path: e.target.value })} placeholder="C:\path\to\voice-worker.exe" /></label>
-            <label className="field"><span className="label">ASR worker arguments</span><textarea rows={4} value={joinArgs(s.voice?.asr_worker_args)} disabled={locked} onChange={(e) => patchVoice({ asr_worker_args: splitArgs(e.target.value) })} placeholder={"-server-path\nC:\\path\\to\\parakeet-server.exe\n-server-model\nC:\\path\\to\\model.gguf"} aria-label="ASR worker arguments, one argument per line" /></label>
-            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={s.voice?.speak_replies ?? false} disabled={locked} onChange={(e) => patchVoice({ speak_replies: e.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies — each displayed reply is enqueued to the running TTS worker; the controller tab plays it</span></label>
-            <label className="field"><span className="label">ElevenLabs API key {s.voice?.elevenlabs_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.voice?.elevenlabs_key_set ? "set (leave blank to keep)" : "Paste key for the ElevenLabs worker"} value={newElevenLabsKey} disabled={locked} onChange={(e) => setNewElevenLabsKey(e.target.value)} /></label>
-            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearElevenLabsKey} disabled={locked} onChange={(e) => setClearElevenLabsKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear ElevenLabs API key on save</span></label>
-            <p className="form-status">The key is stored privately and handed only to the TTS worker process; it is never shown again. Worker paths and the switches apply on Save settings; workers never start on their own.</p>
-            <div className="divider" />
-            <VoiceWorkers locked={locked} />
-          </>
-        )}
+        {section === "voice" && <VoiceSettingsPanel
+          settings={s}
+          locked={locked}
+          patch={patchVoice}
+          newKey={newElevenLabsKey}
+          setNewKey={setNewElevenLabsKey}
+          clearKey={clearElevenLabsKey}
+          setClearKey={setClearElevenLabsKey}
+        />}
 
         {section === "prompts" && (
           <>

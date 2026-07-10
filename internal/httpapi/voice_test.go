@@ -6,11 +6,96 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
+
+func TestResolveWorkerBinaryOrder(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	toolsDir := filepath.Join(root, "data", "tools")
+	if err := os.MkdirAll(appDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(toolsDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	name := "voice-parakeet-worker"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	beside := filepath.Join(appDir, name)
+	tool := filepath.Join(toolsDir, name)
+	if err := os.WriteFile(beside, []byte("worker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tool, []byte("worker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	executable := filepath.Join(appDir, "magichandy.exe")
+	if got := resolveWorkerBinary("explicit-worker", executable, filepath.Join(root, "data"), "voice-parakeet-worker"); got != "explicit-worker" {
+		t.Fatalf("explicit resolution = %q", got)
+	}
+	if got := resolveWorkerBinary("", executable, filepath.Join(root, "data"), "voice-parakeet-worker"); got != beside {
+		t.Fatalf("beside-app resolution = %q, want %q", got, beside)
+	}
+	if err := os.Remove(beside); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolveWorkerBinary("", executable, filepath.Join(root, "data"), "voice-parakeet-worker"); got != tool {
+		t.Fatalf("tools resolution = %q, want %q", got, tool)
+	}
+}
+
+func TestVoiceManagerConfigComposesFirstPartyProviders(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderElevenLabs
+	settings.TTSWorkerPath = `C:\workers\eleven.exe`
+	settings.ElevenLabsVoiceID = "voice-id"
+	settings.ElevenLabsModelID = "model-id"
+	settings.ElevenLabsAPIKey = "private-key"
+	settings.ASRProvider = config.VoiceASRProviderParakeet
+	settings.ASRWorkerPath = `C:\workers\parakeet.exe`
+	settings.ParakeetServerPath = `C:\parakeet\server.exe`
+	settings.ParakeetModelPath = `C:\parakeet\model.gguf`
+	settings.ParakeetServerPort = 9011
+
+	got := voiceManagerConfig(settings, "", "")
+	if got.TTS.Command != settings.TTSWorkerPath || strings.Join(got.TTS.Args, "|") != "-voice-id|voice-id|-model-id|model-id" {
+		t.Fatalf("ElevenLabs composition = %+v", got.TTS)
+	}
+	if got.TTS.Env["ELEVENLABS_API_KEY"] != "private-key" || strings.Contains(strings.Join(got.TTS.Args, " "), "private-key") {
+		t.Fatalf("ElevenLabs secret must be environment-only: %+v", got.TTS)
+	}
+	wantASR := `-server-path|C:\parakeet\server.exe|-server-model|C:\parakeet\model.gguf|-server-port|9011`
+	if got.ASR.Command != settings.ASRWorkerPath || strings.Join(got.ASR.Args, "|") != wantASR {
+		t.Fatalf("Parakeet composition = %+v, want args %q", got.ASR, wantASR)
+	}
+}
+
+func TestVoiceManagerConfigPreservesCustomAndDisablesNone(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceProviderCustom
+	settings.TTSWorkerPath = "custom-tts"
+	settings.TTSWorkerArgs = []string{"--unchanged", "value"}
+	settings.ASRProvider = config.VoiceProviderNone
+	settings.ASRWorkerPath = "hidden-custom-asr"
+	got := voiceManagerConfig(settings, "", "")
+	if !got.TTS.Enabled || got.TTS.Command != "custom-tts" || strings.Join(got.TTS.Args, "|") != "--unchanged|value" {
+		t.Fatalf("custom behavior changed: %+v", got.TTS)
+	}
+	if got.ASR.Enabled || got.ASR.Command != "" {
+		t.Fatalf("provider none must disable hidden command: %+v", got.ASR)
+	}
+}
 
 func TestSilentTestWAVBase64ProducesValidPCMSilence(t *testing.T) {
 	audio, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
@@ -130,6 +215,7 @@ func TestVoiceWorkerStartWithoutCommandFails(t *testing.T) {
 	server := newTestServer(t)
 	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
+		settings.Voice.ASRProvider = config.VoiceProviderCustom
 		return settings
 	})
 	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
@@ -173,6 +259,68 @@ func TestVoiceUnknownRequestIsNotFound(t *testing.T) {
 
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestVoiceTranscriptionUsesASRQueueAndReturnsTranscript(t *testing.T) {
+	server := newTestServer(t)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.Enabled = true
+		settings.Voice.ASRProvider = config.VoiceProviderCustom
+		settings.Voice.ASRWorkerPath = chatStubBinary(t)
+		settings.Voice.ASRWorkerArgs = []string{"-role", "asr", "-start-loaded"}
+		return settings
+	})
+	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
+
+	start := httptest.NewRecorder()
+	server.Handler().ServeHTTP(start, withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/asr/start", nil)))
+	if start.Code != http.StatusOK {
+		t.Fatalf("start ASR = %d: %s", start.Code, start.Body.String())
+	}
+
+	body := `{"audio_b64":"` + strings.Repeat("A", 128*1024) + `","audio_format":"webm"}`
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, withController(httptest.NewRequest(http.MethodPost, "/api/voice/transcriptions", strings.NewReader(body))))
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("transcribe = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var accepted struct {
+		Request struct {
+			ID string `json:"id"`
+		} `json:"request"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &accepted); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		pending, ok := server.voice.Request(accepted.Request.ID)
+		if !ok {
+			t.Fatal("accepted request was not tracked")
+		}
+		snapshot := pending.Snapshot()
+		if snapshot.State == "done" {
+			if len(snapshot.Transcript) != 1 || snapshot.Transcript[0].Text != "stub transcript" {
+				t.Fatalf("transcript = %+v", snapshot)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("transcription did not finish: %+v", snapshot)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestVoiceTranscriptionRejectsUnsupportedAudioFormat(t *testing.T) {
+	server := newTestServer(t)
+	body := strings.NewReader(`{"audio_b64":"AA==","audio_format":"mp3"}`)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, withController(httptest.NewRequest(http.MethodPost, "/api/voice/transcriptions", body)))
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "webm, ogg, or wav") {
+		t.Fatalf("unsupported format = %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
