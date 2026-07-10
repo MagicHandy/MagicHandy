@@ -335,6 +335,11 @@ Mitigation:
 - the connection key stays the user's private credential
 - detect and clearly report HSP-unavailable with concrete fix steps (Invariant 8)
 - document the firmware v4 / API v3 requirement up front in README/setup
+- before Phase 16 packaging claims device support: review current Handy API
+  docs for Handy 2 / Handy 2 Pro deltas (including the documented overclock
+  mode) and expose per-device max-speed limits only from documentation —
+  never guessed values (legacy notes item; see
+  `docs/legacy-parity-sweep-2026-07.md` §D)
 - keep StrokeGPT-ReVibed available for unsupported setups
 
 Exit evidence:
