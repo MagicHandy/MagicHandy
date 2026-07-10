@@ -43,6 +43,7 @@ Phase 13 providers follow one per PR.
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
 | 13.1-13.3 | Voice providers (NeuTTS Air spike, ElevenLabs, Parakeet proxy) | In progress | — |
 | 13.4 | Managed Parakeet runner and interactive installer | In progress | — |
+| 13.5 | Settings compaction: voice input/output split, provider-scoped fields | Planned | — |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -640,6 +641,28 @@ Status: **in progress on the current branch.**
   managed startup-once behavior, port conflict, unload, EOF cleanup, and the
   valid-WAV test request. A real model/microphone measurement remains required
   before push-to-talk or hands-free UI ships.
+
+### Slice 13.5: Settings Compaction (Voice Provider Model)
+
+Status: planned. Design: [docs/settings-compaction.md](docs/settings-compaction.md).
+
+- Selection-scoped disclosure across Settings: fields render only when the
+  selected provider/mode makes them meaningful; switching selections never
+  destroys hidden values; status readouts are never hidden.
+- The Voice tab splits into **Speech input (ASR)** and **Speech output
+  (TTS)** sections on one page, each with a provider dropdown (ASR: none /
+  managed Parakeet / OpenAI-compatible server / custom worker; TTS: none /
+  ElevenLabs / NeuTTS Air placeholder / custom worker) and its own worker
+  status row; speak-replies renders only when a TTS provider is set.
+- Backend-authoritative provider model: `VoiceSettings` gains per-role
+  provider discriminators + provider fields (additive, settings version
+  unchanged); Go composes worker command/args (templates tested in Go, not
+  frontend string-pasting); known worker binaries resolve by documented
+  order (override → beside the app executable → data-dir tools) so path
+  fields disappear from the common case; legacy path/args settings load as
+  `custom` with identical launch behavior.
+- Model and Device tabs get the same disclosure rule (llama.cpp vs Ollama
+  fields; managed vs external mode; developer app-ID only on override).
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and
