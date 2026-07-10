@@ -10,10 +10,16 @@ the companion to two docs and does not repeat them:
 - [ui-design.md](ui-design.md) — the enduring safety, accessibility, and parity
   rules.
 
-This file is the token-and-component layer the shell refactor builds against:
-exact values from `web/app.css`, the changes the redesign makes to them, and the
-do/don't rules that keep the result from reading as generic AI output. A visual
-sketch of the target shell is [ui-shell-sketch.svg](ui-shell-sketch.svg).
+This file is the **live token-and-component reference** for the shipped
+React shell (status 2026-07-09: current). The tokens now live in
+`web/src/styles/tokens.css` (shell and component rules in
+`web/src/styles/shell.css` / `components.css`); values quoted from the
+pre-React `web/app.css` were carried over unchanged, and `web/app.css`
+itself is retired under `web/legacy/` (reference only, not embedded). The
+do/don't rules keep the result from reading as generic AI output. A visual
+sketch of the shell as designed is
+[ui-shell-sketch.svg](ui-shell-sketch.svg) (historical artifact; the build
+is authoritative where they differ).
 
 ## Design Tokens
 
@@ -24,10 +30,9 @@ reusing it elsewhere.
 
 ### Color roles
 
-The app is dark graphite with one interactive hue. Two stale CSS comments still
-say "violet"/"teal" — those are wrong; the palette is graphite + steel azure,
-and no purple or blue-green decorative tone is allowed. Named tokens below come
-from `web/app.css :root`.
+The app is dark graphite with one interactive hue: graphite + steel azure,
+no purple or blue-green decorative tone. Named tokens below live in
+`web/src/styles/tokens.css :root`.
 
 | Token | Value | Role |
 | --- | --- | --- |
@@ -208,7 +213,8 @@ label for a control.
 - Transitions are quiet (`0.15s ease` on interactive state; `0.24s` on the
   visualizer position). No bouncing, pulsing glows, or moving gradients.
 - `prefers-reduced-motion: reduce` disables the visualizer/toast/toggle
-  transitions and the chat entry animation (already wired in `app.css`).
+  transitions and the chat entry animation (wired in
+  `web/src/styles/components.css`).
 - Focus is a `2px --focus` outline at `2px` offset on every interactive element;
   routed views and any popover trap focus and restore it on close.
 - Status is text + icon + color, never color alone. One polite live region for

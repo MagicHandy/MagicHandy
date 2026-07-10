@@ -37,15 +37,25 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 
 ## Layout
 
-> **Shell shape is being superseded.** The status-bar + single-control-sidebar
-> + settings-**window** shell below describes the current build. The next UI
-> phase moves to a **permanent left navigation sidebar that switches pages**
-> (Chat / Preset Modes / Pattern Library / Settings), with Stop pinned to the
-> sidebar footer — see [ui-navigation-redesign.md](ui-navigation-redesign.md).
-> The safety, accessibility, visual-language, and parity rules in this document
-> stay in force; only the arrangement of surfaces changes.
+> **As built (2026-07-08, React shell).** The app is the **permanent left
+> navigation sidebar that switches pages** from
+> [ui-navigation-redesign.md](ui-navigation-redesign.md): a nav rail
+> (Chat / Preset Modes / Pattern Library / Settings) with **Stop pinned to
+> the rail footer on every page**, a status-only top bar (dot+text readouts,
+> stopwatch, no controls), and workspaces as routed pages under a hash
+> router. Chat keeps the live control column (controls, quick settings,
+> manual test); Settings is a routed page with sibling sections
+> (`#/settings/device|model|voice|prompts|diagnostics` — compaction planned
+> in [settings-compaction.md](settings-compaction.md)). Token and component
+> specifics live in [ui-design-guidelines.md](ui-design-guidelines.md).
+>
+> The subsections below marked **Historical** describe the pre-React shell
+> (status bar + single control sidebar + settings window). They are kept
+> because their rationale shaped the current shell — the control column,
+> immediate-apply grouping, and testing-badged manual motion moved into the
+> Chat page largely unchanged — but they no longer describe the build.
 
-### Persistent control bar (all viewports, never hidden)
+### Historical: persistent control bar (pre-React shell)
 
 A slim, always-on bar owns **status only** — it is not a control strip:
 
@@ -58,7 +68,7 @@ This bar is fixed to the viewport, never collapsible, and not hidden when the
 keyboard opens. Controls — including Stop — live in the sidebar panel; the
 bar carries the state the user glances at.
 
-### Primary content
+### Historical: primary content (pre-React shell)
 
 - The conversation is the main scrollable region and should use available
   desktop width. Do not reintroduce the narrow-chat regression from the old app;
@@ -68,7 +78,7 @@ bar carries the state the user glances at.
   as a single window over the control view; deeper areas are sibling sections
   inside that one window, never stacked modals.
 
-### Sidebar (the control rail)
+### Historical: sidebar control rail (now the Chat control column)
 
 Controls live in **one always-visible sidebar panel** next to the chat — the
 shape the old app proved out — not in the top bar (top-bar controls read as
@@ -90,26 +100,28 @@ top to bottom:
 The panel is never collapsible. On narrow viewports it stacks **above** the
 chat, and Stop detaches into a fixed bottom bar so it is always on screen.
 
-### Mobile
+### Mobile (as built)
 
-Same persistent control bar. The keyboard never hides device state or Stop.
-The sidebar stacks below the chat; the settings window fits the viewport with
-Save still reachable.
+The nav rail becomes a bottom tab bar with Stop sharing a reserved footer
+that never overlays content (fixed in the Phase 13.4 shell pass); the
+keyboard never hides device state or Stop; Settings pages fit the viewport
+with Save reachable.
 
-### Implemented structure
+### Implemented structure (as built, React shell)
 
-`#/` is the control view: chat fills the main column (the log grows with the
-viewport) and the single sidebar panel holds Controls (Pause/Resume + run
-readout), Quick settings, the testing-badged Manual motion group, and Stop
-everything. `#/settings/device|model|prompts|diagnostics` open the settings
-window on that section — deep-linkable, driven by the same hash router. The
-window is opened by the profile button, closed by its Close button, the
-backdrop, or Escape (Escape closes the window first and stops motion only
-when no overlay is open); focus is trapped inside while open and restored on
-close. Chat stays visible dimmed behind the window; the status bar stays
-above the backdrop, and Stop renders above it too. Nothing renders as a
-dashboard; new surfaces join the sidebar panel or the settings window, not as
-additional always-visible panels.
+`#/chat` is the primary workspace: the chat log fills the main column and
+the control column holds Controls (Freestyle, Pause/Resume + run readout,
+keepalive), Quick settings (immediate-apply), the testing-badged Manual
+motion group, and the motion visualizer. `#/modes` hosts Preset Modes
+(Freestyle now, Autopilot when its planner lands), `#/library` is the
+labeled Pattern Library placeholder until Phase 14, and
+`#/settings/device|model|voice|prompts|diagnostics` are sibling sections of
+the routed Settings page — deep-linkable, no window, no stacked overlays.
+Stop lives in the nav-rail footer on every route (plus Escape), outside the
+route tree so no navigation state can unmount it; backend loss shows the
+persistent banner and locks backend-required controls while Stop stays
+enabled. Nothing renders as a dashboard; new surfaces join an existing
+workspace or become a nav destination, never an extra always-visible panel.
 
 ## The Device Visualizer
 
@@ -141,13 +153,18 @@ Speed limit, stroke range, reverse direction.
 
 ## Settings
 
-> **Settings becomes a page, not a window.** The window-over-chat decision
-> below (2026-07-03) is superseded by the sidebar-navigation redesign: with four
-> peer workspaces, Settings is a routed page reached from the profile lockup,
-> and the value it protected — never leaving chat for a quick change — is kept
-> by docking the live quick settings on the Chat page. The immediate-apply,
-> single-layer, and confirmed-destructive rules below are unchanged. See
-> [ui-navigation-redesign.md](ui-navigation-redesign.md).
+> **As built: Settings is a routed page**, reached from the profile lockup,
+> with sibling sections under `#/settings/*` — the window-over-chat decision
+> below (2026-07-03) is historical. The value the window protected — never
+> leaving chat for a quick change — is kept by the live quick settings on
+> the Chat page. The immediate-apply, single-layer, and
+> confirmed-destructive rules below are unchanged and still enforced.
+>
+> **Next planned change:** provider-scoped disclosure and the Voice tab's
+> split into Speech input / Speech output sections —
+> [settings-compaction.md](settings-compaction.md) (Slice 13.5). Fields
+> render only when the selected provider/mode makes them meaningful; status
+> readouts are never hidden.
 
 Preserve the familiar grouping (Persona, Model, Voice, Device, Motion,
 Diagnostics) but fix the structural flaws:

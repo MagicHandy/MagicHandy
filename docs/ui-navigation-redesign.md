@@ -2,13 +2,17 @@
 
 ## Status
 
-Proposed 2026-07-06. Design target for the next UI phase (see "Migration",
-below). The shell is now expected to be implemented during the React migration
-accepted in [ADR 0009](decisions/0009-react-frontend.md). This document
-specifies the **shell and information architecture**; it does not restate the
-safety, accessibility, and parity rules in [ui-design.md](ui-design.md), which
-stay in force unchanged. Where the two overlap on layout, this document is the
-newer decision and [ui-design.md](ui-design.md) is annotated to point here.
+Proposed 2026-07-06; **implemented 2026-07-08** with the React migration
+(ADR 0009, PRs #37/#38; mobile-footer refinement in #46). This is now the
+as-built shell specification: the nav rail with pinned Stop, the status-only
+bar, and the four routed workspaces all exist as described, with two labeled
+exceptions — Autopilot renders as coming-soon until its planner ships (shell
+step 3), and Pattern Library is a labeled empty state until Phase 14. This
+document specifies the **shell and information architecture**; it does not
+restate the safety, accessibility, and parity rules in
+[ui-design.md](ui-design.md), which stay in force unchanged. Settings-page
+internals are being revised separately in
+[settings-compaction.md](settings-compaction.md) (Slice 13.5).
 
 ## Why Change The Shell
 

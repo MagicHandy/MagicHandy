@@ -1,5 +1,14 @@
 # React UI Implementation Handoff
 
+> **Historical (consumed).** This handoff drove the React migration that
+> merged as PRs #37/#38 (2026-07-08); the implementation sequence below is
+> complete and the non-negotiables it lists are now enforced by tests and
+> CI rather than by this document. Kept for the record; for current UI
+> guidance see [ui-design.md](ui-design.md),
+> [ui-navigation-redesign.md](ui-navigation-redesign.md) (as-built shell),
+> [ui-design-guidelines.md](ui-design-guidelines.md) (live tokens), and
+> [settings-compaction.md](settings-compaction.md) (next planned change).
+
 ## Goal
 
 Implement the UI design docs in React without changing MagicHandy's safety model
