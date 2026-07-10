@@ -4,8 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,13 +24,18 @@ import (
 // a wedged worker cannot stall the settings page.
 const voiceHealthTimeout = 3 * time.Second
 
-func newVoiceManager(settings config.VoiceSettings) *voice.Manager {
+const (
+	maxVoiceAudioBase64Bytes = 44 << 20
+	maxVoiceRequestBytes     = maxVoiceAudioBase64Bytes + 1024
+)
+
+func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) *voice.Manager {
 	manager := voice.NewManager()
-	manager.Configure(voiceManagerConfig(settings))
+	manager.Configure(voiceManagerConfig(settings, executablePath, dataDir))
 	return manager
 }
 
-func voiceManagerConfig(settings config.VoiceSettings) voice.Config {
+func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir string) voice.Config {
 	// Provider credentials travel to the worker process privately via its
 	// environment — never on the command line (visible in process listings)
 	// and never through any status or protocol frame.
@@ -31,19 +43,66 @@ func voiceManagerConfig(settings config.VoiceSettings) voice.Config {
 	if settings.ElevenLabsAPIKey != "" {
 		ttsEnv = map[string]string{"ELEVENLABS_API_KEY": settings.ElevenLabsAPIKey}
 	}
-	return voice.Config{
-		TTS: voice.WorkerConfig{
-			Enabled: settings.Enabled,
-			Command: settings.TTSWorkerPath,
-			Args:    settings.TTSWorkerArgs,
-			Env:     ttsEnv,
-		},
-		ASR: voice.WorkerConfig{
-			Enabled: settings.Enabled,
-			Command: settings.ASRWorkerPath,
-			Args:    settings.ASRWorkerArgs,
-		},
+	tts := voice.WorkerConfig{Enabled: settings.Enabled && settings.TTSProvider != config.VoiceProviderNone}
+	switch settings.TTSProvider {
+	case config.VoiceTTSProviderElevenLabs:
+		tts.Command = resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-elevenlabs-worker")
+		tts.Args = []string{"-voice-id", settings.ElevenLabsVoiceID, "-model-id", settings.ElevenLabsModelID}
+		tts.Env = ttsEnv
+	case config.VoiceTTSProviderNeuTTSAir:
+		tts.Command = resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")
+		tts.Args = []string{"-runner", settings.NeuTTSRunnerPath, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone}
+		if settings.NeuTTSReferenceWAV != "" {
+			tts.Args = append(tts.Args, "-ref-audio", settings.NeuTTSReferenceWAV)
+		}
+		if settings.NeuTTSReferenceCodes != "" {
+			tts.Args = append(tts.Args, "-ref-codes", settings.NeuTTSReferenceCodes)
+		}
+	case config.VoiceProviderCustom:
+		tts.Command, tts.Args = settings.TTSWorkerPath, settings.TTSWorkerArgs
+		tts.Env = ttsEnv
 	}
+
+	asr := voice.WorkerConfig{Enabled: settings.Enabled && settings.ASRProvider != config.VoiceProviderNone}
+	switch settings.ASRProvider {
+	case config.VoiceASRProviderParakeet:
+		asr.Command = resolveWorkerBinary(settings.ASRWorkerPath, executablePath, dataDir, "voice-parakeet-worker")
+		asr.Args = []string{"-server-path", settings.ParakeetServerPath, "-server-model", settings.ParakeetModelPath, "-server-port", strconv.Itoa(settings.ParakeetServerPort)}
+	case config.VoiceASRProviderOpenAICompat:
+		asr.Command = resolveWorkerBinary(settings.ASRWorkerPath, executablePath, dataDir, "voice-parakeet-worker")
+		asr.Args = []string{"-base-url", settings.ASRBaseURL}
+		if settings.ASRModel != "" {
+			asr.Args = append(asr.Args, "-model", settings.ASRModel)
+		}
+	case config.VoiceProviderCustom:
+		asr.Command, asr.Args = settings.ASRWorkerPath, settings.ASRWorkerArgs
+	}
+	return voice.Config{TTS: tts, ASR: asr}
+}
+
+func resolveWorkerBinary(explicit, executablePath, dataDir, name string) string {
+	if explicit = strings.TrimSpace(explicit); explicit != "" {
+		return explicit
+	}
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if executablePath == "" {
+		executablePath, _ = os.Executable()
+	}
+	candidates := []string{}
+	if executablePath != "" {
+		candidates = append(candidates, filepath.Join(filepath.Dir(executablePath), name))
+	}
+	if dataDir != "" {
+		candidates = append(candidates, filepath.Join(dataDir, "tools", name))
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func (s *Server) voiceRoutes(mux *http.ServeMux) {
@@ -56,6 +115,8 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/voice/requests/{id}", s.handleVoiceRequestGet)
 	mux.HandleFunc("GET /api/voice/requests/{id}/audio", s.handleVoiceRequestAudio)
 	mux.HandleFunc("POST /api/voice/requests/{id}/cancel", s.handleVoiceRequestCancel)
+	mux.HandleFunc("POST /api/voice/transcriptions", s.handleVoiceTranscription)
+	mux.HandleFunc("PUT /api/voice/preferences", s.handleVoicePreferences)
 }
 
 // voiceState is the /api/state block: lifecycle snapshots only, no live IPC
@@ -314,5 +375,84 @@ func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request
 // A changed command or a disable stops the affected worker; nothing starts
 // implicitly. Unchanged configs are a no-op inside SetConfig.
 func (s *Server) applyVoiceSettingsTransition(next config.Settings) {
-	s.voice.Configure(voiceManagerConfig(next.Voice))
+	s.voice.Configure(voiceManagerConfig(next.Voice, s.voiceExecutable, s.voiceDataDir))
+}
+
+func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body struct {
+		AudioB64    string `json:"audio_b64"`
+		AudioFormat string `json:"audio_format"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxVoiceRequestBytes)
+	if err := decodeVoiceTranscriptionJSON(r, &body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.AudioB64 == "" {
+		writeError(w, http.StatusBadRequest, errors.New("recorded audio is required"))
+		return
+	}
+	if len(body.AudioB64) > maxVoiceAudioBase64Bytes {
+		writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
+		return
+	}
+	format := strings.ToLower(strings.TrimSpace(body.AudioFormat))
+	switch format {
+	case "webm", "ogg", "wav":
+		// Supported by MediaRecorder or the silent worker test.
+	default:
+		writeError(w, http.StatusBadRequest, errors.New("recorded audio format must be webm, ogg, or wav"))
+		return
+	}
+	pending, err := s.voice.Worker(voice.RoleASR).Submit(voice.Request{
+		Type: voice.RequestTranscribe, AudioB64: body.AudioB64, AudioFormat: format,
+	})
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	s.voice.Track(pending)
+	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
+}
+
+func decodeVoiceTranscriptionJSON(r *http.Request, target any) error {
+	defer func() { _ = r.Body.Close() }()
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("decode JSON request: %w", err)
+	}
+	var extra struct{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("decode JSON request: multiple JSON values are not allowed")
+	}
+	return nil
+}
+
+func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body struct {
+		SpeakReplies bool `json:"speak_replies"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	settings.Voice.SpeakReplies = body.SpeakReplies
+	if _, err := s.store.Save(settings); err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("voice preference could not be saved"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"speak_replies": body.SpeakReplies})
 }

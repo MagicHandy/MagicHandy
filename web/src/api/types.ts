@@ -150,11 +150,25 @@ export interface ModesStatus {
 
 export interface VoiceSettings {
   enabled: boolean;
+  tts_provider: string;
+  asr_provider: string;
   tts_worker_path?: string;
   tts_worker_args?: string[];
   asr_worker_path?: string;
   asr_worker_args?: string[];
   speak_replies?: boolean;
+  elevenlabs_voice_id?: string;
+  elevenlabs_model_id?: string;
+  parakeet_server_path?: string;
+  parakeet_model_path?: string;
+  parakeet_port?: number;
+  asr_base_url?: string;
+  asr_model?: string;
+  neutts_runner_path?: string;
+  neutts_reference_wav?: string;
+  neutts_reference_codes?: string;
+  neutts_reference_text?: string;
+  neutts_backbone?: string;
   // Read side only: the stored ElevenLabs key is never returned, just a flag.
   elevenlabs_key_set?: boolean;
 }
@@ -164,11 +178,25 @@ export interface VoiceSettings {
 // backend decoder rejects unknown fields like elevenlabs_key_set.
 export interface VoiceSettingsUpdate {
   enabled: boolean;
+  tts_provider: string;
+  asr_provider: string;
   tts_worker_path: string;
   tts_worker_args: string[];
   asr_worker_path: string;
   asr_worker_args: string[];
   speak_replies: boolean;
+  elevenlabs_voice_id: string;
+  elevenlabs_model_id: string;
+  parakeet_server_path: string;
+  parakeet_model_path: string;
+  parakeet_port: number;
+  asr_base_url: string;
+  asr_model: string;
+  neutts_runner_path: string;
+  neutts_reference_wav: string;
+  neutts_reference_codes: string;
+  neutts_reference_text: string;
+  neutts_backbone: string;
   elevenlabs_api_key?: string;
   clear_elevenlabs_key: boolean;
 }
@@ -228,6 +256,8 @@ export interface OptionHints {
   llm_providers?: string[];
   llama_cpp_modes?: string[];
   prompt_sets?: string[];
+  tts_providers?: string[];
+  asr_providers?: string[];
 }
 
 export interface PublicSettings {

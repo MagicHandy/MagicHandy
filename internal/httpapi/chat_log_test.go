@@ -197,6 +197,7 @@ func startSpeakingTTS(t *testing.T, server *Server, speakReplies bool) {
 	t.Helper()
 	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
+		settings.Voice.TTSProvider = config.VoiceProviderCustom
 		settings.Voice.SpeakReplies = speakReplies
 		settings.Voice.TTSWorkerPath = chatStubBinary(t)
 		settings.Voice.TTSWorkerArgs = []string{"-role", "tts", "-start-loaded"}

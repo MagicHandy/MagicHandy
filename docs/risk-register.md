@@ -411,6 +411,10 @@ Exit evidence:
 - a recorded decision on LAN/mobile scope, and — if in scope — a working
   documented HTTPS flow verified from a real mobile browser
 
+Status 2026-07-09: Phase 13 records **localhost-only** microphone support.
+MagicHandy does not claim LAN/mobile voice input. HTTPS, local CA, exact-IP
+SANs, and Android certificate support remain a Phase 16 exposure decision.
+
 ## R19: Datastore Migration And Budget Risk
 
 Level: Medium

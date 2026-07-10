@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, streamChat } from "../api/client";
 import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
+import { MicrophoneIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
 
 interface Msg {
@@ -33,6 +34,7 @@ export function ChatPanel() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [showJump, setShowJump] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -41,6 +43,14 @@ export function ChatPanel() {
   const seeded = useRef(false);
   const speechQueue = useRef<string[]>([]);
   const speaking = useRef(false);
+  const recorder = useRef<MediaRecorder | null>(null);
+  const microphoneStream = useRef<MediaStream | null>(null);
+  const microphoneChunks = useRef<Blob[]>([]);
+  const wantsRecording = useRef(false);
+  const recordingTimer = useRef<number | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mounted = useRef(true);
 
   // Seed the panel from the canonical server log once.
   useEffect(() => {
@@ -62,6 +72,17 @@ export function ChatPanel() {
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      wantsRecording.current = false;
+      if (recordingTimer.current !== null) window.clearTimeout(recordingTimer.current);
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      microphoneStream.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -141,16 +162,16 @@ export function ChatPanel() {
 
   const locked = !backendOnline || readOnly;
 
-  async function send() {
-    const text = draft.trim();
-    if (!text || busy || locked) return;
-    setDraft("");
+  async function sendText(input: string) {
+    const text = input.trim();
+    if (!text || busyRef.current || locked) return;
     const assistantId = uid();
     setMessages((m) => [
       ...m,
       { id: uid(), role: "user", text },
       { id: assistantId, role: "assistant", text: "", streaming: true },
     ]);
+    busyRef.current = true;
     setBusy(true);
     let raw = "";
     let repairRaw = "";
@@ -201,8 +222,88 @@ export function ChatPanel() {
       show(message, "error");
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
     } finally {
+      busyRef.current = false;
       setBusy(false);
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, streaming: false } : x)));
+    }
+  }
+
+  async function send() {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    await sendText(text);
+  }
+
+  async function startRecording() {
+    if (recording || transcribing || busyRef.current || locked) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      show("Microphone capture requires localhost or HTTPS in a supported browser.", "error");
+      return;
+    }
+    wantsRecording.current = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!wantsRecording.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      microphoneStream.current = stream;
+      microphoneChunks.current = [];
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"].find((mime) => MediaRecorder.isTypeSupported(mime));
+      const nextRecorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
+      recorder.current = nextRecorder;
+      nextRecorder.ondataavailable = (event) => { if (event.data.size > 0) microphoneChunks.current.push(event.data); };
+      nextRecorder.onstop = () => void finishRecording(nextRecorder.mimeType || preferred || "audio/webm");
+      nextRecorder.start(250);
+      setRecording(true);
+      recordingTimer.current = window.setTimeout(stopRecording, 30000);
+    } catch (error) {
+      wantsRecording.current = false;
+      show(error instanceof Error ? error.message : "Microphone permission was denied.", "error");
+    }
+  }
+
+  function stopRecording() {
+    wantsRecording.current = false;
+    if (recordingTimer.current !== null) {
+      window.clearTimeout(recordingTimer.current);
+      recordingTimer.current = null;
+    }
+    if (recorder.current?.state === "recording") {
+      // Lock out a second recording until this recorder's asynchronous stop
+      // event has submitted or discarded its audio.
+      setTranscribing(true);
+      recorder.current.stop();
+    }
+    setRecording(false);
+  }
+
+  async function finishRecording(mimeType: string) {
+    microphoneStream.current?.getTracks().forEach((track) => track.stop());
+    microphoneStream.current = null;
+    recorder.current = null;
+    const blob = new Blob(microphoneChunks.current, { type: mimeType });
+    microphoneChunks.current = [];
+    if (blob.size === 0 || !mounted.current) {
+      if (mounted.current) setTranscribing(false);
+      return;
+    }
+    setTranscribing(true);
+    try {
+      const audioB64 = await blobBase64(blob);
+      const format = mimeType.includes("ogg") ? "ogg" : mimeType.includes("wav") ? "wav" : "webm";
+      const submitted = await api.voiceTranscribe(audioB64, format);
+      const transcript = await waitForTranscript(submitted.request.id);
+      if (!transcript) {
+        show("No speech was recognized.", "error");
+        return;
+      }
+      await sendText(transcript);
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Transcription failed.", "error");
+    } finally {
+      setTranscribing(false);
     }
   }
 
@@ -237,7 +338,7 @@ export function ChatPanel() {
           rows={2}
           maxLength={1000}
           value={draft}
-          disabled={locked}
+          disabled={locked || recording || transcribing}
           placeholder={readOnly ? "Read-only client — this tab cannot drive motion." : "Message MagicHandy — chat can start, adjust, and stop motion"}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -248,7 +349,19 @@ export function ChatPanel() {
           }}
         />
         <div className="chat-actions">
-          <button type="submit" className="btn btn-primary" disabled={locked || busy || !draft.trim()}>Send</button>
+          <button
+            type="button"
+            className="btn btn-secondary mic-button"
+            data-recording={recording || undefined}
+            disabled={locked || busy || transcribing}
+            aria-pressed={recording}
+            onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void startRecording(); }}
+            onPointerUp={(event) => { event.preventDefault(); stopRecording(); }}
+            onPointerCancel={stopRecording}
+            onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); void startRecording(); } }}
+            onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); stopRecording(); } }}
+          ><MicrophoneIcon />{recording ? "Listening" : transcribing ? "Transcribing" : "Hold to talk"}</button>
+          <button type="submit" className="btn btn-primary" disabled={locked || busy || recording || transcribing || !draft.trim()}>Send</button>
           <span className="form-status">{busy ? "Streaming…" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
           <span className="hint-inline" aria-hidden="true">Ctrl+Enter to send</span>
         </div>
@@ -273,6 +386,36 @@ async function waitForSpeechDone(requestId: string): Promise<boolean> {
     if (Date.now() > deadline) return false;
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
+}
+
+async function waitForTranscript(requestId: string): Promise<string> {
+  const deadline = Date.now() + 90000;
+  for (;;) {
+    const res = await api.voiceRequest(requestId);
+    const request = res.request;
+    if (request?.state === "done") return request.transcript?.[0]?.text?.trim() ?? "";
+    if (request?.state === "failed") throw new Error(request.error?.message || "Transcription failed.");
+    if (request?.state === "canceled") return "";
+    if (Date.now() > deadline) {
+      await api.voiceRequestCancel(requestId).catch(() => undefined);
+      throw new Error("Transcription timed out.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+}
+
+function blobBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read recorded audio."));
+    reader.onload = () => {
+      const value = String(reader.result ?? "");
+      const comma = value.indexOf(",");
+      if (comma < 0) reject(new Error("Recorded audio could not be encoded."));
+      else resolve(value.slice(comma + 1));
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function playBlob(blob: Blob): Promise<void> {

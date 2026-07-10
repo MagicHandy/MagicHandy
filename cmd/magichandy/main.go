@@ -74,8 +74,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 
 	runtime := httpapi.Runtime{
-		Traces:    diagnostics.NewTraceRing(512),
-		Transport: transport.NewFake(),
+		Traces:         diagnostics.NewTraceRing(512),
+		Transport:      transport.NewFake(),
+		ExecutablePath: executablePath(),
 	}
 
 	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
@@ -130,4 +131,12 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	logger.Info("server stopped")
 
 	return nil
+}
+
+func executablePath() string {
+	path, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return path
 }

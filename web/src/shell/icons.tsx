@@ -54,3 +54,11 @@ export const ClockIcon = ({ size = 16, className }: P) => (
     <path d="M12 8v4l3 2" />
   </svg>
 );
+export const MicrophoneIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M6.5 11a5.5 5.5 0 0 0 11 0" />
+    <path d="M12 16.5V21" />
+    <path d="M9 21h6" />
+  </svg>
+);

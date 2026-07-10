@@ -18,7 +18,7 @@ const baseState = {
     device: { hsp_dispatch_owner: "cloud_rest", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000 },
-    voice: { enabled: false, tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], speak_replies: false, elevenlabs_key_set: false },
+    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], speak_replies: false, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth"],
@@ -27,6 +27,8 @@ const baseState = {
       llm_providers: ["llama_cpp", "ollama"],
       llama_cpp_modes: ["managed", "external"],
       prompt_sets: ["default"],
+      tts_providers: ["none", "elevenlabs", "neutts_air", "custom"],
+      asr_providers: ["none", "parakeet_managed", "openai_compatible", "custom"],
     },
   },
   controller: { active: true, read_only: false },
@@ -149,27 +151,30 @@ describe("app shell safety invariants", () => {
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
-    expect(await screen.findByRole("heading", { name: /voice workers/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^voice$/i })).toBeInTheDocument();
     // Both roles are visible with a dot+text state, even with voice off.
-    expect(screen.getByText(/speech output \(tts\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/speech input \(asr\)/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/speech output \(tts\)/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/speech input \(asr\)/i).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
     // A missing/disabled worker never blocks the app or adds a row of unusable controls.
     expect(screen.queryByRole("button", { name: /^(start|stop|restart|load model|unload model|send test)$/i })).toBeNull();
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
   });
 
-  it("preserves Windows paths in one-argument-per-line worker settings", async () => {
+  it("preserves hidden custom worker arguments when another provider is selected", async () => {
     const fetch = installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
 
-    fireEvent.change(await screen.findByRole("textbox", { name: /asr worker arguments/i }), {
+    const providers = await screen.findAllByRole("combobox", { name: /provider/i });
+    fireEvent.change(providers[0], { target: { value: "custom" } });
+    fireEvent.change(await screen.findByRole("textbox", { name: /worker arguments/i }), {
       target: {
         value: "-server-path\nC:\\Program Files\\MagicHandy\\parakeet-server.exe\n-server-model\nC:\\Users\\Test User\\AppData\\Roaming\\MagicHandy\\voice\\parakeet\\model.gguf",
       },
     });
+    fireEvent.change(providers[0], { target: { value: "none" } });
     fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => {
@@ -183,6 +188,25 @@ describe("app shell safety invariants", () => {
       "-server-model",
       "C:\\Users\\Test User\\AppData\\Roaming\\MagicHandy\\voice\\parakeet\\model.gguf",
     ]);
+  });
+
+  it("discloses only fields for the selected voice provider and keeps status visible", async () => {
+    installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+    const providers = await screen.findAllByRole("combobox", { name: /provider/i });
+
+    expect(screen.queryByLabelText(/^api key/i)).toBeNull();
+    fireEvent.change(providers[1], { target: { value: "elevenlabs" } });
+    expect(screen.getByLabelText(/^api key/i)).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText(/voice id/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/reference transcript/i)).toBeNull();
+
+    fireEvent.change(providers[1], { target: { value: "neutts_air" } });
+    expect(screen.getByLabelText(/reference transcript/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^api key/i)).toBeNull();
+    expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
   });
 
   it("locks settings, prompt, and memory mutations for read-only clients", async () => {

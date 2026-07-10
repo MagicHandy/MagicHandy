@@ -18,12 +18,11 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-09. Phases 0 through 13.4 are merged to `main`: the voice
-worker boundary, the delivery-ordering foundation, the NeuTTS Air spike
-(go), the ElevenLabs and Parakeet workers, and the managed Parakeet runner
-with installer provisioning. Remaining Phase 13 items before Phase 14: the
-NeuTTS Air worker implementation (spike verdict: go), microphone capture UI,
-and the follow-ups in `docs/legacy-parity-sweep-2026-07.md`.
+Updated 2026-07-09. Phases 0 through 13.4 are merged to `main`. Slices
+13.5-13.7 are implemented on the Phase 13 completion branch: provider-scoped
+Settings, the NeuTTS Air adapter, push-to-talk microphone capture, and the
+Chat speak-replies control. Phase 13 deliberately supports microphone capture
+on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging decision.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -48,7 +47,9 @@ and the follow-ups in `docs/legacy-parity-sweep-2026-07.md`.
 | 13.2 | ElevenLabs cloud TTS worker | **Complete** | #44 |
 | 13.3 | Parakeet ASR worker (OpenAI-compatible proxy) | **Complete** | #45 |
 | 13.4 | Managed Parakeet runner and interactive installer | **Complete** | #46 |
-| 13.5 | Settings compaction: voice input/output split, provider-scoped fields | Planned | — |
+| 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | current branch |
+| 13.6 | NeuTTS Air offline stream adapter | **Complete** | current branch |
+| 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | current branch |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -633,7 +634,7 @@ One provider per PR/subphase, in this order:
 
 ### Slice 13.4: Managed Parakeet Runner And Installer
 
-Status: **in progress on the current branch.**
+Status: **complete** in PR #46.
 
 - Select parakeet.cpp over a direct sherpa-onnx binding for the first Windows
   path: its release already contains `parakeet-server`, local GGUF support,
@@ -656,7 +657,8 @@ Status: **in progress on the current branch.**
 
 ### Slice 13.5: Settings Compaction (Voice Provider Model)
 
-Status: planned. Design: [docs/settings-compaction.md](docs/settings-compaction.md).
+Status: **complete**. Design and implementation notes:
+[docs/settings-compaction.md](docs/settings-compaction.md).
 
 - Selection-scoped disclosure across Settings: fields render only when the
   selected provider/mode makes them meaningful; switching selections never
@@ -675,6 +677,39 @@ Status: planned. Design: [docs/settings-compaction.md](docs/settings-compaction.
   `custom` with identical launch behavior.
 - Model and Device tabs get the same disclosure rule (llama.cpp vs Ollama
   fields; managed vs external mode; developer app-ID only on override).
+
+### Slice 13.6: NeuTTS Air Offline Stream Adapter
+
+Status: **complete**.
+
+- `voice-neutts-worker` adapts the non-Python `neutts-rs` `stream_pcm`
+  runner to ADR 0003 and forwards live signed 16-bit 24 kHz PCM chunks.
+  The core wraps retained PCM as WAV only at the playback boundary, preserving
+  the final samples without delaying worker-side streaming or cancellation.
+- The child runs with Hugging Face offline mode forced. Model and voice-code
+  downloads are explicit installer/user actions, never a load, status, or
+  speech side effect.
+- The current `neutts-rs` 0.1.1 encoder export is a stub despite example text
+  suggesting otherwise. This slice requires pre-encoded `.npy` reference
+  codes plus the transcript. The WAV path is provenance only; MagicHandy does
+  not silently invoke Python.
+- Setup and the exact capability boundary are documented in
+  [docs/neutts-worker.md](docs/neutts-worker.md).
+
+### Slice 13.7: Push-To-Talk Voice Input
+
+Status: **complete** for the supported localhost browser path.
+
+- Press-and-hold browser recording submits WebM/Opus (or the best supported
+  browser format) to the core ASR queue. The accepted transcript calls the
+  same chat send function as typed text, preserving every motion limit,
+  smoothing rule, controller lease, and Stop behavior.
+- Recording is bounded to 30 seconds; transcription has a visible busy state,
+  queue status remains in Settings, and timeout cancels the worker request.
+- `http://localhost` is the supported microphone origin. LAN/mobile use is not
+  promised until Phase 16 provides an HTTPS and certificate design.
+- Always-on/hands-free recording remains out of scope until push-to-talk has
+  enough real-microphone reliability evidence.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and
@@ -706,8 +741,8 @@ mobile voice (see risk R18).
 
 Provider-specific tests plus the standard suite. Manual checks with a real
 microphone: missing dependency reported clearly, provider loads, cancellation
-works, queue depth visible, app survives provider failure, push-to-talk and
-hands-free work with the default settings without touching advanced knobs.
+works, queue depth visible, app survives provider failure, and push-to-talk
+works with the default settings without touching advanced knobs.
 
 ## Done Criteria
 

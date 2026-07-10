@@ -296,6 +296,9 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if defaults.Voice.TTSWorkerPath != "" || defaults.Voice.ASRWorkerPath != "" {
 		t.Fatal("voice worker paths must default to empty")
 	}
+	if defaults.Voice.TTSProvider != VoiceProviderNone || defaults.Voice.ASRProvider != VoiceProviderNone {
+		t.Fatalf("voice providers must default to none: %+v", defaults.Voice)
+	}
 
 	settings := defaults
 	settings.Voice = VoiceSettings{
@@ -312,6 +315,58 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	}
 	if len(normalized.Voice.TTSWorkerArgs) != 2 {
 		t.Fatalf("tts worker args = %v, want blank entries dropped", normalized.Voice.TTSWorkerArgs)
+	}
+}
+
+func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T) {
+	data := []byte(`{
+		"version":1,
+		"voice":{"enabled":true,"tts_worker_path":"C:\\legacy\\tts.exe","tts_worker_args":["-role","tts"],"asr_worker_path":"C:\\legacy\\asr.exe","asr_worker_args":["-role","asr"]}
+	}`)
+	settings, migrated, err := loadSettingsFromBytes(data)
+	if err != nil {
+		t.Fatalf("loadSettingsFromBytes: %v", err)
+	}
+	if migrated {
+		t.Fatal("additive version-1 provider defaults must not bump the schema version")
+	}
+	if settings.Voice.TTSProvider != VoiceProviderCustom || settings.Voice.ASRProvider != VoiceProviderCustom {
+		t.Fatalf("legacy commands were not classified as custom: %+v", settings.Voice)
+	}
+	if settings.Voice.TTSWorkerPath != `C:\legacy\tts.exe` || strings.Join(settings.Voice.ASRWorkerArgs, "|") != "-role|asr" {
+		t.Fatalf("legacy command changed during migration: %+v", settings.Voice)
+	}
+}
+
+func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
+	current := DefaultSettings()
+	update := SettingsUpdate{
+		Server: current.Server,
+		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
+		Motion: current.Motion, LLM: current.LLM, Diagnostics: current.Diagnostics,
+		Voice: VoiceUpdate{
+			Enabled: true, TTSProvider: VoiceProviderNone, ASRProvider: VoiceProviderNone,
+			TTSWorkerPath: `C:\custom\tts.exe`, TTSWorkerArgs: []string{"--kept"},
+			ASRWorkerPath: `C:\custom\asr.exe`, ASRWorkerArgs: []string{"--also-kept"},
+			ElevenLabsVoiceID: "voice-123", ElevenLabsModelID: "model-456",
+			ParakeetServerPath: `C:\parakeet\server.exe`, ParakeetModelPath: `C:\parakeet\model.gguf`, ParakeetServerPort: 9012,
+			ASRBaseURL: "http://127.0.0.1:7777/", ASRModel: "parakeet",
+			NeuTTSRunnerPath: `C:\neutts\stream_pcm.exe`, NeuTTSReferenceWAV: `C:\voices\reference.wav`,
+			NeuTTSReferenceCodes: `C:\voices\reference.npy`, NeuTTSReferenceText: "Reference transcript.", NeuTTSBackbone: "local/backbone",
+		},
+	}
+	next, err := current.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate: %v", err)
+	}
+	if next.Voice.TTSProvider != VoiceProviderNone || next.Voice.ASRProvider != VoiceProviderNone {
+		t.Fatalf("active selections changed: %+v", next.Voice)
+	}
+	if next.Voice.ElevenLabsVoiceID != "voice-123" || next.Voice.ParakeetServerPort != 9012 || next.Voice.NeuTTSReferenceCodes != `C:\voices\reference.npy` {
+		t.Fatalf("hidden provider fields were discarded: %+v", next.Voice)
+	}
+	if next.Voice.ASRBaseURL != "http://127.0.0.1:7777" || len(next.Voice.TTSWorkerArgs) != 1 {
+		t.Fatalf("hidden provider fields were not normalized losslessly: %+v", next.Voice)
 	}
 }
 

@@ -41,6 +41,9 @@ type Runtime struct {
 	CloudBaseURL           string
 	CloudHTTPClient        *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
+	// ExecutablePath makes first-party worker discovery deterministic and
+	// injectable in tests. Empty falls back to os.Executable.
+	ExecutablePath string
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -58,6 +61,8 @@ type Server struct {
 	personalization personalizationRuntime
 	modes           *modes.Manager
 	voice           *voice.Manager
+	voiceExecutable string
+	voiceDataDir    string
 	chatLog         *chat.MessageLog
 	started         time.Time
 	version         VersionInfo
@@ -116,7 +121,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.modes = manager
 
 	settings, _ := store.Snapshot()
-	server.voice = newVoiceManager(settings.Voice)
+	server.voiceExecutable = runtime.ExecutablePath
+	server.voiceDataDir = store.DataDir()
+	server.voice = newVoiceManager(settings.Voice, server.voiceExecutable, server.voiceDataDir)
 
 	chatLog, err := chat.OpenMessageLog(store.DataDir())
 	if err != nil {

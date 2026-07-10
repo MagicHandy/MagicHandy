@@ -1,12 +1,24 @@
 package voice
 
 import (
+	"encoding/binary"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/stubworker"
 )
+
+func TestPCMPlaybackWrappingPreservesFinalSamples(t *testing.T) {
+	pcm := []byte("12345678")
+	wav := pcmS16LEToWAV(pcm, 24000)
+	if len(wav) != 52 || string(wav[:4]) != "RIFF" || string(wav[8:12]) != "WAVE" {
+		t.Fatalf("invalid WAV wrapper: %d bytes", len(wav))
+	}
+	if got := binary.LittleEndian.Uint32(wav[40:44]); got != 8 || string(wav[44:]) != string(pcm) {
+		t.Fatalf("final PCM samples were cut off: data=%d tail=%q", got, wav[44:])
+	}
+}
 
 // startStubConn wires a stub worker to a protocol conn over in-process pipes
 // so frame semantics are tested without spawning a process.

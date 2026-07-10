@@ -82,7 +82,11 @@ Reference cloning used the official `samples/dave.wav` (~13 s) and its
 transcript. NeuTTS 1.2.1 also offers optional Perth audio watermarking —
 worth enabling by default in the worker (provenance without quality cost).
 
-## Worker integration shape (Phase 13.1 follow-on PR)
+## Worker integration shape (historical spike design)
+
+This section records the design proposed by the spike. The implementation
+update below is authoritative where the available Rust port differs from the
+proposal.
 
 A separate **TTS worker binary** speaking the Phase 12 protocol
 (`docs/voice-worker-protocol.md`), never part of the core binary — the core
@@ -106,8 +110,30 @@ stays `CGO_ENABLED=0` pure Go:
    - **Go worker + onnxruntime** (official ONNX decoder) — Go end to end,
      but the onnxruntime bindings are CGo, so the *worker* build needs a C
      toolchain (the core does not).
-   Either satisfies ADR 0003/0007; pick after the first Windows build of
-   the Rust crate is attempted.
+Either satisfies ADR 0003/0007; pick after the first Windows build of
+the Rust crate is attempted.
+
+## Implementation update (Slice 13.6)
+
+The first integration uses a Go ADR 0003 adapter around the `neutts-rs`
+`stream_pcm` executable. The runner emits live 24 kHz signed 16-bit PCM; the
+worker forwards those chunks immediately and the core wraps retained PCM as a
+WAV only when the controller fetches completed audio. Cancellation kills the
+active runner process and final-sample preservation is covered by tests.
+
+The crate's public `NeuCodecEncoder` in v0.1.1 is still a stub. Some examples
+on its current branch describe a future Burn encoder, but the exported type
+still rejects `new`, `load`, and `encode_wav`. MagicHandy therefore requires
+pre-encoded `.npy` reference codes and the exact transcript. It stores the WAV
+path only as provenance and does not claim arbitrary-WAV cloning without
+Python. This is a narrower result than the original item 3 above, but it is
+the capability the non-Python runner actually provides today.
+
+All runner children receive `HF_HUB_OFFLINE=1`. Model artifacts and voice
+codes must be installed explicitly before load/speech; status and speech can
+never initiate a model download. A later Rust release with a working,
+redistributable encoder can replace the `.npy` requirement behind the same
+settings and worker protocol.
 
 ## Constraints hit during the spike
 
