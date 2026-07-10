@@ -18,11 +18,13 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-09. Phases 0 through 13.4 are merged to `main`. Slices
-13.5-13.7 are implemented on the Phase 13 completion branch: provider-scoped
-Settings, the NeuTTS Air adapter, push-to-talk microphone capture, and the
-Chat speak-replies control. Phase 13 deliberately supports microphone capture
-on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging decision.
+Updated 2026-07-10. Phases 0 through 13.7 are merged to `main` (13.5-13.7
+landed together in #49): provider-scoped Settings, the NeuTTS Air adapter,
+push-to-talk microphone capture, and the Chat speak-replies control. Phase 13
+deliberately supports microphone capture on localhost only; LAN/mobile HTTPS
+remains a Phase 16 packaging decision. A live UI/UX pass over the merged
+result (docs/ui-ux-review.md, 2026-07-10) queued Slice 13.8 for the found
+voice-UX and stacked-layout defects.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -47,9 +49,10 @@ on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging decision.
 | 13.2 | ElevenLabs cloud TTS worker | **Complete** | #44 |
 | 13.3 | Parakeet ASR worker (OpenAI-compatible proxy) | **Complete** | #45 |
 | 13.4 | Managed Parakeet runner and interactive installer | **Complete** | #46 |
-| 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | current branch |
-| 13.6 | NeuTTS Air offline stream adapter | **Complete** | current branch |
-| 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | current branch |
+| 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | #49 |
+| 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
+| 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | #49 |
+| 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | Planned | — |
 | 14-17 | Patterns, migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -710,6 +713,31 @@ Status: **complete** for the supported localhost browser path.
   promised until Phase 16 provides an HTTPS and certificate design.
 - Always-on/hands-free recording remains out of scope until push-to-talk has
   enough real-microphone reliability evidence.
+
+### Slice 13.8: Voice UX Hardening
+
+Status: planned. Source: the 2026-07-10 live UI/UX pass over merged
+13.5-13.7 ([docs/ui-ux-review.md](docs/ui-ux-review.md)); fix order and
+file/line anchors live there.
+
+- Stacked-layout (≤900px) chat fix: the log's `min-height` overflows its
+  collapsed shell and paints over the composer; bound the log height at the
+  single-column breakpoint so the textarea, mic, and Send stay visible
+  (review H1).
+- Gate the Chat voice controls on usability, not just provider selection:
+  mic hidden without a configured ASR provider and disabled-with-hint when
+  the worker is not running; speak-replies quick toggle requires
+  `voice.enabled` too. Never autostart stays intact (M1, M2).
+- Close the speak-replies loop: auto-send `load` after a user-initiated
+  Start of a first-party provider (or on first speak), so replies do not
+  fail silently with `model_not_loaded` (M4).
+- Make outcomes visible: per-role last-result readout from the request log,
+  play the "Send test" clip through the lease-gated audio endpoint, and a
+  selection-scoped status-bar voice dot only when voice is enabled and
+  unhealthy (M3, M5).
+- Polish: worker controls disabled while the section has unsaved changes,
+  labeled controller readout at narrow widths, visible 30s recording cap
+  (M6, L1, L3).
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and
