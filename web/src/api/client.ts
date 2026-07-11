@@ -21,6 +21,7 @@ import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
   LLMProviderStatus,
+  ManagedLlamaRuntimeBuild,
   OllamaModelInfo,
   OllamaModelScan,
   PatternFeedback,
@@ -151,6 +152,10 @@ export const api = {
   llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
   llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
   llmModels: () => request<LLMModelManagerSnapshot>("GET", "/api/llm/models"),
+  buildManagedLlamaRuntime: (backend: "auto" | "cpu" | "cuda") =>
+    request<{ build: ManagedLlamaRuntimeBuild }>("POST", "/api/llm/runtime/build", { backend }),
+  cancelManagedLlamaRuntimeBuild: () =>
+    request<{ build: ManagedLlamaRuntimeBuild }>("DELETE", "/api/llm/runtime/build"),
   ollamaModels: () => request<{ available: boolean; models: OllamaModelInfo[]; message?: string }>("GET", "/api/llm/ollama/models"),
   scanOllamaModels: (path: string) => request<OllamaModelScan>("POST", "/api/llm/ollama/scan", { path }),
   importOllamaModel: (path: string, candidate_id: string) =>

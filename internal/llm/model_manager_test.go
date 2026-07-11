@@ -86,7 +86,7 @@ func assertImportedOllamaModel(
 
 func assertManagedDelete(t *testing.T, manager *ModelManager, model ModelRecord) {
 	t.Helper()
-	if err := manager.Delete(context.Background(), model.ID, model.ModelPath); !errors.Is(err, ErrModelSelected) {
+	if err := manager.Delete(context.Background(), model.ID, model.ID); !errors.Is(err, ErrModelSelected) {
 		t.Fatalf("delete selected model = %v", err)
 	}
 	if err := manager.Delete(context.Background(), model.ID, ""); err != nil {

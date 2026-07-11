@@ -282,9 +282,14 @@ Current evidence (2026-07-11): schema v9 inventory, standalone GGUF import,
 Ollama daemon listing, configurable filesystem scan/import, atomic verified
 copies, cancellation, deduplication, and selected-model removal protection are
 implemented and fixture-tested. A live Windows library with 16 manifests scans
-as 16 compatible models without starting a copy. R13 remains High until pinned
-runner provisioning, curated downloads, hardware-fit guidance, and real
-managed-model load/chat validation are complete.
+as 16 compatible models without starting a copy. Managed llama.cpp now pins
+`b9966` / `c749cb0`, builds from source through an embedded controller-gated
+helper, validates an app-owned manifest, resolves models by inventory ID, and
+starts the runner offline with its UI disabled. A fresh Windows CPU build was
+verified end to end (54.2 s, 18,432,916 installed bytes), as were idempotent
+reuse and the Ollama-without-managed-runtime path. R13 remains High until CUDA
+build/load/chat, curated downloads, and hardware-fit guidance have real-system
+evidence.
 
 ## R14: Per-Source Motion Path Divergence
 

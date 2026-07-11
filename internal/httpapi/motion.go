@@ -312,6 +312,9 @@ func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
 // device after shutdown (goroutine-lifecycle safety gate).
 func (s *Server) Close() {
 	s.closeLLM()
+	if s.managedLLM != nil {
+		s.managedLLM.Close()
+	}
 	if s.modes != nil {
 		s.modes.Shutdown()
 	}

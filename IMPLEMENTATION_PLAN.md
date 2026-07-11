@@ -97,8 +97,11 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   indication, and chat-driven motion through the engine only.
 - SQLite-backed LLM model manager with managed GGUF copies, standalone GGUF
   import, read-only Ollama library discovery/import, daemon model listing,
-  SHA-256 verification, progress/cancellation, and guarded selection/removal.
-  Curated downloads and runner provisioning remain release work.
+  external llama.cpp model listing, SHA-256 verification,
+  progress/cancellation, and guarded ID-based selection/removal. Managed mode
+  builds pinned llama.cpp `b9966` source into app-owned runtime storage through
+  the installer or controller-gated Model UI; no runner/model path settings.
+  Curated model downloads remain release work.
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
@@ -1015,9 +1018,13 @@ fixtures cover old and current StrokeGPT-ReVibed formats.
 Make MagicHandy distributable as a core binary app.
 
 Delivered ahead of this phase: the model-manager foundation now owns schema v9
-inventory, managed GGUF storage, standalone/Ollama import, and the Model UI.
-Phase 16 still owns curated checksum-pinned downloads, runner provisioning,
-hardware-fit recommendations, and packaging those pieces for non-developers.
+inventory, managed GGUF storage, standalone/Ollama import, ID-based selection,
+and the Model UI. The app also owns a pinned source-build lifecycle for
+llama.cpp on Windows/amd64, including CPU/CUDA choice, build status,
+cancellation, manifest validation, and installer opt-out for existing Ollama
+users. Phase 16 still owns curated checksum-pinned model downloads,
+hardware-fit recommendations, and release packaging that removes the source
+toolchain prerequisite for non-developers.
 
 ## Scope
 

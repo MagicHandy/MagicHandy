@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
   LLMProviderStatus,
+  ManagedLlamaRuntimeBuild,
+  ManagedLlamaRuntimeStatus,
   ManagedLLMModel,
   OllamaModelCandidate,
   OllamaModelInfo,
@@ -27,6 +29,7 @@ interface ModelSettingsPanelProps {
 
 const message = (error: unknown) => (error instanceof Error ? error.message : "Request failed");
 const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.status === "copying";
+const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status === "queued" || build?.status === "building";
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
 
 export function ModelSettingsPanel({ settings, saved, providers, llamaModes, locked, patch }: ModelSettingsPanelProps) {
@@ -44,12 +47,18 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState("");
   const [confirmRemove, setConfirmRemove] = useState("");
+  const [runtimeBackend, setRuntimeBackend] = useState<"auto" | "cpu" | "cuda">("auto");
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
   const ollamaPath = settings.ollama_models_path ?? "";
   const scanPath = ollamaPath.trim() || manager?.suggested_ollama_path || "";
   const activeImports = manager?.imports.some(isActiveImport) ?? false;
-  const managedConfigured = Boolean(settings.llama_cpp_runner_path?.trim() && settings.llama_cpp_model_path?.trim());
+  const runtimeBuildActive = isActiveRuntimeBuild(manager?.runtime_build);
+  const selectedManagedModel = manager?.models.find((model) => model.id === settings.model);
+  const managedConfigured = Boolean(manager?.runtime.installed && selectedManagedModel?.state === "ready");
+  const statusProvider = saved?.provider ?? settings.provider;
+  const statusModel = saved?.model ?? settings.model;
+  const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
 
   const refreshManager = useCallback(async () => {
     try {
@@ -65,14 +74,14 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
       setStatus(await api.llmStatus());
     } catch (error) {
       setStatus({
-        provider: settings.provider,
+        provider: statusProvider,
         base_url: "",
-        model: settings.model,
+        model: statusModel,
         available: false,
         message: message(error),
       });
     }
-  }, [settings.model, settings.provider]);
+  }, [statusModel, statusProvider]);
 
   const refreshOllamaModels = useCallback(async () => {
     try {
@@ -95,16 +104,15 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
   }, [refreshOllamaModels, settings.provider, showOllamaImport]);
 
   useEffect(() => {
-    if (!activeImports) return undefined;
+    if (!activeImports && !runtimeBuildActive) return undefined;
     const timer = window.setInterval(() => void refreshManager(), 500);
     return () => window.clearInterval(timer);
-  }, [activeImports, refreshManager]);
+  }, [activeImports, refreshManager, runtimeBuildActive]);
 
-  const modelOptions = useMemo(() => {
-    if (settings.provider === "ollama") return ollamaModels.map((model) => model.name);
-    if (settings.llama_cpp_mode === "managed") return manager?.models.map((model) => model.id) ?? [];
-    return status?.models ?? [];
-  }, [manager?.models, ollamaModels, settings.llama_cpp_mode, settings.provider, status?.models]);
+  useEffect(() => {
+    const buildStatus = manager?.runtime_build?.status;
+    if (buildStatus && !isActiveRuntimeBuild(manager?.runtime_build)) void refreshStatus();
+  }, [manager?.runtime_build, refreshStatus]);
 
   async function runtimeAction(action: "load" | "unload") {
     setBusy(action);
@@ -112,6 +120,31 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
       const next = await (action === "load" ? api.llmLoad() : api.llmUnload());
       setStatus(next);
       show(action === "load" ? "Model loaded." : "Model unloaded.");
+    } catch (error) {
+      show(message(error), "error");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function buildRuntime() {
+    setBusy("runtime-build");
+    try {
+      const response = await api.buildManagedLlamaRuntime(runtimeBackend);
+      setManager((current) => current ? { ...current, runtime_build: response.build } : current);
+      show("Managed llama.cpp build started.");
+    } catch (error) {
+      show(message(error), "error");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function cancelRuntimeBuild() {
+    setBusy("runtime-cancel");
+    try {
+      await api.cancelManagedLlamaRuntimeBuild();
+      await refreshManager();
     } catch (error) {
       show(message(error), "error");
     } finally {
@@ -204,7 +237,6 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
       provider: "llama_cpp",
       llama_cpp_mode: "managed",
       model: model.id,
-      llama_cpp_model_path: model.model_path,
     });
     show("Model selected. Save settings to apply.");
   }
@@ -214,7 +246,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
     show("Ollama model selected. Save settings to apply.");
   }
 
-  const statusTone = status?.available ? "ready" : status?.loaded ? "waiting" : "idle";
+  const statusTone = !dirty && status?.available ? "ready" : !dirty && status?.loaded ? "waiting" : "idle";
+  const statusMessage = dirty ? "Save settings to check this configuration." : status?.message || "Checking runtime";
   const pathPlaceholder = manager?.suggested_ollama_path || "Ollama models directory";
 
   return (
@@ -223,7 +256,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
         <h2 className="section-title">Local LLM</h2>
         <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite">
           <span className="status-dot" aria-hidden="true" />
-          <span>{status?.message || "Checking runtime"}</span>
+          <span>{statusMessage}</span>
         </div>
       </div>
 
@@ -236,43 +269,46 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
             ))}
           </select>
         </label>
-        <label className="field">
-          <span className="label">Model</span>
-          <input
-            type="text"
-            list="llm-model-options"
-            value={settings.model}
-            disabled={locked}
-            onChange={(event) => patch({ model: event.target.value })}
-          />
-          <datalist id="llm-model-options">
-            {modelOptions.map((model) => <option key={model} value={model} />)}
-          </datalist>
-        </label>
-      </div>
-
-      {settings.provider === "llama_cpp" && (
-        <>
+        {settings.provider === "llama_cpp" && (
           <label className="field">
             <span className="label">llama.cpp mode</span>
             <select value={settings.llama_cpp_mode} disabled={locked} onChange={(event) => patch({ llama_cpp_mode: event.target.value })}>
               {(llamaModes.length ? llamaModes : [settings.llama_cpp_mode]).map((mode) => <option key={mode} value={mode}>{mode}</option>)}
             </select>
           </label>
-          {settings.llama_cpp_mode === "external" ? (
+        )}
+      </div>
+
+      {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+        <ManagedRuntime
+          runtime={manager?.runtime}
+          build={manager?.runtime_build}
+          selectedModel={selectedManagedModel}
+          backend={runtimeBackend}
+          locked={locked}
+          busy={busy}
+          setBackend={setRuntimeBackend}
+          onBuild={buildRuntime}
+          onCancel={cancelRuntimeBuild}
+        />
+      )}
+
+      {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "external" && (
+        <>
+          <div className="model-runtime-grid">
             <label className="field"><span className="label">llama.cpp URL</span><input type="text" value={settings.llama_cpp_base_url} disabled={locked} onChange={(event) => patch({ llama_cpp_base_url: event.target.value })} /></label>
-          ) : (
-            <div className="model-runtime-grid">
-              <label className="field"><span className="label">llama-server path</span><input type="text" value={settings.llama_cpp_runner_path ?? ""} disabled={locked} onChange={(event) => patch({ llama_cpp_runner_path: event.target.value })} /></label>
-              <label className="field"><span className="label">GGUF model path</span><input type="text" value={settings.llama_cpp_model_path ?? ""} disabled={locked} onChange={(event) => patch({ llama_cpp_model_path: event.target.value })} /></label>
-            </div>
-          )}
+            <label className="field"><span className="label">Model</span><input type="text" list="llama-server-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="llama-server-model-options">{status?.models?.map((model) => <option key={model} value={model} />)}</datalist></label>
+          </div>
+          <LlamaServerModels models={status?.models ?? []} selected={settings.model} locked={locked} onUse={(model) => patch({ model })} />
         </>
       )}
 
       {settings.provider === "ollama" && (
         <>
-          <label className="field"><span className="label">Ollama URL</span><input type="text" value={settings.ollama_base_url} disabled={locked} onChange={(event) => patch({ ollama_base_url: event.target.value })} /></label>
+          <div className="model-runtime-grid">
+            <label className="field"><span className="label">Ollama URL</span><input type="text" value={settings.ollama_base_url} disabled={locked} onChange={(event) => patch({ ollama_base_url: event.target.value })} /></label>
+            <label className="field"><span className="label">Model</span><input type="text" list="ollama-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="ollama-model-options">{ollamaModels.map((model) => <option key={model.name} value={model.name} />)}</datalist></label>
+          </div>
           <OllamaDaemonModels models={ollamaModels} selected={settings.model} message={ollamaMessage} locked={locked} onUse={useOllamaModel} />
         </>
       )}
@@ -281,8 +317,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
 
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
         <div className="row-actions model-runtime-actions">
-          <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || busy !== ""} onClick={() => void runtimeAction("load")}>{busy === "load" ? "Loading..." : "Load"}</button>
-          <button type="button" className="btn btn-secondary" disabled={locked || dirty || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? "Unloading..." : "Unload"}</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== ""} onClick={() => void runtimeAction("load")}>{busy === "load" ? "Loading..." : "Load"}</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? "Unloading..." : "Unload"}</button>
           {dirty && <span className="form-status">Save settings before runtime actions.</span>}
         </div>
       )}
@@ -323,7 +359,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
       <ImportProgress jobs={manager?.imports ?? []} locked={locked} busy={busy} onCancel={cancelImport} />
       <ManagedModels
         models={manager?.models ?? []}
-        selectedPath={settings.llama_cpp_model_path ?? ""}
+        selectedID={settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" ? settings.model : ""}
+        protectedID={protectedManagedModelID}
         locked={locked}
         busy={busy}
         confirmRemove={confirmRemove}
@@ -335,11 +372,71 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
   );
 }
 
+function ManagedRuntime({
+  runtime, build, selectedModel, backend, locked, busy, setBackend, onBuild, onCancel,
+}: {
+  runtime?: ManagedLlamaRuntimeStatus;
+  build?: ManagedLlamaRuntimeBuild;
+  selectedModel?: ManagedLLMModel;
+  backend: "auto" | "cpu" | "cuda";
+  locked: boolean;
+  busy: string;
+  setBackend: (backend: "auto" | "cpu" | "cuda") => void;
+  onBuild: () => void;
+  onCancel: () => void;
+}) {
+  const active = isActiveRuntimeBuild(build);
+  const backends = runtime?.supported_backends?.length ? runtime.supported_backends : ["auto", "cpu", "cuda"] as const;
+  const metadata = [
+    runtime?.version || runtime?.expected_version,
+    runtime?.backend?.toUpperCase(),
+    runtime?.source === "built_from_source" ? "Built from pinned source" : undefined,
+  ];
+  return (
+    <div className="managed-runtime" aria-label="Managed llama.cpp runtime">
+      <div className="managed-runtime-summary">
+        <ModelIdentity name="Managed llama.cpp runtime" metadata={metadata} />
+        <div className={`model-state model-state-${runtime?.state ?? "missing"}`}>{runtime?.message || "Checking managed runtime"}</div>
+      </div>
+      <div className="managed-runtime-controls">
+        <label className="field runtime-backend">
+          <span className="label">Build backend</span>
+          <select value={backend} disabled={locked || active} onChange={(event) => setBackend(event.target.value as "auto" | "cpu" | "cuda")}>
+            {backends.map((option) => <option key={option} value={option}>{option === "auto" ? "Auto-detect" : option.toUpperCase()}</option>)}
+          </select>
+        </label>
+        <button type="button" className="btn btn-secondary" disabled={locked || active || busy !== "" || !runtime?.build_supported} title={runtime?.build_supported ? "Build the pinned app-owned llama.cpp runtime" : "Source builds currently require Windows x64"} onClick={() => void onBuild()}>
+          {runtime?.installed ? "Build / switch runtime" : "Build runtime"}
+        </button>
+        {active && <button type="button" className="btn btn-secondary" disabled={locked || busy === "runtime-cancel"} onClick={() => void onCancel()}>Cancel build</button>}
+      </div>
+      {active && <progress className="runtime-build-progress" aria-label="Managed llama.cpp build in progress" />}
+      {build && <p className={`form-status runtime-build-message${build.status === "failed" ? " form-status-error" : ""}`}>{build.message}</p>}
+      <p className="form-status">{selectedModel ? `Selected model: ${selectedModel.display_name}` : "Select a managed model below before loading the runtime."}</p>
+    </div>
+  );
+}
+
+function LlamaServerModels({ models, selected, locked, onUse }: { models: string[]; selected: string; locked: boolean; onUse: (model: string) => void }) {
+  if (!models.length) return <p className="form-status">No models reported by llama.cpp.</p>;
+  return (
+    <div className="provider-model-list" aria-label="Models reported by llama.cpp">
+      {models.map((model) => (
+        <div className="provider-model-row" key={model}>
+          <ModelIdentity name={model} metadata={[]} />
+          <button type="button" className="btn btn-secondary" disabled={locked || selected === model} onClick={() => onUse(model)}>{selected === model ? "Selected" : "Use"}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ManagedModels({
-  models, selectedPath, locked, busy, confirmRemove, setConfirmRemove, onUse, onRemove,
+  models, selectedID, protectedID, locked, busy, confirmRemove, setConfirmRemove, onUse, onRemove,
 }: {
   models: ManagedLLMModel[];
-  selectedPath: string;
+  selectedID: string;
+  protectedID: string;
   locked: boolean;
   busy: string;
   confirmRemove: string;
@@ -351,7 +448,8 @@ function ManagedModels({
   return (
     <div className="model-list" aria-label="Managed models">
       {models.map((model) => {
-        const selected = sameDisplayedPath(selectedPath, model.model_path);
+        const selected = selectedID === model.id;
+        const protectedModel = selected || protectedID === model.id;
         return (
           <div className={`model-row${selected ? " model-row-selected" : ""}`} key={model.id}>
             <ModelIdentity name={model.display_name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes), model.source === "ollama" ? "Ollama import" : "GGUF import"]} />
@@ -359,13 +457,13 @@ function ManagedModels({
             <div className="model-row-actions">
               {confirmRemove === model.id ? (
                 <>
-                  <button type="button" className="btn btn-danger-outline" disabled={busy === model.id} onClick={() => void onRemove(model)}>Remove copy</button>
+                  <button type="button" className="btn btn-danger-outline" disabled={locked || protectedModel || busy === model.id} onClick={() => void onRemove(model)}>Remove copy</button>
                   <button type="button" className="btn btn-secondary" disabled={busy === model.id} onClick={() => setConfirmRemove("")}>Cancel</button>
                 </>
               ) : (
                 <>
                   <button type="button" className="btn btn-secondary" disabled={locked || selected || model.state !== "ready"} onClick={() => onUse(model)}>{selected ? "Selected" : "Use"}</button>
-                  <button type="button" className="icon-btn" aria-label={`Remove ${model.display_name}`} title="Remove managed copy" disabled={locked || selected} onClick={() => setConfirmRemove(model.id)}><TrashIcon size={17} /></button>
+                  <button type="button" className="icon-btn" aria-label={`Remove ${model.display_name}`} title="Remove managed copy" disabled={locked || protectedModel} onClick={() => setConfirmRemove(model.id)}><TrashIcon size={17} /></button>
                 </>
               )}
             </div>
@@ -443,10 +541,4 @@ function ModelIdentity({ name, metadata }: { name: string; metadata: Array<strin
       {visible.length > 0 && <span>{visible.join(" | ")}</span>}
     </div>
   );
-}
-
-function sameDisplayedPath(left: string, right: string): boolean {
-  if (left === right) return true;
-  const windowsPath = /^[a-z]:/i.test(left) || left.includes("\\") || right.includes("\\");
-  return windowsPath && left.toLowerCase() === right.toLowerCase();
 }

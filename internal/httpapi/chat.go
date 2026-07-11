@@ -45,7 +45,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, err := s.newLLMProvider(settings.LLM)
+	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return

@@ -18,12 +18,53 @@ func (s *Server) handleLLMModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
+	runtimeSnapshot := s.managedLLM.Snapshot()
+	response := map[string]any{
 		"models":                snapshot.Models,
 		"imports":               snapshot.Imports,
 		"store_path":            snapshot.StorePath,
 		"suggested_ollama_path": selectedOllamaModelsPath(settings.LLM),
-	})
+		"runtime":               runtimeSnapshot.Runtime,
+	}
+	if runtimeSnapshot.Build != nil {
+		response["runtime_build"] = runtimeSnapshot.Build
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleManagedLLMRuntime(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.managedLLM.Snapshot())
+}
+
+func (s *Server) handleBuildManagedLLMRuntime(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var request struct {
+		Backend string `json:"backend"`
+	}
+	if !decodeModelManagerRequest(w, r, &request) {
+		return
+	}
+	build, err := s.managedLLM.StartBuild(request.Backend)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	s.closeLLM()
+	writeJSON(w, http.StatusAccepted, map[string]any{"build": build})
+}
+
+func (s *Server) handleCancelManagedLLMRuntimeBuild(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	build, err := s.managedLLM.CancelBuild()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"build": build})
 }
 
 func (s *Server) handleOllamaModels(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +180,11 @@ func (s *Server) handleDeleteLLMModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	err := s.models.Delete(r.Context(), r.PathValue("id"), settings.LLM.LlamaCPPModelPath)
+	selectedID := ""
+	if settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged {
+		selectedID = settings.LLM.Model
+	}
+	err := s.models.Delete(r.Context(), r.PathValue("id"), selectedID)
 	switch {
 	case errors.Is(err, llm.ErrModelNotFound):
 		writeError(w, http.StatusNotFound, err)

@@ -203,8 +203,13 @@ Motion pattern names (mild, kept short):
 | llama.cpp mode | Modo llama.cpp | Modo llama.cpp | llama.cpp 模式 | llama.cpp モード |
 | Model | Modelo | Modelo | 模型 | モデル |
 | llama.cpp URL | URL de llama.cpp | URL do llama.cpp | llama.cpp 地址 | llama.cpp の URL |
-| llama-server path | Ruta de llama-server | Caminho do llama-server | llama-server 路径 | llama-server のパス |
-| GGUF model path | Ruta del modelo GGUF | Caminho do modelo GGUF | GGUF 模型路径 | GGUF モデルのパス |
+| Managed llama.cpp runtime | Entorno llama.cpp gestionado | Runtime llama.cpp gerenciado | 托管 llama.cpp 运行时 | 管理対象 llama.cpp ランタイム |
+| Build backend | Backend de compilación | Backend de compilação | 构建后端 | ビルドバックエンド |
+| Auto-detect | Detección automática | Detectar automaticamente | 自动检测 | 自動検出 |
+| Build runtime | Compilar entorno | Compilar runtime | 构建运行时 | ランタイムをビルド |
+| Build / switch runtime | Compilar / cambiar entorno | Compilar / trocar runtime | 构建 / 切换运行时 | ランタイムをビルド / 切替 |
+| Cancel build | Cancelar compilación | Cancelar compilação | 取消构建 | ビルドをキャンセル |
+| Built from pinned source | Compilado desde código fijado | Compilado de fonte fixada | 从固定源码构建 | 固定ソースからビルド |
 | Ollama URL | URL de Ollama | URL do Ollama | Ollama 地址 | Ollama の URL |
 | Managed models | Modelos gestionados | Modelos gerenciados | 托管模型 | 管理対象モデル |
 | Refresh model list | Actualizar lista de modelos | Atualizar lista de modelos | 刷新模型列表 | モデル一覧を更新 |

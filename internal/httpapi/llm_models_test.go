@@ -73,10 +73,20 @@ func TestLLMModelManagerAPIImportsOllamaAndProtectsSelection(t *testing.T) {
 	}
 
 	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
-		settings.LLM.LlamaCPPModelPath = listed.Models[0].ModelPath
 		settings.LLM.Model = listed.Models[0].ID
 		return settings
 	})
+	writeHTTPAPIManagedRuntime(t, server.store.DataDir())
+	statusRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(statusRecorder, httptest.NewRequest(http.MethodGet, "/api/llm/status", nil))
+	if statusRecorder.Code != http.StatusOK {
+		t.Fatalf("managed status = %d: %s", statusRecorder.Code, statusRecorder.Body.String())
+	}
+	var status llm.ProviderStatus
+	decodeResponse(t, statusRecorder, &status)
+	if !status.Managed || status.Loaded || !strings.Contains(status.Message, "not loaded") {
+		t.Fatalf("managed status = %+v, want resolved app-owned runtime and model", status)
+	}
 	deleteRecorder := httptest.NewRecorder()
 	deleteRequest := withController(httptest.NewRequest(http.MethodDelete, "/api/llm/models/"+job.ModelID, nil))
 	server.Handler().ServeHTTP(deleteRecorder, deleteRequest)
@@ -85,7 +95,7 @@ func TestLLMModelManagerAPIImportsOllamaAndProtectsSelection(t *testing.T) {
 	}
 
 	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
-		settings.LLM.LlamaCPPModelPath = ""
+		settings.LLM.Model = "another-model"
 		return settings
 	})
 	deleteRecorder = httptest.NewRecorder()
@@ -105,6 +115,34 @@ func TestLLMLoadAndUnloadRequireController(t *testing.T) {
 		if recorder.Code != http.StatusConflict {
 			t.Fatalf("%s status = %d, want %d", path, recorder.Code, http.StatusConflict)
 		}
+	}
+}
+
+func TestManagedLLMRuntimeAPIIsReadOnlyWithoutController(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	statusRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(statusRecorder, httptest.NewRequest(http.MethodGet, "/api/llm/runtime", nil))
+	if statusRecorder.Code != http.StatusOK {
+		t.Fatalf("runtime status = %d: %s", statusRecorder.Code, statusRecorder.Body.String())
+	}
+	var snapshot llm.ManagedLlamaRuntimeSnapshot
+	decodeResponse(t, statusRecorder, &snapshot)
+	if snapshot.Runtime.State != llm.ManagedRuntimeStateMissing || snapshot.Runtime.ExpectedVersion != llm.ManagedLlamaVersion {
+		t.Fatalf("runtime snapshot = %+v", snapshot)
+	}
+
+	denied := httptest.NewRecorder()
+	server.Handler().ServeHTTP(denied, jsonAPIRequest(t, http.MethodPost, "/api/llm/runtime/build", map[string]any{"backend": "cpu"}))
+	if denied.Code != http.StatusConflict {
+		t.Fatalf("uncontrolled build = %d, want %d", denied.Code, http.StatusConflict)
+	}
+
+	invalid := httptest.NewRecorder()
+	server.Handler().ServeHTTP(invalid, withController(jsonAPIRequest(t, http.MethodPost, "/api/llm/runtime/build", map[string]any{"backend": "invalid"})))
+	if invalid.Code != http.StatusConflict {
+		t.Fatalf("invalid build = %d, want %d", invalid.Code, http.StatusConflict)
 	}
 }
 
@@ -140,6 +178,38 @@ func TestOllamaDaemonModelListDoesNotRequireSelectedModel(t *testing.T) {
 	}
 }
 
+func TestOllamaProviderDoesNotRequireManagedLlamaRuntime(t *testing.T) {
+	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tags" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"models":[{"name":"existing:latest"}]}`))
+	}))
+	t.Cleanup(ollama.Close)
+
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.LLM.Provider = config.LLMProviderOllama
+		settings.LLM.OllamaBaseURL = ollama.URL
+		settings.LLM.Model = "existing:latest"
+		return settings
+	})
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/llm/status", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("Ollama status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var status llm.ProviderStatus
+	decodeResponse(t, recorder, &status)
+	if !status.Available || !status.ModelAvailable || status.Provider != config.LLMProviderOllama {
+		t.Fatalf("Ollama status = %+v, want available without managed llama.cpp", status)
+	}
+}
+
 func writeHTTPAPIOllamaFixture(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "models")
@@ -172,6 +242,36 @@ func writeHTTPAPIOllamaFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func writeHTTPAPIManagedRuntime(t *testing.T, dataDir string) {
+	t.Helper()
+	root := llm.ManagedLlamaRuntimeRoot(dataDir)
+	runnerRelative := "installs/test/bin/llama-server.exe"
+	runner := filepath.Join(root, filepath.FromSlash(runnerRelative))
+	if err := os.MkdirAll(filepath.Dir(runner), 0o700); err != nil {
+		t.Fatalf("create managed runtime: %v", err)
+	}
+	if err := os.WriteFile(runner, []byte("fixture"), 0o600); err != nil {
+		t.Fatalf("write managed runner: %v", err)
+	}
+	manifest := map[string]any{
+		"schema_version": 1,
+		"runtime":        "llama.cpp",
+		"version":        llm.ManagedLlamaVersion,
+		"commit":         llm.ManagedLlamaCommit,
+		"backend":        "cpu",
+		"runner":         runnerRelative,
+		"source":         "built_from_source",
+		"built_at":       time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	payload, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal managed runtime: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "active.json"), payload, 0o600); err != nil {
+		t.Fatalf("write managed runtime manifest: %v", err)
+	}
 }
 
 func writeHTTPAPIBlob(t *testing.T, directory string, payload []byte) string {

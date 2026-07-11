@@ -424,9 +424,14 @@ backend settings envelope.
 
 Settings > Model separates the saved runtime snapshot from the editable form.
 Load/Unload is shown only for managed llama.cpp and locks whenever the visible
-form differs from saved settings. The inventory is backend-authoritative:
-managed GGUF rows expose source, size, quantization, file state, selection, and
-guarded removal. Import GGUF and Import from Ollama are inline disclosures;
+form differs from saved settings. Managed mode shows backend-authoritative
+runtime version/backend/build state and offers an explicit CPU/CUDA/auto source
+build; it never renders runner or GGUF path settings. Build and cancellation are
+controller-gated, flat controls rather than a setup card. The inventory is also
+backend-authoritative: managed GGUF rows expose source, size, quantization, file
+state, ID-based selection, and guarded removal. External llama.cpp and Ollama
+both show server-reported model rows with the same **Use/Selected** behavior.
+Import GGUF and Import from Ollama are inline disclosures;
 the latter accepts a persisted library path, scans bounded manifest metadata,
 shows incompatibility reasons, filters the list, and reports copy progress and
 cancellation. Repeated rows stay flat and compact on desktop/mobile; they are

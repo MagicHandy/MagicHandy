@@ -354,8 +354,6 @@ export interface PublicSettings {
     provider: string;
     llama_cpp_mode: string;
     llama_cpp_base_url: string;
-    llama_cpp_runner_path?: string;
-    llama_cpp_model_path?: string;
     ollama_base_url: string;
     ollama_models_path?: string;
     model: string;
@@ -417,6 +415,33 @@ export interface LLMModelManagerSnapshot {
   imports: LLMModelImport[];
   store_path: string;
   suggested_ollama_path: string;
+  runtime: ManagedLlamaRuntimeStatus;
+  runtime_build?: ManagedLlamaRuntimeBuild;
+}
+
+export interface ManagedLlamaRuntimeStatus {
+  state: "missing" | "ready" | "outdated" | "invalid";
+  installed: boolean;
+  current: boolean;
+  build_supported: boolean;
+  supported_backends: Array<"auto" | "cpu" | "cuda">;
+  expected_version: string;
+  version?: string;
+  commit?: string;
+  backend?: "cpu" | "cuda";
+  source?: "built_from_source";
+  built_at?: string;
+  message: string;
+}
+
+export interface ManagedLlamaRuntimeBuild {
+  id: string;
+  backend: "auto" | "cpu" | "cuda";
+  status: "queued" | "building" | "complete" | "failed" | "cancelled";
+  message: string;
+  output?: string;
+  started_at: string;
+  updated_at: string;
 }
 
 export interface OllamaModelInfo {
