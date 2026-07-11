@@ -160,11 +160,10 @@ Speed limit, stroke range, reverse direction.
 > the Chat page. The immediate-apply, single-layer, and
 > confirmed-destructive rules below are unchanged and still enforced.
 >
-> **Next planned change:** provider-scoped disclosure and the Voice tab's
-> split into Speech input / Speech output sections —
-> [settings-compaction.md](settings-compaction.md) (Slice 13.5). Fields
-> render only when the selected provider/mode makes them meaningful; status
-> readouts are never hidden.
+> **As built:** provider-scoped disclosure is implemented for Model and Voice.
+> Fields render only when the selected provider/mode makes them meaningful;
+> status readouts remain visible. Model imports expand inline within the routed
+> page rather than opening a second modal layer.
 
 Preserve the familiar grouping (Persona, Model, Voice, Device, Motion,
 Diagnostics) but fix the structural flaws:
@@ -421,12 +420,24 @@ produced by the playback interpolator. Playback controls remain controller-
 gated, Stop remains outside the route, and program intensity is capped by the
 backend settings envelope.
 
+### Model-manager implementation
+
+Settings > Model separates the saved runtime snapshot from the editable form.
+Load/Unload is shown only for managed llama.cpp and locks whenever the visible
+form differs from saved settings. The inventory is backend-authoritative:
+managed GGUF rows expose source, size, quantization, file state, selection, and
+guarded removal. Import GGUF and Import from Ollama are inline disclosures;
+the latter accepts a persisted library path, scans bounded manifest metadata,
+shows incompatibility reasons, filters the list, and reports copy progress and
+cancellation. Repeated rows stay flat and compact on desktop/mobile; they are
+not nested cards or oversized download tiles.
+
 ### Not yet built — planned, not regressions
 
 Still planned rather than regressed: the Autopilot planner and its richer mode
 events (including "I'm close"), migration/setup wizard (Phase 15/17),
-Ollama/GGUF model catalog UI (`docs/model-management.md`), the bounded
-speed-test button, raw-model diagnostics, and live device-position layer
+curated model downloads/hardware-fit recommendations (`docs/model-management.md`),
+the bounded speed-test button, raw-model diagnostics, and live device-position layer
 (post-parity backlog). Modes, memory/prompts, voice controls, multi-tab
 controller enforcement, and the Phase 14 pattern/training/player surface have
 landed.

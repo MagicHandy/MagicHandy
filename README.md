@@ -36,6 +36,11 @@ account, no third party in the middle, no tracking.
   talks to these; it doesn't bundle a model, so you pick and download one you
   like.
 
+Settings > Model lists models reported by Ollama and MagicHandy's managed GGUF
+copies. You can import a standalone GGUF or point the app at an existing Ollama
+models directory and copy a compatible model into the managed store. Imports
+show progress and verify SHA-256; they never modify the Ollama library.
+
 ## Get started
 
 **The easy way (Windows).** From the project folder, in PowerShell:
@@ -56,8 +61,9 @@ up to the polish of the original StrokeGPT app — see the plan in
 
 ## Privacy and safety
 
-- **Local-first.** Chat, memories, prompts, settings, patterns, programs, and
-  preference feedback live in a local SQLite database on your machine. Your
+- **Local-first.** Chat, memories, prompts, settings, patterns, programs,
+  preference feedback, and model metadata live in a local SQLite database on
+  your machine; managed model files stay in the app data model store. Your
   Handy connection key is a private credential —
   it is never shown back in the UI, logs, diagnostics, or exports.
 - **Emergency Stop, always reachable.** It's on every screen, works even for a

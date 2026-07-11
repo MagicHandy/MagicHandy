@@ -324,6 +324,9 @@ func (s *Server) Close() {
 	if s.patterns != nil {
 		_ = s.patterns.Close()
 	}
+	if s.models != nil {
+		_ = s.models.Close()
+	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
 	s.personalization.Close()
 	if s.store != nil {

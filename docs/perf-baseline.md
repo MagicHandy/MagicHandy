@@ -10,7 +10,7 @@ core number.
 - Date: 2026-06-30 (Go idle), 2026-07-01 (Python baseline),
   2026-07-02 (Go active Cloud REST short run and one-hour soak; Browser
   Bluetooth UI/chat hardware run), 2026-07-06 (Phase 11B SQLite persistence),
-  2026-07-11 (Phase 14 pattern library and rendered UI)
+  2026-07-11 (Phase 14 pattern library, LLM model manager, and rendered UI)
 - OS and architecture: Windows / amd64
 - Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for Phase 11B and
   Phase 14 measurements
@@ -27,6 +27,7 @@ core number.
 | MagicHandy Go core active, Browser Bluetooth UI/chat short run | Phase 9B Browser Bluetooth readiness/play patch working tree | temp binary under `.tmp-phase9b-manual`, running on `127.0.0.1:49736` with dispatch owner `browser_bluetooth`; Edge Web Bluetooth selected `OHD_hw0_29b3243120f4`; visible UI Start at 28%, deterministic chat `stop`, then a repeat UI Start/Stop for RSS samples | Yes; the user's running Edge profile owned the BLE GATT link | Yes; measured only the `magichandy` PID, excluding Edge, Codex, and automation helpers | First run active sample 17.23 MB (18,063,360 bytes; post-chat-stop 18,071,552 bytes). Repeat active RSS 17.52-17.53 MB (18,374,656-18,378,752 bytes) across 3 samples | Not measured separately | Visible Check connection returned `Connected: HSP ready / Unknown / 0 ms` without queuing `hsp/state`. First run: UI Start sent `stroke_window` 97 ms, `hsp_add` 236 ms, `hsp_play` 176 ms, all `browser_ack`; chat `stop` returned `Stopping motion.` and Stop ACKed in 163 ms. Repeat run: `stroke_window` 80 ms, `hsp_add` 235 ms, `hsp_play` 116 ms, UI Stop 71 ms. Speed remained 28%, below the 40% automated-test cap. |
 | MagicHandy Go core idle/API-read, SQLite persistence | Phase 11B SQLite working tree | `CGO_ENABLED=0 go build` under `%TEMP%\magichandy-phase11b-budget-*`; stripped binary run with `-addr 127.0.0.1:49750 -data-dir %TEMP%\magichandy-phase11b-budget-*\data-stripped`; `/healthz` for idle, then `/api/state`, `/api/settings`, `/api/memory`, `/api/prompt-sets` for DB-backed reads | No browser window; HTTP API exercised by `Invoke-WebRequest` | Yes; measured only the `magichandy-stripped` PID | Idle after `/healthz`: 54.13 MB (54,132,736 bytes) across 3 warmed samples. After DB-backed API reads: 54.36 MB (54,362,112 bytes) across 3 samples | Not measured separately | Binary size re-measured separately: 17.92 MB plain (17,916,928 bytes) / 12.32 MB stripped (12,319,744 bytes). Stripped binary remains under the <30 MB size budget; RSS exceeds the original <40 MB idle target and is recorded as the Phase 11B SQLite waiver in `docs/goal-scorecard.md`. |
 | MagicHandy Go core idle/library reads, Phase 14 | Phase 14 review working tree | plain and `-ldflags "-s -w"` builds under `%TEMP%\MagicHandy-phase14-budget`; fresh stripped binary with isolated data dir; `/healthz` for idle, then five `GET /api/library` reads | No browser window; HTTP API exercised by `Invoke-WebRequest` | Yes; measured only the stripped MagicHandy PID | Idle after `/healthz`: 52.49 MiB (55,042,048 bytes) across 3 equal samples. After library reads: 52.99 MiB (55,562,240 bytes) across 3 equal samples | Not measured separately | Plain binary 18,464,256 bytes; stripped binary 12,766,208 bytes. Embedded JS is 250,740 bytes / 74,321 gzip; CSS 26,797 / 6,212 gzip; combined gzip 80,533 bytes (+8,174, +11.3% from Phase 13). No model or voice worker loaded. |
+| MagicHandy Go core idle/model-manager reads | Model-manager review working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49732` with isolated data; `/healthz` for idle, then five `GET /api/llm/models` reads | No browser window for RSS; rendered UI measured separately | Yes; no Ollama/llama.cpp/voice worker included | Idle after `/healthz`: 52.65 MiB (55,205,888 bytes) across 3 equal samples. After model-manager reads: 52.83 MiB (55,398,400 bytes) across 3 equal samples | Not measured separately | Plain binary 18,744,320 bytes; stripped binary 12,969,472 bytes. Embedded JS is 262,732 bytes / 77,575 gzip; CSS 30,969 / 6,942 gzip; combined gzip 84,517 bytes (+3,984 / 4.9% from Phase 14). No model bytes were copied or loaded. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -126,6 +127,27 @@ Still required (Phase 9B):
   four selectable tabs, a Browse tab panel, labeled toggles, and backend-sampled
   curve graphics. Real-device Phase 14 feel evidence remains open until the
   device advertises again.
+
+## Model Manager Rendered UI Evidence
+
+- The embedded production build rendered Settings > Model at 1280×800 and
+  390×844. Runtime health, provider-scoped fields, managed model actions, and
+  both import disclosures remained reachable with no horizontal overflow.
+- Desktop and mobile DOM checks exposed labeled Provider/Model controls,
+  controller-gated Load/Unload, an accessible Import from Ollama button, path
+  input, scan action, filter, compatibility rows, and stable model actions. The
+  first mobile pass found repeated Import buttons stretching across each row;
+  the final CSS keeps them compact while the two primary import commands retain
+  stable equal widths.
+- A real Windows Ollama library at the platform default path contained 16
+  manifests. The bounded filesystem scanner marked all 16 compatible, while
+  the live daemon `/api/tags` list independently reported 16 models. No model
+  import was started, so this evidence does not duplicate multi-gigabyte model
+  data or prove a managed llama.cpp load.
+- Fixture-backed backend/API tests cover the destructive side of the flow:
+  manifest/config/license parsing, unsupported projector rejection, atomic
+  SHA-256-verified copy, deduplication, selected-model deletion protection,
+  standalone GGUF import, concurrency limits, and controller enforcement.
 
 ## Procedure
 

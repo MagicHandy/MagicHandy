@@ -49,11 +49,54 @@ const libraryFixture = {
   auto_disable: false,
 };
 
+const modelManagerFixture = {
+  models: [
+    {
+      id: "managed-model-a1b2c3",
+      display_name: "Managed model",
+      provider: "llama_cpp",
+      source: "ollama",
+      source_name: "fixture:latest",
+      format: "gguf",
+      family: "llama",
+      parameter_size: "3B",
+      quantization: "Q4_K_M",
+      size_bytes: 2_147_483_648,
+      sha256: "a".repeat(64),
+      model_path: "C:\\MagicHandy\\models\\managed-model-a1b2c3\\model.gguf",
+      imported_at: "now",
+      updated_at: "now",
+      state: "ready",
+    },
+  ],
+  imports: [],
+  store_path: "C:\\MagicHandy\\models",
+  suggested_ollama_path: "C:\\Users\\Test User\\.ollama\\models",
+};
+
+const ollamaScanFixture = {
+  path: "D:\\Ollama\\models",
+  candidates: [
+    {
+      id: "ollama-candidate-1",
+      name: "qwen-test:latest",
+      format: "gguf",
+      family: "qwen",
+      parameter_size: "7B",
+      quantization: "Q4_K_M",
+      size_bytes: 4_294_967_296,
+      digest: `sha256:${"b".repeat(64)}`,
+      license: "Apache 2.0",
+      importable: true,
+    },
+  ],
+};
+
 function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: typeof modelManagerFixture } = {}) {
   const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
@@ -64,6 +107,11 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
     if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
     if (u.includes("/api/voice/status")) return jsonRes(opts.voiceStatus ?? {});
     if (u.includes("/api/library")) return jsonRes({ library: opts.library ?? libraryFixture });
+    if (u.includes("/api/llm/ollama/scan")) return jsonRes(ollamaScanFixture);
+    if (u.includes("/api/llm/ollama/models")) return jsonRes({ available: true, models: [{ name: "qwen-test:latest", size_bytes: 4_294_967_296, format: "gguf", family: "qwen", parameter_size: "7B", quantization: "Q4_K_M" }] });
+    if (u.includes("/api/llm/imports/ollama")) return jsonRes({ import: { id: "import-1", source: "ollama", display_name: "qwen-test:latest", status: "copying", bytes_copied: 1024, total_bytes: 4_294_967_296, started_at: "now", updated_at: "now" } });
+    if (u.includes("/api/llm/models")) return jsonRes(opts.modelManager ?? modelManagerFixture);
+    if (u.includes("/api/llm/status")) return jsonRes({ provider: state.settings.llm.provider, base_url: "http://127.0.0.1:8080", model: state.settings.llm.model, available: false, managed: true, loaded: false, message: "llama.cpp runner is not loaded" });
     if (u.includes("/api/settings")) return jsonRes({ settings: state.settings });
     if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
@@ -226,6 +274,62 @@ describe("app shell safety invariants", () => {
       expect(await screen.findByRole("navigation", { name: /settings sections/i })).toBeInTheDocument();
       expect(screen.queryByText(/this view could not render/i)).toBeNull();
     }
+  });
+
+  it("renders backend-managed models and selects one through the settings form", async () => {
+    const fetch = installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+
+    expect(await screen.findByText("Managed model")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /import from ollama/i })).toBeEnabled();
+    expect(screen.getByText(/runner is not loaded/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^use$/i }));
+
+    expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveValue("managed-model-a1b2c3");
+    expect(screen.getByRole("textbox", { name: /gguf model path/i })).toHaveValue(modelManagerFixture.models[0].model_path);
+    expect(screen.getByRole("button", { name: /^load$/i })).toBeDisabled();
+    expect(screen.getByText(/save settings before runtime actions/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body));
+    expect(payload.llm.model).toBe("managed-model-a1b2c3");
+    expect(payload.llm.llama_cpp_model_path).toBe(modelManagerFixture.models[0].model_path);
+  });
+
+  it("scans a user-selected Ollama path and starts an explicit copy", async () => {
+    const fetch = installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+    fireEvent.click(await screen.findByRole("button", { name: /import from ollama/i }));
+
+    const path = screen.getByRole("textbox", { name: /ollama models path/i });
+    fireEvent.change(path, { target: { value: "D:\\Ollama" } });
+    fireEvent.click(screen.getByRole("button", { name: /scan library/i }));
+    expect(await screen.findByText("qwen-test:latest")).toBeInTheDocument();
+    expect(screen.getByText(/4.00 GiB/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /import copy/i }));
+
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes("/api/llm/imports/ollama"))).toBe(true));
+    const [, scanRequest] = fetch.mock.calls.find(([url]) => String(url).includes("/api/llm/ollama/scan")) ?? [];
+    expect(JSON.parse(String((scanRequest as RequestInit).body))).toEqual({ path: "D:\\Ollama" });
+    const [, importRequest] = fetch.mock.calls.find(([url]) => String(url).includes("/api/llm/imports/ollama")) ?? [];
+    expect(JSON.parse(String((importRequest as RequestInit).body))).toEqual({ path: "D:\\Ollama\\models", candidate_id: "ollama-candidate-1" });
+  });
+
+  it("keeps model inventory visible but locks model mutations for read-only clients", async () => {
+    installFetch({ state: { ...baseState, controller: { active: false, read_only: true } } });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+    expect(await screen.findByText("Managed model")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /import from ollama/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^use$/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /remove managed model/i })).toBeDisabled();
   });
 
   it("shows voice worker status as readouts and hides unavailable controls", async () => {

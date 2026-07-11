@@ -95,6 +95,10 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - Streaming LLM chat (managed llama.cpp primary, external llama.cpp, Ollama
   secondary) with a strict JSON contract, one repair pass, malformed-response
   indication, and chat-driven motion through the engine only.
+- SQLite-backed LLM model manager with managed GGUF copies, standalone GGUF
+  import, read-only Ollama library discovery/import, daemon model listing,
+  SHA-256 verification, progress/cancellation, and guarded selection/removal.
+  Curated downloads and runner provisioning remain release work.
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
@@ -236,7 +240,7 @@ MagicHandy/
   internal/config/         settings, migrations, defaults          [exists]
   internal/httpapi/        REST and SSE routes                     [exists]
   internal/chat/           chat contract, prompt sets, service     [exists]
-  internal/llm/            provider interface, llama.cpp, Ollama   [exists]
+  internal/llm/            providers, model inventory/imports      [exists]
   internal/motion/         targets, plans, sampler, retargeting    [exists]
   internal/transport/      Cloud REST + browser Bluetooth, HSP-only[exists]
   internal/diagnostics/    trace ring, export                      [exists]
@@ -1009,6 +1013,11 @@ fixtures cover old and current StrokeGPT-ReVibed formats.
 ## Objective
 
 Make MagicHandy distributable as a core binary app.
+
+Delivered ahead of this phase: the model-manager foundation now owns schema v9
+inventory, managed GGUF storage, standalone/Ollama import, and the Model UI.
+Phase 16 still owns curated checksum-pinned downloads, runner provisioning,
+hardware-fit recommendations, and packaging those pieces for non-developers.
 
 ## Scope
 

@@ -206,6 +206,17 @@ Motion pattern names (mild, kept short):
 | llama-server path | Ruta de llama-server | Caminho do llama-server | llama-server 路径 | llama-server のパス |
 | GGUF model path | Ruta del modelo GGUF | Caminho do modelo GGUF | GGUF 模型路径 | GGUF モデルのパス |
 | Ollama URL | URL de Ollama | URL do Ollama | Ollama 地址 | Ollama の URL |
+| Managed models | Modelos gestionados | Modelos gerenciados | 托管模型 | 管理対象モデル |
+| Refresh model list | Actualizar lista de modelos | Atualizar lista de modelos | 刷新模型列表 | モデル一覧を更新 |
+| Import GGUF | Importar GGUF | Importar GGUF | 导入 GGUF | GGUF をインポート |
+| Import from Ollama | Importar desde Ollama | Importar do Ollama | 从 Ollama 导入 | Ollama からインポート |
+| Ollama models path | Ruta de modelos de Ollama | Caminho dos modelos do Ollama | Ollama 模型路径 | Ollama モデルのパス |
+| Scan library | Explorar biblioteca | Verificar biblioteca | 扫描模型库 | ライブラリをスキャン |
+| Filter models | Filtrar modelos | Filtrar modelos | 筛选模型 | モデルを絞り込む |
+| Import copy | Importar copia | Importar cópia | 导入副本 | コピーをインポート |
+| Remove copy | Eliminar copia | Remover cópia | 删除副本 | コピーを削除 |
+| No managed models. | No hay modelos gestionados. | Nenhum modelo gerenciado. | 没有托管模型。 | 管理対象モデルはありません。 |
+| Save settings before runtime actions. | Guarda los ajustes antes de controlar el proceso. | Salve as configurações antes de controlar o processo. | 执行运行时操作前请先保存设置。 | ランタイム操作の前に設定を保存してください。 |
 | Timeout ms | Tiempo de espera (ms) | Tempo limite (ms) | 超时（毫秒） | タイムアウト（ミリ秒） |
 | Check | Comprobar | Verificar | 检查 | 確認 |
 | Load | Cargar | Carregar | 加载 | 読み込み |

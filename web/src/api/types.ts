@@ -357,6 +357,7 @@ export interface PublicSettings {
     llama_cpp_runner_path?: string;
     llama_cpp_model_path?: string;
     ollama_base_url: string;
+    ollama_models_path?: string;
     model: string;
     prompt_set: string;
     request_timeout_ms: number;
@@ -364,6 +365,90 @@ export interface PublicSettings {
   voice: VoiceSettings;
   diagnostics: { verbosity: string };
   options: OptionHints;
+}
+
+export interface LLMProviderStatus {
+  provider: string;
+  base_url: string;
+  model: string;
+  available: boolean;
+  model_available?: boolean;
+  managed?: boolean;
+  loaded?: boolean;
+  models?: string[];
+  message?: string;
+}
+
+export interface ManagedLLMModel {
+  id: string;
+  display_name: string;
+  provider: "llama_cpp";
+  source: "gguf" | "ollama";
+  source_name?: string;
+  format: string;
+  family?: string;
+  parameter_size?: string;
+  quantization?: string;
+  size_bytes: number;
+  sha256: string;
+  model_path: string;
+  license?: string;
+  imported_at: string;
+  updated_at: string;
+  state: "ready" | "missing" | "changed";
+  message?: string;
+}
+
+export interface LLMModelImport {
+  id: string;
+  source: "gguf" | "ollama";
+  display_name: string;
+  status: "queued" | "copying" | "complete" | "failed" | "cancelled";
+  bytes_copied: number;
+  total_bytes: number;
+  model_id?: string;
+  error?: string;
+  started_at: string;
+  updated_at: string;
+}
+
+export interface LLMModelManagerSnapshot {
+  models: ManagedLLMModel[];
+  imports: LLMModelImport[];
+  store_path: string;
+  suggested_ollama_path: string;
+}
+
+export interface OllamaModelInfo {
+  name: string;
+  model?: string;
+  modified_at?: string;
+  size_bytes: number;
+  digest?: string;
+  format?: string;
+  family?: string;
+  parameter_size?: string;
+  quantization?: string;
+}
+
+export interface OllamaModelCandidate {
+  id: string;
+  name: string;
+  format?: string;
+  family?: string;
+  parameter_size?: string;
+  quantization?: string;
+  size_bytes: number;
+  digest?: string;
+  license?: string;
+  importable: boolean;
+  reason?: string;
+  imported_model_id?: string;
+}
+
+export interface OllamaModelScan {
+  path: string;
+  candidates: OllamaModelCandidate[];
 }
 
 // One-way update body for PUT /api/settings. handy_connection_key is omitted to

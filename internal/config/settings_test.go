@@ -76,6 +76,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	settings.Device.APIApplicationIDSource = ApplicationIDSourceDeveloperOverride
 	settings.Device.APIApplicationIDOverride = "dev-app"
 	settings.Device.HandyConnectionKey = "secret"
+	settings.LLM.OllamaModelsPath = `D:\Ollama\models`
 	settings.Diagnostics.Verbosity = DiagnosticsVerbosityDebug
 	if _, err := store.Save(settings); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -94,6 +95,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if got.Device.HandyConnectionKey != "secret" {
 		t.Fatal("connection key did not persist")
+	}
+	if got.LLM.OllamaModelsPath != `D:\Ollama\models` {
+		t.Fatalf("Ollama models path = %q", got.LLM.OllamaModelsPath)
 	}
 }
 

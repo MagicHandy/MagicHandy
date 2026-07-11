@@ -198,6 +198,7 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 	args := []string{
 		"--host", host,
 		"--port", strconv.Itoa(port),
+		"--alias", p.model,
 		"-m", p.modelPath,
 	}
 

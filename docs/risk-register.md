@@ -262,6 +262,10 @@ Mitigation:
 - pin runner builds and record compatibility metadata
 - start with a small curated GGUF catalog instead of an open-ended model zoo
 - support importing a local GGUF without forcing a download
+- keep model metadata in SQLite and model bytes in one private managed store;
+  guard removal of the selected file
+- treat Ollama's library as read-only: bounded manifest parsing, explicit copy,
+  manifest SHA-256 verification, and clear rejection of split/auxiliary layers
 - require explicit download confirmation with visible size, license, checksum, and expected hardware fit
 - verify downloads before install and move files atomically
 - keep Ollama available as the secondary cross-platform provider
@@ -273,6 +277,14 @@ Exit evidence:
 - Ollama still works as the secondary provider
 - startup/status checks do not download models
 - model install/import/load/unload paths are tested and documented
+
+Current evidence (2026-07-11): schema v9 inventory, standalone GGUF import,
+Ollama daemon listing, configurable filesystem scan/import, atomic verified
+copies, cancellation, deduplication, and selected-model removal protection are
+implemented and fixture-tested. A live Windows library with 16 manifests scans
+as 16 compatible models without starting a copy. R13 remains High until pinned
+runner provisioning, curated downloads, hardware-fit guidance, and real
+managed-model load/chat validation are complete.
 
 ## R14: Per-Source Motion Path Divergence
 

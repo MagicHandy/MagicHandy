@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for the rewrite plan.
+Accepted. Provider adapters, managed llama.cpp lifecycle, the SQLite-backed
+model inventory, and explicit GGUF/Ollama import are implemented. Curated
+downloads and runner provisioning remain planned.
 
 ## Context
 
@@ -39,6 +41,11 @@ Every local LLM provider must expose:
 
 Chat orchestration, JSON validation, repair prompts, prompt sets, and motion-target application stay above the provider boundary. Providers return text/stream data; they do not produce raw motion commands.
 
+Model inventory is a sibling concern, not part of `Provider`. A provider is a
+configured runtime adapter; the model manager owns durable records, managed
+copies, imports, and filesystem state. This keeps model setup usable even when
+no provider can be constructed because the current model selection is missing.
+
 ## llama.cpp Runtime Model
 
 The llama.cpp provider manages:
@@ -73,6 +80,13 @@ The Ollama provider remains supported but secondary. It should:
 
 Ollama should not be removed just because llama.cpp becomes the primary path. It is the escape hatch for unsupported platforms, non-NVIDIA systems, users with existing Ollama libraries, and users who do not want MagicHandy to manage model files.
 
+An explicit Ollama-to-managed import may read a user-selected Ollama model
+library. It parses content-addressed manifests read-only, accepts only a
+single self-contained GGUF model layer, copies that layer into MagicHandy's
+store, and verifies SHA-256 against the manifest. MagicHandy never mutates the
+Ollama library and never points a durable managed selection directly at an
+Ollama-owned blob. See `docs/model-management.md`.
+
 ## Model Downloads And Management
 
 MagicHandy must not download multi-GB models automatically during startup, setup checks, provider status checks, or first chat.
@@ -86,6 +100,8 @@ Model installation is explicit:
 - move atomically into the model store
 - allow cancel/retry/remove
 - support importing a local GGUF file
+- support copying compatible existing Ollama GGUF layers without requiring a
+  second network download
 
 Model metadata and UI expectations are detailed in `docs/model-management.md`.
 

@@ -7,6 +7,7 @@ import type { PublicSettings, SettingsUpdate } from "../api/types";
 import { BluetoothBridge } from "../components/BluetoothBridge";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { MemoryManager } from "../components/MemoryManager";
+import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
 import { PromptSetEditor } from "../components/PromptSetEditor";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { WorkspaceHead } from "../components/WorkspaceHead";
@@ -127,15 +128,6 @@ export function SettingsRoute() {
       show(msg(e), "error");
     }
   }
-  async function llm(action: "load" | "unload") {
-    try {
-      await (action === "load" ? api.llmLoad() : api.llmUnload());
-      show(action === "load" ? "Model load requested." : "Model unloaded.");
-    } catch (e) {
-      show(msg(e), "error");
-    }
-  }
-
   if (!s) return (<><WorkspaceHead title="Settings" /><p className="form-status">Loading settings…</p></>);
 
   const opt = s.options ?? {
@@ -183,22 +175,14 @@ export function SettingsRoute() {
         )}
 
         {section === "model" && (
-          <>
-            <h2 className="section-title">Local LLM</h2>
-            <label className="field"><span className="label">Provider</span>{sel(s.llm.provider, (v) => patchLLM({ provider: v }), opt.llm_providers)}</label>
-            <label className="field"><span className="label">Model</span><input type="text" value={s.llm.model} disabled={locked} onChange={(e) => patchLLM({ model: e.target.value })} /></label>
-            {s.llm.provider === "llama_cpp" && <>
-              <label className="field"><span className="label">llama.cpp mode</span>{sel(s.llm.llama_cpp_mode, (v) => patchLLM({ llama_cpp_mode: v }), opt.llama_cpp_modes)}</label>
-              {s.llm.llama_cpp_mode === "external" && <label className="field"><span className="label">llama.cpp URL</span><input type="text" value={s.llm.llama_cpp_base_url} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_base_url: e.target.value })} /></label>}
-              {s.llm.llama_cpp_mode === "managed" && <>
-                <label className="field"><span className="label">llama-server path</span><input type="text" value={s.llm.llama_cpp_runner_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_runner_path: e.target.value })} /></label>
-                <label className="field"><span className="label">GGUF model path</span><input type="text" value={s.llm.llama_cpp_model_path ?? ""} disabled={locked} onChange={(e) => patchLLM({ llama_cpp_model_path: e.target.value })} /></label>
-              </>}
-            </>}
-            {s.llm.provider === "ollama" && <label className="field"><span className="label">Ollama URL</span><input type="text" value={s.llm.ollama_base_url} disabled={locked} onChange={(e) => patchLLM({ ollama_base_url: e.target.value })} /></label>}
-            <label className="field"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={s.llm.request_timeout_ms} disabled={locked} onChange={(e) => patchLLM({ request_timeout_ms: Number(e.target.value) })} /></label>
-            <div className="row-actions"><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("load")}>Load</button><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void llm("unload")}>Unload</button></div>
-          </>
+          <ModelSettingsPanel
+            settings={s.llm}
+            saved={saved?.llm}
+            providers={opt.llm_providers ?? []}
+            llamaModes={opt.llama_cpp_modes ?? []}
+            locked={locked}
+            patch={patchLLM}
+          />
         )}
 
         {section === "voice" && <VoiceSettingsPanel
