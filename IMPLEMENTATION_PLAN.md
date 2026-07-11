@@ -127,6 +127,15 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    work is the routine-cycle feel check on real hardware, the Handy 2 scope
    review on R16, and the explicitly deferred diagnostics/UI follow-ups. See
    `docs/legacy-parity-sweep-2026-07.md` for row-level dispositions.
+4. **Third legacy sweep (2026-07-11)**: the full StrokeGPT-ReVibed PR history
+   (#21–#333) mined for lessons the earlier sweeps missed, dispositioned
+   skeptically in `docs/legacy-lessons-sweep-2026-07-11.md`. Near-term items:
+   verify mic→parakeet.cpp audio-format compatibility end to end, prune
+   abandoned `client_cursors` rows, and stop blocked chat sends from eating
+   the draft. The autospeak contract shapes feed the Autopilot slice; the
+   motion items (differentiated retarget lead, semantic no-op guard,
+   clamp-once speed test) carry explicit skepticism notes — contract shapes
+   over copied constants.
 
 ### UI Shell Redesign (Sidebar Navigation)
 

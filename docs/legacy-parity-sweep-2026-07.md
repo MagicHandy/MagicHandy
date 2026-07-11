@@ -207,3 +207,5 @@ catalog and the mode planners, not retrofits to the shipped engine.
   mitigation artifact), R16 (device scope), R17/R15 (voice)
 - StrokeGPT-ReVibed `Changelog.txt` PRs #319–#333, `KNOWN_PROBLEMS.md`,
   `ROADMAP.md` (2026-06/07 state), and the working notes file
+- `docs/legacy-lessons-sweep-2026-07-11.md` (third pass: the full PR history
+  #21–#333, skeptical dispositions of everything this sweep did not cover)
