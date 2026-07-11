@@ -20,11 +20,15 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 Updated 2026-07-11. Phases 0 through 14 are merged to `main` — Phase 14 (#52)
 landed persisted patterns/programs, funscript import, shared-engine playback,
-LLM curation, authoring, and visible reversible training feedback. Phase 14B
-(planned) adds the Intiface/Buttplug dispatch owner under the
-transport-neutral frame contract recorded in ADR 0010. Phase 13 deliberately
-supports microphone capture on localhost only; LAN/mobile HTTPS remains a
-Phase 16 packaging decision.
+LLM curation, authoring, and visible reversible training feedback. The LLM
+model manager (#55) and the managed llama.cpp source-build lifecycle (#56)
+landed ahead of Phase 16 and now anchor its packaging story: the Windows
+install binary is a thin shell around the app's own first-run setup wizard
+(decision and design in `docs/gui-installer.md`). Phase 14B (planned) adds
+the Intiface/Buttplug dispatch owner under the transport-neutral frame
+contract recorded in ADR 0010. Phase 13 deliberately supports microphone
+capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
+decision.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -55,7 +59,8 @@ Phase 16 packaging decision.
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Complete** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | Planned | — |
-| 15-17 | Migration, packaging, parity | Not started | — |
+| 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
+| 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
 before any provider — the SQLite `messages`/`client_cursors` tables (schema
@@ -1011,37 +1016,68 @@ fixtures cover old and current StrokeGPT-ReVibed formats.
 
 ## Suggested `/goal`
 
-`/goal Complete MagicHandy Phase 16: create Windows release packaging, portable zip output, version metadata, file logging, release docs, and decision records for signing, auto-update, and LAN/HTTPS exposure.`
+`/goal Complete MagicHandy Phase 16: create Windows release packaging — portable zip plus a setup binary that launches the in-app first-run wizard — with version metadata, file logging, release docs, and decision records for signing, auto-update, and LAN/HTTPS exposure.`
 
 ## Objective
 
-Make MagicHandy distributable as a core binary app.
+Make MagicHandy distributable as a core binary app that a non-developer can
+install and configure end to end — llama.cpp build choice, model downloads,
+voice provisioning, and StrokeGPT-ReVibed porting — through a GUI.
 
-Delivered ahead of this phase: the model-manager foundation now owns schema v9
-inventory, managed GGUF storage, standalone/Ollama import, ID-based selection,
-and the Model UI. The app also owns a pinned source-build lifecycle for
-llama.cpp on Windows/amd64, including CPU/CUDA choice, build status,
-cancellation, manifest validation, and installer opt-out for existing Ollama
-users. Phase 16 still owns curated checksum-pinned model downloads,
+Delivered ahead of this phase (#55, #56): the model-manager foundation now
+owns schema v9 inventory, managed GGUF storage, standalone/Ollama import,
+ID-based selection, and the Model UI. The app also owns a pinned source-build
+lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build
+status, cancellation, manifest validation, and installer opt-out for existing
+Ollama users. Phase 16 still owns curated checksum-pinned model downloads,
 hardware-fit recommendations, and release packaging that removes the source
 toolchain prerequisite for non-developers.
 
+**GUI installer decision** (evaluation in
+[docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive
+setup surface is the app itself — a first-run onboarding wizard (`#/setup`)
+in the embedded React UI orchestrating the existing build/import/provision
+APIs — delivered by a thin Inno Setup binary that handles only install
+directory, shortcuts, the uninstall entry (program files only; the data
+directory survives), and launching the app into setup. Native installer
+frameworks and dedicated Electron/Tauri installer apps were evaluated and
+rejected for the interactive surface; the portable zip stays as the second
+artifact.
+
 ## Scope
 
-Implement:
+Implement, as slices:
 
-- Windows binary build, portable zip, embedded assets, default config/data
-  directory behavior, version command/endpoint
-- release GitHub Actions workflow and release-notes template
+- **16.0 — release plumbing**: Windows binary build, portable zip, embedded
+  assets, default config/data directory behavior, version command/endpoint,
+  release GitHub Actions workflow and release-notes template
+- **16.1 — Windows setup binary**: Inno Setup script compiled in CI
+  (build-time-only dependency), Start Menu/desktop shortcuts, Add/Remove
+  Programs uninstall that leaves the data directory, silent-install flags,
+  over-install upgrades, finish page launching first-run setup
+- **16.2 — first-run onboarding wizard** (`#/setup`, re-runnable from
+  Settings): welcome/consent → device → LLM runtime (managed source build
+  with backend choice, skip-for-Ollama with store import, or external URL)
+  → LLM model (import or curated download) → optional voice provisioning
+  (Parakeet runner+model and NeuTTS assets moved from `install.ps1` into
+  checksummed, size/license-visible, progress-reporting API endpoints;
+  ElevenLabs key entry) → finish. Every step skippable; every step is the
+  existing settings/API surface, never a second implementation
+- **16.3 — StrokeGPT-ReVibed porting step**: the wizard surfaces the Phase
+  15 importer — install-location detection, dry-run preview with the
+  compatibility report, per-category opt-in, non-destructive import
+  (depends on the Phase 15 importer API)
 - log-to-file by default with a mostly quiet console; print the local URL
   prominently (clickable in terminals that support it)
 - keep binding to localhost by default; document that the app is a
   single-operator local controller and must not be port-forwarded
-- decision docs: signing, auto-update, worker bundle strategy, and LAN/HTTPS
-  exposure (whether MagicHandy ships the HTTPS/cert story or scopes LAN
-  access out — see risk R18)
+- decision docs: signing, auto-update, worker bundle strategy, WebView2
+  app-window shell (presentation only), and LAN/HTTPS exposure (whether
+  MagicHandy ships the HTTPS/cert story or scopes LAN access out — see
+  risk R18)
 - check the binary-size (<30 MB) and cold-start (<500 ms) budgets from
-  `docs/goals-and-guardrails.md`
+  `docs/goals-and-guardrails.md` (the setup binary is a separate artifact
+  with its own small overhead; the core binary budget is unchanged)
 
 ## Validation
 

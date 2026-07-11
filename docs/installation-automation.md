@@ -6,7 +6,11 @@ A non-technical user should be able to get MagicHandy running — app, LLM, mode
 and device — with as little friction as StrokeGPT-ReVibed offered, ideally less.
 This doc compares the two, records what already exists, and lays out the roadmap
 to parity. It is the reference for the interactive installer (`install.ps1`) and
-the eventual in-app setup wizard.
+the eventual in-app setup wizard — whose shape is now decided:
+[docs/gui-installer.md](gui-installer.md) records the evaluation (2026-07-11)
+that the GUI installer is the app's own first-run wizard behind a thin Inno
+Setup shell, with the Windows setup binary and wizard slices scheduled in
+Phase 16.
 
 A structural advantage worth stating up front: MagicHandy's core is a single
 pure-Go binary with **no Python, no venv, no pip, and no torch/CUDA in the core**.
@@ -92,7 +96,10 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
 7. **In-app first-run setup wizard.** The eventual best UX and the real parity
    milestone for non-technical users: connect the Handy (enter key, test),
    choose a provider, pick/download a model, and confirm — all in the browser UI,
-   superseding the script for most people.
+   superseding the script for most people. Designed in
+   [docs/gui-installer.md](gui-installer.md) (Phase 16 slices 16.1-16.3),
+   including voice provisioning moved behind API endpoints and the
+   StrokeGPT-ReVibed porting step over the Phase 15 importer.
 8. **Voice setup (Phase 13).** Parakeet ASR's explicit installer path is the
    first slice. Add an in-app guided profile, local TTS provisioning, and
    microphone calibration only after real-device and microphone evidence;
