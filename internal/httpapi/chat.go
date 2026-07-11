@@ -63,6 +63,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Prompt:   prompt,
 		Model:    settings.LLM.Model,
 		Memories: s.personalization.memory.PromptTexts(),
+		Patterns: s.chatPatternChoices(),
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -180,7 +181,7 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 			return chatMotionDispatch{Action: command.Action}, err
 		}
 		current := engine.Snapshot()
-		target := chatMotionTarget(command, current)
+		target := s.chatMotionTarget(command, current)
 		s.notifyChatTarget(target)
 		if current.Running {
 			state, err := engine.ApplyTarget(ctx, target, "chat_start_retarget")
@@ -195,7 +196,7 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running")
 		}
 		current := engine.Snapshot()
-		target := chatMotionTarget(command, current)
+		target := s.chatMotionTarget(command, current)
 		s.notifyChatTarget(target)
 		state, err := engine.ApplyTarget(ctx, target, "chat_target")
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
@@ -378,15 +379,42 @@ func (s *Server) handleChatCursor(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cursor": cursor})
 }
 
-func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
+func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
 	patternID := motion.PatternID(command.PatternID)
 	speedPercent := 0
-	if command.SpeedPercent != nil {
+	if command.Intensity != nil {
+		speedPercent = *command.Intensity
+	} else if command.SpeedPercent != nil {
 		speedPercent = *command.SpeedPercent
+	}
+	var definition *motion.PatternDefinition
+	var programDefinition *motion.ProgramDefinition
+	var programID string
+	if patternID != "" {
+		if resolved, ok := s.patterns.ResolveEnabled(string(patternID)); ok {
+			definition = &resolved
+		} else {
+			// The enabled set may change while the model is streaming. Never apply
+			// a now-disabled selection; fall back to the deterministic target.
+			patternID = ""
+		}
 	}
 	if current.Running {
 		if patternID == "" {
-			patternID = current.Target.PatternID
+			if current.Target.Program != nil {
+				copied := *current.Target.Program
+				copied.Points = append([]motion.CurvePoint(nil), current.Target.Program.Points...)
+				programDefinition = &copied
+				programID = current.Target.ProgramID
+			} else {
+				patternID = current.Target.PatternID
+			}
+			if programDefinition == nil && current.Target.Pattern != nil {
+				copied := *current.Target.Pattern
+				copied.Points = append([]motion.CurvePoint(nil), current.Target.Pattern.Points...)
+				copied.Tags = append([]string(nil), current.Target.Pattern.Tags...)
+				definition = &copied
+			}
 		}
 		if speedPercent == 0 {
 			speedPercent = current.Target.SpeedPercent
@@ -396,8 +424,23 @@ func chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionSt
 		Label:        "Chat",
 		Source:       "chat",
 		PatternID:    patternID,
+		ProgramID:    programID,
 		SpeedPercent: speedPercent,
+		Pattern:      definition,
+		Program:      programDefinition,
 	}
+}
+
+func (s *Server) chatPatternChoices() []chat.PatternChoice {
+	choices := s.patterns.EnabledChoices()
+	result := make([]chat.PatternChoice, 0, len(choices))
+	for _, choice := range choices {
+		result = append(result, chat.PatternChoice{
+			ID: choice.ID, Name: choice.Name, Description: choice.Description,
+			Tags: choice.Tags, Weight: choice.Weight,
+		})
+	}
+	return result
 }
 
 func isChatStopMessage(message string) bool {

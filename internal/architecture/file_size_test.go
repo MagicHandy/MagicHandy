@@ -42,6 +42,11 @@ func TestSourceFileLineBudgets(t *testing.T) {
 			extension:  ".tsx",
 			defaultMax: 800,
 		},
+		{
+			root:       "web",
+			extension:  ".css",
+			defaultMax: 800,
+		},
 	}
 
 	for _, budget := range budgets {

@@ -52,6 +52,144 @@ func TestEngineContinuousFakePlaybackAndStop(t *testing.T) {
 	}
 }
 
+func TestEngineStopsFiniteProgramAtCompletion(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(64), 5*time.Millisecond)
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 100
+	program := ProgramDefinition{
+		ID: "short-program", Name: "Short program", DurationMillis: 500,
+		Points: []CurvePoint{{TimeMillis: 0}, {TimeMillis: 500, PositionPercent: 100}},
+	}
+	_, err := engine.Start(context.Background(), MotionTarget{
+		ProgramID: program.ID, Program: &program, SpeedPercent: 100,
+	}, settings)
+	if err != nil {
+		t.Fatalf("Start program: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for state := engine.Snapshot(); (state.Running || state.Completing) && time.Now().Before(deadline); state = engine.Snapshot() {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if state := engine.Snapshot(); state.Running || state.Completing || state.Target.ProgramID != program.ID {
+		t.Fatalf("program state = %+v, want completed finite target", state)
+	} else if state.Phase != 1 {
+		t.Fatalf("completed program phase = %.3f, want 1", state.Phase)
+	}
+	if count := countCommands(fake.Commands(), transport.CommandKindStop); count != 1 {
+		t.Fatalf("program stop count = %d, want one explicit engine stop", count)
+	}
+}
+
+func TestEngineRejectsStartUntilProgramCompletionStopReturns(t *testing.T) {
+	blocking := &completionBlockingTransport{
+		Fake:    transport.NewFake(),
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	engine := newTestEngine(t, blocking, diagnostics.NewTraceRing(64), 5*time.Millisecond)
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 100
+	program := ProgramDefinition{
+		ID: "completion-race", Name: "Completion race", DurationMillis: 500,
+		Points: []CurvePoint{{TimeMillis: 0}, {TimeMillis: 500, PositionPercent: 100}},
+	}
+	if _, err := engine.Start(context.Background(), MotionTarget{
+		ProgramID: program.ID, Program: &program, SpeedPercent: 100,
+	}, settings); err != nil {
+		t.Fatalf("Start program: %v", err)
+	}
+	select {
+	case <-blocking.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("program completion did not enter transport Stop")
+	}
+	if state := engine.Snapshot(); state.Running || !state.Completing {
+		t.Fatalf("completion state = %+v, want completing and not running", state)
+	}
+	if _, err := engine.Start(context.Background(), testTarget(), settings); err == nil {
+		t.Fatal("new motion started while program completion Stop was in flight")
+	}
+	close(blocking.release)
+	waitForEngineState(t, engine, 2*time.Second, func(state ActiveMotionState) bool {
+		return !state.Running && !state.Completing
+	})
+	if _, err := engine.Start(context.Background(), testTarget(), settings); err != nil {
+		t.Fatalf("Start after completion: %v", err)
+	}
+	if _, err := engine.Stop(context.Background(), "cleanup"); err != nil {
+		t.Fatalf("Stop after completion: %v", err)
+	}
+}
+
+func TestEngineFreezesPhaseAfterStop(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	fake := transport.NewFake(transport.WithClock(func() time.Time { return now }))
+	engine, err := NewEngine(EngineOptions{
+		Transport:        fake,
+		Traces:           diagnostics.NewTraceRing(32),
+		Now:              func() time.Time { return now },
+		DispatchInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	now = now.Add(time.Second)
+	stopped, err := engine.Stop(context.Background(), "phase_freeze")
+	if err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	now = now.Add(30 * time.Second)
+	if later := engine.Snapshot(); later.Phase != stopped.Phase {
+		t.Fatalf("stopped phase advanced from %.6f to %.6f", stopped.Phase, later.Phase)
+	}
+}
+
+func TestEngineProjectsRelativePatternIntoStrokeWindowOnlyAtTransport(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(32), time.Hour)
+	engine.chunkSize = 12
+	pattern := PatternDefinition{
+		ID: "relative-burst", Name: "Relative burst", Kind: PatternKindBurst, CycleMillis: 500,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 250, PositionPercent: 100},
+			{TimeMillis: 500, PositionPercent: 0},
+		},
+	}
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 100
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+	if _, err := engine.Start(context.Background(), MotionTarget{
+		PatternID: pattern.ID, Pattern: &pattern, SpeedPercent: 100,
+	}, settings); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[0].StrokeWindow == nil ||
+		commands[0].StrokeWindow.MinPercent != 20 || commands[0].StrokeWindow.MaxPercent != 80 {
+		t.Fatalf("stroke-window command = %+v", commands)
+	}
+	add := lastHSPAdd(commands)
+	if add == nil {
+		t.Fatalf("HSP points missing: %+v", commands)
+	}
+	minimum, maximum := 100, 0
+	for _, point := range add.Points {
+		minimum = min(minimum, point.PositionPercent)
+		maximum = max(maximum, point.PositionPercent)
+	}
+	if minimum >= 20 || maximum <= 80 {
+		t.Fatalf("engine pre-projected relative samples to %d..%d; want semantic span beyond 20..80", minimum, maximum)
+	}
+}
+
 func TestEngineDispatchLoopOutlivesStartRequestContext(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), 2*time.Millisecond)
@@ -467,4 +605,33 @@ func (t *blockingAddTransport) AddHSP(ctx context.Context, command transport.HSP
 		Error:       err.Error(),
 		CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}, err
+}
+
+type completionBlockingTransport struct {
+	*transport.Fake
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (t *completionBlockingTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {
+	t.once.Do(func() { close(t.entered) })
+	select {
+	case <-t.release:
+		return t.Fake.Stop(ctx, command)
+	case <-ctx.Done():
+		return transport.CommandResult{}, ctx.Err()
+	}
+}
+
+func waitForEngineState(t *testing.T, engine *Engine, timeout time.Duration, ready func(ActiveMotionState) bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if ready(engine.Snapshot()) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("engine state did not converge: %+v", engine.Snapshot())
 }

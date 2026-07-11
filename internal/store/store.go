@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 2
+	CurrentSchemaVersion = 8
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -275,6 +276,143 @@ var migrations = [][]string{
 			updated_at TEXT NOT NULL
 		)`,
 	},
+	// v2 -> v3: Phase 14 motion content, programs, and reversible feedback.
+	{
+		`CREATE TABLE IF NOT EXISTS patterns (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			origin TEXT NOT NULL CHECK (origin IN ('builtin', 'user', 'generated')),
+			kind TEXT NOT NULL CHECK (kind IN ('routine', 'burst')),
+			enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+			weight REAL NOT NULL CHECK (weight >= 0.1 AND weight <= 3.0),
+			cycle_ms INTEGER NOT NULL CHECK (cycle_ms > 0),
+			points_json TEXT NOT NULL,
+			tags_json TEXT NOT NULL DEFAULT '[]',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS patterns_enabled_weight
+			ON patterns(enabled, weight DESC, name)`,
+		`CREATE TABLE IF NOT EXISTS programs (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			origin TEXT NOT NULL CHECK (origin IN ('user', 'imported')),
+			duration_ms INTEGER NOT NULL CHECK (duration_ms > 0),
+			points_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS pattern_feedback (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			pattern_id TEXT NOT NULL REFERENCES patterns(id) ON DELETE CASCADE,
+			rating INTEGER NOT NULL CHECK (rating IN (-1, 1)),
+			weight_before REAL NOT NULL,
+			weight_after REAL NOT NULL,
+			enabled_before INTEGER NOT NULL CHECK (enabled_before IN (0, 1)),
+			enabled_after INTEGER NOT NULL CHECK (enabled_after IN (0, 1)),
+			reverted INTEGER NOT NULL DEFAULT 0 CHECK (reverted IN (0, 1)),
+			created_at TEXT NOT NULL,
+			reverted_at TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS pattern_feedback_pattern_created
+			ON pattern_feedback(pattern_id, id DESC)`,
+	},
+	// v3 -> v7 are reserved for the divergent Rockfire schema lineage. Those
+	// builds reached user_version 7 before returning to the main architecture.
+	// Keeping the version numbers prevents a Rockfire database from being
+	// rejected as newer while the v8 reconciliation below repairs its core
+	// tables without deleting the still-unimported LSO content.
+	{`SELECT 1`},
+	{`SELECT 1`},
+	{`SELECT 1`},
+	{`SELECT 1`},
+	// v7 -> v8: reconcile both the main and Rockfire lineages. Every statement
+	// is idempotent because a database may have reached version 7 through either
+	// branch with a different subset of tables.
+	{
+		`CREATE TABLE IF NOT EXISTS settings (
+			id TEXT PRIMARY KEY CHECK (id = 'current'),
+			document TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS app_kv (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS memories (
+			id TEXT PRIMARY KEY,
+			text TEXT NOT NULL,
+			enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS prompt_sets (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			system TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS legacy_imports (
+			domain TEXT PRIMARY KEY,
+			source_path TEXT NOT NULL,
+			archived_path TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL,
+			message TEXT NOT NULL DEFAULT '',
+			imported_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS messages (
+			seq INTEGER PRIMARY KEY AUTOINCREMENT,
+			role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+			content TEXT NOT NULL,
+			client_id TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS client_cursors (
+			client_id TEXT PRIMARY KEY,
+			last_seq INTEGER NOT NULL DEFAULT 0,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS patterns (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			origin TEXT NOT NULL CHECK (origin IN ('builtin', 'user', 'generated')),
+			kind TEXT NOT NULL CHECK (kind IN ('routine', 'burst')),
+			enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+			weight REAL NOT NULL CHECK (weight >= 0.1 AND weight <= 3.0),
+			cycle_ms INTEGER NOT NULL CHECK (cycle_ms > 0),
+			points_json TEXT NOT NULL,
+			tags_json TEXT NOT NULL DEFAULT '[]',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS patterns_enabled_weight
+			ON patterns(enabled, weight DESC, name)`,
+		`CREATE TABLE IF NOT EXISTS programs (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			origin TEXT NOT NULL CHECK (origin IN ('user', 'imported')),
+			duration_ms INTEGER NOT NULL CHECK (duration_ms > 0),
+			points_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS pattern_feedback (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			pattern_id TEXT NOT NULL REFERENCES patterns(id) ON DELETE CASCADE,
+			rating INTEGER NOT NULL CHECK (rating IN (-1, 1)),
+			weight_before REAL NOT NULL,
+			weight_after REAL NOT NULL,
+			enabled_before INTEGER NOT NULL CHECK (enabled_before IN (0, 1)),
+			enabled_after INTEGER NOT NULL CHECK (enabled_after IN (0, 1)),
+			reverted INTEGER NOT NULL DEFAULT 0 CHECK (reverted IN (0, 1)),
+			created_at TEXT NOT NULL,
+			reverted_at TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS pattern_feedback_pattern_created
+			ON pattern_feedback(pattern_id, id DESC)`,
+	},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -297,6 +435,11 @@ func (db *DB) migrate(ctx context.Context) error {
 					return fmt.Errorf("apply SQLite migration to v%d: %w", next+1, err)
 				}
 			}
+			if next+1 == CurrentSchemaVersion {
+				if err := reconcileRockfireSchema(ctx, tx); err != nil {
+					return fmt.Errorf("reconcile SQLite schema at v%d: %w", next+1, err)
+				}
+			}
 			if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", next+1)); err != nil {
 				return fmt.Errorf("record SQLite schema version %d: %w", next+1, err)
 			}
@@ -307,6 +450,101 @@ func (db *DB) migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// reconcileRockfireSchema repairs the two table-shape differences created by
+// the unmerged Rockfire branch. Its motion_blocks, funscript_files, queues,
+// personas, and UI tables are deliberately left intact for the explicit LSO
+// data-import phase; Phase 14 must not guess how to reinterpret that content.
+func reconcileRockfireSchema(ctx context.Context, tx *sql.Tx) error {
+	integerSettingsID, err := columnHasType(ctx, tx, "settings", "id", "INTEGER")
+	if err != nil {
+		return err
+	}
+	if integerSettingsID {
+		var document, updatedAt string
+		err := tx.QueryRowContext(ctx, `SELECT document, updated_at FROM settings WHERE id = 1`).Scan(
+			&document,
+			&updatedAt,
+		)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("read Rockfire settings row: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE settings RENAME TO settings_rockfire_legacy`); err != nil {
+			return fmt.Errorf("rename Rockfire settings table: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			CREATE TABLE settings (
+				id TEXT PRIMARY KEY CHECK (id = 'current'),
+				document TEXT NOT NULL,
+				updated_at TEXT NOT NULL
+			)
+		`); err != nil {
+			return fmt.Errorf("create canonical settings table: %w", err)
+		}
+		if document != "" {
+			if updatedAt == "" {
+				updatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			}
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO settings(id, document, updated_at) VALUES('current', ?, ?)
+			`, document, updatedAt); err != nil {
+				return fmt.Errorf("copy Rockfire settings row: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `DROP TABLE settings_rockfire_legacy`); err != nil {
+			return fmt.Errorf("drop migrated Rockfire settings table: %w", err)
+		}
+	}
+
+	hasPromptTimestamp, err := columnExists(ctx, tx, "prompt_sets", "created_at")
+	if err != nil {
+		return err
+	}
+	if !hasPromptTimestamp {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE prompt_sets ADD COLUMN created_at TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add prompt set timestamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE prompt_sets SET created_at = ? WHERE created_at = ''
+		`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("backfill prompt set timestamp: %w", err)
+		}
+	}
+	return nil
+}
+
+func columnHasType(ctx context.Context, tx *sql.Tx, table, column, columnType string) (bool, error) {
+	typeName, exists, err := tableColumnType(ctx, tx, table, column)
+	return exists && strings.EqualFold(typeName, columnType), err
+}
+
+func columnExists(ctx context.Context, tx *sql.Tx, table, column string) (bool, error) {
+	_, exists, err := tableColumnType(ctx, tx, table, column)
+	return exists, err
+}
+
+func tableColumnType(ctx context.Context, tx *sql.Tx, table, column string) (string, bool, error) {
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table)) // #nosec G201 -- internal constants only.
+	if err != nil {
+		return "", false, fmt.Errorf("inspect %s table: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, typeName string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &typeName, &notNull, &defaultValue, &primaryKey); err != nil {
+			return "", false, fmt.Errorf("scan %s table metadata: %w", table, err)
+		}
+		if strings.EqualFold(name, column) {
+			return typeName, true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, fmt.Errorf("read %s table metadata: %w", table, err)
+	}
+	return "", false, nil
 }
 
 func (db *DB) schemaVersion(ctx context.Context) (int, error) {

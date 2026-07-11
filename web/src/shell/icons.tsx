@@ -62,3 +62,59 @@ export const MicrophoneIcon = ({ size = 18, className }: P) => (
     <path d="M9 21h6" />
   </svg>
 );
+export const PlayIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)} fill="currentColor" stroke="none">
+    <path d="M7 4.5 19 12 7 19.5z" />
+  </svg>
+);
+export const PauseIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)} fill="currentColor" stroke="none">
+    <rect x="6" y="5" width="4" height="14" rx="1" />
+    <rect x="14" y="5" width="4" height="14" rx="1" />
+  </svg>
+);
+export const DownloadIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M12 3v12" />
+    <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+    <path d="M5 20h14" />
+  </svg>
+);
+export const UploadIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M12 21V9" />
+    <path d="m7.5 13.5 4.5-4.5 4.5 4.5" />
+    <path d="M5 4h14" />
+  </svg>
+);
+export const TrashIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M5 7h14" />
+    <path d="M9 7V4h6v3" />
+    <path d="m7 7 1 13h8l1-13" />
+  </svg>
+);
+export const ThumbUpIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M7 10v10H4V10z" />
+    <path d="M7 18h9.5a2 2 0 0 0 2-1.6l1-5A2 2 0 0 0 17.5 9H14l.5-3.5A2.2 2.2 0 0 0 12.3 3L7 10" />
+  </svg>
+);
+export const ThumbDownIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M7 14V4H4v10z" />
+    <path d="M7 6h9.5a2 2 0 0 1 2 1.6l1 5a2 2 0 0 1-2 2.4H14l.5 3.5a2.2 2.2 0 0 1-2.2 2.5L7 14" />
+  </svg>
+);
+export const UndoIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m9 7-5 5 5 5" />
+    <path d="M5 12h8a6 6 0 0 1 6 6" />
+  </svg>
+);
+export const ClearIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m4 15 8-8 5 5-8 8H4z" />
+    <path d="m10 9 5 5" />
+  </svg>
+);

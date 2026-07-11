@@ -25,6 +25,8 @@ const (
 const (
 	defaultTickInterval = 250 * time.Millisecond
 	restartBackoff      = 3 * time.Second
+	modeDwellPadding    = 750 * time.Millisecond
+	maximumLatencyDwell = 12 * time.Second
 )
 
 // Engine is the narrow motion-engine surface modes may use. Modes never see
@@ -307,11 +309,12 @@ func (m *Manager) startNextSegment(ctx context.Context, reason string) {
 		return
 	}
 	segment, scores := m.nextPlannedSegment()
-	if _, err := engine.Start(engineCtx, segment.Target("Freestyle", "freestyle"), m.options.Settings()); err != nil {
+	state, err := engine.Start(engineCtx, segment.Target("Freestyle", "freestyle"), m.options.Settings())
+	if err != nil {
 		m.backoff(ModeFreestyle, "start_failed", err)
 		return
 	}
-	m.armSegment(segment)
+	m.armSegment(segment, state.RecentCommandLatencyMillis)
 	m.tracePlanned(reason, segment, scores)
 }
 
@@ -320,11 +323,12 @@ func (m *Manager) startNextSegment(ctx context.Context, reason string) {
 // never replace streams or touch transport.
 func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, reason string) {
 	segment, scores := m.nextPlannedSegment()
-	if _, err := engine.ApplyTarget(ctx, segment.Target("Freestyle", "freestyle"), reason); err != nil {
+	state, err := engine.ApplyTarget(ctx, segment.Target("Freestyle", "freestyle"), reason)
+	if err != nil {
 		m.backoff(ModeFreestyle, "segment_failed", err)
 		return
 	}
-	m.armSegment(segment)
+	m.armSegment(segment, state.RecentCommandLatencyMillis)
 	m.tracePlanned(reason, segment, scores)
 }
 
@@ -341,8 +345,15 @@ func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
 	return planner.NextSegment(m.options.Settings())
 }
 
-func (m *Manager) armSegment(segment Segment) {
+func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64) {
 	duration := time.Duration(segment.DurationMillis) * time.Millisecond
+	latencyFloor := time.Duration(max(int64(0), recentLatencyMillis))*time.Millisecond + modeDwellPadding
+	if latencyFloor > maximumLatencyDwell {
+		latencyFloor = maximumLatencyDwell
+	}
+	if duration < latencyFloor {
+		duration = latencyFloor
+	}
 	if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 		duration = m.options.MaxSegmentDuration
 	}

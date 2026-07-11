@@ -37,11 +37,23 @@ const baseState = {
   memory: { enabled: true, memories: [] },
 };
 
+const libraryFixture = {
+  patterns: [
+    { id: "stroke", name: "Stroke", description: "Even full-span reversals.", origin: "builtin", kind: "routine", enabled: true, weight: 1, cycle_ms: 6600, points: [{ time_ms: 0, position_percent: 0 }, { time_ms: 3300, position_percent: 100 }, { time_ms: 6600, position_percent: 0 }], preview_samples: [{ time_ms: 0, position_percent: 0 }, { time_ms: 1650, position_percent: 50 }, { time_ms: 3300, position_percent: 100 }, { time_ms: 6600, position_percent: 0 }], tags: ["steady"], created_at: "now", updated_at: "now" },
+    { id: "pulse", name: "Pulse", description: "Alternating peaks.", origin: "builtin", kind: "routine", enabled: false, weight: 0.8, cycle_ms: 6600, points: [{ time_ms: 0, position_percent: 15 }, { time_ms: 3300, position_percent: 100 }, { time_ms: 6600, position_percent: 15 }], preview_samples: [{ time_ms: 0, position_percent: 15 }, { time_ms: 3300, position_percent: 100 }, { time_ms: 6600, position_percent: 15 }], tags: ["rhythmic"], created_at: "now", updated_at: "now" },
+  ],
+  programs: [
+    { id: "program-demo", name: "Demo program", origin: "imported", duration_ms: 10000, points: [{ time_ms: 0, position_percent: 0 }, { time_ms: 10000, position_percent: 100 }], preview_samples: [{ time_ms: 0, position_percent: 0 }, { time_ms: 5000, position_percent: 50 }, { time_ms: 10000, position_percent: 100 }], created_at: "now", updated_at: "now" },
+  ],
+  feedback: [],
+  auto_disable: false,
+};
+
 function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture } = {}) {
   const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
@@ -51,6 +63,7 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
     if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0 });
     if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
     if (u.includes("/api/voice/status")) return jsonRes(opts.voiceStatus ?? {});
+    if (u.includes("/api/library")) return jsonRes({ library: opts.library ?? libraryFixture });
     if (u.includes("/api/settings")) return jsonRes({ settings: state.settings });
     if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
@@ -134,6 +147,74 @@ describe("app shell safety invariants", () => {
     go("#/settings");
     expect(await screen.findByRole("navigation", { name: /settings sections/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^settings$/i })).toBeInTheDocument();
+  });
+
+  it("renders the Phase 14 library as a backend-backed catalog", async () => {
+    installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/library");
+    expect(await screen.findByText("Stroke")).toBeInTheDocument();
+    expect(screen.getByText(/1 pattern available to chat/i)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /enable stroke/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /enable pulse/i })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /audition stroke/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /audition pulse/i })).toBeDisabled();
+  });
+
+  it("keeps library exports available read-only while locking mutations", async () => {
+    installFetch({ state: { ...baseState, controller: { active: false, read_only: true } } });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/library");
+    expect(await screen.findByRole("button", { name: /export stroke/i })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: /enable stroke/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /rate stroke up/i })).toBeDisabled();
+  });
+
+  it("keeps programs, authoring, and training in one library workspace", async () => {
+    installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/library");
+    fireEvent.click(await screen.findByRole("tab", { name: /^programs$/i }));
+    expect(screen.getByText("Demo program")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^play$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^author$/i }));
+    expect(screen.getByLabelText(/pattern drawing canvas/i)).toBeInTheDocument();
+    expect(screen.getByText(/saved knots/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^training$/i }));
+    expect(screen.getByRole("button", { name: /audition/i })).toBeInTheDocument();
+    expect(screen.getByText(/auto-disable at low weight/i)).toBeInTheDocument();
+  });
+
+  it("keeps program intensity inside the backend speed envelope", async () => {
+    const state = {
+      ...baseState,
+      settings: {
+        ...baseState.settings,
+        motion: { ...baseState.settings.motion, speed_max_percent: 25 },
+      },
+    };
+    installFetch({ state });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/library");
+    fireEvent.click(await screen.findByRole("tab", { name: /^programs$/i }));
+    const intensity = screen.getByRole("slider", { name: /intensity/i });
+    expect(intensity).toHaveAttribute("max", "25");
+    await waitFor(() => expect(intensity).toHaveValue("25"));
+  });
+
+  it("shows the deterministic curation fallback when every pattern is disabled", async () => {
+    const disabled = { ...libraryFixture, patterns: libraryFixture.patterns.map((pattern) => ({ ...pattern, enabled: false })) };
+    installFetch({ library: disabled });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/library");
+    expect(await screen.findByText(/deterministic fallback active/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^training$/i }));
+    expect(screen.getByText(/no enabled patterns/i)).toBeInTheDocument();
   });
 
   it("renders every settings section without blanking the app", async () => {

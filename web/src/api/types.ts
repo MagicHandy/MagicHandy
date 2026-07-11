@@ -16,15 +16,17 @@ export interface MotionSettings {
 
 export interface MotionSample {
   position_percent: number;
-  time_millis: number;
+  time_ms: number;
 }
 
 export interface EngineSnapshot {
   running: boolean;
+  completing?: boolean;
   paused: boolean;
   running_ms?: number;
-  phase?: string;
-  target?: { label?: string; speed_percent?: number; pattern_identifier?: string };
+  phase?: number;
+  recent_command_latency_ms?: number;
+  target?: { label?: string; speed_percent?: number; pattern_id?: string; program_id?: string };
   last_sample?: MotionSample;
   settings?: MotionSettings;
   last_error?: string;
@@ -146,6 +148,83 @@ export interface ModesStatus {
   mode?: string;
   active_mode?: string;
   [k: string]: unknown;
+}
+
+export interface CurvePoint {
+  time_ms: number;
+  position_percent: number;
+}
+
+export interface LibraryPattern {
+  id: string;
+  name: string;
+  description?: string;
+  origin: "builtin" | "user" | "generated" | string;
+  kind: "routine" | "burst" | string;
+  enabled: boolean;
+  weight: number;
+  cycle_ms: number;
+  points: CurvePoint[];
+  preview_samples: CurvePoint[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LibraryProgram {
+  id: string;
+  name: string;
+  origin: string;
+  duration_ms: number;
+  points: CurvePoint[];
+  preview_samples: CurvePoint[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatternFeedback {
+  id: number;
+  pattern_id: string;
+  rating: -1 | 1;
+  weight_before: number;
+  weight_after: number;
+  enabled_before: boolean;
+  enabled_after: boolean;
+  reverted: boolean;
+  created_at: string;
+  reverted_at?: string;
+}
+
+export interface PatternLibrary {
+  patterns: LibraryPattern[];
+  programs: LibraryProgram[];
+  feedback: PatternFeedback[];
+  auto_disable: boolean;
+}
+
+export interface PatternInput {
+  name: string;
+  description?: string;
+  kind: "routine" | "burst";
+  cycle_ms: number;
+  points: CurvePoint[];
+  tags?: string[];
+  simplify_error?: number;
+}
+
+export interface PatternPreview {
+  points: CurvePoint[];
+  samples: CurvePoint[];
+  cycle_ms: number;
+  original_count: number;
+  simplified_count: number;
+}
+
+export interface LibrarySummary {
+  pattern_count: number;
+  enabled_pattern_count: number;
+  program_count: number;
+  auto_disable: boolean;
 }
 
 export interface VoiceSettings {
@@ -320,6 +399,7 @@ export interface AppState {
   llm?: Record<string, unknown>;
   voice?: VoiceState;
   chat?: { latest_seq?: number };
+  library?: LibrarySummary;
   transport?: Record<string, unknown>;
   cloud_transport?: Record<string, unknown>;
   bluetooth_transport?: Record<string, unknown>;

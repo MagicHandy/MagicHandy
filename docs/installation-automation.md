@@ -39,7 +39,8 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
 - **External LLM by design:** the app talks to llama.cpp or Ollama; model paths
   and provider are set in Settings > Model. The core never downloads a model on
   startup.
-- **Local data:** settings, memory, and prompt sets in a local SQLite DB; the
+- **Local data:** settings, memory, prompt sets, chat history, patterns,
+  programs, and preference feedback in a local SQLite DB; the
   Handy connection key is stored locally and never echoed back.
 
 ## Gaps vs the target

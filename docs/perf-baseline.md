@@ -9,10 +9,11 @@ core number.
 
 - Date: 2026-06-30 (Go idle), 2026-07-01 (Python baseline),
   2026-07-02 (Go active Cloud REST short run and one-hour soak; Browser
-  Bluetooth UI/chat hardware run), 2026-07-06 (Phase 11B SQLite persistence)
+  Bluetooth UI/chat hardware run), 2026-07-06 (Phase 11B SQLite persistence),
+  2026-07-11 (Phase 14 pattern library and rendered UI)
 - OS and architecture: Windows / amd64
-- Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for the Phase 11B
-  SQLite re-measure
+- Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for Phase 11B and
+  Phase 14 measurements
 - Python runtime: CPython 3.11 in the StrokeGPT-ReVibed `.venv`
 
 ## Measurements
@@ -25,6 +26,7 @@ core number.
 | MagicHandy Go core active, Cloud REST one-hour soak | Phase 9B soak-evidence working tree | temp `CGO_ENABLED=0` binary under `.tmp-phase9b-soak`, Cloud REST configured with real Handy, `POST /api/motion/start` at 25%, `GET /api/motion/events` held open, one sample per minute, deterministic chat `stop` cleanup | No browser window; HTTP API exercised the app endpoints and SSE stream | Yes; measured only the `magichandy` PID, excluding the PowerShell supervisor/SSE reader and direct-stop cleanup helper | 18.41-20.16 MB (19,300,352-21,139,456 bytes) across 56 warmed samples from 302s through 3600s | 20.16 MB (21,139,456 bytes) | 61 total samples from 2s through 3600s; all samples reported `running=true` at 25%; SSE log recorded 28,800 lines with 14,392 running events; warmed RSS range grew 9.53%, within the +20% Phase 9B gate; chat `stop`, motion stop, Cloud stop, and direct cleanup Stop all completed. |
 | MagicHandy Go core active, Browser Bluetooth UI/chat short run | Phase 9B Browser Bluetooth readiness/play patch working tree | temp binary under `.tmp-phase9b-manual`, running on `127.0.0.1:49736` with dispatch owner `browser_bluetooth`; Edge Web Bluetooth selected `OHD_hw0_29b3243120f4`; visible UI Start at 28%, deterministic chat `stop`, then a repeat UI Start/Stop for RSS samples | Yes; the user's running Edge profile owned the BLE GATT link | Yes; measured only the `magichandy` PID, excluding Edge, Codex, and automation helpers | First run active sample 17.23 MB (18,063,360 bytes; post-chat-stop 18,071,552 bytes). Repeat active RSS 17.52-17.53 MB (18,374,656-18,378,752 bytes) across 3 samples | Not measured separately | Visible Check connection returned `Connected: HSP ready / Unknown / 0 ms` without queuing `hsp/state`. First run: UI Start sent `stroke_window` 97 ms, `hsp_add` 236 ms, `hsp_play` 176 ms, all `browser_ack`; chat `stop` returned `Stopping motion.` and Stop ACKed in 163 ms. Repeat run: `stroke_window` 80 ms, `hsp_add` 235 ms, `hsp_play` 116 ms, UI Stop 71 ms. Speed remained 28%, below the 40% automated-test cap. |
 | MagicHandy Go core idle/API-read, SQLite persistence | Phase 11B SQLite working tree | `CGO_ENABLED=0 go build` under `%TEMP%\magichandy-phase11b-budget-*`; stripped binary run with `-addr 127.0.0.1:49750 -data-dir %TEMP%\magichandy-phase11b-budget-*\data-stripped`; `/healthz` for idle, then `/api/state`, `/api/settings`, `/api/memory`, `/api/prompt-sets` for DB-backed reads | No browser window; HTTP API exercised by `Invoke-WebRequest` | Yes; measured only the `magichandy-stripped` PID | Idle after `/healthz`: 54.13 MB (54,132,736 bytes) across 3 warmed samples. After DB-backed API reads: 54.36 MB (54,362,112 bytes) across 3 samples | Not measured separately | Binary size re-measured separately: 17.92 MB plain (17,916,928 bytes) / 12.32 MB stripped (12,319,744 bytes). Stripped binary remains under the <30 MB size budget; RSS exceeds the original <40 MB idle target and is recorded as the Phase 11B SQLite waiver in `docs/goal-scorecard.md`. |
+| MagicHandy Go core idle/library reads, Phase 14 | Phase 14 review working tree | plain and `-ldflags "-s -w"` builds under `%TEMP%\MagicHandy-phase14-budget`; fresh stripped binary with isolated data dir; `/healthz` for idle, then five `GET /api/library` reads | No browser window; HTTP API exercised by `Invoke-WebRequest` | Yes; measured only the stripped MagicHandy PID | Idle after `/healthz`: 52.49 MiB (55,042,048 bytes) across 3 equal samples. After library reads: 52.99 MiB (55,562,240 bytes) across 3 equal samples | Not measured separately | Plain binary 18,464,256 bytes; stripped binary 12,766,208 bytes. Embedded JS is 250,740 bytes / 74,321 gzip; CSS 26,797 / 6,212 gzip; combined gzip 80,533 bytes (+8,174, +11.3% from Phase 13). No model or voice worker loaded. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -96,6 +98,34 @@ Still required (Phase 9B):
   active RSS range above. Logs were written under `.tmp-phase9b-manual/` for
   the local validation session; they are not committed because they are run
   artifacts.
+
+## Phase 14 Rendered UI Evidence
+
+- A temporary isolated-data server exercised the real embedded React build with
+  fake transport at 1280 px and 390×844. Browse enablement/weights, Program
+  import/player layout, freehand Author drawing/edit/save, backend preview, and
+  Training rate/undo/auto-disable interactions were all operated in the DOM.
+- Freehand drawing produced 13 source points, 14 saved knots including closure,
+  and 246 backend preview samples. The rendered curve was nonblank and the saved
+  pattern appeared in Browse/Training.
+- Training changed a weight by +0.15 and exact undo restored 1.00 with the ledger
+  visibly marked undone. Auto-disable was switched on and back off.
+- The first 390 px pass found that `.library-shell` could flex-shrink inside the
+  route and clip the Training preference column. Making the route panel content-
+  sized fixed it; all tabs then had no horizontal overflow, their final controls
+  were reachable above the fixed footer, and the browser console was clean.
+- This pass proves UI behavior and backend-sampler agreement over fake transport.
+  It does not replace the capped real-device feel check for the generated
+  routine floor or imported content.
+- 2026-07-11 hardware follow-up: the final embedded build was opened in the
+  user's Edge window with an isolated schema-v8 data directory, Browser
+  Bluetooth selected, and `speed_max_percent` capped at 35. Edge's chooser
+  scanned for five seconds but reported no compatible device advertisement, so
+  it was cancelled and **no motion command was sent**. The same build's Browse
+  view rendered cleanly at 1027×702; accessibility exposed a named tab list,
+  four selectable tabs, a Browse tab panel, labeled toggles, and backend-sampled
+  curve graphics. Real-device Phase 14 feel evidence remains open until the
+  device advertises again.
 
 ## Procedure
 

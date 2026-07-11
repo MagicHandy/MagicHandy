@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for the rewrite plan. Implemented in Phase 11B.
+Accepted for the rewrite plan. Implemented in Phase 11B; extended through
+schema v8 by Phase 14.
 
 ## Context
 
@@ -66,7 +67,10 @@ only their durability substrate moves from JSON files to DB tables.
   - (landed with the Phase 13 delivery-ordering foundation, schema v2) a
     `messages` shared chat log and `client_cursors` per-client
     cursors (ADR 0003).
-  - (Phase 14) `patterns`, `programs`, and `pattern_feedback`.
+  - (landed in Phase 14, schema v3) `patterns`, `programs`, and
+    `pattern_feedback`. Pattern points and tags are JSON payloads inside
+    relational catalog rows; finite programs stay in a separate table so a
+    media-timed script cannot be mistaken for a repeatable loop.
 - **Settings stays a versioned document**, stored as one row in a `settings`
   document/kv table rather than exploded into columns. This preserves the
   existing `Settings` struct, `NormalizeSettings`, the migration hooks, and the
@@ -99,6 +103,16 @@ three separate hand-written per-file version ints. Migrations are ordered and
 run inside a transaction at open. A schema newer than the binary is a clear,
 non-destructive error — never a silent downgrade.
 
+Phase 14 publishes schema v8 because the remote `Rockfire` branch had already
+used versions 1–7 for a divergent LSO-oriented schema. Versions 4–7 are reserved
+compatibility markers, and v8 is an idempotent reconciliation migration. It
+creates any missing canonical tables, converts the Rockfire integer-ID settings
+row to the canonical `id='current'` document row without losing its JSON or
+timestamp, and repairs the older `prompt_sets` shape. Rockfire-only tables such
+as motion blocks, funscript files, queues, personas, and UI layouts are left
+untouched for the explicit Phase 15/LSO importer; schema reconciliation does
+not guess at their semantics.
+
 ### One-time import from the JSON stores
 
 On first open where `settings.json`, `memories.json`, or `prompt_sets.json`
@@ -129,8 +143,8 @@ Positive:
 - One transactional store: atomic multi-row operations, one durability
   mechanism, one migration runner, one file to back up — replacing three
   bespoke atomic-write + version + recovery implementations.
-- The chat log (now landed) and Phase 14 library get a store shaped for them from
-  day one, so those phases do not each reinvent persistence.
+- The chat log and Phase 14 library use the same transaction and migration
+  substrate instead of inventing persistence per feature.
 - Still fully embedded and offline; still `CGO_ENABLED=0`; still one binary;
   cross-builds stay free.
 
@@ -148,6 +162,10 @@ Negative / deliberate trade-offs:
   packages, all pure-Go and permissively licensed). Accepted for what it buys.
 - A schema is now a migration surface — mitigated by forward-only `user_version`
   migrations, transactional open, and the non-destructive one-time import.
+- A divergent development branch consumed schema versions before merge. The v8
+  compatibility migration preserves its rows but intentionally does not expose
+  them as canonical library content until Phase 15 can produce a dry-run report
+  and explicit field mapping.
 - Pure-Go SQLite is slower than the C build. For this workload (small
   settings/memory/prompt data and a local chat log) it is far more than
   adequate; the app is a single local operator, not a high-QPS service.

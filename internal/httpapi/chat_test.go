@@ -9,7 +9,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -132,6 +134,49 @@ func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	commands := fake.Commands()
 	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
 		t.Fatalf("last command = %+v, want stop", commands)
+	}
+}
+
+func TestChatSpeedOnlyTargetPreservesActiveProgram(t *testing.T) {
+	program := motion.ProgramDefinition{
+		ID: "active-program", Name: "Active program", DurationMillis: 1000,
+		Points: []motion.CurvePoint{{TimeMillis: 0}, {TimeMillis: 1000, PositionPercent: 100}},
+	}
+	speed := 25
+	target := (&Server{}).chatMotionTarget(&chat.MotionCommand{
+		Action: chat.MotionActionTarget, SpeedPercent: &speed,
+	}, motion.ActiveMotionState{
+		Running: true,
+		Target: motion.MotionTarget{
+			ProgramID: program.ID, Program: &program, SpeedPercent: 30,
+		},
+	})
+	if target.ProgramID != program.ID || target.Program == nil || target.PatternID != "" {
+		t.Fatalf("speed-only target replaced active program: %+v", target)
+	}
+	if target.SpeedPercent != speed {
+		t.Fatalf("speed-only target speed = %d, want %d", target.SpeedPercent, speed)
+	}
+}
+
+func TestChatNoneLeavesActiveMotionUnchanged(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	t.Cleanup(server.Close)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
+	engine := server.currentMotionEngine()
+	before := engine.Snapshot()
+	dispatch, err := server.dispatchChatMotion(context.Background(), &chat.MotionCommand{Action: chat.MotionActionNone})
+	if err != nil {
+		t.Fatalf("dispatch none: %v", err)
+	}
+	if dispatch.Applied {
+		t.Fatalf("none dispatch was marked applied: %+v", dispatch)
+	}
+	after := engine.Snapshot()
+	if !after.Running || after.Generation != before.Generation || after.PlanID != before.PlanID ||
+		after.Target.PatternID != before.Target.PatternID || after.Target.SpeedPercent != before.Target.SpeedPercent {
+		t.Fatalf("none action changed active motion: before=%+v after=%+v", before, after)
 	}
 }
 

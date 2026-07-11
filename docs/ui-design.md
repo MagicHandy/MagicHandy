@@ -113,8 +113,8 @@ with Save reachable.
 the control column holds Controls (Freestyle, Pause/Resume + run readout,
 keepalive), Quick settings (immediate-apply), the testing-badged Manual
 motion group, and the motion visualizer. `#/modes` hosts Preset Modes
-(Freestyle now, Autopilot when its planner lands), `#/library` is the
-labeled Pattern Library placeholder until Phase 14, and
+(Freestyle now, Autopilot when its planner lands), `#/library` hosts the
+Phase 14 Browse / Programs / Author / Training workspace, and
 `#/settings/device|model|voice|prompts|diagnostics` are sibling sections of
 the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the
@@ -409,16 +409,27 @@ shows the Esc shortcut. Pause/resume remains Phase 11 because it needs
 phase-preserving engine state. Reset to defaults remains Phase 10 with the
 settings UI. Server-side chat continuity remains Phase 12 with ADR 0003.
 
+### Phase 14 library implementation
+
+The library closes the planned pattern/training/player surface without copying
+the reference app's visual density or creating a second motion model. Browse
+exposes enabled state and visible weights; Programs keeps finite funscripts
+separate from loops; Author reduces freehand input to editable knots; Training
+auditions the same enabled catalog with original/smooth/crisp feel choices and
+reversible ratings. Every rendered curve comes from backend preview samples
+produced by the playback interpolator. Playback controls remain controller-
+gated, Stop remains outside the route, and program intensity is capped by the
+backend settings envelope.
+
 ### Not yet built — planned, not regressions
 
-Modes and their affordances (mode buttons, "I'm close", mood/timer, sequence
-log — Phase 11), memory and prompt library UI (Phase 10), voice input/output
-controls (Phases 12-13), pattern library, training studio, program player and
-feedback buttons (Phase 14), migration/setup wizard (Phase 15/17), Ollama/GGUF
-model catalog UI (`docs/model-management.md`), multi-tab controller
-enforcement (Phase 9B — stronger than the old app's warning banner), the
-bounded speed-test button and live device-position layer (post-parity
-backlog).
+Still planned rather than regressed: the Autopilot planner and its richer mode
+events (including "I'm close"), migration/setup wizard (Phase 15/17),
+Ollama/GGUF model catalog UI (`docs/model-management.md`), the bounded
+speed-test button, raw-model diagnostics, and live device-position layer
+(post-parity backlog). Modes, memory/prompts, voice controls, multi-tab
+controller enforcement, and the Phase 14 pattern/training/player surface have
+landed.
 
 ### Second parity sweep (2026-07-09)
 
@@ -429,7 +440,8 @@ placement decided up front (`docs/legacy-parity-sweep-2026-07.md` §E/§F):
 - a speak-replies quick toggle in the **Chat control column** (the status
   bar stays status-only, so the legacy "top-bar voice toggle" moves there);
 - a scrolling motion-history readout fed by the trace ring — a readout,
-  never a control, revisited with the Phase 14 library UI;
+  never a control; the library kept this out of the authoring surface, so it
+  remains a diagnostics follow-up;
 - a per-slider "test this speed for ~3 s" affordance on the speed bounds;
 - raw-LLM-output visibility at the highest diagnostics verbosity
   (display-only, never persisted into history).
@@ -444,10 +456,12 @@ single motion path with no per-source divergence; trace export as one click.
 
 ## Deferred And Open
 
-- The framework choice stays deferred per ADR 0004 (default: none); revisit at
-  Phase 8 only if the minimal modular approach strains.
-- The pattern authoring UI (Phase 14) is the largest UI risk and may remain
-  partial at the Phase 17 parity review; it must still obey these principles.
+- Real-device validation must confirm that the 6.6 s routine floor and backend
+  preview produce the intended physical feel; browser screenshots and fake-
+  transport tests cannot establish that.
+- Advanced authoring history/transforms and multi-pattern sequencing remain
+  deliberately out of Phase 14. Any future editor must preserve backend-owned
+  sampling and shared-engine playback.
 
 ## Relationship To Other Docs
 

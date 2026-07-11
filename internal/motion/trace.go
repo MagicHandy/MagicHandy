@@ -10,22 +10,27 @@ import (
 
 func (e *Engine) snapshotLocked() ActiveMotionState {
 	state := ActiveMotionState{
-		Running:          e.running,
-		Paused:           e.paused,
-		RunningMillis:    e.runningMillisLocked(),
-		Generation:       e.generation,
-		StreamID:         e.streamID,
-		PlanID:           e.plan.ID,
-		Target:           cloneMotionTarget(e.plan.Target),
-		Settings:         e.settings,
-		NextSampleMillis: e.nextSampleMillis,
-		LastError:        redactedError(e.lastError),
+		Running:                    e.running,
+		Completing:                 e.completing,
+		Paused:                     e.paused,
+		RunningMillis:              e.runningMillisLocked(),
+		Generation:                 e.generation,
+		StreamID:                   e.streamID,
+		PlanID:                     e.plan.ID,
+		Target:                     cloneMotionTarget(e.plan.Target),
+		Settings:                   e.settings,
+		NextSampleMillis:           e.nextSampleMillis,
+		RecentCommandLatencyMillis: e.recentCommandLatencyMillisLocked(),
+		LastError:                  redactedError(e.lastError),
 	}
 	if !e.startedAt.IsZero() {
 		state.StartedAt = e.startedAt.UTC().Format(timeFormatRFC3339Nano)
 	}
 	if e.plan.ID != "" {
-		state.Phase = e.plan.PhaseAt(e.nextSampleMillis)
+		state.Phase = e.frozenPhase
+		if e.running {
+			state.Phase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
+		}
 	}
 	if e.lastSample != nil {
 		sample := *e.lastSample
@@ -89,6 +94,8 @@ func (e *Engine) traceRetargetLocked(
 			NextPlanID:                      next.ID,
 			PreviousPatternIdentifier:       string(previous.PatternID),
 			NextPatternIdentifier:           string(next.PatternID),
+			PreviousProgramIdentifier:       previous.ProgramID,
+			NextProgramIdentifier:           next.ProgramID,
 			PreviousTarget:                  traceTarget(previous.Target, previousSettings),
 			NextTarget:                      traceTarget(next.Target, nextSettings),
 			EstimatedCurrentPositionPercent: current.PositionPercent,
@@ -167,6 +174,7 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		StrokeMaxPercent:  settings.StrokeMaxPercent,
 		ReverseDirection:  settings.ReverseDirection,
 		PatternIdentifier: string(target.PatternID),
+		ProgramIdentifier: target.ProgramID,
 	}
 	if target.AreaFocus != nil {
 		trace.AreaMinPercent = target.AreaFocus.MinPercent
@@ -187,6 +195,15 @@ func cloneMotionTarget(target MotionTarget) MotionTarget {
 	if target.SoftAnchor != nil {
 		anchor := *target.SoftAnchor
 		target.SoftAnchor = &anchor
+	}
+	if target.Pattern != nil {
+		definition := clonePatternDefinition(*target.Pattern)
+		target.Pattern = &definition
+	}
+	if target.Program != nil {
+		definition := *target.Program
+		definition.Points = append([]CurvePoint(nil), target.Program.Points...)
+		target.Program = &definition
 	}
 	return target
 }

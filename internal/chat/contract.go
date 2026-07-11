@@ -30,11 +30,30 @@ type AssistantResponse struct {
 type MotionCommand struct {
 	Action       string `json:"action"`
 	PatternID    string `json:"pattern_id,omitempty"`
+	Intensity    *int   `json:"intensity,omitempty"`
 	SpeedPercent *int   `json:"speed_percent,omitempty"`
+}
+
+// PatternChoice is one enabled library entry exposed to the model as data.
+type PatternChoice struct {
+	ID          string
+	Name        string
+	Description string
+	Tags        []string
+	Weight      float64
 }
 
 // ParseAssistantResponse validates one strict JSON response from the model.
 func ParseAssistantResponse(raw string) (AssistantResponse, error) {
+	return parseAssistantResponse(raw, defaultPatternChoices(), false)
+}
+
+// ParseAssistantResponseWithPatterns accepts only the supplied enabled IDs.
+func ParseAssistantResponseWithPatterns(raw string, patterns []PatternChoice) (AssistantResponse, error) {
+	return parseAssistantResponse(raw, patterns, true)
+}
+
+func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool) (AssistantResponse, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return AssistantResponse{}, errors.New("assistant response is empty")
@@ -50,13 +69,13 @@ func ParseAssistantResponse(raw string) (AssistantResponse, error) {
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return AssistantResponse{}, errors.New("assistant response must contain exactly one JSON object")
 	}
-	if err := validateAssistantResponse(&response); err != nil {
+	if err := validateAssistantResponse(&response, patterns, curation); err != nil {
 		return AssistantResponse{}, err
 	}
 	return response, nil
 }
 
-func validateAssistantResponse(response *AssistantResponse) error {
+func validateAssistantResponse(response *AssistantResponse, patterns []PatternChoice, curation bool) error {
 	response.Reply = strings.TrimSpace(response.Reply)
 	if response.Reply == "" {
 		return errors.New("assistant response reply is required")
@@ -72,26 +91,53 @@ func validateAssistantResponse(response *AssistantResponse) error {
 	default:
 		return fmt.Errorf("unknown motion action %q", response.Motion.Action)
 	}
-	if response.Motion.PatternID != "" && !validPatternID(response.Motion.PatternID) {
+	if response.Motion.PatternID != "" && !allowedPatternID(response.Motion.PatternID, patterns) {
 		return fmt.Errorf("unknown motion pattern %q", response.Motion.PatternID)
 	}
-	if response.Motion.SpeedPercent != nil {
-		speed := *response.Motion.SpeedPercent
-		if speed < 1 || speed > 100 {
-			return errors.New("motion speed_percent must be between 1 and 100")
-		}
+	if err := validateMotionRanges(*response.Motion); err != nil {
+		return err
 	}
-	if response.Motion.Action == MotionActionNone && (response.Motion.PatternID != "" || response.Motion.SpeedPercent != nil) {
-		return errors.New("motion action none cannot include target fields")
+	return validateMotionCombination(*response.Motion, curation)
+}
+
+func validateMotionRanges(command MotionCommand) error {
+	if command.Intensity != nil && (*command.Intensity < 1 || *command.Intensity > 100) {
+		return errors.New("motion intensity must be between 1 and 100")
+	}
+	if command.SpeedPercent != nil && (*command.SpeedPercent < 1 || *command.SpeedPercent > 100) {
+		return errors.New("motion speed_percent must be between 1 and 100")
 	}
 	return nil
 }
 
-func validPatternID(patternID string) bool {
-	switch patternID {
-	case "stroke", "pulse", "tease":
-		return true
-	default:
-		return false
+func validateMotionCombination(command MotionCommand, curation bool) error {
+	if command.PatternID == "" && command.Intensity != nil {
+		return errors.New("motion intensity requires an enabled pattern_id")
 	}
+	if command.PatternID != "" && curation && command.Intensity == nil && command.SpeedPercent == nil {
+		return errors.New("curated pattern_id requires intensity")
+	}
+	if command.Intensity != nil && command.SpeedPercent != nil {
+		return errors.New("motion cannot include both intensity and speed_percent")
+	}
+	if command.Action == MotionActionNone && (command.PatternID != "" || command.Intensity != nil || command.SpeedPercent != nil) {
+		return errors.New("motion action none cannot include target fields")
+	}
+	if command.Action == MotionActionStop && (command.PatternID != "" || command.Intensity != nil || command.SpeedPercent != nil) {
+		return errors.New("motion action stop cannot include target fields")
+	}
+	return nil
+}
+
+func allowedPatternID(patternID string, patterns []PatternChoice) bool {
+	for _, pattern := range patterns {
+		if strings.EqualFold(strings.TrimSpace(pattern.ID), patternID) {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultPatternChoices() []PatternChoice {
+	return []PatternChoice{{ID: "stroke"}, {ID: "pulse"}, {ID: "tease"}}
 }

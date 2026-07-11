@@ -148,8 +148,9 @@ its backend source or local-only reason, it probably should not own that state.
 4. **Add Preset Modes placeholder/first implementation.** Relocate Freestyle and
    style selection. Add Autopilot UI only when the backend contract exists; until
    then render disabled/coming-soon with a clear reason.
-5. **Add Pattern Library empty state.** Link exists but is clearly labeled as
-   Phase 14 until backend/API support lands.
+5. **Add Pattern Library.** The interim empty state shipped with the shell and
+   was replaced in Phase 14 by Browse, Programs, Author, and Training backed by
+   the canonical library API.
 6. **Retire legacy files only after parity tests pass.** Remove old vanilla JS
    assets from embedding once React tests cover their safety-critical behavior.
 

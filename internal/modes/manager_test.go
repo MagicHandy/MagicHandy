@@ -113,6 +113,19 @@ func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Fatal("condition not reached in time")
 }
 
+func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := &Manager{options: Options{Now: clock.Now}}
+	manager.armSegment(Segment{DurationMillis: 1000}, 9000)
+	if got := manager.deadline.Sub(clock.Now()); got != 9750*time.Millisecond {
+		t.Fatalf("latency dwell = %s, want 9.75s", got)
+	}
+	manager.armSegment(Segment{DurationMillis: 1000}, 30000)
+	if got := manager.deadline.Sub(clock.Now()); got != maximumLatencyDwell {
+		t.Fatalf("capped latency dwell = %s, want %s", got, maximumLatencyDwell)
+	}
+}
+
 func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}

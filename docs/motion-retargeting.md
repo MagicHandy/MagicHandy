@@ -42,7 +42,7 @@ The shared path must:
   pattern-local speed
 - split large depth jumps and protect against oversized single steps
 - smooth turn apexes and direction reversals
-- sample with monotone, position-parameterized interpolation (PCHIP /
+- sample with wall-time-parameterized monotone interpolation (PCHIP /
   Fritsch-Carlson style) that yields an exact zero-velocity instant at reversal
   knots; do not use an index/phase-parameterized Catmull-Rom spline, which
   reintroduces instantaneous velocity at reversals
@@ -51,6 +51,27 @@ The shared path must:
 
 A new motion source is added by producing a semantic target/plan for this path,
 never by building a parallel sampler or transport path.
+
+### Phase 14 content semantics
+
+Phase 14 adds two content shapes to the shared path:
+
+- A **pattern** is a repeatable curve authored over a semantic 0–100 relative
+  span. The motion engine samples its wall-clock knots with PCHIP, then the
+  transport maps that semantic result into the configured stroke window exactly
+  once. The library never preprojects points into the physical window.
+- A **program** is a finite curve that retains its original knot timing and
+  relative spacing. The player uniformly scales that timeline through the same
+  bounded intensity/speed control used by the engine; it does not rewrite or
+  loop the imported actions. Reaching its final knot causes an engine-owned
+  explicit Stop; the completed phase remains 1.0 for an honest readout, and a
+  new Start is rejected until that Stop returns.
+
+Routine patterns are stretched in time to a 6600 ms minimum cycle while burst
+patterns retain a 500 ms floor. This changes time only, never amplitude. The
+generated catalog is checked against wall-clock acceleration and reversal-gap
+budgets. Stopped or paused playback freezes semantic phase instead of allowing
+the UI estimate to advance while no motion is commanded.
 
 ## Route Policy Learned On Hardware
 
@@ -259,6 +280,10 @@ connection key.
 - Browser Bluetooth is still a dispatch-owner bridge, not the source of motion
   behavior. The experimental Python Bluetooth motion path from ReVibed is not
   treated as a reference implementation because its physical motion was poor.
+- Pattern and program sampling now uses the Phase 14 PCHIP implementation and
+  shared engine path. Automated curve, projection, completion, stop, and
+  lifecycle checks pass; the 6.6 s routine floor still needs a capped
+  real-device feel check because that threshold was hardware-derived.
 - Recovery currently stops and reports unhealthy playback states when the
   transport reports paused, starved, rejected, or stale playback. More nuanced
   resume/play recovery can be added after real-device traces prove the state

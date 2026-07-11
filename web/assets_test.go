@@ -55,6 +55,14 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 		"Speak chat replies",
 		"Hold to talk",
 		"/api/voice/transcriptions",
+		// Phase 14 library/import/authoring/training must ship in the one
+		// canonical embedded frontend, not only in source components.
+		"/api/library",
+		"Deterministic fallback active",
+		"Backend preview",
+		"Saved knots",
+		"Import file",
+		"Auto-disable at low weight",
 	} {
 		if !strings.Contains(js, fragment) {
 			t.Fatalf("built bundle missing critical string %q", fragment)
@@ -63,6 +71,9 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 	// The old oversized-round-bubble status class must not come back.
 	if strings.Contains(js, "status-pill") {
 		t.Fatal("built bundle contains status-pill; status readouts must be compact dot+text, not round pills")
+	}
+	if strings.Contains(js, "Coming in Phase 14") {
+		t.Fatal("built bundle still contains the retired Phase 14 placeholder")
 	}
 }
 
