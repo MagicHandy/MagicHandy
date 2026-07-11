@@ -31,8 +31,8 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20) |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target; largest current file is `internal/config/settings.go` at 781 lines. Phase 14 is isolated in `internal/patterns` rather than added to the engine/server as a god-module. |
-| Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. Phase 14 components are split by Browse/Programs/Author/Training; its 525-line `library.css` was separated from the 783-line shared `components.css`. `web/dist` remains the single shipped build. |
+| Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target. Model inventory, Ollama scanning, and copy jobs are split across focused `internal/llm` files (largest new file: 485 lines) rather than added to the provider adapter or HTTP server. |
+| Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. The 452-line model panel and 303-line model stylesheet are separate from the routed Settings shell and shared controls; `web/dist` remains the single shipped build. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` enforces 800-line defaults for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 13.8 are merged by PR; the Phase 14 branch carries code, tests, rendered UI evidence, migrations, risk updates, and budget measurements together. |
@@ -45,8 +45,8 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 14 stripped build idles at 52.49 MiB after `/healthz`, slightly below the Phase 11B 54.13 MB sample but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
-| Go core active RSS | < 80 MB | **Met** | Phase 14 measured 52.99 MiB after repeated `/api/library` reads. This is an API-read sample, not a new real-device active run; earlier real-device samples remain 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth before SQLite. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Model-manager stripped build idles at 52.65 MiB after `/healthz`, close to the Phase 14 52.49 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
+| Go core active RSS | < 80 MB | **Met** | Model-manager reads settle at 52.83 MiB after repeated `/api/llm/models` calls. This is an API-read sample, not a new real-device active run; earlier real-device samples remain 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth before SQLite. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
 
 Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Phase 14: 18,464,256 bytes plain and 12,766,208 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Model-manager build: 18,744,320 bytes plain and 12,969,472 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 411 / 518 / 522 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which inflates the number). Sits at the boundary; re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -96,12 +96,21 @@ Ranked by threat to the stated goals:
 2. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
-3. **Feature growth vs binary/memory/browser budgets.** Phase 14 remains within
-   binary/RSS limits covered by the SQLite waiver, but adds 8,022 gzip bytes to
-   the embedded UI (80,533 total, +11.3% from Phase 13). Re-measure at each
-   later phase so model management and migration UI growth stays explicit.
+3. **Feature growth vs binary/memory/browser budgets.** The model manager raises
+   the embedded JS+CSS payload from 80,533 to 84,517 gzip bytes (+3,984 / 4.9%)
+   and the stripped binary from 12,766,208 to 12,969,472 bytes (+203,264 / 1.6%).
+   It remains within the binary budget; re-measure after curated downloads and
+   setup-wizard UI rather than assuming this growth stays flat.
 
 ## History
+
+- **2026-07-11** — LLM model-manager foundation: schema v9 adds managed-model
+  metadata; explicit GGUF and configurable Ollama-library imports copy into a
+  private store with SHA-256 verification, cancellation, deduplication, and
+  selected-model removal protection. The provider list no longer depends on a
+  valid selected Ollama model. The rendered Model screen was checked at 1280px
+  and 390px widths; a real Windows Ollama library and daemon each reported the
+  same 16 models without starting a model copy.
 
 - **2026-07-11** — Phase 14 complete on the review branch: generated built-in
   patterns, user patterns, finite programs, MagicHandy share files and bounded

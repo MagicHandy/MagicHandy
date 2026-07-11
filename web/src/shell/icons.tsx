@@ -118,3 +118,11 @@ export const ClearIcon = ({ size = 18, className }: P) => (
     <path d="m10 9 5 5" />
   </svg>
 );
+export const RefreshIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M20 6v5h-5" />
+    <path d="M4 18v-5h5" />
+    <path d="M18.5 10a7 7 0 0 0-12-3L4 11" />
+    <path d="M5.5 14a7 7 0 0 0 12 3l2.5-4" />
+  </svg>
+);

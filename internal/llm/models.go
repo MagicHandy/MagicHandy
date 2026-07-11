@@ -1,0 +1,335 @@
+package llm
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
+)
+
+const (
+	// ModelSourceGGUF identifies a user-selected standalone GGUF file.
+	ModelSourceGGUF = "gguf"
+	// ModelSourceOllama identifies a GGUF copied from an Ollama library.
+	ModelSourceOllama = "ollama"
+
+	modelStateReady   = "ready"
+	modelStateMissing = "missing"
+	modelStateChanged = "changed"
+	stalePartialAge   = 24 * time.Hour
+)
+
+var (
+	// ErrModelNotFound reports a missing managed model record.
+	ErrModelNotFound = errors.New("managed model not found")
+	// ErrModelSelected prevents deleting the model selected by settings.
+	ErrModelSelected = errors.New("selected model cannot be removed")
+	// ErrImportNotFound reports an unknown in-memory import job.
+	ErrImportNotFound = errors.New("model import not found")
+)
+
+// ModelRecord is one managed llama.cpp-compatible model copy.
+type ModelRecord struct {
+	ID            string `json:"id"`
+	DisplayName   string `json:"display_name"`
+	Provider      string `json:"provider"`
+	Source        string `json:"source"`
+	SourceName    string `json:"source_name,omitempty"`
+	Format        string `json:"format"`
+	Family        string `json:"family,omitempty"`
+	ParameterSize string `json:"parameter_size,omitempty"`
+	Quantization  string `json:"quantization,omitempty"`
+	SizeBytes     int64  `json:"size_bytes"`
+	SHA256        string `json:"sha256"`
+	ModelPath     string `json:"model_path"`
+	License       string `json:"license,omitempty"`
+	ImportedAt    string `json:"imported_at"`
+	UpdatedAt     string `json:"updated_at"`
+	State         string `json:"state"`
+	Message       string `json:"message,omitempty"`
+}
+
+// ModelSnapshot is the backend-authoritative model-manager view.
+type ModelSnapshot struct {
+	Models    []ModelRecord `json:"models"`
+	Imports   []ImportJob   `json:"imports"`
+	StorePath string        `json:"store_path"`
+}
+
+// ModelManager owns durable model metadata and managed file imports.
+type ModelManager struct {
+	db           *dbstore.DB
+	modelsDir    string
+	downloadsDir string
+
+	mu     sync.Mutex
+	jobs   map[string]*modelImportJob
+	closed bool
+	wg     sync.WaitGroup
+}
+
+// OpenModelManager opens the inventory and prepares private model directories.
+func OpenModelManager(dataDir string) (*ModelManager, error) {
+	database, err := dbstore.Open(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("open model inventory: %w", err)
+	}
+	manager := &ModelManager{
+		db:           database,
+		modelsDir:    filepath.Join(database.DataDir(), "models", "gguf"),
+		downloadsDir: filepath.Join(database.DataDir(), "downloads"),
+		jobs:         make(map[string]*modelImportJob),
+	}
+	for _, directory := range []string{manager.modelsDir, manager.downloadsDir} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			_ = database.Close()
+			return nil, fmt.Errorf("create model directory: %w", err)
+		}
+	}
+	if err := manager.removeStalePartials(); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	return manager, nil
+}
+
+// Close cancels imports, waits for copy loops, and closes the inventory.
+func (m *ModelManager) Close() error {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.closed = true
+	for _, job := range m.jobs {
+		if job.cancel != nil {
+			job.cancel()
+		}
+	}
+	m.mu.Unlock()
+	m.wg.Wait()
+	return m.db.Close()
+}
+
+// Snapshot returns managed models and current/recent import jobs.
+func (m *ModelManager) Snapshot(ctx context.Context) (ModelSnapshot, error) {
+	models, err := m.List(ctx)
+	if err != nil {
+		return ModelSnapshot{}, err
+	}
+	return ModelSnapshot{
+		Models:    models,
+		Imports:   m.ImportJobs(),
+		StorePath: filepath.Dir(m.modelsDir),
+	}, nil
+}
+
+// List returns inventory rows with filesystem state checked cheaply by size.
+func (m *ModelManager) List(ctx context.Context) ([]ModelRecord, error) {
+	rows, err := m.db.SQL().QueryContext(ctx, `
+		SELECT id, display_name, provider, source, source_name, format, family,
+		       parameter_size, quantization, size_bytes, sha256, model_path,
+		       license, imported_at, updated_at
+		FROM llm_models
+		ORDER BY display_name, id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list managed models: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	models := make([]ModelRecord, 0)
+	for rows.Next() {
+		record, scanErr := scanModelRecord(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan managed model: %w", scanErr)
+		}
+		models = append(models, modelFileState(record))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read managed models: %w", err)
+	}
+	return models, nil
+}
+
+// Model returns one managed model by stable ID.
+func (m *ModelManager) Model(ctx context.Context, id string) (ModelRecord, error) {
+	record, err := scanModelRecord(m.db.SQL().QueryRowContext(ctx, `
+		SELECT id, display_name, provider, source, source_name, format, family,
+		       parameter_size, quantization, size_bytes, sha256, model_path,
+		       license, imported_at, updated_at
+		FROM llm_models WHERE id = ?
+	`, strings.TrimSpace(id)))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ModelRecord{}, ErrModelNotFound
+	}
+	if err != nil {
+		return ModelRecord{}, err
+	}
+	return modelFileState(record), nil
+}
+
+// Delete removes only a MagicHandy-owned model copy. The selected model is
+// protected so a running/configured provider never loses its backing file.
+func (m *ModelManager) Delete(ctx context.Context, id, selectedPath string) error {
+	record, err := m.Model(ctx, id)
+	if err != nil {
+		return err
+	}
+	if selectedPath != "" && samePath(record.ModelPath, selectedPath) {
+		return ErrModelSelected
+	}
+	modelDir := filepath.Dir(record.ModelPath)
+	if !pathWithin(m.modelsDir, modelDir) {
+		return errors.New("managed model path is outside the model store")
+	}
+	if err := os.RemoveAll(modelDir); err != nil {
+		return fmt.Errorf("remove managed model files: %w", err)
+	}
+	return m.db.WithTx(ctx, func(tx *sql.Tx) error {
+		result, deleteErr := tx.ExecContext(ctx, `DELETE FROM llm_models WHERE id = ?`, record.ID)
+		if deleteErr != nil {
+			return deleteErr
+		}
+		if affected, _ := result.RowsAffected(); affected == 0 {
+			return ErrModelNotFound
+		}
+		return nil
+	})
+}
+
+func (m *ModelManager) modelBySHA(ctx context.Context, digest string) (ModelRecord, bool, error) {
+	record, err := scanModelRecord(m.db.SQL().QueryRowContext(ctx, `
+		SELECT id, display_name, provider, source, source_name, format, family,
+		       parameter_size, quantization, size_bytes, sha256, model_path,
+		       license, imported_at, updated_at
+		FROM llm_models WHERE sha256 = ?
+	`, strings.TrimPrefix(strings.TrimSpace(digest), "sha256:")))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ModelRecord{}, false, nil
+	}
+	if err != nil {
+		return ModelRecord{}, false, err
+	}
+	return modelFileState(record), true, nil
+}
+
+func (m *ModelManager) insertModel(ctx context.Context, record ModelRecord) error {
+	return m.db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO llm_models(
+				id, display_name, provider, source, source_name, format, family,
+				parameter_size, quantization, size_bytes, sha256, model_path,
+				license, imported_at, updated_at
+			) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, record.ID, record.DisplayName, record.Provider, record.Source,
+			record.SourceName, record.Format, record.Family, record.ParameterSize,
+			record.Quantization, record.SizeBytes, record.SHA256, record.ModelPath,
+			record.License, record.ImportedAt, record.UpdatedAt)
+		return err
+	})
+}
+
+func (m *ModelManager) removeStalePartials() error {
+	entries, err := os.ReadDir(m.downloadsDir)
+	if err != nil {
+		return fmt.Errorf("read model downloads directory: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "model-import-") || !strings.HasSuffix(entry.Name(), ".partial") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect model import: %w", err)
+		}
+		if info.ModTime().After(time.Now().Add(-stalePartialAge)) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(m.downloadsDir, entry.Name())); err != nil {
+			return fmt.Errorf("remove stale model import: %w", err)
+		}
+	}
+	return nil
+}
+
+type modelScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanModelRecord(scanner modelScanner) (ModelRecord, error) {
+	var record ModelRecord
+	err := scanner.Scan(
+		&record.ID, &record.DisplayName, &record.Provider, &record.Source,
+		&record.SourceName, &record.Format, &record.Family, &record.ParameterSize,
+		&record.Quantization, &record.SizeBytes, &record.SHA256, &record.ModelPath,
+		&record.License, &record.ImportedAt, &record.UpdatedAt,
+	)
+	return record, err
+}
+
+func modelFileState(record ModelRecord) ModelRecord {
+	info, err := os.Stat(record.ModelPath)
+	switch {
+	case err != nil:
+		record.State = modelStateMissing
+		record.Message = "model file is unavailable"
+	case !info.Mode().IsRegular():
+		record.State = modelStateMissing
+		record.Message = "model path is not a regular file"
+	case info.Size() != record.SizeBytes:
+		record.State = modelStateChanged
+		record.Message = "model file size changed after import"
+	default:
+		record.State = modelStateReady
+	}
+	return record
+}
+
+func writeModelMetadata(path string, record ModelRecord) error {
+	record.State = ""
+	record.Message = ""
+	payload, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode model metadata: %w", err)
+	}
+	temporary := path + ".partial"
+	if err := os.WriteFile(temporary, append(payload, '\n'), 0o600); err != nil {
+		return fmt.Errorf("write model metadata: %w", err)
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return fmt.Errorf("commit model metadata: %w", err)
+	}
+	return nil
+}
+
+func samePath(left, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
+}
+
+func pathWithin(root, candidate string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil || relative == "." {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func nowText() string {
+	return time.Now().UTC().Format(time.RFC3339Nano)
+}

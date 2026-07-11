@@ -18,6 +18,11 @@ import type {
   PatternLibrary,
   PatternPreview,
   LibraryPattern,
+  LLMModelImport,
+  LLMModelManagerSnapshot,
+  LLMProviderStatus,
+  OllamaModelInfo,
+  OllamaModelScan,
   PatternFeedback,
   PublicSettings,
   SettingsUpdate,
@@ -142,9 +147,19 @@ export const api = {
   deletePromptSet: (id: string) => request<PromptSetsPayload>("DELETE", `/api/prompt-sets/${encodeURIComponent(id)}`),
 
   // LLM runtime.
-  llmStatus: () => request("GET", "/api/llm/status"),
-  llmLoad: () => request("POST", "/api/llm/load", {}),
-  llmUnload: () => request("POST", "/api/llm/unload", {}),
+  llmStatus: () => request<LLMProviderStatus>("GET", "/api/llm/status"),
+  llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
+  llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
+  llmModels: () => request<LLMModelManagerSnapshot>("GET", "/api/llm/models"),
+  ollamaModels: () => request<{ available: boolean; models: OllamaModelInfo[]; message?: string }>("GET", "/api/llm/ollama/models"),
+  scanOllamaModels: (path: string) => request<OllamaModelScan>("POST", "/api/llm/ollama/scan", { path }),
+  importOllamaModel: (path: string, candidate_id: string) =>
+    request<{ import: LLMModelImport }>("POST", "/api/llm/imports/ollama", { path, candidate_id }),
+  importGGUFModel: (path: string, display_name: string) =>
+    request<{ import: LLMModelImport }>("POST", "/api/llm/imports/gguf", { path, display_name }),
+  llmImport: (id: string) => request<{ import: LLMModelImport }>("GET", `/api/llm/imports/${encodeURIComponent(id)}`),
+  cancelLLMImport: (id: string) => request<{ import: LLMModelImport }>("DELETE", `/api/llm/imports/${encodeURIComponent(id)}`),
+  deleteLLMModel: (id: string) => request<null>("DELETE", `/api/llm/models/${encodeURIComponent(id)}`),
 
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),

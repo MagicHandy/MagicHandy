@@ -2,153 +2,162 @@
 
 ## Purpose
 
-MagicHandy will manage local LLMs deliberately instead of hiding model setup behind startup code. The quality-first path is managed llama.cpp on Windows/NVIDIA. Ollama remains the secondary cross-platform path for externally managed models.
+MagicHandy manages local LLM setup deliberately. Managed llama.cpp is the
+quality-first path; Ollama remains a first-class external provider. The model
+manager gives llama.cpp a durable inventory without making model downloads or
+runtime discovery part of startup.
 
-This document defines how model files, downloads, imports, runtime selection, and user-facing status should work.
+The inventory and local import foundation is implemented. Curated downloads,
+runner provisioning, and hardware-fit recommendations remain release work.
 
-## Provider Priority
+## Ownership Boundaries
 
-Default product direction:
-
-1. llama.cpp, when running on a supported Windows/NVIDIA setup with an installed compatible GGUF model.
-2. Ollama, when selected by the user or when llama.cpp is unavailable/unsupported.
-3. No local LLM, with clear setup actions, when neither provider is ready.
-
-Provider fallback must be visible. The app should not silently switch a running chat session from llama.cpp to Ollama or from Ollama to llama.cpp because that makes response quality, prompt behavior, and diagnostics hard to reason about.
+- `internal/llm.ModelManager` owns model records, managed copies, and import
+  jobs.
+- SQLite schema v9 owns model metadata in `llm_models`.
+- Model files live under the app data directory, outside SQLite.
+- The managed llama.cpp provider owns only its runner process. It receives the
+  selected model path from settings and exposes that model under a stable
+  `--alias`.
+- Ollama owns its daemon and library. MagicHandy may read its manifests and
+  blobs during an explicit import, but never modifies or deletes them.
+- Provider status and model listing never download or load a model.
 
 ## Model Records
 
-A model record should include:
+Each managed record includes:
 
-- stable ID
-- display name
-- provider compatibility (`llama.cpp`, `ollama`, or both when applicable)
-- source URL or repository
-- filename for GGUF models
-- quantization
-- file size
-- checksum
-- license and license URL
-- context window
-- expected system RAM and VRAM range
-- recommended runner/backend profile
-- JSON reliability notes
-- prompt-fit notes for MagicHandy chat and motion control
-- installed path or external model name
-- installed/downloaded/failed state
+- stable ID and display name
+- provider compatibility (currently `llama_cpp`)
+- source (`gguf` or `ollama`) and source model name
+- format, family, parameter size, and quantization when known
+- file size and SHA-256
+- managed file path
+- a short license label when present in the source manifest
+- import/update timestamps
+- computed file state (`ready`, `missing`, or `changed`)
 
-Keep the curated catalog small at first. A shorter list of models that work well is better than a broad list that produces malformed JSON or poor motion intent.
+The inventory is not a model-quality catalog. JSON reliability, prompt fit,
+license URLs, context limits, RAM/VRAM guidance, and curated source URLs belong
+to the later curated catalog.
 
 ## Storage Layout
 
-Recommended data layout:
-
 ```text
 data/
+  magichandy.db                 llm_models metadata (schema v9)
   models/
     gguf/
       <model-id>/
         model.gguf
         metadata.json
   downloads/
-    <download-id>.partial
-  model-index.json
-  model-install-state.json
+    model-import-<job-id>.partial
 ```
 
-The exact app-data root is decided by the config package, but model storage should stay separate from settings and logs so disk cleanup is understandable.
+Imports write to `downloads` on the same filesystem, flush the file, verify it,
+then rename it into the model store. Startup removes only model-import partials
+older than 24 hours, so another process starting on the same data directory
+does not immediately unlink an active copy.
 
-## Download Flow
+## Standalone GGUF Import
 
-Downloads are explicit user actions.
+The user provides a local file path and optional display name. MagicHandy:
 
-Required flow:
+1. requires a regular file with the `GGUF` magic header;
+2. starts an asynchronous, cancellable copy;
+3. computes SHA-256 while copying;
+4. commits the file and metadata atomically;
+5. deduplicates the inventory by SHA-256; and
+6. leaves the source file unchanged.
 
-1. User selects a model.
-2. UI shows size, license, expected hardware fit, and disk impact.
-3. User confirms download.
-4. App downloads to a temporary/incomplete file.
-5. App verifies checksum.
-6. App moves the verified file atomically into the model store.
-7. App records install metadata.
-8. User explicitly loads the model or enables auto-load for future startup.
+The selected model cannot be removed. Selection updates the managed llama.cpp
+model ID and path together, then follows the normal Save settings flow.
 
-Startup, provider status checks, diagnostics, and first chat must not trigger large model downloads.
+## Ollama Import
 
-## Import Flow
+The Model screen has an **Import from Ollama** disclosure. The library path is
+editable and persisted as `llm.ollama_models_path`; an empty value uses:
 
-Users can import an existing local GGUF file.
+1. `OLLAMA_MODELS`, when set;
+2. `~/.ollama/models` on Windows/macOS and when present on Linux; or
+3. `/usr/share/ollama/.ollama/models` on Linux.
 
-Import should:
+The scanner also accepts the parent `.ollama` directory and resolves its
+`models` child. This matches Ollama's documented storage and
+[`OLLAMA_MODELS`](https://docs.ollama.com/faq) behavior.
 
-- copy or register the file according to a clear user choice
-- calculate checksum
-- infer metadata where possible
-- require the user to fill missing license/source data if the model will be exported or shared in diagnostics
-- validate that the selected llama.cpp runner can at least attempt to load the file
+Ollama manifests reference content-addressed blobs. MagicHandy accepts a
+candidate only when:
 
-## llama.cpp Runner Handling
+- the manifest is bounded JSON schema 2;
+- exactly one `application/vnd.ollama.image.model` layer exists;
+- no separate adapter or projector layer is required;
+- the blob exists, has the manifest size, and starts with `GGUF`; and
+- the config reports GGUF when it reports a format.
 
-The llama.cpp provider should treat the runner as managed runtime state:
+Multi-layer/split models and models requiring auxiliary projector/adapter
+arguments are shown with an incompatibility reason. The managed provider does
+not silently drop those layers.
 
-- runner path
-- runner version
-- acceleration profile
-- launch arguments
-- selected model path
-- localhost port
-- process ID
-- health status
-- last stderr excerpt
-- last load error
+Import re-scans the candidate, copies its model blob, computes SHA-256, and
+requires an exact match with the manifest digest before commit. The Ollama
+source remains untouched. This intentionally duplicates disk use: directly
+pointing llama.cpp at a content-addressed Ollama blob would let an Ollama prune
+break MagicHandy's selected model and would not give MagicHandy ownership of
+the file lifecycle.
 
-The Go core starts and stops the runner process. It does not link libllama and does not require CGo.
+## Ollama Provider Model List
 
-The first supported target is Windows/amd64 with NVIDIA acceleration. Other llama.cpp backends can be added later behind the same provider contract.
+The external provider list comes from `GET /api/tags` through a five-second,
+non-loading request. It is independent of the selected model, so setup can list
+available Ollama models even when the current model name is invalid. The list
+includes name, size, format, family, parameter size, and quantization when the
+daemon reports them.
 
-## Ollama Handling
+## UI Contract
 
-Ollama is secondary and externally managed.
+Settings > Model shows:
 
-MagicHandy should:
+- saved runtime health and the provider's last status message;
+- provider-scoped fields only;
+- a model combobox backed by managed or daemon-reported models while retaining
+  a free-form external-provider escape hatch;
+- managed model rows with source, size, quantization, state, Use, and guarded
+  Remove actions;
+- standalone GGUF and Ollama import disclosures;
+- bounded Ollama candidate rows with filtering and compatibility reasons; and
+- copy progress, failure text, and cancellation.
 
-- connect to the configured Ollama host
-- list installed models
-- allow selecting an Ollama model
-- report daemon/model errors clearly
-- avoid trying to manage Ollama's internal model files directly
-- use the same chat, prompt, repair, malformed-response, and motion pathways as llama.cpp
+Runtime Load/Unload actions are available only for managed llama.cpp. They are
+controller-gated in both UI and HTTP and remain disabled while the settings
+form differs from the saved runtime configuration.
 
-## UI Requirements
+## Limits And Remaining Work
 
-The Model section should show:
+Implemented limits:
 
-- active provider
-- active model
-- provider health
-- installed llama.cpp GGUF models
-- curated downloadable llama.cpp models
-- import GGUF action
-- download progress and disk usage
-- load/unload controls
-- Ollama connection/model status
-- hardware-fit warnings
-- last runner or provider error
-- advanced runner args behind a disclosure control
+- at most 2,000 Ollama manifests per scan;
+- at most 1 MiB per manifest, 256 KiB per config/license blob;
+- model files bounded to 1 TiB as a defensive ceiling;
+- at most two concurrent copies and 64 recent in-memory import jobs;
+- no automatic downloads, startup scans, or source-library writes; and
+- recent import progress is process-local; completed model records are durable.
 
-Quality warnings should be direct. If a model is known to produce weak JSON or poor motion-control compliance, say so before the user chooses it.
+Still planned:
 
-## Diagnostics
+- checksum-pinned curated model downloads with license/source metadata;
+- llama.cpp runner provisioning and version/backend inventory;
+- RAM/VRAM and GPU-fit recommendations;
+- context-window and JSON-compliance scoring;
+- resumable downloads and persisted cross-restart import jobs; and
+- split-GGUF and auxiliary projector/adapter launch support if the managed
+  runner contract grows to support them safely.
 
-Diagnostics may include:
+## Diagnostics And Privacy
 
-- provider type and version
-- runner version
-- acceleration profile
-- selected model ID
-- model metadata
-- load/unload timings
-- prompt/response token counts when available
-- structured errors
-
-Diagnostics must not include full private chat logs, secrets, large prompt bodies, or model files.
+Diagnostics may include provider type, selected model ID, managed metadata,
+runner status/errors, import state, and load timings. They must not include
+model bytes, full private chat logs, prompt bodies, connection keys, or API
+keys. Local filesystem paths are operational metadata, not credentials, but
+exports should still avoid including unrelated paths.

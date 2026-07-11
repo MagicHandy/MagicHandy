@@ -80,37 +80,20 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 
 // Status checks Ollama daemon reachability without loading or downloading a model.
 func (p *OllamaProvider) Status(ctx context.Context) ProviderStatus {
-	ctx, cancel := checkedRequestContext(ctx, 5*time.Second)
-	defer cancel()
-
 	status := ProviderStatus{
 		Provider: ollamaProviderName,
 		BaseURL:  p.baseURL,
 		Model:    p.model,
 		Loaded:   true,
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/api/tags", nil)
+	installed, err := ListOllamaModels(ctx, p.baseURL, p.client)
 	if err != nil {
 		status.Message = err.Error()
 		return status
 	}
-	response, err := p.client.Do(request)
-	if err != nil {
-		status.Message = err.Error()
-		return status
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		status.Message = fmt.Sprintf("tags endpoint returned %d", response.StatusCode)
-		return status
-	}
-
-	models, err := decodeOllamaModels(response.Body)
-	if err != nil {
-		status.Message = err.Error()
-		return status
+	models := make([]string, 0, len(installed))
+	for _, model := range installed {
+		models = append(models, model.Name)
 	}
 	status.Models = models
 	status.ModelAvailable = modelListed(p.model, models)
@@ -121,6 +104,46 @@ func (p *OllamaProvider) Status(ctx context.Context) ProviderStatus {
 	}
 	status.Message = "ready"
 	return status
+}
+
+// OllamaModelInfo is one model reported by Ollama's non-loading tags endpoint.
+type OllamaModelInfo struct {
+	Name          string `json:"name"`
+	Model         string `json:"model,omitempty"`
+	ModifiedAt    string `json:"modified_at,omitempty"`
+	SizeBytes     int64  `json:"size_bytes"`
+	Digest        string `json:"digest,omitempty"`
+	Format        string `json:"format,omitempty"`
+	Family        string `json:"family,omitempty"`
+	ParameterSize string `json:"parameter_size,omitempty"`
+	Quantization  string `json:"quantization,omitempty"`
+}
+
+// ListOllamaModels lists daemon-managed models without requiring a selected
+// model and without loading or downloading model data.
+func ListOllamaModels(ctx context.Context, baseURL string, client *http.Client) ([]OllamaModelInfo, error) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return nil, errors.New("base URL for Ollama is required")
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+	ctx, cancel := checkedRequestContext(ctx, 5*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/tags", nil)
+	if err != nil {
+		return nil, fmt.Errorf("build Ollama model-list request: %w", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("list Ollama models: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("tags endpoint for Ollama returned %d", response.StatusCode)
+	}
+	return decodeOllamaModelInfo(response.Body)
 }
 
 type ollamaChatRequest struct {
@@ -174,24 +197,38 @@ func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error
 	return builder.String(), nil
 }
 
-func decodeOllamaModels(body io.Reader) ([]string, error) {
+func decodeOllamaModelInfo(body io.Reader) ([]OllamaModelInfo, error) {
 	var payload struct {
 		Models []struct {
-			Name  string `json:"name"`
-			Model string `json:"model"`
+			Name       string `json:"name"`
+			Model      string `json:"model"`
+			ModifiedAt string `json:"modified_at"`
+			Size       int64  `json:"size"`
+			Digest     string `json:"digest"`
+			Details    struct {
+				Format            string `json:"format"`
+				Family            string `json:"family"`
+				ParameterSize     string `json:"parameter_size"`
+				QuantizationLevel string `json:"quantization_level"`
+			} `json:"details"`
 		} `json:"models"`
 	}
 	if err := json.NewDecoder(io.LimitReader(body, 1024*1024)).Decode(&payload); err != nil {
 		return nil, fmt.Errorf("decode Ollama tags response: %w", err)
 	}
-	models := make([]string, 0, len(payload.Models))
+	models := make([]OllamaModelInfo, 0, len(payload.Models))
 	for _, model := range payload.Models {
 		name := strings.TrimSpace(model.Name)
 		if name == "" {
 			name = strings.TrimSpace(model.Model)
 		}
 		if name != "" {
-			models = append(models, name)
+			models = append(models, OllamaModelInfo{
+				Name: name, Model: strings.TrimSpace(model.Model), ModifiedAt: model.ModifiedAt,
+				SizeBytes: model.Size, Digest: model.Digest, Format: model.Details.Format,
+				Family: model.Details.Family, ParameterSize: model.Details.ParameterSize,
+				Quantization: model.Details.QuantizationLevel,
+			})
 		}
 	}
 	return models, nil

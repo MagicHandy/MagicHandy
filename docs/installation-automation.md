@@ -36,11 +36,12 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
   consent, shows size and license, verifies SHA-256, builds the worker, and
   leaves voice disabled. The installer can also write a
   `Start-MagicHandy.ps1` launcher and open the app.
-- **External LLM by design:** the app talks to llama.cpp or Ollama; model paths
-  and provider are set in Settings > Model. The core never downloads a model on
-  startup.
+- **Local model manager:** Settings > Model lists runtime/daemon models and
+  SQLite-backed managed GGUF copies. Users can import a standalone GGUF or scan
+  a configurable Ollama library path and copy a compatible model with
+  SHA-256-verified progress. The core never downloads a model on startup.
 - **Local data:** settings, memory, prompt sets, chat history, patterns,
-  programs, and preference feedback in a local SQLite DB; the
+  programs, preference feedback, and model metadata in a local SQLite DB; the
   Handy connection key is stored locally and never echoed back.
 
 ## Gaps vs the target
@@ -48,7 +49,8 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
 1. No packaged release yet — install still requires Go to build (Phase 16).
 2. No automated llama.cpp runner provisioning (download the right CUDA/CPU build,
    verify, wire the path).
-3. No in-app curated model catalog or guided model download with progress.
+3. No in-app curated model catalog or guided network download yet. Local GGUF
+   and compatible Ollama-library imports are implemented with copy progress.
 4. GPU handling is detection + advice only, not an end-to-end "pick the right
    runner and a model that fits your VRAM" flow.
 5. No in-app first-run setup wizard (the installer script is the current
@@ -63,30 +65,33 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
 
 1. **Bootstrap installer — done** (`install.ps1`): Go, build, data folder, LLM
    guidance, launch. The entry point until releases exist.
-2. **Packaged releases (Phase 16).** Windows portable zip / signed build so the
+2. **Model-manager foundation (done).** Durable model inventory, provider model
+   list, standalone GGUF import, configurable Ollama-path scan/import,
+   checksum verification, cancellation, selection, and guarded removal.
+3. **Packaged releases (Phase 16).** Windows portable zip / signed build so the
    installer can *download a prebuilt binary* instead of building from source —
    no Go required for end users. Linux/macOS artifacts best-effort.
-3. **Managed llama.cpp runner provisioning.** Download a pinned `llama-server`
+4. **Managed llama.cpp runner provisioning.** Download a pinned `llama-server`
    build, choosing a CUDA variant when an NVIDIA GPU is present and a CPU build
    otherwise; verify the checksum, place it, and set the path. Ties into
    `docs/model-management.md` and risk R13.
-4. **Curated model catalog + guided download.** A small, opinionated list of
+5. **Curated model catalog + guided download.** A small, opinionated list of
    recommended GGUF models with visible size, license, checksum, and rough VRAM
    fit; one-click download with progress; and "import a local GGUF" without a
    download. Startup and status checks never trigger a download (guardrail).
-5. **GPU/VRAM aware recommendations.** Use `nvidia-smi` (and VRAM) to recommend a
+6. **GPU/VRAM aware recommendations.** Use `nvidia-smi` (and VRAM) to recommend a
    runner build and a model size that fits, with an honest CPU fallback and a
    note on driver/CUDA-toolkit expectations. Because CUDA lives only in the
    external runner, this stays far simpler than the old torch/CUDA install.
-6. **In-app first-run setup wizard.** The eventual best UX and the real parity
+7. **In-app first-run setup wizard.** The eventual best UX and the real parity
    milestone for non-technical users: connect the Handy (enter key, test),
    choose a provider, pick/download a model, and confirm — all in the browser UI,
    superseding the script for most people.
-7. **Voice setup (Phase 13).** Parakeet ASR's explicit installer path is the
+8. **Voice setup (Phase 13).** Parakeet ASR's explicit installer path is the
    first slice. Add an in-app guided profile, local TTS provisioning, and
    microphone calibration only after real-device and microphone evidence;
    providers stay optional and off the core install path (ADR 0007).
-8. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
+9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
 
 ## Cross-cutting rules
@@ -112,12 +117,13 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | No Python/venv/torch to install | **Better** — pure-Go core, none needed | by design |
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | Planned | R13, model-management |
-| Model selection + download UI | Planned | catalog + Settings > Model |
+| Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
+| Curated model download UI | Planned | catalog + Settings > Model |
 | GPU/VRAM-aware recommendations | Detection + advice today | install.ps1 GPU detection |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
-| First-run setup wizard | Planned (script is the stand-in) | step 6 |
+| First-run setup wizard | Planned (script is the stand-in) | step 7 |
 | Voice model setup | Partial - opt-in Parakeet ASR installer path | Phase 13.4 |
-| LAN/mobile HTTPS helper | Undecided (scope in R18) | step 8 |
+| LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs
 

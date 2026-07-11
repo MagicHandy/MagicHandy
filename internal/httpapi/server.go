@@ -58,6 +58,7 @@ type Server struct {
 	bluetooth       bluetoothRuntime
 	motion          motionRuntime
 	llm             llmRuntime
+	models          *llm.ModelManager
 	controller      controllerRuntime
 	personalization personalizationRuntime
 	modes           *modes.Manager
@@ -99,6 +100,11 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	if personalization.prompts.Recovered() {
 		logger.Warn("prompt set store recovered with defaults", "data_dir", store.DataDir())
 	}
+	modelManager, err := llm.OpenModelManager(store.DataDir())
+	if err != nil {
+		personalization.Close()
+		return nil, err
+	}
 
 	server := &Server{
 		static:          static,
@@ -110,6 +116,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		bluetooth:       newBluetoothRuntime(runtime),
 		motion:          newMotionRuntime(runtime),
 		llm:             newLLMRuntime(runtime),
+		models:          modelManager,
 		controller:      newControllerRuntime(),
 		personalization: personalization,
 		started:         time.Now().UTC(),
@@ -118,6 +125,8 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 
 	manager, err := server.newModeManager()
 	if err != nil {
+		_ = modelManager.Close()
+		personalization.Close()
 		return nil, err
 	}
 	server.modes = manager
@@ -129,6 +138,8 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 
 	chatLog, err := chat.OpenMessageLog(store.DataDir())
 	if err != nil {
+		_ = modelManager.Close()
+		personalization.Close()
 		return nil, err
 	}
 	server.chatLog = chatLog
@@ -136,6 +147,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	patternLibrary, err := patterns.Open(store.DataDir())
 	if err != nil {
 		_ = chatLog.Close()
+		_ = modelManager.Close()
 		personalization.Close()
 		return nil, err
 	}
@@ -165,6 +177,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
+	mux.HandleFunc("GET /api/llm/models", s.handleLLMModels)
+	mux.HandleFunc("DELETE /api/llm/models/{id}", s.handleDeleteLLMModel)
+	mux.HandleFunc("GET /api/llm/ollama/models", s.handleOllamaModels)
+	mux.HandleFunc("POST /api/llm/ollama/scan", s.handleOllamaScan)
+	mux.HandleFunc("POST /api/llm/imports/ollama", s.handleOllamaImport)
+	mux.HandleFunc("POST /api/llm/imports/gguf", s.handleGGUFImport)
+	mux.HandleFunc("GET /api/llm/imports/{id}", s.handleLLMImport)
+	mux.HandleFunc("DELETE /api/llm/imports/{id}", s.handleCancelLLMImport)
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	mux.HandleFunc("GET /api/chat/messages", s.handleChatMessages)
 	mux.HandleFunc("POST /api/chat/cursor", s.handleChatCursor)

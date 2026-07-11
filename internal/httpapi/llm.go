@@ -89,9 +89,9 @@ func selectedLLMBaseURL(settings config.LLMSettings) string {
 	}
 }
 
-func (s *Server) llmState(_ context.Context) any {
+func (s *Server) llmState(ctx context.Context) any {
 	settings, _ := s.store.Snapshot()
-	return map[string]any{
+	state := map[string]any{
 		"provider":           settings.LLM.Provider,
 		"llama_cpp_mode":     settings.LLM.LlamaCPPMode,
 		"base_url":           selectedLLMBaseURL(settings.LLM),
@@ -100,6 +100,19 @@ func (s *Server) llmState(_ context.Context) any {
 		"request_timeout_ms": settings.LLM.RequestTimeoutMillis,
 		"managed_ready":      settings.LLM.LlamaCPPRunnerPath != "" && settings.LLM.LlamaCPPModelPath != "",
 	}
+	if s.models != nil {
+		if snapshot, err := s.models.Snapshot(ctx); err == nil {
+			activeImports := 0
+			for _, job := range snapshot.Imports {
+				if job.Status == llm.ImportStatusQueued || job.Status == llm.ImportStatusCopying {
+					activeImports++
+				}
+			}
+			state["managed_model_count"] = len(snapshot.Models)
+			state["active_import_count"] = activeImports
+		}
+	}
+	return state
 }
 
 func (s *Server) handleLLMStatus(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +132,9 @@ func (s *Server) handleLLMStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLLMLoad(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	settings, _ := s.store.Snapshot()
 	provider, err := s.newLLMProvider(settings.LLM)
 	if err != nil {
@@ -134,6 +150,9 @@ func (s *Server) handleLLMLoad(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLLMUnload(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
 	settings, _ := s.store.Snapshot()
 	provider, err := s.newLLMProvider(settings.LLM)
 	if err != nil {

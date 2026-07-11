@@ -6,6 +6,7 @@ import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/components.css";
 import "./styles/library.css";
+import "./styles/model-manager.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

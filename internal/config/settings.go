@@ -150,6 +150,7 @@ type LLMSettings struct {
 	LlamaCPPRunnerPath   string `json:"llama_cpp_runner_path,omitempty"`
 	LlamaCPPModelPath    string `json:"llama_cpp_model_path,omitempty"`
 	OllamaBaseURL        string `json:"ollama_base_url"`
+	OllamaModelsPath     string `json:"ollama_models_path,omitempty"`
 	Model                string `json:"model"`
 	PromptSet            string `json:"prompt_set"`
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
@@ -766,6 +767,7 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.LlamaCPPRunnerPath = strings.TrimSpace(settings.LlamaCPPRunnerPath)
 	settings.LlamaCPPModelPath = strings.TrimSpace(settings.LlamaCPPModelPath)
 	settings.OllamaBaseURL = strings.TrimRight(strings.TrimSpace(settings.OllamaBaseURL), "/")
+	settings.OllamaModelsPath = strings.TrimSpace(settings.OllamaModelsPath)
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
 	return settings

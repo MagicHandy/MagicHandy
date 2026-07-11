@@ -198,7 +198,7 @@ func TestMigrationUpgradesV2DatabaseToPatternSchema(t *testing.T) {
 	}
 	defer func() { _ = upgraded.Close() }()
 
-	for _, table := range []string{"patterns", "programs", "pattern_feedback"} {
+	for _, table := range []string{"patterns", "programs", "pattern_feedback", "llm_models"} {
 		assertTableExists(t, upgraded.SQL(), table)
 	}
 	var version int
@@ -280,8 +280,49 @@ func TestMigrationReconcilesRockfireV7WithoutDeletingLibraryData(t *testing.T) {
 	if actions != `[{"at":0,"pos":10}]` {
 		t.Fatalf("motion block actions = %q", actions)
 	}
-	for _, table := range []string{"messages", "client_cursors", "patterns", "programs", "pattern_feedback"} {
+	for _, table := range []string{"messages", "client_cursors", "patterns", "programs", "pattern_feedback", "llm_models"} {
 		assertTableExists(t, db.SQL(), table)
+	}
+}
+
+func TestMigrationUpgradesV8DatabaseToModelInventory(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	path := db.Path()
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	for _, statement := range []string{"DROP TABLE llm_models", "PRAGMA user_version = 8"} {
+		if _, err := raw.Exec(statement); err != nil {
+			_ = raw.Close()
+			t.Fatalf("rewind %q: %v", statement, err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	upgraded, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen v8 database: %v", err)
+	}
+	defer func() { _ = upgraded.Close() }()
+	assertTableExists(t, upgraded.SQL(), "llm_models")
+	if _, err := upgraded.SQL().Exec(`
+		INSERT INTO llm_models(
+			id, display_name, provider, source, size_bytes, sha256, model_path,
+			imported_at, updated_at
+		) VALUES('m1', 'Model', 'llama_cpp', 'ollama', 10, 'abc', 'model.gguf', 'now', 'now')
+	`); err != nil {
+		t.Fatalf("model inventory is not writable: %v", err)
 	}
 }
 

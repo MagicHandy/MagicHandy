@@ -22,7 +22,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 8
+	CurrentSchemaVersion = 9
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -412,6 +412,29 @@ var migrations = [][]string{
 		)`,
 		`CREATE INDEX IF NOT EXISTS pattern_feedback_pattern_created
 			ON pattern_feedback(pattern_id, id DESC)`,
+	},
+	// v8 -> v9: managed local LLM model inventory. Model files remain in the
+	// app data model store; SQLite owns searchable metadata and import lineage.
+	{
+		`CREATE TABLE IF NOT EXISTS llm_models (
+			id TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL,
+			provider TEXT NOT NULL CHECK (provider = 'llama_cpp'),
+			source TEXT NOT NULL CHECK (source IN ('gguf', 'ollama')),
+			source_name TEXT NOT NULL DEFAULT '',
+			format TEXT NOT NULL DEFAULT 'gguf',
+			family TEXT NOT NULL DEFAULT '',
+			parameter_size TEXT NOT NULL DEFAULT '',
+			quantization TEXT NOT NULL DEFAULT '',
+			size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+			sha256 TEXT NOT NULL,
+			model_path TEXT NOT NULL,
+			license TEXT NOT NULL DEFAULT '',
+			imported_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS llm_models_sha256 ON llm_models(sha256)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS llm_models_path ON llm_models(model_path)`,
 	},
 }
 

@@ -1,0 +1,303 @@
+/* Model runtime and managed inventory. Operational rows stay flat and dense. */
+.model-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.model-section-head .section-title {
+  margin-bottom: 0;
+}
+
+.model-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  max-width: min(54ch, 60%);
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.model-health .status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.model-health-ready .status-dot {
+  background: var(--ok);
+}
+
+.model-health-waiting .status-dot {
+  background: var(--warn);
+}
+
+.model-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.model-timeout {
+  max-width: 260px;
+}
+
+.model-runtime-actions {
+  align-items: center;
+  min-height: 42px;
+}
+
+.model-subtitle {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 600;
+}
+
+.model-store-path {
+  margin: 4px 0 0;
+  max-width: 62ch;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.model-import-actions {
+  align-items: center;
+  margin-top: 0;
+}
+
+.model-import-form,
+.ollama-import {
+  margin: 14px 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.model-import-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.55fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.model-import-form .field,
+.model-import-path .field {
+  margin-bottom: 0;
+}
+
+.model-import-form .btn,
+.model-import-path .btn {
+  min-height: 42px;
+}
+
+.model-import-path {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.ollama-candidate-filter {
+  max-width: 360px;
+  margin: 14px 0 0;
+}
+
+.model-list,
+.ollama-candidates,
+.ollama-daemon-list,
+.model-import-progress {
+  border-top: 1px solid var(--line);
+}
+
+.ollama-candidates {
+  max-height: 430px;
+  margin-top: 10px;
+  overflow: auto;
+}
+
+.model-row,
+.ollama-candidate,
+.ollama-daemon-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, auto) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ollama-daemon-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.model-row-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 12px;
+}
+
+.model-identity {
+  min-width: 0;
+}
+
+.model-identity strong,
+.model-identity span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.model-identity strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.model-identity span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.model-state,
+.model-candidate-result {
+  max-width: 240px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.model-state-changed,
+.model-state-missing {
+  color: var(--warn);
+}
+
+.model-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 126px;
+}
+
+.model-row-actions .btn,
+.ollama-candidate .btn,
+.ollama-daemon-row .btn,
+.model-import-job .btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.model-import-progress {
+  margin: 14px 0;
+}
+
+.model-import-job {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 62px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.model-import-job strong,
+.model-import-job span {
+  display: block;
+}
+
+.model-import-job strong {
+  font-size: 0.86rem;
+}
+
+.model-import-job span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
+.model-import-job progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.model-empty {
+  margin: 10px 0 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 760px) {
+  .model-section-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .model-health {
+    max-width: none;
+    text-align: left;
+  }
+
+  .model-runtime-grid,
+  .model-import-form,
+  .model-import-path {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .model-import-actions {
+    display: grid;
+    grid-template-columns: 36px repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .model-import-actions .btn {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  .model-row,
+  .ollama-candidate,
+  .ollama-daemon-row,
+  .model-import-job {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding-block: 12px;
+  }
+
+  .model-state,
+  .model-candidate-result {
+    max-width: none;
+    text-align: left;
+  }
+
+  .model-row-actions {
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .ollama-candidate .btn,
+  .ollama-daemon-row .btn,
+  .model-import-job .btn {
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-health .status-dot,
+  .model-import-job progress {
+    transition: none;
+  }
+}

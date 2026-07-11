@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for the rewrite plan. Implemented in Phase 11B; extended through
-schema v8 by Phase 14.
+schema v9 by the LLM model-manager foundation.
 
 ## Context
 
@@ -71,6 +71,9 @@ only their durability substrate moves from JSON files to DB tables.
     `pattern_feedback`. Pattern points and tags are JSON payloads inside
     relational catalog rows; finite programs stay in a separate table so a
     media-timed script cannot be mistaken for a repeatable loop.
+  - (landed with the model manager, schema v9) `llm_models`, a searchable
+    inventory of managed model metadata and import lineage. Multi-gigabyte GGUF
+    bytes remain ordinary files in the app data model store, never DB blobs.
 - **Settings stays a versioned document**, stored as one row in a `settings`
   document/kv table rather than exploded into columns. This preserves the
   existing `Settings` struct, `NormalizeSettings`, the migration hooks, and the
@@ -112,6 +115,10 @@ timestamp, and repairs the older `prompt_sets` shape. Rockfire-only tables such
 as motion blocks, funscript files, queues, personas, and UI layouts are left
 untouched for the explicit Phase 15/LSO importer; schema reconciliation does
 not guess at their semantics.
+
+Schema v9 appends the `llm_models` inventory and unique SHA-256/path indexes.
+It does not reinterpret any Rockfire-only table and does not move model bytes
+through SQLite.
 
 ### One-time import from the JSON stores
 
