@@ -28,10 +28,13 @@ Exit evidence:
 
 - real-device checklist passes for area focus, speed changes, stroke range changes, reverse changes, same-pattern updates, cross-pattern retargets, and emergency stop
 
-Status 2026-07-01: the Phase 7 checklist passed through the dedicated
-`cmd/retarget-validate` runner. The risk stays open until the shipped app path
-(UI and chat driving the engine through the selected live dispatch owner)
-passes the same checklist on hardware — Phase 9B.
+Status 2026-07-11: Phase 7 and both Phase 9B shipped app paths (Cloud REST and
+Browser Bluetooth) passed capped real-device checks. Phase 14 adds generated
+and imported curves; automated sampling/safety checks pass, but its 6.6 s
+routine-cycle feel threshold remains an explicit capped hardware check. The
+risk therefore remains open for new motion-content behavior. A Phase 14 Edge
+attempt selected Browser Bluetooth and capped speed at 35%, but the chooser saw
+no compatible advertisement; no motion command was sent.
 
 ## R2: Two-Codebase Drift
 
@@ -157,6 +160,11 @@ Exit evidence:
 
 - migration tests pass and manual import produces a clear report
 
+Status 2026-07-11: schema v8 safely opens the divergent Rockfire v7 database,
+preserves its settings/prompt data, and leaves its LSO-only tables untouched.
+That is database-lineage compatibility, not the Phase 15 user importer; dry-run
+mapping from StrokeGPT-ReVibed and LSO content remains open.
+
 ## R9: UI Regression Risk
 
 Level: Medium
@@ -174,6 +182,11 @@ Mitigation:
 Exit evidence:
 
 - desktop/mobile visual checks and UI tests pass for settings, quick controls, stop, and diagnostics
+
+Status 2026-07-11: Phase 14's Browse, Programs, Author, and Training tabs passed
+rendered checks at 1280 px and 390 px. The pass found and fixed a flex-shrink
+bug that made mobile training preferences unreachable. Backend preview samples,
+not frontend interpolation, render every library curve.
 
 ## R10: Scope Creep Toward Legacy Parity
 
@@ -282,6 +295,13 @@ Exit evidence:
 
 - a test asserts no motion source bypasses the shared path; protections are
   applied once and inherited by every caller
+
+Status 2026-07-11: Phase 14 pattern and finite-program playback both construct
+semantic `MotionTarget` content and enter the existing engine. API tests assert
+engine ownership and disabled-pattern rejection; finite completion performs an
+engine-owned Stop. Import-boundary tests still keep `patterns`, `chat`, and
+`modes` away from transport internals. The audited Rockfire `manualqueue`
+transport owner was deliberately not merged.
 
 ## R15: Chat And Voice Delivery Ordering
 
@@ -439,6 +459,9 @@ Mitigation:
 - forward-only migrations keyed on `PRAGMA user_version`, run transactionally at
   open; a schema newer than the binary is a clear error, never a silent
   downgrade
+- schema v8 reserves the divergent Rockfire v4-v7 lineage and reconciles its
+  core settings/prompt shapes idempotently while preserving uninterpreted LSO
+  tables for the explicit migration phase
 - WAL plus `busy_timeout` plus a serialized single writer so the app's own
   concurrency cannot deadlock the store
 - re-measure binary size and idle/active RSS when Phase 11B lands and record in
@@ -458,6 +481,9 @@ Exit evidence:
   tests; the JSON import is covered by fixtures (present, absent, corrupt);
   binary size remains within target; RSS has a recorded waiver; redaction tests
   still pass
+- Phase 14: patterns, programs, and reversible feedback round-trip through
+  SQLite; synthetic main-v2 and Rockfire-v7 fixtures migrate to v8 without data
+  loss; pure-Go build and size budget remain green
 
 Relates to R8 (user migration) and R11 (goals unmeasured).
 
@@ -503,3 +529,36 @@ Exit evidence:
 
 Relates to R14 (per-source motion divergence), R11 (goals unmeasured), R9 (UI
 regression), and R8 (user migration).
+
+## R21: Imported Motion Content Risk
+
+Level: High
+
+Description:
+Pattern share files and third-party funscripts are untrusted inputs that can be
+huge, malformed, nearly stationary, unexpectedly long, or physically harsh.
+Treating media-timed scripts as repeatable patterns can also preserve long
+inactive gaps or normalize an unusable span into misleading motion.
+
+Mitigation:
+
+- cap request bodies at 8 MiB, action counts, durations at 24 hours, and stored
+  pattern/program capacities; reject non-finite/out-of-range positions
+- distinguish finite programs from repeatable patterns at schema, API, and
+  engine levels; only explicit pattern import strips long stationary gaps and
+  normalizes relative amplitude
+- validate/simplify authoring input server-side and preview with the exact
+  backend sampler; never execute raw file payloads or construct transport
+  commands from imported data
+- route all playback through the shared engine and user speed/stroke envelope;
+  controller ownership, Pause, and global Stop remain unchanged
+
+Exit evidence:
+
+- malformed/bounds/inversion/gap fixtures pass; imported program completion and
+  shared-engine ownership pass at the HTTP layer; a capped real-device sample
+  confirms generated and imported content has no unexpected stop, step, or
+  reversal behavior
+
+Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
+path).

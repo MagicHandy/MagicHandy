@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-06, Phase 11B SQLite branch
+## Snapshot — 2026-07-11, Phase 14 pattern-library branch
 
 ### Goal 1: Maintainability
 
@@ -31,11 +31,11 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20) |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **Met** | Browser Bluetooth was split into bridge and transport files; all Go source files are now under the automated 800-line budget. `transport/cloud_client.go` remains in the gray zone at ~645 lines; split when next behavior change touches it. |
-| Size norms — web | same norms for `web/` | **Met** | BLE session extracted to `web/bluetooth-ui.js`; current major JS modules are `app.js` 620, `bluetooth-ui.js` 592, `motion-ui.js` 448, `chat-ui.js` 379. |
+| Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target; largest current file is `internal/config/settings.go` at 781 lines. Phase 14 is isolated in `internal/patterns` rather than added to the engine/server as a god-module. |
+| Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. Phase 14 components are split by Browse/Programs/Author/Training; its 525-line `library.css` was separated from the 783-line shared `components.css`. `web/dist` remains the single shipped build. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` enforces 800-line defaults for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
-| God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; largest structs are scoped (bridge, engine, server). Re-check when modes land. |
-| Phase discipline | scoped PRs, tests, docs per phase | **Met** | 17 PRs, one scope each; docs updated in the same PR as behavior. |
+| God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
+| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 13.8 are merged by PR; the Phase 14 branch carries code, tests, rendered UI evidence, migrations, risk updates, and budget measurements together. |
 
 ### Goal 2: Core Memory
 
@@ -45,8 +45,8 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 11B SQLite stripped build idles at 54.13 MB after `/healthz` (54.36 after DB reads); pre-SQLite baseline was 8.96 MB. The +45 MB reads as a fixed pure-Go SQLite runtime baseline (idle ≈ post-read, not data-proportional; `cache_size` bounded to 2 MB) and is still ~1/10 of the 525 MB Python core. Waived for Phase 11B; if the absolute target matters, `GOMEMLIMIT`/`GOGC` tuning or a lighter datastore are the levers. A SQLite-path soak would confirm it does not drift; re-evaluate if idle climbs past ~60 MB. |
-| Go core active RSS | < 80 MB | **Met** | Phase 11B SQLite API-read sample is 54.36 MB; pre-SQLite real-device active samples were 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth. Re-measure real-device active path after SQLite if a later phase changes transport/motion memory. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 14 stripped build idles at 52.49 MiB after `/healthz`, slightly below the Phase 11B 54.13 MB sample but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
+| Go core active RSS | < 80 MB | **Met** | Phase 14 measured 52.99 MiB after repeated `/api/library` reads. This is an API-read sample, not a new real-device active run; earlier real-device samples remain 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth before SQLite. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
 
 Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Measured 2026-07-06 at Phase 11B: 17.92 MB plain, 12.32 MB with `-trimpath -ldflags "-s -w"` after adding `modernc.org/sqlite`. |
+| Binary size | < 30 MB | **Met** | Phase 14: 18,464,256 bytes plain and 12,766,208 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 411 / 518 / 522 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which inflates the number). Sits at the boundary; re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -81,11 +81,10 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
 
 Tracked row by row in `docs/ui-design.md`, "Functional Parity Baseline".
-Summary: rows 1-4, 6, 8 (backend-loss banner + control lock, scrollback
-stickiness, visible connection check, estimate labeling, copyable
-diagnostics, Esc hint) closed by the Phase 9B UI pass; row 5 (pause/resume)
-is Phase 11; row 7 (reset to defaults) is Phase 10; row 9 (server-side chat
-continuity) is Phase 12.
+Summary: original regression rows 1-9 are closed. Phase 14 also restores the
+reference app's functional pattern browser, finite program/funscript player,
+freehand authoring, and visible/reversible training feedback while keeping one
+backend-authoritative preview and motion path.
 
 ## Watch List
 
@@ -97,13 +96,28 @@ Ranked by threat to the stated goals:
 2. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
-3. **Feature growth vs binary/memory budgets.** Voice workers, pattern
-   libraries, and the model manager all add weight; re-measure size and
-   active RSS at each phase completion so growth is a trend line, not a
-   surprise. The ADR 0008 SQLite datastore landed within binary budget but over
-   the original idle RSS budget; the Phase 11B waiver is recorded below.
+3. **Feature growth vs binary/memory/browser budgets.** Phase 14 remains within
+   binary/RSS limits covered by the SQLite waiver, but adds 8,022 gzip bytes to
+   the embedded UI (80,533 total, +11.3% from Phase 13). Re-measure at each
+   later phase so model management and migration UI growth stays explicit.
 
 ## History
+
+- **2026-07-11** — Phase 14 complete on the review branch: generated built-in
+  patterns, user patterns, finite programs, MagicHandy share files and bounded
+  funscript import now persist in schema v8 and play only through the shared
+  motion engine. The LLM receives enabled IDs/weights as a curation catalog;
+  disabled IDs are rejected and an all-disabled library keeps the deterministic
+  fallback. Authoring uses reversal-preserving simplification and backend PCHIP
+  previews; training feedback is visible, exact-undo, and auto-disable remains
+  opt-in. The divergent GitHub `Rockfire` lineage was audited rather than
+  merged: six runtime DB files, duplicate UI/datastore trees, stale bundles,
+  and its direct manual-queue transport path were excluded; schema v8 preserves
+  its core rows and uninterpreted LSO tables for Phase 15. Rendered 1280 px and
+  390 px checks covered all library tabs and fixed one mobile clipping defect.
+  Budget evidence: binary 18,464,256 bytes plain / 12,766,208 stripped; RSS
+  52.49 MiB idle / 52.99 MiB after library reads; UI 80,533 bytes gzip
+  (+8,174, +11.3%). The capped real-device routine-cycle feel check remains.
 
 - **2026-07-06** — Phase 11B complete on the current branch: settings,
   memories, and user prompt sets now round-trip through one pure-Go SQLite

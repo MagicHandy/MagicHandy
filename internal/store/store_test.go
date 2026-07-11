@@ -161,3 +161,137 @@ func TestMigrationUpgradesV1DatabaseInPlace(t *testing.T) {
 		t.Fatalf("v1 data lost across upgrade: %q, %v", kept, err)
 	}
 }
+
+func TestMigrationUpgradesV2DatabaseToPatternSchema(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	path := db.Path()
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	for _, statement := range []string{
+		"DROP TABLE pattern_feedback",
+		"DROP TABLE programs",
+		"DROP TABLE patterns",
+		"PRAGMA user_version = 2",
+	} {
+		if _, err := raw.Exec(statement); err != nil {
+			_ = raw.Close()
+			t.Fatalf("rewind %q: %v", statement, err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	upgraded, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen v2 database: %v", err)
+	}
+	defer func() { _ = upgraded.Close() }()
+
+	for _, table := range []string{"patterns", "programs", "pattern_feedback"} {
+		assertTableExists(t, upgraded.SQL(), table)
+	}
+	var version int
+	if err := upgraded.SQL().QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if version != CurrentSchemaVersion {
+		t.Fatalf("user_version = %d, want %d", version, CurrentSchemaVersion)
+	}
+}
+
+func TestMigrationReconcilesRockfireV7WithoutDeletingLibraryData(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, DatabaseFileName)
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	statements := []string{
+		`CREATE TABLE settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			document TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`INSERT INTO settings(id, document, updated_at)
+		 VALUES(1, '{"version":1}', '2026-07-10T00:00:00Z')`,
+		`CREATE TABLE prompt_sets (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			system TEXT NOT NULL
+		)`,
+		`INSERT INTO prompt_sets(id, name, system) VALUES('p1', 'Keep', 'Preserve me')`,
+		`CREATE TABLE motion_blocks (
+			id TEXT PRIMARY KEY,
+			actions_json TEXT NOT NULL
+		)`,
+		`INSERT INTO motion_blocks(id, actions_json) VALUES('b1', '[{"at":0,"pos":10}]')`,
+		`PRAGMA user_version = 7`,
+	}
+	for _, statement := range statements {
+		if _, err := raw.Exec(statement); err != nil {
+			_ = raw.Close()
+			t.Fatalf("seed Rockfire schema with %q: %v", statement, err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	db, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open Rockfire v7 database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var id, document, updatedAt string
+	if err := db.SQL().QueryRow(`SELECT id, document, updated_at FROM settings`).Scan(&id, &document, &updatedAt); err != nil {
+		t.Fatalf("read reconciled settings: %v", err)
+	}
+	if id != "current" || document != `{"version":1}` || updatedAt != "2026-07-10T00:00:00Z" {
+		t.Fatalf("reconciled settings = (%q, %q, %q)", id, document, updatedAt)
+	}
+
+	var promptSystem, createdAt string
+	if err := db.SQL().QueryRow(`SELECT system, created_at FROM prompt_sets WHERE id = 'p1'`).Scan(
+		&promptSystem,
+		&createdAt,
+	); err != nil {
+		t.Fatalf("read reconciled prompt set: %v", err)
+	}
+	if promptSystem != "Preserve me" || createdAt == "" {
+		t.Fatalf("reconciled prompt set = (%q, %q)", promptSystem, createdAt)
+	}
+
+	var actions string
+	if err := db.SQL().QueryRow(`SELECT actions_json FROM motion_blocks WHERE id = 'b1'`).Scan(&actions); err != nil {
+		t.Fatalf("Rockfire motion block was not preserved: %v", err)
+	}
+	if actions != `[{"at":0,"pos":10}]` {
+		t.Fatalf("motion block actions = %q", actions)
+	}
+	for _, table := range []string{"messages", "client_cursors", "patterns", "programs", "pattern_feedback"} {
+		assertTableExists(t, db.SQL(), table)
+	}
+}
+
+func assertTableExists(t *testing.T, db *sql.DB, table string) {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&count); err != nil {
+		t.Fatalf("inspect table %s: %v", table, err)
+	}
+	if count != 1 {
+		t.Fatalf("table %s count = %d, want 1", table, count)
+	}
+}

@@ -56,8 +56,9 @@ up to the polish of the original StrokeGPT app — see the plan in
 
 ## Privacy and safety
 
-- **Local-first.** Chat, memories, prompts, and settings live in a local SQLite
-  database on your machine. Your Handy connection key is a private credential —
+- **Local-first.** Chat, memories, prompts, settings, patterns, programs, and
+  preference feedback live in a local SQLite database on your machine. Your
+  Handy connection key is a private credential —
   it is never shown back in the UI, logs, diagnostics, or exports.
 - **Emergency Stop, always reachable.** It's on every screen, works even for a
   read-only second tab or when the backend hiccups, and stops the device even if
@@ -129,6 +130,7 @@ $env:CGO_ENABLED = "0"; go build ./cmd/magichandy
 - [Goals and guardrails](docs/goals-and-guardrails.md)
 - [Goal scorecard](docs/goal-scorecard.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
+- [Pattern library and import contracts](docs/pattern-library.md)
 - [Frontend strategy](docs/decisions/0004-frontend-strategy.md) ·
   [React frontend migration](docs/decisions/0009-react-frontend.md)
 - [SQLite persistence](docs/decisions/0008-sqlite-persistence.md)

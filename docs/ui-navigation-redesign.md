@@ -2,12 +2,12 @@
 
 ## Status
 
-Proposed 2026-07-06; **implemented 2026-07-08** with the React migration
-(ADR 0009, PRs #37/#38; mobile-footer refinement in #46). This is now the
+Proposed 2026-07-06; **implemented 2026-07-08 through Phase 14** with the React
+migration (ADR 0009, PRs #37/#38; mobile-footer refinement in #46). This is now the
 as-built shell specification: the nav rail with pinned Stop, the status-only
 bar, and the four routed workspaces all exist as described, with two labeled
 exceptions — Autopilot renders as coming-soon until its planner ships (shell
-step 3), and Pattern Library is a labeled empty state until Phase 14. This
+step 2), while Pattern Library's Phase 14 workspace is implemented. This
 document specifies the **shell and information architecture**; it does not
 restate the safety, accessibility, and parity rules in
 [ui-design.md](ui-design.md), which stay in force unchanged. Settings-page
@@ -281,9 +281,10 @@ path — everything plays through the shared motion engine.
 - **Feedback**: thumbs adjust weight/enablement **only visibly and reversibly**;
   auto-disable is opt-in.
 
-Until Phase 14 lands, the sidebar link may show the page in a clearly-labeled
-"coming in Phase 14" empty state rather than a dead link, so the shell can ship
-first.
+As built, Browse, Programs, Author, and Training are compact sibling tabs.
+Curves are backend-sampled playback previews rather than a second frontend
+interpolator. Desktop and 390 px mobile checks cover all four tabs, including
+the pinned Stop/footer boundary and scroll reachability.
 
 ## Workspace: Settings
 
@@ -382,8 +383,8 @@ asset/UI tests, and re-checks the Functional Parity Baseline rows it touches.
   the engine, per the contract above). Trace rows and Stop/Pause interruption
   are part of the definition of done.
 - **Step 3 — Pattern Library.** Build the **Pattern Library** workspace with
-  Phase 14 (browse/enable, import, player, authoring, curation, feedback). Until
-  then the link shows a labeled empty state.
+  Phase 14 (browse/enable, import, player, authoring, curation, feedback).
+  **Implemented on the Phase 14 review branch.**
 
 ## Test Hooks That Change
 

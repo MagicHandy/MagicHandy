@@ -139,7 +139,9 @@ func (e *Engine) rememberError(err error) {
 func (e *Engine) forceStopped(err error) {
 	e.mu.Lock()
 	cancel := e.cancel
+	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
 	e.running = false
+	e.completing = false
 	e.cancel = nil
 	e.done = nil
 	if err != nil {

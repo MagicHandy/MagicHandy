@@ -20,29 +20,35 @@ catalog and the mode planners, not retrofits to the shipped engine.
 1. **Monotone-cubic (PCHIP) time-parameterized sampling** (PR #319). The
    Catmull-Rom/index-parameterized sampler overshot; monotone cubic in wall
    time gave C1 continuity, zero-velocity reversals, and cut max wall-clock
-   acceleration ~8900 → ~2500 pos/s². *Adopted*: Phase 14 catalog/sampler
-   requirement (see plan). MagicHandy's current knot interpolation
-   (`internal/motion/plan.go`) predates this; revisit when the catalog lands.
+   acceleration ~8900 → ~2500 pos/s². *Covered in Phase 14*: the shared
+   content curve is wall-time PCHIP; tests assert continuity, no overshoot,
+   and zero velocity at reversal knots.
 2. **Parametric pattern catalog with enforced budgets** (PR #322). 38
    patterns generated parametrically with wall-clock acceleration and
    reversal-gap budgets enforced by the generator — not hand-keyframed.
-   *Adopted*: Phase 14 requirement.
+   *Covered in Phase 14*: built-ins are generated from parameters and every
+   generated definition is checked against acceleration and reversal-gap
+   budgets. Expanding beyond the small baseline catalog remains content work,
+   not a second playback architecture.
 3. **Relative-span normalization, projected exactly once** (PR #323).
    Patterns authored 0–100 relative and projected into the stroke window at
    dispatch; band-authored patterns projected twice degrade into
-   barely-moving twitches. *Adopted*: Phase 14 catalog contract.
+   barely-moving twitches. *Covered in Phase 14*: patterns remain semantic
+   0–100 through planning and are projected only by the transport boundary;
+   the engine regression test checks a non-default stroke window.
 4. **Routine cycle floor** (PR #324). On-device: pattern cycles under ~6 s
    stuttered; ~6.6 s+ felt smooth (burst shapes exempt). Time-only stretch,
    amplitude unchanged. Not reproducible in synthetic wire analysis — a
-   hardware-only signal. *Adopted*: Phase 14 tuning constant + real-device
-   checklist item.
+   hardware-only signal. *Implemented, hardware confirmation pending*: routine
+   curves use a 6600 ms time-only floor and bursts a 500 ms floor. The physical
+   feel check remains open because synthetic evidence cannot prove the source
+   threshold.
 5. **Latency-aware mode dwell floor** (PR #331). Continuous scripted modes
    hold an applied target at least the recent measured command latency plus
    padding (capped 12 s) so Cloud REST latency spikes don't make planners
-   replace streams faster than the device settles. *Adopted (refinement)*:
-   MagicHandy Freestyle segments already run 6–24 s (style-dependent), so
-   the failure window is smaller by construction, but the floor is not
-   latency-aware. Track for Freestyle/Autopilot before Autopilot ships.
+   replace streams faster than the device settles. *Covered in Phase 14*: mode
+   dwell is at least recent measured command latency plus 750 ms, capped at
+   12 s; the floor and cap have regression coverage.
 6. **Live-stream adjustment vs. replacement for plain chat tweaks**
    (PR #320). Plain chat speed/depth adjustments should modify the live
    stream, never flush-and-replace (stop/go "morphs"). *Covered*: the
@@ -51,10 +57,10 @@ catalog and the mode planners, not retrofits to the shipped engine.
    (ADR 0002 Invariant 9).
 7. **Non-action chat must never invent a motion change** (PR #325). An
    affirmation ("that feels good") once fell into a fallback that retargeted
-   active motion. *Covered by design* (`action: none` dispatches nothing;
-   absent pattern/speed inherit the current target), **but untested for the
-   inheritance path** — *Adopted*: add a regression test that a target with
-   empty fields preserves the active pattern/speed exactly.
+   active motion. *Covered*: `action: none` dispatches no target; target-field
+   inheritance preserves active content, including a finite program during a
+   speed-only chat retarget. API regressions cover both no-action and active-
+   program cases.
 8. **Pooled HTTP session for device commands** (PR #321). Per-command
    TCP+TLS setup compounded into 1–2 s command latency in Python.
    *Covered*: the Go cloud transport uses one shared `http.Client`
@@ -96,13 +102,20 @@ catalog and the mode planners, not retrofits to the shipped engine.
     patterns (including generated ones), user rates them; ratings become
     visible, editable weights. **Feedback must never disable anything or
     change weights without the change being visible and reversible in the
-    GUI** (notes, verbatim requirement). *Adopted*: Phase 14 scope.
+    GUI** (notes, verbatim requirement). *Covered in Phase 14*: Training shows
+    the before/after weight, each rating has an exact undo ledger, direct edits
+    cannot be overwritten by stale undo, and auto-disable is an explicit
+    opt-in.
 16. **Patterns as individual shareable files + import** (notes), including
     **funscript import** (notes; STGPT roadmap). Ignore long inactivity gaps
-    when importing funscripts (they were video-matched). *Adopted*: Phase 14
-    scope.
-17. **Smooth/harshen filters when auditioning patterns** (notes). *Adopted*:
-    Phase 14 training-module nicety, after the core loop works.
+    when importing funscripts (they were video-matched). *Covered in Phase 14*:
+    `.mhpattern.json` and `.mhprogram.json` are individual schema-versioned
+    files; funscripts can import as a finite program or normalized pattern, and
+    only pattern import compresses stationary gaps over five seconds.
+17. **Smooth/harshen filters when auditioning patterns** (notes). *Covered in
+    Phase 14*: Training offers temporary Original, Smooth, and Crisp audition
+    filters. They alter only the resolved audition definition and never rewrite
+    stored pattern points.
 18. **Reference repos for pattern work** (notes): FunGen, FredTungsten
     Scripts, thehandy_resources, Howl (pattern generation/processing),
     OpenFunscripter, funscript-io, Funscript-Tools, HapticsEditor-v2,

@@ -55,6 +55,7 @@ type MotionTraceTarget struct {
 	StrokeMaxPercent          int    `json:"stroke_max_percent,omitempty"`
 	ReverseDirection          bool   `json:"reverse_direction,omitempty"`
 	PatternIdentifier         string `json:"pattern_id,omitempty"`
+	ProgramIdentifier         string `json:"program_id,omitempty"`
 	AreaMinPercent            int    `json:"area_min_percent,omitempty"`
 	AreaMaxPercent            int    `json:"area_max_percent,omitempty"`
 	SoftAnchorPositionPercent int    `json:"soft_anchor_position_percent,omitempty"`
@@ -73,6 +74,8 @@ type MotionTraceRetarget struct {
 	NextPlanID                      string             `json:"next_plan_id,omitempty"`
 	PreviousPatternIdentifier       string             `json:"previous_pattern_id,omitempty"`
 	NextPatternIdentifier           string             `json:"next_pattern_id,omitempty"`
+	PreviousProgramIdentifier       string             `json:"previous_program_id,omitempty"`
+	NextProgramIdentifier           string             `json:"next_program_id,omitempty"`
 	PreviousTarget                  *MotionTraceTarget `json:"previous_target,omitempty"`
 	NextTarget                      *MotionTraceTarget `json:"next_target,omitempty"`
 	EstimatedCurrentPositionPercent int                `json:"estimated_current_position_percent,omitempty"`

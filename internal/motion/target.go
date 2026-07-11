@@ -38,10 +38,16 @@ type SoftAnchor struct {
 type MotionTarget struct {
 	Label        string      `json:"label,omitempty"`
 	Source       string      `json:"source,omitempty"`
-	PatternID    PatternID   `json:"pattern_id"`
+	PatternID    PatternID   `json:"pattern_id,omitempty"`
+	ProgramID    string      `json:"program_id,omitempty"`
 	SpeedPercent int         `json:"speed_percent"`
 	AreaFocus    *AreaFocus  `json:"area_focus,omitempty"`
 	SoftAnchor   *SoftAnchor `json:"soft_anchor,omitempty"`
+
+	// Resolved content is backend-owned and never serialized to clients. The
+	// public IDs above remain the authoritative snapshot vocabulary.
+	Pattern *PatternDefinition `json:"-"`
+	Program *ProgramDefinition `json:"-"`
 }
 
 // NormalizeTarget clamps semantic intent without applying physical stroke settings.
@@ -51,7 +57,17 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 	if target.Source == "" {
 		target.Source = "motion"
 	}
-	if target.PatternID == "" {
+	target.ProgramID = strings.TrimSpace(target.ProgramID)
+	if target.Program != nil {
+		target.ProgramID = strings.TrimSpace(target.Program.ID)
+		target.PatternID = ""
+	}
+	if target.Pattern != nil {
+		target.PatternID = target.Pattern.ID
+		target.ProgramID = ""
+		target.Program = nil
+	}
+	if target.PatternID == "" && target.ProgramID == "" {
 		target.PatternID = PatternStroke
 	}
 	if target.SpeedPercent == 0 {

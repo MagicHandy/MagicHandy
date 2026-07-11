@@ -26,7 +26,7 @@ export function StatusBar() {
   const phaseLabel = engine?.paused
     ? "paused"
     : engine?.running
-      ? engine.phase && engine.phase !== "" ? engine.phase : "running"
+      ? engine.target?.label || "running"
       : motion?.available === false ? "unavailable" : "idle";
 
   return (

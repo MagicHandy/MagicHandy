@@ -321,6 +321,9 @@ func (s *Server) Close() {
 	if s.chatLog != nil {
 		_ = s.chatLog.Close()
 	}
+	if s.patterns != nil {
+		_ = s.patterns.Close()
+	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
 	s.personalization.Close()
 	if s.store != nil {

@@ -48,6 +48,7 @@ type Service struct {
 	Prompt   PromptSet
 	Model    string
 	Memories []string
+	Patterns []PatternChoice
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -67,7 +68,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if strings.TrimSpace(prompt.ID) == "" {
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
-	systemPrompt := ComposeSystem(prompt, s.Memories)
+	systemPrompt := ComposeSystemWithPatterns(prompt, s.Memories, s.Patterns)
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
@@ -81,7 +82,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return Result{}, err
 	}
 
-	response, parseErr := ParseAssistantResponse(raw)
+	response, parseErr := ParseAssistantResponseWithPatterns(raw, s.Patterns)
 	if parseErr == nil {
 		return Result{Response: response, Raw: raw}, nil
 	}
@@ -113,7 +114,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, nil
 	}
 
-	repaired, repairParseErr := ParseAssistantResponse(repairRaw)
+	repaired, repairParseErr := ParseAssistantResponseWithPatterns(repairRaw, s.Patterns)
 	if repairParseErr != nil {
 		result.MalformedError = repairParseErr.Error()
 		return result, nil
@@ -158,7 +159,13 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 }
 
 func assistantHistoryContent(content string) string {
-	if _, err := ParseAssistantResponse(content); err == nil {
+	var candidate AssistantResponse
+	_ = json.Unmarshal([]byte(content), &candidate)
+	choices := defaultPatternChoices()
+	if candidate.Motion != nil && strings.TrimSpace(candidate.Motion.PatternID) != "" {
+		choices = append(choices, PatternChoice{ID: candidate.Motion.PatternID})
+	}
+	if _, err := parseAssistantResponse(content, choices, false); err == nil {
 		return content
 	}
 	response := AssistantResponse{

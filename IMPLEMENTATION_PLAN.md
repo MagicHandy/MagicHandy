@@ -18,13 +18,12 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-10. Phases 0 through 13.7 are merged to `main` (13.5-13.7
-landed together in #49): provider-scoped Settings, the NeuTTS Air adapter,
-push-to-talk microphone capture, and the Chat speak-replies control. Phase 13
-deliberately supports microphone capture on localhost only; LAN/mobile HTTPS
-remains a Phase 16 packaging decision. A live UI/UX pass over the merged
-result (docs/ui-ux-review.md, 2026-07-10) queued Slice 13.8 for the found
-voice-UX and stacked-layout defects.
+Updated 2026-07-11. Phases 0 through 13.8 are merged to `main`. Phase 14 is
+implemented on the current review branch: persisted patterns/programs,
+funscript import, shared-engine playback, LLM curation, authoring, and visible
+reversible training feedback. Phase 13 deliberately supports microphone
+capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
+decision.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -53,7 +52,8 @@ voice-UX and stacked-layout defects.
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
-| 14-17 | Patterns, migration, packaging, parity | Not started | — |
+| 14 | Pattern library, programs, authoring, and LLM curation | **Complete on review branch** | current PR |
+| 15-17 | Migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
 before any provider — the SQLite `messages`/`client_cursors` tables (schema
@@ -79,7 +79,7 @@ log with per-client cursors could introduce it as the single canonical
 history; building a separate Phase 10 history store would have created a
 second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 
-### What Exists On Main
+### What Exists On Main And The Current Phase Branch
 
 - Motion engine with retargeting, latency-aware lead, phase preservation, and
   goroutine-lifecycle safety tests, bound at runtime to the **selected dispatch
@@ -93,6 +93,11 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - Streaming LLM chat (managed llama.cpp primary, external llama.cpp, Ollama
   secondary) with a strict JSON contract, one repair pass, malformed-response
   indication, and chat-driven motion through the engine only.
+- SQLite-backed pattern and finite-program library with generated built-ins,
+  share-file/funscript import and export, shared-engine playback, backend-sampled
+  previews, sparse freehand authoring, and visible reversible preference
+  training. The LLM can select only enabled pattern IDs and falls back to the
+  deterministic semantic target contract when no library entry applies.
 - CI: gofmt, `go vet`, `golangci-lint`, tests, race tests, `CGO_ENABLED=0`
   build, import-boundary tests.
 
@@ -115,13 +120,11 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    Baseline".
 2. **Browser Bluetooth endurance** is unproven beyond short sessions; the
    one-hour soak ran on Cloud REST only (scorecard watch list).
-3. **Second parity sweep (2026-07-09)**: a re-read of the legacy notes and
-   StrokeGPT-ReVibed PRs #319–#333 produced a tracked backlog in
-   `docs/legacy-parity-sweep-2026-07.md` — chiefly the June 2026 hardware
-   motion lessons folded into Phase 14, a latency-aware dwell floor for
-   mode planners, an inheritance regression test for non-action chat
-   (empty target fields must preserve the active pattern/speed exactly),
-   Handy 2 scope review on R16, and small diagnostics/UI follow-ups.
+3. **Second parity sweep (2026-07-09)**: the Phase 14 motion/library items and
+   latency-aware mode dwell floor are now implemented and tested. The remaining
+   work is the routine-cycle feel check on real hardware, the Handy 2 scope
+   review on R16, and the explicitly deferred diagnostics/UI follow-ups. See
+   `docs/legacy-parity-sweep-2026-07.md` for row-level dispositions.
 
 ### UI Shell Redesign (Sidebar Navigation)
 
@@ -146,16 +149,17 @@ It ships in steps that never drop a safety control mid-migration:
    Stop/Pause-interruptible, clamped by the quick-settings envelope. Rides the
    Phase 11 mode architecture.
 4. **Pattern Library**: the browse/import/player/authoring/curation workspace —
-   Phase 14; a labeled empty state until then.
+   implemented in Phase 14.
 
 Status: steps 1 and 2 have landed together — the UI is now a Vite + React +
 TypeScript app (`web/`, built to `web/dist`, embedded by Go; no runtime Node)
 implementing the permanent nav rail, status-only bar, pinned Stop, and the
 Chat / Preset Modes / Pattern Library / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
-Vitest. Autopilot renders as coming-soon until its planner exists (step 3);
-Pattern Library is the empty state (step 4). The legacy vanilla UI is retained
-under `web/legacy/` for reference until React reaches parity, then removed.
+Vitest. Preset Modes is present while Autopilot remains a labeled coming-soon
+control until its planner exists (step 3). Pattern Library is implemented on
+the Phase 14 branch (step 4). The legacy vanilla UI remains under `web/legacy/`
+as unshipped reference only; `web/dist` is the single embedded frontend.
 
 ## Rewrite Guardrails
 
@@ -227,11 +231,10 @@ MagicHandy/
   internal/diagnostics/    trace ring, export                      [exists]
   internal/validation/     retarget validation checklist           [exists]
   internal/modes/          freestyle, continuous-chat planners     [exists]
+  internal/patterns/       patterns, programs, import, feedback    [exists]
   internal/memory/         long-term memory store                  [exists]
   internal/store/          SQLite datastore, schema, migrations    [exists]
-  internal/audio/          voice-output queue, TTS worker client   [planned]
-  internal/asr/            voice-input worker client               [planned]
-  internal/workers/        external worker lifecycle/protocol      [planned]
+  internal/voice/          queue, worker protocol, ASR/TTS clients [exists]
   web/                     frontend assets                         [exists]
   docs/
 ```
@@ -789,6 +792,8 @@ works with the default settings without touching advanced knobs.
 
 # Phase 14: Pattern Library, Programs, And Authoring
 
+Status: **implemented on the current review branch (2026-07-11)**.
+
 ## Suggested `/goal`
 
 `/goal Complete MagicHandy Phase 14: implement the motion pattern library, program/funscript import, pattern playback through the motion engine, an LLM curation contract, and a simplified authoring UI with sane simplification/interpolation.`
@@ -848,6 +853,16 @@ multi-pattern sequencing) is a stretch goal; sequencing belongs to the Phase
 
 Standard suite plus manual: import, play, draw, simplify without flattening,
 preview matches playback, LLM picks only enabled patterns.
+
+Implementation evidence: unit/API/UI tests cover generated catalogs,
+PCHIP sampling, acceleration/reversal budgets, relative projection, funscript
+normalization, long-gap stripping, finite-program completion, controller
+ownership, disabled-pattern rejection, curation fallback, feedback undo, and
+backend previews. The rendered React workspace was exercised at 1280 px and
+390 px across Browse, Programs, Author, and Training with no horizontal
+overflow; a mobile flex-shrink defect found during that pass was fixed. The
+remaining manual evidence is the routine-cycle feel check on the real device,
+capped below 40% intensity; synthetic tests cannot establish physical feel.
 
 ## Done Criteria
 

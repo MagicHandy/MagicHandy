@@ -9,6 +9,9 @@ that commit.
 Status: H1, M1–M6, and L1–L3 were fixed by Slice 13.8 (PR #51), which also
 replaced the sidebar's active-link accent bar with a soft azure fill. L4
 (recording level feedback) stays deferred to the hands-free capture slice.
+Phase 14 subsequently replaced the Library empty state with Browse, Programs,
+Author, and Training tabs; its separate 2026-07-11 desktop/mobile evidence is
+recorded in `docs/perf-baseline.md`.
 
 A previous review dated 2026-07-08 lived at this path (never committed). All
 of its findings (C1–C3, H1–H4, M1–M9, L1–L6) were consumed by the
@@ -40,8 +43,9 @@ save row always rendered. That review is superseded by this document.
   present (the toggle persists through `PUT /api/voice/preferences` and
   round-trips into settings); chat history seeds from the canonical server
   log; deterministic stop exchange rendered from persisted state.
-- Modes/Library placeholder states render as designed (Autopilot coming-soon,
-  Library Phase 14 empty state).
+- At the time of this review, Modes/Library placeholder states rendered as
+  designed. Autopilot remains coming-soon; the Library placeholder was retired
+  by Phase 14.
 
 ## High
 

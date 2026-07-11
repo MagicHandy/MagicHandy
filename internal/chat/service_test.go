@@ -60,6 +60,51 @@ func TestParseAssistantResponseNormalizesMotion(t *testing.T) {
 	}
 }
 
+func TestCuratedParserAcceptsOnlyEnabledPatternIDs(t *testing.T) {
+	choices := []PatternChoice{{ID: "pattern-user-wave", Name: "Wave", Weight: 1.2}}
+	response, err := ParseAssistantResponseWithPatterns(
+		`{"reply":"Using it.","motion":{"action":"start","pattern_id":"pattern-user-wave","intensity":32}}`,
+		choices,
+	)
+	if err != nil {
+		t.Fatalf("enabled selection: %v", err)
+	}
+	if response.Motion == nil || response.Motion.Intensity == nil || *response.Motion.Intensity != 32 {
+		t.Fatalf("curated response = %+v", response)
+	}
+	_, err = ParseAssistantResponseWithPatterns(
+		`{"reply":"Wrong.","motion":{"action":"start","pattern_id":"stroke","intensity":32}}`,
+		choices,
+	)
+	if err == nil || !strings.Contains(err.Error(), "unknown motion pattern") {
+		t.Fatalf("disabled selection error = %v", err)
+	}
+}
+
+func TestStopContractRejectsTargetFields(t *testing.T) {
+	_, err := ParseAssistantResponseWithPatterns(
+		`{"reply":"Stopping.","motion":{"action":"stop","pattern_id":"stroke","intensity":20}}`,
+		[]PatternChoice{{ID: "stroke"}},
+	)
+	if err == nil {
+		t.Fatal("stop contract accepted unused target fields")
+	}
+}
+
+func TestNoEnabledPatternsExposeDeterministicFallback(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	prompt := ComposeSystemWithPatterns(set, nil, nil)
+	if !strings.Contains(prompt, "No motion patterns are enabled") || !strings.Contains(prompt, "speed_percent") {
+		t.Fatalf("fallback prompt missing:\n%s", prompt)
+	}
+	response, err := ParseAssistantResponseWithPatterns(
+		`{"reply":"Fallback.","motion":{"action":"start","speed_percent":25}}`, nil,
+	)
+	if err != nil || response.Motion.SpeedPercent == nil {
+		t.Fatalf("deterministic fallback = %+v err=%v", response, err)
+	}
+}
+
 func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 	provider := &scriptedProvider{responses: []string{
 		"not json",

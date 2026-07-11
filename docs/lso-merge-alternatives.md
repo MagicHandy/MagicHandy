@@ -92,8 +92,8 @@ prompt sets plus inspectable long-term memory.
 
 ## Decision 4 — Motion content (LSO blocks vs Pattern Library + arrangement)
 
-LSO has a motion "block" library, editor, and queue; MagicHandy plans a Phase 14
-Pattern Library and already has the Phase 11 bounded arrangement contract.
+LSO has a motion "block" library, editor, and queue; MagicHandy now has the
+Phase 14 Pattern/Program Library and the Phase 11 bounded arrangement contract.
 
 - **A. Fold LSO blocks into the Pattern Library + arrangement contract. —
   Recommended.**
@@ -106,6 +106,12 @@ Pattern Library and already has the Phase 11 bounded arrangement contract.
   - Con: reintroduces the per-source motion divergence this project is explicitly
     avoiding (R14); protections added to one path miss the other.
 - **Invariant:** no motion source bypasses the shared sampler/sanitizer.
+
+Phase 14 settles option A as the architectural target. The remaining Phase 15
+choice is semantic mapping: periodic/normalized blocks may become patterns,
+media-timed clips remain programs, and saved queues map to arrangements. The
+Rockfire v7 tables are preserved by schema v8 until that importer can report
+ambiguous or unsupported rows instead of guessing.
 
 ---
 

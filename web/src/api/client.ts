@@ -14,6 +14,11 @@ import type {
   ChatHistoryMessage,
   ChatMessagesResponse,
   PromptSetsPayload,
+  PatternInput,
+  PatternLibrary,
+  PatternPreview,
+  LibraryPattern,
+  PatternFeedback,
   PublicSettings,
   SettingsUpdate,
   VoiceRequestSnapshot,
@@ -95,6 +100,29 @@ export const api = {
   startMode: (mode: string, options?: Record<string, unknown>) =>
     request("POST", "/api/modes/start", { mode, ...(options ?? {}) }),
   stopMode: () => request("POST", "/api/modes/stop", {}),
+
+  // Pattern library. Point arrays and previews are loaded only in this route;
+  // the regular state poll carries counts, not content documents.
+  getLibrary: () => request<{ library: PatternLibrary }>("GET", "/api/library"),
+  previewPattern: (body: PatternInput) => request<{ preview: PatternPreview }>("POST", "/api/library/preview", body),
+  createPattern: (body: PatternInput) => request<{ pattern: LibraryPattern }>("POST", "/api/library/patterns", body),
+  patchPattern: (id: string, patch: Partial<LibraryPattern>) =>
+    request<{ pattern: LibraryPattern }>("PATCH", `/api/library/patterns/${encodeURIComponent(id)}`, patch),
+  deletePattern: (id: string) => request("DELETE", `/api/library/patterns/${encodeURIComponent(id)}`),
+  playPattern: (id: string, intensity: number, feel = "original") =>
+    request("POST", `/api/library/patterns/${encodeURIComponent(id)}/play`, { intensity, feel }),
+  deleteProgram: (id: string) => request("DELETE", `/api/library/programs/${encodeURIComponent(id)}`),
+  playProgram: (id: string, intensity: number) =>
+    request("POST", `/api/library/programs/${encodeURIComponent(id)}/play`, { intensity }),
+  patternFeedback: (pattern_id: string, rating: -1 | 1) =>
+    request<{ feedback: PatternFeedback; pattern: LibraryPattern }>("POST", "/api/library/feedback", { pattern_id, rating }),
+  undoPatternFeedback: (id: number) =>
+    request<{ feedback: PatternFeedback; pattern: LibraryPattern }>("POST", `/api/library/feedback/${id}/undo`),
+  setPatternAutoDisable: (enabled: boolean) =>
+    request<{ auto_disable: boolean }>("PUT", "/api/library/auto-disable", { enabled }),
+  importMotionContent: (file: File, asKind: "pattern" | "program") => importMotionContent(file, asKind),
+  exportPattern: (id: string) => download(`/api/library/patterns/${encodeURIComponent(id)}/export`),
+  exportProgram: (id: string) => download(`/api/library/programs/${encodeURIComponent(id)}/export`),
 
   // Memory.
   getMemory: () => request<MemoryState>("GET", "/api/memory"),
@@ -186,6 +214,30 @@ export const api = {
 
   exportTrace: () => request("GET", "/api/traces"),
 };
+
+async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<unknown> {
+  const path = `/api/library/import?filename=${encodeURIComponent(file.name)}&as=${asKind}`;
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", [CLIENT_HEADER]: clientId },
+    body: file,
+  });
+  const text = await res.text();
+  const parsed = text ? JSON.parse(text) as unknown : null;
+  if (!res.ok) {
+    const message = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : `Import failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed;
+}
+
+async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(path, { headers: { [CLIENT_HEADER]: clientId } });
+  if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return { blob: await res.blob(), filename: match?.[1] ?? "motion-content.json" };
+}
 
 async function requestWithSignal<T>(method: string, path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, { method, headers: { Accept: "application/json", [CLIENT_HEADER]: clientId }, signal });

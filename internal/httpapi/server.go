@@ -19,6 +19,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
+	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
@@ -64,6 +65,7 @@ type Server struct {
 	voiceExecutable string
 	voiceDataDir    string
 	chatLog         *chat.MessageLog
+	patterns        *patterns.Library
 	started         time.Time
 	version         VersionInfo
 	handler         http.Handler
@@ -131,6 +133,14 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	}
 	server.chatLog = chatLog
 
+	patternLibrary, err := patterns.Open(store.DataDir())
+	if err != nil {
+		_ = chatLog.Close()
+		personalization.Close()
+		return nil, err
+	}
+	server.patterns = patternLibrary
+
 	mux := http.NewServeMux()
 	server.routes(mux)
 	server.handler = logRequests(logger, mux)
@@ -151,16 +161,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
-	mux.HandleFunc("GET /api/memory", s.handleMemoryGet)
-	mux.HandleFunc("POST /api/memory", s.handleMemoryAdd)
-	mux.HandleFunc("POST /api/memory/enabled", s.handleMemorySetEnabled)
-	mux.HandleFunc("POST /api/memory/clear", s.handleMemoryClear)
-	mux.HandleFunc("PATCH /api/memory/{id}", s.handleMemoryPatchItem)
-	mux.HandleFunc("DELETE /api/memory/{id}", s.handleMemoryRemove)
-	mux.HandleFunc("GET /api/prompt-sets", s.handlePromptSetsGet)
-	mux.HandleFunc("POST /api/prompt-sets", s.handlePromptSetCreate)
-	mux.HandleFunc("PUT /api/prompt-sets/{id}", s.handlePromptSetUpdate)
-	mux.HandleFunc("DELETE /api/prompt-sets/{id}", s.handlePromptSetDelete)
+	s.personalizationRoutes(mux)
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
@@ -201,9 +202,23 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/modes", s.handleModesGet)
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
+	s.libraryRoutes(mux)
 	s.voiceRoutes(mux)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
+}
+
+func (s *Server) personalizationRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/memory", s.handleMemoryGet)
+	mux.HandleFunc("POST /api/memory", s.handleMemoryAdd)
+	mux.HandleFunc("POST /api/memory/enabled", s.handleMemorySetEnabled)
+	mux.HandleFunc("POST /api/memory/clear", s.handleMemoryClear)
+	mux.HandleFunc("PATCH /api/memory/{id}", s.handleMemoryPatchItem)
+	mux.HandleFunc("DELETE /api/memory/{id}", s.handleMemoryRemove)
+	mux.HandleFunc("GET /api/prompt-sets", s.handlePromptSetsGet)
+	mux.HandleFunc("POST /api/prompt-sets", s.handlePromptSetCreate)
+	mux.HandleFunc("PUT /api/prompt-sets/{id}", s.handlePromptSetUpdate)
+	mux.HandleFunc("DELETE /api/prompt-sets/{id}", s.handlePromptSetDelete)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -234,6 +249,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		},
 		"features": map[string]string{
 			"chat":      "local_llm_streaming",
+			"library":   "patterns_programs_authoring",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "optional_worker_protocol_v1",
@@ -266,6 +282,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		},
 		"features": map[string]string{
 			"chat":      "local_llm_streaming",
+			"library":   "patterns_programs_authoring",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_manual",
 			"voice":     "optional_worker_protocol_v1",
@@ -276,6 +293,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"modes":               s.modes.Status(),
 		"voice":               s.voiceState(),
 		"chat":                s.chatState(),
+		"library":             s.libraryState(),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),

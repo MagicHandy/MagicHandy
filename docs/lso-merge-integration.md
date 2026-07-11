@@ -68,8 +68,11 @@ LSO's saved motion "blocks," their editor/heatmap tooling, and a motion queue.
 - Must satisfy: playback runs through the shared motion engine and the Phase 11
   arrangement contract — not a parallel block-playback engine (R14). Blocks are
   *content*; the engine is the single path that plays them.
-- Decision needed: fold LSO blocks into the Phase 14 Pattern Library model, or
-  keep a distinct library. See alternatives, Decision 4.
+- Phase 14 now establishes the canonical Pattern/Program model. LSO blocks and
+  queues must be imported into that library plus the Phase 11 arrangement
+  contract; a distinct playback path is not an admissible option. The remaining
+  decision is field mapping and which block shapes are repeatable patterns vs
+  finite programs. See alternatives, Decision 4.
 
 ### 3. Personas
 
@@ -91,6 +94,30 @@ settings, personas, and library content.
   redacted secrets, and fixtures/tests — the same discipline as the
   StrokeGPT-import risk (R8) and the SQLite legacy import (ADR 0008). This is the
   natural home for the Phase 15 migration work.
+
+#### Rockfire branch audit (2026-07-11)
+
+The remote `Rockfire` branch was audited rather than merged. Its database
+lineage reached `PRAGMA user_version=7` with useful LSO rows, but the branch also
+contained committed runtime databases, duplicate datastore/frontend trees,
+stale build assets, and a `manualqueue` package that owned transport dispatch.
+Those source/runtime artifacts are not migration inputs and were not copied.
+
+Schema v8 can open that database non-destructively. It repairs the canonical
+settings/prompt shapes and preserves these Rockfire tables for Phase 15:
+
+- `funscript_files` and `motion_blocks`: candidate Program/Pattern source data;
+  action timing, source relationships, ratings, favorites, blocked state, and
+  usage/success metadata must appear in the dry-run compatibility report
+- `saved_queues`: candidate Phase 11 arrangement data; never a second queue
+  player
+- `personas`: candidate prompt-set/memory/personalization data
+- `ui_preferences` and `app_state`: locale, active persona, and operation-mode
+  preferences; import only where a canonical setting exists, otherwise report
+  them as deferred/unsupported
+
+No preserved row is exposed to the app until an explicit importer maps it. This
+prevents an automatic schema migration from silently changing motion meaning.
 
 ### 5. Frontend
 
@@ -141,8 +168,8 @@ branch merged first — and each should end as an ADR:
 2. Intiface/Buttplug transport scope (first-class vs opt-in) and HSP-only-scope
    reconciliation.
 3. Personalization model: personas vs prompt sets + memory (merge vs keep both).
-4. Motion content: LSO blocks vs the Phase 14 Pattern Library + Phase 11
-   arrangement contract.
+4. Motion-content field mapping into the Phase 14 Pattern/Program library and
+   Phase 11 arrangement contract (the shared engine target is settled).
 5. Repository/integration shape (single merged repo vs shared-backend split).
 6. Localization pipeline and translation source of truth.
 

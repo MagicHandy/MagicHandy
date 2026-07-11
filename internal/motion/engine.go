@@ -51,8 +51,10 @@ type Engine struct {
 	streamIDPrefix   string
 
 	running          bool
+	completing       bool
 	paused           bool
 	pausedPhase      float64
+	frozenPhase      float64
 	pausedTarget     MotionTarget
 	runMillisAccum   int64
 	generation       uint64
@@ -72,20 +74,22 @@ type Engine struct {
 
 // ActiveMotionState is a safe snapshot of the current motion loop.
 type ActiveMotionState struct {
-	Running          bool                     `json:"running"`
-	Paused           bool                     `json:"paused"`
-	RunningMillis    int64                    `json:"running_ms"`
-	Generation       uint64                   `json:"generation"`
-	StreamID         string                   `json:"stream_id,omitempty"`
-	PlanID           string                   `json:"plan_id,omitempty"`
-	Target           MotionTarget             `json:"target"`
-	Settings         config.MotionSettings    `json:"settings"`
-	StartedAt        string                   `json:"started_at,omitempty"`
-	Phase            float64                  `json:"phase"`
-	NextSampleMillis int64                    `json:"next_sample_ms"`
-	LastSample       *MotionSample            `json:"last_sample,omitempty"`
-	LastResult       *transport.CommandResult `json:"last_result,omitempty"`
-	LastError        string                   `json:"last_error,omitempty"`
+	Running                    bool                     `json:"running"`
+	Completing                 bool                     `json:"completing"`
+	Paused                     bool                     `json:"paused"`
+	RunningMillis              int64                    `json:"running_ms"`
+	Generation                 uint64                   `json:"generation"`
+	StreamID                   string                   `json:"stream_id,omitempty"`
+	PlanID                     string                   `json:"plan_id,omitempty"`
+	Target                     MotionTarget             `json:"target"`
+	Settings                   config.MotionSettings    `json:"settings"`
+	StartedAt                  string                   `json:"started_at,omitempty"`
+	Phase                      float64                  `json:"phase"`
+	NextSampleMillis           int64                    `json:"next_sample_ms"`
+	RecentCommandLatencyMillis int64                    `json:"recent_command_latency_ms"`
+	LastSample                 *MotionSample            `json:"last_sample,omitempty"`
+	LastResult                 *transport.CommandResult `json:"last_result,omitempty"`
+	LastError                  string                   `json:"last_error,omitempty"`
 }
 
 // NewEngine creates a motion engine bound to one transport dispatcher.
@@ -192,6 +196,7 @@ func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, e
 	}
 	played := e.estimatedPlaybackMillisLocked(e.now())
 	e.pausedPhase = e.plan.PhaseAt(played)
+	e.frozenPhase = e.pausedPhase
 	e.pausedTarget = e.plan.Target
 	e.runMillisAccum += played
 	e.mu.Unlock()
@@ -251,7 +256,7 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 func (e *Engine) beginResume(reason string, cancel context.CancelFunc) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.running {
+	if e.running || e.completing {
 		return errors.New("motion is already running")
 	}
 	if !e.paused {
@@ -268,6 +273,7 @@ func (e *Engine) beginResume(reason string, cancel context.CancelFunc) error {
 	e.lastError = ""
 	e.latencyMillis = nil
 	e.bridgeSample = nil
+	e.frozenPhase = e.pausedPhase
 	plan := NewMotionPlan(e.planIDLocked(), e.pausedTarget, e.settings, e.pausedPhase, 0, e.startedAt)
 	plan.PhasePreserved = true
 	e.plan = plan
@@ -332,7 +338,7 @@ func (e *Engine) Snapshot() ActiveMotionState {
 func (e *Engine) begin(target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.running {
+	if e.running || e.completing {
 		return errors.New("motion is already running")
 	}
 
@@ -348,6 +354,8 @@ func (e *Engine) begin(target MotionTarget, settings config.MotionSettings, canc
 	e.latencyMillis = nil
 	e.bridgeSample = nil
 	e.paused = false
+	e.completing = false
+	e.frozenPhase = 0
 	e.runMillisAccum = 0
 	// The loop cancel is live before running is published, so any concurrent
 	// Stop/Pause can cancel it. The done channel is installed later, when the
@@ -465,6 +473,9 @@ func (e *Engine) runLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if e.completeProgramIfNeeded(ctx) {
+				return
+			}
 			if err := e.dispatchIfLeadNeeded(ctx, "append_points"); err != nil {
 				e.rememberError(err)
 			}
@@ -472,12 +483,42 @@ func (e *Engine) runLoop(ctx context.Context) {
 	}
 }
 
+// completeProgramIfNeeded ends finite content through the engine-owned stop
+// path. Repeating patterns never enter this branch.
+func (e *Engine) completeProgramIfNeeded(ctx context.Context) bool {
+	e.mu.Lock()
+	if !e.running || e.plan.Loop || !e.plan.CompleteAt(e.estimatedPlaybackMillisLocked(e.now())) {
+		e.mu.Unlock()
+		return false
+	}
+	e.running = false
+	e.completing = true
+	e.frozenPhase = 1
+	e.runMillisAccum = 0
+	e.traceStateLocked("program_completed", "finite_content=true")
+	e.mu.Unlock()
+
+	result, err := e.transport.Stop(context.WithoutCancel(ctx), transport.StopCommand{Reason: "program_completed"})
+	e.recordTransportResult("program_completed", nil, result, err)
+	e.finishStopped(result, err)
+	e.mu.Lock()
+	e.completing = false
+	e.cancel = nil
+	e.done = nil
+	e.mu.Unlock()
+	return true
+}
+
 func (e *Engine) stopLoop() (context.CancelFunc, <-chan struct{}, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.completing {
+		return func() {}, e.done, true
+	}
 	if !e.running {
 		return func() {}, nil, false
 	}
+	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
 	e.running = false
 	cancel := e.cancel
 	done := e.done
@@ -530,6 +571,7 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 	}
 	cancel := e.cancel
 	done := e.done
+	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
 	e.running = false
 	e.cancel = nil
 	e.done = nil

@@ -40,7 +40,7 @@ func TestInternalImportBoundaries(t *testing.T) {
 		{
 			name: "semantic clients do not import transport",
 			appliesTo: func(importPath string) bool {
-				return hasAnyPrefix(importPath, internal+"chat", internal+"llm", internal+"modes", internal+"voice")
+				return hasAnyPrefix(importPath, internal+"chat", internal+"llm", internal+"modes", internal+"patterns", internal+"voice")
 			},
 			forbidden: []string{internal + "transport"},
 		},
