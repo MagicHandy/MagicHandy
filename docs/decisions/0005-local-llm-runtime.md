@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted. Provider adapters, managed llama.cpp lifecycle, the SQLite-backed
-model inventory, and explicit GGUF/Ollama import are implemented. Curated
-downloads and runner provisioning remain planned.
+Accepted. Provider adapters, the app-owned pinned llama.cpp source-build and
+process lifecycle, SQLite-backed model inventory, ID-based selection, and
+explicit GGUF/Ollama import are implemented. Curated model downloads remain
+planned.
 
 ## Context
 
@@ -24,6 +25,20 @@ MagicHandy uses a local LLM provider interface with two first-class providers:
 The llama.cpp path is primary because it is the path MagicHandy can tune most tightly for quality, JSON reliability, predictable startup/load behavior, and future binary releases on the main supported platform. Ollama remains important as the compatibility pathway for Linux, macOS, CPU-only users, unsupported GPU stacks, and users who prefer to manage models outside MagicHandy.
 
 The Go core must not link libllama or require CGo for the early implementation. It should manage `llama-server` as an external process and communicate over localhost using the OpenAI-compatible HTTP API. This preserves the pure-Go core and cross-build guardrail while allowing llama.cpp to evolve independently.
+
+Managed mode does not accept runner or GGUF paths in settings. MagicHandy embeds
+a build helper pinned to llama.cpp `b9966` / commit
+`c749cb041706647f460bb918cccc9d91995205ab`. An explicit controller action (or
+the interactive installer) fetches that source, verifies the commit, builds the
+CPU or CUDA server, probes the result, and atomically activates a constrained
+manifest under the app data directory. Startup and status checks only inspect
+that manifest; they never fetch source or start a build.
+
+Users may decline the managed build and use an existing Ollama installation.
+That avoids the managed runtime and, unless the user explicitly imports a
+model, avoids duplicate model storage. This choice is functional, not a
+degraded fallback: Ollama retains provider health, model listing/selection, and
+streaming chat through the same orchestration layer.
 
 ## Provider Contract
 
@@ -50,7 +65,7 @@ no provider can be constructed because the current model selection is missing.
 
 The llama.cpp provider manages:
 
-- runner discovery or bundled-runner selection
+- pinned source build, app-owned runner activation, and version/backend metadata
 - runner version and acceleration metadata
 - localhost port selection
 - process startup/shutdown
@@ -67,6 +82,13 @@ Initial target:
 - curated GGUF models chosen for instruction following, JSON reliability, and the app's prompt style
 
 Do not attempt to bundle every llama.cpp acceleration backend in the first implementation. CPU, Vulkan, ROCm, Metal, Linux, and macOS llama.cpp paths can be added later if they become worth the packaging and support cost. Ollama covers broad compatibility until then.
+
+The current source builder supports Windows/amd64 CPU and CUDA. `auto` chooses
+CUDA only when both an NVIDIA GPU and `nvcc` are present; otherwise it builds
+CPU. Git, CMake, and Visual Studio C++ Build Tools are build-time prerequisites,
+not runtime dependencies of the Go core. Phase 16 may package prebuilt outputs
+to remove those prerequisites for ordinary release users without changing the
+manifest/provider contract.
 
 ## Ollama Runtime Model
 

@@ -21,6 +21,9 @@ func TestMain(m *testing.M) {
 }
 
 func runManagedLlamaRunnerHelper() {
+	if path := os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER_ARGS"); path != "" {
+		_ = os.WriteFile(path, []byte(strings.Join(os.Args[1:], "\n")), 0o600) // #nosec G306,G703 -- test fixture path injected by its parent.
+	}
 	if path := os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER_COUNT"); path != "" {
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304,G703 -- test helper writes a temp-file path injected by its parent test.
 		if err == nil {
@@ -98,7 +101,7 @@ func TestLlamaCPPStatusRequiresSelectedModelWhenModelListExists(t *testing.T) {
 	}
 }
 
-func TestManagedLlamaCPPStatusRequiresRunnerAndModelPaths(t *testing.T) {
+func TestManagedLlamaCPPStatusRequiresManagedRuntimeAndModel(t *testing.T) {
 	provider, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
 		HTTPProviderOptions: HTTPProviderOptions{
 			BaseURL: "http://127.0.0.1:8080",
@@ -116,8 +119,8 @@ func TestManagedLlamaCPPStatusRequiresRunnerAndModelPaths(t *testing.T) {
 	if !status.Managed {
 		t.Fatalf("managed status should identify managed provider: %+v", status)
 	}
-	if !strings.Contains(status.Message, "runner path") {
-		t.Fatalf("status message = %q, want runner path setup error", status.Message)
+	if !strings.Contains(status.Message, "runtime is not installed") {
+		t.Fatalf("status message = %q, want managed runtime setup error", status.Message)
 	}
 }
 
@@ -128,8 +131,10 @@ func TestManagedLlamaCPPEnsureStartedIsSerialized(t *testing.T) {
 		t.Fatalf("write model fixture: %v", err)
 	}
 	countPath := filepath.Join(dir, "starts.txt")
+	argsPath := filepath.Join(dir, "args.txt")
 	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER", "1")
 	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER_COUNT", countPath)
+	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER_ARGS", argsPath)
 
 	provider, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
 		HTTPProviderOptions: HTTPProviderOptions{
@@ -166,6 +171,16 @@ func TestManagedLlamaCPPEnsureStartedIsSerialized(t *testing.T) {
 
 	if got := waitForStartCount(t, countPath); got != 1 {
 		t.Fatalf("runner starts = %d, want 1", got)
+	}
+	args, err := os.ReadFile(argsPath) // #nosec G304 -- temp fixture path.
+	if err != nil {
+		t.Fatalf("read runner arguments: %v", err)
+	}
+	arguments := string(args)
+	for _, required := range []string{"--offline", "--no-ui", "--alias", "local-model", "-m", modelPath} {
+		if !strings.Contains(arguments, required) {
+			t.Fatalf("runner arguments %q do not contain %q", arguments, required)
+		}
 	}
 }
 

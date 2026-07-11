@@ -31,15 +31,18 @@ account, no third party in the middle, no tracking.
 - A **Handy** with firmware v4 and API v3 access.
 - **Windows** is the primary platform today; Linux and macOS builds are
   best-effort.
-- A **local LLM** for chat — [llama.cpp](https://github.com/ggml-org/llama.cpp)
-  (recommended for NVIDIA GPUs) or [Ollama](https://ollama.com/). MagicHandy
-  talks to these; it doesn't bundle a model, so you pick and download one you
-  like.
+- A **local LLM** for chat. MagicHandy can build and own a pinned
+  [llama.cpp](https://github.com/ggml-org/llama.cpp) runtime (recommended when
+  you want direct runner control), or use an existing [Ollama](https://ollama.com/)
+  install without adding that runtime. Models are never bundled or downloaded
+  at startup.
 
-Settings > Model lists models reported by Ollama and MagicHandy's managed GGUF
-copies. You can import a standalone GGUF or point the app at an existing Ollama
-models directory and copy a compatible model into the managed store. Imports
-show progress and verify SHA-256; they never modify the Ollama library.
+Settings > Model lists models reported by external llama.cpp/Ollama servers and
+MagicHandy's managed GGUF copies. Managed llama.cpp resolves its runner and
+selected model from app-owned inventories, never user-entered executable/model
+paths. You can import a standalone GGUF or scan an existing Ollama models
+directory and explicitly copy a compatible model. Imports show progress and
+verify SHA-256; they never modify the Ollama library.
 
 ## Get started
 
@@ -50,8 +53,11 @@ show progress and verify SHA-256; they never modify the Ollama library.
 ```
 
 The installer checks for [Go](https://go.dev/dl/), builds MagicHandy, sets up
-your data folder, and can help you get a local LLM running. When it's done it
-opens the app in your browser at <http://127.0.0.1:49717>.
+your data folder, and offers to build the pinned managed llama.cpp runtime from
+source. It explains the benefits and storage cost before asking: choose **No**
+to keep using an existing Ollama installation without the extra runtime, or use
+`-SkipLlamaBuild` in an unattended install. When setup is done it opens the app
+at <http://127.0.0.1:49717>.
 
 **Prefer to do it by hand?** See [Build from source](#build-from-source).
 

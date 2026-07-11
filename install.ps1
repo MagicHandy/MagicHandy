@@ -1,4 +1,3 @@
-#Requires -Version 5.1
 <#
 .SYNOPSIS
     Interactive installer for MagicHandy — a local-first AI controller for The Handy.
@@ -28,16 +27,39 @@
 .PARAMETER NoLaunch
     Build and set up, but do not start the app.
 
+.PARAMETER LlamaBackend
+    Managed llama.cpp backend to build: auto, cpu, or cuda. Auto uses CUDA only
+    when both an NVIDIA GPU and the CUDA Toolkit compiler are available.
+
+.PARAMETER SkipLlamaBuild
+    Do not build managed llama.cpp. Use an existing Ollama installation to save
+    the managed runtime space and avoid a model copy unless you explicitly
+    import one. Combine with -Yes for an unattended install.
+
+.PARAMETER OllamaModel
+    Optional Ollama model name to pull. In unattended -Yes mode, an empty value
+    skips pulling a model instead of prompting.
+
 .EXAMPLE
     .\install.ps1
 
 .EXAMPLE
     .\install.ps1 -DataDir .\data -Port 49800
+
+.EXAMPLE
+    .\install.ps1 -Yes -SkipLlamaBuild -NoLaunch
+    Build MagicHandy without the managed llama.cpp runtime so an existing
+    Ollama installation can be used without duplicating runtime storage.
 #>
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [int]$Port = 49717,
     [string]$DataDir,
+    [ValidateSet('auto', 'cpu', 'cuda')]
+    [string]$LlamaBackend = 'auto',
+    [switch]$SkipLlamaBuild,
+    [string]$OllamaModel,
     [switch]$Yes,
     [switch]$NoLaunch
 )
@@ -155,15 +177,44 @@ $voiceDataDir = if ($DataDir) {
 
 # --- 4. Local LLM (optional) -------------------------------------------------
 Write-Head '4. Local LLM (for chat)'
-if (Test-Cmd 'nvidia-smi') {
-    Write-Host 'NVIDIA GPU detected — llama.cpp with a CUDA build is the fast path.' -ForegroundColor Green
+$hasNVIDIA = Test-Cmd 'nvidia-smi'
+$hasNVCC = Test-Cmd 'nvcc'
+if ($hasNVIDIA) {
+    Write-Host 'NVIDIA GPU detected. A CUDA source build is the fast path when the CUDA Toolkit is installed.' -ForegroundColor Green
 } else {
-    Write-Host 'No NVIDIA GPU detected — Ollama or a CPU build of llama.cpp will work, just slower.'
+    Write-Host 'No NVIDIA GPU detected. The managed source build will use the CPU backend.'
 }
 if (Confirm-YesNo 'Set up a local LLM now? (you can always do this later in Settings > Model)') {
+    Write-Host 'Managed llama.cpp lets MagicHandy pin and directly control the runner, startup, model loading,'
+    Write-Host 'and diagnostics. No llama-server path is required; the build verifies b9966 at commit c749cb0.'
+    Write-Host ''
+    Write-Host 'You can skip this build and use an existing Ollama install instead.' -ForegroundColor White
+    Write-Host 'That is the space-saving choice: MagicHandy will use Ollama''s runtime and models in place,'
+    Write-Host 'without keeping a managed llama.cpp build or copying a model unless you explicitly import one.'
+    $effectiveBackend = $LlamaBackend
+    if ($SkipLlamaBuild) {
+        Write-Host 'Skipping managed llama.cpp as requested. Select Ollama in Settings > Model.' -ForegroundColor Green
+    } elseif (Confirm-YesNo 'Build MagicHandy managed llama.cpp now? (No = use Ollama or configure it later)') {
+        if ($effectiveBackend -eq 'auto' -and $hasNVIDIA -and -not $hasNVCC) {
+            Write-Host 'The CUDA Toolkit compiler (nvcc) was not found, so Auto will build the CPU backend.' -ForegroundColor Yellow
+            Write-Host 'Install Nvidia.CUDA with winget and rerun with -LlamaBackend cuda for GPU acceleration.'
+        }
+        $llamaBuilder = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
+        try {
+            & $llamaBuilder -DataDir $voiceDataDir -Backend $effectiveBackend
+        } catch {
+            Write-Warning "Managed llama.cpp build did not complete: $_"
+            Write-Host 'The source build needs Git, CMake, and Visual Studio C++ Build Tools.'
+            Write-Host 'The Model screen can retry the same pinned build after those tools are installed.'
+        }
+    }
+
     if (Test-Cmd 'ollama') {
-        Write-Host 'Ollama is installed.'
-        $model = Read-Host 'Model to pull now (blank to skip, e.g. llama3.1:8b)'
+        Write-Host 'Ollama is also installed and remains available as the external compatibility provider.'
+        $model = $OllamaModel
+        if (-not $Yes -and [string]::IsNullOrWhiteSpace($model)) {
+            $model = Read-Host 'Model to pull now (blank to skip, e.g. llama3.1:8b)'
+        }
         if (-not [string]::IsNullOrWhiteSpace($model)) {
             Write-Host "Heads up: '$model' is a multi-gigabyte download." -ForegroundColor Yellow
             if (Confirm-YesNo "Pull '$model' with Ollama now?") {
@@ -171,15 +222,7 @@ if (Confirm-YesNo 'Set up a local LLM now? (you can always do this later in Sett
             }
         }
     } else {
-        Write-Host 'Ollama not found. The easiest local option is to install it from https://ollama.com/,'
-        Write-Host 'then run: ollama pull llama3.1:8b'
-    }
-    if (Test-Cmd 'llama-server') {
-        Write-Host 'llama-server (llama.cpp) found on PATH — set its path and a GGUF model in Settings > Model.'
-    } else {
-        Write-Host 'For the llama.cpp path (recommended on NVIDIA): download a CUDA llama.cpp release and a'
-        Write-Host 'GGUF model, then set both paths in the app under Settings > Model. See'
-        Write-Host 'docs/installation-automation.md for the planned guided flow.'
+        Write-Host 'Ollama is not installed. That is fine when using MagicHandy managed llama.cpp.'
     }
 }
 

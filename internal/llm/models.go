@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -180,12 +179,12 @@ func (m *ModelManager) Model(ctx context.Context, id string) (ModelRecord, error
 
 // Delete removes only a MagicHandy-owned model copy. The selected model is
 // protected so a running/configured provider never loses its backing file.
-func (m *ModelManager) Delete(ctx context.Context, id, selectedPath string) error {
+func (m *ModelManager) Delete(ctx context.Context, id, selectedID string) error {
 	record, err := m.Model(ctx, id)
 	if err != nil {
 		return err
 	}
-	if selectedPath != "" && samePath(record.ModelPath, selectedPath) {
+	if selectedID != "" && record.ID == selectedID {
 		return ErrModelSelected
 	}
 	modelDir := filepath.Dir(record.ModelPath)
@@ -311,15 +310,6 @@ func writeModelMetadata(path string, record ModelRecord) error {
 		return fmt.Errorf("commit model metadata: %w", err)
 	}
 	return nil
-}
-
-func samePath(left, right string) bool {
-	left = filepath.Clean(left)
-	right = filepath.Clean(right)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(left, right)
-	}
-	return left == right
 }
 
 func pathWithin(root, candidate string) bool {

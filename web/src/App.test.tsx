@@ -3,6 +3,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { streamChat } from "./api/client";
+import type { LLMModelManagerSnapshot } from "./api/types";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
 
 // These tests guard the safety-critical UI invariants from
@@ -49,7 +50,7 @@ const libraryFixture = {
   auto_disable: false,
 };
 
-const modelManagerFixture = {
+const modelManagerFixture: LLMModelManagerSnapshot = {
   models: [
     {
       id: "managed-model-a1b2c3",
@@ -72,6 +73,20 @@ const modelManagerFixture = {
   imports: [],
   store_path: "C:\\MagicHandy\\models",
   suggested_ollama_path: "C:\\Users\\Test User\\.ollama\\models",
+  runtime: {
+    state: "ready",
+    installed: true,
+    current: true,
+    build_supported: true,
+    supported_backends: ["auto", "cpu", "cuda"],
+    expected_version: "b9966",
+    version: "b9966",
+    commit: "c749cb041706647f460bb918cccc9d91995205ab",
+    backend: "cpu",
+    source: "built_from_source",
+    built_at: "2026-07-11T00:00:00Z",
+    message: "Managed llama.cpp b9966 (cpu) is installed.",
+  },
 };
 
 const ollamaScanFixture = {
@@ -96,8 +111,8 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: typeof modelManagerFixture } = {}) {
-  const state = (opts.state ?? baseState) as typeof baseState & { bluetooth_bridge?: unknown };
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+  const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     if (opts.fail) throw new Error("offline");
@@ -110,9 +125,16 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
     if (u.includes("/api/llm/ollama/scan")) return jsonRes(ollamaScanFixture);
     if (u.includes("/api/llm/ollama/models")) return jsonRes({ available: true, models: [{ name: "qwen-test:latest", size_bytes: 4_294_967_296, format: "gguf", family: "qwen", parameter_size: "7B", quantization: "Q4_K_M" }] });
     if (u.includes("/api/llm/imports/ollama")) return jsonRes({ import: { id: "import-1", source: "ollama", display_name: "qwen-test:latest", status: "copying", bytes_copied: 1024, total_bytes: 4_294_967_296, started_at: "now", updated_at: "now" } });
+    if (u.includes("/api/llm/runtime/build")) return jsonRes({ build: { id: "runtime-build-1", backend: "auto", status: "queued", message: "Queued managed llama.cpp source build.", started_at: "now", updated_at: "now" } });
     if (u.includes("/api/llm/models")) return jsonRes(opts.modelManager ?? modelManagerFixture);
-    if (u.includes("/api/llm/status")) return jsonRes({ provider: state.settings.llm.provider, base_url: "http://127.0.0.1:8080", model: state.settings.llm.model, available: false, managed: true, loaded: false, message: "llama.cpp runner is not loaded" });
-    if (u.includes("/api/settings")) return jsonRes({ settings: state.settings });
+    if (u.includes("/api/llm/status")) return jsonRes({ provider: state.settings.llm.provider, base_url: "http://127.0.0.1:8080", model: state.settings.llm.model, available: false, managed: state.settings.llm.llama_cpp_mode === "managed", loaded: false, models: state.settings.llm.llama_cpp_mode === "external" ? ["server-model-a", "server-model-b"] : undefined, message: `llama.cpp runner is not loaded${state.settings.llm.model ? ` (saved model: ${state.settings.llm.model})` : ""}` });
+    if (u.includes("/api/settings")) {
+      if (_init?.method === "PUT" && _init.body) {
+        const update = JSON.parse(String(_init.body)) as { llm?: typeof state.settings.llm };
+        if (update.llm) state.settings.llm = { ...state.settings.llm, ...update.llm };
+      }
+      return jsonRes({ settings: state.settings });
+    }
     if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
     if (u.includes("/api/state")) return jsonRes(state);
@@ -284,12 +306,15 @@ describe("app shell safety invariants", () => {
 
     expect(await screen.findByText("Managed model")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /import from ollama/i })).toBeEnabled();
+    expect(screen.getByText(/built from pinned source/i)).toBeInTheDocument();
     expect(screen.getByText(/runner is not loaded/i)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /llama-server path/i })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /gguf model path/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^use$/i }));
 
-    expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveValue("managed-model-a1b2c3");
-    expect(screen.getByRole("textbox", { name: /gguf model path/i })).toHaveValue(modelManagerFixture.models[0].model_path);
+    expect(screen.getByRole("button", { name: /^selected$/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /^load$/i })).toBeDisabled();
+    expect(screen.getByText(/save settings to check this configuration/i)).toBeInTheDocument();
     expect(screen.getByText(/save settings before runtime actions/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
@@ -297,7 +322,9 @@ describe("app shell safety invariants", () => {
     const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
     const payload = JSON.parse(String((request as RequestInit).body));
     expect(payload.llm.model).toBe("managed-model-a1b2c3");
-    expect(payload.llm.llama_cpp_model_path).toBe(modelManagerFixture.models[0].model_path);
+    expect(payload.llm).not.toHaveProperty("llama_cpp_runner_path");
+    expect(payload.llm).not.toHaveProperty("llama_cpp_model_path");
+    expect(await screen.findByText(/saved model: managed-model-a1b2c3/i)).toBeInTheDocument();
   });
 
   it("scans a user-selected Ollama path and starts an explicit copy", async () => {
@@ -321,6 +348,25 @@ describe("app shell safety invariants", () => {
     expect(JSON.parse(String((importRequest as RequestInit).body))).toEqual({ path: "D:\\Ollama\\models", candidate_id: "ollama-candidate-1" });
   });
 
+  it("lists and selects models reported by an external llama.cpp server", async () => {
+    const state = {
+      ...baseState,
+      settings: {
+        ...baseState.settings,
+        llm: { ...baseState.settings.llm, llama_cpp_mode: "external", model: "server-model-a" },
+      },
+    };
+    installFetch({ state });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+
+    const list = await screen.findByLabelText(/models reported by llama\.cpp/i);
+    expect(within(list).getByText("server-model-a")).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: /^use$/i }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveValue("server-model-b"));
+  });
+
   it("keeps model inventory visible but locks model mutations for read-only clients", async () => {
     installFetch({ state: { ...baseState, controller: { active: false, read_only: true } } });
     renderApp();
@@ -330,6 +376,51 @@ describe("app shell safety invariants", () => {
     expect(screen.getByRole("button", { name: /import from ollama/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /^use$/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /remove managed model/i })).toBeDisabled();
+  });
+
+  it("keeps the saved managed model protected while provider edits are unsaved", async () => {
+    const state = {
+      ...baseState,
+      settings: {
+        ...baseState.settings,
+        llm: { ...baseState.settings.llm, model: "managed-model-a1b2c3" },
+      },
+    };
+    installFetch({ state });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+
+    const remove = await screen.findByRole("button", { name: /remove managed model/i });
+    expect(remove).toBeDisabled();
+    fireEvent.change(screen.getByRole("combobox", { name: /^provider$/i }), { target: { value: "ollama" } });
+    await screen.findByLabelText(/models reported by ollama/i);
+    expect(remove).toBeDisabled();
+  });
+
+  it("refreshes provider health after a managed runtime build finishes", async () => {
+    const fetch = installFetch({
+      modelManager: {
+        ...modelManagerFixture,
+        runtime_build: {
+          id: "runtime-build-complete",
+          backend: "cpu",
+          status: "complete",
+          message: "Managed llama.cpp b9966 (cpu) is installed.",
+          started_at: "now",
+          updated_at: "now",
+        },
+      },
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+    expect((await screen.findAllByText(/managed llama\.cpp b9966 \(cpu\) is installed/i)).length).toBeGreaterThanOrEqual(1);
+
+    await waitFor(() => {
+      const statusCalls = fetch.mock.calls.filter(([url]) => String(url).includes("/api/llm/status"));
+      expect(statusCalls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it("shows voice worker status as readouts and hides unavailable controls", async () => {

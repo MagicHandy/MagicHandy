@@ -147,8 +147,6 @@ type LLMSettings struct {
 	Provider             string `json:"provider"`
 	LlamaCPPMode         string `json:"llama_cpp_mode"`
 	LlamaCPPBaseURL      string `json:"llama_cpp_base_url"`
-	LlamaCPPRunnerPath   string `json:"llama_cpp_runner_path,omitempty"`
-	LlamaCPPModelPath    string `json:"llama_cpp_model_path,omitempty"`
 	OllamaBaseURL        string `json:"ollama_base_url"`
 	OllamaModelsPath     string `json:"ollama_models_path,omitempty"`
 	Model                string `json:"model"`
@@ -160,7 +158,7 @@ type LLMSettings struct {
 // Voice is off by default; worker commands point at local executables that
 // speak the versioned worker protocol (Phase 12 ships only the stub worker;
 // real providers arrive in Phase 13). Paths are not secrets — the same trust
-// model as the llama.cpp runner path.
+// model as other optional local worker executables.
 type VoiceSettings struct {
 	Enabled     bool   `json:"enabled"`
 	TTSProvider string `json:"tts_provider"`
@@ -764,8 +762,6 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.Provider = strings.TrimSpace(settings.Provider)
 	settings.LlamaCPPMode = strings.TrimSpace(settings.LlamaCPPMode)
 	settings.LlamaCPPBaseURL = strings.TrimRight(strings.TrimSpace(settings.LlamaCPPBaseURL), "/")
-	settings.LlamaCPPRunnerPath = strings.TrimSpace(settings.LlamaCPPRunnerPath)
-	settings.LlamaCPPModelPath = strings.TrimSpace(settings.LlamaCPPModelPath)
 	settings.OllamaBaseURL = strings.TrimRight(strings.TrimSpace(settings.OllamaBaseURL), "/")
 	settings.OllamaModelsPath = strings.TrimSpace(settings.OllamaModelsPath)
 	settings.Model = strings.TrimSpace(settings.Model)

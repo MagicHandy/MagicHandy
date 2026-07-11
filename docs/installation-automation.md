@@ -12,7 +12,8 @@ A structural advantage worth stating up front: MagicHandy's core is a single
 pure-Go binary with **no Python, no venv, no pip, and no torch/CUDA in the core**.
 The hardest, most failure-prone part of the old setup — building a Python ML
 environment with matching CUDA/torch wheels — simply does not exist here. CUDA
-matters only for the *external* llama.cpp runner, never for MagicHandy itself.
+matters only for the app-owned external `llama-server` process, never for the
+MagicHandy Go core itself.
 
 ## What StrokeGPT-ReVibed automated (the parity target)
 
@@ -31,15 +32,20 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
   no pip.
 - **Interactive installer (`install.ps1`, this repo):** checks for Go and offers
   to install it (winget), builds the binary, sets up a data folder, detects an
-  NVIDIA GPU, gives guided LLM setup, and offers an optional local Parakeet ASR
-  setup. The Parakeet path downloads a pinned CPU runner and model only after
-  consent, shows size and license, verifies SHA-256, builds the worker, and
-  leaves voice disabled. The installer can also write a
+  NVIDIA GPU, and offers a pinned managed llama.cpp source build with CPU/CUDA
+  selection. It explains why direct llama.cpp control helps and lets existing
+  Ollama users decline the build to save space (`-SkipLlamaBuild` supports the
+  same choice in unattended runs). It also offers an optional local Parakeet
+  ASR setup. The Parakeet path downloads a pinned CPU runner and model only
+  after consent, shows size and license, verifies SHA-256, builds the worker,
+  and leaves voice disabled. The installer can also write a
   `Start-MagicHandy.ps1` launcher and open the app.
 - **Local model manager:** Settings > Model lists runtime/daemon models and
   SQLite-backed managed GGUF copies. Users can import a standalone GGUF or scan
   a configurable Ollama library path and copy a compatible model with
-  SHA-256-verified progress. The core never downloads a model on startup.
+  SHA-256-verified progress. Managed llama.cpp can also build/switch its pinned
+  app-owned runtime from this screen; the core never builds or downloads a
+  runtime/model on startup.
 - **Local data:** settings, memory, prompt sets, chat history, patterns,
   programs, preference feedback, and model metadata in a local SQLite DB; the
   Handy connection key is stored locally and never echoed back.
@@ -47,15 +53,13 @@ matters only for the *external* llama.cpp runner, never for MagicHandy itself.
 ## Gaps vs the target
 
 1. No packaged release yet — install still requires Go to build (Phase 16).
-2. No automated llama.cpp runner provisioning (download the right CUDA/CPU build,
-   verify, wire the path).
-3. No in-app curated model catalog or guided network download yet. Local GGUF
+2. No in-app curated model catalog or guided network download yet. Local GGUF
    and compatible Ollama-library imports are implemented with copy progress.
-4. GPU handling is detection + advice only, not an end-to-end "pick the right
-   runner and a model that fits your VRAM" flow.
-5. No in-app first-run setup wizard (the installer script is the current
+3. GPU handling chooses CPU/CUDA from available build tooling, but does not yet
+   recommend a model from detected VRAM or install the CUDA toolkit itself.
+4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
-6. Voice setup is partial: Parakeet ASR has an installer path, but in-app
+5. Voice setup is partial: Parakeet ASR has an installer path, but in-app
    provider provisioning, microphone UI, local cloning TTS, and any LAN/HTTPS
    story remain open (Phase 13; R17/R18).
 
@@ -71,10 +75,12 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
 3. **Packaged releases (Phase 16).** Windows portable zip / signed build so the
    installer can *download a prebuilt binary* instead of building from source —
    no Go required for end users. Linux/macOS artifacts best-effort.
-4. **Managed llama.cpp runner provisioning.** Download a pinned `llama-server`
-   build, choosing a CUDA variant when an NVIDIA GPU is present and a CPU build
-   otherwise; verify the checksum, place it, and set the path. Ties into
-   `docs/model-management.md` and risk R13.
+4. **Managed llama.cpp runner provisioning (done for source installs).** The
+   installer and Model UI invoke one embedded helper pinned to `b9966` /
+   `c749cb0`, verify the checkout and executable, build CPU or CUDA, install the
+   complete runtime atomically, and activate a constrained app-data manifest.
+   No user path setting remains. Phase 16 packaging can ship prebuilt outputs so
+   release users do not need Git/CMake/Visual Studio.
 5. **Curated model catalog + guided download.** A small, opinionated list of
    recommended GGUF models with visible size, license, checksum, and rough VRAM
    fit; one-click download with progress; and "import a local GGUF" without a
@@ -116,7 +122,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | One-command environment setup | Partial — `install.ps1` builds from source | this repo |
 | No Python/venv/torch to install | **Better** — pure-Go core, none needed | by design |
 | Prebuilt one-click download | Planned | Phase 16 |
-| LLM runner provisioning (CUDA/CPU) | Planned | R13, model-management |
+| LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
 | Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
 | Curated model download UI | Planned | catalog + Settings > Model |
 | GPU/VRAM-aware recommendations | Detection + advice today | install.ps1 GPU detection |

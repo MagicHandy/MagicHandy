@@ -167,10 +167,10 @@ func (p *ManagedLlamaCPPProvider) baseStatus() ProviderStatus {
 
 func (p *ManagedLlamaCPPProvider) setupMessage() string {
 	if p.runnerPath == "" {
-		return "managed llama.cpp requires a llama-server runner path"
+		return "managed llama.cpp runtime is not installed"
 	}
 	if p.modelPath == "" {
-		return "managed llama.cpp requires a GGUF model path"
+		return "managed llama.cpp requires a selected managed model"
 	}
 	if info, err := os.Stat(p.runnerPath); err != nil || info.IsDir() {
 		return fmt.Sprintf("llama-server runner is unavailable: %s", p.runnerPath)
@@ -199,11 +199,13 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 		"--host", host,
 		"--port", strconv.Itoa(port),
 		"--alias", p.model,
+		"--offline",
+		"--no-ui",
 		"-m", p.modelPath,
 	}
 
-	// #nosec G204 -- runner path/model path are explicit local user settings and
-	// are passed directly to exec without shell expansion.
+	// #nosec G204 -- runner/model paths were validated beneath app-owned stores
+	// and are passed directly to exec without shell expansion.
 	command := exec.Command(p.runnerPath, args...)
 	command.Dir = filepath.Dir(p.runnerPath)
 	command.Stderr = p.stderr

@@ -122,10 +122,10 @@ args back into fields), and violate backend-authoritative state. Instead:
 
 ## Same rule applied to the other tabs (small, same slice)
 
-- **Model**: `llama_cpp` shows llama.cpp fields only (runner + GGUF paths
-  only in `managed` mode; base URL only in `external` mode); `ollama` shows
-  only the Ollama URL. Provider and mode dropdowns already exist — this is
-  pure disclosure.
+- **Model**: managed `llama_cpp` shows app-owned runtime status/build controls
+  and the managed model inventory, never runner/GGUF path fields. External
+  `llama_cpp` shows its base URL plus server-reported models; `ollama` shows its
+  URL plus daemon-reported models. Provider and mode disclosure stays explicit.
 - **Device**: the developer application ID field renders only when the ID
   source is `developer_override` (the Bluetooth bridge panel is already
   conditional).

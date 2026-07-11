@@ -7,8 +7,9 @@ quality-first path; Ollama remains a first-class external provider. The model
 manager gives llama.cpp a durable inventory without making model downloads or
 runtime discovery part of startup.
 
-The inventory and local import foundation is implemented. Curated downloads,
-runner provisioning, and hardware-fit recommendations remain release work.
+The inventory, local imports, and app-owned llama.cpp source-build lifecycle are
+implemented. Curated model downloads and hardware-fit recommendations remain
+release work.
 
 ## Ownership Boundaries
 
@@ -16,9 +17,11 @@ runner provisioning, and hardware-fit recommendations remain release work.
   jobs.
 - SQLite schema v9 owns model metadata in `llm_models`.
 - Model files live under the app data directory, outside SQLite.
-- The managed llama.cpp provider owns only its runner process. It receives the
-  selected model path from settings and exposes that model under a stable
-  `--alias`.
+- `ManagedLlamaRuntimeManager` owns explicit build/cancel state and activates
+  only validated app-owned runtime manifests.
+- The managed llama.cpp provider owns only its runner process. The backend
+  resolves the active runner and selected model ID to app-owned paths, then
+  exposes that ID under a stable `--alias`. Paths are not settings.
 - Ollama owns its daemon and library. MagicHandy may read its manifests and
   blobs during an explicit import, but never modifies or deletes them.
 - Provider status and model listing never download or load a model.
@@ -53,12 +56,64 @@ data/
         metadata.json
   downloads/
     model-import-<job-id>.partial
+  runtimes/
+    llama.cpp/
+      active.json               constrained active-runtime manifest
+      .tools/                   embedded build helper materialized at use
+      installs/
+        b9966-<backend>-c749cb0/
+          runtime.json
+          LICENSE-llama.cpp
+          bin/                  llama-server plus required shared libraries
 ```
 
 Imports write to `downloads` on the same filesystem, flush the file, verify it,
 then rename it into the model store. Startup removes only model-import partials
 older than 24 hours, so another process starting on the same data directory
 does not immediately unlink an active copy.
+
+## Managed llama.cpp Runtime Build
+
+Managed mode never asks for `llama-server` or GGUF paths. MagicHandy pins
+llama.cpp release `b9966` at commit
+`c749cb041706647f460bb918cccc9d91995205ab` and embeds the PowerShell build
+helper in the Go binary. **Build runtime** is an explicit, controller-gated
+action. The same helper is called by `install.ps1` when the user accepts its
+managed-runtime prompt.
+
+The helper:
+
+1. requires Windows/amd64 plus Git, CMake, and Visual Studio C++ Build Tools;
+2. chooses CUDA in `auto` mode only when NVIDIA tooling and `nvcc` are present,
+   otherwise CPU;
+3. fetches the pinned tag with Git long-path support and verifies the exact
+   commit;
+4. builds only the local `llama-server` target, with curl, HTTPS, and embedded
+   llama.cpp UI assets disabled;
+5. probes the resulting executable for commit `c749cb0`;
+6. copies the complete binary/DLL set and MIT license into a versioned staging
+   directory; and
+7. atomically writes `active.json` only after the install is valid.
+
+Build source and intermediates use a job-specific temporary directory beneath
+the runtime root and are removed after success or failure. Runtime inspection
+does no network I/O and starts no process. The managed server itself launches
+with `--offline --no-ui`, binds to MagicHandy's fixed loopback endpoint, and
+loads only the backend-resolved managed model. An incomplete or mismatched
+app-owned install is replaced on retry; users are not asked to repair runtime
+directories by hand.
+
+The app exposes build state, bounded output, cancellation, installed version,
+backend, and current/outdated/invalid state. Cancellation terminates the
+PowerShell build process tree on Windows; app shutdown cancels and waits for an
+active build.
+
+The interactive installer explains the tradeoff before building. Managed
+llama.cpp gives MagicHandy direct version, startup, loading, and diagnostics
+control. Users with an existing Ollama setup can answer **No** (or pass
+`-SkipLlamaBuild`) to avoid the extra runtime. Ollama models remain in place
+unless the user separately chooses **Import from Ollama**, which intentionally
+creates a managed copy.
 
 ## Standalone GGUF Import
 
@@ -71,8 +126,10 @@ The user provides a local file path and optional display name. MagicHandy:
 5. deduplicates the inventory by SHA-256; and
 6. leaves the source file unchanged.
 
-The selected model cannot be removed. Selection updates the managed llama.cpp
-model ID and path together, then follows the normal Save settings flow.
+The selected model cannot be removed. Selection stores only the managed model
+ID, then follows the normal Save settings flow. At provider construction the
+backend resolves that ID to a ready inventory record; a missing, changed, or
+unknown record is a visible unavailable state, never a fallback path.
 
 ## Ollama Import
 
@@ -121,8 +178,11 @@ Settings > Model shows:
 
 - saved runtime health and the provider's last status message;
 - provider-scoped fields only;
-- a model combobox backed by managed or daemon-reported models while retaining
-  a free-form external-provider escape hatch;
+- app-owned runtime version/backend/build state with CPU/CUDA/auto build and
+  cancel controls in managed mode;
+- no executable or model path inputs in managed mode;
+- server-reported external llama.cpp and Ollama model rows with matching
+  Use/Selected behavior, while retaining free-form external-provider inputs;
 - managed model rows with source, size, quantization, state, Use, and guarded
   Remove actions;
 - standalone GGUF and Ollama import disclosures;
@@ -147,7 +207,6 @@ Implemented limits:
 Still planned:
 
 - checksum-pinned curated model downloads with license/source metadata;
-- llama.cpp runner provisioning and version/backend inventory;
 - RAM/VRAM and GPU-fit recommendations;
 - context-window and JSON-compliance scoring;
 - resumable downloads and persisted cross-restart import jobs; and
@@ -157,7 +216,8 @@ Still planned:
 ## Diagnostics And Privacy
 
 Diagnostics may include provider type, selected model ID, managed metadata,
-runner status/errors, import state, and load timings. They must not include
+runner version/backend/status/errors, build state/output tail, import state,
+and load timings. They must not include
 model bytes, full private chat logs, prompt bodies, connection keys, or API
 keys. Local filesystem paths are operational metadata, not credentials, but
 exports should still avoid including unrelated paths.
