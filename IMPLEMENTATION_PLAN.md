@@ -18,12 +18,13 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-11. Phases 0 through 13.8 are merged to `main`. Phase 14 is
-implemented on the current review branch: persisted patterns/programs,
-funscript import, shared-engine playback, LLM curation, authoring, and visible
-reversible training feedback. Phase 13 deliberately supports microphone
-capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
-decision.
+Updated 2026-07-11. Phases 0 through 14 are merged to `main` — Phase 14 (#52)
+landed persisted patterns/programs, funscript import, shared-engine playback,
+LLM curation, authoring, and visible reversible training feedback. Phase 14B
+(planned) adds the Intiface/Buttplug dispatch owner under the
+transport-neutral frame contract recorded in ADR 0010. Phase 13 deliberately
+supports microphone capture on localhost only; LAN/mobile HTTPS remains a
+Phase 16 packaging decision.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -52,7 +53,8 @@ decision.
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
-| 14 | Pattern library, programs, authoring, and LLM curation | **Complete on review branch** | current PR |
+| 14 | Pattern library, programs, authoring, and LLM curation | **Complete** | #52 |
+| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | Planned | — |
 | 15-17 | Migration, packaging, parity | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -792,7 +794,7 @@ works with the default settings without touching advanced knobs.
 
 # Phase 14: Pattern Library, Programs, And Authoring
 
-Status: **implemented on the current review branch (2026-07-11)**.
+Status: **complete** — merged 2026-07-11 (#52).
 
 ## Suggested `/goal`
 
@@ -874,6 +876,80 @@ capped below 40% intensity; synthetic tests cannot establish physical feel.
 ## Out Of Scope
 
 - growing a large curated built-in catalog (content work, not architecture)
+
+# Phase 14B: Intiface Dispatch Owner
+
+Status: planned. Decision and schema evaluation recorded in
+[ADR 0010](docs/decisions/0010-transport-neutral-frames-intiface.md), which
+revises ADR 0006's HSP-only dispatch-owner scope and resolves
+`docs/lso-merge-alternatives.md` Decision 2 as a first-class owner.
+
+## Suggested `/goal`
+
+`/goal Complete MagicHandy Phase 14B: neutralize the transport frame contract per ADR 0010, then implement the Intiface/Buttplug dispatch owner with the same safety, diagnostics, and consistency obligations as the Handy owners.`
+
+## Objective
+
+Drive Intiface Central-managed devices from the same motion engine, with
+output that feels the same as the Handy paths because every owner consumes
+the identical timed-point frame under tested, owner-agnostic obligations.
+
+## Schema Verdict (from ADR 0010)
+
+The motion handling schema needs **no structural change**: the engine's
+absolute-time, absolute-position (0–100 relative span) timed-point stream is
+already the right common denominator for browser Bluetooth, Intiface, and
+the Handy v3 API. Two modest modifications ship with this phase:
+
+- rename the `transport` contract's HSP-flavored names to transport-neutral
+  ones (`AppendPoints`/`Play`, kinds `points_add`/`points_play`); HSP stays
+  the name of the Handy *encoding*, not of the frame
+- widen sample/point positions from `int` to `float64` (content and PCHIP
+  sampling are already float); owners quantize at encode time — the Handy to
+  whole percent, Buttplug to 0..1 floats
+
+## Slices
+
+- **14B.0 — contract neutralization.** The renames and float positions,
+  plus the owner-agnostic contract suite: the HSP invariant tests
+  generalize so every dispatch owner is tested for exactly-once window
+  projection, exactly-once reverse mapping, stop preemption, honest health
+  reporting, and no resampling/reshaping of the frame.
+- **14B.1 — Buttplug client and owner.** Pure-Go websocket client
+  (`github.com/coder/websocket`) speaking Buttplug spec v3 against a
+  user-run Intiface Central (default `ws://127.0.0.1:12345`, configurable):
+  handshake, ping keepalive (a safety feature — the server stops devices
+  when the client dies), device list and single linear-actuator selection,
+  the immediate-mode pacer that converts point pairs into scheduled
+  `LinearCmd`s with host-side window projection, `StopDeviceCmd` on Stop
+  with pacer flush, underrun detection reported as honest playback state,
+  and full diagnostics parity. Settings gain the `intiface` dispatch owner
+  and server address; owner-switch stops the old owner first, like today.
+- **14B.2 — validation and docs.** A fake Buttplug server drives the unit
+  and lifecycle suites (goleak-gated, Stop/owner-switch gates extended);
+  live validation runs the same Handy through all three paths — Cloud REST,
+  browser Bluetooth, and Intiface — as a direct like-for-like consistency
+  measurement, plus one non-Handy Buttplug device if available. Setup and
+  the capability boundary are documented (`docs/intiface.md`).
+
+If the LSO merge lands its Buttplug transport first, 14B.1 adapts that code
+behind this contract instead of writing a parallel implementation (R20).
+
+## Out Of Scope
+
+- vibration/rotation devices (`ScalarCmd`/`RotateCmd` mapping) — a later
+  slice once linear output is proven
+- multiple simultaneous devices
+- running or bundling Intiface Central itself; the user operates it
+
+## Done Criteria
+
+- The owner-agnostic contract suite passes for all three owners.
+- Stop, pause/resume, quick-settings refresh, and owner-switch behave
+  identically over Intiface (same invariants, same traces).
+- The same pattern played over Cloud REST and Intiface on the same Handy is
+  indistinguishable in feel at matched latency (manual evidence, like the
+  Phase 14 feel check).
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 

@@ -562,3 +562,41 @@ Exit evidence:
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).
+
+## R22: Third Dispatch Owner (Intiface) Surface Risk
+
+Level: Medium
+
+Description:
+ADR 0010 adds Intiface/Buttplug as a third dispatch owner. Unlike the two
+Handy owners, it is immediate-mode: a host-side pacer schedules every command
+in wall time, with no device-side buffer, starving report, or stroke-window
+projection. New failure modes (timer drift, underrun, missed stop-preemption,
+double or missed window projection) could make the same motion feel different
+per owner or, worse, weaken stop behavior on one path. Buttplug-side devices
+also vary widely in actuator limits the Handy owners never see.
+
+Mitigation:
+
+- one owner-agnostic contract suite (Phase 14B.0): exactly-once window
+  projection, exactly-once reverse mapping, stop preemption, honest health
+  reporting, and no resampling — run against every owner including a fake
+  Buttplug server
+- motion-feel shaping (PCHIP, acceleration/reversal budgets, cycle and dwell
+  floors) stays engine/generator-side so owners cannot diverge by design
+- the pacer detects its own underrun and reports honest playback state; the
+  stop-and-report rule (ADR 0006) applies — never a silent fallback
+- Buttplug ping keepalive stays enabled so Intiface stops devices if
+  MagicHandy dies
+- live validation drives the same Handy through all three owners as a direct
+  like-for-like consistency measurement before the owner is recommended
+
+Exit evidence:
+
+- contract suite green for all owners; Stop/owner-switch/goroutine-lifecycle
+  gates extended to Intiface; a real-device session confirms matched feel on
+  the same Handy over Cloud REST and Intiface and clean stop behavior on a
+  non-Handy Buttplug device if available
+
+Relates to R1 (real-device validation), R14 (one motion path), R16 (device
+coverage), and R20 (LSO merge integration).

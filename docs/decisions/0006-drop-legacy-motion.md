@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted for the rewrite plan.
+Accepted for the rewrite plan. Dispatch-owner scope revised by ADR 0010
+(2026-07-11): Intiface/Buttplug joins Cloud REST and browser Web Bluetooth as
+a third dispatch owner of the same single motion backend and
+transport-neutral frame. Everything listed under "Dropped entirely" stays
+dropped; the recovery rule (no silent fallback — stop and report) applies to
+every owner.
 
 ## Context
 

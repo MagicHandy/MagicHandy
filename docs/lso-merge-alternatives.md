@@ -66,6 +66,11 @@ fallback (ADR 0006).
   HSP-only language, and with Stop/owner-switch/goroutine-lifecycle tests
   extended to the new transport. The "no silent fallback, stop-and-report" rule
   applies to every transport.
+- **Resolved (2026-07-11): option A.**
+  [ADR 0010](decisions/0010-transport-neutral-frames-intiface.md) records the
+  schema evaluation and the owner obligations; Phase 14B in
+  `IMPLEMENTATION_PLAN.md` carries the implementation. If the merge lands
+  LSO's Buttplug transport first, Phase 14B adapts it behind that contract.
 
 ---
 
