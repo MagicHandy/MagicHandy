@@ -256,14 +256,15 @@ func (i *Intiface) Close() error {
 	}
 	i.closed = true
 	connected := i.connected
-	selection, selected := i.selection, i.selected
+	selected := i.selected
 	stopSession := i.sessionStop
 	conn := i.conn
 	i.mu.Unlock()
 
+	var stopErr error
 	if connected && selected {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		_ = i.requestOK(ctx, "StopDeviceCmd", map[string]any{"DeviceIndex": selection.deviceIndex})
+		_, stopErr = i.Stop(ctx, StopCommand{Reason: "owner_close"})
 		cancel()
 	}
 	if stopSession != nil {
@@ -278,6 +279,9 @@ func (i *Intiface) Close() error {
 	i.connected = false
 	i.diagnosis.Connected = false
 	i.mu.Unlock()
+	if closeErr == nil {
+		return stopErr
+	}
 	return closeErr
 }
 

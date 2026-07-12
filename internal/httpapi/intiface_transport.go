@@ -201,12 +201,12 @@ func (s *Server) closeIntiface() {
 func (s *Server) closeIntifaceSession() {
 	s.intiface.mu.Lock()
 	owner := s.intiface.owner
-	if owner != nil {
-		s.intiface.diagnostics = owner.Diagnostics()
-	}
 	s.intiface.owner = nil
 	s.intiface.mu.Unlock()
 	if owner != nil {
 		_ = owner.Close()
+		s.intiface.mu.Lock()
+		s.intiface.diagnostics = owner.Diagnostics()
+		s.intiface.mu.Unlock()
 	}
 }

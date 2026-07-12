@@ -169,6 +169,10 @@ func TestIntifaceClosePreemptsQueuedLinearCommands(t *testing.T) {
 	if err := owner.Close(); err != nil {
 		t.Fatal(err)
 	}
+	diagnostics := owner.Diagnostics()
+	if diagnostics.LastResult == nil || diagnostics.LastResult.Kind != CommandKindStop || !diagnostics.LastResult.OK {
+		t.Fatalf("close diagnostics = %+v, want successful Stop", diagnostics)
+	}
 	time.Sleep(150 * time.Millisecond)
 	history := server.historySnapshot()
 	stopIndex := -1

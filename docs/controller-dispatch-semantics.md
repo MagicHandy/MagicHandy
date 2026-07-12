@@ -15,6 +15,9 @@ independent tabs racing hardware commands.
   watch state and use Stop, but mutating device paths return HTTP 409.
 - Stop remains available to any client because safety takes priority over
   controller ownership.
+- Every Stop activation attempts the configured transport, including idle and
+  no-engine states. If the owner is unreachable, local state remains stopped
+  and the response carries an explicit delivery error for the Stop toast.
 
 ## Mutating Paths
 

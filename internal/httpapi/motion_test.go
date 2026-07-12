@@ -12,6 +12,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 type motionEnvelope struct {
@@ -65,6 +66,92 @@ func TestMotionStartStateStop(t *testing.T) {
 	stopped := callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
 	if stopped.Engine.Running {
 		t.Fatalf("motion should be stopped, got %+v", stopped)
+	}
+}
+
+func TestMotionStopWithoutEngineStillAttemptsConfiguredTransport(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	t.Cleanup(server.Close)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	commands := fake.Commands()
+	if len(commands) != 1 || commands[0].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want one unconditional Stop", commands)
+	}
+}
+
+func TestMotionStopWithoutReachableTransportReportsFailure(t *testing.T) {
+	server := newTestServerWithRuntime(t, Runtime{})
+	t.Cleanup(server.Close)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "stop could not reach the configured transport") {
+		t.Fatalf("stop failure was not explicit: %s", recorder.Body.String())
+	}
+}
+
+func TestMotionStopWithoutEngineUsesSelectedCloudOwner(t *testing.T) {
+	requests := make(chan capturedCloudRequest, 1)
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- captureCloudRequest(t, r)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer cloudServer.Close()
+	server := newTestServerWithRuntime(t, Runtime{CloudBaseURL: cloudServer.URL})
+	t.Cleanup(server.Close)
+	saveCloudSettings(t, server)
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	seen := readCapturedCloudRequest(t, requests)
+	if seen.Path != "/hsp/stop" || seen.Method != http.MethodPut {
+		t.Fatalf("Cloud Stop request = %+v", seen)
+	}
+}
+
+func TestMotionStopWithoutEngineUsesSelectedBrowserBluetoothOwner(t *testing.T) {
+	bridge := transport.NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(transport.BrowserBluetoothClientStatus{
+		ClientID:   "stop-client",
+		Connected:  &connected,
+		DeviceName: "Handy",
+		Protocol:   "hsp_ble",
+		Status:     "connected",
+	})
+	server := newTestServerWithRuntime(t, Runtime{BrowserBluetoothBridge: bridge})
+	t.Cleanup(server.Close)
+	saveBluetoothSettings(t, server)
+
+	recorder := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`)))
+		close(done)
+	}()
+	commands, err := bridge.NextCommands(t.Context(), "stop-client", time.Second)
+	if err != nil || len(commands) != 1 || commands[0].Path != "hsp/stop" {
+		t.Fatalf("Bluetooth Stop commands = %+v, %v", commands, err)
+	}
+	bridge.Acknowledge("stop-client", transport.BrowserBluetoothBridgeAck{ID: commands[0].ID, OK: true})
+	waitForHTTPHandler(t, done)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("stop status = %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 

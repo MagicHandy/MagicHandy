@@ -615,10 +615,12 @@ Exit evidence:
   the same Handy over Cloud REST and Intiface and clean stop behavior on a
   non-Handy Buttplug device if available
 
-Implementation status (2026-07-11): the neutral-frame suite and fake-server
-handshake, keepalive, selection, underrun, rejection, Stop, Close, HTTP runtime,
-and UI tests are implemented. The risk remains Medium until the same-Handy
-Cloud-vs-Intiface feel run and a non-Handy linear-device stop run are recorded.
+Implementation status (2026-07-12): the neutral-frame and shared Stop-preemption
+suites plus fake-server handshake, keepalive, selection, underrun, rejection,
+Stop, Close, HTTP runtime, and UI tests are implemented. A capped Handy session passed Start, Pause,
+phase-preserving Resume, reverse quick refresh, active and repeated-idle Stop,
+and close-time Stop without starvation. The risk remains Medium until the
+same-pattern Cloud comparison and a non-Handy linear-device run are recorded.
 
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
@@ -635,6 +637,13 @@ without creating the selected transport solely to stop it, and an unreachable
 backend cannot forward a Browser Bluetooth command. These gaps can make the UI
 report a locally stopped engine without proving that the physical device
 received a Stop.
+
+Implementation status (2026-07-12): active, paused, idle-engine, and no-engine
+paths now attempt the selected transport; unavailable owners preserve local
+stopped state while returning an explicit error. Intiface hardware produced
+distinct successful active and repeated-idle Stop commands plus a recorded
+close-time Stop. Browser-backend loss and current Cloud/Browser hardware retry
+evidence remain open, so the risk stays Critical.
 
 Mitigation:
 

@@ -301,15 +301,11 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 	cancel, done, active := e.stopLoop()
 	if !active {
 		e.mu.Lock()
-		wasPaused := e.paused
 		e.paused = false
 		e.runMillisAccum = 0
 		e.mu.Unlock()
-		if !wasPaused {
-			return e.Snapshot(), nil
-		}
-		// Paused motion already stopped the device; send an explicit stop
-		// anyway so the safety command is unconditional.
+		// Every Stop activation reaches the transport, including repeated
+		// idle and paused stops. Device state can outlive engine state.
 		result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
 		e.recordTransportResult(reason, nil, result, err)
 		e.finishStopped(result, err)

@@ -45,7 +45,7 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Phase 14B stripped build idles at 52.88 MiB (55,451,648 bytes) after `/healthz`, effectively flat from the managed-runtime 52.73 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Final Phase 14B stripped build idles at 53.20 MiB (55,779,328 bytes) after `/healthz`, near the earlier 52.88 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
 | Go core active RSS | < 80 MB | **Unmeasured** | Model-manager reads settle at 53.40 MiB, but that is not the required active-motion + transport + SSE + chat scenario. Earlier real-device samples (16.75-16.76 MB Cloud REST; 17.52-17.53 MB Browser Bluetooth) predate SQLite and remain historical baselines only. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Unmeasured** | The 2026-07-02 run measured 18.41-20.16 MB over 56 warmed samples (+9.53%), but it predates SQLite. Re-run the full scenario on the current build. |
 
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Phase 14B build: 19,197,440 bytes plain and 13,303,808 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Final Phase 14B build: 19,205,632 bytes plain and 13,309,952 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -66,7 +66,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence |
 | --- | --- | --- |
 | goleak in motion and transport `TestMain` | **Met** | `internal/motion/goleak_test.go`, `internal/transport/goleak_test.go` |
-| Stop-teardown coverage | **At Risk** | Active engine teardown, unhealthy playback, concurrency, owner-switch, and server shutdown are covered. Idle-engine and no-engine UI Stop paths can return without an explicit transport Stop; add unconditional delivery-attempt tests before release. |
+| Stop-teardown coverage | **At Risk** | Active, paused, idle-engine, no-engine, concurrency, owner-switch, and server shutdown attempts are covered. Intiface hardware confirmed distinct active/repeated-idle commands and close-time Stop. Backend-loss delivery for browser-owned Bluetooth remains inherently unavailable and current Cloud/Browser retry evidence is still open. |
 | Race tests in CI | **Met** | `go test -race` gate (CI runs it with CGO on Ubuntu) |
 
 ### Real-Device Milestone (Motion Core)
@@ -76,7 +76,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
 | Full app path — Cloud REST | **At Risk** | The 2026-07-02 browser UI + chat run moved and stopped a real Handy, but it predates the reverse-direction fix. Revalidate reverse and unconditional Stop on hardware (`docs/perf-baseline.md`, "Full App Path Evidence"). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
-| Full app path — Intiface | **Unmeasured** | Fake Buttplug v3, HTTP, and UI tests cover the owner contract and lifecycle. No Intiface Central process/listener was available for the same-Handy or non-Handy live runs (`docs/intiface.md`). |
+| Full app path — Intiface | **Met** | A 2026-07-12 live Handy run at 20% passed Start, Pause, phase-preserving Resume, reverse quick refresh, active/repeated-idle Stop, and disconnect Stop with no starvation. The matched Cloud comparison remains a Phase 14B acceptance item (`docs/intiface.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -102,12 +102,22 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** Phase 14B raises the
-   embedded UI from 85,718 to 86,864 gzip bytes (+1,146 / 1.3%) and the stripped
-   binary from 13,031,936 to 13,303,808 bytes (+271,872 / 2.1%). Both remain
+   embedded UI from 85,718 to 86,893 gzip bytes (+1,175 / 1.4%) and the stripped
+   binary from 13,031,936 to 13,309,952 bytes (+278,016 / 2.1%). Both remain
    within their budgets; re-measure after curated downloads and setup-wizard UI
    rather than assuming this growth stays flat.
 
 ## History
+
+- **2026-07-12** — Phase 14B live safety close-out on `The Handy (FW4+)` through
+  Intiface Central: a 20% stroke passed Pause/Resume and an immediate reverse
+  window refresh with 19 successful trace rows and no starvation. Active and
+  repeated-idle Stop produced distinct successful commands; disconnect recorded
+  its close-time Stop. The same change makes idle/no-engine Stop attempt the
+  selected owner and report unreachable transports honestly. Final plain and
+  stripped binaries measure 19,205,632 / 13,309,952 bytes; idle RSS is 53.20
+  MiB; embedded UI is 86,893 bytes gzip. Matched Cloud feel and non-Handy device
+  evidence remain open.
 
 - **2026-07-11** — Phase 14B implementation: the transport contract now uses
   neutral point/play names and float positions, with Handy quantization only at
@@ -115,9 +125,9 @@ Ranked by threat to the stated goals:
   sessions, keepalive, discovery, one linear-actuator selection, scheduled
   `LinearCmd`, queue/underrun health, and stop-first teardown. Fake-server,
   shared owner-contract, HTTP, lifecycle, and React tests are green. Plain and
-  stripped binaries measure 19,197,440 / 13,303,808 bytes; idle RSS is 52.88
-  MiB; embedded HTML/CSS/JS is 86,864 bytes gzip. Live same-Handy and non-Handy
-  validation remains open because Intiface Central was unavailable locally.
+  stripped binaries initially measured 19,197,440 / 13,303,808 bytes; idle RSS
+  was 52.88 MiB; embedded HTML/CSS/JS was 86,864 bytes gzip. Final measurements
+  after unconditional Stop hardening are recorded in the newer row above.
 
 - **2026-07-11** — Managed llama.cpp source build and model-selection parity:
   the app and installer share a pinned `b9966` / `c749cb0` builder, validate an

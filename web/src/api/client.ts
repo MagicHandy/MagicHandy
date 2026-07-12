@@ -87,7 +87,7 @@ export const api = {
   getState: () => request<AppState>("GET", "/api/state"),
 
   // Motion — semantic commands only.
-  stopMotion: () => request("POST", "/api/motion/stop", {}),
+  stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
   // Manual test target — the strict decoder accepts only these two fields.
   startManualTest: (body: { pattern: string; speed_percent: number }) =>
     request("POST", "/api/motion/start", body),

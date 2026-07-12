@@ -124,6 +124,156 @@ func TestTransportOwnersPreserveNeutralFrameContract(t *testing.T) {
 	})
 }
 
+func TestTransportOwnersStopPreemptionContract(t *testing.T) {
+	t.Run("cloud_rest", testCloudStopPreemption)
+	t.Run("browser_bluetooth", testBrowserBluetoothStopPreemption)
+	t.Run("intiface", testIntifaceStopPreemption)
+}
+
+func testCloudStopPreemption(t *testing.T) {
+	addStarted := make(chan struct{})
+	releaseAdd := make(chan struct{})
+	var addOnce sync.Once
+	var mu sync.Mutex
+	var history []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		history = append(history, r.URL.Path)
+		mu.Unlock()
+		if r.URL.Path == "/hsp/add" {
+			addOnce.Do(func() { close(addStarted) })
+			<-releaseAdd
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer func() {
+		close(releaseAdd)
+		server.Close()
+	}()
+	owner := newTestCloudTransport(t, server.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	addDone := make(chan error, 1)
+	go func() {
+		_, err := owner.AppendPoints(ctx, AppendPointsCommand{
+			StreamID: "stop-preemption",
+			Points:   []TimedPoint{{PositionPercent: 0, TimeMillis: 0}, {PositionPercent: 100, TimeMillis: 100}},
+		})
+		addDone <- err
+	}()
+	select {
+	case <-addStarted:
+	case <-time.After(time.Second):
+		t.Fatal("Cloud append did not start")
+	}
+	stopDone := make(chan error, 1)
+	go func() {
+		_, err := owner.Stop(context.Background(), StopCommand{Reason: "preempt"})
+		stopDone <- err
+	}()
+	cancel()
+	if err := <-addDone; err == nil {
+		t.Fatal("cancelled Cloud append unexpectedly succeeded")
+	}
+	if err := <-stopDone; err != nil {
+		t.Fatalf("Cloud Stop: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	assertNoMotionAfterStopPath(t, history, "/hsp/stop", "/hsp/add")
+}
+
+func testBrowserBluetoothStopPreemption(t *testing.T) {
+	bridge := NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(BrowserBluetoothClientStatus{ClientID: "preempt-client", Connected: &connected})
+	owner := newTestBrowserBluetoothTransport(t, bridge, BrowserBluetoothOptions{})
+	ctx, cancel := context.WithCancel(context.Background())
+	addDone := make(chan error, 1)
+	go func() {
+		_, err := owner.AppendPoints(ctx, AppendPointsCommand{
+			StreamID: "stop-preemption",
+			Points:   []TimedPoint{{PositionPercent: 0, TimeMillis: 0}, {PositionPercent: 100, TimeMillis: 100}},
+		})
+		addDone <- err
+	}()
+	commands, err := bridge.NextCommands(context.Background(), "preempt-client", time.Second)
+	if err != nil || len(commands) != 1 || commands[0].Path != "hsp/add" {
+		t.Fatalf("Bluetooth append commands = %+v, %v", commands, err)
+	}
+	stopDone := make(chan error, 1)
+	go func() {
+		_, err := owner.Stop(context.Background(), StopCommand{Reason: "preempt"})
+		stopDone <- err
+	}()
+	cancel()
+	if err := <-addDone; err == nil {
+		t.Fatal("cancelled Bluetooth append unexpectedly succeeded")
+	}
+	commands, err = bridge.NextCommands(context.Background(), "preempt-client", time.Second)
+	if err != nil || len(commands) != 1 || commands[0].Path != "hsp/stop" {
+		t.Fatalf("Bluetooth Stop commands = %+v, %v", commands, err)
+	}
+	bridge.Acknowledge("preempt-client", BrowserBluetoothBridgeAck{ID: commands[0].ID, OK: true})
+	if err := <-stopDone; err != nil {
+		t.Fatalf("Bluetooth Stop: %v", err)
+	}
+	if pending := bridge.Snapshot().Pending; pending != 0 {
+		t.Fatalf("Bluetooth pending commands = %d after Stop", pending)
+	}
+}
+
+func testIntifaceStopPreemption(t *testing.T) {
+	server := newFakeButtplugServer(t, 1000)
+	defer server.Close()
+	owner := connectTestIntiface(t, server, 32)
+	defer closeTestIntiface(t, owner)
+	if err := owner.SelectDevice(7, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = owner.AppendPoints(context.Background(), AppendPointsCommand{
+		StreamID: "stop-preemption",
+		Points: []TimedPoint{
+			{PositionPercent: 0, TimeMillis: 0},
+			{PositionPercent: 50, TimeMillis: 100},
+			{PositionPercent: 100, TimeMillis: 200},
+		},
+	})
+	if _, err := owner.Play(context.Background(), PlayCommand{StreamID: "stop-preemption"}); err != nil {
+		t.Fatal(err)
+	}
+	server.waitForKind(t, "LinearCmd", time.Second)
+	if _, err := owner.Stop(context.Background(), StopCommand{Reason: "preempt"}); err != nil {
+		t.Fatal(err)
+	}
+	server.waitForKind(t, "StopDeviceCmd", time.Second)
+	time.Sleep(150 * time.Millisecond)
+	history := server.historySnapshot()
+	kinds := make([]string, len(history))
+	for index := range history {
+		kinds[index] = history[index].kind
+	}
+	assertNoMotionAfterStopPath(t, kinds, "StopDeviceCmd", "LinearCmd")
+}
+
+func assertNoMotionAfterStopPath(t *testing.T, history []string, stop, motion string) {
+	t.Helper()
+	stopIndex := -1
+	for index, item := range history {
+		if item == stop {
+			stopIndex = index
+			continue
+		}
+		if stopIndex >= 0 && item == motion {
+			t.Fatalf("motion command %q at %d followed Stop %q at %d: %v", motion, index, stop, stopIndex, history)
+		}
+	}
+	if stopIndex < 0 {
+		t.Fatalf("Stop %q missing from history: %v", stop, history)
+	}
+}
+
 func assertHandyContractPayload(t *testing.T, windowBody, pointsBody []byte) {
 	t.Helper()
 	var stroke struct {

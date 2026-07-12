@@ -219,11 +219,34 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
-		writeJSON(w, http.StatusOK, s.motionState())
+		s.stopSelectedTransportWithoutEngine(w, r)
 		return
 	}
 	state, err := engine.Stop(r.Context(), "ui_stop")
 	s.writeMotionResult(w, state, err)
+}
+
+func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *http.Request) {
+	commandTransport, err := s.newSelectedMotionTransport()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"available": false,
+			"stopped":   true,
+			"error":     fmt.Sprintf("stop could not reach the configured transport: %v", err),
+		})
+		return
+	}
+	result, stopErr := commandTransport.Stop(r.Context(), transport.StopCommand{Reason: "ui_stop_no_engine"})
+	payload := map[string]any{
+		"available":        true,
+		"transport_result": result,
+	}
+	status := http.StatusOK
+	if stopErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = stopErr.Error()
+	}
+	writeJSON(w, status, payload)
 }
 
 // handleMotionPause freezes active motion (phase retained for resume). Unlike

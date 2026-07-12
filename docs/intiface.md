@@ -51,10 +51,26 @@ latency, and redacted errors are available in **Settings > Diagnostics** and
 ## Validation Status
 
 Automated tests use a fake Buttplug v3 server for protocol, precision,
-backpressure, Stop/Close ordering, lifecycle, and HTTP/UI integration. No
-Intiface Central process or port `12345` listener was available during the
-implementation session, so these live checks remain required before Intiface is
-recommended as equivalent to the Handy owners:
+backpressure, Stop/Close ordering, lifecycle, and HTTP/UI integration.
+
+Live evidence from 2026-07-12:
+
+- Intiface Central on `127.0.0.1:12345` discovered `The Handy (FW4+)`, device
+  index 0, with one `Position` actuator (100 steps).
+- An isolated Phase 14B build enforced a 10–20% speed range. The shared stroke
+  pattern ran at 20% with a 20–80% window, paused, resumed with phase preserved,
+  then accepted an immediate 30–70% reverse-direction refresh before Stop.
+- The workflow produced 19 `motion_trace.v2` rows: neutral `points_add` and
+  `points_play` commands, successful Pause/Resume/refresh/Stop results, no
+  `starved` state, and queue depth zero after Stop. Local WebSocket command
+  latency rounded below the diagnostics' one-millisecond resolution.
+- A final one-second 20% run proved unconditional Stop: active Stop commands
+  `intiface-000005` and repeated idle Stop `intiface-000006` were distinct and
+  successful. Disconnect then recorded a third successful close-time Stop.
+- Trace exports and process logs remained temporary runtime artifacts and were
+  not committed. No connection key or API credential was used by Intiface.
+
+Remaining acceptance checks:
 
 - run the same capped pattern on one Handy through Cloud REST and Intiface and
   record latency, trace, Stop behavior, and subjective matched feel

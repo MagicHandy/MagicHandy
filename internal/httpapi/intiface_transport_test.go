@@ -12,6 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
@@ -43,6 +44,12 @@ func TestIntifaceHTTPRuntimeConnectSelectDispatchAndDisconnect(t *testing.T) {
 	if selected.Status.SelectedDeviceIndex == nil || *selected.Status.SelectedDeviceIndex != 7 {
 		t.Fatalf("selection = %+v, want device 7", selected.Status)
 	}
+	stopRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(stopRecorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`)))
+	if stopRecorder.Code != http.StatusOK {
+		t.Fatalf("no-engine Stop status = %d: %s", stopRecorder.Code, stopRecorder.Body.String())
+	}
+	fake.waitForKind(t, "StopDeviceCmd")
 
 	owner, err := server.newSelectedMotionTransport()
 	if err != nil {
@@ -66,6 +73,9 @@ func TestIntifaceHTTPRuntimeConnectSelectDispatchAndDisconnect(t *testing.T) {
 	disconnected := callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/disconnect", `{}`)
 	if disconnected.Status.Connected {
 		t.Fatalf("disconnect snapshot = %+v, want disconnected", disconnected)
+	}
+	if disconnected.Diagnostics.LastResult == nil || disconnected.Diagnostics.LastResult.Kind != transport.CommandKindStop || !disconnected.Diagnostics.LastResult.OK {
+		t.Fatalf("disconnect diagnostics = %+v, want successful close-time Stop", disconnected.Diagnostics)
 	}
 	fake.waitForKind(t, "StopDeviceCmd")
 	if _, err := server.newSelectedMotionTransport(); err == nil {
@@ -124,6 +134,73 @@ func TestIntifaceOwnerSwitchStopsActiveEngineBeforeClosingSession(t *testing.T) 
 	}
 	if _, err := server.currentIntiface(); err == nil {
 		t.Fatal("Intiface session remained available after dispatch-owner switch")
+	}
+}
+
+func TestIntifaceEnginePauseResumeQuickSettingsAndTrace(t *testing.T) {
+	fake := newHTTPAPIButtplugServer(t)
+	server := newTestServerWithRuntime(t, Runtime{Traces: diagnostics.NewTraceRing(64)})
+	defer func() {
+		server.Close()
+		fake.Close()
+	}()
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Device.HSPDispatchOwner = config.DispatchOwnerIntiface
+		settings.Device.IntifaceServerAddress = fake.URL()
+		settings.Motion.SpeedMaxPercent = 30
+		return settings
+	})
+	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/connect", `{}`)
+	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/select", `{"device_index":7,"actuator_index":0}`)
+
+	engine, err := server.motionEngineForStart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, _ := server.store.Snapshot()
+	if _, err := engine.Start(context.Background(), motion.MotionTarget{
+		Source:       "intiface_workflow_test",
+		PatternID:    motion.PatternID("stroke"),
+		SpeedPercent: 20,
+	}, settings.Motion); err != nil {
+		t.Fatal(err)
+	}
+	fake.waitForKind(t, "LinearCmd")
+	paused, err := engine.Pause(context.Background(), "test_pause")
+	if err != nil || !paused.Paused || paused.Running {
+		t.Fatalf("Pause = %+v, %v", paused, err)
+	}
+	fake.waitForKind(t, "StopDeviceCmd")
+	resumed, err := engine.Resume(context.Background(), "test_resume")
+	if err != nil || !resumed.Running || resumed.Paused {
+		t.Fatalf("Resume = %+v, %v", resumed, err)
+	}
+	fake.waitForKind(t, "LinearCmd")
+
+	refreshed := settings.Motion
+	refreshed.StrokeMinPercent = 30
+	refreshed.StrokeMaxPercent = 70
+	refreshed.ReverseDirection = true
+	state, err := engine.RefreshSettings(context.Background(), refreshed, "test_quick_settings")
+	if err != nil || !state.Running {
+		t.Fatalf("RefreshSettings = %+v, %v", state, err)
+	}
+	if _, err := engine.Stop(context.Background(), "test_stop"); err != nil {
+		t.Fatal(err)
+	}
+	fake.waitForKind(t, "StopDeviceCmd")
+
+	reasons := make(map[string]bool)
+	for _, row := range server.traces.Rows() {
+		reasons[row.Reason] = true
+		if row.TransportResult != nil && !row.TransportResult.OK {
+			t.Fatalf("trace contains failed transport result: %+v", row)
+		}
+	}
+	for _, reason := range []string{"test_pause", "resume_stroke_window", "resume_points", "test_quick_settings", "settings_stroke_window", "settings_points", "test_stop"} {
+		if !reasons[reason] {
+			t.Fatalf("trace missing reason %q: %+v", reason, reasons)
+		}
 	}
 }
 

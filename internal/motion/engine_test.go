@@ -52,6 +52,21 @@ func TestEngineContinuousFakePlaybackAndStop(t *testing.T) {
 	}
 }
 
+func TestEngineRepeatedIdleStopStillAttemptsTransport(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(16), time.Hour)
+
+	if _, err := engine.Stop(context.Background(), "first_idle_stop"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Stop(context.Background(), "second_idle_stop"); err != nil {
+		t.Fatal(err)
+	}
+	if count := countCommands(fake.Commands(), transport.CommandKindStop); count != 2 {
+		t.Fatalf("idle Stop count = %d, want one transport attempt per activation", count)
+	}
+}
+
 func TestEngineStopsFiniteProgramAtCompletion(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(64), 5*time.Millisecond)

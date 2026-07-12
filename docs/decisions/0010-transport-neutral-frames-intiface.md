@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted and implemented in Phase 14B. Live same-device consistency evidence
-remains open. Revises the dispatch-owner scope of ADR 0006; everything ADR
-0006 dropped stays dropped.
+Accepted and implemented in Phase 14B. The live Handy Intiface path is
+validated; the matched Cloud comparison remains open. Revises the
+dispatch-owner scope of ADR 0006; everything ADR 0006 dropped stays dropped.
 
 ## Context
 

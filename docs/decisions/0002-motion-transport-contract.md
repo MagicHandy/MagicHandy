@@ -74,7 +74,8 @@ Stop is global and explicit. It must:
 - cancel active motion loop work
 - stop mode planners
 - clear pending retargets
-- send transport stop when possible
+- attempt the configured transport stop on every activation, including idle
+  and no-engine states
 - mark the engine stopped even if the transport stop fails
 - surface stop failure in diagnostics
 

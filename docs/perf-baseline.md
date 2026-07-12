@@ -30,7 +30,7 @@ core number.
 | MagicHandy Go core idle/library reads, Phase 14 | Phase 14 review working tree | plain and `-ldflags "-s -w"` builds under `%TEMP%\MagicHandy-phase14-budget`; fresh stripped binary with isolated data dir; `/healthz` for idle, then five `GET /api/library` reads | No browser window; HTTP API exercised by `Invoke-WebRequest` | Yes; measured only the stripped MagicHandy PID | Idle after `/healthz`: 52.49 MiB (55,042,048 bytes) across 3 equal samples. After library reads: 52.99 MiB (55,562,240 bytes) across 3 equal samples | Not measured separately | Plain binary 18,464,256 bytes; stripped binary 12,766,208 bytes. Embedded JS is 250,740 bytes / 74,321 gzip; CSS 26,797 / 6,212 gzip; combined gzip 80,533 bytes (+8,174, +11.3% from Phase 13). No model or voice worker loaded. |
 | MagicHandy Go core idle/model-manager reads | Managed llama.cpp runtime working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49735` with isolated data; `/healthz` for idle, then twenty `GET /api/llm/models` reads | No browser window for RSS; rendered UI measured separately | Yes; no Ollama/llama.cpp/voice worker included | Idle after `/healthz`: 52.73 MiB (55,296,000 bytes) across 3 equal samples. After model-manager reads: 53.40 MiB (55,992,320 bytes) across 3 equal samples | Not measured separately | Plain binary 18,822,656 bytes; stripped binary 13,031,936 bytes. Embedded JS is 266,268 bytes / 78,339 gzip; CSS 31,934 / 7,091 gzip; HTML 454 / 288 gzip; combined gzip 85,718 bytes (+5,185 / 6.4% from Phase 14). Cold starts measured 556/534/533 ms with the client-side PowerShell probe. No model bytes or runner process were loaded. |
 
-| MagicHandy Go core idle, Phase 14B Intiface owner | Phase 14B working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49761` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS | Yes; no Intiface Central, device, model, or voice worker included | 52.88 MiB (55,451,648 bytes) across 3 equal samples | Not measured separately | Plain binary 19,197,440 bytes; stripped binary 13,303,808 bytes. Embedded JS is 270,401 bytes / 79,404 gzip; CSS 32,443 / 7,177 gzip; HTML 454 / 283 gzip; combined gzip 86,864 bytes (+1,146 / 1.3%). The pure-Go websocket owner adds 271,872 stripped bytes (+2.1%). |
+| MagicHandy Go core idle, Phase 14B Intiface owner | Final Phase 14B working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49764` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS | Yes; no Intiface Central, device, model, or voice worker included | 53.20 MiB (55,779,328 bytes) across 3 equal samples | Not measured separately | Plain binary 19,205,632 bytes; stripped binary 13,309,952 bytes. Embedded JS is 270,506 bytes / 79,435 gzip; CSS 32,443 / 7,177 gzip; HTML 454 / 281 gzip; combined gzip 86,893 bytes (+1,175 / 1.4%). The pure-Go websocket owner and unconditional Stop hardening add 278,016 stripped bytes (+2.1%) over the managed-runtime baseline. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -116,6 +116,26 @@ Still required (Phase 9B):
 - Unsaved owner/address edits visibly disable Connect. After Save, Connect is
   enabled; with no listener on port 12345 the app remains disconnected and
   reports an actionable availability error without enabling motion.
+
+## Phase 14B Intiface Hardware Evidence
+
+- On 2026-07-12, Intiface Central at `127.0.0.1:12345` exposed
+  `The Handy (FW4+)` as one 100-step position actuator. An isolated Phase 14B
+  binary selected it without using a Handy connection key.
+- Settings capped the run to 10–20% speed. The shared stroke pattern ran at
+  20% in a 20–80% window for two seconds, paused with a successful
+  `StopDeviceCmd`, resumed with phase preserved, then applied a 30–70% reverse
+  refresh while running before a successful final Stop.
+- The exported `motion_trace.v2` envelope had 19 rows. All transport results
+  were successful, command kinds were neutral `points_add`/`points_play`, no
+  starvation occurred, final playback was idle, and queue depth was zero.
+  Local command latency rounded to 0 ms at the current millisecond resolution.
+- A rebuilt final binary then ran the pattern at 20% for one second. Active Stop
+  `intiface-000005` and repeated idle Stop `intiface-000006` were distinct,
+  successful commands. Disconnect recorded another successful close-time Stop.
+- The test process was stopped and runtime trace/log files stayed under `%TEMP%`;
+  no generated evidence or credential entered the repository. No non-Handy
+  linear device was available, and the matched Cloud comparison remains open.
 
 ## Phase 14 Rendered UI Evidence
 

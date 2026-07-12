@@ -111,7 +111,7 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   let intiface = (state as typeof state & { intiface_transport?: Record<string, any> }).intiface_transport ?? {
@@ -123,6 +123,14 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     if (opts.fail) throw new Error("offline");
     const u = String(input);
+    if (u.includes("/api/motion/stop")) {
+      const status = opts.stopStatus ?? 200;
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        text: async () => JSON.stringify(opts.stopError ? { error: opts.stopError } : {}),
+      } as Response;
+    }
     if (u.includes("/api/transport/intiface")) {
       if (u.endsWith("/connect")) intiface = { ...intiface, status: { ...intiface.status, connected: true, max_ping_time_ms: 500, devices: [{ device_index: 7, device_name: "Test Linear", linear_actuators: [{ index: 0, feature_descriptor: "Position" }] }] } };
       if (u.endsWith("/disconnect")) intiface = { ...intiface, status: { ...intiface.status, connected: false, devices: [] } };
@@ -595,6 +603,22 @@ describe("app shell safety invariants", () => {
     go("#/settings/device");
     expect(await screen.findByText(/bluetooth disconnected/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
+  });
+
+  it("reports an unreachable transport after preserving local Stop state", async () => {
+    installFetch({ stopError: "stop could not reach the configured transport" });
+    renderApp();
+    const stop = await screen.findByRole("button", { name: /emergency stop/i });
+    fireEvent.click(stop);
+    expect(await screen.findByText(/stop could not reach the configured transport/i)).toBeInTheDocument();
+  });
+
+  it("shows the backend delivery error when transport Stop fails", async () => {
+    installFetch({ stopError: "Intiface Stop was rejected", stopStatus: 502 });
+    renderApp();
+    const stop = await screen.findByRole("button", { name: /emergency stop/i });
+    fireEvent.click(stop);
+    expect(await screen.findByText(/Intiface Stop was rejected/i)).toBeInTheDocument();
   });
 
   it("connects and selects a discovered Intiface linear actuator", async () => {
