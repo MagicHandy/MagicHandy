@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import conductorPoster from "../assets/conductor-hand.png";
+import conductorHand from "../assets/conductor-hand-v2.png";
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot } from "../api/types";
 import { BluetoothBridge, type BluetoothBridgeState } from "../components/BluetoothBridge";
@@ -11,9 +11,9 @@ import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error";
 
 const SIGNAL_PATHS = [
-  "M435 338 Q515 426 596 338",
-  "M384 370 Q515 516 647 370",
-  "M341 397 Q515 585 690 397",
+  "M128 160 Q180 198 232 160",
+  "M102 176 Q180 232 258 176",
+  "M76 190 Q180 266 284 190",
 ];
 
 const emptyIntiface: IntifaceTransportSnapshot = {
@@ -180,6 +180,7 @@ export function ConnectionManager() {
         ref={triggerRef}
         type="button"
         className="connection-manager-trigger"
+        aria-label={`${deviceName} ${statusText}; ${open ? "close" : "open"} connection manager`}
         aria-controls="connection-manager-panel"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -200,29 +201,12 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
     <svg
       className="connection-artwork"
       data-phase={phase}
-      viewBox="210 45 610 455"
+      viewBox="0 0 360 228"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
     >
-      <defs>
-        <filter id="connection-hand-mask-filter" colorInterpolationFilters="sRGB">
-          <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0" />
-          <feComponentTransfer>
-            <feFuncR type="linear" slope="3" intercept="-0.12" />
-            <feFuncG type="linear" slope="3" intercept="-0.12" />
-            <feFuncB type="linear" slope="3" intercept="-0.12" />
-          </feComponentTransfer>
-        </filter>
-        <clipPath id="connection-hand-clip">
-          <path d="M285 115 390 110 520 135 680 105 745 65 805 58 830 80 835 180 700 205 625 230 590 270 555 330 520 365 475 365 450 335 455 300 475 265 430 245 345 285 310 282 295 260 315 230 400 205 315 225 285 220 275 200 290 180 400 175 325 175 310 160 315 140 380 145 365 130Z" />
-        </clipPath>
-        <mask id="connection-hand-mask" x="210" y="45" width="625" height="320" maskUnits="userSpaceOnUse" style={{ maskType: "luminance" }}>
-          <image href={conductorPoster} x="0" y="0" width="1024" height="1024" clipPath="url(#connection-hand-clip)" filter="url(#connection-hand-mask-filter)" />
-        </mask>
-      </defs>
-      <rect x="210" y="45" width="610" height="455" fill="#f7f3e8" />
-      <image href={conductorPoster} x="0" y="0" width="1024" height="1024" mask="url(#connection-hand-mask)" />
+      <image className="connection-hand" href={conductorHand} x="0" y="-85" width="360" height="360" preserveAspectRatio="xMidYMid meet" />
       <g className="connection-signal" aria-hidden="true">
         {SIGNAL_PATHS.map((path, index) => <path key={path} d={path} style={{ "--signal-index": index } as CSSProperties} />)}
       </g>

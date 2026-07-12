@@ -1,6 +1,6 @@
 <svg viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Segoe UI, system-ui, sans-serif">
   <title>MagicHandy sidebar-navigation shell — Preset Modes workspace</title>
-  <desc>A dark app frame: a permanent left navigation rail with a profile lockup, Chat, Preset modes (active), Pattern library and Settings links, and a pinned red Stop button; a status-only top bar of compact dot-and-text readouts; and the Preset Modes workspace featuring an Autopilot control, a Freestyle card with a style selector, preset arrangement chips, and a session panel.</desc>
+  <desc>A dark app frame: a permanent left navigation rail with a profile lockup, Chat, Preset modes (active), Pattern library and Settings links, and a pinned red Stop button; a compact top bar of status readouts plus a connection disclosure; and the Preset Modes workspace featuring an Autopilot control, a Freestyle card with a style selector, preset arrangement chips, and a session panel.</desc>
   <defs>
     <clipPath id="frame"><rect x="6" y="6" width="988" height="628" rx="16"/></clipPath>
     <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">

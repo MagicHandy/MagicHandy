@@ -211,13 +211,14 @@ describe("app shell safety invariants", () => {
     }
   });
 
-  it("keeps the status bar status-only (no sliders or buttons)", async () => {
+  it("keeps only the connection disclosure in the compact top bar", async () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     const status = screen.getByRole("region", { name: /status/i });
     expect(within(status).queryByRole("slider")).toBeNull();
-    expect(within(status).queryByRole("button")).toBeNull();
+    expect(within(status).getAllByRole("button")).toHaveLength(1);
+    expect(within(status).getByRole("button", { name: /open connection manager/i })).toBeInTheDocument();
   });
 
   it("keeps connection and live limits in one floating manager on every route", async () => {
@@ -229,7 +230,7 @@ describe("app shell safety invariants", () => {
       expect(screen.getByRole("button", { name: /the handy connection key required/i })).toBeInTheDocument();
     }
     fireEvent.click(trigger);
-    const close = screen.getByRole("button", { name: /close connection manager/i });
+    const close = screen.getByRole("button", { name: /^close connection manager$/i });
     await waitFor(() => expect(close).toHaveFocus());
     fireEvent.click(close);
     await waitFor(() => expect(trigger).toHaveFocus());
@@ -242,13 +243,14 @@ describe("app shell safety invariants", () => {
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
   });
 
-  it("uses the exact conductor artwork with three independent signal arcs", async () => {
+  it("uses an unmasked hand cutout with three independent signal arcs", async () => {
     installFetch();
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
     const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
-    expect(artwork.querySelector("image")?.getAttribute("href")).toMatch(/conductor-hand\.png/);
-    expect(artwork.querySelector("image")?.getAttribute("clip-path")).toBe("url(#connection-hand-clip)");
+    expect(artwork.querySelector("image")?.getAttribute("href")).toMatch(/conductor-hand-v2\.png/);
+    expect(artwork.querySelector("mask")).toBeNull();
+    expect(artwork.querySelector("clipPath")).toBeNull();
     expect(artwork.querySelectorAll(".connection-signal path")).toHaveLength(3);
   });
 
@@ -617,9 +619,10 @@ describe("app shell safety invariants", () => {
     installFetch({ state });
     renderApp();
     expect(await screen.findByText(/voice not ready/i)).toBeInTheDocument();
-    // The readout stays status-only: no controls join the bar with it.
+    // Voice remains a readout; the connection disclosure is the only top-bar control.
     const status = screen.getByRole("region", { name: /status/i });
-    expect(within(status).queryByRole("button")).toBeNull();
+    expect(within(status).getAllByRole("button")).toHaveLength(1);
+    expect(within(status).getByRole("button", { name: /open connection manager/i })).toBeInTheDocument();
   });
 
   it("locks worker controls behind unsaved voice edits", async () => {

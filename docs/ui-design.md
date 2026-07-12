@@ -41,10 +41,11 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > navigation sidebar that switches pages** from
 > [ui-navigation-redesign.md](ui-navigation-redesign.md): a nav rail
 > (Chat / Preset Modes / Pattern Library / Settings) with **Stop pinned to
-> the rail footer on every page**, a status-only top bar (dot+text readouts,
-> stopwatch, no controls), and workspaces as routed pages under a hash
-> router. A shell-owned floating connection manager stays available on every
-> route and owns live provider actions plus speed/stroke limits. Chat keeps
+> the rail footer on every page**, a compact status-led top bar (dot+text
+> readouts, stopwatch, mini visualizer, and the connection disclosure), and
+> workspaces as routed pages under a hash router. The shell-owned connection
+> manager stays available on every route and owns live provider actions plus
+> speed/stroke limits. Chat keeps
 > motion behavior, manual test, and the visualizer; Settings is a routed page with sibling sections
 > (`#/settings/device|model|voice|prompts|diagnostics` — compaction planned
 > in [settings-compaction.md](settings-compaction.md)). Token and component
@@ -262,8 +263,9 @@ hoc per-widget colors) are not.
   Expanding it exposes actions for only the saved dispatch owner: Cloud REST
   check, browser-owned Bluetooth session, or Intiface connect/discovery/select.
   Credentials, owner choice, and server addresses remain in Settings.
-- The connection artwork uses the exact reviewed conductor-hand bitmap through
-  a hand-only luminance mask. Exactly three steel-azure SVG arcs animate in a
+- The connection artwork uses a transparent hand isolation derived from the
+  reviewed conductor reference. It renders at its intrinsic square ratio with
+  no runtime mask or clip. Exactly three intense-blue SVG arcs animate in a
   staggered appear/disappear wave only while connecting; reduced-motion renders
   them statically.
 - Exactly one client may command the device. Additional clients open read-only:

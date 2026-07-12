@@ -206,7 +206,7 @@ It ships in steps that never drop a safety control mid-migration:
 
 Status: steps 1 and 2 have landed together — the UI is now a Vite + React +
 TypeScript app (`web/`, built to `web/dist`, embedded by Go; no runtime Node)
-implementing the permanent nav rail, status-only bar, pinned Stop, and the
+implementing the permanent nav rail, compact status-led top bar, pinned Stop, and the
 Chat / Preset Modes / Pattern Library / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes is present while Autopilot remains a labeled coming-soon
@@ -1037,20 +1037,21 @@ behind this contract instead of writing a parallel implementation (R20).
 Status: implemented with provider-state, interaction, responsive, and rendered
 coverage.
 
-The shell owns one floating connection manager on every route. It renders only
-the saved dispatch owner's live actions (Cloud check, browser Bluetooth, or
-Intiface connect/discover/select); credentials and addresses remain in routed
-Settings. Speed and stroke limits moved from Chat into this manager and still
-use the semantic immediate-apply API. Reverse direction and motion style remain
-in Chat as motion behavior.
+The shell owns one connection manager on every route. Its compact trigger lives
+at the far right of the top bar and opens a floating panel directly below it.
+The panel renders only the saved dispatch owner's live actions (Cloud check,
+browser Bluetooth, or Intiface connect/discover/select); credentials and
+addresses remain in routed Settings. Speed and stroke limits moved from Chat
+into this manager and still use the semantic immediate-apply API. Reverse
+direction and motion style remain in Chat as motion behavior.
 
-The connecting state copies the reviewed conductor-hand artwork exactly from
-`.scratch/branding-review` into one canonical shipping asset. An SVG luminance
-mask isolates the original hand and starfield without redrawing it. Three
-separate steel-azure vector arcs reproduce the wireless motif and stagger their
-appear/disappear opacity while connecting; reduced-motion users get a static
-state. The non-modal disclosure restores focus on close, leaves Escape to Stop,
-and clears the reserved mobile Stop/footer region.
+The connecting state uses a reference-guided transparent isolation of the
+reviewed conductor hand. It renders directly at a fixed square source ratio,
+without the approximate SVG clip and luminance mask that distorted its shape.
+Three separate intense-blue vector arcs reproduce the wireless motif and
+stagger their appear/disappear opacity while connecting; reduced-motion users
+get a static state. The non-modal disclosure restores focus on close, leaves
+Escape to Stop, and clears the reserved mobile Stop/footer region.
 
 Validation: 38 React tests, typecheck/build, and rendered 1280×800 plus 390×844
 checks. The mobile manager has no horizontal overflow, exposes all four limits,

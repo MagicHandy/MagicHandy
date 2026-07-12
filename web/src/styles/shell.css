@@ -1,4 +1,4 @@
-/* shell.css — the permanent-sidebar shell: nav rail + status-only bar +
+/* shell.css — the permanent-sidebar shell: nav rail + compact top bar +
    routed workspace, with Stop pinned to the rail footer. See
    docs/ui-navigation-redesign.md and docs/ui-design-guidelines.md. */
 
@@ -112,7 +112,7 @@
   min-height: 8px;
 }
 
-/* ---- Status bar (top of workspace column, status only) ---- */
+/* ---- Status bar (top of workspace column) ---- */
 .status-bar {
   grid-column: 2;
   grid-row: 1;
@@ -175,20 +175,18 @@
   margin-left: auto;
 }
 
-/* ---- Floating connection manager ---- */
+/* ---- Top-bar connection manager ---- */
 .connection-manager {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
+  position: relative;
   z-index: 24;
-  width: min(360px, calc(100vw - 48px));
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
+  flex: 0 0 auto;
 }
 .connection-manager-panel {
-  max-height: min(calc(100vh - 110px), 760px);
+  position: fixed;
+  top: calc(var(--status-h) + 8px);
+  right: clamp(8px, 2.4vw, 22px);
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - var(--status-h) - 16px);
   overflow: auto;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -218,15 +216,15 @@
   display: block;
   width: 100%;
   height: 228px;
-  background: #f7f3e8;
+  background: #343b46;
   border-block: 1px solid var(--line);
 }
 .connection-signal path {
   fill: none;
   stroke-linecap: round;
-  stroke: #718f99;
-  stroke-width: 4;
-  opacity: 0.24;
+  stroke: #168bff;
+  stroke-width: 5;
+  opacity: 1;
 }
 .connection-artwork[data-phase="connected"] .connection-signal path {
   opacity: 1;
@@ -335,17 +333,16 @@
 }
 .connection-manager-trigger {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 54px;
-  padding: 8px 12px;
+  gap: 8px;
+  width: 220px;
+  height: 36px;
+  padding: 3px 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow-soft);
   cursor: pointer;
   text-align: left;
 }
@@ -353,15 +350,15 @@
   border-color: var(--accent);
 }
 .connection-trigger-icon {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   color: var(--muted);
-  background: var(--surface);
+  background: var(--surface-2);
 }
 .connection-manager[data-phase="connected"] .connection-trigger-icon {
   color: var(--ok);
@@ -472,6 +469,11 @@
   .status-bar {
     grid-column: 1;
     grid-row: 1;
+    gap: 8px;
+    padding-inline: 8px;
+  }
+  .status-readout-controller {
+    display: none;
   }
   .workspace {
     grid-column: 1;
@@ -524,13 +526,25 @@
     bottom: auto;
     z-index: 30;
   }
-  .connection-manager {
-    right: 8px;
-    bottom: 108px;
-    width: min(360px, calc(100vw - 16px));
-  }
   .connection-manager-panel {
-    max-height: calc(100vh - 178px);
+    top: calc(var(--status-h) + 8px);
+    right: 8px;
+    max-height: calc(100vh - var(--status-h) - 124px);
+  }
+  .connection-manager-trigger {
+    grid-template-columns: 28px;
+    width: 36px;
+    padding-inline: 3px;
+  }
+  .connection-trigger-copy,
+  .connection-trigger-chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .status-bar .visualizer.mini {
+    display: none;
   }
 }
 

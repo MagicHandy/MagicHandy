@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Phase 14C build: 19,613,184 bytes plain and 13,722,624 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Phase 14C top-bar revision: 19,635,712 bytes plain and 13,745,152 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -102,22 +102,22 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** Phase 14C raises the
-   total embedded browser payload from 86,893 to 507,712 gzip bytes because the
-   exact reviewed connection artwork contributes 417,769 gzip bytes. The
-   HTML/CSS/JS portion grows only 3,050 bytes (+3.5%) to 89,943; the stripped
-   binary grows 412,672 bytes (+3.1%) to 13,722,624. These remain within the
-   binary budget, but future bitmap additions must not normalize this one-time
-   fidelity cost.
+   total embedded browser payload from 86,893 to 526,949 gzip bytes because the
+   isolated connection artwork contributes 437,397 gzip bytes. The HTML/CSS/JS
+   portion grows only 2,659 bytes (+3.1%) to 89,552; the stripped binary grows
+   435,200 bytes (+3.3%) to 13,745,152. These remain within the binary budget,
+   but future bitmap additions must not normalize this one-time fidelity cost.
 
 ## History
 
-- **2026-07-12** — Phase 14C adds the route-independent floating connection
-  manager with provider-scoped live actions and immediate speed/stroke limits.
-  The reviewed conductor hand ships as one canonical 421,147-byte PNG; an SVG
-  luminance mask preserves its exact silhouette/starfield and three vector arcs
-  provide the reduced-motion-aware connection wave. Plain/stripped binaries are
-  19,613,184 / 13,722,624 bytes, idle RSS is 53.60 MiB, and the full embedded
-  browser payload is 507,712 bytes gzip (89,943 excluding the artwork).
+- **2026-07-12** — Phase 14C adds the route-independent connection manager with
+  provider-scoped live actions and immediate speed/stroke limits. Its trigger
+  now lives in the top bar; a 444,236-byte transparent, reference-guided hand
+  isolation replaces the distorting SVG luminance mask, and three intense-blue
+  vector arcs provide the reduced-motion-aware connection wave. Plain/stripped
+  binaries are 19,635,712 / 13,745,152 bytes, idle RSS is 53.41 MiB, and the
+  full embedded browser payload is 526,949 bytes gzip (89,552 excluding the
+  artwork).
 
 - **2026-07-12** — Phase 14B live safety close-out on `The Handy (FW4+)` through
   Intiface Central: a 20% stroke passed Pause/Resume and an immediate reverse
