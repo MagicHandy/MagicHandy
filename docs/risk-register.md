@@ -617,10 +617,11 @@ Exit evidence:
 
 Implementation status (2026-07-12): the neutral-frame and shared Stop-preemption
 suites plus fake-server handshake, keepalive, selection, underrun, rejection,
-Stop, Close, HTTP runtime, and UI tests are implemented. A capped Handy session passed Start, Pause,
-phase-preserving Resume, reverse quick refresh, active and repeated-idle Stop,
-and close-time Stop without starvation. The risk remains Medium until the
-same-pattern Cloud comparison and a non-Handy linear-device run are recorded.
+Stop, Close, HTTP runtime, and UI tests are implemented. Matched capped Handy
+runs over Intiface and Cloud REST passed Start, Pause, phase-preserving Resume,
+reverse quick refresh, active and repeated-idle Stop, and close-time Stop where
+applicable, without starvation. The risk remains Medium until subjective feel
+is confirmed; no non-Handy linear device was available for the conditional run.
 
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).

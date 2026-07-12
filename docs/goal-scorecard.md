@@ -74,9 +74,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence / Notes |
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
-| Full app path — Cloud REST | **At Risk** | The 2026-07-02 browser UI + chat run moved and stopped a real Handy, but it predates the reverse-direction fix. Revalidate reverse and unconditional Stop on hardware (`docs/perf-baseline.md`, "Full App Path Evidence"). |
+| Full app path — Cloud REST | **Met** | A 2026-07-12 current-build run at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation (`docs/perf-baseline.md`, "Phase 14B Intiface Hardware Evidence"). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
-| Full app path — Intiface | **Met** | A 2026-07-12 live Handy run at 20% passed Start, Pause, phase-preserving Resume, reverse quick refresh, active/repeated-idle Stop, and disconnect Stop with no starvation. The matched Cloud comparison remains a Phase 14B acceptance item (`docs/intiface.md`). |
+| Full app path — Intiface | **Met** | A 2026-07-12 live Handy run at 20% passed Start, Pause, phase-preserving Resume, reverse quick refresh, active/repeated-idle Stop, and disconnect Stop with no starvation. The matched Cloud transport/trace comparison also passed; subjective feel confirmation remains (`docs/intiface.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -116,8 +116,9 @@ Ranked by threat to the stated goals:
   its close-time Stop. The same change makes idle/no-engine Stop attempt the
   selected owner and report unreachable transports honestly. Final plain and
   stripped binaries measure 19,205,632 / 13,309,952 bytes; idle RSS is 53.20
-  MiB; embedded UI is 86,893 bytes gzip. Matched Cloud feel and non-Handy device
-  evidence remain open.
+  MiB; embedded UI is 86,893 bytes gzip. A matched Cloud run also passed with
+  19 successful results and no starvation; subjective feel remains open, and
+  no non-Handy device was available.
 
 - **2026-07-11** — Phase 14B implementation: the transport contract now uses
   neutral point/play names and float positions, with Handy quantization only at

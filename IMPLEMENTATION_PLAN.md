@@ -64,7 +64,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
-| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; Intiface HW validated, Cloud comparison open** | #59 |
+| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; matched HW paths validated, feel confirmation open** | #59 |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
@@ -930,7 +930,8 @@ capped below 40% intensity; synthetic tests cannot establish physical feel.
 # Phase 14B: Intiface Dispatch Owner
 
 Status: implemented with automated contract, API, lifecycle, and UI coverage;
-The Handy live path is validated; a same-pattern Cloud comparison remains open.
+the matched Handy paths and trace health are validated, with subjective feel
+confirmation still open.
 Decision and schema evaluation recorded in
 [ADR 0010](docs/decisions/0010-transport-neutral-frames-intiface.md), which
 revises ADR 0006's HSP-only dispatch-owner scope and resolves
@@ -1023,8 +1024,12 @@ behind this contract instead of writing a parallel implementation (R20).
   Resume, a live 30–70% reverse refresh, and Stop. Nineteen trace rows had no
   failed result or starvation. Repeated idle Stop produced distinct successful
   commands, and disconnect recorded its close-time Stop. See `docs/intiface.md`.
-- The matched Cloud run and a non-Handy linear-device run remain open; no
-  non-Handy device was available in this session.
+- A matched Cloud REST run used the same 20% cap, pattern, Pause/Resume, and
+  live 30–70% reverse refresh. Its 23 trace rows contained 19 successful
+  transport results and no starvation. Pause, active Stop, and repeated-idle
+  Stop were distinct successful deliveries at 317, 311, and 310 ms.
+- Subjective matched feel still needs operator confirmation. No non-Handy
+  linear device was available, so that conditional run remains unperformed.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 

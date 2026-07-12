@@ -133,9 +133,15 @@ Still required (Phase 9B):
 - A rebuilt final binary then ran the pattern at 20% for one second. Active Stop
   `intiface-000005` and repeated idle Stop `intiface-000006` were distinct,
   successful commands. Disconnect recorded another successful close-time Stop.
+- The same Handy then ran the matched workflow over Cloud REST: 20% cap,
+  20–80% initial window, Pause/Resume, live 30–70% reverse refresh, active Stop,
+  and repeated-idle Stop. The 23-row trace contained 19 successful transport
+  results and no starvation. Pause, active Stop, and idle Stop latency measured
+  317, 311, and 310 ms; a non-moving HSP check and preflight Stop succeeded at
+  676 and 105 ms.
 - The test process was stopped and runtime trace/log files stayed under `%TEMP%`;
   no generated evidence or credential entered the repository. No non-Handy
-  linear device was available, and the matched Cloud comparison remains open.
+  linear device was available. Subjective matched feel remains open.
 
 ## Phase 14 Rendered UI Evidence
 

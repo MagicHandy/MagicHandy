@@ -69,11 +69,19 @@ Live evidence from 2026-07-12:
   successful. Disconnect then recorded a third successful close-time Stop.
 - Trace exports and process logs remained temporary runtime artifacts and were
   not committed. No connection key or API credential was used by Intiface.
+- A same-Handy Cloud REST comparison then repeated the 20% pattern,
+  Pause/Resume, 30–70% reverse refresh, active Stop, and repeated-idle Stop.
+  Its 23 trace rows contained 19 successful transport results with no
+  starvation. Pause, active Stop, and idle Stop completed in 317, 311, and
+  310 ms; the Intiface run's local command latency rounded below 1 ms.
+- The Cloud credential moved only in memory from an existing ignored local
+  profile into the temporary datastore. It was not printed, logged, exported,
+  or added to the repository.
 
 Remaining acceptance checks:
 
-- run the same capped pattern on one Handy through Cloud REST and Intiface and
-  record latency, trace, Stop behavior, and subjective matched feel
+- record the operator's subjective matched-feel judgment for the completed
+  Cloud REST and Intiface runs
 - run a capped pattern and Stop on one non-Handy linear device if available
 
 Keep automated or unattended real-device runs at or below 40% speed.

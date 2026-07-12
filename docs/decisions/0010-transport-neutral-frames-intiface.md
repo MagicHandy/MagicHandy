@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted and implemented in Phase 14B. The live Handy Intiface path is
-validated; the matched Cloud comparison remains open. Revises the
-dispatch-owner scope of ADR 0006; everything ADR 0006 dropped stays dropped.
+Accepted and implemented in Phase 14B. Matched live Handy runs validate the
+Intiface and Cloud REST transport/trace paths; subjective feel confirmation
+remains open. Revises the dispatch-owner scope of ADR 0006; everything ADR
+0006 dropped stays dropped.
 
 ## Context
 
