@@ -18,7 +18,8 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-11. Phases 0 through 14 are merged to `main` — Phase 14 (#52)
+Updated 2026-07-11. MagicHandy is a source-runnable alpha, not a packaged or
+release-ready application. Phases 0 through 14 are merged to `main`; Phase 14 (#52)
 landed persisted patterns/programs, funscript import, shared-engine playback,
 LLM curation, authoring, and visible reversible training feedback. The LLM
 model manager (#55) and the managed llama.cpp source-build lifecycle (#56)
@@ -29,6 +30,11 @@ the Intiface/Buttplug dispatch owner under the transport-neutral frame
 contract recorded in ADR 0010. Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
 decision.
+
+In this table, **Complete** means the scoped implementation and automated tests
+landed. It does not imply that every real-hardware acceptance check, provider
+provisioning path, or release gate has passed. Qualifications are shown in the
+status column and in "Known Gaps Carried Forward" below.
 
 | Phase | Scope | Status | PRs |
 | --- | --- | --- | --- |
@@ -43,10 +49,10 @@ decision.
 | 7 | Retargeting + real-device validation runner | Complete | #9 |
 | 8 | Motion UI and live visualizer | Complete | #10 |
 | 9 | Local LLM chat driving motion | Complete | #11, #12 |
-| 9B | App-path device validation, controller ownership | Complete | #15, #16, #17, #22 |
+| 9B | App-path device validation, controller ownership | Implemented; reverse HW recheck open | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
-| 11 | Modes as motion clients (Freestyle, chat keepalive) | **Complete** | #26 |
-| 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
+| 11 | Modes as motion clients (Freestyle, chat keepalive) | **Implemented; HW acceptance open** | #26 |
+| 11B | SQLite persistence foundation (ADR 0008) | **Implemented; corrupt-DB recovery open** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
 | 13.1 | NeuTTS Air spike — non-Python decode proven, RTF ~0.5 CPU (R17) | **Complete** | #43 |
@@ -55,9 +61,9 @@ decision.
 | 13.4 | Managed Parakeet runner and interactive installer | **Complete** | #46 |
 | 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | #49 |
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
-| 13.7 | Push-to-talk microphone input and Chat voice controls | **Complete** | #49 |
+| 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
-| 14 | Pattern library, programs, authoring, and LLM curation | **Complete** | #52 |
+| 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | Planned | — |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
@@ -148,14 +154,37 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    motion items (differentiated retarget lead, semantic no-op guard,
    clamp-once speed test) carry explicit skepticism notes — contract shapes
    over copied constants.
+5. **Emergency Stop delivery**: the permanent UI control remains available and
+   active Stop cancels the engine before a best-effort transport Stop. An idle
+   engine currently returns without retrying the transport, a server with no
+   engine does not create a selected transport solely to stop it, and an
+   unreachable backend cannot deliver Browser Bluetooth Stop. Release readiness
+   requires unconditional transport-stop attempts where a dispatch owner is
+   available, regression coverage for idle/no-engine paths, and honest failure
+   reporting. No document may claim physical delivery after communication fails.
+   Tracked as risk R23 (verified against `internal/motion/engine.go` and
+   `internal/httpapi/motion.go` on 2026-07-11).
+6. **Voice end-to-end acceptance**: browser push-to-talk records WebM/Opus or
+   Ogg and forwards it unchanged, while the managed parakeet.cpp path is
+   documented and tested with WAV. Provider adapters and UI are implemented,
+   but real microphone-to-managed-Parakeet compatibility and turnkey provider
+   provisioning are not yet proven. Tracked as risk R24 (third legacy sweep,
+   item A1).
+7. **Current-build performance evidence**: the post-SQLite build has current
+   idle/API-read measurements, but active motion and the one-hour soak were last
+   measured before SQLite. Those rows remain unmeasured for the current build.
+8. **Release provisioning**: voice workers are optional external processes and
+   not all are installed by `install.ps1`; managed llama.cpp currently builds
+   from source. Phase 16 must provide checksummed prebuilt runtimes before the
+   GUI setup path can claim no Git/CMake/Visual Studio requirement.
 
 ### UI Shell Redesign (Sidebar Navigation)
 
-The UI is moving to React now, then from the current status-bar +
+The UI has moved to React and from the former status-bar +
 single-control-sidebar + settings-window shell to a **permanent left navigation
 sidebar that switches pages** (Chat / Preset Modes / Pattern Library /
 Settings), with Stop pinned to the sidebar footer on every page. Framework
-decision and handoff:
+decision and historical handoff:
 [docs/decisions/0009-react-frontend.md](docs/decisions/0009-react-frontend.md)
 and [docs/react-ui-implementation-handoff.md](docs/react-ui-implementation-handoff.md).
 Full shell spec: [docs/ui-navigation-redesign.md](docs/ui-navigation-redesign.md).
@@ -180,8 +209,8 @@ implementing the permanent nav rail, status-only bar, pinned Stop, and the
 Chat / Preset Modes / Pattern Library / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes is present while Autopilot remains a labeled coming-soon
-control until its planner exists (step 3). Pattern Library is implemented on
-the Phase 14 branch (step 4). The legacy vanilla UI remains under `web/legacy/`
+control until its planner exists (step 3). Pattern Library is merged to `main`
+(step 4). The legacy vanilla UI remains under `web/legacy/`
 as unshipped reference only; `web/dist` is the single embedded frontend.
 
 ## Rewrite Guardrails
@@ -1021,8 +1050,9 @@ fixtures cover old and current StrokeGPT-ReVibed formats.
 ## Objective
 
 Make MagicHandy distributable as a core binary app that a non-developer can
-install and configure end to end — llama.cpp build choice, model downloads,
-voice provisioning, and StrokeGPT-ReVibed porting — through a GUI.
+install and configure end to end without a source toolchain: prebuilt llama.cpp
+runtime choice, model downloads, voice provisioning, and StrokeGPT-ReVibed
+porting through a GUI. Source builds remain an advanced/developer fallback.
 
 Delivered ahead of this phase (#55, #56): the model-manager foundation now
 owns schema v9 inventory, managed GGUF storage, standalone/Ollama import,
@@ -1033,7 +1063,7 @@ Ollama users. Phase 16 still owns curated checksum-pinned model downloads,
 hardware-fit recommendations, and release packaging that removes the source
 toolchain prerequisite for non-developers.
 
-**GUI installer decision** (evaluation in
+**GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive
 setup surface is the app itself — a first-run onboarding wizard (`#/setup`)
 in the embedded React UI orchestrating the existing build/import/provision
@@ -1050,14 +1080,17 @@ Implement, as slices:
 
 - **16.0 — release plumbing**: Windows binary build, portable zip, embedded
   assets, default config/data directory behavior, version command/endpoint,
-  release GitHub Actions workflow and release-notes template
+  release GitHub Actions workflow and release-notes template; publish
+  checksum-pinned CPU and CUDA llama.cpp runtime bundles from the same pinned
+  revision, with manifests and license notices consumable by the app
 - **16.1 — Windows setup binary**: Inno Setup script compiled in CI
   (build-time-only dependency), Start Menu/desktop shortcuts, Add/Remove
   Programs uninstall that leaves the data directory, silent-install flags,
   over-install upgrades, finish page launching first-run setup
 - **16.2 — first-run onboarding wizard** (`#/setup`, re-runnable from
-  Settings): welcome/consent → device → LLM runtime (managed source build
-  with backend choice, skip-for-Ollama with store import, or external URL)
+  Settings): welcome/consent → device → LLM runtime (checksummed prebuilt
+  CPU/CUDA download by default, advanced managed source build, skip-for-Ollama
+  with store import, or external URL)
   → LLM model (import or curated download) → optional voice provisioning
   (Parakeet runner+model and NeuTTS assets moved from `install.ps1` into
   checksummed, size/license-visible, progress-reporting API endpoints;
@@ -1082,7 +1115,9 @@ Implement, as slices:
 ## Validation
 
 Standard suite plus: unzip release, run from a clean directory, config/data
-directories created correctly, no source checkout required.
+directories created correctly, install and select a prebuilt managed llama.cpp
+runtime on a machine without Go/Git/CMake/Visual Studio, and confirm no source
+checkout is required.
 
 ## Done Criteria
 

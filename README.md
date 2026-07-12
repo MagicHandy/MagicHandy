@@ -1,10 +1,12 @@
 # MagicHandy
 
 **MagicHandy is a free, open-source, local-first app that lets a local AI
-control your [Handy](https://www.thehandy.com/).** You chat with an assistant —
-or let it take over — and it moves your device in real time. Everything runs on
-your own machine: your conversations, settings, and device key stay local. No
-account, no third party in the middle, no tracking.
+control your [Handy](https://www.thehandy.com/).** You chat with an assistant,
+or let it take over, and it moves your device in real time. Conversations,
+settings, and credentials are stored locally. Browser Bluetooth and local
+LLM/voice providers can keep processing on your machine; the optional Handy
+Cloud and ElevenLabs providers send the data required by those selected
+services. MagicHandy itself has no account or tracking.
 
 > **Status:** early and under active development. It already works — local chat
 > drives real device motion — but it isn't packaged for one-click install yet
@@ -21,8 +23,8 @@ account, no third party in the middle, no tracking.
 - **You stay in control.** Live speed / stroke / direction controls apply
   instantly, and an emergency **Stop** is always one click (or `Esc`) away on
   every screen.
-- **Local and private.** A single lightweight app; your data lives in a local
-  database on your computer, not a cloud.
+- **Local-first and private by default.** App data lives in a local database;
+  network providers are explicit choices rather than hidden dependencies.
 - **Runs light.** It's a Go rewrite built for efficiency — the core idles in tens
   of megabytes, not hundreds.
 
@@ -72,9 +74,11 @@ up to the polish of the original StrokeGPT app — see the plan in
   your machine; managed model files stay in the app data model store. Your
   Handy connection key is a private credential —
   it is never shown back in the UI, logs, diagnostics, or exports.
-- **Emergency Stop, always reachable.** It's on every screen, works even for a
-  read-only second tab or when the backend hiccups, and stops the device even if
-  a network call fails.
+- **Emergency Stop, always reachable.** It's on every screen and available to a
+  read-only second tab. During active motion it immediately cancels local motion
+  and planners, marks the engine stopped, and attempts an explicit transport
+  Stop; any transport or backend failure is surfaced because software cannot
+  claim a physical stop was delivered after communication failed.
 - **You set the limits.** Live controls apply immediately, and hands-free modes
   stay inside the speed/stroke limits you choose and stop the instant you say so.
 - **Adults only.** MagicHandy controls an intimate device. Use it responsibly and
@@ -99,12 +103,16 @@ embedded in the binary), see [`web/`](web/) and
 
 ## Roadmap highlights
 
-MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working today: local
-chat driving real motion (Cloud REST and browser Bluetooth), live controls,
-Freestyle, long-term memory, editable prompt sets, and the new React UI. In
-progress or planned: Autopilot, a pattern/program library and authoring, voice
-in/out, guided setup and model management, and packaged releases. The full
-picture is in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working from source
+today: local chat driving real motion (Cloud REST and browser Bluetooth), live
+controls, Freestyle, long-term memory, editable prompt sets, pattern/program
+library and authoring, voice provider adapters and push-to-talk UI, model
+management, and the React UI. Voice providers still need manual provisioning,
+and real microphone compatibility with the managed Parakeet path remains to be
+validated. Planned work includes Autopilot, Intiface, migration, guided setup,
+curated downloads, and packaged releases. See
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for acceptance gaps as well as
+implemented scope.
 
 MagicHandy and [LSO (Local Stroke Orchestrator)](docs/lso-merge-integration.md)
 are being combined into one project on this Go core.
@@ -124,18 +132,22 @@ Contributions are welcome, from people and AI coding tools alike.
 Validate a change before you push:
 
 ```powershell
-gofmt -w cmd internal web
+go fmt ./...
 go vet ./...
 go test ./...
 go test -race ./...          # needs a C compiler; CI also runs it on Linux
 $env:CGO_ENABLED = "0"; go build ./cmd/magichandy
-(cd web; npm ci; npm run typecheck; npm run test; npm run build)
+npm --prefix web ci
+npm --prefix web run typecheck
+npm --prefix web run test
+npm --prefix web run build
 ```
 
 ### Docs
 
 - [Contributing standards (humans and agents)](AGENTS.md)
 - [Installation automation plan](docs/installation-automation.md)
+- [Windows installer architecture](docs/decisions/0011-windows-installer-shell.md)
 - [MagicHandy + LSO integration plan](docs/lso-merge-integration.md)
 - [MagicHandy + LSO merge alternatives](docs/lso-merge-alternatives.md)
 - [Implementation plan](IMPLEMENTATION_PLAN.md)

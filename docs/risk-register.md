@@ -617,3 +617,67 @@ Exit evidence:
 
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
+
+## R23: Emergency Stop Delivery Gaps
+
+Level: Critical
+
+Description:
+The permanent Stop control is mounted outside routes and active engine Stop
+cancels local work before attempting transport Stop. However, an idle engine can
+return without retrying transport Stop, the no-engine HTTP path returns success
+without creating the selected transport solely to stop it, and an unreachable
+backend cannot forward a Browser Bluetooth command. These gaps can make the UI
+report a locally stopped engine without proving that the physical device
+received a Stop.
+
+Mitigation:
+
+- make every Stop request attempt the selected dispatch owner's Stop whenever
+  that owner is available, including idle-engine and no-engine states
+- preserve the current invariant that local planners and motion state stop even
+  when transport delivery fails; surface the failure instead of claiming
+  physical delivery
+- add idle/no-engine/read-only/backend-loss coverage for Cloud REST and Browser
+  Bluetooth, plus real-device checks for retry and owner-switch cases
+- keep Stop mounted outside routes and controller ownership gates
+
+Exit evidence:
+
+- automated tests prove unconditional delivery attempts and local teardown for
+  active, paused, idle, no-engine, read-only, owner-switch, and transport-error
+  paths; capped hardware checks record Cloud REST and Browser Bluetooth results
+
+Relates to R1 (real-device validation), R3 (transport behavior), and R9 (UI
+safety regression).
+
+## R24: Browser Microphone And Managed ASR Format Mismatch
+
+Level: High
+
+Description:
+Browser push-to-talk records WebM/Opus or Ogg and sends that payload unchanged
+through the core. The managed parakeet.cpp path is documented and tested with
+WAV input, and the worker changes multipart metadata without decoding or
+transcoding. The UI and adapters can therefore be implementation-complete while
+the default managed microphone path remains incompatible on real browsers.
+
+Mitigation:
+
+- run an end-to-end browser MediaRecorder sample through the pinned managed
+  runner before claiming push-to-talk acceptance
+- either negotiate a format the runner decodes or add bounded decoding at the
+  worker boundary; native audio dependencies must not enter the pure-Go core
+- reject unsupported formats with a visible actionable error rather than
+  forwarding bytes optimistically
+- retain fixture tests for every accepted browser format and the WAV provider
+  contract
+
+Exit evidence:
+
+- Chrome/Edge localhost push-to-talk produces an accurate transcript through
+  the pinned managed Parakeet install, with format/error tests and no core CGo
+  dependency
+
+Relates to R17 (voice dependency and latency risk) and R18 (browser security and
+LAN microphone access).
