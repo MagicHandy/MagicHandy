@@ -162,11 +162,14 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    requires unconditional transport-stop attempts where a dispatch owner is
    available, regression coverage for idle/no-engine paths, and honest failure
    reporting. No document may claim physical delivery after communication fails.
+   Tracked as risk R23 (verified against `internal/motion/engine.go` and
+   `internal/httpapi/motion.go` on 2026-07-11).
 6. **Voice end-to-end acceptance**: browser push-to-talk records WebM/Opus or
    Ogg and forwards it unchanged, while the managed parakeet.cpp path is
    documented and tested with WAV. Provider adapters and UI are implemented,
    but real microphone-to-managed-Parakeet compatibility and turnkey provider
-   provisioning are not yet proven.
+   provisioning are not yet proven. Tracked as risk R24 (third legacy sweep,
+   item A1).
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.

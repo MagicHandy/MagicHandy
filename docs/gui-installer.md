@@ -8,8 +8,9 @@ licenses visible, enter cloud keys, port data from StrokeGPT-ReVibed), and
 the existing consent/checksum law applied to all of it. This doc evaluates
 how to get there and records the decision. It extends
 `docs/installation-automation.md` (which anticipated "the eventual in-app
-setup wizard") and feeds Phase 16. ADR 0011 records the architecture decision;
-this document is the detailed implementation design.
+setup wizard") and feeds Phase 16.
+[ADR 0011](decisions/0011-windows-installer-shell.md) records the
+architecture decision; this document is the detailed implementation design.
 
 ## What already exists (and changes the answer)
 
