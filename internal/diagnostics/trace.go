@@ -7,7 +7,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-const traceSchemaVersion = "motion_trace.v1"
+const traceSchemaVersion = "motion_trace.v2"
 
 // MotionTraceRow is the stable JSON row schema for motion and transport traces.
 type MotionTraceRow struct {
@@ -64,8 +64,8 @@ type MotionTraceTarget struct {
 
 // MotionTraceSample records a sampled transport-neutral motion point.
 type MotionTraceSample struct {
-	PositionPercent int   `json:"position_percent"`
-	TimeMillis      int64 `json:"time_ms"`
+	PositionPercent float64 `json:"position_percent"`
+	TimeMillis      int64   `json:"time_ms"`
 }
 
 // MotionTraceRetarget records retarget decision details required for real-device review.
@@ -78,7 +78,7 @@ type MotionTraceRetarget struct {
 	NextProgramIdentifier           string             `json:"next_program_id,omitempty"`
 	PreviousTarget                  *MotionTraceTarget `json:"previous_target,omitempty"`
 	NextTarget                      *MotionTraceTarget `json:"next_target,omitempty"`
-	EstimatedCurrentPositionPercent int                `json:"estimated_current_position_percent,omitempty"`
+	EstimatedCurrentPositionPercent float64            `json:"estimated_current_position_percent,omitempty"`
 	EstimatedCurrentStreamMillis    int64              `json:"estimated_current_stream_ms,omitempty"`
 	SelectedHandoffMillis           int64              `json:"selected_handoff_ms,omitempty"`
 	SelectedLeadMillis              int64              `json:"selected_lead_ms,omitempty"`

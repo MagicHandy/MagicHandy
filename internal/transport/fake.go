@@ -72,20 +72,20 @@ func (f *Fake) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand)
 	return f.record(ctx, recorded, f.currentPlaybackState())
 }
 
-// AddHSP records an HSP add command.
-func (f *Fake) AddHSP(ctx context.Context, command HSPAddCommand) (CommandResult, error) {
+// AppendPoints records a timed-point append command.
+func (f *Fake) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
 	recorded := Command{
-		Kind:   CommandKindHSPAdd,
-		HSPAdd: cloneHSPAdd(command),
+		Kind:      CommandKindPointsAdd,
+		PointsAdd: cloneAppendPoints(command),
 	}
 	return f.record(ctx, recorded, "buffered")
 }
 
-// PlayHSP records an HSP play command.
-func (f *Fake) PlayHSP(ctx context.Context, command HSPPlayCommand) (CommandResult, error) {
+// Play records a timed-point play command.
+func (f *Fake) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
 	recorded := Command{
-		Kind:    CommandKindHSPPlay,
-		HSPPlay: &command,
+		Kind:       CommandKindPointsPlay,
+		PointsPlay: &command,
 	}
 	return f.record(ctx, recorded, "playing")
 }
@@ -194,7 +194,7 @@ func (f *Fake) currentPlaybackState() string {
 	return f.playbackState
 }
 
-func cloneHSPAdd(command HSPAddCommand) *HSPAddCommand {
+func cloneAppendPoints(command AppendPointsCommand) *AppendPointsCommand {
 	clone := command
 	clone.Points = make([]TimedPoint, len(command.Points))
 	copy(clone.Points, command.Points)
@@ -222,12 +222,12 @@ func cloneCommand(command Command) Command {
 		setup := *command.HSPSetup
 		command.HSPSetup = &setup
 	}
-	if command.HSPAdd != nil {
-		command.HSPAdd = cloneHSPAdd(*command.HSPAdd)
+	if command.PointsAdd != nil {
+		command.PointsAdd = cloneAppendPoints(*command.PointsAdd)
 	}
-	if command.HSPPlay != nil {
-		play := *command.HSPPlay
-		command.HSPPlay = &play
+	if command.PointsPlay != nil {
+		play := *command.PointsPlay
+		command.PointsPlay = &play
 	}
 	return command
 }

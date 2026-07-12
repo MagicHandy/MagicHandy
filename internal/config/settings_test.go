@@ -20,6 +20,9 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.Device.HSPDispatchOwner != DispatchOwnerCloudREST {
 		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST)
 	}
+	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
+		t.Fatalf("Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
+	}
 	if settings.Device.FirmwareAPIRequirement != FirmwareAPIRequirementRequired {
 		t.Fatalf("firmware requirement = %q, want %q", settings.Device.FirmwareAPIRequirement, FirmwareAPIRequirementRequired)
 	}
@@ -73,6 +76,8 @@ func TestSaveAndLoadSettings(t *testing.T) {
 
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49720
+	settings.Device.HSPDispatchOwner = DispatchOwnerIntiface
+	settings.Device.IntifaceServerAddress = "wss://intiface.example.test/socket"
 	settings.Device.APIApplicationIDSource = ApplicationIDSourceDeveloperOverride
 	settings.Device.APIApplicationIDOverride = "dev-app"
 	settings.Device.HandyConnectionKey = "secret"
@@ -95,6 +100,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if got.Device.HandyConnectionKey != "secret" {
 		t.Fatal("connection key did not persist")
+	}
+	if got.Device.HSPDispatchOwner != DispatchOwnerIntiface || got.Device.IntifaceServerAddress != "wss://intiface.example.test/socket" {
+		t.Fatalf("Intiface settings did not persist: %+v", got.Device)
 	}
 	if got.LLM.OllamaModelsPath != `D:\Ollama\models` {
 		t.Fatalf("Ollama models path = %q", got.LLM.OllamaModelsPath)
@@ -165,6 +173,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatal("missing LLM settings were not defaulted")
 	}
+	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
+		t.Fatalf("missing Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
+	}
 }
 
 func TestSettingsLoaderAcceptsUTF8BOM(t *testing.T) {
@@ -221,8 +232,11 @@ func TestCorruptSettingsRecoverToDefaults(t *testing.T) {
 func TestPublicSettingsRedactsConnectionKey(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Device.HandyConnectionKey = "secret"
+	settings.Device.HSPDispatchOwner = DispatchOwnerIntiface
+	settings.Device.IntifaceServerAddress = "wss://intiface.example.test/socket"
 
-	data, err := json.Marshal(settings.Public())
+	public := settings.Public()
+	data, err := json.Marshal(public)
 	if err != nil {
 		t.Fatalf("marshal public settings: %v", err)
 	}
@@ -232,8 +246,128 @@ func TestPublicSettingsRedactsConnectionKey(t *testing.T) {
 	if containsString(string(data), "secret") {
 		t.Fatal("public settings leaked connection key")
 	}
-	if !settings.Public().Device.ConnectionKeySet {
+	if !public.Device.ConnectionKeySet {
 		t.Fatal("public settings did not indicate configured connection key")
+	}
+	if public.Device.IntifaceServerAddress != settings.Device.IntifaceServerAddress {
+		t.Fatalf("public Intiface server address = %q, want %q", public.Device.IntifaceServerAddress, settings.Device.IntifaceServerAddress)
+	}
+	if !containsString(string(data), `"hsp_dispatch_owner":"intiface"`) {
+		t.Fatal("public settings did not preserve the hsp_dispatch_owner JSON key")
+	}
+	if !oneOf(DispatchOwnerIntiface, public.Options.HSPDispatchOwners...) {
+		t.Fatal("public dispatch owner options did not include Intiface")
+	}
+}
+
+func TestIntifaceSettingsApplyUpdate(t *testing.T) {
+	current := DefaultSettings()
+	update := SettingsUpdate{
+		Server: current.Server,
+		Device: DeviceUpdate{
+			HSPDispatchOwner:       DispatchOwnerIntiface,
+			IntifaceServerAddress:  "  wss://intiface.example.test/socket  ",
+			FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement,
+			APIApplicationIDSource: current.Device.APIApplicationIDSource,
+		},
+		Motion:      current.Motion,
+		LLM:         current.LLM,
+		Diagnostics: current.Diagnostics,
+	}
+
+	next, err := current.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate: %v", err)
+	}
+	if next.Device.HSPDispatchOwner != DispatchOwnerIntiface {
+		t.Fatalf("dispatch owner = %q, want %q", next.Device.HSPDispatchOwner, DispatchOwnerIntiface)
+	}
+	if next.Device.IntifaceServerAddress != "wss://intiface.example.test/socket" {
+		t.Fatalf("Intiface server address = %q, want trimmed update", next.Device.IntifaceServerAddress)
+	}
+
+	update.Device.IntifaceServerAddress = ""
+	next, err = current.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate missing address: %v", err)
+	}
+	if next.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
+		t.Fatalf("missing update address = %q, want default %q", next.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
+	}
+}
+
+func TestLegacyVersionOneSettingsDefaultIntifaceAddressWithoutVersionBump(t *testing.T) {
+	raw := []byte(`{"version":1,"device":{"hsp_dispatch_owner":"cloud_rest","firmware_api_requirement":"firmware_v4_api_v3_required","api_application_id_source":"bundled_app_id"}}`)
+
+	settings, migrated, err := loadSettingsFromBytes(raw)
+	if err != nil {
+		t.Fatalf("loadSettingsFromBytes: %v", err)
+	}
+	if migrated {
+		t.Fatal("additive Intiface address default unexpectedly migrated version-1 settings")
+	}
+	if settings.Version != 1 {
+		t.Fatalf("version = %d, want 1", settings.Version)
+	}
+	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
+		t.Fatalf("Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
+	}
+}
+
+func TestIntifaceServerAddressValidation(t *testing.T) {
+	valid := []string{
+		"ws://127.0.0.1:12345",
+		"wss://intiface.example.test",
+		"ws://[::1]:12345/socket",
+	}
+	for _, address := range valid {
+		t.Run("valid_"+address, func(t *testing.T) {
+			settings := DefaultSettings()
+			settings.Device.IntifaceServerAddress = address
+			if _, err := NormalizeSettings(settings); err != nil {
+				t.Fatalf("NormalizeSettings(%q): %v", address, err)
+			}
+		})
+	}
+
+	invalid := []struct {
+		name    string
+		address string
+		want    string
+	}{
+		{name: "relative", address: "localhost/socket", want: "absolute ws or wss URL with a host"},
+		{name: "missing host", address: "ws:///socket", want: "absolute ws or wss URL with a host"},
+		{name: "wrong scheme", address: "http://127.0.0.1:12345", want: "scheme must be ws or wss"},
+		{name: "userinfo", address: "ws://user@127.0.0.1:12345", want: "must not include userinfo"},
+		{name: "query", address: "ws://127.0.0.1:12345?token=value", want: "must not include a query"},
+		{name: "empty query", address: "ws://127.0.0.1:12345?", want: "must not include a query"},
+		{name: "fragment", address: "ws://127.0.0.1:12345#fragment", want: "must not include a fragment"},
+		{name: "empty fragment", address: "ws://127.0.0.1:12345#", want: "must not include a fragment"},
+		{name: "malformed", address: "ws://127.0.0.1/%zz", want: "must be a valid URL"},
+	}
+	for _, test := range invalid {
+		t.Run(test.name, func(t *testing.T) {
+			settings := DefaultSettings()
+			settings.Device.IntifaceServerAddress = test.address
+			_, err := NormalizeSettings(settings)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("NormalizeSettings(%q) error = %v, want containing %q", test.address, err, test.want)
+			}
+		})
+	}
+}
+
+func TestDispatchOwnerValidationIncludesIntiface(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Device.HSPDispatchOwner = DispatchOwnerIntiface
+	if _, err := NormalizeSettings(settings); err != nil {
+		t.Fatalf("NormalizeSettings Intiface owner: %v", err)
+	}
+
+	settings.Device.HSPDispatchOwner = "unknown"
+	_, err := NormalizeSettings(settings)
+	if err == nil || !strings.Contains(err.Error(), `unknown dispatch owner "unknown"`) {
+		t.Fatalf("NormalizeSettings unknown owner error = %v", err)
 	}
 }
 

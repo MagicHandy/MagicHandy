@@ -11,6 +11,7 @@ import type {
   BluetoothClientStatus,
   BluetoothCommandsResponse,
   BluetoothStatusResponse,
+  IntifaceTransportSnapshot,
   ChatHistoryMessage,
   ChatMessagesResponse,
   PromptSetsPayload,
@@ -174,6 +175,16 @@ export const api = {
   // Non-motion connection check for the selected dispatch owner.
   connectionCheck: (owner: "cloud" | "bluetooth") =>
     request(`POST`, `/api/transport/${owner}/check`, {}),
+
+  // Intiface Central session. Device indices are scoped to this discovery
+  // session, so selection deliberately remains runtime state rather than a setting.
+  intifaceStatus: () => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status"),
+  intifaceConnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", {}),
+  intifaceDisconnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", {}),
+  intifaceStartScan: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/scan", {}),
+  intifaceStopScan: () => request<IntifaceTransportSnapshot>("DELETE", "/api/transport/intiface/scan"),
+  intifaceSelect: (device_index: number, actuator_index: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/select", { device_index, actuator_index }),
 
   // Browser Bluetooth bridge. React owns only the browser/device session; all
   // motion commands still come from backend bridge commands.

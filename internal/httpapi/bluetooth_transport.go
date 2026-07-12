@@ -280,7 +280,7 @@ func (s *Server) handleBluetoothHSPAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var command transport.HSPAddCommand
+	var command transport.AppendPointsCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -291,8 +291,8 @@ func (s *Server) handleBluetoothHSPAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := bluetooth.AddHSP(r.Context(), command)
-	s.writeBluetoothCommandResponse(w, string(transport.CommandKindHSPAdd), bluetooth, result, err)
+	result, err := bluetooth.AppendPoints(r.Context(), command)
+	s.writeBluetoothCommandResponse(w, string(transport.CommandKindPointsAdd), bluetooth, result, err)
 }
 
 func (s *Server) handleBluetoothHSPPlay(w http.ResponseWriter, r *http.Request) {
@@ -300,7 +300,7 @@ func (s *Server) handleBluetoothHSPPlay(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var command transport.HSPPlayCommand
+	var command transport.PlayCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -311,8 +311,8 @@ func (s *Server) handleBluetoothHSPPlay(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, err := bluetooth.PlayHSP(r.Context(), command)
-	s.writeBluetoothCommandResponse(w, string(transport.CommandKindHSPPlay), bluetooth, result, err)
+	result, err := bluetooth.Play(r.Context(), command)
+	s.writeBluetoothCommandResponse(w, string(transport.CommandKindPointsPlay), bluetooth, result, err)
 }
 
 func (s *Server) handleBluetoothStop(w http.ResponseWriter, r *http.Request) {

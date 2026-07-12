@@ -113,9 +113,9 @@ func countModeCommands(commands []transport.Command) modeCommandCounts {
 	var counts modeCommandCounts
 	for _, command := range commands {
 		switch command.Kind {
-		case transport.CommandKindHSPPlay:
+		case transport.CommandKindPointsPlay:
 			counts.plays++
-		case transport.CommandKindHSPAdd:
+		case transport.CommandKindPointsAdd:
 			counts.adds++
 		case transport.CommandKindStop:
 			counts.stops++

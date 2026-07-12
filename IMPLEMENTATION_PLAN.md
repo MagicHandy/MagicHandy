@@ -64,7 +64,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
-| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | Planned | — |
+| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; live consistency validation open** | current PR |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
@@ -929,7 +929,8 @@ capped below 40% intensity; synthetic tests cannot establish physical feel.
 
 # Phase 14B: Intiface Dispatch Owner
 
-Status: planned. Decision and schema evaluation recorded in
+Status: implemented with automated contract, API, lifecycle, and UI coverage;
+live same-Handy and non-Handy validation remains open. Decision and schema evaluation recorded in
 [ADR 0010](docs/decisions/0010-transport-neutral-frames-intiface.md), which
 revises ADR 0006's HSP-only dispatch-owner scope and resolves
 `docs/lso-merge-alternatives.md` Decision 2 as a first-class owner.
@@ -1000,6 +1001,22 @@ behind this contract instead of writing a parallel implementation (R20).
 - The same pattern played over Cloud REST and Intiface on the same Handy is
   indistinguishable in feel at matched latency (manual evidence, like the
   Phase 14 feel check).
+
+## Implementation Evidence
+
+- The neutral `AppendPoints`/`Play` contract and float positions are used by
+  the engine and all owners; Handy quantization occurs only at its encoding
+  boundaries.
+- `TestTransportOwnersPreserveNeutralFrameContract` runs one fractional frame
+  through Cloud REST, browser Bluetooth, and Intiface and checks exactly-once
+  window/reverse mapping plus unchanged point timing/count.
+- The fake Buttplug v3 server covers handshake, ping failure, discovery,
+  selection, stop/close preemption, queue bounds, underrun, command rejection,
+  and diagnostics. HTTP integration covers connect/select/dispatch/disconnect.
+- The React route covers saved-address gating, connect/disconnect, scanning,
+  and one linear-actuator selection without constructing transport payloads.
+- Live evidence is not recorded: Intiface Central was not installed or listening
+  on the development machine during implementation. See `docs/intiface.md`.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 

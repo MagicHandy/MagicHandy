@@ -11,7 +11,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-// blockingPlayTransport blocks in PlayHSP until released, so a test can hold
+// blockingPlayTransport blocks in Play until released, so a test can hold
 // Start inside its transport-setup window (after running is published, before
 // the loop launches) and interleave a concurrent Stop.
 type blockingPlayTransport struct {
@@ -21,12 +21,12 @@ type blockingPlayTransport struct {
 	once    int32
 }
 
-func (b *blockingPlayTransport) PlayHSP(ctx context.Context, command transport.HSPPlayCommand) (transport.CommandResult, error) {
+func (b *blockingPlayTransport) Play(ctx context.Context, command transport.PlayCommand) (transport.CommandResult, error) {
 	if atomic.CompareAndSwapInt32(&b.once, 0, 1) {
 		close(b.entered)
 		<-b.release
 	}
-	return b.Fake.PlayHSP(ctx, command)
+	return b.Fake.Play(ctx, command)
 }
 
 // TestConcurrentStopDuringStartupDoesNotPanic reproduces the startup race: a
@@ -48,12 +48,12 @@ func TestConcurrentStopDuringStartupDoesNotPanic(t *testing.T) {
 		_, _ = engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion)
 	}()
 
-	// Wait until Start is blocked inside PlayHSP: running is published but the
+	// Wait until Start is blocked inside Play: running is published but the
 	// loop goroutine has not launched yet.
 	select {
 	case <-blocking.entered:
 	case <-time.After(2 * time.Second):
-		t.Fatal("Start never reached PlayHSP")
+		t.Fatal("Start never reached Play")
 	}
 
 	// This must not panic on a nil cancel.
@@ -85,7 +85,7 @@ func TestConcurrentStopDuringStartupDoesNotPanic(t *testing.T) {
 	// runs on the loop context Stop cancelled, so it aborts instead of sending
 	// an HSP play after the stop. A play recorded here means startup work
 	// restarted motion the user just stopped.
-	if plays := countCommands(fake.Commands(), transport.CommandKindHSPPlay); plays != 0 {
+	if plays := countCommands(fake.Commands(), transport.CommandKindPointsPlay); plays != 0 {
 		t.Fatalf("HSP play commands = %d after concurrent stop, want 0 (motion must not restart)", plays)
 	}
 }

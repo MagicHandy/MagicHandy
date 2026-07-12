@@ -38,7 +38,7 @@ func assertNoRestartBeforeStop(t *testing.T, commands []transport.Command) {
 	stopCount := 0
 	for _, command := range commands {
 		switch command.Kind {
-		case transport.CommandKindHSPPlay:
+		case transport.CommandKindPointsPlay:
 			playCount++
 		case transport.CommandKindStop:
 			stopCount++
@@ -77,13 +77,13 @@ func assertEngineEmitsSemanticPosition(t *testing.T, commands []transport.Comman
 	if sample == nil {
 		t.Fatal("last semantic sample is missing")
 	}
-	add := lastHSPAdd(commands)
+	add := lastPointsAdd(commands)
 	if add == nil || len(add.Points) == 0 {
 		t.Fatalf("commands = %+v, want HSP add points", commands)
 	}
 	got := add.Points[len(add.Points)-1].PositionPercent
 	if got != sample.PositionPercent {
-		t.Fatalf("last transport point = %d, want semantic sample %d (engine must not pre-reverse)", got, sample.PositionPercent)
+		t.Fatalf("last transport point = %g, want semantic sample %g (engine must not pre-reverse)", got, sample.PositionPercent)
 	}
 }
 
@@ -127,10 +127,10 @@ func hasTraceAnnotationPrefix(rows []diagnostics.MotionTraceRow, reason string, 
 	return false
 }
 
-func lastHSPAdd(commands []transport.Command) *transport.HSPAddCommand {
+func lastPointsAdd(commands []transport.Command) *transport.AppendPointsCommand {
 	for index := len(commands) - 1; index >= 0; index-- {
-		if commands[index].HSPAdd != nil {
-			return commands[index].HSPAdd
+		if commands[index].PointsAdd != nil {
+			return commands[index].PointsAdd
 		}
 	}
 	return nil

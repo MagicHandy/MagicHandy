@@ -12,7 +12,7 @@ func TestTraceRowSerialization(t *testing.T) {
 	ring := NewTraceRing(4)
 	result := transport.CommandResult{
 		CommandID:     "fake-000001",
-		Kind:          transport.CommandKindHSPAdd,
+		Kind:          transport.CommandKindPointsAdd,
 		Transport:     "fake_handy",
 		OK:            true,
 		Status:        "recorded",
@@ -30,7 +30,7 @@ func TestTraceRowSerialization(t *testing.T) {
 			StrokeMaxPercent: 90,
 		},
 		Sample: &MotionTraceSample{
-			PositionPercent: 42,
+			PositionPercent: 42.25,
 			TimeMillis:      125,
 		},
 		TransportResult: &result,
@@ -40,7 +40,7 @@ func TestTraceRowSerialization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal trace export: %v", err)
 	}
-	want := `{"schema_version":"motion_trace.v1","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"fixture","target":{"label":"manual","speed_percent":50,"stroke_min_percent":10,"stroke_max_percent":90},"sample":{"position_percent":42,"time_ms":125},"transport_result":{"command_id":"fake-000001","kind":"hsp_add","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":7,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0}`
+	want := `{"schema_version":"motion_trace.v2","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"fixture","target":{"label":"manual","speed_percent":50,"stroke_min_percent":10,"stroke_max_percent":90},"sample":{"position_percent":42.25,"time_ms":125},"transport_result":{"command_id":"fake-000001","kind":"points_add","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":7,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0}`
 	if string(got) != want {
 		t.Fatalf("trace export mismatch\nwant: %s\ngot:  %s", want, got)
 	}
@@ -113,8 +113,8 @@ func TestTraceRingOwnsAddedRows(t *testing.T) {
 	}
 	command := transport.Command{
 		ID:   "fake-000001",
-		Kind: transport.CommandKindHSPAdd,
-		HSPAdd: &transport.HSPAddCommand{
+		Kind: transport.CommandKindPointsAdd,
+		PointsAdd: &transport.AppendPointsCommand{
 			StreamID: "1",
 			Points: []transport.TimedPoint{
 				{PositionPercent: 20, TimeMillis: 100},
@@ -135,7 +135,7 @@ func TestTraceRingOwnsAddedRows(t *testing.T) {
 	target.Label = "mutated"
 	planner.Scores[0].Score = 99
 	retarget.PreviousTarget.Label = "mutated-previous"
-	command.HSPAdd.Points[0].PositionPercent = 99
+	command.PointsAdd.Points[0].PositionPercent = 99
 
 	row := ring.Export().Rows[0]
 	if row.Target.Label != "original" {
@@ -147,8 +147,8 @@ func TestTraceRingOwnsAddedRows(t *testing.T) {
 	if row.Retarget.PreviousTarget.Label != "previous" {
 		t.Fatalf("previous target label = %q, want previous", row.Retarget.PreviousTarget.Label)
 	}
-	if row.TransportCommand.HSPAdd.Points[0].PositionPercent != 20 {
-		t.Fatalf("transport point = %d, want 20", row.TransportCommand.HSPAdd.Points[0].PositionPercent)
+	if row.TransportCommand.PointsAdd.Points[0].PositionPercent != 20 {
+		t.Fatalf("transport point = %g, want 20", row.TransportCommand.PointsAdd.Points[0].PositionPercent)
 	}
 }
 

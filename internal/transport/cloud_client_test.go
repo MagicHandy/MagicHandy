@@ -32,15 +32,15 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 	defer server.Close()
 
 	cloud := newTestCloudTransport(t, server.URL)
-	result, err := cloud.AddHSP(context.Background(), HSPAddCommand{
+	result, err := cloud.AppendPoints(context.Background(), AppendPointsCommand{
 		StreamID: "stream-1",
 		Points: []TimedPoint{
 			{PositionPercent: 25, TimeMillis: 0},
-			{PositionPercent: 75, TimeMillis: 250},
+			{PositionPercent: 75.25, TimeMillis: 250},
 		},
 	})
 	if err != nil {
-		t.Fatalf("AddHSP: %v", err)
+		t.Fatalf("AppendPoints: %v", err)
 	}
 	if !result.OK {
 		t.Fatalf("result = %+v, want OK", result)
@@ -69,11 +69,11 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 	}
 
 	diagnostics := cloud.Diagnostics()
-	if diagnostics.LastCommand == nil || diagnostics.LastCommand.HSPAdd == nil {
+	if diagnostics.LastCommand == nil || diagnostics.LastCommand.PointsAdd == nil {
 		t.Fatalf("diagnostics missing safe HSP add command: %+v", diagnostics.LastCommand)
 	}
-	if diagnostics.LastCommand.HSPAdd.Points[1].PositionPercent != 75 {
-		t.Fatalf("diagnostic points = %+v, want safe HSP points", diagnostics.LastCommand.HSPAdd.Points)
+	if diagnostics.LastCommand.PointsAdd.Points[1].PositionPercent != 75.25 {
+		t.Fatalf("diagnostic points = %+v, want safe semantic points", diagnostics.LastCommand.PointsAdd.Points)
 	}
 }
 

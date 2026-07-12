@@ -3,6 +3,7 @@ package transport
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func TestCloudRequestGoldenShape(t *testing.T) {
 
 func TestHSPPointValuesStayZeroToOneHundred(t *testing.T) {
 	builder := newCloudBuilder(t, CloudBuildOptions{})
-	request, err := builder.BuildHSPAdd(HSPAddCommand{
+	request, err := builder.BuildHSPAdd(AppendPointsCommand{
 		StreamID: "bounds",
 		Points: []TimedPoint{
 			{PositionPercent: 0, TimeMillis: 0},
@@ -48,12 +49,37 @@ func TestHSPPointValuesStayZeroToOneHundred(t *testing.T) {
 		t.Fatalf("points = %+v, want 0 and 100", points)
 	}
 
-	_, err = builder.BuildHSPAdd(HSPAddCommand{
+	_, err = builder.BuildHSPAdd(AppendPointsCommand{
 		StreamID: "bad",
 		Points:   []TimedPoint{{PositionPercent: 101, TimeMillis: 0}},
 	})
 	if err == nil {
 		t.Fatal("invalid HSP x value was accepted")
+	}
+}
+
+func TestCloudHandyEncodingQuantizesFractionalPointsAndRejectsNonFinite(t *testing.T) {
+	builder := newCloudBuilder(t, CloudBuildOptions{ReverseDirection: true})
+	request, err := builder.BuildHSPAdd(AppendPointsCommand{
+		StreamID: "fractional",
+		Points:   []TimedPoint{{PositionPercent: 25.25, TimeMillis: 0}, {PositionPercent: 75.75, TimeMillis: 250}},
+	})
+	if err != nil {
+		t.Fatalf("BuildHSPAdd: %v", err)
+	}
+	points := request.Body.(cloudHSPAddBody).Points
+	if points[0].X != 75 || points[1].X != 24 {
+		t.Fatalf("encoded points = %+v, want rounded reverse positions 75 and 24", points)
+	}
+
+	for _, position := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, err := builder.BuildHSPAdd(AppendPointsCommand{
+			StreamID: "non-finite",
+			Points:   []TimedPoint{{PositionPercent: position}},
+		})
+		if err == nil {
+			t.Fatalf("non-finite position %v was accepted", position)
+		}
 	}
 }
 
@@ -67,7 +93,7 @@ func TestStrokeWindowDoesNotRewriteHSPPoints(t *testing.T) {
 		t.Fatalf("stroke window = %+v, want 0.2..0.8", window.Body)
 	}
 
-	add, err := builder.BuildHSPAdd(HSPAddCommand{
+	add, err := builder.BuildHSPAdd(AppendPointsCommand{
 		StreamID: "range",
 		Points: []TimedPoint{
 			{PositionPercent: 0, TimeMillis: 0},
@@ -86,7 +112,7 @@ func TestStrokeWindowDoesNotRewriteHSPPoints(t *testing.T) {
 }
 
 func TestReverseDirectionMapsAtTransportBoundary(t *testing.T) {
-	semantic := HSPAddCommand{
+	semantic := AppendPointsCommand{
 		StreamID: "reverse",
 		Points: []TimedPoint{
 			{PositionPercent: 15, TimeMillis: 0},
@@ -111,7 +137,7 @@ func TestReverseDirectionMapsAtTransportBoundary(t *testing.T) {
 
 func TestHSPSpeedIntentDoesNotBecomePhysicalVelocity(t *testing.T) {
 	builder := newCloudBuilder(t, CloudBuildOptions{})
-	request, err := builder.BuildHSPAdd(HSPAddCommand{
+	request, err := builder.BuildHSPAdd(AppendPointsCommand{
 		StreamID: "timing",
 		Points: []TimedPoint{
 			{PositionPercent: 10, TimeMillis: 100},
@@ -231,7 +257,7 @@ func buildGoldenCloudRequests(t *testing.T, builder *CloudRESTBuilder) []CloudRe
 	if err != nil {
 		t.Fatalf("BuildStrokeWindow: %v", err)
 	}
-	add, err := builder.BuildHSPAdd(HSPAddCommand{
+	add, err := builder.BuildHSPAdd(AppendPointsCommand{
 		StreamID: "stream-1",
 		Points: []TimedPoint{
 			{PositionPercent: 0, TimeMillis: 0},
@@ -242,7 +268,7 @@ func buildGoldenCloudRequests(t *testing.T, builder *CloudRESTBuilder) []CloudRe
 	if err != nil {
 		t.Fatalf("BuildHSPAdd: %v", err)
 	}
-	play, err := builder.BuildHSPPlay(HSPPlayCommand{StreamID: "stream-1"})
+	play, err := builder.BuildHSPPlay(PlayCommand{StreamID: "stream-1"})
 	if err != nil {
 		t.Fatalf("BuildHSPPlay: %v", err)
 	}

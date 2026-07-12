@@ -32,7 +32,7 @@
   },
   {
     "transport": "handy_cloud_rest",
-    "operation": "hsp_add",
+    "operation": "points_add",
     "method": "PUT",
     "path": "hsp/add",
     "auth": {
@@ -62,7 +62,7 @@
   },
   {
     "transport": "handy_cloud_rest",
-    "operation": "hsp_play",
+    "operation": "points_play",
     "method": "PUT",
     "path": "hsp/play",
     "auth": {

@@ -10,9 +10,9 @@
   },
   {
     "id": "fake-000002",
-    "kind": "hsp_add",
+    "kind": "points_add",
     "issued_at": "2026-06-30T12:00:00Z",
-    "hsp_add": {
+    "points_add": {
       "stream_id": "trace-test",
       "points": [
         {
@@ -28,9 +28,9 @@
   },
   {
     "id": "fake-000003",
-    "kind": "hsp_play",
+    "kind": "points_play",
     "issued_at": "2026-06-30T12:00:00Z",
-    "hsp_play": {
+    "points_play": {
       "stream_id": "trace-test",
       "start_time_ms": 0
     }

@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -20,11 +21,11 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 
 	done := make(chan resultAndError, 1)
 	go func() {
-		result, err := bluetooth.AddHSP(context.Background(), HSPAddCommand{
+		result, err := bluetooth.AppendPoints(context.Background(), AppendPointsCommand{
 			StreamID: "7",
 			Points: []TimedPoint{
-				{PositionPercent: 25, TimeMillis: 10},
-				{PositionPercent: 75, TimeMillis: 250},
+				{PositionPercent: 25.25, TimeMillis: 10},
+				{PositionPercent: 75.75, TimeMillis: 250},
 			},
 		})
 		done <- resultAndError{result: result, err: err}
@@ -38,7 +39,7 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 		t.Fatalf("command count = %d, want 1", len(commands))
 	}
 	command := commands[0]
-	if command.Path != "hsp/add" || command.Kind != CommandKindHSPAdd {
+	if command.Path != "hsp/add" || command.Kind != CommandKindPointsAdd {
 		t.Fatalf("command = %+v, want HSP add bridge command", command)
 	}
 	if command.Body["stream_id"] != 7 {
@@ -48,8 +49,8 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 	if !ok || len(points) != 2 {
 		t.Fatalf("points = %#v, want two bridge points", command.Body["points"])
 	}
-	if points[0]["x"] != 75 || points[1]["x"] != 25 {
-		t.Fatalf("reverse points = %+v, want 75 then 25", points)
+	if points[0]["x"] != 75 || points[1]["x"] != 24 {
+		t.Fatalf("reverse points = %+v, want rounded positions 75 then 24", points)
 	}
 
 	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{
@@ -63,7 +64,7 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 
 	outcome := readBluetoothOutcome(t, done)
 	if outcome.err != nil {
-		t.Fatalf("AddHSP: %v", outcome.err)
+		t.Fatalf("AppendPoints: %v", outcome.err)
 	}
 	if !outcome.result.OK || outcome.result.Status != "browser_ack" {
 		t.Fatalf("result = %+v, want browser ack", outcome.result)
@@ -72,11 +73,27 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 		t.Fatalf("command id = %q, want %q", outcome.result.CommandID, command.ID)
 	}
 	diagnostics := bluetooth.Diagnostics()
-	if diagnostics.LastCommand == nil || diagnostics.LastCommand.Kind != CommandKindHSPAdd {
+	if diagnostics.LastCommand == nil || diagnostics.LastCommand.Kind != CommandKindPointsAdd {
 		t.Fatalf("diagnostics last command = %+v, want HSP add", diagnostics.LastCommand)
+	}
+	if diagnostics.LastCommand.PointsAdd == nil || diagnostics.LastCommand.PointsAdd.Points[1].PositionPercent != 75.75 {
+		t.Fatalf("diagnostics last command = %+v, want fractional semantic points", diagnostics.LastCommand)
 	}
 	if diagnostics.CommandCount != 1 {
 		t.Fatalf("command count = %d, want 1", diagnostics.CommandCount)
+	}
+}
+
+func TestBrowserBluetoothHandyEncodingRejectsNonFinitePoints(t *testing.T) {
+	bluetooth := newTestBrowserBluetoothTransport(t, NewBrowserBluetoothBridge(), BrowserBluetoothOptions{})
+	for _, position := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		result, err := bluetooth.AppendPoints(context.Background(), AppendPointsCommand{
+			StreamID: "non-finite",
+			Points:   []TimedPoint{{PositionPercent: position}},
+		})
+		if err == nil || result.Kind != CommandKindPointsAdd {
+			t.Fatalf("non-finite position %v result = %+v, err = %v", position, result, err)
+		}
 	}
 }
 
@@ -162,7 +179,7 @@ func TestBrowserBluetoothTransportMapsSemanticStreamID(t *testing.T) {
 
 	done := make(chan resultAndError, 1)
 	go func() {
-		result, err := bluetooth.AddHSP(context.Background(), HSPAddCommand{
+		result, err := bluetooth.AppendPoints(context.Background(), AppendPointsCommand{
 			StreamID: "motion-000001",
 			Points:   []TimedPoint{{PositionPercent: 50, TimeMillis: 0}},
 		})
@@ -186,12 +203,12 @@ func TestBrowserBluetoothTransportMapsSemanticStreamID(t *testing.T) {
 
 	outcome := readBluetoothOutcome(t, done)
 	if outcome.err != nil {
-		t.Fatalf("AddHSP: %v", outcome.err)
+		t.Fatalf("AppendPoints: %v", outcome.err)
 	}
 	diagnostics := bluetooth.Diagnostics()
 	if diagnostics.LastCommand == nil ||
-		diagnostics.LastCommand.HSPAdd == nil ||
-		diagnostics.LastCommand.HSPAdd.StreamID != "motion-000001" {
+		diagnostics.LastCommand.PointsAdd == nil ||
+		diagnostics.LastCommand.PointsAdd.StreamID != "motion-000001" {
 		t.Fatalf("diagnostics last command = %+v, want semantic stream id retained", diagnostics.LastCommand)
 	}
 }
@@ -207,7 +224,7 @@ func TestBrowserBluetoothTransportReusesMappedStreamIDForPlay(t *testing.T) {
 
 	addDone := make(chan resultAndError, 1)
 	go func() {
-		result, err := bluetooth.AddHSP(context.Background(), HSPAddCommand{
+		result, err := bluetooth.AppendPoints(context.Background(), AppendPointsCommand{
 			StreamID: "motion-000001",
 			Points:   []TimedPoint{{PositionPercent: 50, TimeMillis: 0}},
 		})
@@ -222,12 +239,12 @@ func TestBrowserBluetoothTransportReusesMappedStreamIDForPlay(t *testing.T) {
 	}
 	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{ID: addCommands[0].ID, OK: true})
 	if outcome := readBluetoothOutcome(t, addDone); outcome.err != nil {
-		t.Fatalf("AddHSP: %v", outcome.err)
+		t.Fatalf("AppendPoints: %v", outcome.err)
 	}
 
 	playDone := make(chan resultAndError, 1)
 	go func() {
-		result, err := bluetooth.PlayHSP(context.Background(), HSPPlayCommand{StreamID: "motion-000001"})
+		result, err := bluetooth.Play(context.Background(), PlayCommand{StreamID: "motion-000001"})
 		playDone <- resultAndError{result: result, err: err}
 	}()
 	playCommands, err := bridge.NextCommands(context.Background(), "client-1", time.Second)
@@ -239,7 +256,7 @@ func TestBrowserBluetoothTransportReusesMappedStreamIDForPlay(t *testing.T) {
 	}
 	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{ID: playCommands[0].ID, OK: true})
 	if outcome := readBluetoothOutcome(t, playDone); outcome.err != nil {
-		t.Fatalf("PlayHSP: %v", outcome.err)
+		t.Fatalf("Play: %v", outcome.err)
 	}
 }
 

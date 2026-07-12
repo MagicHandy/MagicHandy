@@ -31,10 +31,10 @@ func TestEngineContinuousFakePlaybackAndStop(t *testing.T) {
 	}
 
 	commands := fake.Commands()
-	if countCommands(commands, transport.CommandKindHSPAdd) < 2 {
+	if countCommands(commands, transport.CommandKindPointsAdd) < 2 {
 		t.Fatalf("commands = %+v, want continuous HSP add chunks", commands)
 	}
-	if countCommands(commands, transport.CommandKindHSPPlay) != 1 {
+	if countCommands(commands, transport.CommandKindPointsPlay) != 1 {
 		t.Fatalf("commands = %+v, want one HSP play", commands)
 	}
 	if countCommands(commands, transport.CommandKindStop) != 1 {
@@ -176,17 +176,17 @@ func TestEngineProjectsRelativePatternIntoStrokeWindowOnlyAtTransport(t *testing
 		commands[0].StrokeWindow.MinPercent != 20 || commands[0].StrokeWindow.MaxPercent != 80 {
 		t.Fatalf("stroke-window command = %+v", commands)
 	}
-	add := lastHSPAdd(commands)
+	add := lastPointsAdd(commands)
 	if add == nil {
 		t.Fatalf("HSP points missing: %+v", commands)
 	}
-	minimum, maximum := 100, 0
+	minimum, maximum := 100.0, 0.0
 	for _, point := range add.Points {
 		minimum = min(minimum, point.PositionPercent)
 		maximum = max(maximum, point.PositionPercent)
 	}
 	if minimum >= 20 || maximum <= 80 {
-		t.Fatalf("engine pre-projected relative samples to %d..%d; want semantic span beyond 20..80", minimum, maximum)
+		t.Fatalf("engine pre-projected relative samples to %g..%g; want semantic span beyond 20..80", minimum, maximum)
 	}
 }
 
@@ -204,10 +204,10 @@ func TestEngineDispatchLoopOutlivesStartRequestContext(t *testing.T) {
 	}
 	cancel()
 
-	initialAdds := countCommands(fake.Commands(), transport.CommandKindHSPAdd)
+	initialAdds := countCommands(fake.Commands(), transport.CommandKindPointsAdd)
 	deadline := time.Now().Add(250 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if countCommands(fake.Commands(), transport.CommandKindHSPAdd) > initialAdds {
+		if countCommands(fake.Commands(), transport.CommandKindPointsAdd) > initialAdds {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -498,7 +498,7 @@ func TestEngineShortSoakAgainstFakeTransport(t *testing.T) {
 	if _, err := engine.Stop(context.Background(), "soak_stop"); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	if countCommands(fake.Commands(), transport.CommandKindHSPAdd) < 5 {
+	if countCommands(fake.Commands(), transport.CommandKindPointsAdd) < 5 {
 		t.Fatalf("commands = %+v, want soak to maintain lead with appended chunks", fake.Commands())
 	}
 }
@@ -583,12 +583,12 @@ func (t *blockingAddTransport) BlockFutureAdds() {
 	t.blockAdds = true
 }
 
-func (t *blockingAddTransport) AddHSP(ctx context.Context, command transport.HSPAddCommand) (transport.CommandResult, error) {
+func (t *blockingAddTransport) AppendPoints(ctx context.Context, command transport.AppendPointsCommand) (transport.CommandResult, error) {
 	t.blockMu.Lock()
 	block := t.blockAdds
 	t.blockMu.Unlock()
 	if !block {
-		return t.Fake.AddHSP(ctx, command)
+		return t.Fake.AppendPoints(ctx, command)
 	}
 
 	t.startOnce.Do(func() { close(t.addStarted) })
@@ -598,7 +598,7 @@ func (t *blockingAddTransport) AddHSP(ctx context.Context, command transport.HSP
 		err = context.Canceled
 	}
 	return transport.CommandResult{
-		Kind:        transport.CommandKindHSPAdd,
+		Kind:        transport.CommandKindPointsAdd,
 		Transport:   "blocked_append",
 		OK:          false,
 		Status:      "failed",

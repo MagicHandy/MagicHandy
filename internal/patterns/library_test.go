@@ -161,8 +161,8 @@ func TestPreviewMatchesMotionPlanSampler(t *testing.T) {
 	}, settings, 0, 0, time.Unix(0, 0))
 	for _, sample := range preview.Samples {
 		got := plan.SampleAt(sample.TimeMillis).PositionPercent
-		if math.Abs(float64(got)-sample.PositionPercent) > 0.51 {
-			t.Fatalf("sample at %d = %d, preview %.3f", sample.TimeMillis, got, sample.PositionPercent)
+		if math.Abs(got-sample.PositionPercent) > 0.51 {
+			t.Fatalf("sample at %d = %.3f, preview %.3f", sample.TimeMillis, got, sample.PositionPercent)
 		}
 	}
 }

@@ -615,6 +615,11 @@ Exit evidence:
   the same Handy over Cloud REST and Intiface and clean stop behavior on a
   non-Handy Buttplug device if available
 
+Implementation status (2026-07-11): the neutral-frame suite and fake-server
+handshake, keepalive, selection, underrun, rejection, Stop, Close, HTTP runtime,
+and UI tests are implemented. The risk remains Medium until the same-Handy
+Cloud-vs-Intiface feel run and a non-Handy linear-device stop run are recorded.
+
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
 

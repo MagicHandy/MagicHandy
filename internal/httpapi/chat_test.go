@@ -104,8 +104,8 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 		t.Fatalf("motion engine commands = %d, want at least 3: %+v", len(commands), commands)
 	}
 	if commands[0].Kind != transport.CommandKindStrokeWindow ||
-		commands[1].Kind != transport.CommandKindHSPAdd ||
-		commands[2].Kind != transport.CommandKindHSPPlay {
+		commands[1].Kind != transport.CommandKindPointsAdd ||
+		commands[2].Kind != transport.CommandKindPointsPlay {
 		t.Fatalf("commands did not flow through motion engine: %+v", commands[:3])
 	}
 }
