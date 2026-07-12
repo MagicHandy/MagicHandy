@@ -8,7 +8,8 @@ licenses visible, enter cloud keys, port data from StrokeGPT-ReVibed), and
 the existing consent/checksum law applied to all of it. This doc evaluates
 how to get there and records the decision. It extends
 `docs/installation-automation.md` (which anticipated "the eventual in-app
-setup wizard") and feeds Phase 16.
+setup wizard") and feeds Phase 16. ADR 0011 records the architecture decision;
+this document is the detailed implementation design.
 
 ## What already exists (and changes the answer)
 
@@ -76,8 +77,8 @@ suites already know how to test it.
 For the install binary itself, **Inno Setup** over WiX/NSIS/hand-rolled:
 
 - Build-time-only dependency (CI installs `iscc`, compiles
-  `installer/magichandy.iss`); nothing ships at runtime. The stub adds only
-  a couple of MB around the app payload.
+  `installer/magichandy.iss`); nothing ships at runtime. Target only a few MB
+  of installer overhead around the app payload and measure it in Phase 16.
 - Mature Add/Remove Programs integration, silent flags (`/VERYSILENT`) for
   scripted installs, over-install upgrades, and code-signing hooks (signing
   itself stays a Phase 16 decision doc).
@@ -106,10 +107,13 @@ non-blocking — the app must remain fully usable with everything declined
    nothing here ever commands the device.
 2. **Device** — connection key (write-only), dispatch owner, non-motion
    connection check. Existing settings surface, embedded.
-3. **LLM runtime** — the choice the user asked for by name: managed
-   llama.cpp **source build** (backend auto/CPU/CUDA, streaming status,
-   cancel — existing endpoint), **skip because Ollama** (scan + import from
-   the local Ollama store — existing endpoints), or external server URL.
+3. **LLM runtime** — checksummed prebuilt managed llama.cpp CPU/CUDA bundles
+   by default, with size/license/backend fit visible before download; an
+   advanced managed **source build** (backend auto/CPU/CUDA, streaming status,
+   cancel — existing endpoint); **skip because Ollama** (scan + import from
+   the local Ollama store — existing endpoints); or an external server URL.
+   The prebuilt path is required before this wizard can claim that end users
+   need no Git/CMake/Visual Studio toolchain.
 4. **LLM model** — import GGUF / import from Ollama (existing), or the
    Phase 16 curated checksum-pinned downloads with hardware-fit
    recommendations once those land.
@@ -144,6 +148,7 @@ where the logic lives.
 | Gap | Where it lands |
 | --- | --- |
 | Release plumbing: portable zip, version metadata, release workflow | Slice 16.0 (already in scope) |
+| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Slice 16.0 |
 | Inno Setup script, CI compile, uninstall story, over-install upgrade | Slice 16.1 |
 | First-run detection, `#/setup` wizard route and steps, re-run from Settings | Slice 16.2 |
 | Voice provisioning endpoints (checksummed downloads with progress, mirroring `install.ps1`) | Slice 16.2 |

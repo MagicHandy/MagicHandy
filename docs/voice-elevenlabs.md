@@ -1,6 +1,6 @@
 # ElevenLabs Cloud TTS Worker
 
-The premium cloud TTS path from ADR 0007, implemented as a Phase 12 protocol
+The premium cloud TTS path from ADR 0007, implemented in Phase 13 as a protocol
 worker (`cmd/voice-elevenlabs-worker`). Pure Go, no Python, no CGo. Cloud
 and clearly optional: it sends reply text to ElevenLabs, so it is a
 deliberate privacy choice the user makes by configuring it — never a
@@ -13,8 +13,10 @@ default or a silent fallback.
    ```powershell
    go build -o voice-elevenlabs-worker.exe ./cmd/voice-elevenlabs-worker
    ```
-3. In **Settings → Voice**: enable voice workers, set the **TTS worker
-   path** to the binary, paste the **ElevenLabs API key**, and save. Then
+3. In **Settings → Voice**: enable voice workers, select **ElevenLabs (cloud)**
+   as the Speech output provider, paste the API key, choose the voice/model IDs,
+   and save. The app resolves a worker beside the core binary automatically;
+   **Advanced > Worker binary override** handles a nonstandard location. Then
    Start the worker and Load (load validates the key against the account
    endpoint, so a bad key fails immediately with a clear message).
 4. Turn on **Speak chat replies** to hear replies (the reply text is what
@@ -32,18 +34,13 @@ config, worker, and process level.
 
 ## Voice and model selection
 
-The routine settings surface stays minimal (one key field). Voice, model,
-and output format are worker arguments:
+Voice and model IDs are provider-scoped settings. Defaults are stock voice
+`21m00Tcm4TlvDq8ikWAM` ("Rachel"), model `eleven_multilingual_v2`, and internal
+output format `mp3_44100_128`.
 
-```
--voice-id 21m00Tcm4TlvDq8ikWAM   (default: "Rachel", a stock voice)
--model-id eleven_multilingual_v2 (default)
--format   mp3_44100_128          (default)
-```
-
-Set them in the **TTS worker arguments** field. Instant voice cloning uses
-a voice created in the ElevenLabs dashboard: clone there, then point
-`-voice-id` at it.
+Instant voice cloning uses a voice created in the ElevenLabs dashboard: clone
+there, then enter its ID in the Voice ID field. Raw argument lists are available
+only when the **Custom worker** provider is selected.
 
 ## Behavior behind the protocol
 

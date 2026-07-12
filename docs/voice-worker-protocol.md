@@ -13,8 +13,10 @@ model-free implementation).
 
 ## Transport And Framing
 
-- The core launches the worker process from an explicit user setting (path +
-  args); workers never start implicitly.
+- The core launches the worker only after the user enables voice and selects a
+  provider. Built-in providers resolve their worker binary automatically with
+  an advanced path override; custom providers use explicit path + args. Workers
+  never start implicitly.
 - Frames are NDJSON: exactly one JSON object per line. Requests arrive on the
   worker's stdin; responses leave on stdout. stderr is free-form logging —
   the core captures a bounded tail and shows it on crash.
@@ -83,9 +85,8 @@ enter chat history, TTS playback, or motion (ADR 0003).
 
 ## Core-Side Guarantees
 
-- One serialized work request per worker; the core queue is bounded and
-  rejects new work when full (catch-up flood protection; a configurable
-  drop-oldest policy arrives with real audio playback in Phase 13).
+- One serialized work request per worker; the core queue is bounded and rejects
+  new work when full for catch-up flood protection.
 - Per-request timeouts: handshake 5 s, control 5 s, work 60 s (then a cancel
   frame + a `timeout` failure).
 - Status surfaces every lifecycle state (`disabled`, `not_configured`,

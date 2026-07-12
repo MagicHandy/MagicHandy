@@ -63,9 +63,10 @@ MagicHandy Go core itself.
    recommend a model from detected VRAM or install the CUDA toolkit itself.
 4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
-5. Voice setup is partial: Parakeet ASR has an installer path, but in-app
-   provider provisioning, microphone UI, local cloning TTS, and any LAN/HTTPS
-   story remain open (Phase 13; R17/R18).
+5. Voice setup is partial: provider adapters, provider-scoped settings, browser
+   push-to-talk, and the Parakeet installer path exist. Turnkey in-app provider
+   provisioning, managed browser-audio-to-Parakeet validation, arbitrary-WAV
+   NeuTTS cloning, and any LAN/HTTPS story remain open (R17/R18).
 
 ## Roadmap to parity
 
@@ -76,15 +77,17 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
 2. **Model-manager foundation (done).** Durable model inventory, provider model
    list, standalone GGUF import, configurable Ollama-path scan/import,
    checksum verification, cancellation, selection, and guarded removal.
-3. **Packaged releases (Phase 16).** Windows portable zip / signed build so the
+3. **Packaged releases (Phase 16).** Windows portable zip / setup binary so the
    installer can *download a prebuilt binary* instead of building from source —
-   no Go required for end users. Linux/macOS artifacts best-effort.
+   no Go required for end users. Production signing remains an explicit Phase
+   16 decision. Linux/macOS artifacts are best-effort.
 4. **Managed llama.cpp runner provisioning (done for source installs).** The
    installer and Model UI invoke one embedded helper pinned to `b9966` /
    `c749cb0`, verify the checkout and executable, build CPU or CUDA, install the
    complete runtime atomically, and activate a constrained app-data manifest.
-   No user path setting remains. Phase 16 packaging can ship prebuilt outputs so
-   release users do not need Git/CMake/Visual Studio.
+   No user path setting remains. Phase 16 must publish checksummed prebuilt CPU
+   and CUDA runtime bundles so release users do not need Git/CMake/Visual Studio;
+   source build remains an advanced fallback.
 5. **Curated model catalog + guided download.** A small, opinionated list of
    recommended GGUF models with visible size, license, checksum, and rough VRAM
    fit; one-click download with progress; and "import a local GGUF" without a
@@ -100,10 +103,11 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    [docs/gui-installer.md](gui-installer.md) (Phase 16 slices 16.1-16.3),
    including voice provisioning moved behind API endpoints and the
    StrokeGPT-ReVibed porting step over the Phase 15 importer.
-8. **Voice setup (Phase 13).** Parakeet ASR's explicit installer path is the
-   first slice. Add an in-app guided profile, local TTS provisioning, and
-   microphone calibration only after real-device and microphone evidence;
-   providers stay optional and off the core install path (ADR 0007).
+8. **Voice setup (implemented adapters; provisioning remains).** Provider
+   selection, workers, push-to-talk, and browser playback have landed. Add
+   in-app guided provisioning and microphone/provider compatibility checks only
+   with real-provider evidence; providers stay optional and off the core install
+   path (ADR 0007).
 9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
 
@@ -135,7 +139,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | Detection + advice today | install.ps1 GPU detection |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - opt-in Parakeet ASR installer path | Phase 13.4 |
+| Voice model setup | Partial - adapters/UI landed; opt-in Parakeet installer only | Phase 13 + Phase 16 provisioning |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

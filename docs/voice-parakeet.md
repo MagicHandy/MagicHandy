@@ -40,21 +40,13 @@ places the optional runner and model under the selected MagicHandy data folder:
 | Worker | `voice-parakeet-worker.exe` | built locally | GPL-3.0-only | Go build |
 
 The installer builds the worker but does not enable or start voice. In
-**Settings > Voice**, enable voice workers, set the installed
-`voice-parakeet-worker.exe` as the ASR worker path, and enter these ASR
-arguments one per line:
-
-```text
--server-path
-C:\path\to\parakeet-server.exe
--server-model
-C:\path\to\tdt-0.6b-v3-q4_k.gguf
-```
-
-Paths are separate arguments so normal Windows paths with spaces remain intact.
-Save settings, then use Start and Load in the Speech input row. The default
-managed port is `127.0.0.1:8990`; use `-server-port` on its own line only when
-that port is already in use.
+**Settings > Voice**, enable voice workers, select **Parakeet (managed, local)**
+as the Speech input provider, and set the installed `parakeet-server.exe` and
+GGUF model paths. The app resolves `voice-parakeet-worker.exe` automatically
+when it is beside the core binary; **Advanced > Worker binary override** handles
+nonstandard layouts. Save settings, then use Start and Load in the Speech input
+row. The default managed port is `127.0.0.1:8990`; change the provider-scoped
+Server port field only when that port is already in use.
 
 The first installer path intentionally uses the portable CPU runner. Users can
 replace it with a compatible parakeet.cpp CUDA or Vulkan runner later without
@@ -69,23 +61,18 @@ Build the worker:
 go build -o voice-parakeet-worker.exe ./cmd/voice-parakeet-worker
 ```
 
-Run it in managed mode through MagicHandy's voice settings with the arguments
-above. The worker launches:
+Run it in managed mode by selecting the managed provider and filling its
+server/model fields in MagicHandy's voice settings. The worker launches:
 
 ```text
 parakeet-server --model <local GGUF> --host 127.0.0.1 --port 8990
 ```
 
-For a user-managed compatible server instead, configure only:
-
-```text
--base-url
-http://127.0.0.1:8765
-```
-
-`-base-url` and managed `-server-path`/`-server-model` are mutually exclusive.
-The load response names missing paths, model files, unreachable servers, and
-port conflicts directly.
+For a user-managed compatible server instead, select **OpenAI-compatible
+server** and set its Base URL and model name. Raw worker paths and argument
+lists are exposed only by the **Custom worker** provider. The load response
+names missing paths, model files, unreachable servers, and port conflicts
+directly.
 
 ## Worker Behavior
 
@@ -102,19 +89,22 @@ port conflicts directly.
 - The Settings test action sends a valid, silent WAV to exercise the real
   decode path without inserting spoken content into chat or motion.
 
-Browser microphone capture, push-to-talk, and hands-free routing are later
-voice slices. Recognized speech will use the same chat and motion safety path
-as typed chat; it will never bypass limits, smoothing, controller ownership, or
-Emergency Stop.
+Browser microphone capture and push-to-talk are implemented on localhost.
+Recognized speech uses the same chat and motion safety path as typed chat; it
+never bypasses limits, smoothing, controller ownership, or Emergency Stop.
+However, browsers currently record WebM/Opus or Ogg while the pinned managed
+runner path is documented with WAV. End-to-end format compatibility remains an
+acceptance gap (risk R24); hands-free routing is still planned.
 
 ## Validation
 
 The worker tests cover external `/v1/models` compatibility, parakeet.cpp
 `/health` readiness, a managed child process starting only once, port conflict
 errors, unload, shutdown, cancellation, and no-speech handling. A real-model
-check remains required before microphone UI ships: capture the runner version,
-model checksum, CPU/GPU mode, load time, transcription latency, and the
-no-speech result in diagnostics without recording raw audio or credentials.
+check remains required before managed push-to-talk is called validated: capture
+the browser format, runner version, model checksum, CPU/GPU mode, load time,
+transcription latency, and the no-speech result in diagnostics without recording
+raw audio or credentials.
 
 ## Related
 

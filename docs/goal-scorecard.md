@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-11, managed llama.cpp runtime branch
+## Snapshot — 2026-07-11, post-Phase-14 documentation review
 
 ### Goal 1: Maintainability
 
@@ -33,9 +33,9 @@ Scoring key:
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target. Runtime build state is isolated in a 447-line manager and a 244-line embedded PowerShell helper rather than added to the provider adapter or HTTP server. |
 | Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. The 544-line model panel and 372-line model stylesheet are separate from the routed Settings shell and shared controls; `web/dist` remains the single shipped build. |
-| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` enforces 800-line defaults for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
+| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
-| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 13.8 are merged by PR; the Phase 14 branch carries code, tests, rendered UI evidence, migrations, risk updates, and budget measurements together. |
+| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 14 and the ahead-of-phase model/runtime work are merged by PR with code, tests, rendered UI evidence where applicable, migrations, risk updates, and budget measurements together. |
 
 ### Goal 2: Core Memory
 
@@ -46,8 +46,8 @@ Full rows in `docs/perf-baseline.md`.
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
 | Go core idle RSS | < 40 MB | **Violated (waived)** | Managed-runtime stripped build idles at 52.73 MiB after `/healthz`, close to the Phase 14 52.49 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
-| Go core active RSS | < 80 MB | **Met** | Model-manager reads settle at 53.40 MiB after repeated `/api/llm/models` calls. This is an API-read sample, not a new real-device active run; earlier real-device samples remain 16.75-16.76 MB Cloud REST and 17.52-17.53 MB Browser Bluetooth before SQLite. |
-| Sustained soak | 1 h RSS within +20% of active baseline | **Met** | 18.41-20.16 MB over 56 warmed samples; +9.53% growth (2026-07-02) |
+| Go core active RSS | < 80 MB | **Unmeasured** | Model-manager reads settle at 53.40 MiB, but that is not the required active-motion + transport + SSE + chat scenario. Earlier real-device samples (16.75-16.76 MB Cloud REST; 17.52-17.53 MB Browser Bluetooth) predate SQLite and remain historical baselines only. |
+| Sustained soak | 1 h RSS within +20% of active baseline | **Unmeasured** | The 2026-07-02 run measured 18.41-20.16 MB over 56 warmed samples (+9.53%), but it predates SQLite. Re-run the full scenario on the current build. |
 
 Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 11B SQLite idle-RSS waiver now explicit.
@@ -66,7 +66,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence |
 | --- | --- | --- |
 | goleak in motion and transport `TestMain` | **Met** | `internal/motion/goleak_test.go`, `internal/transport/goleak_test.go` |
-| Stop-teardown coverage | **Met** | engine stop/unhealthy-playback/concurrent tests; owner-switch stops motion (`controller_test.go`); server `Close()` stops the loop on shutdown |
+| Stop-teardown coverage | **At Risk** | Active engine teardown, unhealthy playback, concurrency, owner-switch, and server shutdown are covered. Idle-engine and no-engine UI Stop paths can return without an explicit transport Stop; add unconditional delivery-attempt tests before release. |
 | Race tests in CI | **Met** | `go test -race` gate (CI runs it with CGO on Ubuntu) |
 
 ### Real-Device Milestone (Motion Core)
@@ -74,8 +74,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence / Notes |
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
-| Full app path — Cloud REST | **Met** | 2026-07-02: browser UI + chat against a real Handy; visible connection check (`HSP ready / 540 ms`), Start via UI, SSE visualizer running, deterministic chat stop (`docs/perf-baseline.md`, "Full App Path Evidence") |
-| Full app path — Browser Bluetooth | **Met** | 2026-07-02: visible Edge Web Bluetooth flow selected `OHD_hw0_29b3243120f4`; visible Check connection reported `Connected: HSP ready / Unknown / 0 ms` without queuing `hsp/state`; visible Start motion at 28% sent `stroke_window`, `hsp_add`, and `hsp_play` with `browser_ack`; chat `stop` returned `Stopping motion.` and Stop ACKed; repeat UI Start/Stop captured active RSS samples (`docs/perf-baseline.md`, "Full App Path Evidence"). |
+| Full app path — Cloud REST | **At Risk** | The 2026-07-02 browser UI + chat run moved and stopped a real Handy, but it predates the reverse-direction fix. Revalidate reverse and unconditional Stop on hardware (`docs/perf-baseline.md`, "Full App Path Evidence"). |
+| Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -90,13 +90,17 @@ backend-authoritative preview and motion path.
 
 Ranked by threat to the stated goals:
 
-1. **Cold start at the boundary.** Probably measurement overhead, but nobody
+1. **Emergency Stop delivery gaps.** The mounted control and active engine
+   teardown are covered, but idle/no-engine paths do not always attempt a
+   transport Stop and backend loss prevents browser delivery. Close the
+   unconditional-attempt and failure-reporting gaps before a release claim.
+2. **Cold start at the boundary.** Probably measurement overhead, but nobody
    has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
    it server-side.
-2. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
+3. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
-3. **Feature growth vs binary/memory/browser budgets.** The model manager and
+4. **Feature growth vs binary/memory/browser budgets.** The model manager and
    managed-runtime flow raise the embedded UI from 80,533 to 85,718 gzip bytes
    (+5,185 / 6.4%) and the stripped binary from 12,766,208 to 13,031,936 bytes
    (+265,728 / 2.1%). Both remain within their budgets; re-measure after curated

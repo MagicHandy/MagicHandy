@@ -11,7 +11,7 @@ the companion to two docs and does not repeat them:
   rules.
 
 This file is the **live token-and-component reference** for the shipped
-React shell (status 2026-07-09: current). The tokens now live in
+React shell (status 2026-07-11: current). The tokens now live in
 `web/src/styles/tokens.css` (shell and component rules in
 `web/src/styles/shell.css` / `components.css`); values quoted from the
 pre-React `web/app.css` were carried over unchanged, and `web/app.css`
@@ -99,11 +99,10 @@ chat-provider chip. The redesign **retires the fully-round pill for status**
   `MagicHandy` in `--text` `600`, session identity (`local · llama.cpp · cloud`)
   in `--muted` `0.72rem`. It is a button → navigates to `#/settings`.
 - **Nav row**: 40px tall, `0 12px`, 18px icon + `0.9rem` label, `--radius-sm`.
-  - Default: `--muted` label, transparent bg.
-  - Hover: `--surface-2` bg.
-  - **Active: a 3px `--accent` left border + `--surface-2` fill + `--text`
-    label + `--accent` icon, and `border-radius: 0`** (single-side borders never
-    get rounded corners). Not a saturated pill. `aria-current="page"`.
+  Default is a `--muted` label on a transparent background; hover uses
+  `--surface-2`. Active uses the soft `--accent-tint` fill, `--text` label,
+  and `--accent` icon on the rounded row, with no edge bar. It is not a
+  saturated pill and carries `aria-current="page"`.
 - **Pinned Stop** (bottom, `margin-top:auto`): the existing `.stop-button`
   treatment (full-width here) — `--danger`/`--danger-strong` red gradient, white
   `700`, `--radius-sm`, `--shadow`, with the `Esc` keycap. Present on every page.
@@ -201,11 +200,11 @@ label for a control.
 
 - Desktop: rail + status bar + workspace; the workspace column holds the routed
   page (two-column on Chat: control column + conversation).
-- `≤1040px`: rail may collapse to a 64px icon rail (labels → tooltips); Stop
-  stays a pinned red icon block.
-- `≤880px` (existing breakpoint): status readouts wrap; keep them compact.
-- `≤720px`: rail becomes a bottom tab bar; **Stop detaches to its own fixed
-  bottom bar above the tabs** so the keyboard never hides it.
+- `≤1100px`: the controller status label hides while its state remains visible.
+- `≤980px`: the status timer hides to preserve the compact status row.
+- `≤860px`: the rail becomes a reserved bottom footer with tabs and a full-width
+  Stop row above them. The footer participates in layout rather than overlaying
+  the workspace, so content and the keyboard do not hide Stop.
 - `≤520px` (existing): field rows collapse to one column; bubbles go full width.
 
 ## Motion And Accessibility
