@@ -11,7 +11,7 @@ core number.
   2026-07-02 (Go active Cloud REST short run and one-hour soak; Browser
   Bluetooth UI/chat hardware run), 2026-07-06 (Phase 11B SQLite persistence),
   2026-07-11 (Phase 14 pattern library, LLM model manager, managed llama.cpp,
-  Phase 14B Intiface owner, and rendered UI)
+  Phase 14B Intiface owner, Phase 14C floating connection manager, and rendered UI)
 - OS and architecture: Windows / amd64
 - Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for Phase 11B and
   Phase 14 measurements
@@ -31,6 +31,7 @@ core number.
 | MagicHandy Go core idle/model-manager reads | Managed llama.cpp runtime working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49735` with isolated data; `/healthz` for idle, then twenty `GET /api/llm/models` reads | No browser window for RSS; rendered UI measured separately | Yes; no Ollama/llama.cpp/voice worker included | Idle after `/healthz`: 52.73 MiB (55,296,000 bytes) across 3 equal samples. After model-manager reads: 53.40 MiB (55,992,320 bytes) across 3 equal samples | Not measured separately | Plain binary 18,822,656 bytes; stripped binary 13,031,936 bytes. Embedded JS is 266,268 bytes / 78,339 gzip; CSS 31,934 / 7,091 gzip; HTML 454 / 288 gzip; combined gzip 85,718 bytes (+5,185 / 6.4% from Phase 14). Cold starts measured 556/534/533 ms with the client-side PowerShell probe. No model bytes or runner process were loaded. |
 
 | MagicHandy Go core idle, Phase 14B Intiface owner | Final Phase 14B working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49764` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS | Yes; no Intiface Central, device, model, or voice worker included | 53.20 MiB (55,779,328 bytes) across 3 equal samples | Not measured separately | Plain binary 19,205,632 bytes; stripped binary 13,309,952 bytes. Embedded JS is 270,506 bytes / 79,435 gzip; CSS 32,443 / 7,177 gzip; HTML 454 / 281 gzip; combined gzip 86,893 bytes (+1,175 / 1.4%). The pure-Go websocket owner and unconditional Stop hardening add 278,016 stripped bytes (+2.1%) over the managed-runtime baseline. |
+| MagicHandy Go core idle, Phase 14C floating connection manager | Phase 14C working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%\MagicHandy-floating-budget`; fresh stripped binary on `127.0.0.1:49768` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS; rendered UI checked separately | Yes; no device, model, or voice worker included | 53.60 MiB (56,205,312 bytes) across 3 equal samples | Not measured separately | Plain binary 19,613,184 bytes; stripped binary 13,722,624 bytes. JS 278,156 / 81,765 gzip; CSS 36,780 / 7,898 gzip; HTML 454 / 280 gzip; reviewed PNG 421,147 / 417,769 gzip; total embedded browser payload 736,537 raw / 507,712 gzip. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -142,6 +143,24 @@ Still required (Phase 9B):
 - The test process was stopped and runtime trace/log files stayed under `%TEMP%`;
   no generated evidence or credential entered the repository. No non-Handy
   linear device was available. Subjective matched feel remains open.
+
+## Phase 14C Floating Connection Manager Evidence
+
+- The embedded production build was rendered at 1280×800 and 390×844. The
+  desktop panel measured 360×658 px with no document, panel, or internal
+  overflow; all four immediate limits were visible.
+- At 390×844 the complete 658px panel fit without horizontal or internal
+  overflow. Its trigger ended at y=736 while the always-mounted Stop bar began
+  at y=748, so
+  the floating surface did not cover the safety control or bottom navigation.
+- The artwork references the reviewed 421,147-byte conductor-hand PNG. A
+  luminance mask removes only its paper field and source arcs while preserving
+  the original hand/starfield pixels; the rendered connection layer contains
+  exactly three SVG signal paths and no duplicate source-wave layer.
+- React tests cover route persistence, provider-scoped Cloud/Bluetooth/Intiface
+  controls, immediate semantic limit updates, focus restoration, three signal
+  paths, and the transient connecting phase. Reduced-motion disables the wave
+  animation in CSS.
 
 ## Phase 14 Rendered UI Evidence
 

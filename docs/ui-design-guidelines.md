@@ -140,6 +140,22 @@ page — one component, engine-driven, position labeled as a commanded estimate.
 - Disabled: `opacity .45`, `--surface-2`, `--muted`, no shadow — visibly inert,
   with a reason nearby (never a silent no-op).
 
+### Floating connection manager
+
+- Shell-owned and route-independent, fixed at the lower right. The collapsed
+  trigger is a compact `--surface-2` rectangle with provider/device text and a
+  state icon; it is not a round pill and never overlaps the reserved mobile Stop
+  footer.
+- The expanded non-modal panel is at most 360px wide, one overlay surface with
+  dividers rather than nested cards. It contains the current provider's live
+  actions, a Settings link, and a 2×2 grid of immediate speed/stroke limits.
+- Artwork is the reviewed conductor hand, not a loose redraw: one canonical
+  embedded PNG is luminance-masked to its hand pixels. Three SVG signal arcs use
+  `#718f99`; connecting staggers opacity across them, connected shows all three,
+  and `prefers-reduced-motion` disables the animation.
+- Open moves focus to Close; Close restores the trigger. Escape remains the
+  global Stop shortcut and is never consumed by this disclosure.
+
 ### Cards, groups, fields
 
 - Panel/card: `--surface`, `--line`, `--radius`, `--shadow`, padding

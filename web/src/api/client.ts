@@ -14,6 +14,7 @@ import type {
   IntifaceTransportSnapshot,
   ChatHistoryMessage,
   ChatMessagesResponse,
+  ConnectionCheckResult,
   PromptSetsPayload,
   PatternInput,
   PatternLibrary,
@@ -174,7 +175,7 @@ export const api = {
 
   // Non-motion connection check for the selected dispatch owner.
   connectionCheck: (owner: "cloud" | "bluetooth") =>
-    request(`POST`, `/api/transport/${owner}/check`, {}),
+    request<ConnectionCheckResult>(`POST`, `/api/transport/${owner}/check`, {}),
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.

@@ -43,8 +43,9 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > (Chat / Preset Modes / Pattern Library / Settings) with **Stop pinned to
 > the rail footer on every page**, a status-only top bar (dot+text readouts,
 > stopwatch, no controls), and workspaces as routed pages under a hash
-> router. Chat keeps the live control column (controls, quick settings,
-> manual test); Settings is a routed page with sibling sections
+> router. A shell-owned floating connection manager stays available on every
+> route and owns live provider actions plus speed/stroke limits. Chat keeps
+> motion behavior, manual test, and the visualizer; Settings is a routed page with sibling sections
 > (`#/settings/device|model|voice|prompts|diagnostics` — compaction planned
 > in [settings-compaction.md](settings-compaction.md)). Token and component
 > specifics live in [ui-design-guidelines.md](ui-design-guidelines.md).
@@ -111,8 +112,10 @@ with Save reachable.
 
 `#/chat` is the primary workspace: the chat log fills the main column and
 the control column holds Controls (Freestyle, Pause/Resume + run readout,
-keepalive), Quick settings (immediate-apply), the testing-badged Manual
-motion group, and the motion visualizer. `#/modes` hosts Preset Modes
+keepalive), reverse/style motion behavior, the testing-badged Manual motion
+group, and the motion visualizer. The shell-level connection manager owns the
+saved dispatch owner's connect/check/discover actions and immediate speed/stroke
+limits on every route. `#/modes` hosts Preset Modes
 (Freestyle now, Autopilot when its planner lands), `#/library` hosts the
 Phase 14 Browse / Programs / Author / Training workspace, and
 `#/settings/device|model|voice|prompts|diagnostics` are sibling sections of
@@ -121,7 +124,8 @@ Stop lives in the nav-rail footer on every route (plus Escape), outside the
 route tree so no navigation state can unmount it; backend loss shows the
 persistent banner and locks backend-required controls while Stop stays
 enabled. Nothing renders as a dashboard; new surfaces join an existing
-workspace or become a nav destination, never an extra always-visible panel.
+workspace or become a nav destination. Only compact safety and status tools,
+including Stop and the connection manager, remain route-independent.
 
 ## The Device Visualizer
 
@@ -137,16 +141,17 @@ One component, one source of truth.
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
 - Is never itself a click target: controls are separate, labeled elements
-  (quick settings live in the sidebar), not artwork turned into a mystery
-  button.
+  (limits live in the connection manager and behavior lives in Chat), not
+  artwork turned into a mystery button.
 
 ## Quick Controls
 
-Speed limit, stroke range, reverse direction.
+Speed limits, stroke range, reverse direction, and motion style.
 
 - Apply immediately to active motion (ADR 0002, invariant 9). No save step.
-- Always visible in the sidebar control rail (stacked below chat on mobile) —
-  no popover to hunt for.
+- Speed and stroke limits live in the persistent floating connection manager;
+  reverse and style stay in Chat's motion-behavior group. The collapsed manager
+  remains visible on every route and clears the reserved mobile Stop footer.
 - Reflect engine state live; if the engine clamps or resolves a value, the
   control shows the resolved value inline rather than via a status line
   elsewhere on screen.
@@ -156,8 +161,8 @@ Speed limit, stroke range, reverse direction.
 > **As built: Settings is a routed page**, reached from the profile lockup,
 > with sibling sections under `#/settings/*` — the window-over-chat decision
 > below (2026-07-03) is historical. The value the window protected — never
-> leaving chat for a quick change — is kept by the live quick settings on
-> the Chat page. The immediate-apply, single-layer, and
+> leaving the current task for a quick change — is kept by the floating
+> connection manager. The immediate-apply, single-layer, and
 > confirmed-destructive rules below are unchanged and still enforced.
 >
 > **As built:** provider-scoped disclosure is implemented for Model and Voice.
@@ -253,7 +258,14 @@ hoc per-widget colors) are not.
 
 ## Connection And Single-Controller
 
-- Connection/transport state is always visible in the persistent bar.
+- Connection/transport state is always visible in the floating manager trigger.
+  Expanding it exposes actions for only the saved dispatch owner: Cloud REST
+  check, browser-owned Bluetooth session, or Intiface connect/discovery/select.
+  Credentials, owner choice, and server addresses remain in Settings.
+- The connection artwork uses the exact reviewed conductor-hand bitmap through
+  a hand-only luminance mask. Exactly three steel-azure SVG arcs animate in a
+  staggered appear/disappear wave only while connecting; reduced-motion renders
+  them statically.
 - Exactly one client may command the device. Additional clients open read-only:
   they can watch state and trigger Stop, but cannot send motion, rather than
   racing and showing a warning banner after the fact.
@@ -265,8 +277,9 @@ hoc per-widget colors) are not.
 - Interactive elements are real semantic controls. Decorative artwork stays
   `aria-hidden`; the visualizer's controls are separate, labeled elements, not a
   role bolted onto live-updating text.
-- Full keyboard operability, visible focus, logical order. Routed views and any
-  overlay trap focus and restore it on close.
+- Full keyboard operability, visible focus, logical order. The connection
+  manager is a non-modal disclosure: opening focuses its Close button and
+  closing restores the trigger; it does not capture Escape, which remains Stop.
 - Status is never color-only.
 - `prefers-reduced-motion` is respected for visualizer animation and transitions.
 - Live regions are minimal and intentional: one polite region for status; the

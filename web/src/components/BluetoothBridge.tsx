@@ -17,11 +17,19 @@ const WRITE_WITHOUT_RESPONSE_SETTLE_MS = 20;
 const RESPONSE_TIMEOUT_MS = 5000;
 const NO_COMPLETION_ID = 2147483647;
 
+export interface BluetoothBridgeState {
+  connected: boolean;
+  connecting: boolean;
+  status: string;
+  deviceName: string;
+}
+
 interface BluetoothBridgeProps {
   visible: boolean;
   locked: boolean;
   backendOnline: boolean;
   initial?: BluetoothBridgeSnapshot;
+  onStateChange?: (state: BluetoothBridgeState) => void;
 }
 
 interface BluetoothCharacteristicLike extends EventTarget {
@@ -59,7 +67,7 @@ interface PendingResponse {
   timer: number;
 }
 
-export function BluetoothBridge({ visible, locked, backendOnline, initial }: BluetoothBridgeProps) {
+export function BluetoothBridge({ visible, locked, backendOnline, initial, onStateChange }: BluetoothBridgeProps) {
   const { show } = useToast();
   const [bridge, setBridge] = useState<BluetoothBridgeSnapshot>(initial ?? {});
   const [connecting, setConnecting] = useState(false);
@@ -75,6 +83,16 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial }: Blu
   useEffect(() => {
     if (initial) setBridge(initial);
   }, [initial]);
+
+  useEffect(() => {
+    const connected = Boolean(bridge.connected || (device.current?.gatt?.connected && tx.current && rx.current));
+    onStateChange?.({
+      connected,
+      connecting,
+      status: bridge.status || (connected ? "connected" : "disconnected"),
+      deviceName: bridge.device_name || device.current?.name || (connected ? "The Handy" : ""),
+    });
+  }, [bridge, connecting, onStateChange]);
 
   useEffect(() => {
     if (!visible || !backendOnline) return;

@@ -111,7 +111,7 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; connectionCheckGate?: Promise<void>; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   let intiface = (state as typeof state & { intiface_transport?: Record<string, any> }).intiface_transport ?? {
@@ -130,6 +130,11 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
         status,
         text: async () => JSON.stringify(opts.stopError ? { error: opts.stopError } : {}),
       } as Response;
+    }
+    if (u.includes("/api/transport/cloud/check")) {
+      await opts.connectionCheckGate;
+      (state as typeof state & { cloud_transport?: { connected: boolean } }).cloud_transport = { connected: true };
+      return jsonRes({ ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 });
     }
     if (u.includes("/api/transport/intiface")) {
       if (u.endsWith("/connect")) intiface = { ...intiface, status: { ...intiface.status, connected: true, max_ping_time_ms: 500, devices: [{ device_index: 7, device_name: "Test Linear", linear_actuators: [{ index: 0, feature_descriptor: "Position" }] }] } };
@@ -213,6 +218,68 @@ describe("app shell safety invariants", () => {
     const status = screen.getByRole("region", { name: /status/i });
     expect(within(status).queryByRole("slider")).toBeNull();
     expect(within(status).queryByRole("button")).toBeNull();
+  });
+
+  it("keeps connection and live limits in one floating manager on every route", async () => {
+    installFetch();
+    renderApp();
+    const trigger = await screen.findByRole("button", { name: /the handy connection key required/i });
+    for (const hash of ["#/modes", "#/library", "#/settings", "#/chat"]) {
+      go(hash);
+      expect(screen.getByRole("button", { name: /the handy connection key required/i })).toBeInTheDocument();
+    }
+    fireEvent.click(trigger);
+    const close = screen.getByRole("button", { name: /close connection manager/i });
+    await waitFor(() => expect(close).toHaveFocus());
+    fireEvent.click(close);
+    await waitFor(() => expect(trigger).toHaveFocus());
+    fireEvent.click(trigger);
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    for (const name of [/speed min/i, /speed max/i, /stroke min/i, /stroke max/i]) {
+      expect(within(manager).getByRole("slider", { name })).toBeInTheDocument();
+    }
+    const motionControls = screen.getByRole("complementary", { name: /motion controls/i });
+    expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
+  });
+
+  it("uses the exact conductor artwork with three independent signal arcs", async () => {
+    installFetch();
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
+    expect(artwork.querySelector("image")?.getAttribute("href")).toMatch(/conductor-hand\.png/);
+    expect(artwork.querySelector("image")?.getAttribute("clip-path")).toBe("url(#connection-hand-clip)");
+    expect(artwork.querySelectorAll(".connection-signal path")).toHaveLength(3);
+  });
+
+  it("applies a floating limit change through the semantic quick API", async () => {
+    const fetchMock = installFetch();
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    fireEvent.change(screen.getByRole("slider", { name: /speed max/i }), { target: { value: "40" } });
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_max_percent: 40 });
+    });
+  });
+
+  it("shows the wireless wave state while checking The Handy", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    installFetch({
+      connectionCheckGate: gate,
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, connection_key_set: true } },
+      },
+    });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy not checked/i }));
+    fireEvent.click(screen.getByRole("button", { name: /check connection/i }));
+    expect(screen.getByRole("img", { name: /in progress/i })).toHaveAttribute("data-phase", "connecting");
+    await act(async () => release());
+    await waitFor(() => expect(screen.getByRole("img", { name: /the handy wireless connection$/i })).toHaveAttribute("data-phase", "connected"));
   });
 
   it("shows the backend-loss banner when the core is unreachable", async () => {
@@ -579,11 +646,16 @@ describe("app shell safety invariants", () => {
   });
 
   it("locks settings, prompt, and memory mutations for read-only clients", async () => {
-    installFetch({ state: { ...baseState, controller: { active: false, read_only: true } } });
+    installFetch({ state: {
+      ...baseState,
+      controller: { active: false, read_only: true },
+      settings: { ...baseState.settings, device: { ...baseState.settings.device, connection_key_set: true } },
+    } });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/device");
     expect(await screen.findByRole("button", { name: /save settings/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /the handy not checked/i }));
     expect(screen.getByRole("button", { name: /check connection/i })).toBeDisabled();
     go("#/settings/prompts");
     expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
@@ -600,9 +672,10 @@ describe("app shell safety invariants", () => {
     });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    go("#/settings/device");
-    expect(await screen.findByText(/bluetooth disconnected/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /the handy bluetooth disconnected/i }));
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    expect(within(manager).getAllByText(/bluetooth disconnected/i).length).toBeGreaterThan(0);
+    expect(within(manager).getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
   });
 
   it("reports an unreachable transport after preserving local Stop state", async () => {
@@ -636,7 +709,7 @@ describe("app shell safety invariants", () => {
     });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    go("#/settings/device");
+    fireEvent.click(screen.getByRole("button", { name: /the handy intiface disconnected/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
     expect(await screen.findByText(/connected - select a linear actuator/i)).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: /linear actuator/i }), { target: { value: "7:0" } });

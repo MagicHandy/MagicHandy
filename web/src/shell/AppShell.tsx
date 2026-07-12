@@ -2,6 +2,7 @@
 // workspace. Stop lives in the rail (always mounted), not here.
 import type { ReactNode } from "react";
 import { useAppState } from "../state/app-state";
+import { ConnectionManager } from "./ConnectionManager";
 import { NavRail } from "./NavRail";
 import { StatusBar } from "./StatusBar";
 
@@ -20,6 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
         {children}
       </main>
+      <ConnectionManager />
     </div>
   );
 }

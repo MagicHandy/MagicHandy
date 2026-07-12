@@ -496,6 +496,23 @@ export interface SettingsUpdate {
   clear_connection_key: boolean;
 }
 
+export interface ConnectionCheckResult {
+  ok: boolean;
+  status: string;
+  hsp_available: boolean;
+  playback_state?: string;
+  latency_ms: number;
+}
+
+export interface TransportDiagnostics {
+  name?: string;
+  connected?: boolean;
+  playback_state?: string;
+  command_count?: number;
+  last_latency_ms?: number;
+  last_error?: string;
+}
+
 export interface IntifaceLinearActuator {
   index: number;
   feature_descriptor?: string;
@@ -542,8 +559,8 @@ export interface AppState {
   chat?: { latest_seq?: number };
   library?: LibrarySummary;
   transport?: Record<string, unknown>;
-  cloud_transport?: Record<string, unknown>;
-  bluetooth_transport?: Record<string, unknown>;
+  cloud_transport?: TransportDiagnostics;
+  bluetooth_transport?: TransportDiagnostics;
   bluetooth_bridge?: BluetoothBridgeSnapshot;
   intiface_transport?: IntifaceTransportSnapshot;
   trace?: Record<string, unknown>;

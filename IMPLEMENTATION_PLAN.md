@@ -65,6 +65,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; matched HW paths validated, feel confirmation open** | #59 |
+| 14C | Floating connection manager, live limits, conductor-hand connection animation | **Implemented; rendered QA green** | current branch |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
@@ -1030,6 +1031,30 @@ behind this contract instead of writing a parallel implementation (R20).
   Stop were distinct successful deliveries at 317, 311, and 310 ms.
 - Subjective matched feel still needs operator confirmation. No non-Handy
   linear device was available, so that conditional run remains unperformed.
+
+# Phase 14C: Floating Connection Manager
+
+Status: implemented with provider-state, interaction, responsive, and rendered
+coverage.
+
+The shell owns one floating connection manager on every route. It renders only
+the saved dispatch owner's live actions (Cloud check, browser Bluetooth, or
+Intiface connect/discover/select); credentials and addresses remain in routed
+Settings. Speed and stroke limits moved from Chat into this manager and still
+use the semantic immediate-apply API. Reverse direction and motion style remain
+in Chat as motion behavior.
+
+The connecting state copies the reviewed conductor-hand artwork exactly from
+`.scratch/branding-review` into one canonical shipping asset. An SVG luminance
+mask isolates the original hand and starfield without redrawing it. Three
+separate steel-azure vector arcs reproduce the wireless motif and stagger their
+appear/disappear opacity while connecting; reduced-motion users get a static
+state. The non-modal disclosure restores focus on close, leaves Escape to Stop,
+and clears the reserved mobile Stop/footer region.
+
+Validation: 38 React tests, typecheck/build, and rendered 1280×800 plus 390×844
+checks. The mobile manager has no horizontal overflow, exposes all four limits,
+and stays above Stop; desktop contains the full panel without internal scroll.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 

@@ -4,9 +4,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, SettingsUpdate } from "../api/types";
-import { BluetoothBridge } from "../components/BluetoothBridge";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
-import { IntifacePanel } from "../components/IntifacePanel";
 import { MemoryManager } from "../components/MemoryManager";
 import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
 import { PromptSetEditor } from "../components/PromptSetEditor";
@@ -24,7 +22,7 @@ const SECTIONS = [
 ] as const;
 
 export function SettingsRoute() {
-  const { backendOnline, readOnly, state, refresh } = useAppState();
+  const { backendOnline, readOnly, refresh } = useAppState();
   const { show } = useToast();
   const hash = useHashRoute();
   const requestedSection = hash.split("/")[2] || "device";
@@ -120,16 +118,6 @@ export function SettingsRoute() {
     }
   }
 
-  async function checkConnection() {
-    if (!s) return;
-    const owner = s.device.hsp_dispatch_owner === "browser_bluetooth" ? "bluetooth" : "cloud";
-    try {
-      await api.connectionCheck(owner);
-      show(`Connection check (${owner}) reachable.`);
-    } catch (e) {
-      show(msg(e), "error");
-    }
-  }
   if (!s) return (<><WorkspaceHead title="Settings" /><p className="form-status">Loading settings…</p></>);
 
   const opt = s.options ?? {
@@ -151,7 +139,6 @@ export function SettingsRoute() {
     </select>
   );
   const owner = s.device.hsp_dispatch_owner;
-  const deviceDirty = JSON.stringify(s.device) !== JSON.stringify(saved?.device) || newKey.trim() !== "" || clearKey;
 
   return (
     <>
@@ -174,13 +161,10 @@ export function SettingsRoute() {
               <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => setNewKey(e.target.value)} /></label>
               <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
             </>}
-            <BluetoothBridge visible={owner === "browser_bluetooth"} locked={locked} backendOnline={backendOnline} initial={state?.bluetooth_bridge} />
             {owner === "intiface" && <>
               <label className="field"><span className="label">Intiface Central server</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
-              <IntifacePanel visible locked={locked} dirty={deviceDirty} initial={state?.intiface_transport} />
             </>}
             <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
-            {owner !== "intiface" && <div className="row-actions"><button type="button" className="btn btn-secondary" onClick={() => void checkConnection()} disabled={locked}>Check connection</button></div>}
           </>
         )}
 

@@ -175,6 +175,216 @@
   margin-left: auto;
 }
 
+/* ---- Floating connection manager ---- */
+.connection-manager {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 24;
+  width: min(360px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.connection-manager-panel {
+  max-height: min(calc(100vh - 110px), 760px);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.connection-manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 10px;
+}
+.connection-manager-head .eyebrow {
+  margin-bottom: 2px;
+  letter-spacing: 0;
+}
+.connection-manager-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.connection-manager-head .icon-button {
+  flex: 0 0 auto;
+}
+.connection-artwork {
+  display: block;
+  width: 100%;
+  height: 228px;
+  background: #f7f3e8;
+  border-block: 1px solid var(--line);
+}
+.connection-signal path {
+  fill: none;
+  stroke-linecap: round;
+  stroke: #718f99;
+  stroke-width: 4;
+  opacity: 0.24;
+}
+.connection-artwork[data-phase="connected"] .connection-signal path {
+  opacity: 1;
+}
+.connection-artwork[data-phase="error"] .connection-signal path {
+  opacity: 0.12;
+}
+.connection-artwork[data-phase="connecting"] .connection-signal path {
+  animation: connection-signal-wave 1.35s ease-in-out infinite;
+  animation-delay: calc(var(--signal-index) * 0.18s);
+}
+@keyframes connection-signal-wave {
+  0%, 12%, 100% { opacity: 0.12; }
+  35%, 62% { opacity: 1; }
+  82% { opacity: 0.12; }
+}
+.connection-current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 14px 8px;
+}
+.connection-current > span:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.connection-current strong,
+.connection-trigger-copy strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.connection-current small,
+.connection-trigger-copy small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.connection-provider-actions {
+  padding: 0 14px 12px;
+}
+.connection-provider-actions > .btn {
+  width: 100%;
+}
+.connection-provider-actions .bluetooth-panel,
+.connection-provider-actions .transport-panel {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+.connection-provider-actions .bluetooth-panel .row-actions,
+.connection-provider-actions .transport-panel .row-actions {
+  margin-top: 8px;
+}
+.connection-provider-actions .meta-grid {
+  margin-top: 10px;
+}
+.connection-configure {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.connection-configure:hover {
+  color: var(--accent);
+}
+.connection-divider {
+  height: 1px;
+  margin: 0 14px;
+  background: var(--line);
+}
+.connection-limits-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 0;
+}
+.connection-limits-head h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.connection-limits-head span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.connection-manager .quick-fields-limits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  padding: 10px 14px 14px;
+}
+.connection-manager .quick-fields-limits .field {
+  min-width: 0;
+}
+.connection-manager-trigger {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  text-align: left;
+}
+.connection-manager-trigger:hover {
+  border-color: var(--accent);
+}
+.connection-trigger-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: var(--surface);
+}
+.connection-manager[data-phase="connected"] .connection-trigger-icon {
+  color: var(--ok);
+}
+.connection-manager[data-phase="connecting"] .connection-trigger-icon {
+  color: var(--accent);
+}
+.connection-manager[data-phase="error"] .connection-trigger-icon {
+  color: var(--danger);
+}
+.connection-trigger-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.connection-trigger-chevron {
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+.connection-manager[data-open="true"] .connection-trigger-chevron {
+  transform: rotate(180deg);
+}
+
 /* ---- Workspace (routed) ---- */
 .workspace {
   grid-column: 2;
@@ -313,5 +523,23 @@
     top: 6px;
     bottom: auto;
     z-index: 30;
+  }
+  .connection-manager {
+    right: 8px;
+    bottom: 108px;
+    width: min(360px, calc(100vw - 16px));
+  }
+  .connection-manager-panel {
+    max-height: calc(100vh - 178px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connection-artwork[data-phase="connecting"] .connection-signal path {
+    animation: none;
+    opacity: 0.72;
+  }
+  .connection-trigger-chevron {
+    transition: none;
   }
 }
