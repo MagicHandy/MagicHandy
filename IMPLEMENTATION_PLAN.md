@@ -65,7 +65,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; matched HW paths validated, feel confirmation open** | #59 |
-| 14C | Floating connection manager, live limits, conductor-hand connection animation | **Implemented; rendered QA green** | current branch |
+| 14C | Floating connection manager, live limits, conductor-hand connection animation | **Implemented; rendered QA green** | #60 |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
