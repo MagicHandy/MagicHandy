@@ -226,11 +226,35 @@
   stroke-width: 5;
   opacity: 1;
 }
-.connection-artwork[data-phase="connected"] .connection-signal path {
+.connection-signal,
+.connection-disconnected {
+  opacity: 0;
+}
+.connection-artwork[data-phase="connected"] .connection-signal,
+.connection-artwork[data-phase="connecting"] .connection-signal,
+.connection-artwork[data-phase="disconnected"] .connection-disconnected,
+.connection-artwork[data-phase="error"] .connection-disconnected {
   opacity: 1;
 }
-.connection-artwork[data-phase="error"] .connection-signal path {
-  opacity: 0.12;
+.connection-disconnected path {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.connection-handy-body {
+  fill: #111317;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+}
+.connection-handy-led {
+  fill: var(--muted);
+}
+.connection-artwork[data-phase="connected"] .connection-handy-led {
+  fill: var(--ok);
+}
+.connection-artwork[data-phase="connecting"] .connection-handy-led {
+  fill: #168bff;
 }
 .connection-artwork[data-phase="connecting"] .connection-signal path {
   animation: connection-signal-wave 1.35s ease-in-out infinite;

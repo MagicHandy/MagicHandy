@@ -1048,10 +1048,13 @@ direction and motion style remain in Chat as motion behavior.
 The connecting state uses a reference-guided transparent isolation of the
 reviewed conductor hand. It renders directly at a fixed square source ratio,
 without the approximate SVG clip and luminance mask that distorted its shape.
-Three separate intense-blue vector arcs reproduce the wireless motif and
-stagger their appear/disappear opacity while connecting; reduced-motion users
-get a static state. The non-modal disclosure restores focus on close, leaves
-Escape to Stop, and clears the reserved mobile Stop/footer region.
+The scaled composition keeps the hand, three intense-blue vector arcs, and the
+poster's rounded Handy body/indicator inside one frame. The arcs occupy the
+lower half and stagger toward the device while connecting; connected shows the
+complete signal, while disconnected/error replaces it with a red X.
+Reduced-motion users get a static state. The non-modal disclosure restores
+focus on close, leaves Escape to Stop, and clears the reserved mobile
+Stop/footer region.
 
 Validation: 38 React tests, typecheck/build, and rendered 1280×800 plus 390×844
 checks. The mobile manager has no horizontal overflow, exposes all four limits,

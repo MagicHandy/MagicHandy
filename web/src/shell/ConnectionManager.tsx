@@ -11,9 +11,9 @@ import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error";
 
 const SIGNAL_PATHS = [
-  "M128 160 Q180 198 232 160",
-  "M102 176 Q180 232 258 176",
-  "M76 190 Q180 266 284 190",
+  "M145 126 Q180 150 215 126",
+  "M124 140 Q180 178 236 140",
+  "M102 151 Q180 195 258 151",
 ];
 
 const emptyIntiface: IntifaceTransportSnapshot = {
@@ -206,9 +206,18 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
       role="img"
       aria-label={phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
     >
-      <image className="connection-hand" href={conductorHand} x="0" y="-85" width="360" height="360" preserveAspectRatio="xMidYMid meet" />
+      <image className="connection-hand" href={conductorHand} x="30" y="-77" width="300" height="300" preserveAspectRatio="xMidYMid meet" />
       <g className="connection-signal" aria-hidden="true">
         {SIGNAL_PATHS.map((path, index) => <path key={path} d={path} style={{ "--signal-index": index } as CSSProperties} />)}
+      </g>
+      <g className="connection-disconnected" aria-hidden="true">
+        <path d="m169 145 22 22" />
+        <path d="m191 145-22 22" />
+      </g>
+      <g className="connection-handy" aria-hidden="true">
+        <rect className="connection-handy-body" x="151" y="172" width="22" height="50" rx="11" />
+        <path className="connection-handy-body" d="M181 222v-18a12 12 0 0 1 24 0v18Z" />
+        <circle className="connection-handy-led" cx="162" cy="198" r="3.25" />
       </g>
     </svg>
   );

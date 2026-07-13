@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Phase 14C top-bar revision: 19,635,712 bytes plain and 13,745,152 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Phase 14C completed-composition revision: 19,636,736 bytes plain and 13,746,176 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -102,10 +102,10 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** Phase 14C raises the
-   total embedded browser payload from 86,893 to 526,949 gzip bytes because the
+   total embedded browser payload from 86,893 to 527,187 gzip bytes because the
    isolated connection artwork contributes 437,397 gzip bytes. The HTML/CSS/JS
-   portion grows only 2,659 bytes (+3.1%) to 89,552; the stripped binary grows
-   435,200 bytes (+3.3%) to 13,745,152. These remain within the binary budget,
+   portion grows only 2,897 bytes (+3.3%) to 89,790; the stripped binary grows
+   436,224 bytes (+3.3%) to 13,746,176. These remain within the binary budget,
    but future bitmap additions must not normalize this one-time fidelity cost.
 
 ## History
@@ -113,10 +113,12 @@ Ranked by threat to the stated goals:
 - **2026-07-12** — Phase 14C adds the route-independent connection manager with
   provider-scoped live actions and immediate speed/stroke limits. Its trigger
   now lives in the top bar; a 444,236-byte transparent, reference-guided hand
-  isolation replaces the distorting SVG luminance mask, and three intense-blue
-  vector arcs provide the reduced-motion-aware connection wave. Plain/stripped
-  binaries are 19,635,712 / 13,745,152 bytes, idle RSS is 53.41 MiB, and the
-  full embedded browser payload is 526,949 bytes gzip (89,552 excluding the
+  isolation replaces the distorting SVG luminance mask. A scaled Handy target
+  completes the composition; three intense-blue arcs appear only for
+  connecting/connected states, with a red X for disconnected/error.
+  Plain/stripped
+  binaries are 19,636,736 / 13,746,176 bytes, idle RSS is 53.63 MiB, and the
+  full embedded browser payload is 527,187 bytes gzip (89,790 excluding the
   artwork).
 
 - **2026-07-12** — Phase 14B live safety close-out on `The Handy (FW4+)` through

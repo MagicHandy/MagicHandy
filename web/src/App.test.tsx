@@ -243,7 +243,7 @@ describe("app shell safety invariants", () => {
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
   });
 
-  it("uses an unmasked hand cutout with three independent signal arcs", async () => {
+  it("composes the hand, three signals, and Handy target without a runtime mask", async () => {
     installFetch();
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
@@ -252,6 +252,10 @@ describe("app shell safety invariants", () => {
     expect(artwork.querySelector("mask")).toBeNull();
     expect(artwork.querySelector("clipPath")).toBeNull();
     expect(artwork.querySelectorAll(".connection-signal path")).toHaveLength(3);
+    expect(artwork.querySelectorAll(".connection-handy-body")).toHaveLength(2);
+    expect(artwork.querySelector(".connection-handy-led")).toBeInTheDocument();
+    expect(artwork.querySelectorAll(".connection-disconnected path")).toHaveLength(2);
+    expect(artwork).toHaveAttribute("data-phase", "disconnected");
   });
 
   it("applies a floating limit change through the semantic quick API", async () => {

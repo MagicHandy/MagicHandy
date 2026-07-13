@@ -150,9 +150,13 @@ page — one component, engine-driven, position labeled as a commanded estimate.
   dividers rather than nested cards. It contains the current provider's live
   actions, a Settings link, and a 2×2 grid of immediate speed/stroke limits.
 - Artwork is a reference-guided transparent isolation of the reviewed conductor
-  hand, rendered directly without a runtime mask or clip. Three SVG signal arcs
-  use intense blue `#168bff`; connecting staggers opacity across them, connected
-  shows all three, and `prefers-reduced-motion` disables the animation.
+  hand, rendered directly without a runtime mask or clip. Scale the hand, three
+  signal arcs, and the poster's rounded Handy body/indicator into one frame; no
+  element may touch the frame edge. The arcs use intense blue `#168bff` only for
+  connecting/connected states and cascade toward the device. Disconnected/error
+  hides every blue arc and shows one compact `--danger` X; this is a semantic
+  status mark, not a red action competing with Stop. `prefers-reduced-motion`
+  disables the connecting animation.
 - Open moves focus to Close; Close restores the trigger. Escape remains the
   global Stop shortcut and is never consumed by this disclosure.
 
