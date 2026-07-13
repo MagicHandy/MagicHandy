@@ -608,9 +608,10 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Device.FirmwareAPIRequirement == "" {
 		settings.Device.FirmwareAPIRequirement = defaults.Device.FirmwareAPIRequirement
 	}
-	if settings.Device.APIApplicationIDSource == "" {
-		settings.Device.APIApplicationIDSource = defaults.Device.APIApplicationIDSource
-	}
+	settings.Device.APIApplicationIDSource, settings.Device.APIApplicationIDOverride = normalizeAPIApplicationID(
+		settings.Device.APIApplicationIDSource,
+		settings.Device.APIApplicationIDOverride,
+	)
 	if settings.Motion.SpeedMinPercent == 0 {
 		settings.Motion.SpeedMinPercent = defaults.Motion.SpeedMinPercent
 	}
@@ -651,6 +652,17 @@ func applyMissingDefaults(settings Settings) Settings {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
 	}
 	return settings
+}
+
+func normalizeAPIApplicationID(source string, override string) (string, string) {
+	override = strings.TrimSpace(override)
+	if source == "" || (source == ApplicationIDSourceDeveloperOverride && override == "") {
+		source = ApplicationIDSourceBundled
+	}
+	if source == ApplicationIDSourceBundled {
+		override = ""
+	}
+	return source, override
 }
 
 func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {

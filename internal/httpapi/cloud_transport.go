@@ -297,7 +297,9 @@ func (s *Server) traceCloudResult(
 
 func resolveCloudApplicationID(settings config.Settings) string {
 	if settings.Device.APIApplicationIDSource == config.ApplicationIDSourceDeveloperOverride {
-		return strings.TrimSpace(settings.Device.APIApplicationIDOverride)
+		if override := strings.TrimSpace(settings.Device.APIApplicationIDOverride); override != "" {
+			return override
+		}
 	}
 	return config.BundledAPIApplicationID
 }

@@ -171,6 +171,8 @@ export const api = {
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
+  saveConnectionKey: (connection_key: string) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
   resetSettings: () => request("POST", "/api/settings/reset", {}),
 
   // Non-motion connection check for the selected dispatch owner.

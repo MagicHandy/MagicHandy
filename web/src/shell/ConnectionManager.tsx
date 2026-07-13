@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import conductorHand from "../assets/conductor-hand-v2.png";
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot } from "../api/types";
@@ -11,9 +11,9 @@ import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error";
 
 const SIGNAL_PATHS = [
-  "M145 126 Q180 150 215 126",
-  "M124 140 Q180 178 236 140",
-  "M102 151 Q180 195 258 151",
+  "M145 124 Q180 150 215 124",
+  "M123 138 Q180 180 237 138",
+  "M100 149 Q180 197 260 149",
 ];
 
 const emptyIntiface: IntifaceTransportSnapshot = {
@@ -42,6 +42,8 @@ export function ConnectionManager() {
   const { show } = useToast();
   const [open, setOpen] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudKeyBusy, setCloudKeyBusy] = useState(false);
+  const [cloudKey, setCloudKey] = useState("");
   const [bluetooth, setBluetooth] = useState(emptyBluetooth);
   const [intiface, setIntiface] = useState(state?.intiface_transport ?? emptyIntiface);
   const [intifaceActivity, setIntifaceActivity] = useState<IntifaceActivity | null>(null);
@@ -52,6 +54,7 @@ export function ConnectionManager() {
 
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "";
   const keySet = Boolean(state?.settings?.device?.connection_key_set);
+  const bundledApplicationID = state?.settings?.device?.api_application_id_source !== "developer_override";
   const locked = !backendOnline || readOnly;
 
   useEffect(() => {
@@ -114,13 +117,31 @@ export function ConnectionManager() {
     }
   }
 
+  async function saveCloudKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextKey = cloudKey.trim();
+    if (!nextKey) return;
+
+    setCloudKeyBusy(true);
+    try {
+      await api.saveConnectionKey(nextKey);
+      setCloudKey("");
+      show("Handy connection key saved.");
+      refresh();
+    } catch (error) {
+      show(error instanceof Error ? error.message : "Connection key could not be saved.", "error");
+    } finally {
+      setCloudKeyBusy(false);
+    }
+  }
+
   return (
     <div className="connection-manager" data-open={open} data-phase={phase}>
       <section id="connection-manager-panel" className="connection-manager-panel" aria-label="Connection manager" hidden={!open}>
         <header className="connection-manager-head">
-          <div>
-            <p className="eyebrow">{provider}</p>
+          <div className="connection-manager-title">
             <h2>Connection</h2>
+            <p>{provider}</p>
           </div>
           <button ref={closeRef} type="button" className="icon-button" aria-label="Close connection manager" onClick={() => setOpen(false)}>
             <CloseIcon />
@@ -140,11 +161,31 @@ export function ConnectionManager() {
         <div className="connection-provider-actions">
           {owner === "cloud_rest" && (
             <>
+              <form className="connection-key-form" onSubmit={(event) => void saveCloudKey(event)}>
+                <div className="connection-key-label">
+                  <label htmlFor="connection-manager-key">Handy connection key</label>
+                  <span>{keySet ? "Saved" : "Required"}</span>
+                </div>
+                <div className="connection-key-entry">
+                  <input
+                    id="connection-manager-key"
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder={keySet ? "Leave blank to keep saved key" : "Paste connection key"}
+                    value={cloudKey}
+                    disabled={locked || cloudKeyBusy}
+                    onChange={(event) => setCloudKey(event.target.value)}
+                  />
+                  <button type="submit" className="btn btn-secondary" disabled={locked || cloudKeyBusy || !cloudKey.trim()}>
+                    {cloudKeyBusy ? "Saving" : "Save key"}
+                  </button>
+                </div>
+              </form>
               <button type="button" className="btn btn-secondary" disabled={locked || cloudBusy || !keySet} onClick={() => void checkCloud()}>
                 <WirelessIcon />
                 {cloudBusy ? "Connecting" : connected ? "Check again" : "Check connection"}
               </button>
-              {!keySet && <p className="form-status">A Handy connection key is required.</p>}
             </>
           )}
           <BluetoothBridge
@@ -162,10 +203,13 @@ export function ConnectionManager() {
             onActivityChange={onIntifaceActivity}
             onSnapshotChange={onIntifaceSnapshot}
           />
-          <a className="connection-configure" href="#/settings/device" onClick={() => { restoreFocus.current = false; setOpen(false); }}>
-            <SettingsIcon />
-            Configure device
-          </a>
+          <div className="connection-provider-meta">
+            {owner === "cloud_rest" && <span>{bundledApplicationID ? "Built-in Handy API v3 ID" : "Developer API v3 ID override"}</span>}
+            <a className="connection-configure" href="#/settings/device" onClick={() => { restoreFocus.current = false; setOpen(false); }}>
+              <SettingsIcon />
+              Configure device
+            </a>
+          </div>
         </div>
 
         <div className="connection-divider" />
@@ -201,7 +245,7 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
     <svg
       className="connection-artwork"
       data-phase={phase}
-      viewBox="0 0 360 228"
+      viewBox="0 0 360 260"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
@@ -211,13 +255,14 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
         {SIGNAL_PATHS.map((path, index) => <path key={path} d={path} style={{ "--signal-index": index } as CSSProperties} />)}
       </g>
       <g className="connection-disconnected" aria-hidden="true">
-        <path d="m169 145 22 22" />
-        <path d="m191 145-22 22" />
+        <path d="m169 139 22 22" />
+        <path d="m191 139-22 22" />
       </g>
       <g className="connection-handy" aria-hidden="true">
-        <rect className="connection-handy-body" x="151" y="172" width="22" height="50" rx="11" />
-        <path className="connection-handy-body" d="M181 222v-18a12 12 0 0 1 24 0v18Z" />
-        <circle className="connection-handy-led" cx="162" cy="198" r="3.25" />
+        <rect className="connection-handy-body" x="146" y="184" width="27" height="70" rx="13.5" />
+        <path className="connection-handy-body" d="M180 254v-22.5c0-7.5 6-13.5 13.5-13.5s13.5 6 13.5 13.5V254Z" />
+        <circle className="connection-handy-led" cx="159.5" cy="219" r="3" />
+        <rect className="connection-handy-marker" x="216" y="247" width="7" height="7" />
       </g>
     </svg>
   );

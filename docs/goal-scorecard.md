@@ -45,7 +45,7 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Final Phase 14B stripped build idles at 53.20 MiB (55,779,328 bytes) after `/healthz`, near the earlier 52.88 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | Final Phase 14C stripped build idles at 53.47 MiB (56,066,048 bytes) after `/healthz`, near the Phase 14B 53.20 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
 | Go core active RSS | < 80 MB | **Unmeasured** | Model-manager reads settle at 53.40 MiB, but that is not the required active-motion + transport + SSE + chat scenario. Earlier real-device samples (16.75-16.76 MB Cloud REST; 17.52-17.53 MB Browser Bluetooth) predate SQLite and remain historical baselines only. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Unmeasured** | The 2026-07-02 run measured 18.41-20.16 MB over 56 warmed samples (+9.53%), but it predates SQLite. Re-run the full scenario on the current build. |
 
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Phase 14C completed-composition revision: 19,636,736 bytes plain and 13,746,176 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Final Phase 14C compacted-manager revision: 19,670,016 bytes plain and 13,773,824 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -102,10 +102,10 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** Phase 14C raises the
-   total embedded browser payload from 86,893 to 527,187 gzip bytes because the
-   isolated connection artwork contributes 437,397 gzip bytes. The HTML/CSS/JS
-   portion grows only 2,897 bytes (+3.3%) to 89,790; the stripped binary grows
-   436,224 bytes (+3.3%) to 13,746,176. These remain within the binary budget,
+   total embedded browser payload from 86,893 to 527,609 gzip bytes because the
+   isolated connection artwork contributes 437,427 gzip bytes. The HTML/CSS/JS
+   portion grows only 3,289 bytes (+3.8%) to 90,182; the stripped binary grows
+   463,872 bytes (+3.5%) to 13,773,824. These remain within the binary budget,
    but future bitmap additions must not normalize this one-time fidelity cost.
 
 ## History
@@ -113,13 +113,14 @@ Ranked by threat to the stated goals:
 - **2026-07-12** — Phase 14C adds the route-independent connection manager with
   provider-scoped live actions and immediate speed/stroke limits. Its trigger
   now lives in the top bar; a 444,236-byte transparent, reference-guided hand
-  isolation replaces the distorting SVG luminance mask. A scaled Handy target
-  completes the composition; three intense-blue arcs appear only for
-  connecting/connected states, with a red X for disconnected/error.
-  Plain/stripped
-  binaries are 19,636,736 / 13,746,176 bytes, idle RSS is 53.63 MiB, and the
-  full embedded browser payload is 527,187 bytes gzip (89,790 excluding the
-  artwork).
+  isolation replaces the distorting SVG luminance mask. The final target
+  recreates the reference's tall capsule, domed body, LED, and square marker;
+  three intense-blue arcs appear only for connecting/connected states, with a
+  red X for disconnected/error. Cloud REST adds a scoped write-only connection
+  key control and visible API v3 ID source, while empty developer overrides
+  fall back to the bundled StrokeGPT-ReVibed ID. Plain/stripped binaries are
+  19,670,016 / 13,773,824 bytes, idle RSS is 53.47 MiB, and the full embedded
+  browser payload is 527,609 bytes gzip (90,182 excluding the artwork).
 
 - **2026-07-12** — Phase 14B live safety close-out on `The Handy (FW4+)` through
   Intiface Central: a 20% stroke passed Pause/Resume and an immediate reverse

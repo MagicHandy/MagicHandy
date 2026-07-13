@@ -16,7 +16,7 @@ const baseState = {
   settings: {
     version: 1,
     server: { port: 49717 },
-    device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled", connection_key_set: false },
+    device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000 },
     voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], speak_replies: false, elevenlabs_key_set: false },
@@ -156,7 +156,8 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
     if (u.includes("/api/llm/status")) return jsonRes({ provider: state.settings.llm.provider, base_url: "http://127.0.0.1:8080", model: state.settings.llm.model, available: false, managed: state.settings.llm.llama_cpp_mode === "managed", loaded: false, models: state.settings.llm.llama_cpp_mode === "external" ? ["server-model-a", "server-model-b"] : undefined, message: `llama.cpp runner is not loaded${state.settings.llm.model ? ` (saved model: ${state.settings.llm.model})` : ""}` });
     if (u.includes("/api/settings")) {
       if (_init?.method === "PUT" && _init.body) {
-        const update = JSON.parse(String(_init.body)) as { llm?: typeof state.settings.llm };
+        const update = JSON.parse(String(_init.body)) as { connection_key?: string; llm?: typeof state.settings.llm };
+        if (u.endsWith("/device/connection-key") && update.connection_key) state.settings.device.connection_key_set = true;
         if (update.llm) state.settings.llm = { ...state.settings.llm, ...update.llm };
       }
       return jsonRes({ settings: state.settings });
@@ -254,8 +255,28 @@ describe("app shell safety invariants", () => {
     expect(artwork.querySelectorAll(".connection-signal path")).toHaveLength(3);
     expect(artwork.querySelectorAll(".connection-handy-body")).toHaveLength(2);
     expect(artwork.querySelector(".connection-handy-led")).toBeInTheDocument();
+    expect(artwork.querySelector(".connection-handy-marker")).toBeInTheDocument();
     expect(artwork.querySelectorAll(".connection-disconnected path")).toHaveLength(2);
+    expect(artwork).toHaveAttribute("viewBox", "0 0 360 260");
     expect(artwork).toHaveAttribute("data-phase", "disconnected");
+  });
+
+  it("saves the Cloud connection key through the scoped redacted endpoint", async () => {
+    const fetchMock = installFetch();
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    expect(within(manager).getByText(/built-in handy api v3 id/i)).toBeInTheDocument();
+
+    fireEvent.change(within(manager).getByLabelText(/handy connection key/i), { target: { value: "test-connection-key" } });
+    fireEvent.click(within(manager).getByRole("button", { name: /save key/i }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/settings/device/connection-key"));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ connection_key: "test-connection-key" });
+    });
+    await waitFor(() => expect(within(manager).getByLabelText(/handy connection key/i)).toHaveValue(""));
   });
 
   it("applies a floating limit change through the semantic quick API", async () => {
@@ -663,7 +684,10 @@ describe("app shell safety invariants", () => {
     go("#/settings/device");
     expect(await screen.findByRole("button", { name: /save settings/i })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /the handy not checked/i }));
-    expect(screen.getByRole("button", { name: /check connection/i })).toBeDisabled();
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    expect(within(manager).getByLabelText(/handy connection key/i)).toBeDisabled();
+    expect(within(manager).getByRole("button", { name: /save key/i })).toBeDisabled();
+    expect(within(manager).getByRole("button", { name: /check connection/i })).toBeDisabled();
     go("#/settings/prompts");
     expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
     expect(await screen.findByRole("button", { name: /add memory/i })).toBeDisabled();
@@ -683,6 +707,7 @@ describe("app shell safety invariants", () => {
     const manager = screen.getByRole("region", { name: /connection manager/i });
     expect(within(manager).getAllByText(/bluetooth disconnected/i).length).toBeGreaterThan(0);
     expect(within(manager).getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
+    expect(within(manager).queryByLabelText(/handy connection key/i)).toBeNull();
   });
 
   it("reports an unreachable transport after preserving local Stop state", async () => {

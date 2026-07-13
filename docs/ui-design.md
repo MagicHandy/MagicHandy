@@ -262,14 +262,18 @@ hoc per-widget colors) are not.
 - Connection/transport state is always visible in the floating manager trigger.
   Expanding it exposes actions for only the saved dispatch owner: Cloud REST
   check, browser-owned Bluetooth session, or Intiface connect/discovery/select.
-  Credentials, owner choice, and server addresses remain in Settings.
+  Cloud REST also exposes a compact write-only connection-key field and the
+  active API v3 ID source; owner choice, key clearing, developer ID override,
+  and server addresses remain in Settings.
 - The connection artwork uses a transparent hand isolation derived from the
   reviewed conductor reference. It renders at its intrinsic square ratio with
   no runtime mask or clip. The scaled frame contains the hand, three
-  intense-blue SVG arcs, and the poster's rounded Handy body with a state-aware
-  indicator. The arcs cascade toward the device while connecting and remain
+  intense-blue SVG arcs, and the poster's tall capsule, domed body, LED, and
+  square marker. The arcs cascade toward the device while connecting and remain
   visible when connected; disconnected/error replaces the arcs with a compact
   red X. Reduced-motion renders the connecting signal statically.
+  [Connection artwork](connection-artwork.md) records the generated asset
+  provenance, SVG coordinates, state table, and refactor checklist.
 - Exactly one client may command the device. Additional clients open read-only:
   they can watch state and trigger Stop, but cannot send motion, rather than
   racing and showing a warning banner after the fact.

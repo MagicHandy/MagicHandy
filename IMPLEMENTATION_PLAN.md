@@ -1041,22 +1041,26 @@ The shell owns one connection manager on every route. Its compact trigger lives
 at the far right of the top bar and opens a floating panel directly below it.
 The panel renders only the saved dispatch owner's live actions (Cloud check,
 browser Bluetooth, or Intiface connect/discover/select); credentials and
-addresses remain in routed Settings. Speed and stroke limits moved from Chat
-into this manager and still use the semantic immediate-apply API. Reverse
-direction and motion style remain in Chat as motion behavior.
+addresses remain in routed Settings except for a compact, write-only Cloud
+connection-key row. The Cloud surface also identifies the active bundled or
+developer API v3 ID source. Speed and stroke limits moved from Chat into this
+manager and still use the semantic immediate-apply API. Reverse direction and
+motion style remain in Chat as motion behavior.
 
 The connecting state uses a reference-guided transparent isolation of the
 reviewed conductor hand. It renders directly at a fixed square source ratio,
 without the approximate SVG clip and luminance mask that distorted its shape.
 The scaled composition keeps the hand, three intense-blue vector arcs, and the
-poster's rounded Handy body/indicator inside one frame. The arcs occupy the
-lower half and stagger toward the device while connecting; connected shows the
-complete signal, while disconnected/error replaces it with a red X.
+poster's tall capsule, shorter domed body, LED, and square marker inside one
+frame. The arcs occupy the lower half and stagger toward the device while
+connecting; connected shows the complete signal, while disconnected/error
+replaces it with a red X. `docs/connection-artwork.md` preserves the generation,
+construction, state, and refactor details.
 Reduced-motion users get a static state. The non-modal disclosure restores
 focus on close, leaves Escape to Stop, and clears the reserved mobile
 Stop/footer region.
 
-Validation: 38 React tests, typecheck/build, and rendered 1280×800 plus 390×844
+Validation: 39 React tests, typecheck/build, and rendered 1280×800 plus 390×844
 checks. The mobile manager has no horizontal overflow, exposes all four limits,
 and stays above Stop; desktop contains the full panel without internal scroll.
 
