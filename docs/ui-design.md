@@ -469,11 +469,13 @@ not nested cards or oversized download tiles.
 
 Generation optimizations are a compact three-field row: maximum output,
 thinking/reasoning, and timeout. Maximum output uses backend-advertised reviewed
-choices; reasoning exposes only `Automatic` and `Disabled when supported`.
-Inline notice text names both tradeoffs: low output limits can truncate JSON and
-cause a repair, while disabled reasoning can reduce difficult-request quality
-and unsupported models may ignore or reject the override. These controls never
-claim a measured speedup or expose unproven threads/GPU/context/cache knobs.
+choices; reasoning exposes only `Disabled when supported` (the recommended
+small-model default request) and `Automatic / provider default`. Inline notice text
+explains that low caps can still truncate JSON, the current managed automatic
+reasoning path is bounded to half the cap, and repair requests reasoning off to
+leave more budget for JSON. Unsupported external models may ignore or reject the override. These
+controls never claim an unmeasured general speedup or expose unproven
+threads/GPU/context/cache knobs.
 
 Device requirements and app-managed voice modules are status/notice surfaces,
 not fake form fields. Cloud REST firmware v4/API v3 appears as a semantic note.

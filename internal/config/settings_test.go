@@ -44,7 +44,7 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.LLM.PromptSet != PromptSetMagicHandyMotionV1 {
 		t.Fatalf("prompt set = %q, want %q", settings.LLM.PromptSet, PromptSetMagicHandyMotionV1)
 	}
-	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningAuto {
+	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningOff {
 		t.Fatalf("LLM generation defaults = %+v", settings.LLM)
 	}
 }
@@ -193,7 +193,7 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatal("missing LLM settings were not defaulted")
 	}
-	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningAuto {
+	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningOff {
 		t.Fatalf("missing LLM generation settings were not defaulted: %+v", settings.LLM)
 	}
 	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {

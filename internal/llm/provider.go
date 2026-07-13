@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// ErrOutputTruncated reports that a provider exhausted its generation budget.
+var ErrOutputTruncated = errors.New("LLM output reached the maximum token limit")
+
 // Message is one chat turn sent to a local model provider.
 type Message struct {
 	Role    string `json:"role"`
@@ -22,6 +25,8 @@ type ChatRequest struct {
 	Temperature   float64
 	MaxTokens     int
 	ReasoningMode string
+	// ReasoningBudgetTokens is used only by providers with an explicit bounded-thinking API.
+	ReasoningBudgetTokens int
 }
 
 // Provider streams text from one local LLM runtime.

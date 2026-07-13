@@ -35,8 +35,11 @@ separates app-managed Parakeet assets from custom paths, and makes source update
 survive merged/deleted feature upstreams without switching branches or
 discarding work. Source rebuilds Stop and terminate only their checkout-owned
 app tree before staged binary replacement, then verify the new server before
-opening the browser. Runtime LLM latency and real managed microphone acceptance
-are still measurements, not inferred completion claims.
+opening the browser. A live small-model regression showed unbounded automatic
+reasoning consuming the full JSON budget; the current pinned managed runtime now
+bounds reasoning, repair retains context and requests reasoning off, and parser-valid examples end in
+an immutable output guard. Broader LLM quality/latency and real managed
+microphone acceptance are still measurements, not inferred completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider

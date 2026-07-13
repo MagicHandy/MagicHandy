@@ -166,8 +166,9 @@ type ollamaChatChunk struct {
 	Message struct {
 		Content string `json:"content"`
 	} `json:"message"`
-	Done  bool   `json:"done"`
-	Error string `json:"error,omitempty"`
+	Done       bool   `json:"done"`
+	DoneReason string `json:"done_reason,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error) {
@@ -196,6 +197,9 @@ func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error
 			}
 		}
 		if chunk.Done {
+			if chunk.DoneReason == "length" {
+				return builder.String(), ErrOutputTruncated
+			}
 			return builder.String(), nil
 		}
 	}

@@ -311,12 +311,16 @@ new process owns the configured port before opening the browser. This prevents a
 hidden bind failure from reopening an older embedded UI. It does not add CUDA
 load/chat evidence or lower R13.
 
-Latency-control mitigation (2026-07-13): initial and repair requests now share a
-reviewed output-token cap (default 256), explicit automatic/off reasoning maps to
-provider-native fields with quality/support warnings, repair temperature zero is
-serialized, and warm managed calls skip repeated health/model-list preflights.
-Request-shape and UI tests are green, but no fixed-model A/B inference benchmark
-was run; R13 remains High and no speedup is claimed from source inspection alone.
+Latency-control mitigation (2026-07-13): requests use a reviewed output-token cap
+(default 256), explicit automatic/off reasoning maps to provider-native fields,
+repair temperature zero is serialized, and warm managed calls skip repeated
+health/model-list preflights. A live managed Gemma 4 12B Q4 regression probe then
+showed automatic reasoning consuming both 256- and 512-token limits with zero
+visible JSON. Reasoning-off and a 128-token managed reasoning budget both
+produced valid JSON for the same request. Reasoning now defaults off, the current
+pinned managed automatic path receives half the total budget, length finishes are explicit,
+and repair retains context while requesting reasoning off. This is one diagnostic case,
+not broad fixed-model quality evidence; R13 remains High.
 
 ## R14: Per-Source Motion Path Divergence
 

@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 	var body map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body = make(map[string]any)
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
@@ -29,16 +31,32 @@ func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 		t.Fatalf("NewLlamaCPPProvider: %v", err)
 	}
 	_, err = provider.StreamChat(t.Context(), ChatRequest{
-		Messages:      []Message{{Role: "user", Content: "test"}},
-		Temperature:   0,
-		MaxTokens:     256,
-		ReasoningMode: "off",
+		Messages:              []Message{{Role: "user", Content: "test"}},
+		Temperature:           0,
+		MaxTokens:             256,
+		ReasoningMode:         "auto",
+		ReasoningBudgetTokens: 128,
 	}, nil)
 	if err != nil {
 		t.Fatalf("StreamChat: %v", err)
 	}
 	if body["temperature"] != float64(0) || body["max_tokens"] != float64(256) {
 		t.Fatalf("generation controls = %#v", body)
+	}
+	if body["thinking_budget_tokens"] != float64(128) {
+		t.Fatalf("thinking budget = %#v", body["thinking_budget_tokens"])
+	}
+	if _, ok := body["chat_template_kwargs"]; ok {
+		t.Fatalf("automatic reasoning unexpectedly disabled: %#v", body["chat_template_kwargs"])
+	}
+	_, err = provider.StreamChat(t.Context(), ChatRequest{
+		Messages:      []Message{{Role: "user", Content: "repair"}},
+		Temperature:   0,
+		MaxTokens:     256,
+		ReasoningMode: "off",
+	}, nil)
+	if err != nil {
+		t.Fatalf("repair StreamChat: %v", err)
 	}
 	kwargs, ok := body["chat_template_kwargs"].(map[string]any)
 	if !ok || kwargs["enable_thinking"] != false {
@@ -73,6 +91,22 @@ func TestOllamaStreamChatSendsGenerationControls(t *testing.T) {
 	options, ok := body["options"].(map[string]any)
 	if !ok || options["num_predict"] != float64(512) || body["think"] != false {
 		t.Fatalf("generation controls = %#v", body)
+	}
+}
+
+func TestLlamaCPPStreamReportsTokenLimit(t *testing.T) {
+	stream := "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"thinking\"},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n"
+	raw, err := readOpenAIEventStream(strings.NewReader(stream), nil)
+	if raw != "" || !errors.Is(err, ErrOutputTruncated) {
+		t.Fatalf("readOpenAIEventStream = %q, %v", raw, err)
+	}
+}
+
+func TestOllamaStreamReportsTokenLimit(t *testing.T) {
+	stream := "{\"message\":{\"content\":\"\"},\"done\":true,\"done_reason\":\"length\"}\n"
+	raw, err := readOllamaStream(strings.NewReader(stream), nil)
+	if raw != "" || !errors.Is(err, ErrOutputTruncated) {
+		t.Fatalf("readOllamaStream = %q, %v", raw, err)
 	}
 }
 

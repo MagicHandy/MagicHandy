@@ -10,8 +10,9 @@ import (
 )
 
 type scriptedProvider struct {
-	responses []string
-	requests  []llm.ChatRequest
+	responses      []string
+	responseErrors []error
+	requests       []llm.ChatRequest
 }
 
 func (p *scriptedProvider) StreamChat(_ context.Context, request llm.ChatRequest, onDelta func(string) error) (string, error) {
@@ -21,12 +22,17 @@ func (p *scriptedProvider) StreamChat(_ context.Context, request llm.ChatRequest
 	}
 	response := p.responses[0]
 	p.responses = p.responses[1:]
+	var responseErr error
+	if len(p.responseErrors) > 0 {
+		responseErr = p.responseErrors[0]
+		p.responseErrors = p.responseErrors[1:]
+	}
 	if onDelta != nil {
 		if err := onDelta(response); err != nil {
 			return response, err
 		}
 	}
-	return response, nil
+	return response, responseErr
 }
 
 func (p *scriptedProvider) Status(context.Context) llm.ProviderStatus {
@@ -105,6 +111,38 @@ func TestNoEnabledPatternsExposeDeterministicFallback(t *testing.T) {
 	}
 }
 
+func TestPromptExamplesMatchStrictParserAndGuardIsLast(t *testing.T) {
+	examples := []string{
+		`{"reply":"short user-facing reply"}`,
+		`{"reply":"short user-facing reply","motion":{"action":"none"}}`,
+		`{"reply":"short user-facing reply","motion":{"action":"start","speed_percent":25}}`,
+		`{"reply":"short user-facing reply","motion":{"action":"target","speed_percent":25}}`,
+		`{"reply":"short user-facing reply","motion":{"action":"stop"}}`,
+	}
+	for _, example := range examples {
+		if _, err := ParseAssistantResponseWithPatterns(example, nil); err != nil {
+			t.Fatalf("prompt example %s: %v", example, err)
+		}
+	}
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	prompt := ComposeSystemWithPatterns(set, []string{"keep replies brief"}, []PatternChoice{{ID: "pulse", Name: "Pulse"}})
+	if !strings.HasSuffix(prompt, finalOutputGuard) {
+		t.Fatalf("final output guard is not last:\n%s", prompt)
+	}
+	for _, line := range strings.Split(prompt, "\n") {
+		if !strings.HasPrefix(line, "Valid curated ") {
+			continue
+		}
+		_, example, ok := strings.Cut(line, ": ")
+		if !ok {
+			t.Fatalf("curated example marker malformed: %q", line)
+		}
+		if _, err := ParseAssistantResponseWithPatterns(example, []PatternChoice{{ID: "pulse"}}); err != nil {
+			t.Fatalf("curated prompt example %s: %v", example, err)
+		}
+	}
+}
+
 func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 	provider := &scriptedProvider{responses: []string{
 		"not json",
@@ -146,11 +184,69 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 		t.Fatalf("repair temperature = %v, want 0", provider.requests[1].Temperature)
 	}
 	repairPrompt := provider.requests[1].Messages[len(provider.requests[1].Messages)-1].Content
-	if !strings.Contains(repairPrompt, "Validation error") || !strings.Contains(repairPrompt, "not json") {
+	if !strings.Contains(repairPrompt, "Validation error") || strings.Contains(repairPrompt, "not json") {
 		t.Fatalf("repair prompt did not include failure context: %q", repairPrompt)
+	}
+	if got := provider.requests[1].Messages[len(provider.requests[1].Messages)-2]; got.Role != "assistant" || got.Content != "not json" {
+		t.Fatalf("malformed assistant output not retained as repair context: %+v", got)
 	}
 	if !sawEvent(events, "malformed") || !sawEvent(events, "repair_delta") {
 		t.Fatalf("events = %+v, want malformed and repair_delta", events)
+	}
+}
+
+func TestServiceReservesAutomaticReasoningAndRepairsTruncationWithoutThinking(t *testing.T) {
+	provider := &scriptedProvider{
+		responses:      []string{"", `{"reply":"Recovered."}`},
+		responseErrors: []error{llm.ErrOutputTruncated, nil},
+	}
+	service := Service{
+		Provider:              provider,
+		Model:                 "small-local-model",
+		MaxTokens:             256,
+		ReasoningMode:         "auto",
+		ReasoningBudgetTokens: 128,
+	}
+	result, err := service.Complete(t.Context(), Request{
+		Message: "hello",
+		History: []llm.Message{{Role: "assistant", Content: "Earlier reply."}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if !result.Repaired || result.Response.Reply != "Recovered." {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(provider.requests) != 2 {
+		t.Fatalf("provider calls = %d, want 2", len(provider.requests))
+	}
+	if initial := provider.requests[0]; initial.MaxTokens != 256 || initial.ReasoningMode != "auto" || initial.ReasoningBudgetTokens != 128 {
+		t.Fatalf("initial generation controls = %+v", initial)
+	}
+	if repair := provider.requests[1]; repair.MaxTokens != 256 || repair.ReasoningMode != "off" || repair.ReasoningBudgetTokens != 0 {
+		t.Fatalf("repair generation controls = %+v", repair)
+	}
+	repairMessages := provider.requests[1].Messages
+	if len(repairMessages) < 5 || repairMessages[len(repairMessages)-3].Content != "hello" ||
+		repairMessages[len(repairMessages)-2].Role != "assistant" ||
+		repairMessages[len(repairMessages)-2].Content != emptyRepairContext ||
+		strings.Contains(repairMessages[len(repairMessages)-2].Content, "motion") ||
+		repairMessages[len(repairMessages)-1].Role != "user" {
+		t.Fatalf("repair did not retain original conversation: %+v", repairMessages)
+	}
+}
+
+func TestServiceAcceptsValidRepairAtTokenLimit(t *testing.T) {
+	provider := &scriptedProvider{
+		responses:      []string{"not json", `{"reply":"Complete."}`},
+		responseErrors: []error{nil, llm.ErrOutputTruncated},
+	}
+	result, err := (Service{Provider: provider, MaxTokens: 128}).Complete(t.Context(), Request{Message: "hello"}, nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if !result.Repaired || result.Malformed || result.Response.Reply != "Complete." {
+		t.Fatalf("valid repair at token limit was rejected: %+v", result)
 	}
 }
 

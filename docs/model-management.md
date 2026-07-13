@@ -199,18 +199,23 @@ Settings > Model shows:
 
 Generation controls stay deliberately small and provider-aware:
 
-- **Maximum output** defaults to 256 tokens and applies to both the initial and
-  repair pass. llama.cpp receives `max_tokens`; Ollama receives
-  `options.num_predict`. Lower limits bound worst-case generation but can
-  truncate contract JSON and force a repair, so the UI exposes reviewed
-  128/256/512/1024 choices with an explicit warning.
-- **Thinking / reasoning** supports `auto` and `off`. `auto` leaves behavior to
-  the provider/model. `off` sends
+- **Maximum output** defaults to 256 tokens and applies to both passes.
+  llama.cpp receives `max_tokens`; Ollama receives `options.num_predict`.
+  Provider `length` completion reasons are handled as truncation rather than a
+  successful empty response. The UI exposes reviewed 128/256/512/1024 choices.
+- **Thinking / reasoning** supports `off` (the default) and `auto`. `off` sends
   `chat_template_kwargs.enable_thinking=false` to the pinned llama.cpp server
   and top-level `think=false` to Ollama. Some templates/models can ignore or
-  reject this override; the UI does not promise support and warns that disabling
-  reasoning can reduce difficult-request quality.
-- Repair temperature `0` is serialized explicitly. Managed llama.cpp remembers
+  reject this override. `auto` retains provider/model behavior; the current
+  pinned managed llama.cpp bounds hidden reasoning to half the selected
+  total token budget so compact JSON has room. Outdated managed and external
+  providers retain their native behavior and rely on the repair fallback.
+- Repair temperature `0` is serialized explicitly, repair always requests
+  reasoning off where supported, and the original conversation remains in
+  repair context. Prompt
+  examples are parser-valid and an immutable final guard makes reply-only JSON
+  the uncertainty fallback, following the strongest small-model lesson from the
+  STGPT-RV prompt inventory. Managed llama.cpp remembers
   a successful load and skips redundant `/health` and `/v1/models` probes on
   subsequent warm chat/repair calls; explicit status and cold load still probe.
 
