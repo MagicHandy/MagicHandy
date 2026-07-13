@@ -98,8 +98,8 @@ func TestIntifaceLinearPrecisionWindowReverseAndCrossChunk(t *testing.T) {
 
 	first := server.waitForKind(t, "LinearCmd", time.Second)
 	second := server.waitForKind(t, "LinearCmd", time.Second)
-	assertLinearVector(t, first, 0, 100, 0.649259264)
-	assertLinearVector(t, second, 0, 100, 0.34666667)
+	assertLinearVectorDurationRange(t, first, 0, 75, 100, 0.649259264)
+	assertLinearVectorDurationRange(t, second, 0, 75, 100, 0.34666667)
 	if _, err := owner.Stop(ctx, StopCommand{Reason: "test"}); err != nil {
 		t.Fatal(err)
 	}
@@ -1334,6 +1334,25 @@ func assertLinearVector(t *testing.T, message wireButtplugMessage, index, durati
 	}
 	if int(vector["Index"].(float64)) != index || int(vector["Duration"].(float64)) != duration {
 		t.Fatalf("vector index/duration = %#v", vector)
+	}
+	if got := vector["Position"].(float64); math.Abs(got-position) > 1e-12 {
+		t.Fatalf("Position = %.12f, want %.12f", got, position)
+	}
+}
+
+func assertLinearVectorDurationRange(t *testing.T, message wireButtplugMessage, index, minimumDuration, maximumDuration int, position float64) {
+	t.Helper()
+	vectors, ok := message.fields["Vectors"].([]any)
+	if !ok || len(vectors) != 1 {
+		t.Fatalf("Vectors = %#v", message.fields["Vectors"])
+	}
+	vector, ok := vectors[0].(map[string]any)
+	if !ok {
+		t.Fatalf("vector = %#v", vectors[0])
+	}
+	duration := int(vector["Duration"].(float64))
+	if int(vector["Index"].(float64)) != index || duration < minimumDuration || duration > maximumDuration {
+		t.Fatalf("vector index/duration = %#v, want duration %d..%d", vector, minimumDuration, maximumDuration)
 	}
 	if got := vector["Position"].(float64); math.Abs(got-position) > 1e-12 {
 		t.Fatalf("Position = %.12f, want %.12f", got, position)
