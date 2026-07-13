@@ -67,7 +67,7 @@ of in a combined block at the bottom.
 | Provider | Visible fields |
 | --- | --- |
 | None | none (section shows only the dropdown) |
-| Parakeet (managed, local) | `parakeet-server` path · GGUF model path · port (Advanced, default 8990) — both paths prefilled when the installer provisioned them |
+| Parakeet (managed, local) | runtime source: MagicHandy module or custom local server. App-managed mode shows installation status and no paths; custom mode shows `parakeet-server` path, GGUF model path, and port. App-managed port remains Advanced (default 8990). |
 | OpenAI-compatible server | base URL |
 | Custom worker | worker path · worker args (one per line) |
 
@@ -97,6 +97,7 @@ args back into fields), and violate backend-authoritative state. Instead:
    tts_provider:  none | elevenlabs | neutts_air | custom
    asr_provider:  none | parakeet_managed | openai_compatible | custom
    elevenlabs_voice_id, elevenlabs_model_id
+   parakeet_source: app_managed | custom_local
    parakeet_server_path, parakeet_model_path, parakeet_port
    asr_base_url
    ```
@@ -116,9 +117,14 @@ args back into fields), and violate backend-authoritative state. Instead:
    to the app, which makes the zero-path-fields case the default; the
    resolution order is reported in worker status so a wrong pick is
    visible, never silent.
-4. **Migration**: existing settings with populated worker paths load as
-   `provider: custom` with all values intact — upgrades change presentation
-   only, never behavior. Covered by settings round-trip tests.
+4. **Parakeet asset resolution** keeps app-built modules separate from custom
+   runtime files. `app_managed` resolves the fixed installer-owned runner/model
+   paths under the app data directory and reports complete/incomplete/missing
+   module state. `custom_local` alone reads the saved server/model paths.
+5. **Migration**: existing raw worker path/argument settings load as
+   `provider: custom`; existing Parakeet server/model paths load as
+   `parakeet_source: custom_local`. Values remain intact, so upgrades change
+   presentation only, never behavior. Covered by settings round-trip tests.
 
 ## Same rule applied to the other tabs (small, same slice)
 

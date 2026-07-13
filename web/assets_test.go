@@ -49,6 +49,11 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 		"/api/voice/status",
 		"/api/voice/workers/",
 		"not configured",
+		"MagicHandy module",
+		"Enable voice workers and save",
+		"Cloud REST requires Handy firmware v4 with API v3 access.",
+		"Maximum output",
+		"Automatic reasoning can add hidden tokens",
 		// Shared chat log + lockstep TTS (Phase 13 foundation, ADR 0003).
 		"/api/chat/messages",
 		"/api/chat/cursor",

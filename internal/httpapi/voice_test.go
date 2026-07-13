@@ -62,6 +62,7 @@ func TestVoiceManagerConfigComposesFirstPartyProviders(t *testing.T) {
 	settings.ElevenLabsModelID = "model-id"
 	settings.ElevenLabsAPIKey = "private-key"
 	settings.ASRProvider = config.VoiceASRProviderParakeet
+	settings.ParakeetSource = config.ParakeetSourceCustom
 	settings.ASRWorkerPath = `C:\workers\parakeet.exe`
 	settings.ParakeetServerPath = `C:\parakeet\server.exe`
 	settings.ParakeetModelPath = `C:\parakeet\model.gguf`
@@ -77,6 +78,79 @@ func TestVoiceManagerConfigComposesFirstPartyProviders(t *testing.T) {
 	wantASR := `-server-path|C:\parakeet\server.exe|-server-model|C:\parakeet\model.gguf|-server-port|9011`
 	if got.ASR.Command != settings.ASRWorkerPath || strings.Join(got.ASR.Args, "|") != wantASR {
 		t.Fatalf("Parakeet composition = %+v, want args %q", got.ASR, wantASR)
+	}
+}
+
+func TestVoiceManagerConfigUsesAppManagedParakeetAssets(t *testing.T) {
+	dataDir := t.TempDir()
+	serverPath, modelPath := parakeetAppPaths(dataDir)
+	if err := os.MkdirAll(filepath.Dir(serverPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range map[string]string{serverPath: "server", modelPath: "model"} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.ASRProvider = config.VoiceASRProviderParakeet
+	settings.ASRWorkerPath = "app-worker"
+	settings.ParakeetSource = config.ParakeetSourceApp
+
+	got := voiceManagerConfig(settings, "", dataDir)
+	wantArgs := strings.Join([]string{"-server-path", serverPath, "-server-model", modelPath, "-server-port", "8990"}, "|")
+	if got.ASR.Command != "app-worker" || strings.Join(got.ASR.Args, "|") != wantArgs {
+		t.Fatalf("app-managed Parakeet composition = %+v, want args %q", got.ASR, wantArgs)
+	}
+}
+
+func TestVoiceManagerConfigDoesNotStartIncompleteCustomParakeet(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.ASRProvider = config.VoiceASRProviderParakeet
+	settings.ParakeetSource = config.ParakeetSourceCustom
+	settings.ASRWorkerPath = "custom-worker"
+	settings.ParakeetServerPath = "server.exe"
+
+	got := voiceManagerConfig(settings, "", "")
+	if got.ASR.Command != "" || got.ASR.Args != nil {
+		t.Fatalf("incomplete custom Parakeet must remain unconfigured: %+v", got.ASR)
+	}
+}
+
+func TestInspectParakeetAppModuleSeparatesAdapterAndRuntime(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	dataDir := filepath.Join(root, "data")
+	if err := os.MkdirAll(appDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	workerName := "voice-parakeet-worker"
+	if runtime.GOOS == "windows" {
+		workerName += ".exe"
+	}
+	workerPath := filepath.Join(appDir, workerName)
+	if err := os.WriteFile(workerPath, []byte("worker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	status := inspectParakeetAppModule("", filepath.Join(appDir, "magichandy.exe"), dataDir)
+	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled {
+		t.Fatalf("adapter-only status = %+v", status)
+	}
+	serverPath, modelPath := parakeetAppPaths(dataDir)
+	if err := os.MkdirAll(filepath.Dir(serverPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{serverPath, modelPath} {
+		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status = inspectParakeetAppModule("", filepath.Join(appDir, "magichandy.exe"), dataDir)
+	if !status.Installed || status.State != "ready" || !status.RuntimeInstalled {
+		t.Fatalf("complete status = %+v", status)
 	}
 }
 
@@ -124,6 +198,15 @@ func TestSilentTestWAVBase64ProducesValidPCMSilence(t *testing.T) {
 	}
 }
 
+func TestVoiceModelLoadUsesManagedStartupTimeout(t *testing.T) {
+	if got := voiceModelActionTimeout(true); got != voiceModelLoadTimeout {
+		t.Fatalf("load timeout = %s, want %s", got, voiceModelLoadTimeout)
+	}
+	if got := voiceModelActionTimeout(false); got != voiceHealthTimeout {
+		t.Fatalf("unload timeout = %s, want %s", got, voiceHealthTimeout)
+	}
+}
+
 func TestVoiceStatusDefaultsToDisabled(t *testing.T) {
 	server := newTestServer(t)
 
@@ -141,6 +224,7 @@ func TestVoiceStatusDefaultsToDisabled(t *testing.T) {
 				State      string `json:"state"`
 				Configured bool   `json:"configured"`
 			} `json:"workers"`
+			Modules map[string]voiceModuleStatus `json:"modules"`
 		} `json:"voice"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
@@ -160,6 +244,9 @@ func TestVoiceStatusDefaultsToDisabled(t *testing.T) {
 		if worker.State != "disabled" {
 			t.Fatalf("%s worker state = %q, want disabled", role, worker.State)
 		}
+	}
+	if _, ok := payload.Voice.Modules["parakeet"]; !ok {
+		t.Fatal("voice status is missing the app-managed Parakeet module")
 	}
 }
 

@@ -70,8 +70,18 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 	asr := voice.WorkerConfig{Enabled: settings.Enabled && settings.ASRProvider != config.VoiceProviderNone}
 	switch settings.ASRProvider {
 	case config.VoiceASRProviderParakeet:
-		asr.Command = resolveWorkerBinary(settings.ASRWorkerPath, executablePath, dataDir, "voice-parakeet-worker")
-		asr.Args = []string{"-server-path", settings.ParakeetServerPath, "-server-model", settings.ParakeetModelPath, "-server-port", strconv.Itoa(settings.ParakeetServerPort)}
+		serverPath, modelPath := settings.ParakeetServerPath, settings.ParakeetModelPath
+		if settings.ParakeetSource == config.ParakeetSourceApp {
+			serverPath, modelPath = parakeetAppPaths(dataDir)
+			if !isRegularFile(serverPath) || !isRegularFile(modelPath) {
+				break
+			}
+		}
+		command := resolveWorkerBinary(settings.ASRWorkerPath, executablePath, dataDir, "voice-parakeet-worker")
+		if command != "" && serverPath != "" && modelPath != "" {
+			asr.Command = command
+			asr.Args = []string{"-server-path", serverPath, "-server-model", modelPath, "-server-port", strconv.Itoa(settings.ParakeetServerPort)}
+		}
 	case config.VoiceASRProviderOpenAICompat:
 		asr.Command = resolveWorkerBinary(settings.ASRWorkerPath, executablePath, dataDir, "voice-parakeet-worker")
 		asr.Args = []string{"-base-url", settings.ASRBaseURL}
@@ -82,6 +92,54 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 		asr.Command, asr.Args = settings.ASRWorkerPath, settings.ASRWorkerArgs
 	}
 	return voice.Config{TTS: tts, ASR: asr}
+}
+
+func parakeetAppPaths(dataDir string) (string, string) {
+	if strings.TrimSpace(dataDir) == "" {
+		return "", ""
+	}
+	root := filepath.Join(dataDir, "voice", "parakeet")
+	return filepath.Join(root, "runner", "parakeet-server.exe"), filepath.Join(root, "tdt-0.6b-v3-q4_k.gguf")
+}
+
+func isRegularFile(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
+type voiceModuleStatus struct {
+	State            string `json:"state"`
+	Installed        bool   `json:"installed"`
+	WorkerInstalled  bool   `json:"worker_installed"`
+	RuntimeInstalled bool   `json:"runtime_installed"`
+	Message          string `json:"message"`
+}
+
+func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) voiceModuleStatus {
+	worker := resolveWorkerBinary(workerOverride, executablePath, dataDir, "voice-parakeet-worker")
+	serverPath, modelPath := parakeetAppPaths(dataDir)
+	workerInstalled := isRegularFile(worker)
+	runtimeInstalled := isRegularFile(serverPath) && isRegularFile(modelPath)
+	status := voiceModuleStatus{
+		State:            "missing",
+		WorkerInstalled:  workerInstalled,
+		RuntimeInstalled: runtimeInstalled,
+		Message:          "Parakeet is not installed by MagicHandy. Rerun update.ps1 with Parakeet enabled.",
+	}
+	if workerInstalled && runtimeInstalled {
+		status.State = "ready"
+		status.Installed = true
+		status.Message = "MagicHandy's Parakeet worker, runner, and model are installed."
+		return status
+	}
+	if workerInstalled || runtimeInstalled {
+		status.State = "incomplete"
+		status.Message = "The MagicHandy Parakeet module is incomplete. Rerun update.ps1 with Parakeet enabled."
+	}
+	return status
 }
 
 func resolveWorkerBinary(explicit, executablePath, dataDir, name string) string {
@@ -132,6 +190,9 @@ func (s *Server) voiceState() map[string]any {
 		"enabled":          settings.Voice.Enabled,
 		"protocol_version": voice.ProtocolVersion,
 		"workers":          status,
+		"modules": map[string]any{
+			"parakeet": inspectParakeetAppModule(settings.Voice.ASRWorkerPath, s.voiceExecutable, s.voiceDataDir),
+		},
 	}
 }
 
@@ -182,19 +243,24 @@ func (s *Server) handleVoiceWorkerStart(w http.ResponseWriter, r *http.Request) 
 // writeStartedWorker follows every user-initiated start with a model load:
 // starting a role means making it ready to serve, so replies never fail
 // silently with model_not_loaded. Workers are still never started
-// implicitly. A load failure keeps the worker running and is reported
-// alongside the status instead of failing the start.
+// implicitly. A load failure stops the just-started worker and fails the
+// action, so a successful Start always means the role is ready to serve.
 func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervisor) {
 	// Detached context: an impatient client disconnect must not abort the load.
 	ctx, cancel := context.WithTimeout(context.Background(), voiceModelLoadTimeout)
 	defer cancel()
-	payload := map[string]any{}
 	if _, err := worker.SetModelLoaded(ctx, true); err != nil {
 		s.logger.Warn("voice model auto-load failed", "role", worker.Status().Role, "error", err)
-		payload["load_error"] = err.Error()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
+		_ = worker.Stop(stopCtx)
+		stopCancel()
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":  fmt.Sprintf("voice worker could not become ready: %s", err),
+			"worker": worker.Status(),
+		})
+		return
 	}
-	payload["worker"] = worker.Status()
-	writeJSON(w, http.StatusOK, payload)
+	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
 }
 
 func (s *Server) handleVoiceWorkerStop(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +311,7 @@ func (s *Server) handleVoiceWorkerModel(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), voiceHealthTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), voiceModelActionTimeout(body.Loaded))
 	defer cancel()
 	health, err := worker.SetModelLoaded(ctx, body.Loaded)
 	if err != nil {
@@ -259,6 +325,13 @@ func (s *Server) handleVoiceWorkerModel(w http.ResponseWriter, r *http.Request) 
 		"model_state": health.ModelState,
 		"worker":      worker.Status(),
 	})
+}
+
+func voiceModelActionTimeout(loaded bool) time.Duration {
+	if loaded {
+		return voiceModelLoadTimeout
+	}
+	return voiceHealthTimeout
 }
 
 // handleVoiceWorkerTest submits a small valid request so the queue,

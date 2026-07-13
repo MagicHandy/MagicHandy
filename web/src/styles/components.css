@@ -1029,6 +1029,29 @@ textarea:disabled {
   height: 4px;
   background: transparent;
 }
+.voice-module-readout {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.voice-module-readout .status-dot {
+  flex: 0 0 auto;
+  margin-top: 0.35em;
+}
+.device-requirement {
+  margin-bottom: 12px;
+  border-left: 3px solid var(--warn);
+}
+.device-requirement p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+}
 .range-slider-input::-moz-range-track {
   height: 4px;
   background: transparent;

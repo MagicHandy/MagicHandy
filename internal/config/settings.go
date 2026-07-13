@@ -77,6 +77,13 @@ const (
 	DefaultLLMModel = "local-model"
 	// DefaultLLMRequestTimeoutMillis caps one chat or repair pass.
 	DefaultLLMRequestTimeoutMillis = 120000
+	// DefaultLLMMaxOutputTokens bounds compact intent JSON generation.
+	DefaultLLMMaxOutputTokens = 256
+
+	// LLMReasoningAuto leaves thinking behavior to the provider and model.
+	LLMReasoningAuto = "auto"
+	// LLMReasoningOff disables thinking when the provider/template supports it.
+	LLMReasoningOff = "off"
 )
 
 const (
@@ -94,6 +101,10 @@ const (
 	VoiceASRProviderOpenAICompat = "openai_compatible"
 	// DefaultParakeetServerPort is the managed local ASR port.
 	DefaultParakeetServerPort = 8990
+	// ParakeetSourceApp uses the runner and model installed by MagicHandy.
+	ParakeetSourceApp = "app_managed"
+	// ParakeetSourceCustom uses user-supplied local runner and model paths.
+	ParakeetSourceCustom = "custom_local"
 	// DefaultElevenLabsVoiceID is the stock Rachel voice.
 	DefaultElevenLabsVoiceID = "21m00Tcm4TlvDq8ikWAM"
 	// DefaultElevenLabsModelID is the default multilingual model.
@@ -159,13 +170,14 @@ type LLMSettings struct {
 	Model                string `json:"model"`
 	PromptSet            string `json:"prompt_set"`
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
+	MaxOutputTokens      int    `json:"max_output_tokens"`
+	ReasoningMode        string `json:"reasoning_mode"`
 }
 
 // VoiceSettings configures the optional voice worker processes (ADR 0003).
-// Voice is off by default; worker commands point at local executables that
-// speak the versioned worker protocol (Phase 12 ships only the stub worker;
-// real providers arrive in Phase 13). Paths are not secrets — the same trust
-// model as other optional local worker executables.
+// Voice is off by default; first-party and custom workers all speak the
+// versioned protocol. Paths are not secrets — the same trust model as other
+// optional local worker executables.
 type VoiceSettings struct {
 	Enabled     bool   `json:"enabled"`
 	TTSProvider string `json:"tts_provider"`
@@ -184,6 +196,7 @@ type VoiceSettings struct {
 	ParakeetServerPath string `json:"parakeet_server_path,omitempty"`
 	ParakeetModelPath  string `json:"parakeet_model_path,omitempty"`
 	ParakeetServerPort int    `json:"parakeet_port,omitempty"`
+	ParakeetSource     string `json:"parakeet_source"`
 	ASRBaseURL         string `json:"asr_base_url,omitempty"`
 	ASRModel           string `json:"asr_model,omitempty"`
 
@@ -217,6 +230,7 @@ type PublicVoiceSettings struct {
 	ParakeetServerPath   string   `json:"parakeet_server_path,omitempty"`
 	ParakeetModelPath    string   `json:"parakeet_model_path,omitempty"`
 	ParakeetServerPort   int      `json:"parakeet_port,omitempty"`
+	ParakeetSource       string   `json:"parakeet_source"`
 	ASRBaseURL           string   `json:"asr_base_url,omitempty"`
 	ASRModel             string   `json:"asr_model,omitempty"`
 	NeuTTSRunnerPath     string   `json:"neutts_runner_path,omitempty"`
@@ -243,6 +257,7 @@ type VoiceUpdate struct {
 	ParakeetServerPath   string   `json:"parakeet_server_path"`
 	ParakeetModelPath    string   `json:"parakeet_model_path"`
 	ParakeetServerPort   int      `json:"parakeet_port"`
+	ParakeetSource       *string  `json:"parakeet_source,omitempty"`
 	ASRBaseURL           string   `json:"asr_base_url"`
 	ASRModel             string   `json:"asr_model"`
 	NeuTTSRunnerPath     string   `json:"neutts_runner_path"`
@@ -289,9 +304,43 @@ type PublicSettingsOptionHints struct {
 	MotionStyles            []string `json:"motion_styles"`
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
+	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
+	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
 	PromptSets              []string `json:"prompt_sets"`
 	TTSProviders            []string `json:"tts_providers"`
 	ASRProviders            []string `json:"asr_providers"`
+	ParakeetSources         []string `json:"parakeet_sources"`
+}
+
+// LLMUpdate is the settings API write shape. New tuning fields are pointers so
+// older clients that omit them preserve the current persisted values.
+type LLMUpdate struct {
+	Provider             string  `json:"provider"`
+	LlamaCPPMode         string  `json:"llama_cpp_mode"`
+	LlamaCPPBaseURL      string  `json:"llama_cpp_base_url"`
+	OllamaBaseURL        string  `json:"ollama_base_url"`
+	OllamaModelsPath     string  `json:"ollama_models_path,omitempty"`
+	Model                string  `json:"model"`
+	PromptSet            string  `json:"prompt_set"`
+	RequestTimeoutMillis int     `json:"request_timeout_ms"`
+	MaxOutputTokens      *int    `json:"max_output_tokens,omitempty"`
+	ReasoningMode        *string `json:"reasoning_mode,omitempty"`
+}
+
+// LLMUpdateFromSettings creates a complete write payload from a settings view.
+func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
+	return LLMUpdate{
+		Provider:             settings.Provider,
+		LlamaCPPMode:         settings.LlamaCPPMode,
+		LlamaCPPBaseURL:      settings.LlamaCPPBaseURL,
+		OllamaBaseURL:        settings.OllamaBaseURL,
+		OllamaModelsPath:     settings.OllamaModelsPath,
+		Model:                settings.Model,
+		PromptSet:            settings.PromptSet,
+		RequestTimeoutMillis: settings.RequestTimeoutMillis,
+		MaxOutputTokens:      &settings.MaxOutputTokens,
+		ReasoningMode:        &settings.ReasoningMode,
+	}
 }
 
 // SettingsUpdate is the payload accepted by the settings API.
@@ -299,7 +348,7 @@ type SettingsUpdate struct {
 	Server             ServerSettings      `json:"server"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
-	LLM                LLMSettings         `json:"llm"`
+	LLM                LLMUpdate           `json:"llm"`
 	Voice              VoiceUpdate         `json:"voice"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
@@ -343,6 +392,8 @@ func DefaultSettings() Settings {
 			Model:                DefaultLLMModel,
 			PromptSet:            PromptSetMagicHandyMotionV1,
 			RequestTimeoutMillis: DefaultLLMRequestTimeoutMillis,
+			MaxOutputTokens:      DefaultLLMMaxOutputTokens,
+			ReasoningMode:        LLMReasoningAuto,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -350,6 +401,7 @@ func DefaultSettings() Settings {
 			ElevenLabsVoiceID:  DefaultElevenLabsVoiceID,
 			ElevenLabsModelID:  DefaultElevenLabsModelID,
 			ParakeetServerPort: DefaultParakeetServerPort,
+			ParakeetSource:     ParakeetSourceApp,
 			NeuTTSBackbone:     DefaultNeuTTSBackbone,
 		},
 		Diagnostics: DiagnosticsSettings{
@@ -387,6 +439,7 @@ func (s Settings) Public() PublicSettings {
 			ParakeetServerPath:   s.Voice.ParakeetServerPath,
 			ParakeetModelPath:    s.Voice.ParakeetModelPath,
 			ParakeetServerPort:   s.Voice.ParakeetServerPort,
+			ParakeetSource:       s.Voice.ParakeetSource,
 			ASRBaseURL:           s.Voice.ASRBaseURL,
 			ASRModel:             s.Voice.ASRModel,
 			NeuTTSRunnerPath:     s.Voice.NeuTTSRunnerPath,
@@ -425,6 +478,11 @@ func (s Settings) Public() PublicSettings {
 				LlamaCPPModeManaged,
 				LlamaCPPModeExternal,
 			},
+			LLMReasoningModes: []string{
+				LLMReasoningAuto,
+				LLMReasoningOff,
+			},
+			LLMMaxOutputTokens: []int{128, 256, 512, 1024},
 			PromptSets: []string{
 				PromptSetMagicHandyMotionV1,
 				PromptSetMagicHandyMotionV1ES,
@@ -444,6 +502,10 @@ func (s Settings) Public() PublicSettings {
 				VoiceASRProviderOpenAICompat,
 				VoiceProviderCustom,
 			},
+			ParakeetSources: []string{
+				ParakeetSourceApp,
+				ParakeetSourceCustom,
+			},
 		},
 	}
 }
@@ -459,7 +521,30 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDSource = update.Device.APIApplicationIDSource
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
-	next.LLM = normalizeLLMStrings(update.LLM)
+	maxOutputTokens := s.LLM.MaxOutputTokens
+	if update.LLM.MaxOutputTokens != nil {
+		maxOutputTokens = *update.LLM.MaxOutputTokens
+	}
+	reasoningMode := s.LLM.ReasoningMode
+	if update.LLM.ReasoningMode != nil {
+		reasoningMode = *update.LLM.ReasoningMode
+	}
+	next.LLM = normalizeLLMStrings(LLMSettings{
+		Provider:             update.LLM.Provider,
+		LlamaCPPMode:         update.LLM.LlamaCPPMode,
+		LlamaCPPBaseURL:      update.LLM.LlamaCPPBaseURL,
+		OllamaBaseURL:        update.LLM.OllamaBaseURL,
+		OllamaModelsPath:     update.LLM.OllamaModelsPath,
+		Model:                update.LLM.Model,
+		PromptSet:            update.LLM.PromptSet,
+		RequestTimeoutMillis: update.LLM.RequestTimeoutMillis,
+		MaxOutputTokens:      maxOutputTokens,
+		ReasoningMode:        reasoningMode,
+	})
+	parakeetSource := s.Voice.ParakeetSource
+	if update.Voice.ParakeetSource != nil {
+		parakeetSource = *update.Voice.ParakeetSource
+	}
 	next.Voice = normalizeVoiceStrings(VoiceSettings{
 		Enabled:              update.Voice.Enabled,
 		TTSProvider:          update.Voice.TTSProvider,
@@ -474,6 +559,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		ParakeetServerPath:   update.Voice.ParakeetServerPath,
 		ParakeetModelPath:    update.Voice.ParakeetModelPath,
 		ParakeetServerPort:   update.Voice.ParakeetServerPort,
+		ParakeetSource:       parakeetSource,
 		ASRBaseURL:           update.Voice.ASRBaseURL,
 		ASRModel:             update.Voice.ASRModel,
 		NeuTTSRunnerPath:     update.Voice.NeuTTSRunnerPath,
@@ -561,6 +647,9 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	if _, present := header.Voice["asr_provider"]; !present {
 		settings.Voice.ASRProvider = ""
 	}
+	if _, present := header.Voice["parakeet_source"]; !present {
+		settings.Voice.ParakeetSource = ""
+	}
 
 	return MigrateSettings(settings, header.Version)
 }
@@ -645,6 +734,12 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.LLM.RequestTimeoutMillis == 0 {
 		settings.LLM.RequestTimeoutMillis = defaults.LLM.RequestTimeoutMillis
 	}
+	if settings.LLM.MaxOutputTokens == 0 {
+		settings.LLM.MaxOutputTokens = defaults.LLM.MaxOutputTokens
+	}
+	if settings.LLM.ReasoningMode == "" {
+		settings.LLM.ReasoningMode = defaults.LLM.ReasoningMode
+	}
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
 	settings.LLM = normalizeLLMStrings(settings.LLM)
 	settings.Voice = normalizeVoiceStrings(settings.Voice)
@@ -688,6 +783,12 @@ func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	}
 	if settings.ParakeetServerPort == 0 {
 		settings.ParakeetServerPort = defaults.ParakeetServerPort
+	}
+	if settings.ParakeetSource == "" {
+		settings.ParakeetSource = defaults.ParakeetSource
+		if settings.ParakeetServerPath != "" || settings.ParakeetModelPath != "" {
+			settings.ParakeetSource = ParakeetSourceCustom
+		}
 	}
 	if settings.NeuTTSBackbone == "" {
 		settings.NeuTTSBackbone = defaults.NeuTTSBackbone
@@ -762,6 +863,12 @@ func validateLLMSettings(settings LLMSettings) error {
 	if settings.RequestTimeoutMillis < 1000 || settings.RequestTimeoutMillis > 300000 {
 		return errors.New("LLM request timeout must be between 1000 and 300000 milliseconds")
 	}
+	if settings.MaxOutputTokens < 64 || settings.MaxOutputTokens > 4096 {
+		return errors.New("LLM output limit must be between 64 and 4096 tokens")
+	}
+	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
+		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
+	}
 	return nil
 }
 
@@ -776,6 +883,7 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.ElevenLabsModelID = strings.TrimSpace(settings.ElevenLabsModelID)
 	settings.ParakeetServerPath = strings.TrimSpace(settings.ParakeetServerPath)
 	settings.ParakeetModelPath = strings.TrimSpace(settings.ParakeetModelPath)
+	settings.ParakeetSource = strings.TrimSpace(settings.ParakeetSource)
 	settings.ASRBaseURL = strings.TrimRight(strings.TrimSpace(settings.ASRBaseURL), "/")
 	settings.ASRModel = strings.TrimSpace(settings.ASRModel)
 	settings.NeuTTSRunnerPath = strings.TrimSpace(settings.NeuTTSRunnerPath)
@@ -795,6 +903,9 @@ func validateVoiceSettings(settings VoiceSettings) error {
 	}
 	if settings.ParakeetServerPort < 1 || settings.ParakeetServerPort > 65535 {
 		return errors.New("parakeet server port must be between 1 and 65535")
+	}
+	if !oneOf(settings.ParakeetSource, ParakeetSourceApp, ParakeetSourceCustom) {
+		return fmt.Errorf("unknown Parakeet source %q", settings.ParakeetSource)
 	}
 	return nil
 }
@@ -821,6 +932,7 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.OllamaModelsPath = strings.TrimSpace(settings.OllamaModelsPath)
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
+	settings.ReasoningMode = strings.TrimSpace(settings.ReasoningMode)
 	return settings
 }
 

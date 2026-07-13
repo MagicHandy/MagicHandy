@@ -46,8 +46,10 @@ MagicHandy Go core itself.
   `Start-MagicHandy.ps1` launcher and open the app.
 - **State-aware source updater (`update.ps1`):** atomically reads the non-secret
   install choices stored under LocalAppData, shows them, asks whether to revise
-  them, refuses a dirty worktree, fast-forwards with `git pull --ff-only`, and
-  rebuilds through the same provisioning implementation. Provider credentials
+  them, refuses a dirty worktree, resolves an explicit safe fast-forward target,
+  and rebuilds through the same provisioning implementation. Live feature
+  branches follow their upstream; merged features with a deleted upstream may
+  advance from `origin/main` only after an ancestry check. Provider credentials
   and the Handy connection key never enter installer state.
 - **Local model manager:** Settings > Model lists runtime/daemon models and
   SQLite-backed managed GGUF copies. Users can import a standalone GGUF or scan
@@ -72,9 +74,11 @@ MagicHandy Go core itself.
 4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
 5. Voice setup is partial: provider adapters, provider-scoped settings, browser
-   push-to-talk, and the Parakeet installer path exist. Turnkey in-app provider
-   provisioning, managed browser-audio-to-Parakeet validation, arbitrary-WAV
-   NeuTTS cloning, and any LAN/HTTPS story remain open (R17/R18).
+   push-to-talk, and the Parakeet installer path exist. Installed app-managed
+   Parakeet assets are now discovered separately from custom local server paths,
+   but turnkey in-app provider provisioning, managed browser-audio-to-Parakeet
+   validation, arbitrary-WAV NeuTTS cloning, and any LAN/HTTPS story remain open
+   (R17/R18).
 
 ## Roadmap to parity
 
@@ -153,7 +157,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - adapters/UI landed; opt-in Parakeet installer only | Phase 13 + Phase 16 provisioning |
+| Voice model setup | Partial - opt-in Parakeet source install is detected as an app-managed module; in-app download/repair remains planned | Phase 13 + Phase 16 provisioning |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

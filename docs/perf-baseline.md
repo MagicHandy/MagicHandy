@@ -225,6 +225,23 @@ Still required (Phase 9B):
   SHA-256-verified copy, deduplication, selected-model deletion protection,
   standalone GGUF import, concurrency limits, and controller enforcement.
 
+## LLM Latency Controls (Unmeasured Runtime Delta)
+
+- Source inspection found no output-token cap in the mainline provider request,
+  implicit provider/model reasoning behavior, and redundant managed llama.cpp
+  health/model-list probes before every warm initial and repair call.
+- Requests now default to 256 maximum output tokens, expose reviewed
+  128/256/512/1024 choices, and map explicit `auto`/`off` reasoning behavior to
+  llama.cpp and Ollama native fields. A zero-temperature repair is now sent as
+  zero rather than omitted.
+- Managed llama.cpp still performs readiness/model checks during cold load and
+  explicit status actions, but reuses successful readiness for warm calls.
+- Go request-shape tests prove exact provider payloads; frontend tests prove the
+  controls, tradeoff warnings, and persisted values. No model inference was run
+  for this change, so TTFT, prompt tokens/s, hidden reasoning tokens, visible
+  generation tokens/s, total latency, and malformed/repair rate remain to be
+  A/B measured on a fixed model/quantization/backend before claiming a speedup.
+
 ## Procedure
 
 For Windows local measurements:

@@ -121,8 +121,11 @@ non-blocking — the app must remain fully usable with everything declined
 5. **Voice (optional)** — Parakeet ASR: download the pinned parakeet.cpp
    runner + model (sizes, licenses, SHA-256 — lifted from `install.ps1`
    into API endpoints so the wizard and the script share one checksummed
-   path). NeuTTS: runner + reference codes with the same rules. ElevenLabs:
-   write-only key entry. Speak-replies and push-to-talk explained.
+    path). NeuTTS: runner + reference codes with the same rules. ElevenLabs:
+    write-only key entry. Installing assets does not enable or start voice;
+    enablement is explicit and a separate Start action confirms model readiness.
+    App-managed modules and custom local paths are separate choices.
+    Speak-replies and push-to-talk explained.
 6. **Port from StrokeGPT-ReVibed** — detect likely install locations, offer
    a browse fallback, then run the Phase 15 importer in **dry-run** first:
    per-category preview (settings, memories, prompt sets/personas, motion

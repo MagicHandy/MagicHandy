@@ -44,11 +44,13 @@ type Result struct {
 // Prompt is the resolved behavior profile; Memories are the enabled memory
 // texts (empty when the memory switch is off — chat must work without them).
 type Service struct {
-	Provider llm.Provider
-	Prompt   PromptSet
-	Model    string
-	Memories []string
-	Patterns []PatternChoice
+	Provider      llm.Provider
+	Prompt        PromptSet
+	Model         string
+	MaxTokens     int
+	ReasoningMode string
+	Memories      []string
+	Patterns      []PatternChoice
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -72,9 +74,11 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:    messages,
-		Model:       s.Model,
-		Temperature: 0.2,
+		Messages:      messages,
+		Model:         s.Model,
+		Temperature:   0.2,
+		MaxTokens:     s.MaxTokens,
+		ReasoningMode: s.ReasoningMode,
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
@@ -102,9 +106,11 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		{Role: "user", Content: RepairPrompt(prompt, raw, parseErr.Error())},
 	}
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:    repairMessages,
-		Model:       s.Model,
-		Temperature: 0,
+		Messages:      repairMessages,
+		Model:         s.Model,
+		Temperature:   0,
+		MaxTokens:     s.MaxTokens,
+		ReasoningMode: s.ReasoningMode,
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "repair_delta", Phase: "repair", Text: text})
 	})

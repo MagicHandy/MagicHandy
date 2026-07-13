@@ -44,6 +44,9 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.LLM.PromptSet != PromptSetMagicHandyMotionV1 {
 		t.Fatalf("prompt set = %q, want %q", settings.LLM.PromptSet, PromptSetMagicHandyMotionV1)
 	}
+	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningAuto {
+		t.Fatalf("LLM generation defaults = %+v", settings.LLM)
+	}
 }
 
 func TestBundledAPIApplicationIDUsesPublicV3ID(t *testing.T) {
@@ -190,8 +193,64 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatal("missing LLM settings were not defaulted")
 	}
+	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningAuto {
+		t.Fatalf("missing LLM generation settings were not defaulted: %+v", settings.LLM)
+	}
 	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
 		t.Fatalf("missing Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
+	}
+}
+
+func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
+	current := DefaultSettings()
+	current.LLM.MaxOutputTokens = 1024
+	current.LLM.ReasoningMode = LLMReasoningOff
+	current.Voice.ParakeetSource = ParakeetSourceApp
+	current.Voice.ParakeetServerPath = `C:\retained\server.exe`
+	current.Voice.ParakeetModelPath = `C:\retained\model.gguf`
+	llmUpdate := LLMUpdateFromSettings(current.LLM)
+	llmUpdate.MaxOutputTokens = nil
+	llmUpdate.ReasoningMode = nil
+
+	oldUpdate := SettingsUpdate{
+		Server: current.Server,
+		Device: DeviceUpdate{
+			HSPDispatchOwner:       current.Device.HSPDispatchOwner,
+			IntifaceServerAddress:  current.Device.IntifaceServerAddress,
+			FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement,
+			APIApplicationIDSource: current.Device.APIApplicationIDSource,
+		},
+		Motion: current.Motion,
+		LLM:    llmUpdate,
+		Voice: VoiceUpdate{
+			TTSProvider:        current.Voice.TTSProvider,
+			ASRProvider:        current.Voice.ASRProvider,
+			ParakeetServerPath: current.Voice.ParakeetServerPath,
+			ParakeetModelPath:  current.Voice.ParakeetModelPath,
+			ParakeetServerPort: current.Voice.ParakeetServerPort,
+		},
+		Diagnostics: current.Diagnostics,
+	}
+	encoded, err := json.Marshal(oldUpdate)
+	if err != nil {
+		t.Fatalf("marshal old update: %v", err)
+	}
+	if strings.Contains(string(encoded), "max_output_tokens") || strings.Contains(string(encoded), "reasoning_mode") || strings.Contains(string(encoded), "parakeet_source") {
+		t.Fatalf("old update unexpectedly contains new fields: %s", encoded)
+	}
+	var decoded SettingsUpdate
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decode old update: %v", err)
+	}
+	next, err := current.ApplyUpdate(decoded)
+	if err != nil {
+		t.Fatalf("ApplyUpdate: %v", err)
+	}
+	if next.LLM.MaxOutputTokens != 1024 || next.LLM.ReasoningMode != LLMReasoningOff {
+		t.Fatalf("older update reset LLM tuning: %+v", next.LLM)
+	}
+	if next.Voice.ParakeetSource != ParakeetSourceApp {
+		t.Fatalf("older update changed Parakeet source to %q", next.Voice.ParakeetSource)
 	}
 }
 
@@ -288,7 +347,7 @@ func TestIntifaceSettingsApplyUpdate(t *testing.T) {
 			APIApplicationIDSource: current.Device.APIApplicationIDSource,
 		},
 		Motion:      current.Motion,
-		LLM:         current.LLM,
+		LLM:         LLMUpdateFromSettings(current.LLM),
 		Diagnostics: current.Diagnostics,
 	}
 
@@ -454,6 +513,9 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if defaults.Voice.TTSProvider != VoiceProviderNone || defaults.Voice.ASRProvider != VoiceProviderNone {
 		t.Fatalf("voice providers must default to none: %+v", defaults.Voice)
 	}
+	if defaults.Voice.ParakeetSource != ParakeetSourceApp {
+		t.Fatalf("Parakeet source = %q, want %q", defaults.Voice.ParakeetSource, ParakeetSourceApp)
+	}
 
 	settings := defaults
 	settings.Voice = VoiceSettings{
@@ -493,19 +555,35 @@ func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T
 	}
 }
 
+func TestExistingParakeetPathsMigrateToCustomSource(t *testing.T) {
+	data := []byte(`{
+		"version":1,
+		"voice":{"asr_provider":"parakeet_managed","parakeet_server_path":"C:\\parakeet\\server.exe","parakeet_model_path":"C:\\parakeet\\model.gguf"}
+	}`)
+	settings, _, err := loadSettingsFromBytes(data)
+	if err != nil {
+		t.Fatalf("loadSettingsFromBytes: %v", err)
+	}
+	if settings.Voice.ParakeetSource != ParakeetSourceCustom {
+		t.Fatalf("Parakeet source = %q, want %q", settings.Voice.ParakeetSource, ParakeetSourceCustom)
+	}
+}
+
 func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 	current := DefaultSettings()
+	parakeetSource := ParakeetSourceCustom
 	update := SettingsUpdate{
 		Server: current.Server,
 		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
-		Motion: current.Motion, LLM: current.LLM, Diagnostics: current.Diagnostics,
+		Motion: current.Motion, LLM: LLMUpdateFromSettings(current.LLM), Diagnostics: current.Diagnostics,
 		Voice: VoiceUpdate{
 			Enabled: true, TTSProvider: VoiceProviderNone, ASRProvider: VoiceProviderNone,
 			TTSWorkerPath: `C:\custom\tts.exe`, TTSWorkerArgs: []string{"--kept"},
 			ASRWorkerPath: `C:\custom\asr.exe`, ASRWorkerArgs: []string{"--also-kept"},
 			ElevenLabsVoiceID: "voice-123", ElevenLabsModelID: "model-456",
 			ParakeetServerPath: `C:\parakeet\server.exe`, ParakeetModelPath: `C:\parakeet\model.gguf`, ParakeetServerPort: 9012,
-			ASRBaseURL: "http://127.0.0.1:7777/", ASRModel: "parakeet",
+			ParakeetSource: &parakeetSource,
+			ASRBaseURL:     "http://127.0.0.1:7777/", ASRModel: "parakeet",
 			NeuTTSRunnerPath: `C:\neutts\stream_pcm.exe`, NeuTTSReferenceWAV: `C:\voices\reference.wav`,
 			NeuTTSReferenceCodes: `C:\voices\reference.npy`, NeuTTSReferenceText: "Reference transcript.", NeuTTSBackbone: "local/backbone",
 		},
@@ -519,6 +597,9 @@ func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 	}
 	if next.Voice.ElevenLabsVoiceID != "voice-123" || next.Voice.ParakeetServerPort != 9012 || next.Voice.NeuTTSReferenceCodes != `C:\voices\reference.npy` {
 		t.Fatalf("hidden provider fields were discarded: %+v", next.Voice)
+	}
+	if next.Voice.ParakeetSource != ParakeetSourceCustom {
+		t.Fatalf("hidden Parakeet source was discarded: %+v", next.Voice)
 	}
 	if next.Voice.ASRBaseURL != "http://127.0.0.1:7777" || len(next.Voice.TTSWorkerArgs) != 1 {
 		t.Fatalf("hidden provider fields were not normalized losslessly: %+v", next.Voice)
@@ -537,7 +618,7 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 		Server:      current.Server,
 		Device:      DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
 		Motion:      current.Motion,
-		LLM:         current.LLM,
+		LLM:         LLMUpdateFromSettings(current.LLM),
 		Voice:       VoiceUpdate{Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"}},
 		Diagnostics: current.Diagnostics,
 	}
@@ -580,7 +661,7 @@ func TestElevenLabsKeyIsRedactedAndWriteOnly(t *testing.T) {
 		Server:      settings.Server,
 		Device:      DeviceUpdate{HSPDispatchOwner: settings.Device.HSPDispatchOwner, FirmwareAPIRequirement: settings.Device.FirmwareAPIRequirement, APIApplicationIDSource: settings.Device.APIApplicationIDSource},
 		Motion:      settings.Motion,
-		LLM:         settings.LLM,
+		LLM:         LLMUpdateFromSettings(settings.LLM),
 		Voice:       VoiceUpdate{Enabled: true},
 		Diagnostics: settings.Diagnostics,
 	}

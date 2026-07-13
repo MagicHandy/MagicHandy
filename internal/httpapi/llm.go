@@ -130,6 +130,8 @@ func (s *Server) llmState(ctx context.Context) any {
 		"model":              settings.LLM.Model,
 		"prompt_set":         settings.LLM.PromptSet,
 		"request_timeout_ms": settings.LLM.RequestTimeoutMillis,
+		"max_output_tokens":  settings.LLM.MaxOutputTokens,
+		"reasoning_mode":     settings.LLM.ReasoningMode,
 	}
 	if settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged {
 		runtimeStatus := s.managedLLM.Snapshot().Runtime

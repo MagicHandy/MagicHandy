@@ -78,7 +78,10 @@ without losing those choices with:
 
 The updater shows the saved data directory, port, llama.cpp/Ollama selection,
 Parakeet choice, and launcher choice, then asks whether to modify them. It
-refuses to pull over local source changes and uses `git pull --ff-only`.
+refuses to update over local source changes and only fast-forwards: `main`
+follows `origin/main`, a live feature follows its configured upstream, and a
+merged feature whose remote branch was deleted can safely advance from
+`origin/main` without switching branches or discarding work.
 
 **Prefer to do it by hand?** See [Build from source](#build-from-source).
 Detailed package, state, and updater behavior is documented in
@@ -128,10 +131,11 @@ MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working from source
 today: local chat driving real motion (Cloud REST and browser Bluetooth), live
 controls, Freestyle, long-term memory, editable prompt sets, pattern/program
 library and authoring, voice provider adapters and push-to-talk UI, model
-management, and the React UI. Voice providers still need manual provisioning,
-and real microphone compatibility with the managed Parakeet path remains to be
-validated. Planned work includes Autopilot, Intiface, migration, guided setup,
-curated downloads, and packaged releases. See
+management, Intiface dispatch, and the React UI. The source installer can
+provision the app-managed Parakeet module, while custom local server paths stay
+separate in Voice settings; real microphone compatibility with the managed
+Parakeet path remains to be validated. Planned work includes Autopilot,
+migration, guided setup, curated downloads, and packaged releases. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for acceptance gaps as well as
 implemented scope.
 

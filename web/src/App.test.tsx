@@ -16,10 +16,10 @@ const baseState = {
   settings: {
     version: 1,
     server: { port: 49717 },
-    device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled_app_id", connection_key_set: false },
+    device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
-    llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000 },
-    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], speak_replies: false, elevenlabs_key_set: false },
+    llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "auto" },
+    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", speak_replies: false, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth", "intiface"],
@@ -27,9 +27,12 @@ const baseState = {
       diagnostics_verbosities: ["normal", "debug", "trace"],
       llm_providers: ["llama_cpp", "ollama"],
       llama_cpp_modes: ["managed", "external"],
+      llm_reasoning_modes: ["auto", "off"],
+      llm_max_output_tokens: [128, 256, 512, 1024],
       prompt_sets: ["default"],
       tts_providers: ["none", "elevenlabs", "neutts_air", "custom"],
       asr_providers: ["none", "parakeet_managed", "openai_compatible", "custom"],
+      parakeet_sources: ["app_managed", "custom_local"],
     },
   },
   controller: { active: true, read_only: false },
@@ -564,6 +567,38 @@ describe("app shell safety invariants", () => {
     expect(await screen.findByText(/saved model: managed-model-a1b2c3/i)).toBeInTheDocument();
   });
 
+  it("presents the Cloud REST firmware requirement as a notice, not a disabled field", async () => {
+    installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/device");
+
+    const notice = await screen.findByRole("note", { name: /firmware \/ api requirement/i });
+    expect(notice).toHaveTextContent(/firmware v4 with API v3 access/i);
+    expect(screen.queryByRole("textbox", { name: /firmware \/ api requirement/i })).toBeNull();
+  });
+
+  it("saves bounded output and reasoning optimizations with effect warnings", async () => {
+    const fetch = installFetch();
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/model");
+
+    expect(await screen.findByRole("combobox", { name: /maximum output/i })).toHaveValue("256");
+    expect(screen.getByRole("combobox", { name: /thinking \/ reasoning/i })).toHaveValue("auto");
+    expect(screen.getByText(/automatic reasoning can add hidden tokens/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /maximum output/i }), { target: { value: "128" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /thinking \/ reasoning/i }), { target: { value: "off" } });
+    expect(screen.getByText(/may reduce quality/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body));
+    expect(payload.llm.max_output_tokens).toBe(128);
+    expect(payload.llm.reasoning_mode).toBe("off");
+  });
+
   it("scans a user-selected Ollama path and starts an explicit copy", async () => {
     const fetch = installFetch();
     renderApp();
@@ -677,6 +712,41 @@ describe("app shell safety invariants", () => {
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
   });
 
+  it("separates the installed Parakeet module from custom paths and explains how to enable it", async () => {
+    const state = {
+      ...baseState,
+      settings: {
+        ...baseState.settings,
+        voice: { ...baseState.settings.voice, asr_provider: "parakeet_managed", parakeet_source: "app_managed" },
+      },
+    };
+    installFetch({
+      state,
+      voiceStatus: {
+        voice: {
+          enabled: false,
+          protocol_version: 1,
+          workers: { asr: { role: "asr", state: "disabled", configured: true, worker_queue_depth: 0, queue_depth: 0 } },
+          modules: { parakeet: { state: "ready", installed: true, worker_installed: true, runtime_installed: true, message: "MagicHandy's Parakeet worker, runner, and model are installed." } },
+        },
+        requests: [],
+      },
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+
+    const source = await screen.findByRole("combobox", { name: /runtime source/i });
+    expect(source).toHaveValue("app_managed");
+    expect(await screen.findByRole("status", { name: /magichandy parakeet module/i })).toHaveTextContent(/worker, runner, and model are installed/i);
+    expect(screen.getByText(/enable voice workers and save; start will appear/i)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /custom parakeet-server path/i })).toBeNull();
+
+    fireEvent.change(source, { target: { value: "custom_local" } });
+    expect(screen.getByRole("textbox", { name: /custom parakeet-server path/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /custom gguf model path/i })).toBeInTheDocument();
+  });
+
   it("preserves hidden custom worker arguments when another provider is selected", async () => {
     const fetch = installFetch();
     renderApp();
@@ -746,6 +816,19 @@ describe("app shell safety invariants", () => {
     expect(mic.getAttribute("title")).toMatch(/settings/i);
   });
 
+  it("keeps the mic disabled until the running ASR model is ready", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: true, asr_provider: "parakeet_managed" } },
+      voice: { enabled: true, protocol_version: 1, workers: { asr: { role: "asr", state: "running", configured: true, model_state: "unloaded", worker_queue_depth: 0, queue_depth: 0 } } },
+    };
+    installFetch({ state });
+    renderApp();
+    const mic = await screen.findByRole("button", { name: /hold to talk/i });
+    expect(mic).toBeDisabled();
+    expect(mic.getAttribute("title")).toMatch(/start and load/i);
+  });
+
   it("keeps the speak-replies toggle hidden while voice workers are globally disabled", async () => {
     const state = {
       ...baseState,
@@ -793,6 +876,29 @@ describe("app shell safety invariants", () => {
     fireEvent.change(providers[1], { target: { value: "elevenlabs" } });
     expect(await screen.findByText(/save settings to apply/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^start$/i })).toBeDisabled();
+  });
+
+  it("locks worker controls while an ElevenLabs key change is unsaved", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: true, tts_provider: "elevenlabs" } },
+    };
+    installFetch({
+      state,
+      voiceStatus: {
+        voice: { enabled: true, protocol_version: 1, workers: { tts: { role: "tts", state: "stopped", configured: true, worker_queue_depth: 0, queue_depth: 0 } } },
+        requests: [],
+      },
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+
+    const start = await screen.findByRole("button", { name: /^start$/i });
+    expect(start).toBeEnabled();
+    fireEvent.change(screen.getByLabelText(/^api key/i), { target: { value: "new-key" } });
+    expect(await screen.findByText(/save settings to apply/i)).toBeInTheDocument();
+    expect(start).toBeDisabled();
   });
 
   it("locks settings, prompt, and memory mutations for read-only clients", async () => {

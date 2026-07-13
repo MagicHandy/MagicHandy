@@ -92,7 +92,7 @@ func TestDispatchOwnerSwitchStopsAndClearsActiveMotion(t *testing.T) {
 			APIApplicationIDSource: current.Device.APIApplicationIDSource,
 		},
 		Motion:      current.Motion,
-		LLM:         current.LLM,
+		LLM:         config.LLMUpdateFromSettings(current.LLM),
 		Diagnostics: current.Diagnostics,
 	}
 	data, err := json.Marshal(update)

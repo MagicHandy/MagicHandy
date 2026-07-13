@@ -173,7 +173,8 @@ export function ChatPanel() {
   // a pointer to Settings — workers are never started implicitly from here.
   const voiceSettings = state?.settings?.voice;
   const asrConfigured = Boolean(voiceSettings?.enabled && voiceSettings.asr_provider && voiceSettings.asr_provider !== "none");
-  const asrRunning = state?.voice?.workers?.asr?.state === "running";
+  const asrWorker = state?.voice?.workers?.asr;
+  const asrReady = asrWorker?.state === "running" && asrWorker.model_state === "ready";
 
   async function sendText(input: string) {
     const text = input.trim();
@@ -378,9 +379,9 @@ export function ChatPanel() {
               type="button"
               className="btn btn-secondary mic-button"
               data-recording={recording || undefined}
-              disabled={locked || busy || transcribing || !asrRunning}
+              disabled={locked || busy || transcribing || !asrReady}
               aria-pressed={recording}
-              title={asrRunning ? `Records up to ${RECORDING_LIMIT_SECONDS} seconds` : "Start the speech-input worker in Settings → Voice"}
+              title={asrReady ? `Records up to ${RECORDING_LIMIT_SECONDS} seconds` : "Start and load the speech-input worker in Settings → Voice"}
               onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void startRecording(); }}
               onPointerUp={(event) => { event.preventDefault(); stopRecording(); }}
               onPointerCancel={stopRecording}

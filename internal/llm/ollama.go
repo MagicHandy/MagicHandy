@@ -51,6 +51,13 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 			"temperature": request.Temperature,
 		},
 	}
+	if request.MaxTokens > 0 {
+		body.Options["num_predict"] = request.MaxTokens
+	}
+	if request.ReasoningMode == "off" {
+		disabled := false
+		body.Think = &disabled
+	}
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("encode Ollama chat request: %w", err)
@@ -151,6 +158,7 @@ type ollamaChatRequest struct {
 	Messages []Message      `json:"messages"`
 	Stream   bool           `json:"stream"`
 	Format   string         `json:"format"`
+	Think    *bool          `json:"think,omitempty"`
 	Options  map[string]any `json:"options,omitempty"`
 }
 

@@ -164,8 +164,8 @@ try {
     $remote = Join-Path $tempRoot 'remote.git'
     $seed = Join-Path $tempRoot 'seed'
     $checkout = Join-Path $tempRoot 'checkout'
-    & $git init --bare $remote | Out-Null
-    & $git init $seed | Out-Null
+    & $git init --bare --initial-branch=main $remote | Out-Null
+    & $git init --initial-branch=main $seed | Out-Null
     & $git -C $seed config user.email 'installer-test@magichandy.invalid'
     & $git -C $seed config user.name 'MagicHandy Installer Test'
     [System.IO.File]::WriteAllText((Join-Path $seed 'version.txt'), 'v1')
@@ -188,6 +188,66 @@ try {
         $dirtyRejected = $_.Exception.Message -match 'local changes'
     }
     Assert-True -Condition $dirtyRejected -Message 'updater should reject a dirty checkout'
+
+    Write-Host 'Checking updater follows a live feature upstream...'
+    $activeCheckout = Join-Path $tempRoot 'active-feature-checkout'
+    & $git -C $seed switch -c active-feature | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $seed 'active.txt'), 'feature v1')
+    & $git -C $seed add active.txt
+    & $git -C $seed commit -m 'active feature' | Out-Null
+    & $git -C $seed push -u origin active-feature | Out-Null
+    & $git clone --branch active-feature $remote $activeCheckout | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $seed 'active.txt'), 'feature v2')
+    & $git -C $seed add active.txt
+    & $git -C $seed commit -m 'advance active feature' | Out-Null
+    & $git -C $seed push | Out-Null
+    Update-MagicHandySource -RepositoryPath $activeCheckout -AssumeYes
+    Assert-Equal -Expected 'active-feature' -Actual (& $git -C $activeCheckout branch --show-current) -Message 'live feature update should retain its branch'
+    Assert-Equal -Expected 'feature v2' -Actual (Get-Content -LiteralPath (Join-Path $activeCheckout 'active.txt') -Raw) -Message 'live feature should follow its own upstream'
+    & $git -C $seed switch main | Out-Null
+    & $git -C $seed push origin --delete active-feature | Out-Null
+
+    Write-Host 'Checking updater fallback for a merged and deleted feature branch...'
+    $mergedCheckout = Join-Path $tempRoot 'merged-feature-checkout'
+    & $git -C $seed switch -c merged-feature | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $seed 'feature.txt'), 'merged feature')
+    & $git -C $seed add feature.txt
+    & $git -C $seed commit -m 'merged feature' | Out-Null
+    & $git -C $seed push -u origin merged-feature | Out-Null
+    & $git clone --single-branch --branch merged-feature $remote $mergedCheckout | Out-Null
+    & $git -C $seed switch main | Out-Null
+    & $git -C $seed merge --no-ff merged-feature -m 'merge feature' | Out-Null
+    & $git -C $seed push origin main | Out-Null
+    & $git -C $seed push origin --delete merged-feature | Out-Null
+    Update-MagicHandySource -RepositoryPath $mergedCheckout -AssumeYes
+    Assert-Equal -Expected 'merged-feature' -Actual (& $git -C $mergedCheckout branch --show-current) -Message 'deleted-feature fallback should retain the local branch name'
+    Assert-Equal -Expected (& $git -C $mergedCheckout rev-parse refs/remotes/origin/main) -Actual (& $git -C $mergedCheckout rev-parse HEAD) -Message 'merged deleted feature should fast-forward to origin/main'
+    Assert-Equal -Expected 'refs/heads/merged-feature' -Actual (& $git -C $mergedCheckout config --get branch.merged-feature.merge) -Message 'fallback should not rewrite upstream configuration'
+
+    Write-Host 'Checking updater refusal for an unmerged deleted feature branch...'
+    $unmergedCheckout = Join-Path $tempRoot 'unmerged-feature-checkout'
+    & $git -C $seed switch -c unmerged-feature | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $seed 'unmerged.txt'), 'local feature work')
+    & $git -C $seed add unmerged.txt
+    & $git -C $seed commit -m 'unmerged feature' | Out-Null
+    & $git -C $seed push -u origin unmerged-feature | Out-Null
+    & $git clone --branch unmerged-feature $remote $unmergedCheckout | Out-Null
+    $unmergedHead = & $git -C $unmergedCheckout rev-parse HEAD
+    & $git -C $seed switch main | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $seed 'main-only.txt'), 'new release work')
+    & $git -C $seed add main-only.txt
+    & $git -C $seed commit -m 'advance main' | Out-Null
+    & $git -C $seed push origin main | Out-Null
+    & $git -C $seed push origin --delete unmerged-feature | Out-Null
+    $unmergedRejected = $false
+    try {
+        Update-MagicHandySource -RepositoryPath $unmergedCheckout -AssumeYes
+    } catch {
+        $unmergedRejected = $_.Exception.Message -match 'contains commits not present'
+    }
+    Assert-True -Condition $unmergedRejected -Message 'updater should reject an unmerged feature whose upstream was deleted'
+    Assert-Equal -Expected $unmergedHead -Actual (& $git -C $unmergedCheckout rev-parse HEAD) -Message 'unmerged deleted feature should keep its HEAD'
+    Assert-Equal -Expected 'unmerged-feature' -Actual (& $git -C $unmergedCheckout branch --show-current) -Message 'unmerged deleted feature should keep its branch'
 
     Write-Host 'Checking install.ps1 plan-only behavior...'
     $freshPlanState = Join-Path $tempRoot 'fresh-plan-state.json'

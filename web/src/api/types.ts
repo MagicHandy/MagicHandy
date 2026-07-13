@@ -241,6 +241,7 @@ export interface VoiceSettings {
   parakeet_server_path?: string;
   parakeet_model_path?: string;
   parakeet_port?: number;
+  parakeet_source: string;
   asr_base_url?: string;
   asr_model?: string;
   neutts_runner_path?: string;
@@ -269,6 +270,7 @@ export interface VoiceSettingsUpdate {
   parakeet_server_path: string;
   parakeet_model_path: string;
   parakeet_port: number;
+  parakeet_source: string;
   asr_base_url: string;
   asr_model: string;
   neutts_runner_path: string;
@@ -311,6 +313,15 @@ export interface VoiceState {
   enabled: boolean;
   protocol_version: number;
   workers?: Record<string, VoiceWorkerStatus>;
+  modules?: Record<string, VoiceModuleStatus>;
+}
+
+export interface VoiceModuleStatus {
+  state: "ready" | "incomplete" | "missing" | string;
+  installed: boolean;
+  worker_installed: boolean;
+  runtime_installed: boolean;
+  message: string;
 }
 
 export interface VoiceRequestSnapshot {
@@ -334,9 +345,12 @@ export interface OptionHints {
   motion_styles?: string[];
   llm_providers?: string[];
   llama_cpp_modes?: string[];
+  llm_reasoning_modes?: string[];
+  llm_max_output_tokens?: number[];
   prompt_sets?: string[];
   tts_providers?: string[];
   asr_providers?: string[];
+  parakeet_sources?: string[];
 }
 
 export interface PublicSettings {
@@ -360,6 +374,8 @@ export interface PublicSettings {
     model: string;
     prompt_set: string;
     request_timeout_ms: number;
+    max_output_tokens: number;
+    reasoning_mode: string;
   };
   voice: VoiceSettings;
   diagnostics: { verbosity: string };

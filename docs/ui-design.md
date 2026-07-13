@@ -467,6 +467,22 @@ shows incompatibility reasons, filters the list, and reports copy progress and
 cancellation. Repeated rows stay flat and compact on desktop/mobile; they are
 not nested cards or oversized download tiles.
 
+Generation optimizations are a compact three-field row: maximum output,
+thinking/reasoning, and timeout. Maximum output uses backend-advertised reviewed
+choices; reasoning exposes only `Automatic` and `Disabled when supported`.
+Inline notice text names both tradeoffs: low output limits can truncate JSON and
+cause a repair, while disabled reasoning can reduce difficult-request quality
+and unsupported models may ignore or reject the override. These controls never
+claim a measured speedup or expose unproven threads/GPU/context/cache knobs.
+
+Device requirements and app-managed voice modules are status/notice surfaces,
+not fake form fields. Cloud REST firmware v4/API v3 appears as a semantic note.
+Parakeet separates **MagicHandy module** from **Custom local server**: the former
+shows backend-inspected installation state and no paths; only the latter exposes
+server/model paths. With voice off, text explicitly says Enable, Save, then
+Start. A successful Start includes model load, and microphone input remains
+disabled until the backend reports the ASR model ready.
+
 ### Not yet built — planned, not regressions
 
 Still planned rather than regressed: the Autopilot planner and its richer mode

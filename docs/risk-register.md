@@ -270,6 +270,9 @@ Mitigation:
 - verify downloads before install and move files atomically
 - keep Ollama available as the secondary cross-platform provider
 - surface runner stderr, health, model-load errors, and hardware-fit warnings in diagnostics
+- bound compact intent output, make hidden reasoning policy explicit, and
+  separate cold load, prompt evaluation, reasoning, visible generation, and
+  repair rate before attributing latency to the provider
 
 Exit evidence:
 
@@ -300,6 +303,13 @@ load/chat evidence and does not lower R13 yet. A same-process CUDA environment
 fix was then verified by building the pinned `b9966` runtime with CUDA 13.3 and
 MSVC 19.51 and probing the installed `c749cb0` runner. This supplies CUDA build
 evidence, but model load/chat remains unverified and R13 stays High.
+
+Latency-control mitigation (2026-07-13): initial and repair requests now share a
+reviewed output-token cap (default 256), explicit automatic/off reasoning maps to
+provider-native fields with quality/support warnings, repair temperature zero is
+serialized, and warm managed calls skip repeated health/model-list preflights.
+Request-shape and UI tests are green, but no fixed-model A/B inference benchmark
+was run; R13 remains High and no speedup is claimed from source inspection alone.
 
 ## R14: Per-Source Motion Path Divergence
 

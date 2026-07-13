@@ -55,7 +55,10 @@ artifacts. The optional portable `data/` directory is ignored too.
 
 Parakeet's external CPU runner and 644 MiB model are separate explicit assets.
 The script displays their size/license, verifies their pinned SHA-256 values,
-and installs them atomically under `<data-dir>/voice/parakeet`.
+and installs them atomically under `<data-dir>/voice/parakeet`. It then prints
+the deliberate activation sequence: Settings > Voice, select Parakeet and the
+MagicHandy module, enable voice, save, then Start. Installing files never enables
+or autostarts a microphone worker.
 
 ## Install Commands
 
@@ -114,10 +117,14 @@ The updater:
 1. reads and displays the saved choices;
 2. asks whether to modify them (default: no);
 3. refuses to touch a dirty Git worktree;
-4. runs `git pull --ff-only` on the configured current branch;
-5. invokes the newly checked-out `install.ps1` with preserved or revised state;
-6. writes state only after provisioning succeeds; and
-7. optionally launches the app.
+4. fetches explicitly, then fast-forwards `main` from `origin/main` or a live
+   feature from its configured upstream;
+5. if a feature upstream was deleted after merge, uses `origin/main` only when
+   the local feature tip is already contained there; it never switches the
+   branch or rewrites its upstream;
+6. invokes the newly checked-out `install.ps1` with preserved or revised state;
+7. writes state only after provisioning succeeds; and
+8. optionally launches the app.
 
 Use `-Yes -NoLaunch` for an unattended update with unchanged choices,
 `-Reconfigure` to walk every choice, `-NoPull` to rebuild the current checkout,
@@ -133,4 +140,6 @@ voice asset. It only changes what subsequent runs ensure is present.
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion, managed
 CUDA versus Ollama-only plans, and end-to-end plan-only install/update behavior.
-It intentionally performs no package or model download.
+Updater fixtures cover `main`, a live feature upstream, a single-branch
+merged/deleted feature fallback, unmerged/deleted refusal, and dirty-tree
+refusal. It intentionally performs no package or model download.

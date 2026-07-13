@@ -18,18 +18,23 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-11. MagicHandy is a source-runnable alpha, not a packaged or
-release-ready application. Phases 0 through 14 are merged to `main`; Phase 14 (#52)
-landed persisted patterns/programs, funscript import, shared-engine playback,
-LLM curation, authoring, and visible reversible training feedback. The LLM
-model manager (#55) and the managed llama.cpp source-build lifecycle (#56)
-landed ahead of Phase 16 and now anchor its packaging story: the Windows
-install binary is a thin shell around the app's own first-run setup wizard
-(decision and design in `docs/gui-installer.md`). Phase 14B (planned) adds
-the Intiface/Buttplug dispatch owner under the transport-neutral frame
-contract recorded in ADR 0010. Phase 13 deliberately supports microphone
+Updated 2026-07-13. MagicHandy is a source-runnable alpha, not a packaged or
+release-ready application. Phases 0 through 14, 14B, and 14C are merged to
+`main`: persisted patterns/programs, Intiface dispatch, the route-independent
+connection manager, and the current React shell are implemented. The LLM model
+manager (#55) and managed llama.cpp source-build lifecycle (#56) landed ahead
+of Phase 16 and anchor its packaging story. The future Windows install binary
+remains a thin shell around the app's own first-run setup wizard (decision and
+design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
 decision.
+
+Current maintenance work bounds LLM output, exposes honest provider-native
+reasoning control, removes redundant warm managed-llama readiness probes,
+separates app-managed Parakeet assets from custom paths, and makes source updates
+survive merged/deleted feature upstreams without switching branches or
+discarding work. Runtime LLM latency and real managed microphone acceptance are
+still measurements, not inferred completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider
@@ -106,7 +111,10 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   diagnostics panel, trace export.
 - Streaming LLM chat (managed llama.cpp primary, external llama.cpp, Ollama
   secondary) with a strict JSON contract, one repair pass, malformed-response
-  indication, and chat-driven motion through the engine only.
+  indication, bounded output, explicit automatic/off reasoning policy, and
+  chat-driven motion through the engine only. Provider-native controls carry
+  visible latency/quality warnings; no hardware tuning knob is promoted without
+  measurement.
 - SQLite-backed LLM model manager with managed GGUF copies, standalone GGUF
   import, read-only Ollama library discovery/import, daemon model listing,
   external llama.cpp model listing, SHA-256 verification,
@@ -114,6 +122,11 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   builds pinned llama.cpp `b9966` source into app-owned runtime storage through
   the installer or controller-gated Model UI; no runner/model path settings.
   Curated model downloads remain release work.
+- Optional voice workers remain off and never autostart. Source-installed
+  Parakeet assets are discovered as one app-managed module with visible
+  complete/incomplete state; custom local server/model paths are a separate
+  source selection. Saving enablement exposes Start, which succeeds only after
+  model readiness.
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
@@ -167,10 +180,11 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    `internal/httpapi/motion.go` on 2026-07-11).
 6. **Voice end-to-end acceptance**: browser push-to-talk records WebM/Opus or
    Ogg and forwards it unchanged, while the managed parakeet.cpp path is
-   documented and tested with WAV. Provider adapters and UI are implemented,
-   but real microphone-to-managed-Parakeet compatibility and turnkey provider
-   provisioning are not yet proven. Tracked as risk R24 (third legacy sweep,
-   item A1).
+   documented and tested with WAV. Provider adapters, source-installer asset
+   discovery, app-managed/custom separation, and explicit enable/save/Start UI
+   are implemented, but real microphone-to-managed-Parakeet compatibility and
+   in-app download/repair are not yet proven. Tracked as risk R24 (third legacy
+   sweep, item A1).
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
@@ -707,6 +721,10 @@ Status: **complete** in PR #46.
 - Extend `install.ps1` with an opt-in CPU runner/model download showing size,
   license, and checksum. Install under the local data directory, build the Go
   worker, and leave voice disabled until the user explicitly saves and starts it.
+- The app-managed runtime source resolves those canonical assets without path
+  inputs and reports complete/incomplete/missing module state. Custom local
+  server/model paths remain a separate source. Installation never implies
+  enablement or autostart; Save then Start is explicit, and Start includes load.
 - Keep the ordinary Voice settings surface minimal. Worker arguments are
   structured one-per-line values so Windows paths with spaces survive without a
   homemade shell parser. Lifecycle actions are state-specific rather than a row

@@ -36,6 +36,7 @@ type ManagedLlamaCPPProvider struct {
 	process *exec.Cmd
 	done    chan error
 	stderr  *tailBuffer
+	ready   bool
 }
 
 // NewManagedLlamaCPPProvider creates a managed llama.cpp provider.
@@ -60,9 +61,13 @@ func NewManagedLlamaCPPProvider(options ManagedLlamaCPPOptions) (*ManagedLlamaCP
 
 // StreamChat loads the configured runner if needed and streams chat text.
 func (p *ManagedLlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
-	status := p.Load(ctx)
-	if !status.Available {
-		return "", errors.New(status.Message)
+	// Load performs health and model-list probes. Reuse that successful state on
+	// warm calls; the chat request itself will still report a crashed server.
+	if !p.readyToServe() {
+		status := p.Load(ctx)
+		if !status.Available {
+			return "", errors.New(status.Message)
+		}
 	}
 	return p.client.StreamChat(ctx, request, onDelta)
 }
@@ -105,6 +110,7 @@ func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 		providerStatus.Managed = true
 		providerStatus.Loaded = p.running()
 		if providerStatus.Available {
+			p.setReady(true)
 			return providerStatus
 		}
 		if time.Now().After(deadline) {
@@ -129,6 +135,7 @@ func (p *ManagedLlamaCPPProvider) Unload(context.Context) ProviderStatus {
 	p.process = nil
 	done := p.done
 	p.done = nil
+	p.ready = false
 	p.mu.Unlock()
 
 	if process == nil || process.Process == nil {
@@ -221,7 +228,20 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 
 	p.process = command
 	p.done = done
+	p.ready = false
 	return nil
+}
+
+func (p *ManagedLlamaCPPProvider) readyToServe() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.runningLocked() && p.ready
+}
+
+func (p *ManagedLlamaCPPProvider) setReady(ready bool) {
+	p.mu.Lock()
+	p.ready = ready
+	p.mu.Unlock()
 }
 
 func (p *ManagedLlamaCPPProvider) running() bool {
@@ -238,6 +258,7 @@ func (p *ManagedLlamaCPPProvider) runningLocked() bool {
 	case err := <-p.done:
 		p.process = nil
 		p.done = nil
+		p.ready = false
 		if err != nil {
 			p.stderr.WriteString(err.Error())
 		}
