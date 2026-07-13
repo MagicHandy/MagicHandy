@@ -277,6 +277,9 @@
 .connection-handy-marker[data-state="connected"] {
   fill: var(--ok);
 }
+.connection-handy-marker[data-state="initializing"] {
+  fill: var(--muted);
+}
 .connection-artwork[data-phase="connected"] .connection-handy-led {
   fill: var(--ok);
 }
@@ -311,9 +314,6 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-}
-.connection-retry {
-  flex: 0 0 auto;
 }
 .connection-current strong,
 .connection-trigger-copy strong {

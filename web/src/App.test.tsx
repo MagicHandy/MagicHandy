@@ -3,7 +3,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { streamChat } from "./api/client";
-import type { LLMModelManagerSnapshot } from "./api/types";
+import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot, LLMModelManagerSnapshot, TransportDiagnostics } from "./api/types";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
 
 // These tests guard the safety-critical UI invariants from
@@ -111,12 +111,16 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-type TestState = typeof baseState & { bluetooth_bridge?: unknown; cloud_transport?: unknown; intiface_transport?: unknown };
+type TestState = typeof baseState & {
+  bluetooth_bridge?: BluetoothBridgeSnapshot;
+  cloud_transport?: TransportDiagnostics;
+  intiface_transport?: IntifaceTransportSnapshot;
+};
 
-function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; stateGate?: Promise<void>; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as TestState;
   const chatLog = opts.chatLog ?? [];
-  let intiface = (state as typeof state & { intiface_transport?: Record<string, any> }).intiface_transport ?? {
+  let intiface: IntifaceTransportSnapshot = state.intiface_transport ?? {
     dispatch_owner: "intiface",
     address: state.settings.device.intiface_server_address,
     status: { connected: false, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
@@ -135,7 +139,7 @@ function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolea
     }
     if (u.includes("/api/transport/cloud/check")) {
       await opts.connectionCheckGate;
-      (state as typeof state & { cloud_transport?: { connected: boolean } }).cloud_transport = { connected: true };
+      state.cloud_transport = { connected: true };
       return jsonRes({ ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 });
     }
     if (u.includes("/api/transport/intiface")) {
@@ -167,7 +171,10 @@ function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolea
     }
     if (u.includes("/api/memory")) return jsonRes(opts.memory ?? baseState.memory);
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
-    if (u.includes("/api/state")) return jsonRes(state);
+    if (u.includes("/api/state")) {
+      await opts.stateGate;
+      return jsonRes(state);
+    }
     return jsonRes({});
   });
   vi.stubGlobal("fetch", fn);
@@ -247,6 +254,23 @@ describe("app shell safety invariants", () => {
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
   });
 
+  it("shows a neutral connection state until the first backend snapshot arrives", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    installFetch({ stateGate: gate });
+    renderApp();
+
+    fireEvent.click(await screen.findByRole("button", { name: /the handy checking/i }));
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    expect(within(manager).getByText(/loading provider/i)).toBeInTheDocument();
+    const artwork = within(manager).getByRole("img", { name: /connection status loading/i });
+    expect(artwork).toHaveAttribute("data-phase", "initializing");
+    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "initializing");
+
+    await act(async () => release());
+    await screen.findByRole("button", { name: /the handy connection key required/i });
+  });
+
   it("composes the hand, three signals, and Handy target without a runtime mask", async () => {
     installFetch();
     renderApp();
@@ -304,17 +328,64 @@ describe("app shell safety invariants", () => {
     const fetchMock = installFetch();
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
-    // The dual-thumb Speed range sends both bounds; moving the high thumb to 40
-    // keeps the low bound (20) and lowers the max.
     fireEvent.change(screen.getByRole("slider", { name: /speed maximum/i }), { target: { value: "40" } });
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
       expect(call).toBeDefined();
-      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_min_percent: 20, speed_max_percent: 40 });
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_max_percent: 40 });
     });
   });
 
-  it("halts and drops the cloud session from the connection manager Disconnect", async () => {
+  it("keeps the stroke bounds distinct and sends only the changed bound", async () => {
+    const fetchMock = installFetch();
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    const minimum = screen.getByRole("slider", { name: /stroke minimum/i });
+    expect(minimum).toHaveAttribute("aria-valuemax", "99");
+
+    fireEvent.change(minimum, { target: { value: "100" } });
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ stroke_min_percent: 99 });
+    });
+  });
+
+  it("lets pointer users drag either bound from the shared range track", async () => {
+    const fetchMock = installFetch();
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    const speed = screen.getByRole("group", { name: /^speed$/i });
+    const track = speed.querySelector(".range-slider-track") as HTMLDivElement;
+    vi.spyOn(track, "getBoundingClientRect").mockReturnValue({ left: 0, width: 100 } as DOMRect);
+
+    fireEvent(track, new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 10 }));
+    fireEvent(track, new MouseEvent("pointermove", { bubbles: true, clientX: 30 }));
+    fireEvent(track, new MouseEvent("pointerup", { bubbles: true, clientX: 30 }));
+    expect(within(speed).getByRole("slider", { name: /minimum/i })).toHaveValue("31");
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_min_percent: 31 });
+    });
+  });
+
+  it("merges rapid quick changes without adding untouched sibling bounds", async () => {
+    const fetchMock = installFetch();
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    fireEvent.change(screen.getByRole("slider", { name: /speed minimum/i }), { target: { value: "30" } });
+    fireEvent.change(screen.getByRole("slider", { name: /stroke maximum/i }), { target: { value: "90" } });
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_min_percent: 30, stroke_max_percent: 90 });
+    });
+  });
+
+  it("keeps Cloud REST status backend-authoritative and offers a connection check", async () => {
     const fetchMock = installFetch({
       state: {
         ...baseState,
@@ -325,15 +396,13 @@ describe("app shell safety invariants", () => {
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy cloud connection ready/i }));
     const manager = screen.getByRole("region", { name: /connection manager/i });
-    // Connected shows a small re-check button beside the status line.
-    expect(within(manager).getByRole("button", { name: /re-check connection/i })).toBeInTheDocument();
-    fireEvent.click(within(manager).getByRole("button", { name: /^disconnect$/i }));
+    fireEvent.click(within(manager).getByRole("button", { name: /check again/i }));
     await waitFor(() => {
-      const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/transport/cloud/stop"));
+      const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/transport/cloud/check"));
       expect(call).toBeDefined();
     });
-    // After disconnect the primary action returns to Connect.
-    await waitFor(() => expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeInTheDocument());
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/transport/cloud/stop"))).toBe(false);
+    expect(within(manager).getByRole("button", { name: /check again/i })).toBeInTheDocument();
   });
 
   it("shows the wireless wave state while checking The Handy", async () => {
@@ -348,7 +417,7 @@ describe("app shell safety invariants", () => {
     });
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy not checked/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /check connection/i }));
     expect(screen.getByRole("img", { name: /in progress/i })).toHaveAttribute("data-phase", "connecting");
     await act(async () => release());
     await waitFor(() => expect(screen.getByRole("img", { name: /the handy wireless connection$/i })).toHaveAttribute("data-phase", "connected"));
@@ -740,7 +809,7 @@ describe("app shell safety invariants", () => {
     const manager = screen.getByRole("region", { name: /connection manager/i });
     expect(within(manager).getByLabelText(/handy connection key/i)).toBeDisabled();
     expect(within(manager).getByRole("button", { name: /save key/i })).toBeDisabled();
-    expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeDisabled();
+    expect(within(manager).getByRole("button", { name: /check connection/i })).toBeDisabled();
     go("#/settings/prompts");
     expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
     expect(await screen.findByRole("button", { name: /add memory/i })).toBeDisabled();
@@ -790,7 +859,7 @@ describe("app shell safety invariants", () => {
           status: { connected: false, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
           diagnostics: {},
         },
-      } as typeof baseState,
+      },
     });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
@@ -814,7 +883,7 @@ describe("app shell safety invariants", () => {
           status: { connected: false, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
           diagnostics: {},
         },
-      } as typeof baseState,
+      },
     });
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy intiface disconnected/i }));
@@ -838,7 +907,7 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/reply preserved across reloads/i)).toBeInTheDocument();
   });
 
-  it("renders a Handy rail and carriage from the commanded engine estimate", async () => {
+  it("renders a Handy body and sleeve from the commanded engine estimate", async () => {
     const state = {
       ...baseState,
       motion: {

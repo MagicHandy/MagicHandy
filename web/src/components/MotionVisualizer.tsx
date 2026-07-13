@@ -25,10 +25,10 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   // way The Handy 2's sleeve carriage travels. 100% is the top of the channel.
   const travelTop = 30;
   const travelBottom = 104;
-  const toRailY = (percent: number) => travelBottom - ((travelBottom - travelTop) * percent) / 100;
-  const rangeTop = toRailY(max);
-  const rangeBottom = toRailY(min);
-  const carriageStyle = { "--viz-carriage-y": `${toRailY(pos)}px` } as CSSProperties;
+  const toChannelY = (percent: number) => travelBottom - ((travelBottom - travelTop) * percent) / 100;
+  const rangeTop = toChannelY(max);
+  const rangeBottom = toChannelY(min);
+  const carriageStyle = { "--viz-carriage-y": `${toChannelY(pos)}px` } as CSSProperties;
   const label = `Motion ${state}; commanded position estimate ${roundedPosition} percent; stroke range ${Math.round(min)} to ${Math.round(max)} percent`;
 
   return (

@@ -178,8 +178,6 @@ export const api = {
   // Non-motion connection check for the selected dispatch owner.
   connectionCheck: (owner: "cloud" | "bluetooth") =>
     request<ConnectionCheckResult>(`POST`, `/api/transport/${owner}/check`, {}),
-  // Halt the Cloud REST device (used by the connection-manager Disconnect).
-  cloudStop: () => request("POST", "/api/transport/cloud/stop", {}),
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.

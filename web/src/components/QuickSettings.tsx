@@ -8,6 +8,7 @@ import { RangeSlider } from "./RangeSlider";
 import { useAppState, useToast } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
+type QuickPatch = Parameters<typeof api.applyQuick>[0];
 
 interface QuickSettingsProps {
   section?: "all" | "limits" | "behavior";
@@ -20,15 +21,14 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const locked = !backendOnline || readOnly;
   const [vals, setVals] = useState<MotionSettings | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const pending = useRef<Record<string, unknown>>({});
+  const pending = useRef<QuickPatch>({});
 
   useEffect(() => {
     if (motion) setVals({ ...motion });
   }, [motion]);
 
-  // Debounced, but patches accumulate so moving one range thumb never drops a
-  // sibling value queued in the same window.
-  function push(patch: Record<string, unknown>) {
+  // Combine rapid edits without resending untouched bounds from a stale poll.
+  function push(patch: QuickPatch) {
     pending.current = { ...pending.current, ...patch };
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
@@ -58,10 +58,11 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           floor={1}
           minValue={vals.speed_min_percent}
           maxValue={vals.speed_max_percent}
+          minGap={0}
           disabled={locked}
-          onChange={({ min, max }) => {
+          onChange={({ min, max }, changed) => {
             setVals((s) => (s ? { ...s, speed_min_percent: min, speed_max_percent: max } : s));
-            push({ speed_min_percent: min, speed_max_percent: max });
+            push(changed === "min" ? { speed_min_percent: min } : { speed_max_percent: max });
           }}
         />
       )}
@@ -71,10 +72,11 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           floor={0}
           minValue={vals.stroke_min_percent}
           maxValue={vals.stroke_max_percent}
+          minGap={1}
           disabled={locked}
-          onChange={({ min, max }) => {
+          onChange={({ min, max }, changed) => {
             setVals((s) => (s ? { ...s, stroke_min_percent: min, stroke_max_percent: max } : s));
-            push({ stroke_min_percent: min, stroke_max_percent: max });
+            push(changed === "min" ? { stroke_min_percent: min } : { stroke_max_percent: max });
           }}
         />
       )}

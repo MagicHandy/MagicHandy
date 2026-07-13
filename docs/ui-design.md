@@ -158,6 +158,9 @@ Speed limits, stroke range, reverse direction, and motion style.
 - Speed and stroke limits live in the persistent floating connection manager;
   reverse and style stay in Chat's motion-behavior group. The collapsed manager
   remains visible on every route and clears the reserved mobile Stop footer.
+- Speed and stroke each use one dual-thumb control. Thumb changes send only the
+  changed backend field; Stroke always keeps at least one percentage point
+  between its minimum and maximum to match backend validation.
 - Reflect engine state live; if the engine clamps or resolves a value, the
   control shows the resolved value inline rather than via a status line
   elsewhere on screen.

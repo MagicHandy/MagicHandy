@@ -341,7 +341,7 @@ textarea:disabled {
 }
 /* The Handy 2 body: a charcoal capsule held vertically. */
 .viz-body {
-  fill: #23272e;
+  fill: var(--surface-3);
   stroke: var(--line-strong);
   stroke-width: 1.2;
 }
@@ -352,13 +352,13 @@ textarea:disabled {
   stroke-linecap: round;
 }
 .viz-screen {
-  fill: #14171b;
-  stroke: rgba(255, 255, 255, 0.04);
+  fill: var(--bg-inset);
+  stroke: var(--line);
   stroke-width: 0.8;
 }
 .viz-track {
-  fill: #0d0f12;
-  stroke: #3a4048;
+  fill: var(--bg);
+  stroke: var(--line-strong);
   stroke-width: 1;
 }
 .viz-stroke-range {
@@ -374,13 +374,13 @@ textarea:disabled {
 /* Collar is the position indicator, coloured by engine state. */
 .viz-carriage-collar {
   fill: currentColor;
-  stroke: #d7dbe0;
+  stroke: var(--text);
   stroke-width: 0.7;
 }
 /* Sleeve reads as the clear ribbed cup the collar holds. */
 .viz-carriage-sleeve {
   fill: rgba(210, 224, 236, 0.16);
-  stroke: #9aa3ad;
+  stroke: var(--muted);
   stroke-width: 0.7;
 }
 .viz-sleeve-rib {
@@ -965,9 +965,11 @@ textarea:disabled {
 }
 .range-slider-track {
   position: relative;
-  height: 20px;
+  height: 28px;
   display: flex;
   align-items: center;
+  cursor: ew-resize;
+  touch-action: none;
 }
 /* Base rail + coloured fill between the two thumbs. */
 .range-slider-track::before {
@@ -987,12 +989,14 @@ textarea:disabled {
   border-radius: 999px;
   background: var(--accent);
 }
-/* Both inputs occupy the same box; only their thumbs receive pointer events so
-   whichever thumb is under the cursor is the one that moves. */
+/* The inputs provide native keyboard/AT semantics. Pointer input is handled by
+   the shared track so overlapping thumbs remain operable. */
 .range-slider-input {
   position: absolute;
+  top: 0;
   left: 0;
   width: 100%;
+  height: 28px;
   margin: 0;
   background: none;
   pointer-events: none;
@@ -1000,11 +1004,12 @@ textarea:disabled {
   appearance: none;
 }
 .range-slider-input::-webkit-slider-thumb {
-  pointer-events: auto;
+  pointer-events: none;
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  margin-top: -10px;
   border-radius: 999px;
   background: var(--accent);
   border: 2px solid var(--bg);
@@ -1012,16 +1017,30 @@ textarea:disabled {
   cursor: pointer;
 }
 .range-slider-input::-moz-range-thumb {
-  pointer-events: auto;
-  width: 16px;
-  height: 16px;
+  pointer-events: none;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: var(--accent);
   border: 2px solid var(--bg);
   cursor: pointer;
 }
+.range-slider-input::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+}
 .range-slider-input::-moz-range-track {
-  background: none;
+  height: 4px;
+  background: transparent;
+}
+.range-slider-low {
+  z-index: 1;
+}
+.range-slider-high {
+  z-index: 2;
+}
+.range-slider-input:focus {
+  z-index: 3;
 }
 .range-slider-input:focus-visible::-webkit-slider-thumb {
   outline: 2px solid var(--focus);
@@ -1035,5 +1054,8 @@ textarea:disabled {
   opacity: 0.62;
 }
 .range-slider[data-disabled] .range-slider-input {
+  cursor: not-allowed;
+}
+.range-slider[data-disabled] .range-slider-track {
   cursor: not-allowed;
 }
