@@ -40,7 +40,7 @@ func TestTraceRowSerialization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal trace export: %v", err)
 	}
-	want := `{"schema_version":"motion_trace.v2","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"fixture","target":{"label":"manual","speed_percent":50,"stroke_min_percent":10,"stroke_max_percent":90},"sample":{"position_percent":42.25,"time_ms":125},"transport_result":{"command_id":"fake-000001","kind":"points_add","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":7,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0}`
+	want := `{"schema_version":"motion_trace.v3","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"fixture","target":{"label":"manual","speed_percent":50,"stroke_min_percent":10,"stroke_max_percent":90},"sample":{"position_percent":42.25,"time_ms":125},"transport_result":{"command_id":"fake-000001","kind":"points_add","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":7,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0,"intiface_dispatches_dropped":0,"intiface_linear_sent_count":0}`
 	if string(got) != want {
 		t.Fatalf("trace export mismatch\nwant: %s\ngot:  %s", want, got)
 	}

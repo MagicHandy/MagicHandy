@@ -999,10 +999,11 @@ the Handy v3 API. Two modest modifications ship with this phase:
   user-run Intiface Central (default `ws://127.0.0.1:12345`, configurable):
   handshake, ping keepalive (a safety feature — the server stops devices
   when the client dies), device list and single linear-actuator selection,
-  the immediate-mode pacer that converts point pairs into scheduled
-  `LinearCmd`s with host-side window projection, `StopDeviceCmd` on Stop
-  with pacer flush, underrun detection reported as honest playback state,
-  and full diagnostics parity. Settings gain the `intiface` dispatch owner
+  the immediate-mode pacer that converts point pairs into absolute-deadline
+  `LinearCmd`s with host-side window projection, asynchronous bounded ACK
+  correlation, startup anchoring, stale-frame suppression, `StopDeviceCmd` on
+  Stop with pacer flush, underrun detection reported as honest playback state,
+  and paced-wire diagnostics. Settings gain the `intiface` dispatch owner
   and server address; owner-switch stops the old owner first, like today.
 - **14B.2 — validation and docs.** A fake Buttplug server drives the unit
   and lifecycle suites (goleak-gated, Stop/owner-switch gates extended);
@@ -1041,8 +1042,10 @@ behind this contract instead of writing a parallel implementation (R20).
 - `TestTransportOwnersStopPreemptionContract` runs the same Stop-ordering
   invariant against all three owners and rejects motion emitted after Stop.
 - The fake Buttplug v3 server covers handshake, ping failure, discovery,
-  selection, stop/close preemption, queue bounds, underrun, command rejection,
-  and diagnostics. HTTP integration covers connect/select/dispatch/disconnect.
+  selection, startup anchoring, delayed/missing/rejected ACKs, stop/close
+  preemption, queue/ACK bounds, late/expired coalescing, timing capabilities,
+  underrun, and paced-wire diagnostics. HTTP integration covers
+  connect/select/dispatch/export/disconnect.
 - The React route covers saved-address gating, connect/disconnect, scanning,
   and one linear-actuator selection without constructing transport payloads.
 - A 2026-07-12 Intiface Central session discovered `The Handy (FW4+)` and ran
@@ -1054,8 +1057,10 @@ behind this contract instead of writing a parallel implementation (R20).
   live 30–70% reverse refresh. Its 23 trace rows contained 19 successful
   transport results and no starvation. Pause, active Stop, and repeated-idle
   Stop were distinct successful deliveries at 317, 311, and 310 ms.
-- Subjective matched feel still needs operator confirmation. No non-Handy
-  linear device was available, so that conditional run remains unperformed.
+- The old live run predates the deadline-driven asynchronous-ACK pacer and only
+  measured queue admission. A new `motion_trace.v3` matched run and subjective
+  feel confirmation are required. No non-Handy linear device was available, so
+  that conditional run remains unperformed.
 
 # Phase 14C: Floating Connection Manager
 

@@ -7,7 +7,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-const traceSchemaVersion = "motion_trace.v2"
+const traceSchemaVersion = "motion_trace.v3"
 
 // MotionTraceRow is the stable JSON row schema for motion and transport traces.
 type MotionTraceRow struct {
@@ -90,9 +90,12 @@ type MotionTraceRetarget struct {
 
 // TraceExport is the stable JSON envelope returned by trace export endpoints.
 type TraceExport struct {
-	SchemaVersion string           `json:"schema_version"`
-	Rows          []MotionTraceRow `json:"rows"`
-	DroppedRows   uint64           `json:"dropped_rows"`
+	SchemaVersion             string                             `json:"schema_version"`
+	Rows                      []MotionTraceRow                   `json:"rows"`
+	DroppedRows               uint64                             `json:"dropped_rows"`
+	IntifaceDispatches        []transport.IntifaceDispatchStatus `json:"intiface_dispatches,omitempty"`
+	IntifaceDispatchesDropped uint64                             `json:"intiface_dispatches_dropped"`
+	IntifaceLinearSentCount   uint64                             `json:"intiface_linear_sent_count"`
 }
 
 // TraceSummary is a compact app-state view of trace availability.

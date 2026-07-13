@@ -25,10 +25,11 @@ type buttplugDeviceList struct {
 }
 
 type buttplugDevice struct {
-	ID             uint32                     `json:"Id"`
-	DeviceIndex    uint32                     `json:"DeviceIndex"`
-	DeviceName     string                     `json:"DeviceName"`
-	DeviceMessages map[string]json.RawMessage `json:"DeviceMessages"`
+	ID                     uint32                     `json:"Id"`
+	DeviceIndex            uint32                     `json:"DeviceIndex"`
+	DeviceName             string                     `json:"DeviceName"`
+	DeviceMessageTimingGap uint32                     `json:"DeviceMessageTimingGap"`
+	DeviceMessages         map[string]json.RawMessage `json:"DeviceMessages"`
 }
 
 type buttplugLinearFeature struct {
@@ -75,8 +76,9 @@ func decodeButtplugMessages(data []byte) ([]buttplugMessage, error) {
 
 func intifaceDeviceFromProtocol(device buttplugDevice) IntifaceDevice {
 	snapshot := IntifaceDevice{
-		DeviceIndex: device.DeviceIndex,
-		DeviceName:  device.DeviceName,
+		DeviceIndex:                  device.DeviceIndex,
+		DeviceName:                   device.DeviceName,
+		DeviceMessageTimingGapMillis: device.DeviceMessageTimingGap,
 	}
 	var features []buttplugLinearFeature
 	if raw := device.DeviceMessages["LinearCmd"]; len(raw) != 0 {

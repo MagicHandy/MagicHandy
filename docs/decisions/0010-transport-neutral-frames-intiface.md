@@ -50,9 +50,9 @@ What the schema already guarantees (verified against the code at `main`
   1. *Buffered vs immediate.* HSP hands a buffered timeline to the device
      (server-time sync, device-side starving reports). Buttplug is
      immediate-mode: the host must pace each command in wall time. Pacing is
-     an owner-internal concern; the engine already measures per-command
-     latency (`CommandResult.LatencyMillis`) and maintains a latency-aware
-     lead, which gives the pacer its inputs.
+     an owner-internal concern. Semantic `CommandResult.LatencyMillis` measures
+     queue admission; the owner separately records each scheduled time, actual
+     write completion, lateness, effective duration, and acknowledgement RTT.
   2. *Health reporting.* Buttplug has no starving signal. The Intiface owner
      must detect its own underrun/backpressure and report an honest
      `playback_state`; recovery follows the existing stop-and-report rule —
@@ -98,10 +98,25 @@ Intiface — must satisfy the same tested invariant table:
 | Obligation | Handy owners | Intiface owner |
 | --- | --- | --- |
 | Stroke-window projection, exactly once | device-side (stroke window command) | host-side scale before `LinearCmd` |
-| Reverse mapping, exactly once, at boundary | `x → 100−x` (existing) | same, in the owner |
+| Reverse mapping, exactly once, at boundary | `x → 100−x` at point encoding | same, snapshotted when points enter the owner |
 | Stop preempts everything queued | HSP stop | `StopDeviceCmd` + pacer flush |
 | Honest health, no silent fallback | device starving reports | pacer-detected underrun |
 | No resampling/reshaping of the frame | already tested | same tests, parameterized |
+
+The Intiface delivery policy does not create a second motion model. It uses
+absolute monotonic deadlines for the neutral segments, establishes the first
+point with one generation-guarded startup anchor, and preserves the segment endpoints.
+Acknowledgements are correlated asynchronously so response latency cannot delay
+the next deadline. A late segment is shortened only within a 25% bound; expired
+segments are discarded instead of burst-replayed, and anything later becomes a
+reported starvation followed by Stop. These are immediate-mode delivery and
+initial-condition rules, not semantic interpolation or resampling.
+
+`DeviceMessageTimingGap` is exposed as a transport capability. The shared engine
+raises its neutral sample interval when a selected device requires a slower
+message cadence, including a bounded scheduler margin. `StepCount` remains a
+reported physical-resolution limit; MagicHandy keeps the neutral float position
+and does not add a second quantizer.
 
 The existing HSP invariant suite generalizes into an owner-agnostic contract
 suite run against all owners (the fake transport, the Cloud builder, the
@@ -118,6 +133,13 @@ Buttplug message spec v3, one selected linear-actuator device initially.
 Vibration/rotation mapping (`ScalarCmd`) is deferred to a later slice.
 Buttplug ping keepalive is honored — it is a safety feature: the server
 stops devices when the client dies.
+
+The pacer keeps at most 64 unsent segments and eight unacknowledged linear
+commands. Every response has a transport-owned deadline. A missing or rejected
+response invalidates that playback generation, prevents stale responses from
+affecting a newer generation, attempts an acknowledged `StopDeviceCmd`, and
+marks the owner stale if Stop cannot be confirmed. Stop/Close invalidate before
+their wire barrier, so an old `LinearCmd` cannot follow the final Stop.
 
 **5. Dependency.** A pure-Go websocket client is required
 (`github.com/coder/websocket` — CGO-free, maintained). This is the first

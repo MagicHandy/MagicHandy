@@ -1,6 +1,9 @@
 package transport
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // CommandKind identifies the physical transport command family.
 type CommandKind string
@@ -38,6 +41,23 @@ type Transport interface {
 // DiagnosticsProvider exposes a safe transport diagnostics snapshot.
 type DiagnosticsProvider interface {
 	Diagnostics() TransportDiagnostics
+}
+
+// MotionTimingCapabilities describes transport timing limits that the shared
+// engine must honor before producing its transport-neutral frame.
+type MotionTimingCapabilities struct {
+	MinimumPointInterval time.Duration
+}
+
+// MotionTimingCapabilitiesProvider exposes optional device timing constraints.
+type MotionTimingCapabilitiesProvider interface {
+	MotionTimingCapabilities() MotionTimingCapabilities
+}
+
+// PlaybackStartTimeProvider reports when transport playback actually began.
+// Owners that perform a pre-roll use this to align the shared engine clock.
+type PlaybackStartTimeProvider interface {
+	PlaybackStartTime() time.Time
 }
 
 // TimedPoint is a single transport-neutral timed point. Position is expressed as 0..100.

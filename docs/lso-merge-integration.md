@@ -56,10 +56,16 @@ Intiface-managed devices in addition to HSP.
   owner (semantic 0–100 mapped at the boundary), pure-Go, covered by the motion
   safety gate (Stop, goroutine lifecycle), and honest about failure (no silent
   fallback — see ADR 0006's recovery rule).
-- Decision needed: whether Intiface is a first-class dispatch owner alongside
-  HSP or an opt-in/experimental one, and how it reconciles with the current
-  HSP-only scope (ADR 0006). See alternatives, Decision 2. Record the outcome as
-  a new ADR.
+- ADR 0010 resolved this as a first-class, user-selected dispatch owner. Its
+  immediate-mode delivery uses absolute deadlines, bounded asynchronous ACK
+  correlation, generation-invalidating Stop, and wire-level diagnostics while
+  remaining behind the shared neutral-frame contract.
+
+A 2026-07-13 source review of LSO commit `206d468a` retained its useful absolute
+monotonic deadline and adjacent-keyframe-duration ideas, but rejected its
+unbounded whole-script transport queue, ACK-less success reporting,
+flush-before-Stop ordering, direct-control bypass, and dequeued-command-after-
+Stop race. None of those execution paths are migration inputs.
 
 ### 2. Motion library / blocks and the queue
 
@@ -102,6 +108,12 @@ lineage reached `PRAGMA user_version=7` with useful LSO rows, but the branch als
 contained committed runtime databases, duplicate datastore/frontend trees,
 stale build assets, and a `manualqueue` package that owned transport dispatch.
 Those source/runtime artifacts are not migration inputs and were not copied.
+
+The Intiface client at audited branch commit `50614411` is also excluded. It
+bursts future neutral points without honoring timestamps, ignores movement
+ACKs, retains queued movement after Stop, has no ping keepalive, and participates
+in several private motion-owner paths. The current owner is an independent
+implementation of the accepted shared-engine and Stop contract.
 
 Schema v8 can open that database non-destructively. It repairs the canonical
 settings/prompt shapes and preserves these Rockfire tables for Phase 15:

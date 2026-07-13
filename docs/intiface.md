@@ -33,20 +33,38 @@ dispatch owner are persisted normally.
 
 - Only `LinearCmd` actuators are supported in this phase. Scalar vibration,
   rotation, and simultaneous multi-device output are not mapped.
-- Consecutive neutral timed points become one scheduled `LinearCmd` each. The
-  owner does not interpolate, resample, or reshape engine output.
-- Stroke-window projection and reverse direction are applied once in the
-  Intiface owner. Handy owners continue to apply their equivalent at the Handy
-  encoding/device boundary.
+- Consecutive neutral timed points become one absolute-deadline `LinearCmd`
+  each. The first point is established through a generation-guarded startup
+  anchor of at least 250 ms (raised to the device timing gap when necessary)
+  before the stream clock begins. Stop invalidates that generation before its
+  wire barrier. The owner does not add interpolation or a private motion
+  generator.
+- Reverse direction is snapshotted as each point enters the owner, matching the
+  Handy encoding paths. The min/max stroke envelope remains live and immediate,
+  matching the documented quick-settings contract.
+- Linear writes do not wait for the preceding acknowledgement. Up to eight
+  responses are correlated asynchronously with a 650 ms deadline; a missing or
+  rejected response invalidates the stream and forces Stop without retrying an
+  ambiguously delivered movement.
+- Expired points are discarded rather than burst onto the device. A live late
+  segment may use only its remaining scheduled duration and never more than 25%
+  compression; otherwise playback reports `starved` and stops.
+- The unsent queue is capped at 64 segments. A device's
+  `DeviceMessageTimingGap` raises the shared engine sampling interval with a
+  scheduler margin. `StepCount` is reported as physical resolution but positions
+  remain floats; MagicHandy does not apply a second quantizer.
 - **Emergency Stop**, owner changes, disconnect, server shutdown, pacer
   underrun, and rejected linear commands clear queued work and issue
   `StopDeviceCmd` where the session is still reachable.
 - Buttplug ping keepalive remains enabled. A failed ping marks the connection
   stale; MagicHandy does not silently fall back to another owner.
 
-Connection state, selected actuator, queue depth, playback state, command
-latency, and redacted errors are available in **Settings > Diagnostics** and
-`GET /api/state` under `intiface_transport`.
+Connection state, selected actuator/resolution, queue depth and coverage,
+playback state, pending ACKs, sent/acknowledged/rejected/timeout counts, send
+lateness, ACK latency, coalesced segments, recent wire dispatches, and redacted
+errors are available in **Settings > Diagnostics** and `GET /api/state` under
+`intiface_transport`. Trace exports use `motion_trace.v3` and include the most
+recent 32 paced wire records plus explicit sent/dropped counts.
 
 ## Validation Status
 
@@ -60,10 +78,11 @@ Live evidence from 2026-07-12:
 - An isolated Phase 14B build enforced a 10–20% speed range. The shared stroke
   pattern ran at 20% with a 20–80% window, paused, resumed with phase preserved,
   then accepted an immediate 30–70% reverse-direction refresh before Stop.
-- The workflow produced 19 `motion_trace.v2` rows: neutral `points_add` and
+- The historical workflow produced 19 `motion_trace.v2` rows: neutral `points_add` and
   `points_play` commands, successful Pause/Resume/refresh/Stop results, no
   `starved` state, and queue depth zero after Stop. Local WebSocket command
-  latency rounded below the diagnostics' one-millisecond resolution.
+  queue-admission latency rounded below the diagnostics' one-millisecond
+  resolution. That old metric did not measure paced `LinearCmd` writes or ACKs.
 - A final one-second 20% run proved unconditional Stop: active Stop commands
   `intiface-000005` and repeated idle Stop `intiface-000006` were distinct and
   successful. Disconnect then recorded a third successful close-time Stop.
@@ -83,5 +102,7 @@ Remaining acceptance checks:
 - record the operator's subjective matched-feel judgment for the completed
   Cloud REST and Intiface runs
 - run a capped pattern and Stop on one non-Handy linear device if available
+- repeat the matched Handy run on this deadline-driven pacer and retain the
+  `motion_trace.v3` send-lateness/ACK distributions
 
 Keep automated or unattended real-device runs at or below 40% speed.

@@ -69,6 +69,19 @@ func TestIntifaceHTTPRuntimeConnectSelectDispatchAndDisconnect(t *testing.T) {
 		t.Fatalf("Play: %v", err)
 	}
 	fake.waitForKind(t, "LinearCmd")
+	traceRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(traceRecorder, httptest.NewRequest(http.MethodGet, "/api/traces", nil))
+	var traceExport diagnostics.TraceExport
+	if err := json.Unmarshal(traceRecorder.Body.Bytes(), &traceExport); err != nil {
+		t.Fatalf("decode trace export: %v", err)
+	}
+	if len(traceExport.IntifaceDispatches) == 0 {
+		t.Fatal("trace export omitted paced Intiface wire dispatches")
+	}
+	latestDispatch := traceExport.IntifaceDispatches[len(traceExport.IntifaceDispatches)-1]
+	if latestDispatch.ActualSendTime == "" || latestDispatch.EffectiveDurationMillis <= 0 {
+		t.Fatalf("Intiface trace dispatch = %+v, want actual send timing", latestDispatch)
+	}
 
 	disconnected := callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/disconnect", `{}`)
 	if disconnected.Status.Connected {

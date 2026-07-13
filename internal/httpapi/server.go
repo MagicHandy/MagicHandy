@@ -433,7 +433,12 @@ func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Reque
 }
 
 func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.traces.Export())
+	export := s.traces.Export()
+	intifaceStatus := s.intifaceSnapshot().Status
+	export.IntifaceDispatches = intifaceStatus.RecentDispatches
+	export.IntifaceDispatchesDropped = intifaceStatus.RecentDispatchesDropped
+	export.IntifaceLinearSentCount = intifaceStatus.LinearSentCount
+	writeJSON(w, http.StatusOK, export)
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {

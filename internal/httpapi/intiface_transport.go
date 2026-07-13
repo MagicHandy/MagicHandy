@@ -16,6 +16,7 @@ type intifaceRuntime struct {
 	mu          sync.Mutex
 	owner       *transport.Intiface
 	httpClient  *http.Client
+	status      transport.IntifaceStatus
 	diagnostics transport.TransportDiagnostics
 }
 
@@ -29,6 +30,10 @@ type intifaceSnapshot struct {
 func newIntifaceRuntime(runtime Runtime) intifaceRuntime {
 	return intifaceRuntime{
 		httpClient: runtime.IntifaceHTTPClient,
+		status: transport.IntifaceStatus{
+			PlaybackState: "idle",
+			Devices:       []transport.IntifaceDevice{},
+		},
 		diagnostics: transport.TransportDiagnostics{
 			Name:          "intiface_buttplug_v3",
 			PlaybackState: "idle",
@@ -88,6 +93,7 @@ func (s *Server) handleIntifaceConnect(w http.ResponseWriter, r *http.Request) {
 	s.intiface.mu.Lock()
 	previous := s.intiface.owner
 	s.intiface.owner = owner
+	s.intiface.status = owner.Status()
 	s.intiface.diagnostics = owner.Diagnostics()
 	s.intiface.mu.Unlock()
 	if previous != nil {
@@ -179,15 +185,15 @@ func (s *Server) intifaceSnapshot() intifaceSnapshot {
 	snapshot := intifaceSnapshot{
 		DispatchOwner: settings.Device.HSPDispatchOwner,
 		Address:       settings.Device.IntifaceServerAddress,
-		Status: transport.IntifaceStatus{
-			PlaybackState: "idle",
-			Devices:       []transport.IntifaceDevice{},
-		},
-		Diagnostics: s.intiface.diagnostics,
+		Status:        s.intiface.status,
+		Diagnostics:   s.intiface.diagnostics,
 	}
 	if s.intiface.owner != nil {
 		snapshot.Status = s.intiface.owner.Status()
 		snapshot.Diagnostics = s.intiface.owner.Diagnostics()
+	}
+	if snapshot.Status.Devices == nil {
+		snapshot.Status.Devices = []transport.IntifaceDevice{}
 	}
 	return snapshot
 }
@@ -206,6 +212,7 @@ func (s *Server) closeIntifaceSession() {
 	if owner != nil {
 		_ = owner.Close()
 		s.intiface.mu.Lock()
+		s.intiface.status = owner.Status()
 		s.intiface.diagnostics = owner.Diagnostics()
 		s.intiface.mu.Unlock()
 	}

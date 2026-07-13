@@ -52,6 +52,20 @@ func TestEngineContinuousFakePlaybackAndStop(t *testing.T) {
 	}
 }
 
+func TestEngineHonorsTransportTimingFloor(t *testing.T) {
+	commandTransport := &timingCapabilityTransport{
+		Fake:            transport.NewFake(),
+		minimumInterval: 300 * time.Millisecond,
+	}
+	engine, err := NewEngine(EngineOptions{Transport: commandTransport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if engine.sampleInterval != 300*time.Millisecond {
+		t.Fatalf("sample interval = %v, want selected device timing floor", engine.sampleInterval)
+	}
+}
+
 func TestEngineRepeatedIdleStopStillAttemptsTransport(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(16), time.Hour)
@@ -627,6 +641,15 @@ type completionBlockingTransport struct {
 	entered chan struct{}
 	release chan struct{}
 	once    sync.Once
+}
+
+type timingCapabilityTransport struct {
+	*transport.Fake
+	minimumInterval time.Duration
+}
+
+func (t *timingCapabilityTransport) MotionTimingCapabilities() transport.MotionTimingCapabilities {
+	return transport.MotionTimingCapabilities{MinimumPointInterval: t.minimumInterval}
 }
 
 func (t *completionBlockingTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {
