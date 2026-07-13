@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -238,6 +239,60 @@ func TestSettingsAPIRejectsInvalidSettings(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+}
+
+func TestConnectionKeyAPISavesOnlyRedactedCredential(t *testing.T) {
+	server := newTestServer(t)
+	before, _ := server.store.Snapshot()
+	const secret = "connection-secret"
+
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings/device/connection-key", strings.NewReader(`{"connection_key":"  connection-secret  "}`)))
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	if contains(recorder.Body.String(), secret) {
+		t.Fatal("connection key save response leaked the credential")
+	}
+	if !contains(recorder.Body.String(), `"connection_key_set":true`) {
+		t.Fatalf("response did not confirm the redacted key state: %s", recorder.Body.String())
+	}
+
+	after, _ := server.store.Snapshot()
+	if after.Device.HandyConnectionKey != secret {
+		t.Fatal("connection key was not saved")
+	}
+	before.Device.HandyConnectionKey = secret
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("scoped connection key update changed unrelated settings\nbefore: %+v\nafter:  %+v", before, after)
+	}
+}
+
+func TestConnectionKeyAPIRequiresControllerAndNonEmptyKey(t *testing.T) {
+	server := newTestServer(t)
+
+	for name, testCase := range map[string]struct {
+		request    *http.Request
+		wantStatus int
+	}{
+		"read only": {request: httptest.NewRequest(http.MethodPut, "/api/settings/device/connection-key", strings.NewReader(`{"connection_key":"secret"}`)), wantStatus: http.StatusConflict},
+		"empty":     {request: withController(httptest.NewRequest(http.MethodPut, "/api/settings/device/connection-key", strings.NewReader(`{"connection_key":"  "}`))), wantStatus: http.StatusBadRequest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, testCase.request)
+			if recorder.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, testCase.wantStatus, recorder.Body.String())
+			}
+		})
+	}
+
+	settings, _ := server.store.Snapshot()
+	if settings.Device.HandyConnectionKey != "" {
+		t.Fatal("rejected request changed the connection key")
 	}
 }
 

@@ -186,6 +186,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
 	s.personalizationRoutes(mux)
 	s.llmRoutes(mux)
@@ -389,6 +390,40 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	_, status := s.store.Snapshot()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"settings": saved.Public(),
+		"status":   status,
+	})
+}
+
+func (s *Server) handlePutConnectionKey(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+
+	var update struct {
+		ConnectionKey string `json:"connection_key"`
+	}
+	if err := decodeJSON(r, &update); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	update.ConnectionKey = strings.TrimSpace(update.ConnectionKey)
+	if update.ConnectionKey == "" {
+		writeError(w, http.StatusBadRequest, errors.New("connection key is required"))
+		return
+	}
+
+	current, _ := s.store.Snapshot()
+	next := current
+	next.Device.HandyConnectionKey = update.ConnectionKey
+	if _, err := s.store.Save(next); err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("connection key could not be saved"))
+		return
+	}
+	s.applySettingsRuntimeTransition(r.Context(), current, next)
+
+	settings, status := s.store.PublicSnapshot()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"settings": settings,
 		"status":   status,
 	})
 }

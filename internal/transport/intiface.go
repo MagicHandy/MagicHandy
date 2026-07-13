@@ -22,6 +22,7 @@ const (
 	defaultIntifaceQueueCapacity = 2048
 	intifaceTransportName        = "intiface_buttplug_v3"
 	intifaceLateTolerance        = 100 * time.Millisecond
+	intifaceWriteTimeout         = 500 * time.Millisecond
 )
 
 var errPacerSuperseded = errors.New("Intiface pacer command superseded")
@@ -480,7 +481,22 @@ func (i *Intiface) requestGuarded(ctx context.Context, kind string, fields map[s
 			return buttplugMessage{}, errPacerSuperseded
 		}
 	}
-	err = conn.Write(ctx, websocket.MessageText, data)
+	if err := ctx.Err(); err != nil {
+		i.writeMu.Unlock()
+		i.removeWaiter(id)
+		return buttplugMessage{}, err
+	}
+	if sessionCtx.Err() != nil {
+		i.writeMu.Unlock()
+		i.removeWaiter(id)
+		return buttplugMessage{}, errors.New("Intiface connection is stale")
+	}
+	// coder/websocket closes the connection when a write context is canceled.
+	// Let an admitted frame finish under a short transport-owned deadline so
+	// canceling playback cannot tear down the connection needed by Stop.
+	writeCtx, cancelWrite := context.WithTimeout(context.Background(), intifaceWriteTimeout)
+	err = conn.Write(writeCtx, websocket.MessageText, data)
+	cancelWrite()
 	i.writeMu.Unlock()
 	if err != nil {
 		i.removeWaiter(id)

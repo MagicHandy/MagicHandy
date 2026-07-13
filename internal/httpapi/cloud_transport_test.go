@@ -18,6 +18,16 @@ import (
 
 const cloudTestConnectionKey = "test-connection-key"
 
+func TestResolveCloudApplicationIDFallsBackToBundled(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Device.APIApplicationIDSource = config.ApplicationIDSourceDeveloperOverride
+	settings.Device.APIApplicationIDOverride = "  "
+
+	if got := resolveCloudApplicationID(settings); got != config.BundledAPIApplicationID {
+		t.Fatalf("application ID = %q, want bundled public v3 ID", got)
+	}
+}
+
 func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
 	requests := make(chan capturedCloudRequest, 2)
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

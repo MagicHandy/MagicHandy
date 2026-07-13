@@ -52,6 +52,23 @@ func TestBundledAPIApplicationIDUsesPublicV3ID(t *testing.T) {
 	}
 }
 
+func TestEmptyDeveloperApplicationIDFallsBackToBundled(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Device.APIApplicationIDSource = ApplicationIDSourceDeveloperOverride
+	settings.Device.APIApplicationIDOverride = "  "
+
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Device.APIApplicationIDSource != ApplicationIDSourceBundled {
+		t.Fatalf("app ID source = %q, want %q", normalized.Device.APIApplicationIDSource, ApplicationIDSourceBundled)
+	}
+	if normalized.Device.APIApplicationIDOverride != "" {
+		t.Fatalf("app ID override = %q, want empty", normalized.Device.APIApplicationIDOverride)
+	}
+}
+
 func TestLoadMissingSettingsUsesDefaults(t *testing.T) {
 	store, err := OpenStore(t.TempDir())
 	if err != nil {

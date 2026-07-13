@@ -22,10 +22,8 @@ export function ChatRoute() {
           <h2 className="section-title">Controls</h2>
           <VoiceQuickControls />
           <div className="divider" />
-          <h2 className="section-title">
-            Quick settings <span className="hint-inline">applies immediately</span>
-          </h2>
-          <QuickSettings />
+          <h2 className="section-title">Motion behavior</h2>
+          <QuickSettings section="behavior" />
           <div className="divider" />
           <ManualMotionTest />
           <div className="divider" />

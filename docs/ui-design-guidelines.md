@@ -122,9 +122,9 @@ Replace with a compact readout in the status bar:
   text, never color alone.
 - the run timer is `--muted` label + tabular-nums value with a clock icon.
 
-The one authoritative visualizer keeps its compact form in the status bar (track
-+ position marker; `--ok` marker when active) and its detailed form on the Chat
-page — one component, engine-driven, position labeled as a commanded estimate.
+The one authoritative visualizer keeps a compact Handy side profile in the
+status bar and its detailed rail/carriage form on the Chat page — one
+component, engine-driven, position labeled as a commanded estimate.
 
 ### Buttons
 
@@ -139,6 +139,31 @@ page — one component, engine-driven, position labeled as a commanded estimate.
   Stop.
 - Disabled: `opacity .45`, `--surface-2`, `--muted`, no shadow — visibly inert,
   with a reason nearby (never a silent no-op).
+
+### Top-bar connection manager
+
+- Shell-owned and route-independent. The compact trigger sits at the far right
+  of the top bar and opens the panel immediately below it. Desktop shows
+  provider/device text and a state icon; narrow screens keep the labeled button
+  accessible while rendering only its state icon.
+- The expanded non-modal panel is at most 360px wide, one overlay surface with
+  dividers rather than nested cards. It contains the current provider's live
+  actions, a Settings link, and a 2×2 grid of immediate speed/stroke limits.
+  Cloud REST includes one compact write-only connection-key row and identifies
+  whether the bundled or developer API v3 application ID is active.
+- Artwork is a reference-guided transparent isolation of the reviewed conductor
+  hand, rendered directly without a runtime mask or clip. Scale the hand, three
+  signal arcs, and the poster's tall capsule, domed body, LED, and square marker
+  into one frame; no element may touch the frame edge. The arcs use intense blue
+  `#168bff` only for connecting/connected states and cascade toward the device.
+  Disconnected/error hides every blue arc and shows one compact `--danger` X;
+  this is a semantic
+  status mark, not a red action competing with Stop. `prefers-reduced-motion`
+  disables the connecting animation.
+- Keep [connection-artwork.md](connection-artwork.md) aligned with any asset,
+  SVG-coordinate, state, or panel-sizing change.
+- Open moves focus to Close; Close restores the trigger. Escape remains the
+  global Stop shortcut and is never consumed by this disclosure.
 
 ### Cards, groups, fields
 

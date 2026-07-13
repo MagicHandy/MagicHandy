@@ -126,3 +126,21 @@ export const RefreshIcon = ({ size = 18, className }: P) => (
     <path d="M5.5 14a7 7 0 0 0 12 3l2.5-4" />
   </svg>
 );
+export const WirelessIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M5 9.5a10 10 0 0 1 14 0" />
+    <path d="M8 13a5.7 5.7 0 0 1 8 0" />
+    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
+export const CloseIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m6 6 12 12" />
+    <path d="m18 6-12 12" />
+  </svg>
+);
+export const ChevronUpIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m6 15 6-6 6 6" />
+  </svg>
+);

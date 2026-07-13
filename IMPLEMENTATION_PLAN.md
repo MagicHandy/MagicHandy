@@ -65,6 +65,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; matched HW paths validated, feel confirmation open** | #59 |
+| 14C | Floating connection manager, live limits, conductor-hand connection animation | **Implemented; rendered QA green** | #60 |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
@@ -205,7 +206,7 @@ It ships in steps that never drop a safety control mid-migration:
 
 Status: steps 1 and 2 have landed together — the UI is now a Vite + React +
 TypeScript app (`web/`, built to `web/dist`, embedded by Go; no runtime Node)
-implementing the permanent nav rail, status-only bar, pinned Stop, and the
+implementing the permanent nav rail, compact status-led top bar, pinned Stop, and the
 Chat / Preset Modes / Pattern Library / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes is present while Autopilot remains a labeled coming-soon
@@ -1030,6 +1031,44 @@ behind this contract instead of writing a parallel implementation (R20).
   Stop were distinct successful deliveries at 317, 311, and 310 ms.
 - Subjective matched feel still needs operator confirmation. No non-Handy
   linear device was available, so that conditional run remains unperformed.
+
+# Phase 14C: Floating Connection Manager
+
+Status: implemented with provider-state, interaction, responsive, and rendered
+coverage.
+
+The shell owns one connection manager on every route. Its compact trigger lives
+at the far right of the top bar and opens a floating panel directly below it.
+The panel renders only the saved dispatch owner's live actions (Cloud check,
+browser Bluetooth, or Intiface connect/discover/select); credentials and
+addresses remain in routed Settings except for a compact, write-only Cloud
+connection-key row. The Cloud surface also identifies the active bundled or
+developer API v3 ID source. Speed and stroke limits moved from Chat into this
+manager and still use the semantic immediate-apply API. Reverse direction and
+motion style remain in Chat as motion behavior.
+
+The connecting state uses a reference-guided transparent isolation of the
+reviewed conductor hand. It renders directly at a fixed square source ratio,
+without the approximate SVG clip and luminance mask that distorted its shape.
+The scaled composition keeps the hand, three intense-blue vector arcs, and the
+poster's tall capsule, shorter domed body, LED, and square marker inside one
+frame. The arcs occupy the lower half and stagger toward the device while
+connecting; connected shows the complete signal. Disconnected shows no signal
+and a red square; only a failed connection attempt adds a briefly shaking red X.
+The square turns green when connected. `docs/connection-artwork.md` preserves
+the generation, construction, state, and refactor details.
+Reduced-motion users get static state feedback. The non-modal disclosure
+restores focus on close, leaves Escape to Stop, and clears the reserved mobile
+Stop/footer region.
+
+The shared motion visualizer now uses a Handy side profile in both top-bar and
+Chat forms. Its physical rail displays the configured stroke envelope and its
+carriage moves to the backend's commanded position estimate; the detailed form
+also exposes state, target speed, and active target without becoming a control.
+
+Validation: 41 React tests, typecheck/build, and rendered 1280×800 plus 390×844
+checks. The mobile manager has no horizontal overflow, exposes all four limits,
+and stays above Stop; desktop contains the full panel without internal scroll.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 

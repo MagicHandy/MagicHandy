@@ -1,8 +1,9 @@
-// Status-only top bar: compact dot+text readouts, run timer, and the mini
-// visualizer. No controls live here (docs/ui-design-guidelines.md).
+// Compact status readouts, run timer, mini visualizer, and the shell-level
+// connection disclosure. Motion controls remain in their routed workspaces.
 import { MotionVisualizer } from "../components/MotionVisualizer";
 import { useAppState } from "../state/app-state";
 import { formatClock } from "../util/format";
+import { ConnectionManager } from "./ConnectionManager";
 import { ClockIcon } from "./icons";
 
 export function StatusBar() {
@@ -61,6 +62,7 @@ export function StatusBar() {
       </span>
       <span className="status-spacer" />
       <MotionVisualizer motion={motion} mini />
+      <ConnectionManager />
     </div>
   );
 }

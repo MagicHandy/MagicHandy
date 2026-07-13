@@ -29,7 +29,7 @@ the binary can only ship one. Which is canonical, and what happens to the other?
     LSO features in translation.
 - **C. Adopt LSO's frontend but hold the line (hybrid). — Recommended.**
   - Make LSO's UI canonical, then bring it under `docs/ui-design-guidelines.md`
-    (status-only bar, no round pills / glow / purple, one interactive hue,
+    (status-led top bar, no round pills / glow / purple, one interactive hue,
     reduced-motion, accessibility) and set an explicit browser-perf budget
     (bundle size, idle memory, interaction cost). Trim or lazy-load features that
     do not earn their weight; keep the i18n table out of the critical path.

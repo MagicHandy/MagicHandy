@@ -8,7 +8,11 @@ import { useAppState, useToast } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
 
-export function QuickSettings() {
+interface QuickSettingsProps {
+  section?: "all" | "limits" | "behavior";
+}
+
+export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const { state, backendOnline, readOnly, refresh } = useAppState();
   const { show } = useToast();
   const motion = state?.settings?.motion;
@@ -35,6 +39,8 @@ export function QuickSettings() {
 
   if (!vals) return <p className="form-status">Loading…</p>;
 
+  const showLimits = section !== "behavior";
+  const showBehavior = section !== "limits";
   const range = (key: keyof MotionSettings, label: string, min: number) => (
     <label className="field">
       <span className="label">
@@ -42,6 +48,7 @@ export function QuickSettings() {
       </span>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={100}
         value={vals[key] as number}
@@ -55,13 +62,13 @@ export function QuickSettings() {
   );
 
   return (
-    <fieldset className="quick-fields" disabled={locked}>
-      <legend className="visually-hidden">Speed, stroke, direction, and style</legend>
-      {range("speed_min_percent", "Speed min", 1)}
-      {range("speed_max_percent", "Speed max", 1)}
-      {range("stroke_min_percent", "Stroke min", 0)}
-      {range("stroke_max_percent", "Stroke max", 0)}
-      <label className="toggle-line">
+    <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
+      <legend className="visually-hidden">{section === "limits" ? "Speed and stroke limits" : section === "behavior" ? "Direction and motion style" : "Speed, stroke, direction, and style"}</legend>
+      {showLimits && range("speed_min_percent", "Speed min", 1)}
+      {showLimits && range("speed_max_percent", "Speed max", 1)}
+      {showLimits && range("stroke_min_percent", "Stroke min", 0)}
+      {showLimits && range("stroke_max_percent", "Stroke max", 0)}
+      {showBehavior && <label className="toggle-line">
         <span className="toggle">
           <input
             type="checkbox"
@@ -76,8 +83,8 @@ export function QuickSettings() {
           <span className="track" aria-hidden="true" />
         </span>
         <span>Reverse direction</span>
-      </label>
-      <label className="field">
+      </label>}
+      {showBehavior && <label className="field">
         <span className="label">
           Style <span className="hint-inline">biases Freestyle pacing</span>
         </span>
@@ -93,7 +100,7 @@ export function QuickSettings() {
             <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>
           ))}
         </select>
-      </label>
+      </label>}
       {locked && (
         <p className="form-status">{readOnly ? "Read-only client — cannot change motion." : "Core offline."}</p>
       )}
