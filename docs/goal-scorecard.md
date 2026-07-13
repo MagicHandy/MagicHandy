@@ -101,14 +101,24 @@ Ranked by threat to the stated goals:
 3. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
-4. **Feature growth vs binary/memory/browser budgets.** Phase 14C raises the
-   total embedded browser payload from 86,893 to 529,003 gzip bytes because the
-   isolated connection artwork contributes 437,427 gzip bytes. The HTML/CSS/JS
-   portion grows only 4,683 bytes (+5.4%) to 91,576; the stripped binary grows
-   470,016 bytes (+3.5%) to 13,779,968. These remain within the binary budget,
-   but future bitmap additions must not normalize this one-time fidelity cost.
+4. **Feature growth vs binary/memory/browser budgets.** The current embedded
+   browser payload is 530,031 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 92,634 gzip bytes, 1,058 bytes over
+   the Phase 14C measurement; the stripped binary is 13,786,624 bytes. These
+   remain within budget, but future bitmap additions must not normalize this
+   one-time fidelity cost.
 
 ## History
+
+- **2026-07-13** — Chat's heading now aligns with its wide workspace and the
+  position visualizer uses a compact vertical Handy body/sleeve form. Speed and
+  Stroke use dual-thumb controls with track-sized pointer input, native
+  keyboard/AT semantics, independent backend patches, and strict Stroke bound
+  separation. Cloud REST remains a stateless backend-authoritative connection
+  check rather than presenting a frontend-only session. The initial connection
+  phase is neutral until the first snapshot arrives. Plain/stripped binaries are
+  19,682,304 / 13,786,624 bytes; embedded UI is 771,643 raw / 530,031 gzip bytes
+  (92,634 gzip excluding the unchanged connection artwork).
 
 - **2026-07-13** — source installation can now begin on 64-bit Windows without
   preinstalled Go, Git, CMake, MSVC, CUDA, or Ollama. Missing selected packages

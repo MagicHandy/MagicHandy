@@ -72,16 +72,19 @@ connected. The X uses red only as failure feedback, never as idle decoration.
 
 | Phase | Arcs | X | LED | Square | Motion |
 |---|---|---|---|---|---|
+| `initializing` | Hidden | Hidden | Muted | Muted | None |
 | `connected` | Intense blue, visible | Hidden | Green | Green | Static |
 | `connecting` | Intense blue, visible | Hidden | Blue | Blue | Staggered opacity wave |
 | `disconnected` | Hidden | Hidden | Muted | Red | None |
 | `error` | Hidden | Red | Muted | Red | One brief X shake on entry |
 
-`prefers-reduced-motion: reduce` removes both the signal wave and error shake,
-leaving static state feedback. The error phase is entered only from a failed
-provider connection attempt; a backend-offline or never-connected state remains
-disconnected. Backend snapshots and provider attempt results determine the
-phase; the artwork does not infer connection state.
+`initializing` lasts only until the first backend snapshot arrives and does not
+guess a provider or failure state. `prefers-reduced-motion: reduce` removes both
+the signal wave and error shake, leaving static state feedback. The error phase
+is entered only from a failed provider connection attempt; a backend-offline or
+never-connected state remains disconnected. Backend snapshots and provider
+attempt results determine the phase; the artwork does not infer connection
+state.
 
 ## Panel sizing
 

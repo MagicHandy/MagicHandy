@@ -142,9 +142,10 @@ One component, one source of truth.
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
 - Uses a restrained Handy side profile rather than an abstract progress bar:
-  the device rail carries the configured stroke envelope and the carriage moves
-  to the backend sample position. Detailed telemetry names state, target speed,
-  and active target without adding controls to the artwork.
+  a vertical body styled after The Handy 2, whose right-edge channel carries the
+  configured stroke envelope while the sleeve carriage moves to the backend
+  sample position. Detailed telemetry names state, target speed, and active
+  target without adding controls to the artwork.
 - Is never itself a click target: controls are separate, labeled elements
   (limits live in the connection manager and behavior lives in Chat), not
   artwork turned into a mystery button.
@@ -157,6 +158,9 @@ Speed limits, stroke range, reverse direction, and motion style.
 - Speed and stroke limits live in the persistent floating connection manager;
   reverse and style stay in Chat's motion-behavior group. The collapsed manager
   remains visible on every route and clears the reserved mobile Stop footer.
+- Speed and stroke each use one dual-thumb control. Thumb changes send only the
+  changed backend field; Stroke always keeps at least one percentage point
+  between its minimum and maximum to match backend validation.
 - Reflect engine state live; if the engine clamps or resolves a value, the
   control shows the resolved value inline rather than via a status line
   elsewhere on screen.

@@ -123,8 +123,9 @@ Replace with a compact readout in the status bar:
 - the run timer is `--muted` label + tabular-nums value with a clock icon.
 
 The one authoritative visualizer keeps a compact Handy side profile in the
-status bar and its detailed rail/carriage form on the Chat page — one
-component, engine-driven, position labeled as a commanded estimate.
+status bar and its detailed form on the Chat page — a vertical body styled
+after The Handy 2 with the sleeve carriage travelling a right-edge channel.
+One component, engine-driven, position labeled as a commanded estimate.
 
 ### Buttons
 
@@ -148,7 +149,8 @@ component, engine-driven, position labeled as a commanded estimate.
   accessible while rendering only its state icon.
 - The expanded non-modal panel is at most 360px wide, one overlay surface with
   dividers rather than nested cards. It contains the current provider's live
-  actions, a Settings link, and a 2×2 grid of immediate speed/stroke limits.
+  actions, a Settings link, and dual-thumb immediate controls for speed and
+  stroke limits.
   Cloud REST includes one compact write-only connection-key row and identifies
   whether the bundled or developer API v3 application ID is active.
 - Artwork is a reference-guided transparent isolation of the reviewed conductor
@@ -174,8 +176,11 @@ component, engine-driven, position labeled as a commanded estimate.
   spacing and a `--line` divider, not another shadowed box.
 - Inputs / select / textarea: `--bg-inset`, `--line`, `--radius-sm`, padding
   `9px 11px`; focus swaps the border to `--accent` (plus the global focus ring).
-- Range: native with `accent-color: --accent`. Toggle: 40×22 track, 18px thumb;
-  off `--line` + `--muted` thumb, on `--accent-strong` track + white thumb.
+- Range: native with `accent-color: --accent`. A dual-thumb range keeps two
+  native keyboard/AT sliders, exposes each bound's effective ARIA constraint,
+  and uses one track-sized pointer target so close thumbs remain reachable.
+  Toggle: 40×22 track, 18px thumb; off `--line` + `--muted` thumb, on
+  `--accent-strong` track + white thumb.
 - Badge (e.g. the "testing" tag): 1px `--line-strong`, `--surface-2`, `--muted`,
   `0.68rem`, `999px` is *not* used — small `--radius-sm`/pill-ish hairline chip,
   quiet.

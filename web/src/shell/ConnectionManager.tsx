@@ -8,7 +8,7 @@ import { QuickSettings } from "../components/QuickSettings";
 import { useAppState, useToast } from "../state/app-state";
 import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
 
-type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error";
+type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error" | "initializing";
 
 const SIGNAL_PATHS = [
   "M145 124 Q180 150 215 124",
@@ -80,9 +80,8 @@ export function ConnectionManager() {
     return intiface.status.devices?.find((device) => device.device_index === selected);
   }, [intiface.status.devices, intiface.status.selected_device_index]);
 
-  const provider = owner === "browser_bluetooth"
-    ? "Browser Bluetooth"
-    : owner === "intiface" ? "Intiface Central" : owner === "cloud_rest" ? "Cloud REST" : "Not configured";
+  const initializing = backendOnline && state == null;
+  const provider = connectionProviderName(owner, initializing);
   const deviceName = owner === "browser_bluetooth"
     ? bluetooth.deviceName || "The Handy"
     : selectedIntifaceDevice?.device_name || "The Handy";
@@ -97,7 +96,7 @@ export function ConnectionManager() {
     || (owner === "intiface" && intifaceAttemptFailed);
   const phase: ConnectionPhase = !backendOnline
     ? "disconnected"
-    : connecting ? "connecting" : connected ? "connected" : hasError ? "error" : "disconnected";
+    : initializing ? "initializing" : connecting ? "connecting" : connected ? "connected" : hasError ? "error" : "disconnected";
   const statusText = connectionStatusText({
     backendOnline,
     bluetooth,
@@ -158,8 +157,8 @@ export function ConnectionManager() {
         <ConnectionArtwork phase={phase} />
 
         <div className="connection-current" aria-live="polite">
-          <span className="status-dot" data-state={phase === "connected" ? "ok" : phase === "connecting" ? "pending" : phase === "error" ? "error" : "idle"} aria-hidden="true" />
-          <span>
+          <span className="status-dot" data-state={phase === "connected" ? "ok" : phase === "connecting" || phase === "initializing" ? "pending" : phase === "error" ? "error" : "idle"} aria-hidden="true" />
+          <span className="connection-current-copy">
             <strong>{deviceName}</strong>
             <small>{statusText}</small>
           </span>
@@ -191,7 +190,7 @@ export function ConnectionManager() {
               </form>
               <button type="button" className="btn btn-secondary" disabled={locked || cloudBusy || !keySet} onClick={() => void checkCloud()}>
                 <WirelessIcon />
-                {cloudBusy ? "Connecting" : connected ? "Check again" : "Check connection"}
+                {cloudBusy ? "Checking" : connected ? "Check again" : "Check connection"}
               </button>
             </>
           )}
@@ -248,6 +247,14 @@ export function ConnectionManager() {
   );
 }
 
+function connectionProviderName(owner: string, initializing: boolean) {
+  if (initializing) return "Loading provider";
+  if (owner === "browser_bluetooth") return "Browser Bluetooth";
+  if (owner === "intiface") return "Intiface Central";
+  if (owner === "cloud_rest") return "Cloud REST";
+  return "Not configured";
+}
+
 function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
   return (
     <svg
@@ -256,7 +263,7 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
       viewBox="0 0 360 260"
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label={phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
+      aria-label={phase === "initializing" ? "The Handy connection status loading" : phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
     >
       <image className="connection-hand" href={conductorHand} x="30" y="-77" width="300" height="300" preserveAspectRatio="xMidYMid meet" />
       <g className="connection-signal" aria-hidden="true">
@@ -272,7 +279,7 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
         <circle className="connection-handy-led" cx="159.5" cy="219" r="3" />
         <rect
           className="connection-handy-marker"
-          data-state={phase === "connected" ? "connected" : phase === "connecting" ? "connecting" : "disconnected"}
+          data-state={phase === "connected" ? "connected" : phase === "connecting" ? "connecting" : phase === "initializing" ? "initializing" : "disconnected"}
           x="216"
           y="247"
           width="7"
@@ -293,7 +300,8 @@ function connectionStatusText(input: {
   phase: ConnectionPhase;
 }) {
   if (!input.backendOnline) return "Core offline";
-  if (input.phase === "connecting") return input.owner === "intiface" ? "Finding a linear device" : "Connecting";
+  if (input.phase === "initializing") return "Checking…";
+  if (input.phase === "connecting") return input.owner === "cloud_rest" ? "Checking connection" : input.owner === "intiface" ? "Finding a linear device" : "Connecting";
   if (input.phase === "error" && input.owner === "cloud_rest") return "Cloud connection failed";
   if (input.phase === "error" && input.owner === "intiface") return "Intiface connection failed";
   if (input.owner === "cloud_rest") {

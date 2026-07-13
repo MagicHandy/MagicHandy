@@ -13,7 +13,7 @@ export function ChatRoute() {
   const { motion } = useAppState();
   return (
     <>
-      <WorkspaceHead title="Chat" lede="Message MagicHandy — chat can start, adjust, and stop motion." />
+      <WorkspaceHead title="Chat" lede="Message MagicHandy — chat can start, adjust, and stop motion." wide />
       <div className="split">
         <section className="panel chat-panel-shell" aria-label="Conversation">
           <ChatPanel />

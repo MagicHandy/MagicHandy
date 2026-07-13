@@ -277,6 +277,9 @@
 .connection-handy-marker[data-state="connected"] {
   fill: var(--ok);
 }
+.connection-handy-marker[data-state="initializing"] {
+  fill: var(--muted);
+}
 .connection-artwork[data-phase="connected"] .connection-handy-led {
   fill: var(--ok);
 }
@@ -306,8 +309,9 @@
   min-height: 44px;
   padding: 6px 12px;
 }
-.connection-current > span:last-child {
+.connection-current-copy {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
 }
@@ -423,15 +427,10 @@
   font-size: 0.72rem;
 }
 .connection-manager .quick-fields-limits {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 7px 12px 10px;
-}
-.connection-manager .quick-fields-limits .field {
-  min-width: 0;
-  gap: 4px;
-  margin-bottom: 6px;
 }
 .connection-manager-trigger {
   display: grid;
@@ -506,6 +505,11 @@
   width: min(100%, var(--content-wide-max));
   flex: 1 1 auto;
   min-height: 0;
+}
+/* Wide-route headers share the .split content width so the title left-aligns
+   with the two-column content instead of the narrower default column. */
+.workspace-head[data-wide] {
+  width: min(100%, var(--content-wide-max));
 }
 /* Once the split stacks into one column (components.css, 900px), it must
    size to its content and let the workspace scroll; keeping the viewport
