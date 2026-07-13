@@ -47,6 +47,37 @@ try {
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
 
+    Write-Host 'Checking same-process CUDA environment initialization...'
+    $builderPath = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
+    $builderTokens = $null
+    $builderErrors = $null
+    $builderAst = [System.Management.Automation.Language.Parser]::ParseFile($builderPath, [ref]$builderTokens, [ref]$builderErrors)
+    $initializerAst = $builderAst.Find({
+        $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $args[0].Name -eq 'Initialize-CudaToolkitEnvironment'
+    }, $true)
+    Assert-True -Condition ($null -ne $initializerAst) -Message 'managed llama.cpp builder should define CUDA environment initialization'
+    Invoke-Expression $initializerAst.Extent.Text
+
+    $fakeToolkit = Join-Path $tempRoot 'CUDA\v99.1'
+    $fakeNvcc = Join-Path $fakeToolkit 'bin\nvcc.exe'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fakeNvcc) | Out-Null
+    [System.IO.File]::WriteAllText($fakeNvcc, '')
+    $originalCUDAPath = [Environment]::GetEnvironmentVariable('CUDA_PATH', 'Process')
+    $originalCudaToolkitDir = [Environment]::GetEnvironmentVariable('CudaToolkitDir', 'Process')
+    try {
+        $env:CUDA_PATH = 'stale'
+        $env:CudaToolkitDir = ''
+        Initialize-CudaToolkitEnvironment -Nvcc $fakeNvcc
+        Assert-Equal -Expected $fakeToolkit -Actual $env:CUDA_PATH -Message 'CUDA_PATH should use the resolved nvcc toolkit root'
+        Assert-Equal -Expected "$fakeToolkit\" -Actual $env:CudaToolkitDir -Message 'CudaToolkitDir should include the trailing separator required by MSBuild'
+        $childEnvironment = & powershell.exe -NoProfile -Command '[Console]::Write($env:CUDA_PATH + [char]124 + $env:CudaToolkitDir)'
+        Assert-Equal -Expected "$fakeToolkit|$fakeToolkit\" -Actual $childEnvironment -Message 'CUDA environment should reach child build processes'
+    } finally {
+        [Environment]::SetEnvironmentVariable('CUDA_PATH', $originalCUDAPath, 'Process')
+        [Environment]::SetEnvironmentVariable('CudaToolkitDir', $originalCudaToolkitDir, 'Process')
+    }
+
     Write-Host 'Checking installer branding and completion art...'
     $installBanner = Write-MagicHandyBanner -Operation Install 6>&1 | Out-String
     Assert-True -Condition ($installBanner -match 'INSTALL - local-first AI control for The Handy') -Message 'install banner should identify the product and operation'

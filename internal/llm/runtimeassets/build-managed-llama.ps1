@@ -76,6 +76,18 @@ function Resolve-CMake {
     return $null
 }
 
+function Initialize-CudaToolkitEnvironment([string]$Nvcc) {
+    $nvccPath = [System.IO.Path]::GetFullPath($Nvcc)
+    $cudaToolkitDir = Split-Path -Parent (Split-Path -Parent $nvccPath)
+    if ([string]::IsNullOrWhiteSpace($cudaToolkitDir)) {
+        throw "Could not resolve the CUDA Toolkit directory from '$nvccPath'."
+    }
+
+    # CMake and NVIDIA's Visual Studio targets consult different properties.
+    $env:CUDA_PATH = $cudaToolkitDir.TrimEnd('\')
+    $env:CudaToolkitDir = $cudaToolkitDir.TrimEnd('\') + '\'
+}
+
 function Test-VCToolchain {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path -LiteralPath $vswhere)) {
@@ -176,12 +188,16 @@ if (-not (Test-VCToolchain)) {
     throw 'The Visual Studio Desktop C++ Build Tools workload is required to build llama.cpp. Run install.ps1 to provision it, then retry.'
 }
 
+$nvcc = Resolve-Executable 'nvcc'
 $selectedBackend = $Backend
 if ($selectedBackend -eq 'auto') {
-    $selectedBackend = if ((Resolve-Executable 'nvidia-smi') -and (Resolve-Executable 'nvcc')) { 'cuda' } else { 'cpu' }
+    $selectedBackend = if ((Resolve-Executable 'nvidia-smi') -and $nvcc) { 'cuda' } else { 'cpu' }
 }
-if ($selectedBackend -eq 'cuda' -and -not (Resolve-Executable 'nvcc')) {
-    throw 'The CUDA backend requires the NVIDIA CUDA Toolkit (nvcc). Install it or choose the CPU backend.'
+if ($selectedBackend -eq 'cuda') {
+    if (-not $nvcc) {
+        throw 'The CUDA backend requires the NVIDIA CUDA Toolkit (nvcc). Install it or choose the CPU backend.'
+    }
+    Initialize-CudaToolkitEnvironment -Nvcc $nvcc
 }
 
 $resolvedDataDir = [System.IO.Path]::GetFullPath($DataDir)
