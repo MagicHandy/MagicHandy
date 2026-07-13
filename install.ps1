@@ -299,6 +299,7 @@ if (-not $UpdateRun) {
     Write-MagicHandyBanner -Operation Install
 }
 
+$existing = $null
 $state = if ($UseSavedChoices -or $Reconfigure) {
     $existing = Read-MagicHandyInstallState -Path $StatePath
     if ($Reconfigure) {
@@ -314,7 +315,8 @@ $state = if ($UseSavedChoices -or $Reconfigure) {
 
 Write-InstallerHeading 'Selected installation'
 Show-MagicHandyInstallState -State $state
-Invoke-MagicHandyProvision -State $state -RepositoryPath $Repo -AssumeYes:$Yes -PlanOnly:$PlanOnly
+$runningPort = if ($null -ne $existing) { [int]$existing.port } else { [int]$state.port }
+Invoke-MagicHandyProvision -State $state -RepositoryPath $Repo -RunningPort $runningPort -AssumeYes:$Yes -PlanOnly:$PlanOnly
 
 if ($PlanOnly) {
     Write-Host ''

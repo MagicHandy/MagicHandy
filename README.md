@@ -81,7 +81,9 @@ Parakeet choice, and launcher choice, then asks whether to modify them. It
 refuses to update over local source changes and only fast-forwards: `main`
 follows `origin/main`, a live feature follows its configured upstream, and a
 merged feature whose remote branch was deleted can safely advance from
-`origin/main` without switching branches or discarding work.
+`origin/main` without switching branches or discarding work. Before replacing
+the executable, it sends Emergency Stop and terminates only the app process tree
+owned by this checkout; the browser opens only after the rebuilt server answers.
 
 **Prefer to do it by hand?** See [Build from source](#build-from-source).
 Detailed package, state, and updater behavior is documented in

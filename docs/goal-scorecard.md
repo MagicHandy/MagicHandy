@@ -110,6 +110,16 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-13** — Source rebuilds no longer replace an executable while its old
+  process still owns the HTTP port. The updater sends Emergency Stop, tears down
+  only the checkout-owned process tree, stages Go outputs before replacement,
+  removes legacy `*.exe~` backups, and waits for the rebuilt process to own the
+  port and answer `/api/state` before opening the browser. Temporary-app tests
+  cover quoted data paths, Stop/teardown, foreign and multiple-instance refusal,
+  and backup cleanup; staging/readiness paths retain syntax and source coverage.
+  Core/UI bytes are unchanged, so the immediately preceding measurements remain
+  current.
+
 - **2026-07-13** — Model settings now bound compact LLM output (default 256),
   expose provider-native automatic/off reasoning with latency/quality/support
   warnings, serialize zero-temperature repair, and skip redundant warm managed
