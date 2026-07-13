@@ -13,6 +13,8 @@
     follow their configured upstream, and merged features whose remote branch
     was deleted may safely advance from origin/main. It then invokes the current
     install.ps1 so dependencies and worker binaries are provisioned consistently.
+    A running app from this checkout receives Emergency Stop and is terminated
+    before replacement; launch succeeds only after the rebuilt server is ready.
 
 .PARAMETER Yes
     Preserve all saved choices and accept required package prompts without

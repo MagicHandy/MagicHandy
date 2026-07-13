@@ -53,6 +53,17 @@ Every successful run builds these files beside the source checkout:
 The executables and generated `Start-MagicHandy.ps1` are ignored build/runtime
 artifacts. The optional portable `data/` directory is ignored too.
 
+Builds are written to per-process temporary executable paths and moved into
+place only after Go succeeds. Before replacement, the installer finds only
+`magichandy.exe` processes owned by the selected checkout, calls the local
+Emergency Stop endpoint, and terminates that process tree (including optional
+workers). A failed active Stop, unexpected port owner, or multiple checkout
+instances aborts the rebuild and leaves every app in place. When no local motion
+engine exists, an unreachable configured transport is surfaced as a warning
+before teardown rather than misreported as delivered. Legacy Go `*.exe~`
+backups are removed and ignored so an old in-use replacement cannot dirty the
+checkout again.
+
 Parakeet's external CPU runner and 644 MiB model are separate explicit assets.
 The script displays their size/license, verifies their pinned SHA-256 values,
 and installs them atomically under `<data-dir>/voice/parakeet`. It then prints
@@ -123,8 +134,11 @@ The updater:
    the local feature tip is already contained there; it never switches the
    branch or rewrites its upstream;
 6. invokes the newly checked-out `install.ps1` with preserved or revised state;
-7. writes state only after provisioning succeeds; and
-8. optionally launches the app.
+7. during provisioning, sends Emergency Stop and stops this checkout's running
+   app process tree before replacing binaries;
+8. writes state only after provisioning succeeds; and
+9. optionally launches the app, opening the browser only after `/api/state`
+   confirms that the new process owns the configured port.
 
 Use `-Yes -NoLaunch` for an unattended update with unchanged choices,
 `-Reconfigure` to walk every choice, `-NoPull` to rebuild the current checkout,
@@ -142,4 +156,6 @@ all script syntax, atomic state round trips and secret-field exclusion, managed
 CUDA versus Ollama-only plans, and end-to-end plan-only install/update behavior.
 Updater fixtures cover `main`, a live feature upstream, a single-branch
 merged/deleted feature fallback, unmerged/deleted refusal, and dirty-tree
-refusal. It intentionally performs no package or model download.
+refusal. A real temporary app verifies Emergency Stop, checkout-scoped
+process-tree teardown, and stale executable-backup cleanup. It intentionally
+performs no package or model download.

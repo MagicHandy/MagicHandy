@@ -33,8 +33,10 @@ Current maintenance work bounds LLM output, exposes honest provider-native
 reasoning control, removes redundant warm managed-llama readiness probes,
 separates app-managed Parakeet assets from custom paths, and makes source updates
 survive merged/deleted feature upstreams without switching branches or
-discarding work. Runtime LLM latency and real managed microphone acceptance are
-still measurements, not inferred completion claims.
+discarding work. Source rebuilds Stop and terminate only their checkout-owned
+app tree before staged binary replacement, then verify the new server before
+opening the browser. Runtime LLM latency and real managed microphone acceptance
+are still measurements, not inferred completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider

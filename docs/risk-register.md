@@ -304,6 +304,13 @@ fix was then verified by building the pinned `b9966` runtime with CUDA 13.3 and
 MSVC 19.51 and probing the installed `c749cb0` runner. This supplies CUDA build
 evidence, but model load/chat remains unverified and R13 stays High.
 
+Source-update lifecycle hardening (2026-07-13): rebuilds now send Emergency Stop
+to a running checkout-owned app, terminate its process tree before replacing
+executables, stage Go outputs, clean legacy `*.exe~` backups, and verify that the
+new process owns the configured port before opening the browser. This prevents a
+hidden bind failure from reopening an older embedded UI. It does not add CUDA
+load/chat evidence or lower R13.
+
 Latency-control mitigation (2026-07-13): initial and repair requests now share a
 reviewed output-token cap (default 256), explicit automatic/off reasoning maps to
 provider-native fields with quality/support warnings, repair temperature zero is

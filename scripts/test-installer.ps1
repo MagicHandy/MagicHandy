@@ -29,6 +29,16 @@ function Assert-PlanExcludes([string[]]$Plan, [string]$Pattern) {
     Assert-True -Condition (-not [bool]($Plan | Where-Object { $_ -match $Pattern })) -Message "plan should exclude /$Pattern/"
 }
 
+function Get-AvailableLoopbackPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    } finally {
+        $listener.Stop()
+    }
+}
+
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("magichandy-installer-test-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 try {
@@ -133,8 +143,157 @@ try {
     [System.Management.Automation.Language.Parser]::ParseFile($launcherPath, [ref]$tokens, [ref]$errors) | Out-Null
     Assert-Equal -Expected 0 -Actual $errors.Count -Message 'generated launcher should parse'
     $launcherText = Get-Content -LiteralPath $launcherPath -Raw
-    Assert-True -Condition ($launcherText -match '-WindowStyle Hidden') -Message 'launcher should hide the background app window'
+    Assert-True -Condition ($launcherText -match 'Start-MagicHandyApp') -Message 'launcher should reuse the verified app startup path'
+    Assert-True -Condition ($launcherText -match 'InstallerSupport\.psm1') -Message 'launcher should import shared installer support'
     Assert-True -Condition ($launcherText -match "root''s copy") -Message 'launcher should escape apostrophes in paths'
+
+    Write-Host 'Checking running app Stop and process-tree teardown before rebuild...'
+    $runtimeRepo = Join-Path $tempRoot 'running-app-repo'
+    $runtimeData = Join-Path $tempRoot 'running app data with spaces'
+    $runtimePort = Get-AvailableLoopbackPort
+    New-Item -ItemType Directory -Force -Path $runtimeRepo | Out-Null
+    $runtimeExe = Join-Path $runtimeRepo 'magichandy.exe'
+    $go = Resolve-MagicHandyExecutable -Name 'go'
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($go)) -Message 'Go is required by the Windows CI image'
+    $previousCGO = $env:CGO_ENABLED
+    try {
+        $env:CGO_ENABLED = '0'
+        & $go -C $Repo build -o $runtimeExe ./cmd/magichandy
+        Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'test app build should succeed'
+    } finally {
+        $env:CGO_ENABLED = $previousCGO
+    }
+    $runtimeArguments = & $supportModule {
+        param($Address, $DataDir)
+        New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir
+    } "127.0.0.1:$runtimePort" $runtimeData
+    $runtimeProcess = Start-Process -FilePath $runtimeExe -ArgumentList $runtimeArguments -PassThru -WindowStyle Hidden
+    try {
+        $ready = $false
+        $readyDeadline = [DateTime]::UtcNow.AddSeconds(10)
+        do {
+            try {
+                Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$runtimePort/api/state" -TimeoutSec 1 | Out-Null
+                $ready = $true
+                break
+            } catch {
+                Start-Sleep -Milliseconds 100
+            }
+        } while ([DateTime]::UtcNow -lt $readyDeadline)
+        Assert-True -Condition $ready -Message 'test app should become ready'
+        Assert-True -Condition (Test-Path -LiteralPath (Join-Path $runtimeData 'magichandy.db')) -Message 'quoted startup should keep the database under the intended spaced data path'
+
+        $foreignRepo = Join-Path $tempRoot 'foreign-app-repo'
+        New-Item -ItemType Directory -Force -Path $foreignRepo | Out-Null
+        Copy-Item -LiteralPath $runtimeExe -Destination (Join-Path $foreignRepo 'magichandy.exe')
+        $foreignRejected = $false
+        try {
+            & $supportModule {
+                param($RepositoryPath, $Port)
+                Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port
+            } $foreignRepo $runtimePort
+        } catch {
+            $foreignRejected = $_.Exception.Message -match 'owned by another process'
+        }
+        Assert-True -Condition $foreignRejected -Message 'rebuild preparation should refuse a listener from another checkout'
+        $runtimeProcess.Refresh()
+        Assert-True -Condition (-not $runtimeProcess.HasExited) -Message 'foreign-checkout refusal must leave the running app alive'
+
+        [System.IO.File]::WriteAllText("$runtimeExe~", 'stale build backup')
+        & $supportModule {
+            param($RepositoryPath, $Port)
+            Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port
+        } $runtimeRepo $runtimePort
+        $runtimeProcess.Refresh()
+        Assert-True -Condition $runtimeProcess.HasExited -Message 'rebuild preparation should stop the running app tree'
+        Assert-True -Condition (-not (Test-Path -LiteralPath "$runtimeExe~")) -Message 'rebuild preparation should remove stale Go executable backups'
+    } finally {
+        $runtimeProcess.Refresh()
+        if (-not $runtimeProcess.HasExited) {
+            & "$env:SystemRoot\System32\taskkill.exe" /PID $runtimeProcess.Id /T /F | Out-Null
+        }
+    }
+
+    Write-Host 'Checking staged binary replacement and verified relaunch...'
+    [System.IO.File]::WriteAllText($runtimeExe, 'stale executable sentinel')
+    $staleHash = (Get-FileHash -LiteralPath $runtimeExe -Algorithm SHA256).Hash
+    & $supportModule {
+        param($RepositoryPath, $GoExecutable)
+        Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $GoExecutable
+    } $runtimeRepo $go
+    $rebuiltHash = (Get-FileHash -LiteralPath $runtimeExe -Algorithm SHA256).Hash
+    Assert-True -Condition ($rebuiltHash -ne $staleHash) -Message 'staged build should replace the stale executable only after a successful compile'
+    Assert-True -Condition (-not [bool](Get-ChildItem -LiteralPath $runtimeRepo -Filter '*.partial-*' -File)) -Message 'successful staged build should leave no partial executable'
+    Assert-True -Condition (-not (Test-Path -LiteralPath "$runtimeExe~")) -Message 'staged replacement should not create a Go executable backup'
+    $relaunchPort = Get-AvailableLoopbackPort
+    $relaunchData = Join-Path $tempRoot 'verified relaunch data with spaces'
+    Start-MagicHandyApp -RepositoryPath $runtimeRepo -DataDir $relaunchData -Port $relaunchPort -NoBrowser
+    try {
+        $index = (Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$relaunchPort/" -TimeoutSec 5).Content
+        $asset = [regex]::Match($index, '/assets/[^"'']+\.js').Value
+        $javascript = (Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$relaunchPort$asset" -TimeoutSec 5).Content
+        Assert-True -Condition ($javascript -match 'Maximum output') -Message 'verified relaunch should serve the current embedded UI'
+    } finally {
+        & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port } $runtimeRepo $relaunchPort
+    }
+
+    Write-Host 'Checking rebuild Stop response classification...'
+    & $supportModule {
+        Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+            available = $false
+            stopped = $true
+            error = 'configured transport unavailable'
+        })
+    } 3>$null
+    $stopFailureRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                stopped = $false
+                error = 'active Stop failed'
+            })
+        }
+    } catch {
+        $stopFailureRejected = $_.Exception.Message -match 'active Stop failed'
+    }
+    Assert-True -Condition $stopFailureRejected -Message 'a failed active Stop must abort rebuild preparation'
+
+    Write-Host 'Checking multiple checkout instances are refused before any forced teardown...'
+    $multiPortA = Get-AvailableLoopbackPort
+    do { $multiPortB = Get-AvailableLoopbackPort } while ($multiPortB -eq $multiPortA)
+    $multiArgsA = & $supportModule { param($Address, $DataDir) New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir } "127.0.0.1:$multiPortA" (Join-Path $tempRoot 'multi-data-a')
+    $multiArgsB = & $supportModule { param($Address, $DataDir) New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir } "127.0.0.1:$multiPortB" (Join-Path $tempRoot 'multi-data-b')
+    $multiProcessA = Start-Process -FilePath $runtimeExe -ArgumentList $multiArgsA -PassThru -WindowStyle Hidden
+    $multiProcessB = Start-Process -FilePath $runtimeExe -ArgumentList $multiArgsB -PassThru -WindowStyle Hidden
+    try {
+        $multiDeadline = [DateTime]::UtcNow.AddSeconds(10)
+        do {
+            $multiReadyA = $false
+            $multiReadyB = $false
+            try { Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$multiPortA/api/state" -TimeoutSec 1 | Out-Null; $multiReadyA = $true } catch {}
+            try { Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$multiPortB/api/state" -TimeoutSec 1 | Out-Null; $multiReadyB = $true } catch {}
+            if (-not ($multiReadyA -and $multiReadyB)) { Start-Sleep -Milliseconds 100 }
+        } while (-not ($multiReadyA -and $multiReadyB) -and [DateTime]::UtcNow -lt $multiDeadline)
+        Assert-True -Condition ($multiReadyA -and $multiReadyB) -Message 'both test app instances should become ready'
+        $multipleRejected = $false
+        try {
+            & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port } $runtimeRepo $multiPortA
+        } catch {
+            $multipleRejected = $_.Exception.Message -match 'Multiple MagicHandy instances'
+        }
+        Assert-True -Condition $multipleRejected -Message 'multiple checkout instances must be refused before teardown'
+        $multiProcessA.Refresh()
+        $multiProcessB.Refresh()
+        Assert-True -Condition (-not $multiProcessA.HasExited -and -not $multiProcessB.HasExited) -Message 'multiple-instance refusal must leave every app alive'
+    } finally {
+        foreach ($process in @($multiProcessA, $multiProcessB)) {
+            $process.Refresh()
+            if (-not $process.HasExited) {
+                & "$env:SystemRoot\System32\taskkill.exe" /PID $process.Id /T /F | Out-Null
+            }
+        }
+    }
 
     Write-Host 'Checking selected-component plans...'
     $managedPlan = @(Get-MagicHandyProvisionPlan -State $loaded)

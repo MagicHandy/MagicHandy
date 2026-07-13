@@ -50,7 +50,10 @@ MagicHandy Go core itself.
   and rebuilds through the same provisioning implementation. Live feature
   branches follow their upstream; merged features with a deleted upstream may
   advance from `origin/main` only after an ancestry check. Provider credentials
-  and the Handy connection key never enter installer state.
+  and the Handy connection key never enter installer state. Rebuilds first send
+  Emergency Stop and terminate only this checkout's app process tree; binaries
+  are staged before replacement, and browser launch waits for the rebuilt
+  process to own the configured port and answer `/api/state`.
 - **Local model manager:** Settings > Model lists runtime/daemon models and
   SQLite-backed managed GGUF copies. Users can import a standalone GGUF or scan
   a configurable Ollama library path and copy a compatible model with
