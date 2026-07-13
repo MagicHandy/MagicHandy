@@ -317,49 +317,185 @@ textarea:disabled {
 
 /* ---- Motion visualizer ---- */
 .visualizer {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(104px, 132px) minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
-.visualizer.mini .viz-track {
-  width: clamp(72px, 10vw, 120px);
+.visualizer.mini {
+  display: block;
+  width: 56px;
+  height: 40px;
+  flex: 0 0 56px;
 }
-.viz-track {
-  position: relative;
+.viz-device {
+  display: block;
   width: 100%;
-  height: 12px;
-  border-radius: 999px;
-  background: var(--bg-inset);
-  border: 1px solid var(--line);
-  overflow: hidden;
+  height: auto;
+  aspect-ratio: 132 / 96;
 }
-.viz-range {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  background: rgba(125, 152, 182, 0.18);
-  border-left: 1px solid rgba(125, 152, 182, 0.4);
-  border-right: 1px solid rgba(125, 152, 182, 0.4);
+.visualizer.mini .viz-device {
+  width: 56px;
+  height: 40px;
 }
-.viz-pos {
-  position: absolute;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
+.viz-floor {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.viz-device-base,
+.viz-device-tower,
+.viz-device-bridge {
+  fill: var(--surface-3);
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+}
+.viz-device-tower {
+  fill: #15181d;
+}
+.viz-device-bridge {
+  fill: #22272e;
+}
+.viz-device-rail {
+  fill: #0d0f12;
+  stroke: #555d68;
+  stroke-width: 1;
+}
+.viz-rail-line {
+  fill: none;
+  stroke: #717b87;
+  stroke-width: 1;
+}
+.viz-rail-ticks,
+.viz-device-seam {
+  fill: none;
+  stroke: #59616b;
+  stroke-linecap: round;
+  stroke-width: 1;
+}
+.viz-stroke-range {
+  fill: var(--accent-tint);
+  stroke: var(--accent-strong);
+  stroke-width: 1;
+}
+.viz-carriage {
+  color: var(--muted);
+  transform: translateY(var(--viz-carriage-y));
+  transition: transform 0.24s ease, color 0.18s ease;
+}
+.viz-carriage-body,
+.viz-carriage-coupler {
+  fill: currentColor;
+  stroke: #d7dbe0;
+  stroke-width: 0.7;
+}
+.viz-carriage-arm {
+  fill: #6d7681;
+  stroke: #aeb5bd;
+  stroke-width: 0.7;
+}
+.viz-device-led {
+  fill: var(--muted);
+}
+.viz-state-dot {
   background: var(--muted);
-  box-shadow: 0 0 0 3px rgba(14, 15, 17, 0.9);
-  transform: translate(-50%, -50%);
-  transition: left 0.24s ease, background 0.2s ease;
 }
-.viz-pos[data-active="true"] {
+.visualizer[data-state="running"] .viz-carriage {
+  color: var(--ok);
+}
+.visualizer[data-state="running"] .viz-device-led {
+  fill: var(--ok);
+}
+.visualizer[data-state="running"] .viz-state-dot {
   background: var(--ok);
 }
-.viz-caption {
-  color: var(--muted);
-  font-size: 0.75rem;
+.visualizer[data-state="paused"] .viz-carriage {
+  color: var(--warn);
 }
-
+.visualizer[data-state="paused"] .viz-device-led {
+  fill: var(--warn);
+}
+.visualizer[data-state="paused"] .viz-state-dot {
+  background: var(--warn);
+}
+.visualizer[data-state="completing"] .viz-carriage {
+  color: var(--accent);
+}
+.visualizer[data-state="completing"] .viz-device-led {
+  fill: var(--accent);
+}
+.visualizer[data-state="completing"] .viz-state-dot {
+  background: var(--accent);
+}
+.visualizer[data-state="error"] .viz-device-led {
+  fill: var(--danger);
+}
+.visualizer[data-state="error"] .viz-state-dot {
+  background: var(--danger);
+}
+.viz-telemetry {
+  min-width: 0;
+}
+.viz-primary {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+.viz-primary span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+.viz-primary strong {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.viz-metrics {
+  display: grid;
+  gap: 4px;
+  margin: 7px 0 0;
+}
+.viz-metrics > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.viz-metrics dt,
+.viz-metrics dd {
+  margin: 0;
+  font-size: 0.72rem;
+}
+.viz-metrics dt {
+  color: var(--muted);
+}
+.viz-metrics dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 64%;
+  overflow: hidden;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viz-state-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
 /* ---- Chat ---- */
 .chat-log {
   min-height: 240px;
@@ -748,7 +884,7 @@ textarea:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .viz-pos,
+  .viz-carriage,
   .toast,
   .toggle .track::before,
   .chat-message {

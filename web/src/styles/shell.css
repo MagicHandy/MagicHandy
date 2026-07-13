@@ -239,16 +239,22 @@
   opacity: 1;
 }
 .connection-signal,
-.connection-disconnected {
+.connection-error-mark {
   opacity: 0;
 }
 .connection-artwork[data-phase="connected"] .connection-signal,
 .connection-artwork[data-phase="connecting"] .connection-signal,
-.connection-artwork[data-phase="disconnected"] .connection-disconnected,
-.connection-artwork[data-phase="error"] .connection-disconnected {
+.connection-artwork[data-phase="error"] .connection-error-mark {
   opacity: 1;
 }
-.connection-disconnected path {
+.connection-error-mark {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.connection-artwork[data-phase="error"] .connection-error-mark {
+  animation: connection-error-shake 0.42s ease-out 1;
+}
+.connection-error-mark path {
   fill: none;
   stroke: var(--danger);
   stroke-width: 5;
@@ -263,11 +269,13 @@
   fill: var(--muted);
 }
 .connection-handy-marker {
-  fill: rgba(255, 255, 255, 0.34);
-}
-.connection-artwork[data-phase="disconnected"] .connection-handy-marker,
-.connection-artwork[data-phase="error"] .connection-handy-marker {
   fill: var(--danger);
+}
+.connection-handy-marker[data-state="connecting"] {
+  fill: #168bff;
+}
+.connection-handy-marker[data-state="connected"] {
+  fill: var(--ok);
 }
 .connection-artwork[data-phase="connected"] .connection-handy-led {
   fill: var(--ok);
@@ -283,6 +291,13 @@
   0%, 12%, 100% { opacity: 0.12; }
   35%, 62% { opacity: 1; }
   82% { opacity: 0.12; }
+}
+@keyframes connection-error-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20% { transform: translateX(-5px) rotate(-5deg); }
+  40% { transform: translateX(4px) rotate(4deg); }
+  60% { transform: translateX(-3px) rotate(-3deg); }
+  80% { transform: translateX(2px) rotate(2deg); }
 }
 .connection-current {
   display: flex;
@@ -424,8 +439,8 @@
   align-items: center;
   gap: 8px;
   width: 220px;
-  height: 36px;
-  padding: 3px 8px;
+  height: 38px;
+  padding: 3px 8px 4px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -460,6 +475,10 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-self: stretch;
+  justify-content: center;
+  gap: 1px;
+  padding-bottom: 1px;
 }
 .connection-trigger-chevron {
   color: var(--muted);
@@ -620,7 +639,7 @@
   }
   .connection-manager-trigger {
     grid-template-columns: 28px;
-    width: 36px;
+    width: 38px;
     padding-inline: 3px;
   }
   .connection-trigger-copy,
@@ -642,5 +661,8 @@
   }
   .connection-trigger-chevron {
     transition: none;
+  }
+  .connection-artwork[data-phase="error"] .connection-error-mark {
+    animation: none;
   }
 }

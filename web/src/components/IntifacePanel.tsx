@@ -9,6 +9,7 @@ interface IntifacePanelProps {
   dirty: boolean;
   initial?: IntifaceTransportSnapshot;
   onActivityChange?: (activity: IntifaceActivity | null) => void;
+  onConnectionAttemptError?: (failed: boolean) => void;
   onSnapshotChange?: (snapshot: IntifaceTransportSnapshot) => void;
 }
 
@@ -28,7 +29,7 @@ const emptySnapshot: IntifaceTransportSnapshot = {
   diagnostics: {},
 };
 
-export function IntifacePanel({ visible, locked, dirty, initial, onActivityChange, onSnapshotChange }: IntifacePanelProps) {
+export function IntifacePanel({ visible, locked, dirty, initial, onActivityChange, onConnectionAttemptError, onSnapshotChange }: IntifacePanelProps) {
   const { show } = useToast();
   const [snapshot, setSnapshot] = useState(initial ?? emptySnapshot);
   const [busy, setBusy] = useState(false);
@@ -70,11 +71,14 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
   async function run(action: () => Promise<IntifaceTransportSnapshot>, success: string, nextActivity: IntifaceActivity) {
     setBusy(true);
     setActivity(nextActivity);
+    if (nextActivity === "connecting") onConnectionAttemptError?.(false);
     try {
       const next = await action();
       setSnapshot(next);
+      if (nextActivity === "connecting") onConnectionAttemptError?.(false);
       show(success);
     } catch (error) {
+      if (nextActivity === "connecting") onConnectionAttemptError?.(true);
       show(error instanceof Error ? error.message : "Intiface request failed.", "error");
     } finally {
       setBusy(false);

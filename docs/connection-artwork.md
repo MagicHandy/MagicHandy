@@ -9,7 +9,7 @@ generated bitmap, SVG geometry, CSS state, and panel layout fit together.
 | Piece | Canonical source | Purpose |
 |---|---|---|
 | Isolated hand | `web/src/assets/conductor-hand-v2.png` | Transparent 1280 x 1280 bitmap preserving the generated graphite/starfield hand. |
-| Composition | `web/src/shell/ConnectionManager.tsx`, `ConnectionArtwork` | One 360 x 260 SVG coordinate space containing the bitmap, signal paths, disconnected mark, and Handy-inspired target. |
+| Composition | `web/src/shell/ConnectionManager.tsx`, `ConnectionArtwork` | One 360 x 260 SVG coordinate space containing the bitmap, signal paths, failed-attempt mark, and Handy-inspired target. |
 | State and motion | `web/src/styles/shell.css`, `.connection-*` rules | Shows the correct signal/status treatment for connected, connecting, disconnected, and error states. |
 | Embedded output | `web/dist/assets/` | Vite-hashed production copies served by the Go binary. Do not edit these by hand. |
 
@@ -59,26 +59,29 @@ whole composition uniformly to the panel width.
 - The target recreates the reference geometry rather than a product drawing: a
   tall 27 x 70 capsule, a shorter domed body aligned at the baseline, a centered
   LED, and a small square marker to the right.
-- The disconnected X occupies the signal zone. The target remains visible so
-  the X still reads as a failed path between the hand and device.
+- The error X occupies the signal zone only after a connection attempt fails.
+  The target remains visible so the X reads as a failed path between the hand
+  and device; an ordinary disconnected state has neither arcs nor an X.
 
 The target is intentionally vector geometry. It stays sharp, costs little, and
 can be proportioned independently of the generated hand. The square marker is
-neutral while connecting/connected and becomes `--danger` only for a
-disconnected/error status; decorative red would conflict with the Stop color.
+red while disconnected or errored, blue while connecting, and green only when
+connected. The X uses red only as failure feedback, never as idle decoration.
 
 ## State contract
 
 | Phase | Arcs | X | LED | Square | Motion |
 |---|---|---|---|---|---|
-| `connected` | Intense blue, visible | Hidden | Green | Neutral | Static |
-| `connecting` | Intense blue, visible | Hidden | Blue | Neutral | Staggered opacity wave |
-| `disconnected` | Hidden | Red | Muted | Red | None |
-| `error` | Hidden | Red | Muted | Red | None |
+| `connected` | Intense blue, visible | Hidden | Green | Green | Static |
+| `connecting` | Intense blue, visible | Hidden | Blue | Blue | Staggered opacity wave |
+| `disconnected` | Hidden | Hidden | Muted | Red | None |
+| `error` | Hidden | Red | Muted | Red | One brief X shake on entry |
 
-`prefers-reduced-motion: reduce` removes the opacity animation and leaves a
-static connecting signal. Backend transport snapshots determine the phase;
-the artwork does not infer or store connection state.
+`prefers-reduced-motion: reduce` removes both the signal wave and error shake,
+leaving static state feedback. The error phase is entered only from a failed
+provider connection attempt; a backend-offline or never-connected state remains
+disconnected. Backend snapshots and provider attempt results determine the
+phase; the artwork does not infer connection state.
 
 ## Panel sizing
 
@@ -113,7 +116,7 @@ scrolling, but must not move or cover Stop.
 
 1. Run `npm test -- --run` and `npm run build` from `web/`.
 2. Confirm tests still find one hand image, three signal paths, two target body
-   shapes, one LED, one square marker, and the disconnected X.
+   shapes, one LED, one square marker, and the failed-attempt X.
 3. Render the open manager at 1280 x 800 and 390 x 844. Check all four states,
    no clipping, no horizontal overflow, and access to all four limit sliders.
 4. Check reduced motion in browser emulation.

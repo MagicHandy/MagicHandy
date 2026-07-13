@@ -31,7 +31,7 @@ core number.
 | MagicHandy Go core idle/model-manager reads | Managed llama.cpp runtime working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49735` with isolated data; `/healthz` for idle, then twenty `GET /api/llm/models` reads | No browser window for RSS; rendered UI measured separately | Yes; no Ollama/llama.cpp/voice worker included | Idle after `/healthz`: 52.73 MiB (55,296,000 bytes) across 3 equal samples. After model-manager reads: 53.40 MiB (55,992,320 bytes) across 3 equal samples | Not measured separately | Plain binary 18,822,656 bytes; stripped binary 13,031,936 bytes. Embedded JS is 266,268 bytes / 78,339 gzip; CSS 31,934 / 7,091 gzip; HTML 454 / 288 gzip; combined gzip 85,718 bytes (+5,185 / 6.4% from Phase 14). Cold starts measured 556/534/533 ms with the client-side PowerShell probe. No model bytes or runner process were loaded. |
 
 | MagicHandy Go core idle, Phase 14B Intiface owner | Final Phase 14B working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49764` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS | Yes; no Intiface Central, device, model, or voice worker included | 53.20 MiB (55,779,328 bytes) across 3 equal samples | Not measured separately | Plain binary 19,205,632 bytes; stripped binary 13,309,952 bytes. Embedded JS is 270,506 bytes / 79,435 gzip; CSS 32,443 / 7,177 gzip; HTML 454 / 281 gzip; combined gzip 86,893 bytes (+1,175 / 1.4%). The pure-Go websocket owner and unconditional Stop hardening add 278,016 stripped bytes (+2.1%) over the managed-runtime baseline. |
-| MagicHandy Go core idle, Phase 14C compacted connection manager | Final Phase 14C working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%\MagicHandy-connection-final`; fresh stripped binary on `127.0.0.1:49781` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS; rendered UI checked separately | Yes; no device, model, or voice worker included | 53.47 MiB (56,066,048 bytes) across 3 equal samples | Not measured separately | Plain binary 19,670,016 bytes; stripped binary 13,773,824 bytes. JS 278,984 / 81,710 gzip; CSS 38,564 / 8,185 gzip; HTML 454 / 287 gzip; isolated PNG 444,236 / 437,427 gzip; total embedded browser payload 762,238 raw / 527,609 gzip. |
+| MagicHandy Go core idle, Phase 14C compacted connection manager | Final Phase 14C working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%\MagicHandy-connection-final`; fresh stripped binary on `127.0.0.1:49781` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS; rendered UI checked separately | Yes; no device, model, or voice worker included | 53.47 MiB (56,066,048 bytes) across 3 equal samples | Not measured separately | Final artwork/visualizer refinement: plain binary 19,675,648 bytes; stripped binary 13,779,968 bytes. JS 281,698 / 82,637 gzip; CSS 41,123 / 8,653 gzip; HTML 454 / 286 gzip; isolated PNG 444,236 / 437,427 gzip; total embedded browser payload 767,511 raw / 529,003 gzip. RSS is retained from the preceding Phase 14C sample because only embedded browser assets changed. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -156,13 +156,19 @@ Still required (Phase 9B):
   the reviewed reference. It renders directly at a fixed square source ratio,
   with no SVG mask, filter, or clip. The scaled frame contains the hand, exactly
   three signal paths in the lower half, and the reference's tall capsule,
-  shorter domed body, LED, and square marker; disconnected/error replaces the
-  signal group with a two-stroke red X.
+  shorter domed body, LED, and square marker. Disconnected hides both signal
+  and X while keeping the square red; connected makes the square green; only a
+  failed connection attempt shows the two-stroke red X, which shakes once for
+  420 ms. Reduced-motion leaves the X static.
 - React tests cover route persistence, provider-scoped Cloud/Bluetooth/Intiface
   controls, the scoped redacted connection-key save, active API v3 ID source,
   immediate semantic limit updates, focus restoration, three signal paths, and
-  the transient connecting phase. Reduced-motion disables the wave animation
-  in CSS.
+  connected/disconnected/error artwork states. The one shared motion visualizer
+  now renders a Handy chassis, physical rail, configured stroke envelope, and
+  backend-positioned carriage in both top-bar and detailed forms; the detailed
+  390px rendering remained inside its 314.4px container with all telemetry
+  visible. Reduced-motion disables both position transitions and connection
+  animations in CSS.
 
 ## Phase 14 Rendered UI Evidence
 

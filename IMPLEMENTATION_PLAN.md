@@ -1053,14 +1053,20 @@ without the approximate SVG clip and luminance mask that distorted its shape.
 The scaled composition keeps the hand, three intense-blue vector arcs, and the
 poster's tall capsule, shorter domed body, LED, and square marker inside one
 frame. The arcs occupy the lower half and stagger toward the device while
-connecting; connected shows the complete signal, while disconnected/error
-replaces it with a red X. `docs/connection-artwork.md` preserves the generation,
-construction, state, and refactor details.
-Reduced-motion users get a static state. The non-modal disclosure restores
-focus on close, leaves Escape to Stop, and clears the reserved mobile
+connecting; connected shows the complete signal. Disconnected shows no signal
+and a red square; only a failed connection attempt adds a briefly shaking red X.
+The square turns green when connected. `docs/connection-artwork.md` preserves
+the generation, construction, state, and refactor details.
+Reduced-motion users get static state feedback. The non-modal disclosure
+restores focus on close, leaves Escape to Stop, and clears the reserved mobile
 Stop/footer region.
 
-Validation: 39 React tests, typecheck/build, and rendered 1280×800 plus 390×844
+The shared motion visualizer now uses a Handy side profile in both top-bar and
+Chat forms. Its physical rail displays the configured stroke envelope and its
+carriage moves to the backend's commanded position estimate; the detailed form
+also exposes state, target speed, and active target without becoming a control.
+
+Validation: 41 React tests, typecheck/build, and rendered 1280×800 plus 390×844
 checks. The mobile manager has no horizontal overflow, exposes all four limits,
 and stays above Stop; desktop contains the full panel without internal scroll.
 

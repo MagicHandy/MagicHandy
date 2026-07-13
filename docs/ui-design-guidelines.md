@@ -122,9 +122,9 @@ Replace with a compact readout in the status bar:
   text, never color alone.
 - the run timer is `--muted` label + tabular-nums value with a clock icon.
 
-The one authoritative visualizer keeps its compact form in the status bar (track
-+ position marker; `--ok` marker when active) and its detailed form on the Chat
-page — one component, engine-driven, position labeled as a commanded estimate.
+The one authoritative visualizer keeps a compact Handy side profile in the
+status bar and its detailed rail/carriage form on the Chat page — one
+component, engine-driven, position labeled as a commanded estimate.
 
 ### Buttons
 

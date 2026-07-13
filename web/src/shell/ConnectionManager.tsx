@@ -42,11 +42,13 @@ export function ConnectionManager() {
   const { show } = useToast();
   const [open, setOpen] = useState(false);
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudAttemptFailed, setCloudAttemptFailed] = useState(false);
   const [cloudKeyBusy, setCloudKeyBusy] = useState(false);
   const [cloudKey, setCloudKey] = useState("");
   const [bluetooth, setBluetooth] = useState(emptyBluetooth);
   const [intiface, setIntiface] = useState(state?.intiface_transport ?? emptyIntiface);
   const [intifaceActivity, setIntifaceActivity] = useState<IntifaceActivity | null>(null);
+  const [intifaceAttemptFailed, setIntifaceAttemptFailed] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
@@ -71,6 +73,7 @@ export function ConnectionManager() {
   const onBluetoothState = useCallback((next: BluetoothBridgeState) => setBluetooth(next), []);
   const onIntifaceSnapshot = useCallback((next: IntifaceTransportSnapshot) => setIntiface(next), []);
   const onIntifaceActivity = useCallback((activity: IntifaceActivity | null) => setIntifaceActivity(activity), []);
+  const onIntifaceAttemptError = useCallback((failed: boolean) => setIntifaceAttemptFailed(failed), []);
 
   const selectedIntifaceDevice = useMemo(() => {
     const selected = intiface.status.selected_device_index;
@@ -89,11 +92,12 @@ export function ConnectionManager() {
     : owner === "browser_bluetooth" ? bluetooth.connected : owner === "intiface"
       ? Boolean(intiface.status.connected && intiface.status.selected_device_index !== undefined)
       : false;
-  const hasError = !backendOnline
-    || (owner === "browser_bluetooth" && ["error", "unsupported"].includes(bluetooth.status))
-    || Boolean(owner === "cloud_rest" && state?.cloud_transport?.last_error)
-    || Boolean(owner === "intiface" && typeof intiface.diagnostics.last_error === "string" && intiface.diagnostics.last_error);
-  const phase: ConnectionPhase = connecting ? "connecting" : connected ? "connected" : hasError ? "error" : "disconnected";
+  const hasError = (owner === "browser_bluetooth" && ["error", "unsupported"].includes(bluetooth.status))
+    || (owner === "cloud_rest" && cloudAttemptFailed)
+    || (owner === "intiface" && intifaceAttemptFailed);
+  const phase: ConnectionPhase = !backendOnline
+    ? "disconnected"
+    : connecting ? "connecting" : connected ? "connected" : hasError ? "error" : "disconnected";
   const statusText = connectionStatusText({
     backendOnline,
     bluetooth,
@@ -106,10 +110,13 @@ export function ConnectionManager() {
 
   async function checkCloud() {
     setCloudBusy(true);
+    setCloudAttemptFailed(false);
     try {
       const result = await api.connectionCheck("cloud");
+      setCloudAttemptFailed(!result.ok);
       show(result.ok ? `The Handy is reachable (${result.latency_ms} ms).` : "The Handy did not report HSP ready.", result.ok ? "info" : "error");
     } catch (error) {
+      setCloudAttemptFailed(true);
       show(error instanceof Error ? error.message : "Connection check failed.", "error");
     } finally {
       setCloudBusy(false);
@@ -201,6 +208,7 @@ export function ConnectionManager() {
             dirty={false}
             initial={state?.intiface_transport}
             onActivityChange={onIntifaceActivity}
+            onConnectionAttemptError={onIntifaceAttemptError}
             onSnapshotChange={onIntifaceSnapshot}
           />
           <div className="connection-provider-meta">
@@ -254,7 +262,7 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
       <g className="connection-signal" aria-hidden="true">
         {SIGNAL_PATHS.map((path, index) => <path key={path} d={path} style={{ "--signal-index": index } as CSSProperties} />)}
       </g>
-      <g className="connection-disconnected" aria-hidden="true">
+      <g className="connection-error-mark" data-visible={phase === "error"} aria-hidden="true">
         <path d="m169 139 22 22" />
         <path d="m191 139-22 22" />
       </g>
@@ -262,7 +270,14 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
         <rect className="connection-handy-body" x="146" y="184" width="27" height="70" rx="13.5" />
         <path className="connection-handy-body" d="M180 254v-22.5c0-7.5 6-13.5 13.5-13.5s13.5 6 13.5 13.5V254Z" />
         <circle className="connection-handy-led" cx="159.5" cy="219" r="3" />
-        <rect className="connection-handy-marker" x="216" y="247" width="7" height="7" />
+        <rect
+          className="connection-handy-marker"
+          data-state={phase === "connected" ? "connected" : phase === "connecting" ? "connecting" : "disconnected"}
+          x="216"
+          y="247"
+          width="7"
+          height="7"
+        />
       </g>
     </svg>
   );
@@ -279,6 +294,8 @@ function connectionStatusText(input: {
 }) {
   if (!input.backendOnline) return "Core offline";
   if (input.phase === "connecting") return input.owner === "intiface" ? "Finding a linear device" : "Connecting";
+  if (input.phase === "error" && input.owner === "cloud_rest") return "Cloud connection failed";
+  if (input.phase === "error" && input.owner === "intiface") return "Intiface connection failed";
   if (input.owner === "cloud_rest") {
     if (!input.keySet) return "Connection key required";
     return input.cloudVerified ? "Cloud connection ready" : "Not checked";

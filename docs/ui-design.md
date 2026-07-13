@@ -141,6 +141,10 @@ One component, one source of truth.
 - Distinguishes commanded/estimated position from device-confirmed position, and
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
+- Uses a restrained Handy side profile rather than an abstract progress bar:
+  the device rail carries the configured stroke envelope and the carriage moves
+  to the backend sample position. Detailed telemetry names state, target speed,
+  and active target without adding controls to the artwork.
 - Is never itself a click target: controls are separate, labeled elements
   (limits live in the connection manager and behavior lives in Chat), not
   artwork turned into a mystery button.
@@ -270,8 +274,9 @@ hoc per-widget colors) are not.
   no runtime mask or clip. The scaled frame contains the hand, three
   intense-blue SVG arcs, and the poster's tall capsule, domed body, LED, and
   square marker. The arcs cascade toward the device while connecting and remain
-  visible when connected; disconnected/error replaces the arcs with a compact
-  red X. Reduced-motion renders the connecting signal statically.
+  visible when connected. Disconnected has no signal and keeps the square red;
+  only a failed connection attempt adds a briefly shaking red X. Reduced-motion
+  renders connection feedback statically.
   [Connection artwork](connection-artwork.md) records the generated asset
   provenance, SVG coordinates, state table, and refactor checklist.
 - Exactly one client may command the device. Additional clients open read-only:

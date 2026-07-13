@@ -111,7 +111,7 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; connectionCheckGate?: Promise<void>; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
   let intiface = (state as typeof state & { intiface_transport?: Record<string, any> }).intiface_transport ?? {
@@ -137,6 +137,7 @@ function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: un
       return jsonRes({ ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 });
     }
     if (u.includes("/api/transport/intiface")) {
+      if (u.endsWith("/connect") && opts.intifaceConnectError) throw new Error(opts.intifaceConnectError);
       if (u.endsWith("/connect")) intiface = { ...intiface, status: { ...intiface.status, connected: true, max_ping_time_ms: 500, devices: [{ device_index: 7, device_name: "Test Linear", linear_actuators: [{ index: 0, feature_descriptor: "Position" }] }] } };
       if (u.endsWith("/disconnect")) intiface = { ...intiface, status: { ...intiface.status, connected: false, devices: [] } };
       if (u.endsWith("/scan")) intiface = { ...intiface, status: { ...intiface.status, scanning: _init?.method !== "DELETE" } };
@@ -256,9 +257,27 @@ describe("app shell safety invariants", () => {
     expect(artwork.querySelectorAll(".connection-handy-body")).toHaveLength(2);
     expect(artwork.querySelector(".connection-handy-led")).toBeInTheDocument();
     expect(artwork.querySelector(".connection-handy-marker")).toBeInTheDocument();
-    expect(artwork.querySelectorAll(".connection-disconnected path")).toHaveLength(2);
+    expect(artwork.querySelectorAll(".connection-error-mark path")).toHaveLength(2);
+    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
+    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
     expect(artwork).toHaveAttribute("viewBox", "0 0 360 260");
     expect(artwork).toHaveAttribute("data-phase", "disconnected");
+  });
+
+  it("shows the failure mark only for an errored connection attempt", async () => {
+    installFetch({
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, hsp_dispatch_owner: "browser_bluetooth" } },
+        bluetooth_bridge: { connected: false, ready: false, status: "error", message: "Bluetooth connection failed" },
+      },
+    });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy bluetooth error/i }));
+    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
+    expect(artwork).toHaveAttribute("data-phase", "error");
+    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "true");
+    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
   });
 
   it("saves the Cloud connection key through the scoped redacted endpoint", async () => {
@@ -307,12 +326,20 @@ describe("app shell safety invariants", () => {
     expect(screen.getByRole("img", { name: /in progress/i })).toHaveAttribute("data-phase", "connecting");
     await act(async () => release());
     await waitFor(() => expect(screen.getByRole("img", { name: /the handy wireless connection$/i })).toHaveAttribute("data-phase", "connected"));
+    const artwork = screen.getByRole("img", { name: /the handy wireless connection$/i });
+    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
+    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "connected");
   });
 
   it("shows the backend-loss banner when the core is unreachable", async () => {
     installFetch({ fail: true });
     renderApp();
     expect(await screen.findByText(/core connection lost/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /the handy core offline/i }));
+    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
+    expect(artwork).toHaveAttribute("data-phase", "disconnected");
+    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
+    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
     // Stop is still present so an offline client can still attempt it.
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeInTheDocument();
   });
@@ -749,6 +776,30 @@ describe("app shell safety invariants", () => {
     expect(await screen.findByText(/connected - ready/i)).toBeInTheDocument();
   });
 
+  it("shows the error artwork only after an Intiface connection attempt fails", async () => {
+    installFetch({
+      intifaceConnectError: "Intiface Central is not reachable",
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, hsp_dispatch_owner: "intiface" } },
+        intiface_transport: {
+          dispatch_owner: "intiface",
+          address: "ws://127.0.0.1:59999",
+          status: { connected: false, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
+          diagnostics: {},
+        },
+      } as typeof baseState,
+    });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy intiface disconnected/i }));
+    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
+    expect(artwork).toHaveAttribute("data-phase", "disconnected");
+    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+    await waitFor(() => expect(artwork).toHaveAttribute("data-phase", "error"));
+    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "true");
+    expect(screen.getByRole("button", { name: /the handy intiface connection failed/i })).toBeInTheDocument();
+  });
+
   it("seeds chat history from the shared server log", async () => {
     installFetch({
       chatLog: [
@@ -761,12 +812,38 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/reply preserved across reloads/i)).toBeInTheDocument();
   });
 
-  it("labels the visualizer as an engine-state image (commanded estimate)", async () => {
-    installFetch();
-    renderApp();
+  it("renders a Handy rail and carriage from the commanded engine estimate", async () => {
+    const state = {
+      ...baseState,
+      motion: {
+        available: true,
+        engine: {
+          running: true,
+          paused: false,
+          last_sample: { position_percent: 72, time_ms: 1000 },
+          settings: { ...baseState.settings.motion, stroke_min_percent: 20, stroke_max_percent: 80 },
+          target: { label: "Steady stroke", speed_percent: 35 },
+        },
+      },
+    };
+    installFetch({ state });
+    const { container } = renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    expect(screen.getAllByRole("img", { name: /motion/i }).length).toBeGreaterThan(0);
-    expect(screen.getByText(/commanded position estimate/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: /commanded position estimate 72 percent/i })).toHaveLength(2);
+    const detailed = container.querySelector(".visualizer:not(.mini)");
+    expect(detailed).toHaveAttribute("data-state", "running");
+    expect(detailed?.querySelector(".viz-device-base")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-device-rail")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-stroke-range")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-carriage")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-position", "72");
+    expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-min", "20");
+    expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-max", "80");
+    expect(within(detailed as HTMLElement).getByText(/commanded position estimate/i)).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("72%")).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("20-80%")).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("35%")).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("Steady stroke")).toBeInTheDocument();
   });
 });
 
