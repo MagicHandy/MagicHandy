@@ -99,7 +99,7 @@ func TestTransportOwnersPreserveNeutralFrameContract(t *testing.T) {
 	})
 
 	t.Run("intiface", func(t *testing.T) {
-		server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+		server := newFakeButtplugServer(t, 1000)
 		defer server.Close()
 		owner := connectTestIntiface(t, server, 32)
 		defer closeTestIntiface(t, owner)
@@ -225,7 +225,7 @@ func testBrowserBluetoothStopPreemption(t *testing.T) {
 }
 
 func testIntifaceStopPreemption(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
 	defer closeTestIntiface(t, owner)

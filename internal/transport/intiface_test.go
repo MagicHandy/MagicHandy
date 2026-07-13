@@ -14,9 +14,6 @@ import (
 	"github.com/coder/websocket"
 )
 
-// Keep background heartbeat outside tests that exercise unrelated transport behavior.
-const stableTestMaxPingMillis int64 = 10_000
-
 func TestIntifaceHandshakeScanningAndSelection(t *testing.T) {
 	server := newFakeButtplugServer(t, 200)
 	defer server.Close()
@@ -67,7 +64,7 @@ func TestIntifaceHandshakeScanningAndSelection(t *testing.T) {
 }
 
 func TestIntifaceLinearPrecisionWindowReverseAndCrossChunk(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
 	defer closeTestIntiface(t, owner)
@@ -108,7 +105,7 @@ func TestIntifaceLinearPrecisionWindowReverseAndCrossChunk(t *testing.T) {
 }
 
 func TestIntifaceStopPreemptsQueuedLinearCommands(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
 	defer closeTestIntiface(t, owner)
@@ -149,7 +146,7 @@ func TestIntifaceStopPreemptsQueuedLinearCommands(t *testing.T) {
 }
 
 func TestIntifaceClosePreemptsQueuedLinearCommands(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
 	if err := owner.SelectDevice(7, 0); err != nil {
@@ -194,7 +191,7 @@ func TestIntifaceClosePreemptsQueuedLinearCommands(t *testing.T) {
 }
 
 func TestIntifaceDeviceRemovalCancelsPacer(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
 	defer closeTestIntiface(t, owner)
@@ -238,7 +235,7 @@ func TestIntifacePingFailureMarksConnectionStale(t *testing.T) {
 }
 
 func TestIntifaceQueueUnderrunReportsStarvedAndStopsDevice(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
 	defer closeTestIntiface(t, owner)
@@ -263,7 +260,7 @@ func TestIntifaceQueueUnderrunReportsStarvedAndStopsDevice(t *testing.T) {
 }
 
 func TestIntifaceLinearFailureCancelsPlaybackAndStopsDevice(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	server.rejectLinear = true
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 32)
@@ -289,7 +286,7 @@ func TestIntifaceLinearFailureCancelsPlaybackAndStopsDevice(t *testing.T) {
 }
 
 func TestIntifaceRejectsInvalidPointsAndBoundedQueue(t *testing.T) {
-	server := newFakeButtplugServer(t, stableTestMaxPingMillis)
+	server := newFakeButtplugServer(t, 1000)
 	defer server.Close()
 	owner := connectTestIntiface(t, server, 1)
 	defer closeTestIntiface(t, owner)
@@ -387,7 +384,6 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			f.mu.Lock()
 			f.history = append(f.history, message)
 			f.mu.Unlock()
-			f.received <- message
 			id, ok := message.uint32("Id")
 			if !ok {
 				return
@@ -412,6 +408,9 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			default:
 				f.write("Ok", map[string]any{"Id": id})
 			}
+			// Test waiters observe a command only after its protocol response has
+			// been written, so preemption assertions do not race the fake ACK.
+			f.received <- message
 		}
 	}
 }
