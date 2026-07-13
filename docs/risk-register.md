@@ -288,7 +288,7 @@ helper, validates an app-owned manifest, resolves models by inventory ID, and
 starts the runner offline with its UI disabled. A fresh Windows CPU build was
 verified end to end (54.2 s, 18,432,916 installed bytes), as were idempotent
 reuse and the Ollama-without-managed-runtime path. R13 remains High until CUDA
-build/load/chat, curated downloads, and hardware-fit guidance have real-system
+load/chat, curated downloads, and hardware-fit guidance have real-system
 evidence.
 
 Source-install mitigation (2026-07-13): `install.ps1` now provisions and verifies
@@ -296,7 +296,10 @@ missing Go/Git/CMake/MSVC/Windows SDK/CUDA/Ollama dependencies before a selected
 build, while `update.ps1` reuses atomic non-secret choices unless the user opts
 to revise them. Windows PowerShell 5.1 plan tests cover managed CUDA and
 Ollama-only dependency graphs. This reduces manual setup drift but is not CUDA
-build/load/chat evidence and does not lower R13 yet.
+load/chat evidence and does not lower R13 yet. A same-process CUDA environment
+fix was then verified by building the pinned `b9966` runtime with CUDA 13.3 and
+MSVC 19.51 and probing the installed `c749cb0` runner. This supplies CUDA build
+evidence, but model load/chat remains unverified and R13 stays High.
 
 ## R14: Per-Source Motion Path Divergence
 

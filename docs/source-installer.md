@@ -37,7 +37,9 @@ If WinGet is absent, the installer offers Microsoft's supported
 `Microsoft.WinGet.Client` repair flow. Every installed tool is resolved and
 verified in the current process; the script asks for a restart/retry only when
 Windows reports success but the executable or compiler workload is still not
-available.
+available. For CUDA builds, the managed-runtime helper also derives the toolkit
+root from `nvcc.exe` and passes it to both CMake and NVIDIA's Visual Studio build
+targets, including when WinGet installed CUDA earlier in the same process.
 
 ## Built Outputs
 
