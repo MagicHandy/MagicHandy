@@ -951,3 +951,95 @@ textarea:disabled {
 .advanced-fields[open] summary {
   margin-bottom: 10px;
 }
+
+/* ---- Dual-thumb range slider (speed / stroke low+high in one control) ---- */
+.range-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.range-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.range-slider-value {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.range-slider-track {
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+/* Base rail + coloured fill between the two thumbs. */
+.range-slider-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+.range-slider-fill {
+  position: absolute;
+  left: var(--low);
+  right: calc(100% - var(--high));
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+/* Both inputs occupy the same box; only their thumbs receive pointer events so
+   whichever thumb is under the cursor is the one that moves. */
+.range-slider-input {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-slider-input::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+.range-slider-input::-moz-range-track {
+  background: none;
+}
+.range-slider-input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.range-slider-input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.range-slider[data-disabled] {
+  opacity: 0.62;
+}
+.range-slider[data-disabled] .range-slider-input {
+  cursor: not-allowed;
+}

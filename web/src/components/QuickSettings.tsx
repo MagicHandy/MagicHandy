@@ -1,9 +1,10 @@
 // Immediate-apply quick controls: speed/stroke/reverse/style. No save step —
 // each change patches the engine live (docs/ui-design.md, Quick Controls).
 // Disabled for read-only or backend-offline clients with a visible reason.
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MotionSettings } from "../api/types";
+import { RangeSlider } from "./RangeSlider";
 import { useAppState, useToast } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
@@ -19,16 +20,22 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const locked = !backendOnline || readOnly;
   const [vals, setVals] = useState<MotionSettings | null>(null);
   const timer = useRef<number | undefined>(undefined);
+  const pending = useRef<Record<string, unknown>>({});
 
   useEffect(() => {
     if (motion) setVals({ ...motion });
   }, [motion]);
 
+  // Debounced, but patches accumulate so moving one range thumb never drops a
+  // sibling value queued in the same window.
   function push(patch: Record<string, unknown>) {
+    pending.current = { ...pending.current, ...patch };
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
+      const body = pending.current;
+      pending.current = {};
       try {
-        await api.applyQuick(patch);
+        await api.applyQuick(body);
       } catch (e) {
         show(e instanceof Error ? e.message : "Quick setting failed", "error");
       } finally {
@@ -41,33 +48,36 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   const showLimits = section !== "behavior";
   const showBehavior = section !== "limits";
-  const range = (key: keyof MotionSettings, label: string, min: number) => (
-    <label className="field">
-      <span className="label">
-        {label} <output>{vals[key] as number}%</output>
-      </span>
-      <input
-        type="range"
-        aria-label={label}
-        min={min}
-        max={100}
-        value={vals[key] as number}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => {
-          const v = Number(e.target.value);
-          setVals((s) => (s ? { ...s, [key]: v } : s));
-          push({ [key]: v });
-        }}
-      />
-    </label>
-  );
 
   return (
     <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
       <legend className="visually-hidden">{section === "limits" ? "Speed and stroke limits" : section === "behavior" ? "Direction and motion style" : "Speed, stroke, direction, and style"}</legend>
-      {showLimits && range("speed_min_percent", "Speed min", 1)}
-      {showLimits && range("speed_max_percent", "Speed max", 1)}
-      {showLimits && range("stroke_min_percent", "Stroke min", 0)}
-      {showLimits && range("stroke_max_percent", "Stroke max", 0)}
+      {showLimits && (
+        <RangeSlider
+          label="Speed"
+          floor={1}
+          minValue={vals.speed_min_percent}
+          maxValue={vals.speed_max_percent}
+          disabled={locked}
+          onChange={({ min, max }) => {
+            setVals((s) => (s ? { ...s, speed_min_percent: min, speed_max_percent: max } : s));
+            push({ speed_min_percent: min, speed_max_percent: max });
+          }}
+        />
+      )}
+      {showLimits && (
+        <RangeSlider
+          label="Stroke"
+          floor={0}
+          minValue={vals.stroke_min_percent}
+          maxValue={vals.stroke_max_percent}
+          disabled={locked}
+          onChange={({ min, max }) => {
+            setVals((s) => (s ? { ...s, stroke_min_percent: min, stroke_max_percent: max } : s));
+            push({ stroke_min_percent: min, stroke_max_percent: max });
+          }}
+        />
+      )}
       {showBehavior && <label className="toggle-line">
         <span className="toggle">
           <input

@@ -302,12 +302,36 @@ describe("app shell safety invariants", () => {
     const fetchMock = installFetch();
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
-    fireEvent.change(screen.getByRole("slider", { name: /speed max/i }), { target: { value: "40" } });
+    // The dual-thumb Speed range sends both bounds; moving the high thumb to 40
+    // keeps the low bound (20) and lowers the max.
+    fireEvent.change(screen.getByRole("slider", { name: /speed maximum/i }), { target: { value: "40" } });
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
       expect(call).toBeDefined();
-      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_max_percent: 40 });
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ speed_min_percent: 20, speed_max_percent: 40 });
     });
+  });
+
+  it("halts and drops the cloud session from the connection manager Disconnect", async () => {
+    const fetchMock = installFetch({
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, connection_key_set: true } },
+        cloud_transport: { connected: true },
+      },
+    });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud connection ready/i }));
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    // Connected shows a small re-check button beside the status line.
+    expect(within(manager).getByRole("button", { name: /re-check connection/i })).toBeInTheDocument();
+    fireEvent.click(within(manager).getByRole("button", { name: /^disconnect$/i }));
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/transport/cloud/stop"));
+      expect(call).toBeDefined();
+    });
+    // After disconnect the primary action returns to Connect.
+    await waitFor(() => expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeInTheDocument());
   });
 
   it("shows the wireless wave state while checking The Handy", async () => {
@@ -322,7 +346,7 @@ describe("app shell safety invariants", () => {
     });
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy not checked/i }));
-    fireEvent.click(screen.getByRole("button", { name: /check connection/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
     expect(screen.getByRole("img", { name: /in progress/i })).toHaveAttribute("data-phase", "connecting");
     await act(async () => release());
     await waitFor(() => expect(screen.getByRole("img", { name: /the handy wireless connection$/i })).toHaveAttribute("data-phase", "connected"));
@@ -714,7 +738,7 @@ describe("app shell safety invariants", () => {
     const manager = screen.getByRole("region", { name: /connection manager/i });
     expect(within(manager).getByLabelText(/handy connection key/i)).toBeDisabled();
     expect(within(manager).getByRole("button", { name: /save key/i })).toBeDisabled();
-    expect(within(manager).getByRole("button", { name: /check connection/i })).toBeDisabled();
+    expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeDisabled();
     go("#/settings/prompts");
     expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
     expect(await screen.findByRole("button", { name: /add memory/i })).toBeDisabled();
