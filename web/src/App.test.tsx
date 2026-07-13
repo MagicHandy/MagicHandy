@@ -111,8 +111,10 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
-  const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as typeof baseState & { bluetooth_bridge?: unknown };
+type TestState = typeof baseState & { bluetooth_bridge?: unknown; cloud_transport?: unknown; intiface_transport?: unknown };
+
+function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+  const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as TestState;
   const chatLog = opts.chatLog ?? [];
   let intiface = (state as typeof state & { intiface_transport?: Record<string, any> }).intiface_transport ?? {
     dispatch_owner: "intiface",
@@ -856,8 +858,8 @@ describe("app shell safety invariants", () => {
     expect(screen.getAllByRole("img", { name: /commanded position estimate 72 percent/i })).toHaveLength(2);
     const detailed = container.querySelector(".visualizer:not(.mini)");
     expect(detailed).toHaveAttribute("data-state", "running");
-    expect(detailed?.querySelector(".viz-device-base")).toBeInTheDocument();
-    expect(detailed?.querySelector(".viz-device-rail")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-body")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-track")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-stroke-range")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-carriage")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-position", "72");

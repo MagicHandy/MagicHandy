@@ -123,8 +123,9 @@ Replace with a compact readout in the status bar:
 - the run timer is `--muted` label + tabular-nums value with a clock icon.
 
 The one authoritative visualizer keeps a compact Handy side profile in the
-status bar and its detailed rail/carriage form on the Chat page — one
-component, engine-driven, position labeled as a commanded estimate.
+status bar and its detailed form on the Chat page — a vertical body styled
+after The Handy 2 with the sleeve carriage travelling a right-edge channel.
+One component, engine-driven, position labeled as a commanded estimate.
 
 ### Buttons
 

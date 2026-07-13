@@ -318,60 +318,47 @@ textarea:disabled {
 /* ---- Motion visualizer ---- */
 .visualizer {
   display: grid;
-  grid-template-columns: minmax(104px, 132px) minmax(0, 1fr);
+  grid-template-columns: minmax(78px, 96px) minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 .visualizer.mini {
   display: block;
-  width: 56px;
+  width: 30px;
   height: 40px;
-  flex: 0 0 56px;
+  flex: 0 0 30px;
 }
 .viz-device {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 132 / 96;
+  aspect-ratio: 96 / 132;
 }
 .visualizer.mini .viz-device {
-  width: 56px;
+  width: 30px;
   height: 40px;
 }
-.viz-floor {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 1;
-}
-.viz-device-base,
-.viz-device-tower,
-.viz-device-bridge {
-  fill: var(--surface-3);
+/* The Handy 2 body: a charcoal capsule held vertically. */
+.viz-body {
+  fill: #23272e;
   stroke: var(--line-strong);
   stroke-width: 1.2;
 }
-.viz-device-tower {
-  fill: #15181d;
-}
-.viz-device-bridge {
-  fill: #22272e;
-}
-.viz-device-rail {
-  fill: #0d0f12;
-  stroke: #555d68;
-  stroke-width: 1;
-}
-.viz-rail-line {
+.viz-grip {
   fill: none;
-  stroke: #717b87;
-  stroke-width: 1;
-}
-.viz-rail-ticks,
-.viz-device-seam {
-  fill: none;
-  stroke: #59616b;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1.4;
   stroke-linecap: round;
+}
+.viz-screen {
+  fill: #14171b;
+  stroke: rgba(255, 255, 255, 0.04);
+  stroke-width: 0.8;
+}
+.viz-track {
+  fill: #0d0f12;
+  stroke: #3a4048;
   stroke-width: 1;
 }
 .viz-stroke-range {
@@ -384,16 +371,23 @@ textarea:disabled {
   transform: translateY(var(--viz-carriage-y));
   transition: transform 0.24s ease, color 0.18s ease;
 }
-.viz-carriage-body,
-.viz-carriage-coupler {
+/* Collar is the position indicator, coloured by engine state. */
+.viz-carriage-collar {
   fill: currentColor;
   stroke: #d7dbe0;
   stroke-width: 0.7;
 }
-.viz-carriage-arm {
-  fill: #6d7681;
-  stroke: #aeb5bd;
+/* Sleeve reads as the clear ribbed cup the collar holds. */
+.viz-carriage-sleeve {
+  fill: rgba(210, 224, 236, 0.16);
+  stroke: #9aa3ad;
   stroke-width: 0.7;
+}
+.viz-sleeve-rib {
+  fill: none;
+  stroke: rgba(200, 212, 224, 0.45);
+  stroke-width: 0.7;
+  stroke-linecap: round;
 }
 .viz-device-led {
   fill: var(--muted);
