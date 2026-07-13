@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -143,6 +144,53 @@ func TestIntifaceStopPreemptsQueuedLinearCommands(t *testing.T) {
 			t.Fatalf("LinearCmd at history index %d followed StopDeviceCmd at %d", index, stopIndex)
 		}
 	}
+}
+
+func TestIntifaceCanceledQueuedWriteKeepsConnectionForStop(t *testing.T) {
+	server := newFakeButtplugServer(t, 1000)
+	defer server.Close()
+	owner := connectTestIntiface(t, server, 32)
+	defer closeTestIntiface(t, owner)
+	if err := owner.SelectDevice(7, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	owner.writeMu.Lock()
+	writeLocked := true
+	defer func() {
+		if writeLocked {
+			owner.writeMu.Unlock()
+		}
+	}()
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	requestDone := make(chan error, 1)
+	go func() {
+		_, err := owner.request(requestCtx, "LinearCmd", map[string]any{
+			"DeviceIndex": 7,
+			"Vectors": []map[string]any{{
+				"Index": 0, "Duration": 100, "Position": 0.5,
+			}},
+		})
+		requestDone <- err
+	}()
+	waitForTest(t, time.Second, func() bool {
+		owner.mu.Lock()
+		defer owner.mu.Unlock()
+		return len(owner.waiters) > 0
+	})
+	cancelRequest()
+	owner.writeMu.Unlock()
+	writeLocked = false
+
+	if err := <-requestDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled LinearCmd = %v, want context canceled", err)
+	}
+	stopCtx, cancelStop := context.WithTimeout(context.Background(), time.Second)
+	defer cancelStop()
+	if _, err := owner.Stop(stopCtx, StopCommand{Reason: "canceled_write"}); err != nil {
+		t.Fatalf("Stop after canceled write: %v", err)
+	}
+	server.waitForKind(t, "StopDeviceCmd", time.Second)
 }
 
 func TestIntifaceClosePreemptsQueuedLinearCommands(t *testing.T) {
