@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,69 @@ import (
 	"testing"
 	"time"
 )
+
+func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"{}\"}}]}\n\ndata: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	provider, err := NewLlamaCPPProvider(HTTPProviderOptions{BaseURL: server.URL, Model: "test-model"})
+	if err != nil {
+		t.Fatalf("NewLlamaCPPProvider: %v", err)
+	}
+	_, err = provider.StreamChat(t.Context(), ChatRequest{
+		Messages:      []Message{{Role: "user", Content: "test"}},
+		Temperature:   0,
+		MaxTokens:     256,
+		ReasoningMode: "off",
+	}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat: %v", err)
+	}
+	if body["temperature"] != float64(0) || body["max_tokens"] != float64(256) {
+		t.Fatalf("generation controls = %#v", body)
+	}
+	kwargs, ok := body["chat_template_kwargs"].(map[string]any)
+	if !ok || kwargs["enable_thinking"] != false {
+		t.Fatalf("chat template kwargs = %#v", body["chat_template_kwargs"])
+	}
+}
+
+func TestOllamaStreamChatSendsGenerationControls(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = w.Write([]byte("{\"message\":{\"content\":\"{}\"},\"done\":true}\n"))
+	}))
+	defer server.Close()
+
+	provider, err := NewOllamaProvider(HTTPProviderOptions{BaseURL: server.URL, Model: "test-model"})
+	if err != nil {
+		t.Fatalf("NewOllamaProvider: %v", err)
+	}
+	_, err = provider.StreamChat(t.Context(), ChatRequest{
+		Messages:      []Message{{Role: "user", Content: "test"}},
+		Temperature:   0.2,
+		MaxTokens:     512,
+		ReasoningMode: "off",
+	}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat: %v", err)
+	}
+	options, ok := body["options"].(map[string]any)
+	if !ok || options["num_predict"] != float64(512) || body["think"] != false {
+		t.Fatalf("generation controls = %#v", body)
+	}
+}
 
 func TestMain(m *testing.M) {
 	if os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER") == "1" {

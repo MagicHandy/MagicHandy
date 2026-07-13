@@ -203,6 +203,7 @@ func TestMidRequestCrashIsVisibleAndRestartRecovers(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitForState(t, supervisor, StateRunning)
+	requireReadyModel(t, supervisor)
 
 	pending, err := supervisor.Submit(Request{Type: RequestSpeak, Text: stubworker.CrashText})
 	if err != nil {
@@ -230,6 +231,7 @@ func TestSubmitSpeakCompletesWithChunks(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitForState(t, supervisor, StateRunning)
+	requireReadyModel(t, supervisor)
 
 	pending, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "hello"})
 	if err != nil {
@@ -248,6 +250,7 @@ func TestCancelStopsActiveRequest(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitForState(t, supervisor, StateRunning)
+	requireReadyModel(t, supervisor)
 
 	pending, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "hello", DelayMillis: 10000})
 	if err != nil {
@@ -268,6 +271,18 @@ func TestSubmitWhileStoppedFails(t *testing.T) {
 
 	if _, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "hello"}); err == nil {
 		t.Fatal("submit must fail while the worker is stopped")
+	}
+}
+
+func TestSubmitWhileModelIsNotReadyFails(t *testing.T) {
+	supervisor := newTestSupervisor(t, RoleTTS)
+	if err := supervisor.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitForState(t, supervisor, StateRunning)
+
+	if _, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "hello"}); err == nil || !strings.Contains(err.Error(), "model is not ready") {
+		t.Fatalf("submit error = %v, want model-not-ready rejection", err)
 	}
 }
 
@@ -318,6 +333,7 @@ func TestCompletedSpeakRetainsBoundedAudio(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitForState(t, supervisor, StateRunning)
+	requireReadyModel(t, supervisor)
 
 	pending, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "retain me"})
 	if err != nil {
@@ -394,6 +410,17 @@ func TestWorkerEnvCarriesCredentialsPrivately(t *testing.T) {
 	if strings.Contains(status.Command, secret) || strings.Contains(strings.Join(status.Capabilities, " "), secret) ||
 		strings.Contains(status.LastError, secret) || strings.Contains(status.StderrTail, secret) {
 		t.Fatalf("credential leaked into worker status: %+v", status)
+	}
+}
+
+func requireReadyModel(t *testing.T, supervisor *Supervisor) {
+	t.Helper()
+	health, err := supervisor.Health(t.Context())
+	if err != nil {
+		t.Fatalf("health: %v", err)
+	}
+	if health.ModelState != ModelStateReady {
+		t.Fatalf("model state = %q, want ready", health.ModelState)
 	}
 }
 

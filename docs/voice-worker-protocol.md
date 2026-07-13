@@ -87,8 +87,9 @@ enter chat history, TTS playback, or motion (ADR 0003).
 
 - One serialized work request per worker; the core queue is bounded and rejects
   new work when full for catch-up flood protection.
-- Per-request timeouts: handshake 5 s, control 5 s, work 60 s (then a cancel
-  frame + a `timeout` failure).
+- Per-request timeouts: handshake and ordinary control 5 s, work 60 s (then a
+  cancel frame + a `timeout` failure). Model load honors a longer caller
+  deadline (30 s for Start) because a managed local server may boot inside it.
 - Status surfaces every lifecycle state (`disabled`, `not_configured`,
   `stopped`, `starting`, `running`, `crashed`) plus provider identity, model
   state, queue depth, last error, and the crash stderr tail — in
@@ -98,7 +99,8 @@ enter chat history, TTS playback, or motion (ADR 0003).
 
 - `GET /api/voice/status` — both workers with a live health probe.
 - `POST /api/voice/workers/{role}/start|stop|restart` — lifecycle (controller
-  lease required).
+  lease required). Start includes model load; on load failure the just-started
+  adapter is stopped and the request fails, so success means ready to serve.
 - `POST /api/voice/workers/{role}/model` — `{"loaded": bool}`.
 - `POST /api/voice/workers/{role}/test` — `{"text": "...", "delay_ms": n}`;
   submits a stub-scale request, returns its ID.

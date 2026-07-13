@@ -181,6 +181,9 @@ func (s *Supervisor) Submit(request Request) (*PendingRequest, error) {
 	if s.queue == nil || s.state != StateRunning {
 		return nil, fmt.Errorf("%s worker is not running", s.role)
 	}
+	if s.lastHealth.ModelState != ModelStateReady {
+		return nil, fmt.Errorf("%s worker model is not ready", s.role)
+	}
 
 	s.nextID++
 	pending := &PendingRequest{

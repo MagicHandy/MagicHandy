@@ -176,6 +176,10 @@ One component, engine-driven, position labeled as a commanded estimate.
   spacing and a `--line` divider, not another shadowed box.
 - Inputs / select / textarea: `--bg-inset`, `--line`, `--radius-sm`, padding
   `9px 11px`; focus swaps the border to `--accent` (plus the global focus ring).
+- Immutable requirements and installation state use semantic notes/status
+  readouts, never read-only inputs that look disabled. A caution prerequisite
+  may use one `--warn` left rule; ordinary module state stays graphite with its
+  compact status dot.
 - Range: native with `accent-color: --accent`. A dual-thumb range keeps two
   native keyboard/AT sliders, exposes each bound's effective ARIA constraint,
   and uses one track-sized pointer target so close thumbs remain reachable.

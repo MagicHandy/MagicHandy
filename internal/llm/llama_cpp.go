@@ -47,9 +47,13 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 		Messages:    request.Messages,
 		Stream:      true,
 		Temperature: request.Temperature,
+		MaxTokens:   request.MaxTokens,
 		ResponseFormat: &openAIResponseFormat{
 			Type: "json_object",
 		},
+	}
+	if request.ReasoningMode == "off" {
+		body.ChatTemplateKwargs = &openAIChatTemplateKwargs{EnableThinking: false}
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -162,11 +166,17 @@ func (p *LlamaCPPProvider) listModels(ctx context.Context) ([]string, error) {
 }
 
 type openAIChatRequest struct {
-	Model          string                `json:"model"`
-	Messages       []Message             `json:"messages"`
-	Stream         bool                  `json:"stream"`
-	Temperature    float64               `json:"temperature,omitempty"`
-	ResponseFormat *openAIResponseFormat `json:"response_format,omitempty"`
+	Model              string                    `json:"model"`
+	Messages           []Message                 `json:"messages"`
+	Stream             bool                      `json:"stream"`
+	Temperature        float64                   `json:"temperature"`
+	MaxTokens          int                       `json:"max_tokens,omitempty"`
+	ChatTemplateKwargs *openAIChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
+	ResponseFormat     *openAIResponseFormat     `json:"response_format,omitempty"`
+}
+
+type openAIChatTemplateKwargs struct {
+	EnableThinking bool `json:"enable_thinking"`
 }
 
 type openAIResponseFormat struct {

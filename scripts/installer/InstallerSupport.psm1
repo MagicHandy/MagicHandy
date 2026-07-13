@@ -679,6 +679,7 @@ function Install-MagicHandyParakeet {
     Install-MagicHandyVerifiedDownload -Uri $script:ParakeetModelURL -Destination $modelPath -ExpectedSHA256 $script:ParakeetModelSHA256
     Write-Host "Parakeet runner: $serverExe" -ForegroundColor Green
     Write-Host "Parakeet model:  $modelPath" -ForegroundColor Green
+    Write-Host 'In MagicHandy, open Settings > Voice, select Parakeet and the MagicHandy module, enable voice workers, save, then choose Start.' -ForegroundColor Cyan
 }
 
 function Ensure-MagicHandyOllamaModel {
@@ -826,16 +827,102 @@ function Update-MagicHandySource {
         throw 'Could not inspect the Git worktree.'
     }
     if (-not [string]::IsNullOrWhiteSpace(($status -join "`n"))) {
-        throw 'The MagicHandy worktree has local changes. Commit, stash, or remove them before running update.ps1.'
+        throw 'The MagicHandy worktree has local changes. Source update was not attempted. Preserve and reconcile those changes first, or use update.ps1 -NoPull to rebuild the current checkout.'
     }
-    & $git -C $RepositoryPath rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw 'The current branch has no upstream. Set one before running update.ps1.'
+
+    $branchOutput = @(& $git -C $RepositoryPath symbolic-ref --quiet --short HEAD 2>$null)
+    $branchExit = $LASTEXITCODE
+    if ($branchExit -ne 0 -or $branchOutput.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$branchOutput[0])) {
+        throw 'Source update requires a named branch. Detached HEAD and in-progress rebases are not updated.'
     }
-    Write-Host 'Fast-forwarding the current branch...'
-    & $git -C $RepositoryPath pull --ff-only | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "git pull --ff-only failed (exit $LASTEXITCODE)."
+    $currentBranch = ([string]$branchOutput[0]).Trim()
+    $releaseRef = 'refs/remotes/origin/main'
+    $releaseRefspec = '+refs/heads/main:refs/remotes/origin/main'
+    $targetRef = ''
+    $targetDisplay = ''
+
+    if ($currentBranch -eq 'main') {
+        $fetchOutput = @(& $git -C $RepositoryPath fetch --prune origin $releaseRefspec)
+        $fetchExit = $LASTEXITCODE
+        $fetchOutput | Out-Host
+        if ($fetchExit -ne 0) {
+            throw "Fetching origin failed (exit $fetchExit). No branch, index, or working-tree files were changed."
+        }
+        & $git -C $RepositoryPath show-ref --verify --quiet $releaseRef
+        if ($LASTEXITCODE -ne 0) {
+            throw 'origin/main is unavailable after fetch. No source files were changed.'
+        }
+        $targetRef = $releaseRef
+        $targetDisplay = 'origin/main'
+    } else {
+        $localRef = "refs/heads/$currentBranch"
+        $upstreamOutput = @(& $git -C $RepositoryPath for-each-ref '--format=%(upstream)' $localRef)
+        $upstreamExit = $LASTEXITCODE
+        $remoteOutput = @(& $git -C $RepositoryPath for-each-ref '--format=%(upstream:remotename)' $localRef)
+        $remoteExit = $LASTEXITCODE
+        $remoteRefOutput = @(& $git -C $RepositoryPath for-each-ref '--format=%(upstream:remoteref)' $localRef)
+        $remoteRefExit = $LASTEXITCODE
+        if ($upstreamExit -ne 0 -or $remoteExit -ne 0 -or $remoteRefExit -ne 0) {
+            throw 'Could not inspect the current branch upstream. No source files were changed.'
+        }
+        $upstreamRef = ($upstreamOutput -join '').Trim()
+        $upstreamRemote = ($remoteOutput -join '').Trim()
+        $upstreamRemoteRef = ($remoteRefOutput -join '').Trim()
+        if ([string]::IsNullOrWhiteSpace($upstreamRef) -or [string]::IsNullOrWhiteSpace($upstreamRemote) -or [string]::IsNullOrWhiteSpace($upstreamRemoteRef)) {
+            throw "The current branch '$currentBranch' has no configured upstream. No source files were changed."
+        }
+
+        $remoteMatch = @(& $git -C $RepositoryPath ls-remote --exit-code --heads $upstreamRemote $upstreamRemoteRef 2>$null)
+        $remoteMatchExit = $LASTEXITCODE
+        if ($remoteMatchExit -eq 0) {
+            $featureRefspec = '+{0}:{1}' -f $upstreamRemoteRef, $upstreamRef
+            $fetchOutput = @(& $git -C $RepositoryPath fetch --prune $upstreamRemote $featureRefspec)
+            $fetchExit = $LASTEXITCODE
+            $fetchOutput | Out-Host
+            if ($fetchExit -ne 0) {
+                throw "Fetching '$upstreamRemoteRef' from '$upstreamRemote' failed (exit $fetchExit). No branch, index, or working-tree files were changed."
+            }
+            & $git -C $RepositoryPath show-ref --verify --quiet $upstreamRef
+            if ($LASTEXITCODE -ne 0) {
+                throw 'The configured upstream was not available after fetch. No source files were changed.'
+            }
+            $targetRef = $upstreamRef
+            $targetDisplay = $upstreamRef -replace '^refs/remotes/', ''
+        } elseif ($remoteMatchExit -eq 2 -and $upstreamRemote -ne '.') {
+            $fetchOutput = @(& $git -C $RepositoryPath fetch --prune origin $releaseRefspec)
+            $fetchExit = $LASTEXITCODE
+            $fetchOutput | Out-Host
+            if ($fetchExit -ne 0) {
+                throw "The feature upstream was deleted, and fetching origin/main failed (exit $fetchExit). No source files were changed."
+            }
+            & $git -C $RepositoryPath show-ref --verify --quiet $releaseRef
+            if ($LASTEXITCODE -ne 0) {
+                throw 'The feature upstream was deleted, but origin/main is unavailable. No source files were changed.'
+            }
+            & $git -C $RepositoryPath merge-base --is-ancestor HEAD $releaseRef
+            $ancestorExit = $LASTEXITCODE
+            if ($ancestorExit -eq 1) {
+                throw "The deleted feature upstream cannot be replaced by origin/main because '$currentBranch' contains commits not present there. No branch, index, or working-tree files were changed."
+            }
+            if ($ancestorExit -ne 0) {
+                throw 'Could not verify whether the deleted feature branch is contained in origin/main. No source files were changed.'
+            }
+            Write-Host "The upstream for '$currentBranch' was deleted after merge; fast-forwarding from origin/main without changing branch or upstream settings." -ForegroundColor Cyan
+            $targetRef = $releaseRef
+            $targetDisplay = 'origin/main'
+        } elseif ($remoteMatchExit -eq 2) {
+            throw 'The configured local upstream no longer exists. No source files were changed.'
+        } else {
+            throw "Could not inspect '$upstreamRemoteRef' on '$upstreamRemote' (exit $remoteMatchExit). No source files were changed."
+        }
+    }
+
+    Write-Host "Fast-forwarding '$currentBranch' from '$targetDisplay'..."
+    $mergeOutput = @(& $git -C $RepositoryPath merge --ff-only $targetRef)
+    $mergeExit = $LASTEXITCODE
+    $mergeOutput | Out-Host
+    if ($mergeExit -ne 0) {
+        throw "Cannot fast-forward '$currentBranch' to '$targetDisplay'. Remote refs were fetched, but the branch, index, and working-tree files were not changed."
     }
 }
 

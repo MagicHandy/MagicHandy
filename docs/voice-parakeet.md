@@ -43,12 +43,18 @@ preserves this choice unless the user elects to reconfigure it:
 
 The installer does not enable or start voice. In
 **Settings > Voice**, enable voice workers, select **Parakeet (managed, local)**
-as the Speech input provider, and set the installed `parakeet-server.exe` and
-GGUF model paths. The app resolves `voice-parakeet-worker.exe` automatically
-when it is beside the core binary; **Advanced > Worker binary override** handles
-nonstandard layouts. Save settings, then use Start and Load in the Speech input
-row. The default managed port is `127.0.0.1:8990`; change the provider-scoped
-Server port field only when that port is already in use.
+as the Speech input provider, and keep **Runtime source > MagicHandy module**.
+The backend discovers the installer-owned `parakeet-server.exe`, GGUF model, and
+`voice-parakeet-worker.exe`; no custom paths are required. The module status
+distinguishes a complete installation from an adapter-only or otherwise
+incomplete setup and directs the user back to `update.ps1` when repair is
+needed. Save settings, then use **Start** in the Speech input row; Start also
+loads the model and succeeds only when ASR is ready. The default managed port is
+`127.0.0.1:8990` under Advanced.
+
+Installation, enablement, and process start remain separate actions: the
+installer writes files only, voice remains opt-in, and workers never autostart.
+The installer prints the exact Settings > Voice sequence after provisioning.
 
 The first installer path intentionally uses the portable CPU runner. Users can
 replace it with a compatible parakeet.cpp CUDA or Vulkan runner later without
@@ -63,8 +69,8 @@ Build the worker:
 go build -o voice-parakeet-worker.exe ./cmd/voice-parakeet-worker
 ```
 
-Run it in managed mode by selecting the managed provider and filling its
-server/model fields in MagicHandy's voice settings. The worker launches:
+For a manual parakeet.cpp setup, choose **Runtime source > Custom local server**
+and provide the server/model paths. The worker launches:
 
 ```text
 parakeet-server --model <local GGUF> --host 127.0.0.1 --port 8990
@@ -90,6 +96,8 @@ directly.
   inference, while the core-owned worker queue remains bounded and visible.
 - The Settings test action sends a valid, silent WAV to exercise the real
   decode path without inserting spoken content into chat or motion.
+- A failed automatic load fails Start and stops the just-started adapter; the UI
+  never treats a running but unloaded worker as microphone-ready.
 
 Browser microphone capture and push-to-talk are implemented on localhost.
 Recognized speech uses the same chat and motion safety path as typed chat; it

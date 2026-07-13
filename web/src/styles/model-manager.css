@@ -48,6 +48,30 @@
   max-width: 260px;
 }
 
+.model-generation-settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 14px;
+  margin-top: 4px;
+}
+
+.generation-notes {
+  margin: -2px 0 14px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--surface-1);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.generation-notes p {
+  margin: 0;
+}
+
+.generation-notes p + p {
+  margin-top: 4px;
+}
+
 .model-runtime-actions {
   align-items: center;
   min-height: 42px;
@@ -303,6 +327,7 @@
   }
 
   .model-runtime-grid,
+  .model-generation-settings,
   .model-import-form,
   .model-import-path {
     grid-template-columns: minmax(0, 1fr);

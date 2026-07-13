@@ -8,9 +8,11 @@
     same data directory, port, managed llama.cpp backend, Ollama preference,
     Parakeet choice, and launcher choice are reused.
 
-    The updater refuses to pull over local source changes and only performs a
-    fast-forward Git update. It then invokes the current install.ps1 so newly
-    added dependencies and worker binaries are provisioned consistently.
+    The updater refuses to update over local source changes and only performs a
+    fast-forward Git update. Main follows origin/main, live feature branches
+    follow their configured upstream, and merged features whose remote branch
+    was deleted may safely advance from origin/main. It then invokes the current
+    install.ps1 so dependencies and worker binaries are provisioned consistently.
 
 .PARAMETER Yes
     Preserve all saved choices and accept required package prompts without
@@ -20,7 +22,7 @@
     Skip the initial question and walk through every saved installation choice.
 
 .PARAMETER NoPull
-    Rebuild the current checkout without running git pull --ff-only.
+    Rebuild the current checkout without fetching or fast-forwarding source.
 
 .PARAMETER NoLaunch
     Update and rebuild without starting the app.
@@ -37,11 +39,11 @@
 
 .EXAMPLE
     .\update.ps1 -Yes -NoLaunch
-    Fast-forward and rebuild unattended using the previous choices.
+    Resolve a safe fast-forward target and rebuild unattended using the previous choices.
 
 .EXAMPLE
     .\update.ps1 -Reconfigure
-    Fast-forward, then revisit choices such as managed llama.cpp and Parakeet.
+    Safely fast-forward, then revisit choices such as managed llama.cpp and Parakeet.
 #>
 #Requires -Version 5.1
 [CmdletBinding()]

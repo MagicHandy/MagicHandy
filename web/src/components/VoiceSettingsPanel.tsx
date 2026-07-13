@@ -14,6 +14,11 @@ const PROVIDER_LABELS: Record<string, string> = {
   custom: "Custom worker",
 };
 
+const PARAKEET_SOURCE_LABELS: Record<string, string> = {
+  app_managed: "MagicHandy module",
+  custom_local: "Custom local server",
+};
+
 interface Props {
   settings: PublicSettings;
   locked: boolean;
@@ -29,6 +34,7 @@ interface Props {
 
 export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, setNewKey, clearKey, setClearKey }: Props) {
   const voice = s.voice;
+  const parakeetSource = voice.parakeet_source || "app_managed";
   const providerSelect = (value: string, options: string[] | undefined, onChange: (value: string) => void) => (
     <select value={value} disabled={locked} onChange={(event) => onChange(event.target.value)}>
       {(options?.length ? options : [value]).map((option) => <option key={option} value={option}>{PROVIDER_LABELS[option] ?? option}</option>)}
@@ -44,9 +50,13 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       <h3 className="group-title">Speech input (ASR)</h3>
       <label className="field"><span className="label">Provider</span>{providerSelect(voice.asr_provider, s.options.asr_providers, (asr_provider) => patch({ asr_provider }))}</label>
       {voice.asr_provider === "parakeet_managed" && <>
-        <label className="field"><span className="label">parakeet-server path</span><input type="text" value={voice.parakeet_server_path ?? ""} disabled={locked} onChange={(event) => patch({ parakeet_server_path: event.target.value })} /></label>
-        <label className="field"><span className="label">GGUF model path</span><input type="text" value={voice.parakeet_model_path ?? ""} disabled={locked} onChange={(event) => patch({ parakeet_model_path: event.target.value })} /></label>
-        <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>
+        <label className="field"><span className="label">Runtime source</span><select value={parakeetSource} disabled={locked} onChange={(event) => patch({ parakeet_source: event.target.value })}>{(s.options.parakeet_sources?.length ? s.options.parakeet_sources : [parakeetSource]).map((source) => <option key={source} value={source}>{PARAKEET_SOURCE_LABELS[source] ?? source}</option>)}</select></label>
+        {parakeetSource === "app_managed" && <p className="form-status">Uses the worker, runner, and model installed by MagicHandy. No custom paths are required.</p>}
+        {parakeetSource === "custom_local" && <>
+          <label className="field"><span className="label">Custom parakeet-server path</span><input type="text" value={voice.parakeet_server_path ?? ""} disabled={locked} onChange={(event) => patch({ parakeet_server_path: event.target.value })} /></label>
+          <label className="field"><span className="label">Custom GGUF model path</span><input type="text" value={voice.parakeet_model_path ?? ""} disabled={locked} onChange={(event) => patch({ parakeet_model_path: event.target.value })} /></label>
+          <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>
+        </>}
       </>}
       {voice.asr_provider === "openai_compatible" && <>
         <label className="field"><span className="label">Base URL</span><input type="url" value={voice.asr_base_url ?? ""} disabled={locked} onChange={(event) => patch({ asr_base_url: event.target.value })} /></label>
@@ -56,8 +66,8 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Worker path</span><input type="text" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ asr_worker_path: event.target.value })} /></label>
         <label className="field"><span className="label">Worker arguments</span><textarea rows={4} value={joinArgs(voice.asr_worker_args)} disabled={locked} onChange={(event) => patch({ asr_worker_args: splitArgs(event.target.value) })} /></label>
       </>}
-      {voice.asr_provider !== "none" && voice.asr_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ asr_worker_path: event.target.value })} /></label></details>}
-      <VoiceWorkers locked={locked} role="asr" dirty={dirty} />
+      {voice.asr_provider !== "none" && voice.asr_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary>{voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed" && <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>}<label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ asr_worker_path: event.target.value })} /></label></details>}
+      <VoiceWorkers locked={locked} role="asr" dirty={dirty} enabled={voice.enabled} providerSelected={voice.asr_provider !== "none"} showParakeetModule={voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed"} />
 
       <div className="divider" />
       <h3 className="group-title">Speech output (TTS)</h3>
@@ -81,7 +91,7 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       </>}
       {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ tts_worker_path: event.target.value })} /></label></details>}
       {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies</span></label>}
-      <VoiceWorkers locked={locked} role="tts" dirty={dirty} />
+      <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} />
     </>
   );
 }

@@ -417,6 +417,9 @@ func (s *Supervisor) Health(ctx context.Context) (Response, error) {
 	if response.Type == ResponseError {
 		return Response{}, response.Error
 	}
+	if response.Type != ResponseHealth {
+		return Response{}, fmt.Errorf("%s worker returned %q to health, want %q", s.role, response.Type, ResponseHealth)
+	}
 	s.mu.Lock()
 	s.lastHealth = response
 	s.mu.Unlock()
@@ -432,15 +435,28 @@ func (s *Supervisor) SetModelLoaded(ctx context.Context, loaded bool) (Response,
 		return Response{}, fmt.Errorf("%s worker is not running", s.role)
 	}
 	requestType := RequestUnload
+	timeout := controlTimeout
 	if loaded {
 		requestType = RequestLoad
+		if deadline, ok := ctx.Deadline(); ok {
+			if remaining := time.Until(deadline); remaining > timeout {
+				timeout = remaining
+			}
+		}
 	}
-	response, err := s.roundTrip(ctx, workerConn, Request{Type: requestType}, controlTimeout)
+	response, err := s.roundTrip(ctx, workerConn, Request{Type: requestType}, timeout)
 	if err != nil {
 		return Response{}, err
 	}
 	if response.Type == ResponseError {
 		return Response{}, response.Error
+	}
+	wantState := ModelStateUnloaded
+	if loaded {
+		wantState = ModelStateReady
+	}
+	if response.Type != ResponseHealth || response.ModelState != wantState {
+		return Response{}, fmt.Errorf("%s worker returned %q with model state %q, want health/%s", s.role, response.Type, response.ModelState, wantState)
 	}
 	s.mu.Lock()
 	s.lastHealth = response

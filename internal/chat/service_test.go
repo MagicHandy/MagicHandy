@@ -111,8 +111,10 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 		`{"reply":"Fixed.","motion":{"action":"none"}}`,
 	}}
 	service := Service{
-		Provider: provider,
-		Model:    "local-model",
+		Provider:      provider,
+		Model:         "local-model",
+		MaxTokens:     256,
+		ReasoningMode: "off",
 	}
 	var events []StreamEvent
 
@@ -134,6 +136,14 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 	}
 	if len(provider.requests) != 2 {
 		t.Fatalf("provider calls = %d, want 2", len(provider.requests))
+	}
+	for index, request := range provider.requests {
+		if request.MaxTokens != 256 || request.ReasoningMode != "off" {
+			t.Fatalf("request %d generation controls = %+v", index, request)
+		}
+	}
+	if provider.requests[1].Temperature != 0 {
+		t.Fatalf("repair temperature = %v, want 0", provider.requests[1].Temperature)
 	}
 	repairPrompt := provider.requests[1].Messages[len(provider.requests[1].Messages)-1].Content
 	if !strings.Contains(repairPrompt, "Validation error") || !strings.Contains(repairPrompt, "not json") {

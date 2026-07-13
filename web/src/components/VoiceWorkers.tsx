@@ -4,7 +4,7 @@
 // Status readouts follow the design guidelines: dot + text, no pills.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
+import type { VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { useToast } from "../state/app-state";
 import { playBlob } from "../util/audio";
 
@@ -38,10 +38,20 @@ const ROLE_LABEL: Record<string, string> = { tts: "Speech output (TTS)", asr: "S
 
 // dirty means the surrounding settings form has unsaved voice changes; the
 // controls act on the *saved* config, so they lock until the form is saved.
-export function VoiceWorkers({ locked, role: selectedRole, dirty }: { locked: boolean; role?: "tts" | "asr"; dirty?: boolean }) {
+export function VoiceWorkers({
+  locked, role: selectedRole, dirty, enabled, providerSelected, showParakeetModule,
+}: {
+  locked: boolean;
+  role?: "tts" | "asr";
+  dirty?: boolean;
+  enabled?: boolean;
+  providerSelected?: boolean;
+  showParakeetModule?: boolean;
+}) {
   const { show } = useToast();
   const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
   const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
+  const [modules, setModules] = useState<Record<string, VoiceModuleStatus>>({});
   const [busyRole, setBusyRole] = useState<string | null>(null);
   const alive = useRef(true);
 
@@ -50,6 +60,7 @@ export function VoiceWorkers({ locked, role: selectedRole, dirty }: { locked: bo
       const res = await api.voiceStatus();
       if (!alive.current) return;
       setWorkers(res.voice.workers ?? {});
+      setModules(res.voice.modules ?? {});
       setRequests(res.requests ?? []);
     } catch {
       // The settings page surfaces core-offline globally; keep the last view.
@@ -118,9 +129,16 @@ export function VoiceWorkers({ locked, role: selectedRole, dirty }: { locked: bo
 
   const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
   const activeRequests = requests.filter((r) => r.state === "queued" || r.state === "active");
+  const parakeetModule = modules.parakeet;
 
   return (
     <div className="voice-workers">
+      {showParakeetModule && (
+        <div className="voice-module-readout" role="status" aria-label="MagicHandy Parakeet module">
+          <span className="status-dot" data-state={parakeetModule?.installed ? "ok" : parakeetModule?.state === "incomplete" ? "warn" : "idle"} />
+          <span>{parakeetModule?.message || "Checking the MagicHandy Parakeet module."}</span>
+        </div>
+      )}
       {roles.map((role) => {
         const worker = workers[role];
         const state = worker?.state ?? "disabled";
@@ -146,7 +164,10 @@ export function VoiceWorkers({ locked, role: selectedRole, dirty }: { locked: bo
               )}
             </div>
             {state === "not_configured" && (
-              <p className="form-status">No worker command configured. Set a worker path above and save.</p>
+              <p className="form-status">{showParakeetModule && role === "asr" ? "The app-managed module is not ready; follow the module status above before starting it." : "The selected worker is not configured. Check its provider fields or installation, then save."}</p>
+            )}
+            {state === "disabled" && providerSelected && (
+              <p className="form-status">{enabled ? "Save these voice settings; Start will appear here once the worker is configured." : "Enable voice workers and save; Start will appear here when the worker is ready."}</p>
             )}
             {worker?.last_error && state !== "running" && (
               <p className="form-status voice-worker-error">{worker.last_error}</p>

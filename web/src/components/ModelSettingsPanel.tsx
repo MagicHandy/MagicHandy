@@ -23,6 +23,8 @@ interface ModelSettingsPanelProps {
   saved?: LLMSettings;
   providers: string[];
   llamaModes: string[];
+  reasoningModes: string[];
+  maxOutputOptions: number[];
   locked: boolean;
   patch: (next: Partial<LLMSettings>) => void;
 }
@@ -31,8 +33,9 @@ const message = (error: unknown) => (error instanceof Error ? error.message : "R
 const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.status === "copying";
 const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status === "queued" || build?.status === "building";
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
+const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic" : mode === "off" ? "Disabled when supported" : mode;
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, locked, patch }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
   const [managerMessage, setManagerMessage] = useState("");
@@ -59,6 +62,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
   const statusProvider = saved?.provider ?? settings.provider;
   const statusModel = saved?.model ?? settings.model;
   const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
+  const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).sort((a, b) => a - b);
 
   const refreshManager = useCallback(async () => {
     try {
@@ -313,7 +317,27 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, loc
         </>
       )}
 
-      <label className="field model-timeout"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
+      <div className="model-generation-settings" aria-label="Generation optimizations">
+        <label className="field">
+          <span className="label">Maximum output</span>
+          <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
+            {outputOptions.map((tokens) => <option key={tokens} value={tokens}>{tokens} tokens</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span className="label">Thinking / reasoning</span>
+          <select value={settings.reasoning_mode} disabled={locked} onChange={(event) => patch({ reasoning_mode: event.target.value })}>
+            {(reasoningModes.length ? reasoningModes : [settings.reasoning_mode]).map((mode) => <option key={mode} value={mode}>{reasoningLabel(mode)}</option>)}
+          </select>
+        </label>
+        <label className="field model-timeout"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
+      </div>
+      <div className="generation-notes" role="note">
+        <p>The output cap bounds worst-case generation time. A limit that is too low can truncate JSON and trigger a repair pass.</p>
+        <p>{settings.reasoning_mode === "off"
+          ? `Disabling reasoning usually reduces latency on compatible ${providerLabel(settings.provider)} models, but may reduce quality on difficult requests. Unsupported models may ignore or reject it.`
+          : "Automatic reasoning can add hidden tokens before the visible reply and substantially increase latency."}</p>
+      </div>
 
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
         <div className="row-actions model-runtime-actions">

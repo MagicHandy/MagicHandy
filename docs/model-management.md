@@ -197,6 +197,27 @@ Settings > Model shows:
 - bounded Ollama candidate rows with filtering and compatibility reasons; and
 - copy progress, failure text, and cancellation.
 
+Generation controls stay deliberately small and provider-aware:
+
+- **Maximum output** defaults to 256 tokens and applies to both the initial and
+  repair pass. llama.cpp receives `max_tokens`; Ollama receives
+  `options.num_predict`. Lower limits bound worst-case generation but can
+  truncate contract JSON and force a repair, so the UI exposes reviewed
+  128/256/512/1024 choices with an explicit warning.
+- **Thinking / reasoning** supports `auto` and `off`. `auto` leaves behavior to
+  the provider/model. `off` sends
+  `chat_template_kwargs.enable_thinking=false` to the pinned llama.cpp server
+  and top-level `think=false` to Ollama. Some templates/models can ignore or
+  reject this override; the UI does not promise support and warns that disabling
+  reasoning can reduce difficult-request quality.
+- Repair temperature `0` is serialized explicitly. Managed llama.cpp remembers
+  a successful load and skips redundant `/health` and `/v1/models` probes on
+  subsequent warm chat/repair calls; explicit status and cold load still probe.
+
+These are latency controls, not a measured speed claim. Keep output quality,
+malformed/repair rate, cold load, prompt evaluation, hidden reasoning, visible
+generation, and total time separate when comparing models.
+
 Runtime Load/Unload actions are available only for managed llama.cpp. They are
 controller-gated in both UI and HTTP and remain disabled while the settings
 form differs from the saved runtime configuration.

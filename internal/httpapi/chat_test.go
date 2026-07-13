@@ -77,6 +77,13 @@ func TestChatStreamRepairsMalformedJSONAndReportsIndicator(t *testing.T) {
 	if provider.callCount() != 2 {
 		t.Fatalf("provider calls = %d, want 2", provider.callCount())
 	}
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	for index, request := range provider.requests {
+		if request.MaxTokens != 256 || request.ReasoningMode != "auto" {
+			t.Fatalf("request %d generation settings = %+v", index, request)
+		}
+	}
 }
 
 func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {

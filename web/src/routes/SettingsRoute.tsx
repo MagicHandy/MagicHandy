@@ -13,6 +13,9 @@ import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
+const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
+  ? "Cloud REST requires Handy firmware v4 with API v3 access."
+  : value;
 const SECTIONS = [
   { id: "device", label: "Device" },
   { id: "model", label: "Model" },
@@ -91,6 +94,7 @@ export function SettingsRoute() {
         parakeet_server_path: s.voice?.parakeet_server_path ?? "",
         parakeet_model_path: s.voice?.parakeet_model_path ?? "",
         parakeet_port: s.voice?.parakeet_port ?? 8990,
+        parakeet_source: s.voice?.parakeet_source ?? "app_managed",
         asr_base_url: s.voice?.asr_base_url ?? "",
         asr_model: s.voice?.asr_model ?? "",
         neutts_runner_path: s.voice?.neutts_runner_path ?? "",
@@ -127,9 +131,12 @@ export function SettingsRoute() {
     motion_styles: [],
     llm_providers: [],
     llama_cpp_modes: [],
+    llm_reasoning_modes: [],
+    llm_max_output_tokens: [],
     prompt_sets: [],
     tts_providers: [],
     asr_providers: [],
+    parakeet_sources: [],
   };
   const sel = (value: string, onChange: (v: string) => void, options: string[] = []) => (
     <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
@@ -155,7 +162,10 @@ export function SettingsRoute() {
             <h2 className="section-title">Device connection</h2>
             <label className="field"><span className="label">Dispatch owner</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
             {owner === "cloud_rest" && <>
-              <label className="field"><span className="label">Firmware / API requirement</span><input type="text" value={s.device.firmware_api_requirement} readOnly /></label>
+              <div className="group device-requirement" role="note" aria-labelledby="device-firmware-requirement">
+                <h3 id="device-firmware-requirement" className="group-title">Firmware / API requirement</h3>
+                <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
+              </div>
               <label className="field"><span className="label">API application ID source</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
               {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
               <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => setNewKey(e.target.value)} /></label>
@@ -174,6 +184,8 @@ export function SettingsRoute() {
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}
             llamaModes={opt.llama_cpp_modes ?? []}
+            reasoningModes={opt.llm_reasoning_modes ?? []}
+            maxOutputOptions={opt.llm_max_output_tokens ?? []}
             locked={locked}
             patch={patchLLM}
           />
@@ -182,7 +194,7 @@ export function SettingsRoute() {
         {section === "voice" && <VoiceSettingsPanel
           settings={s}
           locked={locked}
-          dirty={JSON.stringify(s.voice) !== JSON.stringify(saved?.voice)}
+          dirty={JSON.stringify(s.voice) !== JSON.stringify(saved?.voice) || Boolean(newElevenLabsKey.trim()) || clearElevenLabsKey}
           patch={patchVoice}
           newKey={newElevenLabsKey}
           setNewKey={setNewElevenLabsKey}

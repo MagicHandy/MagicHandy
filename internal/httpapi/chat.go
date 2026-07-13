@@ -59,11 +59,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
 	}
 	service := chat.Service{
-		Provider: provider,
-		Prompt:   prompt,
-		Model:    settings.LLM.Model,
-		Memories: s.personalization.memory.PromptTexts(),
-		Patterns: s.chatPatternChoices(),
+		Provider:      provider,
+		Prompt:        prompt,
+		Model:         settings.LLM.Model,
+		MaxTokens:     settings.LLM.MaxOutputTokens,
+		ReasoningMode: settings.LLM.ReasoningMode,
+		Memories:      s.personalization.memory.PromptTexts(),
+		Patterns:      s.chatPatternChoices(),
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)

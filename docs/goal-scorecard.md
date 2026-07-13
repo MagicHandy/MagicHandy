@@ -102,13 +102,25 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 530,031 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 92,634 gzip bytes, 1,058 bytes over
-   the Phase 14C measurement; the stripped binary is 13,786,624 bytes. These
+   browser payload is 531,060 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 93,663 gzip bytes, 2,087 bytes over
+   the Phase 14C measurement; the stripped binary is 13,802,496 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-13** — Model settings now bound compact LLM output (default 256),
+  expose provider-native automatic/off reasoning with latency/quality/support
+  warnings, serialize zero-temperature repair, and skip redundant warm managed
+  readiness probes. Cloud firmware/API requirements render as a notice rather
+  than a disabled-looking field. Voice settings distinguish the detected
+  MagicHandy Parakeet module from custom local paths and explain Enable > Save >
+  Start; Start now means model-ready. The source updater safely handles live and
+  merged/deleted feature upstreams with ancestry-checked fast-forwards. Plain /
+  stripped binaries are 19,704,320 / 13,802,496 bytes; embedded UI is 776,296
+  raw / 531,060 gzip bytes (93,663 gzip excluding unchanged artwork). LLM runtime
+  latency remains unmeasured; these figures are size evidence only.
 
 - **2026-07-13** — Chat's heading now aligns with its wide workspace and the
   position visualizer uses a compact vertical Handy body/sleeve form. Speed and
