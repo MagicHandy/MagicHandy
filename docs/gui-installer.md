@@ -157,6 +157,6 @@ where the logic lives.
 | StrokeGPT-ReVibed importer API (dry-run, report, non-destructive) | Phase 15 (wizard consumes it in slice 16.3) |
 | Signing / auto-update / WebView2 shell decisions | Phase 16 decision docs (already listed) |
 
-`install.ps1` stays for source-first developers and unattended installs, and
-shrinks over time to a wrapper that fetches a release and defers to the same
-in-app setup.
+`install.ps1` stays for source-first developers and unattended installs, with
+`update.ps1` preserving or revisiting its non-secret choices. Both shrink over
+time to wrappers that fetch a release and defer to the same in-app setup.

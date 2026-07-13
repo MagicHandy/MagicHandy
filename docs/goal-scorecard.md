@@ -23,15 +23,15 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-11, Phase 14B implementation
+## Snapshot — 2026-07-13, Phase 14C/source-installer follow-up
 
 ### Goal 1: Maintainability
 
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
-| CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20) |
+| CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target. Runtime build state is isolated in a 447-line manager and a 244-line embedded PowerShell helper rather than added to the provider adapter or HTTP server. |
+| Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target. Runtime build state stays isolated from provider/HTTP code; the embedded helper is 283 lines. The source-installer support module is a focused 861-line guideline exception, with 338/122-line install/update entry points and separate tests/docs. |
 | Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. The 544-line model panel and 372-line model stylesheet are separate from the routed Settings shell and shared controls; `web/dist` remains the single shipped build. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Final Phase 14C artwork/visualizer revision: 19,675,648 bytes plain and 13,779,968 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Source-installer follow-up: 19,677,696 bytes plain and 13,782,016 bytes stripped with `-ldflags "-s -w"`; the embedded compiler-discovery helper adds 2,048 bytes to each Phase 14C build and remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -109,6 +109,20 @@ Ranked by threat to the stated goals:
    but future bitmap additions must not normalize this one-time fidelity cost.
 
 ## History
+
+- **2026-07-13** — source installation can now begin on 64-bit Windows without
+  preinstalled Go, Git, CMake, MSVC, CUDA, or Ollama. Missing selected packages
+  are consented, installed through WinGet (with Microsoft's repair path), and
+  verified in-process. The installer builds the core plus all three first-party
+  voice adapters and atomically stores only non-secret choices. `update.ps1`
+  displays those choices, asks whether to revise them, refuses dirty trees, and
+  fast-forwards before rebuilding. Both entry points add operation branding and
+  honest ready/plan-only completion art. Windows PowerShell 5.1 tests cover
+  state hygiene, dependency graphs, launcher quoting, clean fast-forward, and
+  dirty-tree refusal. A clean pinned CPU llama.cpp build completed in 70.8 s and
+  reported `c749cb0`; broad Go/frontend gates passed. Plain/stripped binaries
+  are 19,677,696 / 13,782,016 bytes; UI bytes and the 53.47 MiB idle sample are
+  retained because only the explicit-build helper changed at runtime.
 
 - **2026-07-12** — Phase 14C adds the route-independent connection manager with
   provider-scoped live actions and immediate speed/stroke limits. Its trigger

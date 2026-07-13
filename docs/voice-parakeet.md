@@ -29,9 +29,11 @@ server.
 
 ## Installer
 
-`install.ps1` offers this setup explicitly after the core build and LLM
-questions. It downloads only after consent, verifies both SHA-256 values, and
-places the optional runner and model under the selected MagicHandy data folder:
+`install.ps1` builds the small Parakeet Go adapter with the rest of the app, then
+offers the external runner/model setup explicitly after the LLM questions. It
+downloads only after consent, verifies both SHA-256 values, and places the
+optional assets under the selected MagicHandy data folder. `update.ps1`
+preserves this choice unless the user elects to reconfigure it:
 
 | Artifact | Version / file | Size | License | Verification |
 | --- | --- | ---: | --- | --- |
@@ -39,7 +41,7 @@ places the optional runner and model under the selected MagicHandy data folder:
 | Model | `tdt-0.6b-v3-q4_k.gguf` | 644 MiB | CC-BY-4.0 | Hugging Face LFS SHA-256 |
 | Worker | `voice-parakeet-worker.exe` | built locally | GPL-3.0-only | Go build |
 
-The installer builds the worker but does not enable or start voice. In
+The installer does not enable or start voice. In
 **Settings > Voice**, enable voice workers, select **Parakeet (managed, local)**
 as the Speech input provider, and set the installed `parakeet-server.exe` and
 GGUF model paths. The app resolves `voice-parakeet-worker.exe` automatically

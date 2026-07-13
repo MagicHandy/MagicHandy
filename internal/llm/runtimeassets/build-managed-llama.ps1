@@ -20,6 +20,31 @@ function Resolve-Executable([string]$Name) {
     if ($null -ne $command) {
         return $command.Source
     }
+
+    $candidates = switch ($Name.ToLowerInvariant()) {
+        'git' { @((Join-Path $env:ProgramFiles 'Git\cmd\git.exe')) }
+        'cmake' { @((Join-Path $env:ProgramFiles 'CMake\bin\cmake.exe')) }
+        default { @() }
+    }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    if ($Name -eq 'nvcc') {
+        $cudaRoot = Join-Path $env:ProgramFiles 'NVIDIA GPU Computing Toolkit\CUDA'
+        if (Test-Path -LiteralPath $cudaRoot) {
+            $candidate = Get-ChildItem -LiteralPath $cudaRoot -Directory -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending |
+                ForEach-Object { Join-Path $_.FullName 'bin\nvcc.exe' } |
+                Where-Object { Test-Path -LiteralPath $_ } |
+                Select-Object -First 1
+            if ($candidate) {
+                return $candidate
+            }
+        }
+    }
     return $null
 }
 
@@ -37,16 +62,27 @@ function Resolve-CMake {
         }
     }
 
-    $visualStudioRoot = Join-Path $env:ProgramFiles 'Microsoft Visual Studio'
-    if (Test-Path -LiteralPath $visualStudioRoot) {
-        $candidate = Get-ChildItem -Path $visualStudioRoot -Filter cmake.exe -File -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -like '*CommonExtensions*Microsoft*CMake*bin*' } |
-            Select-Object -First 1
-        if ($null -ne $candidate) {
-            return $candidate.FullName
+    foreach ($programFilesRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+        $visualStudioRoot = Join-Path $programFilesRoot 'Microsoft Visual Studio'
+        if (Test-Path -LiteralPath $visualStudioRoot) {
+            $candidate = Get-ChildItem -Path $visualStudioRoot -Filter cmake.exe -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -like '*CommonExtensions*Microsoft*CMake*bin*' } |
+                Select-Object -First 1
+            if ($null -ne $candidate) {
+                return $candidate.FullName
+            }
         }
     }
     return $null
+}
+
+function Test-VCToolchain {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswhere)) {
+        return $false
+    }
+    $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    return -not [string]::IsNullOrWhiteSpace(($installation | Select-Object -First 1))
 }
 
 function Invoke-Checked([string]$Executable, [string[]]$Arguments, [string]$Failure) {
@@ -135,6 +171,9 @@ if (-not $git) {
 $cmake = Resolve-CMake
 if (-not $cmake) {
     throw 'CMake is required to build llama.cpp. Install CMake or the Visual Studio CMake tools, then retry.'
+}
+if (-not (Test-VCToolchain)) {
+    throw 'The Visual Studio Desktop C++ Build Tools workload is required to build llama.cpp. Run install.ps1 to provision it, then retry.'
 }
 
 $selectedBackend = $Backend

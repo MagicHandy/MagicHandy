@@ -291,6 +291,13 @@ reuse and the Ollama-without-managed-runtime path. R13 remains High until CUDA
 build/load/chat, curated downloads, and hardware-fit guidance have real-system
 evidence.
 
+Source-install mitigation (2026-07-13): `install.ps1` now provisions and verifies
+missing Go/Git/CMake/MSVC/Windows SDK/CUDA/Ollama dependencies before a selected
+build, while `update.ps1` reuses atomic non-secret choices unless the user opts
+to revise them. Windows PowerShell 5.1 plan tests cover managed CUDA and
+Ollama-only dependency graphs. This reduces manual setup drift but is not CUDA
+build/load/chat evidence and does not lower R13 yet.
+
 ## R14: Per-Source Motion Path Divergence
 
 Level: High

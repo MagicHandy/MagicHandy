@@ -34,16 +34,21 @@ MagicHandy Go core itself.
 
 - **Build/run from source:** `go run ./cmd/magichandy` (or `go build`). No venv,
   no pip.
-- **Interactive installer (`install.ps1`, this repo):** checks for Go and offers
-  to install it (winget), builds the binary, sets up a data folder, detects an
-  NVIDIA GPU, and offers a pinned managed llama.cpp source build with CPU/CUDA
-  selection. It explains why direct llama.cpp control helps and lets existing
-  Ollama users decline the build to save space (`-SkipLlamaBuild` supports the
-  same choice in unattended runs). It also offers an optional local Parakeet
-  ASR setup. The Parakeet path downloads a pinned CPU runner and model only
-  after consent, shows size and license, verifies SHA-256, builds the worker,
-  and leaves voice disabled. The installer can also write a
+- **Interactive installer (`install.ps1`, this repo):** can bootstrap a clean
+  64-bit Windows machine. It repairs/installs WinGet through Microsoft's
+  supported PowerShell path when needed, then installs and verifies Go. A
+  selected managed llama.cpp source build additionally provisions Git, CMake,
+  the Visual Studio Desktop C++ workload/Windows SDK, and CUDA when selected.
+  Choosing Ollama avoids that compiler/runtime footprint; the installer can
+  provision Ollama too. It builds the core and all three first-party Go voice
+  adapters. Optional Parakeet assets remain consented, size/license-visible,
+  and SHA-256 verified, and voice remains disabled. The installer can write a
   `Start-MagicHandy.ps1` launcher and open the app.
+- **State-aware source updater (`update.ps1`):** atomically reads the non-secret
+  install choices stored under LocalAppData, shows them, asks whether to revise
+  them, refuses a dirty worktree, fast-forwards with `git pull --ff-only`, and
+  rebuilds through the same provisioning implementation. Provider credentials
+  and the Handy connection key never enter installer state.
 - **Local model manager:** Settings > Model lists runtime/daemon models and
   SQLite-backed managed GGUF copies. Users can import a standalone GGUF or scan
   a configurable Ollama library path and copy a compatible model with
@@ -56,11 +61,14 @@ MagicHandy Go core itself.
 
 ## Gaps vs the target
 
-1. No packaged release yet — install still requires Go to build (Phase 16).
+1. No packaged release yet. Source setup no longer requires Go or the compiler
+   to be preinstalled, but it installs a multi-GB developer toolchain when a
+   managed source build is selected. Phase 16 still owns a prebuilt path that
+   does not install those tools at all.
 2. No in-app curated model catalog or guided network download yet. Local GGUF
    and compatible Ollama-library imports are implemented with copy progress.
-3. GPU handling chooses CPU/CUDA from available build tooling, but does not yet
-   recommend a model from detected VRAM or install the CUDA toolkit itself.
+3. GPU handling can install the CUDA Toolkit when CUDA is explicitly selected,
+   but does not yet recommend a model from detected VRAM.
 4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
 5. Voice setup is partial: provider adapters, provider-scoped settings, browser
@@ -72,8 +80,10 @@ MagicHandy Go core itself.
 
 Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
 
-1. **Bootstrap installer — done** (`install.ps1`): Go, build, data folder, LLM
-   guidance, launch. The entry point until releases exist.
+1. **Bootstrap installer — done** (`install.ps1`, `update.ps1`): bare-machine
+   WinGet/Go/toolchain provisioning, complete first-party Go binary build, data
+   folder, LLM/voice choices, atomic non-secret state, choice-preserving source
+   updates, launcher, and launch. This is the entry point until releases exist.
 2. **Model-manager foundation (done).** Durable model inventory, provider model
    list, standalone GGUF import, configurable Ollama-path scan/import,
    checksum verification, cancellation, selection, and guarded removal.
@@ -82,6 +92,7 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    no Go required for end users. Production signing remains an explicit Phase
    16 decision. Linux/macOS artifacts are best-effort.
 4. **Managed llama.cpp runner provisioning (done for source installs).** The
+   installer provisions missing Git/CMake/MSVC/CUDA build dependencies, and the
    installer and Model UI invoke one embedded helper pinned to `b9966` /
    `c749cb0`, verify the checkout and executable, build CPU or CUDA, install the
    complete runtime atomically, and activate a constrained app-data manifest.
@@ -119,6 +130,9 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 - **Downloads are explicit user actions** with visible size, license, checksum,
   and disk-use; verify before install and move files atomically. Startup and
   status checks must never kick off a multi-GB download.
+- **Build-tool installation is explicit too.** WinGet package agreements are
+  accepted only after the script names the package, purpose, license, and large
+  disk impact. `-Yes` is the unattended form of that consent.
 - **The core stays pure-Go.** CUDA/torch and any native ML live in the external
   runner or a worker process, never in the MagicHandy binary.
 - **Secrets never touch logs or the catalog** — the connection key and any API
@@ -130,13 +144,13 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 
 | StrokeGPT-ReVibed setup capability | MagicHandy status | Where |
 | --- | --- | --- |
-| One-command environment setup | Partial — `install.ps1` builds from source | this repo |
+| One-command environment setup | **Implemented for source installs** — bootstraps dependencies and compiler | `install.ps1` |
 | No Python/venv/torch to install | **Better** — pure-Go core, none needed | by design |
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
 | Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
 | Curated model download UI | Planned | catalog + Settings > Model |
-| GPU/VRAM-aware recommendations | Detection + advice today | install.ps1 GPU detection |
+| GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
 | Voice model setup | Partial - adapters/UI landed; opt-in Parakeet installer only | Phase 13 + Phase 16 provisioning |
@@ -145,6 +159,9 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 ## Related docs
 
 - `install.ps1` — the interactive installer.
+- `update.ps1` — the choice-preserving source updater.
+- `scripts/installer/InstallerSupport.psm1` — shared provisioning/state logic.
+- `docs/source-installer.md` — package IDs, state schema, commands, and updater contract.
 - `IMPLEMENTATION_PLAN.md` — Phase 16 (packaging), Phases 12-13 (voice).
 - `docs/model-management.md` — model catalog and llama.cpp runner strategy.
 - `docs/risk-register.md` — R13 (runner/model management), R18 (LAN/HTTPS).

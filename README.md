@@ -54,14 +54,35 @@ verify SHA-256; they never modify the Ollama library.
 .\install.ps1
 ```
 
-The installer checks for [Go](https://go.dev/dl/), builds MagicHandy, sets up
-your data folder, and offers to build the pinned managed llama.cpp runtime from
-source. It explains the benefits and storage cost before asking: choose **No**
-to keep using an existing Ollama installation without the extra runtime, or use
-`-SkipLlamaBuild` in an unattended install. When setup is done it opens the app
-at <http://127.0.0.1:49717>.
+The source installer can start on a clean 64-bit Windows machine. With consent,
+it repairs Windows Package Manager when needed; installs Go; and provisions
+Git, CMake, the Visual Studio Desktop C++ workload, and CUDA only when the
+selected managed llama.cpp build requires them. Choosing Ollama instead avoids
+that managed runtime and compiler toolchain. It builds the core plus the
+Parakeet, NeuTTS Air, and ElevenLabs Go adapters; the optional Parakeet runner
+and 644 MiB model remain a separate, checksum-verified prompt.
+
+Use `-SkipLlamaBuild` to choose Ollama without the extra managed runtime, or
+`-Yes -LlamaBackend cuda` for an unattended full CUDA source setup. `-Yes`
+accepts the displayed third-party package licenses and large-download choices;
+use `-PlanOnly` to inspect the work first. When setup is done the app opens at
+<http://127.0.0.1:49717>.
+
+The installer stores only non-secret choices in
+`%LOCALAPPDATA%\MagicHandy\install-state.json`. Update the checkout and rebuild
+without losing those choices with:
+
+```powershell
+.\update.ps1
+```
+
+The updater shows the saved data directory, port, llama.cpp/Ollama selection,
+Parakeet choice, and launcher choice, then asks whether to modify them. It
+refuses to pull over local source changes and uses `git pull --ff-only`.
 
 **Prefer to do it by hand?** See [Build from source](#build-from-source).
+Detailed package, state, and updater behavior is documented in
+[`docs/source-installer.md`](docs/source-installer.md).
 
 One-click packaging, guided model download, and GPU/CUDA setup are being brought
 up to the polish of the original StrokeGPT app — see the plan in
