@@ -35,8 +35,8 @@ transport, or the control UI:
   `docs/risk-register.md` R14).
 - **Transports implement the transport interface, nothing more.** A new device
   backend (Cloud REST, Browser Bluetooth, Intiface/Buttplug, …) is a *dispatch
-  owner* behind the `transport` interface (`Stop`, `SetStrokeWindow`, `AddHSP`,
-  `PlayHSP`, `Diagnostics`). It maps the engine's semantic 0–100 to the device
+  owner* behind the `transport` interface (`Stop`, `SetStrokeWindow`,
+  `AppendPoints`, `Play`, `Diagnostics`). It maps the engine's semantic 0–100 to the device
   at the boundary; it never reaches back into the engine or invents a second
   motion model (ADR 0002).
 - **Stop always works.** Emergency Stop is always mounted, reachable by

@@ -67,11 +67,11 @@ func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode cloud command response: %v", err)
 	}
-	if response.Result.Kind != transport.CommandKindHSPAdd || !response.Result.OK {
+	if response.Result.Kind != transport.CommandKindPointsAdd || !response.Result.OK {
 		t.Fatalf("result = %+v, want successful HSP add", response.Result)
 	}
 	rows := server.traces.Rows()
-	if len(rows) != 1 || rows[0].TransportResult.Kind != transport.CommandKindHSPAdd {
+	if len(rows) != 1 || rows[0].TransportResult.Kind != transport.CommandKindPointsAdd {
 		t.Fatalf("trace rows = %+v, want one HSP add row", rows)
 	}
 }

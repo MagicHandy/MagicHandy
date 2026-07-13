@@ -18,21 +18,21 @@ const (
 	CommandKindStop CommandKind = "stop"
 	// CommandKindStrokeWindow applies a physical stroke envelope.
 	CommandKindStrokeWindow CommandKind = "stroke_window"
-	// CommandKindHSPAdd appends HSP timed points to a stream.
-	CommandKindHSPAdd CommandKind = "hsp_add"
-	// CommandKindHSPPlay starts or resumes an HSP stream.
-	CommandKindHSPPlay CommandKind = "hsp_play"
+	// CommandKindPointsAdd appends timed points to a stream.
+	CommandKindPointsAdd CommandKind = "points_add"
+	// CommandKindPointsPlay starts or resumes a timed-point stream.
+	CommandKindPointsPlay CommandKind = "points_play"
 )
 
-// Transport is the deterministic boundary used by motion code to command Handy
+// Transport is the deterministic boundary used by motion code to command
 // playback without knowing the concrete dispatch owner.
 type Transport interface {
 	DiagnosticsProvider
 
 	Stop(context.Context, StopCommand) (CommandResult, error)
 	SetStrokeWindow(context.Context, StrokeWindowCommand) (CommandResult, error)
-	AddHSP(context.Context, HSPAddCommand) (CommandResult, error)
-	PlayHSP(context.Context, HSPPlayCommand) (CommandResult, error)
+	AppendPoints(context.Context, AppendPointsCommand) (CommandResult, error)
+	Play(context.Context, PlayCommand) (CommandResult, error)
 }
 
 // DiagnosticsProvider exposes a safe transport diagnostics snapshot.
@@ -40,10 +40,10 @@ type DiagnosticsProvider interface {
 	Diagnostics() TransportDiagnostics
 }
 
-// TimedPoint is a single HSP timed point. Position is expressed as 0..100.
+// TimedPoint is a single transport-neutral timed point. Position is expressed as 0..100.
 type TimedPoint struct {
-	PositionPercent int   `json:"position_percent"`
-	TimeMillis      int64 `json:"time_ms"`
+	PositionPercent float64 `json:"position_percent"`
+	TimeMillis      int64   `json:"time_ms"`
 }
 
 // StopCommand requests transport stop.
@@ -53,18 +53,19 @@ type StopCommand struct {
 
 // StrokeWindowCommand applies the physical stroke envelope at transport level.
 type StrokeWindowCommand struct {
-	MinPercent int `json:"min_percent"`
-	MaxPercent int `json:"max_percent"`
+	MinPercent       int  `json:"min_percent"`
+	MaxPercent       int  `json:"max_percent"`
+	ReverseDirection bool `json:"reverse_direction,omitempty"`
 }
 
-// HSPAddCommand appends timed points to an HSP stream.
-type HSPAddCommand struct {
+// AppendPointsCommand appends timed points to a stream.
+type AppendPointsCommand struct {
 	StreamID string       `json:"stream_id"`
 	Points   []TimedPoint `json:"points"`
 }
 
-// HSPPlayCommand starts or resumes playback of an HSP stream.
-type HSPPlayCommand struct {
+// PlayCommand starts or resumes playback of a timed-point stream.
+type PlayCommand struct {
 	StreamID         string `json:"stream_id"`
 	StartTimeMillis  int64  `json:"start_time_ms"`
 	ServerTimeMillis int64  `json:"server_time_ms,omitempty"`
@@ -83,8 +84,8 @@ type Command struct {
 	Stop         *StopCommand         `json:"stop,omitempty"`
 	StrokeWindow *StrokeWindowCommand `json:"stroke_window,omitempty"`
 	HSPSetup     *HSPSetupCommand     `json:"hsp_setup,omitempty"`
-	HSPAdd       *HSPAddCommand       `json:"hsp_add,omitempty"`
-	HSPPlay      *HSPPlayCommand      `json:"hsp_play,omitempty"`
+	PointsAdd    *AppendPointsCommand `json:"points_add,omitempty"`
+	PointsPlay   *PlayCommand         `json:"points_play,omitempty"`
 }
 
 // CommandResult captures safe transport command outcome details.

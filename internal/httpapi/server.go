@@ -41,6 +41,7 @@ type Runtime struct {
 	LLMHTTPClient          *http.Client
 	CloudBaseURL           string
 	CloudHTTPClient        *http.Client
+	IntifaceHTTPClient     *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
 	// ExecutablePath makes first-party worker discovery deterministic and
 	// injectable in tests. Empty falls back to os.Executable.
@@ -56,6 +57,7 @@ type Server struct {
 	transport       transport.DiagnosticsProvider
 	cloud           cloudRuntime
 	bluetooth       bluetoothRuntime
+	intiface        intifaceRuntime
 	motion          motionRuntime
 	llm             llmRuntime
 	models          *llm.ModelManager
@@ -121,6 +123,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		transport:       runtime.Transport,
 		cloud:           newCloudRuntime(runtime),
 		bluetooth:       newBluetoothRuntime(runtime),
+		intiface:        newIntifaceRuntime(runtime),
 		motion:          newMotionRuntime(runtime),
 		llm:             newLLMRuntime(runtime),
 		models:          modelManager,
@@ -212,6 +215,13 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/transport/bluetooth/hsp-add", s.handleBluetoothHSPAdd)
 	mux.HandleFunc("POST /api/transport/bluetooth/hsp-play", s.handleBluetoothHSPPlay)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
+	mux.HandleFunc("GET /api/transport/intiface/status", s.handleIntifaceStatus)
+	mux.HandleFunc("POST /api/transport/intiface/connect", s.handleIntifaceConnect)
+	mux.HandleFunc("POST /api/transport/intiface/disconnect", s.handleIntifaceDisconnect)
+	mux.HandleFunc("POST /api/transport/intiface/scan", s.handleIntifaceStartScan)
+	mux.HandleFunc("DELETE /api/transport/intiface/scan", s.handleIntifaceStopScan)
+	mux.HandleFunc("POST /api/transport/intiface/select", s.handleIntifaceSelect)
+	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	mux.HandleFunc("POST /api/motion/start", s.handleMotionStart)
@@ -289,7 +299,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring",
 			"motion":    "manual",
-			"transport": "cloud_rest_browser_bluetooth_manual",
+			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
 	})
@@ -322,7 +332,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring",
 			"motion":    "manual",
-			"transport": "cloud_rest_browser_bluetooth_manual",
+			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
 		"llm":                 s.llmState(r.Context()),
@@ -337,6 +347,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"cloud_transport":     s.cloudDiagnostics(),
 		"bluetooth_transport": s.bluetoothDiagnostics(),
 		"bluetooth_bridge":    s.bluetooth.bridge.Snapshot(),
+		"intiface_transport":  s.intifaceSnapshot(),
 		"trace":               s.traces.Summary(),
 	})
 }

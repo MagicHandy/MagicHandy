@@ -64,7 +64,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
-| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | Planned | — |
+| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; matched HW paths validated, feel confirmation open** | #59 |
 | 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
 | 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
 
@@ -929,7 +929,10 @@ capped below 40% intensity; synthetic tests cannot establish physical feel.
 
 # Phase 14B: Intiface Dispatch Owner
 
-Status: planned. Decision and schema evaluation recorded in
+Status: implemented with automated contract, API, lifecycle, and UI coverage;
+the matched Handy paths and trace health are validated, with subjective feel
+confirmation still open.
+Decision and schema evaluation recorded in
 [ADR 0010](docs/decisions/0010-transport-neutral-frames-intiface.md), which
 revises ADR 0006's HSP-only dispatch-owner scope and resolves
 `docs/lso-merge-alternatives.md` Decision 2 as a first-class owner.
@@ -1000,6 +1003,33 @@ behind this contract instead of writing a parallel implementation (R20).
 - The same pattern played over Cloud REST and Intiface on the same Handy is
   indistinguishable in feel at matched latency (manual evidence, like the
   Phase 14 feel check).
+
+## Implementation Evidence
+
+- The neutral `AppendPoints`/`Play` contract and float positions are used by
+  the engine and all owners; Handy quantization occurs only at its encoding
+  boundaries.
+- `TestTransportOwnersPreserveNeutralFrameContract` runs one fractional frame
+  through Cloud REST, browser Bluetooth, and Intiface and checks exactly-once
+  window/reverse mapping plus unchanged point timing/count.
+- `TestTransportOwnersStopPreemptionContract` runs the same Stop-ordering
+  invariant against all three owners and rejects motion emitted after Stop.
+- The fake Buttplug v3 server covers handshake, ping failure, discovery,
+  selection, stop/close preemption, queue bounds, underrun, command rejection,
+  and diagnostics. HTTP integration covers connect/select/dispatch/disconnect.
+- The React route covers saved-address gating, connect/disconnect, scanning,
+  and one linear-actuator selection without constructing transport payloads.
+- A 2026-07-12 Intiface Central session discovered `The Handy (FW4+)` and ran
+  the shared stroke pattern at 20% through Start, Pause, phase-preserving
+  Resume, a live 30–70% reverse refresh, and Stop. Nineteen trace rows had no
+  failed result or starvation. Repeated idle Stop produced distinct successful
+  commands, and disconnect recorded its close-time Stop. See `docs/intiface.md`.
+- A matched Cloud REST run used the same 20% cap, pattern, Pause/Resume, and
+  live 30–70% reverse refresh. Its 23 trace rows contained 19 successful
+  transport results and no starvation. Pause, active Stop, and repeated-idle
+  Stop were distinct successful deliveries at 317, 311, and 310 ms.
+- Subjective matched feel still needs operator confirmation. No non-Handy
+  linear device was available, so that conditional run remains unperformed.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 

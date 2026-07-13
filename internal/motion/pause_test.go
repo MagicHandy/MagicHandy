@@ -94,7 +94,7 @@ func TestEngineResumePreservesTargetAndPhase(t *testing.T) {
 	}
 
 	// A fresh play command went out for the new stream.
-	if countCommands(fake.Commands(), transport.CommandKindHSPPlay) != 2 {
+	if countCommands(fake.Commands(), transport.CommandKindPointsPlay) != 2 {
 		t.Fatalf("commands = %+v, want a second HSP play after resume", fake.Commands())
 	}
 	assertTraceAnnotation(t, traces.Rows(), "test_resume", "phase_preserved=true")

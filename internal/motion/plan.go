@@ -33,7 +33,7 @@ type MotionSample struct {
 	PlanID          string    `json:"plan_id"`
 	PatternID       PatternID `json:"pattern_id,omitempty"`
 	ProgramID       string    `json:"program_id,omitempty"`
-	PositionPercent int       `json:"position_percent"`
+	PositionPercent float64   `json:"position_percent"`
 	TimeMillis      int64     `json:"time_ms"`
 	Phase           float64   `json:"phase"`
 }
@@ -77,7 +77,7 @@ func (p MotionPlan) SampleAt(streamMillis int64) MotionSample {
 		PlanID:          p.ID,
 		PatternID:       p.PatternID,
 		ProgramID:       p.ProgramID,
-		PositionPercent: clamp(int(math.Round(position)), 0, 100),
+		PositionPercent: math.Max(0, math.Min(100, position)),
 		TimeMillis:      streamMillis,
 		Phase:           phase,
 	}
@@ -211,14 +211,14 @@ func applyTargetFocus(value float64, target MotionTarget) float64 {
 	return position
 }
 
-func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current int, currentDirection int) float64 {
+func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current float64, currentDirection int) float64 {
 	candidatePlan := NewMotionPlan("candidate", target, settings, 0, 0, time.Unix(0, 0))
 	bestPhase := 0.0
 	bestDistance := math.MaxFloat64
 	for index := range 64 {
 		phase := float64(index) / 64
 		position := candidatePlan.SampleAt(int64(float64(candidatePlan.PeriodMillis) * phase)).PositionPercent
-		distance := math.Abs(float64(position - current))
+		distance := math.Abs(position - current)
 		candidateDirection := candidatePlan.DirectionAt(int64(float64(candidatePlan.PeriodMillis) * phase))
 		score := handoffScore(distance, currentDirection, candidateDirection)
 		if score < bestDistance {

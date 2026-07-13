@@ -83,7 +83,7 @@ func TestPlanUsesResolvedPatternAndFiniteProgram(t *testing.T) {
 		PatternID: pattern.ID, Pattern: &pattern, SpeedPercent: 100,
 	}, settings, 0, 0, time.Unix(0, 0))
 	if got := plan.SampleAt(0).PositionPercent; got != 30 {
-		t.Fatalf("resolved custom sample = %d, want 30", got)
+		t.Fatalf("resolved custom sample = %g, want 30", got)
 	}
 
 	program := ProgramDefinition{
@@ -97,6 +97,22 @@ func TestPlanUsesResolvedPatternAndFiniteProgram(t *testing.T) {
 		t.Fatalf("finite completion state is wrong: %+v", finite)
 	}
 	if got := finite.SampleAt(5000).PositionPercent; got != 100 {
-		t.Fatalf("finite endpoint = %d, want held final position", got)
+		t.Fatalf("finite endpoint = %g, want held final position", got)
+	}
+}
+
+func TestMotionPlanPreservesFractionalSamplePosition(t *testing.T) {
+	curve, err := NewCurve([]CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 1000, PositionPercent: 100},
+	}, 1000, false)
+	if err != nil {
+		t.Fatalf("NewCurve: %v", err)
+	}
+	plan := MotionPlan{ID: "fractional", PeriodMillis: 1000, curve: curve}
+	got := plan.SampleAt(333).PositionPercent
+	want := curve.Sample(333)
+	if math.Abs(got-want) > 0.000001 || got == math.Round(got) {
+		t.Fatalf("sample position = %.9f, want fractional curve value %.9f without sampler rounding", got, want)
 	}
 }

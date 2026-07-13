@@ -3,6 +3,7 @@ module github.com/mapledaemon/MagicHandy
 go 1.25.0
 
 require (
+	github.com/coder/websocket v1.8.15
 	go.uber.org/goleak v1.3.0
 	modernc.org/sqlite v1.53.0
 )

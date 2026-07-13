@@ -2,7 +2,7 @@
 // so it is present on every route and reachable by read-only/offline clients.
 // Esc is the documented global shortcut. See docs/ui-design.md (Emergency Stop).
 import { useCallback, useEffect } from "react";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import { useAppState, useToast } from "../state/app-state";
 import { StopIcon } from "./icons";
 
@@ -12,10 +12,13 @@ export function StopButton({ className = "" }: { className?: string }) {
 
   const stop = useCallback(async () => {
     try {
-      await api.stopMotion();
-      show("Stopped.");
-    } catch {
-      show("Stop request failed — check the connection.", "error");
+      const result = await api.stopMotion();
+      show(result?.error ?? "Stopped.", result?.error ? "error" : "info");
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : "Stop request failed — check the connection.";
+      show(message, "error");
     } finally {
       refresh();
     }

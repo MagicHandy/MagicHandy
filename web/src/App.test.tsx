@@ -16,13 +16,13 @@ const baseState = {
   settings: {
     version: 1,
     server: { port: 49717 },
-    device: { hsp_dispatch_owner: "cloud_rest", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled", connection_key_set: false },
+    device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "v4/v3", api_application_id_source: "bundled", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000 },
     voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], speak_replies: false, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
-      hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth"],
+      hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth", "intiface"],
       api_application_id_sources: ["bundled", "developer_override"],
       diagnostics_verbosities: ["normal", "debug", "trace"],
       llm_providers: ["llama_cpp", "ollama"],
@@ -111,12 +111,33 @@ function jsonRes(data: unknown) {
   return { ok: true, status: 200, text: async () => JSON.stringify(data) } as Response;
 }
 
-function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+function installFetch(opts: { state?: typeof baseState & { bluetooth_bridge?: unknown }; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as typeof baseState & { bluetooth_bridge?: unknown };
   const chatLog = opts.chatLog ?? [];
+  let intiface = (state as typeof state & { intiface_transport?: Record<string, any> }).intiface_transport ?? {
+    dispatch_owner: "intiface",
+    address: state.settings.device.intiface_server_address,
+    status: { connected: false, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
+    diagnostics: {},
+  };
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     if (opts.fail) throw new Error("offline");
     const u = String(input);
+    if (u.includes("/api/motion/stop")) {
+      const status = opts.stopStatus ?? 200;
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        text: async () => JSON.stringify(opts.stopError ? { error: opts.stopError } : {}),
+      } as Response;
+    }
+    if (u.includes("/api/transport/intiface")) {
+      if (u.endsWith("/connect")) intiface = { ...intiface, status: { ...intiface.status, connected: true, max_ping_time_ms: 500, devices: [{ device_index: 7, device_name: "Test Linear", linear_actuators: [{ index: 0, feature_descriptor: "Position" }] }] } };
+      if (u.endsWith("/disconnect")) intiface = { ...intiface, status: { ...intiface.status, connected: false, devices: [] } };
+      if (u.endsWith("/scan")) intiface = { ...intiface, status: { ...intiface.status, scanning: _init?.method !== "DELETE" } };
+      if (u.endsWith("/select")) intiface = { ...intiface, status: { ...intiface.status, selected_device_index: 7, selected_actuator_index: 0 } };
+      return jsonRes(intiface);
+    }
     if (u.includes("/api/transport/bluetooth/status")) return jsonRes({ status: "success", dispatch_owner: state.settings.device.hsp_dispatch_owner, bluetooth: state.bluetooth_bridge ?? {} });
     if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0 });
     if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
@@ -582,6 +603,45 @@ describe("app shell safety invariants", () => {
     go("#/settings/device");
     expect(await screen.findByText(/bluetooth disconnected/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
+  });
+
+  it("reports an unreachable transport after preserving local Stop state", async () => {
+    installFetch({ stopError: "stop could not reach the configured transport" });
+    renderApp();
+    const stop = await screen.findByRole("button", { name: /emergency stop/i });
+    fireEvent.click(stop);
+    expect(await screen.findByText(/stop could not reach the configured transport/i)).toBeInTheDocument();
+  });
+
+  it("shows the backend delivery error when transport Stop fails", async () => {
+    installFetch({ stopError: "Intiface Stop was rejected", stopStatus: 502 });
+    renderApp();
+    const stop = await screen.findByRole("button", { name: /emergency stop/i });
+    fireEvent.click(stop);
+    expect(await screen.findByText(/Intiface Stop was rejected/i)).toBeInTheDocument();
+  });
+
+  it("connects and selects a discovered Intiface linear actuator", async () => {
+    installFetch({
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, hsp_dispatch_owner: "intiface" } },
+        intiface_transport: {
+          dispatch_owner: "intiface",
+          address: "ws://127.0.0.1:12345",
+          status: { connected: false, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
+          diagnostics: {},
+        },
+      } as typeof baseState,
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/device");
+    fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
+    expect(await screen.findByText(/connected - select a linear actuator/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /linear actuator/i }), { target: { value: "7:0" } });
+    fireEvent.click(screen.getByRole("button", { name: /use actuator/i }));
+    expect(await screen.findByText(/connected - ready/i)).toBeInTheDocument();
   });
 
   it("seeds chat history from the shared server log", async () => {

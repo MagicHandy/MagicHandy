@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -17,10 +18,15 @@ const (
 )
 
 const (
-	// DispatchOwnerCloudREST is the initial HSP dispatch owner placeholder.
+	// DispatchOwnerCloudREST selects backend-owned Handy Cloud REST dispatch.
 	DispatchOwnerCloudREST = "cloud_rest"
-	// DispatchOwnerBrowserBluetooth is the future browser-owned BLE dispatch owner.
+	// DispatchOwnerBrowserBluetooth selects browser-owned Bluetooth dispatch.
 	DispatchOwnerBrowserBluetooth = "browser_bluetooth"
+	// DispatchOwnerIntiface selects backend-owned Intiface dispatch.
+	DispatchOwnerIntiface = "intiface"
+
+	// DefaultIntifaceServerAddress is the default local Intiface WebSocket endpoint.
+	DefaultIntifaceServerAddress = "ws://127.0.0.1:12345"
 
 	// FirmwareAPIRequirementRequired records the firmware v4/API v3 requirement.
 	FirmwareAPIRequirementRequired = "firmware_v4_api_v3_required"
@@ -112,9 +118,10 @@ type ServerSettings struct {
 	Port int `json:"port"`
 }
 
-// DeviceSettings contains Handy transport prerequisites and placeholders.
+// DeviceSettings contains device transport configuration.
 type DeviceSettings struct {
 	HSPDispatchOwner         string `json:"hsp_dispatch_owner"`
+	IntifaceServerAddress    string `json:"intiface_server_address"`
 	FirmwareAPIRequirement   string `json:"firmware_api_requirement"`
 	APIApplicationIDSource   string `json:"api_application_id_source"`
 	APIApplicationIDOverride string `json:"api_application_id_override,omitempty"`
@@ -267,13 +274,14 @@ type PublicSettings struct {
 // PublicDeviceSettings is the API-safe device settings view.
 type PublicDeviceSettings struct {
 	HSPDispatchOwner         string `json:"hsp_dispatch_owner"`
+	IntifaceServerAddress    string `json:"intiface_server_address"`
 	FirmwareAPIRequirement   string `json:"firmware_api_requirement"`
 	APIApplicationIDSource   string `json:"api_application_id_source"`
 	APIApplicationIDOverride string `json:"api_application_id_override,omitempty"`
 	ConnectionKeySet         bool   `json:"connection_key_set"`
 }
 
-// PublicSettingsOptionHints exposes valid option values to the static UI.
+// PublicSettingsOptionHints lists valid option values for settings clients.
 type PublicSettingsOptionHints struct {
 	HSPDispatchOwners       []string `json:"hsp_dispatch_owners"`
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
@@ -300,6 +308,7 @@ type SettingsUpdate struct {
 // DeviceUpdate is the API write payload for device settings.
 type DeviceUpdate struct {
 	HSPDispatchOwner         string  `json:"hsp_dispatch_owner"`
+	IntifaceServerAddress    string  `json:"intiface_server_address"`
 	FirmwareAPIRequirement   string  `json:"firmware_api_requirement"`
 	APIApplicationIDSource   string  `json:"api_application_id_source"`
 	APIApplicationIDOverride string  `json:"api_application_id_override"`
@@ -315,6 +324,7 @@ func DefaultSettings() Settings {
 		},
 		Device: DeviceSettings{
 			HSPDispatchOwner:       DispatchOwnerCloudREST,
+			IntifaceServerAddress:  DefaultIntifaceServerAddress,
 			FirmwareAPIRequirement: FirmwareAPIRequirementRequired,
 			APIApplicationIDSource: ApplicationIDSourceBundled,
 		},
@@ -355,6 +365,7 @@ func (s Settings) Public() PublicSettings {
 		Server:  s.Server,
 		Device: PublicDeviceSettings{
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
+			IntifaceServerAddress:    s.Device.IntifaceServerAddress,
 			FirmwareAPIRequirement:   s.Device.FirmwareAPIRequirement,
 			APIApplicationIDSource:   s.Device.APIApplicationIDSource,
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
@@ -390,6 +401,7 @@ func (s Settings) Public() PublicSettings {
 			HSPDispatchOwners: []string{
 				DispatchOwnerCloudREST,
 				DispatchOwnerBrowserBluetooth,
+				DispatchOwnerIntiface,
 			},
 			APIApplicationIDSources: []string{
 				ApplicationIDSourceBundled,
@@ -442,6 +454,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Version = CurrentSettingsVersion
 	next.Server = update.Server
 	next.Device.HSPDispatchOwner = update.Device.HSPDispatchOwner
+	next.Device.IntifaceServerAddress = strings.TrimSpace(update.Device.IntifaceServerAddress)
 	next.Device.FirmwareAPIRequirement = update.Device.FirmwareAPIRequirement
 	next.Device.APIApplicationIDSource = update.Device.APIApplicationIDSource
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
@@ -556,8 +569,11 @@ func validateSettings(settings Settings) error {
 	if settings.Server.Port < 1 || settings.Server.Port > 65535 {
 		return fmt.Errorf("server port must be between 1 and 65535")
 	}
-	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth) {
-		return fmt.Errorf("unknown HSP dispatch owner %q", settings.Device.HSPDispatchOwner)
+	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
+		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
+	}
+	if err := validateIntifaceServerAddress(settings.Device.IntifaceServerAddress); err != nil {
+		return err
 	}
 	if settings.Device.FirmwareAPIRequirement != FirmwareAPIRequirementRequired {
 		return errors.New("firmware/API requirement must remain firmware_v4_api_v3_required")
@@ -584,6 +600,10 @@ func applyMissingDefaults(settings Settings) Settings {
 	}
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner
+	}
+	settings.Device.IntifaceServerAddress = strings.TrimSpace(settings.Device.IntifaceServerAddress)
+	if settings.Device.IntifaceServerAddress == "" {
+		settings.Device.IntifaceServerAddress = defaults.Device.IntifaceServerAddress
 	}
 	if settings.Device.FirmwareAPIRequirement == "" {
 		settings.Device.FirmwareAPIRequirement = defaults.Device.FirmwareAPIRequirement
@@ -678,6 +698,29 @@ func validateMotionSettings(settings MotionSettings) error {
 	}
 	if !oneOf(settings.Style, MotionStyleGentle, MotionStyleBalanced, MotionStyleIntense) {
 		return fmt.Errorf("unknown motion style %q", settings.Style)
+	}
+	return nil
+}
+
+func validateIntifaceServerAddress(address string) error {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return fmt.Errorf("intiface server address must be a valid URL: %w", err)
+	}
+	if !parsed.IsAbs() || parsed.Hostname() == "" {
+		return errors.New("intiface server address must be an absolute ws or wss URL with a host")
+	}
+	if parsed.Scheme != "ws" && parsed.Scheme != "wss" {
+		return errors.New("intiface server address scheme must be ws or wss")
+	}
+	if parsed.User != nil {
+		return errors.New("intiface server address must not include userinfo")
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return errors.New("intiface server address must not include a query")
+	}
+	if parsed.Fragment != "" || strings.Contains(address, "#") {
+		return errors.New("intiface server address must not include a fragment")
 	}
 	return nil
 }

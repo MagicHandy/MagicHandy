@@ -3,6 +3,7 @@ package transport
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -55,6 +56,7 @@ type CloudRequest struct {
 	Path      string            `json:"path"`
 	Auth      CloudAuthMetadata `json:"auth"`
 	Body      any               `json:"body,omitempty"`
+	command   *Command
 }
 
 // CloudHSPPoint is the Cloud REST HSP timed-point payload shape.
@@ -136,6 +138,10 @@ func (b *CloudRESTBuilder) BuildStrokeWindow(command StrokeWindowCommand) (Cloud
 			Min: percentFraction(command.MinPercent),
 			Max: percentFraction(command.MaxPercent),
 		},
+		command: &Command{
+			Kind:         CommandKindStrokeWindow,
+			StrokeWindow: &command,
+		},
 	}, nil
 }
 
@@ -155,11 +161,11 @@ func (b *CloudRESTBuilder) BuildHSPSetup(command HSPSetupCommand) (CloudRequest,
 }
 
 // BuildHSPAdd shapes a Cloud REST request that appends HSP timed points.
-func (b *CloudRESTBuilder) BuildHSPAdd(command HSPAddCommand) (CloudRequest, error) {
+func (b *CloudRESTBuilder) BuildHSPAdd(command AppendPointsCommand) (CloudRequest, error) {
 	return b.buildHSPAdd(command, true, len(command.Points))
 }
 
-func (b *CloudRESTBuilder) buildHSPAdd(command HSPAddCommand, flush bool, tailPointStreamIndex int) (CloudRequest, error) {
+func (b *CloudRESTBuilder) buildHSPAdd(command AppendPointsCommand, flush bool, tailPointStreamIndex int) (CloudRequest, error) {
 	streamID, err := cleanStreamID(command.StreamID)
 	if err != nil {
 		return CloudRequest{}, err
@@ -173,17 +179,14 @@ func (b *CloudRESTBuilder) buildHSPAdd(command HSPAddCommand, flush bool, tailPo
 
 	points := make([]CloudHSPPoint, len(command.Points))
 	for index, point := range command.Points {
-		if point.PositionPercent < 0 || point.PositionPercent > 100 {
+		x, ok := quantizeHandyPosition(point.PositionPercent, b.options.ReverseDirection)
+		if !ok {
 			return CloudRequest{}, fmt.Errorf("HSP point %d x must be between 0 and 100", index)
 		}
 		if point.TimeMillis < 0 {
 			return CloudRequest{}, fmt.Errorf("HSP point %d t must be non-negative", index)
 		}
 
-		x := point.PositionPercent
-		if b.options.ReverseDirection {
-			x = 100 - x
-		}
 		points[index] = CloudHSPPoint{
 			X: x,
 			T: point.TimeMillis,
@@ -192,7 +195,7 @@ func (b *CloudRESTBuilder) buildHSPAdd(command HSPAddCommand, flush bool, tailPo
 
 	return CloudRequest{
 		Transport: cloudRESTName,
-		Operation: string(CommandKindHSPAdd),
+		Operation: string(CommandKindPointsAdd),
 		Method:    "PUT",
 		Path:      cloudPathHSPAdd,
 		Auth:      b.auth,
@@ -202,11 +205,15 @@ func (b *CloudRESTBuilder) buildHSPAdd(command HSPAddCommand, flush bool, tailPo
 			Flush:                flush,
 			TailPointStreamIndex: tailPointStreamIndex,
 		},
+		command: &Command{
+			Kind:      CommandKindPointsAdd,
+			PointsAdd: cloneAppendPoints(command),
+		},
 	}, nil
 }
 
 // BuildHSPPlay shapes a Cloud REST request that starts or resumes an HSP stream.
-func (b *CloudRESTBuilder) BuildHSPPlay(command HSPPlayCommand) (CloudRequest, error) {
+func (b *CloudRESTBuilder) BuildHSPPlay(command PlayCommand) (CloudRequest, error) {
 	streamID, err := cleanStreamID(command.StreamID)
 	if err != nil {
 		return CloudRequest{}, err
@@ -217,7 +224,7 @@ func (b *CloudRESTBuilder) BuildHSPPlay(command HSPPlayCommand) (CloudRequest, e
 
 	return CloudRequest{
 		Transport: cloudRESTName,
-		Operation: string(CommandKindHSPPlay),
+		Operation: string(CommandKindPointsPlay),
 		Method:    "PUT",
 		Path:      cloudPathHSPPlay,
 		Auth:      b.auth,
@@ -228,6 +235,10 @@ func (b *CloudRESTBuilder) BuildHSPPlay(command HSPPlayCommand) (CloudRequest, e
 			PlaybackRate:     1,
 			PauseOnStarving:  true,
 			Loop:             false,
+		},
+		command: &Command{
+			Kind:       CommandKindPointsPlay,
+			PointsPlay: &command,
 		},
 	}, nil
 }
@@ -306,6 +317,16 @@ type cloudStopBody struct{}
 
 func percentFraction(value int) float64 {
 	return float64(value) / 100
+}
+
+func quantizeHandyPosition(position float64, reverse bool) (int, bool) {
+	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 100 {
+		return 0, false
+	}
+	if reverse {
+		position = 100 - position
+	}
+	return int(math.Round(position)), true
 }
 
 func validateStrokeWindow(command StrokeWindowCommand) error {

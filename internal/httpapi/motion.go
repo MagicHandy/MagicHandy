@@ -219,11 +219,34 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
-		writeJSON(w, http.StatusOK, s.motionState())
+		s.stopSelectedTransportWithoutEngine(w, r)
 		return
 	}
 	state, err := engine.Stop(r.Context(), "ui_stop")
 	s.writeMotionResult(w, state, err)
+}
+
+func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *http.Request) {
+	commandTransport, err := s.newSelectedMotionTransport()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"available": false,
+			"stopped":   true,
+			"error":     fmt.Sprintf("stop could not reach the configured transport: %v", err),
+		})
+		return
+	}
+	result, stopErr := commandTransport.Stop(r.Context(), transport.StopCommand{Reason: "ui_stop_no_engine"})
+	payload := map[string]any{
+		"available":        true,
+		"transport_result": result,
+	}
+	status := http.StatusOK
+	if stopErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = stopErr.Error()
+	}
+	writeJSON(w, status, payload)
 }
 
 // handleMotionPause freezes active motion (phase retained for resume). Unlike
@@ -282,12 +305,17 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) {
 	s.applyVoiceSettingsTransition(next)
-	if previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner {
+	ownerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
+	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
+	if ownerChanged || intifaceAddressChanged {
 		// Owner switches stop first — including any autonomous mode.
 		if s.modes != nil {
 			s.modes.Stop("dispatch_owner_changed")
 		}
 		s.stopAndClearMotionEngine(ctx, "dispatch_owner_changed")
+		if ownerChanged || next.Device.HSPDispatchOwner == config.DispatchOwnerIntiface {
+			s.closeIntiface()
+		}
 		return
 	}
 	s.refreshActiveMotion(ctx, next.Motion)
@@ -303,7 +331,8 @@ func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
 	if engine == nil {
 		return
 	}
-	if engine.Snapshot().Running {
+	snapshot := engine.Snapshot()
+	if snapshot.Running || snapshot.Paused {
 		_, _ = engine.Stop(ctx, reason)
 	}
 }
@@ -331,6 +360,7 @@ func (s *Server) Close() {
 		_ = s.models.Close()
 	}
 	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
+	s.closeIntiface()
 	s.personalization.Close()
 	if s.store != nil {
 		_ = s.store.Close()
@@ -388,6 +418,16 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 			return nil, err
 		}
 		return bluetooth, nil
+	case config.DispatchOwnerIntiface:
+		intiface, err := s.currentIntiface()
+		if err != nil {
+			return nil, err
+		}
+		status := intiface.Status()
+		if status.SelectedDeviceIndex == nil || status.SelectedActuatorIndex == nil {
+			return nil, errors.New("an Intiface linear actuator must be selected")
+		}
+		return intiface, nil
 	default:
 		return nil, errMotionUnavailable
 	}

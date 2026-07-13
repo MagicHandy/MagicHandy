@@ -63,6 +63,9 @@ func (t *BrowserBluetoothTransport) Stop(ctx context.Context, command StopComman
 
 // SetStrokeWindow sends a stroke envelope command through the browser bridge.
 func (t *BrowserBluetoothTransport) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand) (CommandResult, error) {
+	t.hspMu.Lock()
+	defer t.hspMu.Unlock()
+
 	if err := validateStrokeWindow(command); err != nil {
 		return t.recordBuildError(CommandKindStrokeWindow, err), err
 	}
@@ -74,35 +77,36 @@ func (t *BrowserBluetoothTransport) SetStrokeWindow(ctx context.Context, command
 		"min": command.MinPercent,
 		"max": command.MaxPercent,
 	}
-	return t.dispatch(ctx, recorded, "slider/stroke", body)
+	result, err := t.dispatch(ctx, recorded, "slider/stroke", body)
+	if err == nil {
+		t.options.ReverseDirection = command.ReverseDirection
+	}
+	return result, err
 }
 
-// AddHSP sends HSP timed points through the browser bridge.
-func (t *BrowserBluetoothTransport) AddHSP(ctx context.Context, command HSPAddCommand) (CommandResult, error) {
+// AppendPoints sends timed points through browser-owned Handy HSP.
+func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 
 	semanticStreamID, bluetoothStreamID, err := t.bluetoothStreamIDLocked(command.StreamID)
 	if err != nil {
-		return t.recordBuildError(CommandKindHSPAdd, err), err
+		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
 	if len(command.Points) == 0 {
 		err := errors.New("HSP add requires at least one point")
-		return t.recordBuildError(CommandKindHSPAdd, err), err
+		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
 	points := make([]map[string]any, len(command.Points))
 	for index, point := range command.Points {
-		if point.PositionPercent < 0 || point.PositionPercent > 100 {
+		x, ok := quantizeHandyPosition(point.PositionPercent, t.options.ReverseDirection)
+		if !ok {
 			err := fmt.Errorf("HSP point %d x must be between 0 and 100", index)
-			return t.recordBuildError(CommandKindHSPAdd, err), err
+			return t.recordBuildError(CommandKindPointsAdd, err), err
 		}
 		if point.TimeMillis < 0 {
 			err := fmt.Errorf("HSP point %d t must be non-negative", index)
-			return t.recordBuildError(CommandKindHSPAdd, err), err
-		}
-		x := point.PositionPercent
-		if t.options.ReverseDirection {
-			x = 100 - x
+			return t.recordBuildError(CommandKindPointsAdd, err), err
 		}
 		points[index] = map[string]any{
 			"x": x,
@@ -111,8 +115,8 @@ func (t *BrowserBluetoothTransport) AddHSP(ctx context.Context, command HSPAddCo
 	}
 
 	recorded := Command{
-		Kind:   CommandKindHSPAdd,
-		HSPAdd: cloneHSPAdd(command),
+		Kind:      CommandKindPointsAdd,
+		PointsAdd: cloneAppendPoints(command),
 	}
 	body := map[string]any{
 		"stream_id": bluetoothStreamID,
@@ -126,22 +130,22 @@ func (t *BrowserBluetoothTransport) AddHSP(ctx context.Context, command HSPAddCo
 	return result, err
 }
 
-// PlayHSP sends an HSP play command through the browser bridge.
-func (t *BrowserBluetoothTransport) PlayHSP(ctx context.Context, command HSPPlayCommand) (CommandResult, error) {
+// Play starts or resumes timed-point playback through browser-owned Handy HSP.
+func (t *BrowserBluetoothTransport) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 
 	semanticStreamID, bluetoothStreamID, err := t.bluetoothStreamIDLocked(command.StreamID)
 	if err != nil {
-		return t.recordBuildError(CommandKindHSPPlay, err), err
+		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
 	if command.StartTimeMillis < 0 {
 		err := errors.New("HSP play start time must be non-negative")
-		return t.recordBuildError(CommandKindHSPPlay, err), err
+		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
 	recorded := Command{
-		Kind:    CommandKindHSPPlay,
-		HSPPlay: &command,
+		Kind:       CommandKindPointsPlay,
+		PointsPlay: &command,
 	}
 	body := map[string]any{
 		"stream_id":  bluetoothStreamID,
@@ -281,9 +285,9 @@ func (t *BrowserBluetoothTransport) recordResult(command Command, result Command
 		switch result.Kind {
 		case CommandKindStop:
 			playbackState = "idle"
-		case CommandKindHSPAdd:
+		case CommandKindPointsAdd:
 			playbackState = "buffered"
-		case CommandKindHSPPlay:
+		case CommandKindPointsPlay:
 			playbackState = "playing"
 		case CommandKindHSPState, CommandKindConnectionCheck:
 			if state := playbackStateFromAck(snapshot.LastAck); state != "" {

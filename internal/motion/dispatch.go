@@ -16,7 +16,7 @@ func (e *Engine) dispatchNextChunk(ctx context.Context, reason string) error {
 		return nil
 	}
 
-	result, err := e.transport.AddHSP(ctx, transport.HSPAddCommand{
+	result, err := e.transport.AppendPoints(ctx, transport.AppendPointsCommand{
 		StreamID: streamID,
 		Points:   points,
 	})
@@ -45,8 +45,9 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, reason string) error 
 func (e *Engine) setStrokeWindow(ctx context.Context, reason string) error {
 	settings := e.motionSettings()
 	result, err := e.transport.SetStrokeWindow(ctx, transport.StrokeWindowCommand{
-		MinPercent: settings.StrokeMinPercent,
-		MaxPercent: settings.StrokeMaxPercent,
+		MinPercent:       settings.StrokeMinPercent,
+		MaxPercent:       settings.StrokeMaxPercent,
+		ReverseDirection: settings.ReverseDirection,
 	})
 	e.recordTransportResult(reason, nil, result, err)
 	e.rememberResult(result, err)
@@ -55,7 +56,7 @@ func (e *Engine) setStrokeWindow(ctx context.Context, reason string) error {
 
 func (e *Engine) play(ctx context.Context) error {
 	streamID := e.currentStreamID()
-	result, err := e.transport.PlayHSP(ctx, transport.HSPPlayCommand{StreamID: streamID})
+	result, err := e.transport.Play(ctx, transport.PlayCommand{StreamID: streamID})
 	e.recordTransportResult("play", nil, result, err)
 	e.rememberResult(result, err)
 	return err

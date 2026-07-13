@@ -129,17 +129,21 @@ func (t *CloudRESTTransport) SetStrokeWindow(ctx context.Context, command Stroke
 	if err != nil {
 		return t.recordBuildError(CommandKindStrokeWindow, err), err
 	}
-	return t.dispatch(ctx, request)
+	result, err := t.dispatch(ctx, request)
+	if err == nil {
+		t.builder.options.ReverseDirection = command.ReverseDirection
+	}
+	return result, err
 }
 
-// AddHSP sends a Cloud REST HSP add command.
-func (t *CloudRESTTransport) AddHSP(ctx context.Context, command HSPAddCommand) (CommandResult, error) {
+// AppendPoints sends timed points through Cloud REST HSP.
+func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 
 	streamID, err := cleanStreamID(command.StreamID)
 	if err != nil {
-		return t.recordBuildError(CommandKindHSPAdd, err), err
+		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
 	if streamID != t.activeStreamID {
 		setup := HSPSetupCommand{StreamID: t.nextSetupStreamIDLocked()}
@@ -157,7 +161,7 @@ func (t *CloudRESTTransport) AddHSP(ctx context.Context, command HSPAddCommand) 
 	tailPointStreamIndex := t.hspPointCount + len(command.Points)
 	request, err := t.builder.buildHSPAdd(command, t.hspPointCount == 0, tailPointStreamIndex)
 	if err != nil {
-		return t.recordBuildError(CommandKindHSPAdd, err), err
+		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
 	result, err := t.dispatch(ctx, request)
 	if err == nil {
@@ -166,15 +170,15 @@ func (t *CloudRESTTransport) AddHSP(ctx context.Context, command HSPAddCommand) 
 	return result, err
 }
 
-// PlayHSP sends a Cloud REST HSP play command.
-func (t *CloudRESTTransport) PlayHSP(ctx context.Context, command HSPPlayCommand) (CommandResult, error) {
+// Play starts or resumes timed-point playback through Cloud REST HSP.
+func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 
 	command.ServerTimeMillis = t.estimatedServerTimeMillisLocked(ctx)
 	request, err := t.builder.BuildHSPPlay(command)
 	if err != nil {
-		return t.recordBuildError(CommandKindHSPPlay, err), err
+		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
 	return t.dispatch(ctx, request)
 }
@@ -488,6 +492,9 @@ func (t *CloudRESTTransport) recordHTTPResult(request CloudRequest, statusCode i
 }
 
 func commandFromCloudRequest(request CloudRequest) Command {
+	if request.command != nil {
+		return cloneCommand(*request.command)
+	}
 	command := Command{
 		Kind: CommandKind(request.Operation),
 	}
@@ -505,16 +512,16 @@ func commandFromCloudRequest(request CloudRequest) Command {
 		points := make([]TimedPoint, len(body.Points))
 		for index, point := range body.Points {
 			points[index] = TimedPoint{
-				PositionPercent: point.X,
+				PositionPercent: float64(point.X),
 				TimeMillis:      point.T,
 			}
 		}
-		command.HSPAdd = &HSPAddCommand{
+		command.PointsAdd = &AppendPointsCommand{
 			StreamID: body.StreamID,
 			Points:   points,
 		}
 	case cloudHSPPlayBody:
-		command.HSPPlay = &HSPPlayCommand{
+		command.PointsPlay = &PlayCommand{
 			StreamID:         body.StreamID,
 			StartTimeMillis:  body.StartTimeMillis,
 			ServerTimeMillis: body.ServerTimeMillis,

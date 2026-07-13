@@ -344,6 +344,7 @@ export interface PublicSettings {
   server: { port: number };
   device: {
     hsp_dispatch_owner: string;
+    intiface_server_address: string;
     firmware_api_requirement: string;
     api_application_id_source: string;
     api_application_id_override?: string;
@@ -482,6 +483,7 @@ export interface SettingsUpdate {
   server: { port: number };
   device: {
     hsp_dispatch_owner: string;
+    intiface_server_address: string;
     firmware_api_requirement: string;
     api_application_id_source: string;
     api_application_id_override: string;
@@ -492,6 +494,35 @@ export interface SettingsUpdate {
   voice: VoiceSettingsUpdate;
   diagnostics: { verbosity: string };
   clear_connection_key: boolean;
+}
+
+export interface IntifaceLinearActuator {
+  index: number;
+  feature_descriptor?: string;
+  actuator_type?: string;
+  step_count?: number;
+}
+
+export interface IntifaceDevice {
+  device_index: number;
+  device_name: string;
+  linear_actuators: IntifaceLinearActuator[];
+}
+
+export interface IntifaceTransportSnapshot {
+  dispatch_owner: string;
+  address: string;
+  status: {
+    connected: boolean;
+    scanning: boolean;
+    playback_state: string;
+    max_ping_time_ms: number;
+    queue_depth: number;
+    selected_device_index?: number;
+    selected_actuator_index?: number;
+    devices: IntifaceDevice[];
+  };
+  diagnostics: Record<string, unknown>;
 }
 
 export interface AppState {
@@ -514,6 +545,7 @@ export interface AppState {
   cloud_transport?: Record<string, unknown>;
   bluetooth_transport?: Record<string, unknown>;
   bluetooth_bridge?: BluetoothBridgeSnapshot;
+  intiface_transport?: IntifaceTransportSnapshot;
   trace?: Record<string, unknown>;
 }
 

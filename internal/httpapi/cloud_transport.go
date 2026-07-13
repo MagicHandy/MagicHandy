@@ -162,7 +162,7 @@ func (s *Server) handleCloudHSPAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var command transport.HSPAddCommand
+	var command transport.AppendPointsCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -173,8 +173,8 @@ func (s *Server) handleCloudHSPAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := cloud.AddHSP(r.Context(), command)
-	s.writeCloudCommandResponse(w, string(transport.CommandKindHSPAdd), cloud, result, err)
+	result, err := cloud.AppendPoints(r.Context(), command)
+	s.writeCloudCommandResponse(w, string(transport.CommandKindPointsAdd), cloud, result, err)
 }
 
 func (s *Server) handleCloudHSPPlay(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +182,7 @@ func (s *Server) handleCloudHSPPlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var command transport.HSPPlayCommand
+	var command transport.PlayCommand
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -193,8 +193,8 @@ func (s *Server) handleCloudHSPPlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := cloud.PlayHSP(r.Context(), command)
-	s.writeCloudCommandResponse(w, string(transport.CommandKindHSPPlay), cloud, result, err)
+	result, err := cloud.Play(r.Context(), command)
+	s.writeCloudCommandResponse(w, string(transport.CommandKindPointsPlay), cloud, result, err)
 }
 
 func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {

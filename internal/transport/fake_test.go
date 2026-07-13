@@ -99,17 +99,17 @@ func recordGoldenCommands(t *testing.T, fake *Fake) {
 	if _, err := fake.SetStrokeWindow(ctx, StrokeWindowCommand{MinPercent: 10, MaxPercent: 90}); err != nil {
 		t.Fatalf("SetStrokeWindow: %v", err)
 	}
-	if _, err := fake.AddHSP(ctx, HSPAddCommand{
+	if _, err := fake.AppendPoints(ctx, AppendPointsCommand{
 		StreamID: "trace-test",
 		Points: []TimedPoint{
 			{PositionPercent: 20, TimeMillis: 0},
 			{PositionPercent: 80, TimeMillis: 250},
 		},
 	}); err != nil {
-		t.Fatalf("AddHSP: %v", err)
+		t.Fatalf("AppendPoints: %v", err)
 	}
-	if _, err := fake.PlayHSP(ctx, HSPPlayCommand{StreamID: "trace-test"}); err != nil {
-		t.Fatalf("PlayHSP: %v", err)
+	if _, err := fake.Play(ctx, PlayCommand{StreamID: "trace-test"}); err != nil {
+		t.Fatalf("Play: %v", err)
 	}
 	if _, err := fake.Stop(ctx, StopCommand{Reason: "test complete"}); err != nil {
 		t.Fatalf("Stop: %v", err)

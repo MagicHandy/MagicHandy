@@ -56,7 +56,7 @@ func TestSamplerSupportsFixedPatternsAreaFocusAndSoftAnchor(t *testing.T) {
 		t.Fatalf("samples escaped focus: low=%+v peak=%+v", low, peak)
 	}
 	if peak.PositionPercent <= low.PositionPercent {
-		t.Fatalf("fixed pulse peak = %d, want above low %d", peak.PositionPercent, low.PositionPercent)
+		t.Fatalf("fixed pulse peak = %g, want above low %g", peak.PositionPercent, low.PositionPercent)
 	}
 
 	anchored := NewMotionPlan("anchored", MotionTarget{
@@ -65,7 +65,7 @@ func TestSamplerSupportsFixedPatternsAreaFocusAndSoftAnchor(t *testing.T) {
 		SoftAnchor:   &SoftAnchor{PositionPercent: 50, WeightPercent: 50},
 	}, settings, 0, 0, time.Unix(0, 0))
 	if got := anchored.SampleAt(0).PositionPercent; got != 25 {
-		t.Fatalf("anchored sample = %d, want 25", got)
+		t.Fatalf("anchored sample = %g, want 25", got)
 	}
 }
 
@@ -116,8 +116,8 @@ func TestCrossPatternRetargetChoosesLowJumpPhase(t *testing.T) {
 	if almostEqual(next.PhaseOffset, 0) {
 		t.Fatal("cross-pattern retarget hard reset to phase zero")
 	}
-	if delta := absInt(replacement.PositionPercent - current.PositionPercent); delta > 10 {
-		t.Fatalf("replacement jump = %d, want low-jump handoff from %d to %d", delta, current.PositionPercent, replacement.PositionPercent)
+	if delta := math.Abs(replacement.PositionPercent - current.PositionPercent); delta > 10 {
+		t.Fatalf("replacement jump = %g, want low-jump handoff from %g to %g", delta, current.PositionPercent, replacement.PositionPercent)
 	}
 	if plan.DirectionAt(streamMillis) != 0 && next.DirectionAt(streamMillis) != 0 &&
 		plan.DirectionAt(streamMillis) != next.DirectionAt(streamMillis) {
@@ -127,11 +127,4 @@ func TestCrossPatternRetargetChoosesLowJumpPhase(t *testing.T) {
 
 func almostEqual(left float64, right float64) bool {
 	return math.Abs(left-right) < 0.000001
-}
-
-func absInt(value int) int {
-	if value < 0 {
-		return -value
-	}
-	return value
 }

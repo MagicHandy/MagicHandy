@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted for planning (implementation is Phase 14B). Revises the
-dispatch-owner scope of ADR 0006; everything ADR 0006 dropped stays dropped.
+Accepted and implemented in Phase 14B. Matched live Handy runs validate the
+Intiface and Cloud REST transport/trace paths; subjective feel confirmation
+remains open. Revises the dispatch-owner scope of ADR 0006; everything ADR
+0006 dropped stays dropped.
 
 ## Context
 
@@ -31,7 +33,8 @@ What the schema already guarantees (verified against the code at `main`
   funscript programs) flows through the shared sampler into
   `transport.TimedPoint{position_percent, time_ms}` chunks
   (`internal/motion/dispatch.go`), plus three control commands:
-  `SetStrokeWindow`, `PlayHSP`, `Stop` (`internal/transport/types.go`). ADR
+  `SetStrokeWindow`, `AppendPoints`, `Play`, and `Stop`
+  (`internal/transport/types.go`). ADR
   0002 keeps intent semantic and pushes stroke window and reverse direction
   to the transport boundary; the engine emits the semantic 0–100 relative
   span and both current owners invert/reproject from the same settings
@@ -103,6 +106,11 @@ Intiface — must satisfy the same tested invariant table:
 The existing HSP invariant suite generalizes into an owner-agnostic contract
 suite run against all owners (the fake transport, the Cloud builder, the
 Bluetooth builder, and the future Buttplug owner).
+
+Implementation note: the durable/API field remains `hsp_dispatch_owner` for
+settings compatibility. New UI and documentation call it "Dispatch owner";
+changing the persisted field name would add migration risk without changing
+the neutral transport contract.
 
 **4. Intiface owner scope.** Connect to a user-run Intiface Central over a
 local websocket (default `ws://127.0.0.1:12345`, address configurable),

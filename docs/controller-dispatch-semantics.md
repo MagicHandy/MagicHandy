@@ -15,6 +15,9 @@ independent tabs racing hardware commands.
   watch state and use Stop, but mutating device paths return HTTP 409.
 - Stop remains available to any client because safety takes priority over
   controller ownership.
+- Every Stop activation attempts the configured transport, including idle and
+  no-engine states. If the owner is unreachable, local state remains stopped
+  and the response carries an explicit delivery error for the Stop toast.
 
 ## Mutating Paths
 
@@ -27,6 +30,7 @@ These paths require the active controller:
 - `POST /api/motion/quick`
 - Cloud and Browser Bluetooth stroke-window, HSP add, and HSP play endpoints
 - Browser Bluetooth connect
+- Intiface connect/disconnect, scan, and linear-actuator selection
 
 Read-only diagnostic and state paths remain available. Browser Bluetooth
 connection check is a bridge-readiness diagnostic and does not queue a device
@@ -41,7 +45,9 @@ runtime boundary:
    `dispatch_owner_changed`.
 2. The engine pointer and recorded owner are cleared.
 3. No fallback transport is attempted.
-4. The next motion start constructs a new engine for the selected dispatch
+4. A process-owned Intiface session is stopped and closed before the switch
+   completes. Changing its saved server address applies the same teardown.
+5. The next motion start constructs a new engine for the selected dispatch
    owner.
 
 If motion settings change without changing dispatch owner, active motion is
