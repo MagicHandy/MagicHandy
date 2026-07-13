@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
@@ -59,13 +60,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
 	}
 	service := chat.Service{
-		Provider:      provider,
-		Prompt:        prompt,
-		Model:         settings.LLM.Model,
-		MaxTokens:     settings.LLM.MaxOutputTokens,
-		ReasoningMode: settings.LLM.ReasoningMode,
-		Memories:      s.personalization.memory.PromptTexts(),
-		Patterns:      s.chatPatternChoices(),
+		Provider:              provider,
+		Prompt:                prompt,
+		Model:                 settings.LLM.Model,
+		MaxTokens:             settings.LLM.MaxOutputTokens,
+		ReasoningMode:         settings.LLM.ReasoningMode,
+		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
+		Memories:              s.personalization.memory.PromptTexts(),
+		Patterns:              s.chatPatternChoices(),
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -108,6 +110,15 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	s.emitChatCompletionResult(r, emit, result, err, settings.LLM.Provider)
+}
+
+func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent bool) int {
+	if settings.Provider != config.LLMProviderLlamaCPP ||
+		settings.LlamaCPPMode != config.LlamaCPPModeManaged ||
+		settings.ReasoningMode != config.LLMReasoningAuto || !runtimeCurrent || settings.MaxOutputTokens < 2 {
+		return 0
+	}
+	return settings.MaxOutputTokens / 2
 }
 
 func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, result chat.Result, err error, provider string) {

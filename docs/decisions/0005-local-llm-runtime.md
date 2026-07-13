@@ -59,12 +59,15 @@ Every local LLM provider must expose:
 Chat orchestration, JSON validation, repair prompts, prompt sets, and motion-target application stay above the provider boundary. Providers return text/stream data; they do not produce raw motion commands.
 
 The current request policy defaults to a 256-token output cap for the app's
-compact intent contract. Reasoning is explicit: `auto` delegates to the model;
-`off` requests provider-native thinking suppression and is presented as
-best-effort because arbitrary GGUF/Ollama models do not share one capability
-contract. Hardware/runtime flags remain managed defaults until measurements
-justify user-facing controls. Warm managed requests do not repeat readiness and
-model-list probes after a successful load.
+compact intent contract. Reasoning is explicit: `off` is the recommended
+small-model default request and asks for provider-native thinking suppression; `auto` delegates to the
+model, with the current pinned managed llama.cpp bounding hidden reasoning to
+half the total budget through its pinned API. Repair always uses `off` and retains the original
+conversation. Arbitrary external GGUF/Ollama models do not share one capability
+contract, so suppression remains best-effort there. Hardware/runtime flags
+remain managed defaults until measurements justify user-facing controls. Warm
+managed requests do not repeat readiness and model-list probes after a
+successful load.
 
 Model inventory is a sibling concern, not part of `Provider`. A provider is a
 configured runtime adapter; the model manager owns durable records, managed

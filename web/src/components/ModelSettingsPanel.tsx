@@ -33,7 +33,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : "R
 const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.status === "copying";
 const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status === "queued" || build?.status === "building";
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
-const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic" : mode === "off" ? "Disabled when supported" : mode;
+const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider default" : mode === "off" ? "Disabled when supported" : mode;
 
 export function ModelSettingsPanel({ settings, saved, providers, llamaModes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
   const { show } = useToast();
@@ -333,10 +333,10 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
         <label className="field model-timeout"><span className="label">Timeout ms</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
       </div>
       <div className="generation-notes" role="note">
-        <p>The output cap bounds worst-case generation time. A limit that is too low can truncate JSON and trigger a repair pass.</p>
+        <p>The selected cap covers reasoning plus visible JSON, so low limits can truncate JSON. The current pinned managed llama.cpp limits automatic reasoning to half that budget; every repair requests reasoning off to leave more budget for JSON.</p>
         <p>{settings.reasoning_mode === "off"
-          ? `Disabling reasoning usually reduces latency on compatible ${providerLabel(settings.provider)} models, but may reduce quality on difficult requests. Unsupported models may ignore or reject it.`
-          : "Automatic reasoning can add hidden tokens before the visible reply and substantially increase latency."}</p>
+          ? `Requesting disabled reasoning is recommended for compact structured replies from small ${providerLabel(settings.provider)} models. Unsupported models may ignore or reject it.`
+          : "Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply."}</p>
       </div>
 
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (

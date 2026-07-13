@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -63,6 +64,11 @@ func TestChatStreamRepairsMalformedJSONAndReportsIndicator(t *testing.T) {
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
+	settings, _ := server.store.Snapshot()
+	settings.LLM.ReasoningMode = config.LLMReasoningAuto
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save automatic reasoning settings: %v", err)
+	}
 
 	body := postChatStream(t, server, `{"message":"hello"}`)
 	if !strings.Contains(body, "event: malformed") {
@@ -79,10 +85,31 @@ func TestChatStreamRepairsMalformedJSONAndReportsIndicator(t *testing.T) {
 	}
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
-	for index, request := range provider.requests {
-		if request.MaxTokens != 256 || request.ReasoningMode != "auto" {
-			t.Fatalf("request %d generation settings = %+v", index, request)
-		}
+	initial, repair := provider.requests[0], provider.requests[1]
+	if initial.MaxTokens != 256 || initial.ReasoningMode != "auto" || initial.ReasoningBudgetTokens != 0 {
+		t.Fatalf("initial generation settings = %+v", initial)
+	}
+	if repair.MaxTokens != 256 || repair.ReasoningMode != "off" || repair.ReasoningBudgetTokens != 0 {
+		t.Fatalf("repair generation settings = %+v", repair)
+	}
+}
+
+func TestManagedLlamaReasoningBudgetRequiresCurrentPinnedRuntime(t *testing.T) {
+	settings := config.DefaultSettings().LLM
+	settings.ReasoningMode = config.LLMReasoningAuto
+	if got := managedLlamaReasoningBudget(settings, true); got != settings.MaxOutputTokens/2 {
+		t.Fatalf("current managed budget = %d", got)
+	}
+	if got := managedLlamaReasoningBudget(settings, false); got != 0 {
+		t.Fatalf("outdated managed budget = %d", got)
+	}
+	settings.LlamaCPPMode = config.LlamaCPPModeExternal
+	if got := managedLlamaReasoningBudget(settings, true); got != 0 {
+		t.Fatalf("external llama.cpp budget = %d", got)
+	}
+	settings.Provider = config.LLMProviderOllama
+	if got := managedLlamaReasoningBudget(settings, true); got != 0 {
+		t.Fatalf("Ollama budget = %d", got)
 	}
 }
 

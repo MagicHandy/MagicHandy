@@ -102,13 +102,23 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 531,060 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 93,663 gzip bytes, 2,087 bytes over
-   the Phase 14C measurement; the stripped binary is 13,802,496 bytes. These
+   browser payload is 531,099 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 93,702 gzip bytes, 2,126 bytes over
+   the Phase 14C measurement; the stripped binary is 13,807,616 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-13** — A live managed Gemma 4 12B Q4 reproduction confirmed that
+  automatic reasoning consumed the complete 256-token JSON budget and returned
+  no visible content; 512 tokens failed the same way. Reasoning-off and a
+  128-token managed reasoning budget both produced valid JSON for the exact
+  request. Reasoning now defaults off, the current pinned managed automatic path
+  is bounded, provider truncation is explicit, repair retains original context
+  and requests reasoning off, and parser-valid examples end with an STGPT-style immutable guard.
+  Plain/stripped binaries are 19,710,464 / 13,807,616 bytes; embedded UI is
+  776,443 raw / 531,099 gzip bytes (93,702 gzip excluding unchanged artwork).
 
 - **2026-07-13** — Source rebuilds no longer replace an executable while its old
   process still owns the HTTP port. The updater sends Emergency Stop, tears down

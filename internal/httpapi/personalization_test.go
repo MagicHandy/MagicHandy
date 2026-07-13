@@ -92,7 +92,7 @@ func TestChatSystemPromptIncludesMemoriesOnlyWhenEnabled(t *testing.T) {
 	if !strings.Contains(system, "Prefers the tease pattern.") {
 		t.Fatalf("system prompt missing enabled memory:\n%s", system)
 	}
-	if !strings.Contains(system, "JSON contract") {
+	if !strings.Contains(system, "Choose one valid base shape") {
 		t.Fatalf("system prompt missing code-owned contract:\n%s", system)
 	}
 
@@ -110,7 +110,7 @@ func TestChatSystemPromptIncludesMemoriesOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(system, "Prefers the tease pattern.") || strings.Contains(system, "Saved user memories") {
 		t.Fatalf("system prompt leaked memories while disabled:\n%s", system)
 	}
-	if !strings.Contains(system, "JSON contract") {
+	if !strings.Contains(system, "Choose one valid base shape") {
 		t.Fatalf("contract missing with memory disabled:\n%s", system)
 	}
 }

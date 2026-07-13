@@ -19,9 +19,10 @@ func TestComposeSystemAlwaysAppendsContract(t *testing.T) {
 	if !strings.Contains(composed, ContractInstructions) {
 		t.Fatalf("composed system missing the code-owned contract:\n%s", composed)
 	}
-	// The contract always follows the editable text so it cannot be overridden
-	// by earlier instructions being "closer" to the end of the prompt.
-	if strings.Index(composed, "pirate") > strings.Index(composed, "JSON contract") {
+	// The contract and final guard follow editable text so earlier instructions
+	// cannot become the model's most recent output rule.
+	if strings.Index(composed, "pirate") > strings.Index(composed, "Return exactly one JSON object") ||
+		!strings.HasSuffix(composed, finalOutputGuard) {
 		t.Fatalf("contract did not follow behavior text:\n%s", composed)
 	}
 }

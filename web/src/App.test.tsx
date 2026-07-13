@@ -18,7 +18,7 @@ const baseState = {
     server: { port: 49717 },
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
-    llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "auto" },
+    llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
     voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", speak_replies: false, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
@@ -27,7 +27,7 @@ const baseState = {
       diagnostics_verbosities: ["normal", "debug", "trace"],
       llm_providers: ["llama_cpp", "ollama"],
       llama_cpp_modes: ["managed", "external"],
-      llm_reasoning_modes: ["auto", "off"],
+      llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512, 1024],
       prompt_sets: ["default"],
       tts_providers: ["none", "elevenlabs", "neutts_air", "custom"],
@@ -585,18 +585,18 @@ describe("app shell safety invariants", () => {
     go("#/settings/model");
 
     expect(await screen.findByRole("combobox", { name: /maximum output/i })).toHaveValue("256");
-    expect(screen.getByRole("combobox", { name: /thinking \/ reasoning/i })).toHaveValue("auto");
-    expect(screen.getByText(/automatic reasoning can add hidden tokens/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /thinking \/ reasoning/i })).toHaveValue("off");
+    expect(screen.getByText(/recommended for compact structured replies/i)).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: /maximum output/i }), { target: { value: "128" } });
-    fireEvent.change(screen.getByRole("combobox", { name: /thinking \/ reasoning/i }), { target: { value: "off" } });
-    expect(screen.getByText(/may reduce quality/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /thinking \/ reasoning/i }), { target: { value: "auto" } });
+    expect(screen.getByText(/may improve difficult intent interpretation/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
     const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
     const payload = JSON.parse(String((request as RequestInit).body));
     expect(payload.llm.max_output_tokens).toBe(128);
-    expect(payload.llm.reasoning_mode).toBe("off");
+    expect(payload.llm.reasoning_mode).toBe("auto");
   });
 
   it("scans a user-selected Ollama path and starts an explicit copy", async () => {

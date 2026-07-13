@@ -13,6 +13,7 @@ import (
 const (
 	maxUserMessageBytes = 4096
 	maxHistoryMessages  = 12
+	emptyRepairContext  = `{"_malformed":"empty_or_truncated_output"}`
 )
 
 // StreamEvent describes chat orchestration progress.
@@ -44,13 +45,14 @@ type Result struct {
 // Prompt is the resolved behavior profile; Memories are the enabled memory
 // texts (empty when the memory switch is off — chat must work without them).
 type Service struct {
-	Provider      llm.Provider
-	Prompt        PromptSet
-	Model         string
-	MaxTokens     int
-	ReasoningMode string
-	Memories      []string
-	Patterns      []PatternChoice
+	Provider              llm.Provider
+	Prompt                PromptSet
+	Model                 string
+	MaxTokens             int
+	ReasoningMode         string
+	ReasoningBudgetTokens int
+	Memories              []string
+	Patterns              []PatternChoice
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -74,21 +76,26 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:      messages,
-		Model:         s.Model,
-		Temperature:   0.2,
-		MaxTokens:     s.MaxTokens,
-		ReasoningMode: s.ReasoningMode,
+		Messages:              messages,
+		Model:                 s.Model,
+		Temperature:           0.2,
+		MaxTokens:             s.MaxTokens,
+		ReasoningMode:         s.ReasoningMode,
+		ReasoningBudgetTokens: s.ReasoningBudgetTokens,
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
-	if err != nil {
+	truncated := errors.Is(err, llm.ErrOutputTruncated)
+	if err != nil && !truncated {
 		return Result{}, err
 	}
 
 	response, parseErr := ParseAssistantResponseWithPatterns(raw, s.Patterns)
 	if parseErr == nil {
 		return Result{Response: response, Raw: raw}, nil
+	}
+	if truncated {
+		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
 	}
 
 	result := Result{
@@ -101,27 +108,34 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, err
 	}
 
-	repairMessages := []llm.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: RepairPrompt(prompt, raw, parseErr.Error())},
+	repairMessages := append([]llm.Message(nil), messages...)
+	repairContext := strings.TrimSpace(raw)
+	if repairContext == "" {
+		repairContext = emptyRepairContext
 	}
+	repairMessages = append(repairMessages, llm.Message{Role: "assistant", Content: repairContext})
+	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: RepairPrompt(prompt, parseErr.Error())})
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:      repairMessages,
 		Model:         s.Model,
 		Temperature:   0,
 		MaxTokens:     s.MaxTokens,
-		ReasoningMode: s.ReasoningMode,
+		ReasoningMode: "off",
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "repair_delta", Phase: "repair", Text: text})
 	})
 	result.RepairRaw = repairRaw
-	if repairErr != nil {
+	repairTruncated := errors.Is(repairErr, llm.ErrOutputTruncated)
+	if repairErr != nil && !repairTruncated {
 		result.MalformedError = repairErr.Error()
 		return result, nil
 	}
 
 	repaired, repairParseErr := ParseAssistantResponseWithPatterns(repairRaw, s.Patterns)
 	if repairParseErr != nil {
+		if repairTruncated {
+			repairParseErr = fmt.Errorf("repaired response was truncated before valid JSON: %w", repairParseErr)
+		}
 		result.MalformedError = repairParseErr.Error()
 		return result, nil
 	}

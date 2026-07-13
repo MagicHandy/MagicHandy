@@ -393,7 +393,7 @@ func DefaultSettings() Settings {
 			PromptSet:            PromptSetMagicHandyMotionV1,
 			RequestTimeoutMillis: DefaultLLMRequestTimeoutMillis,
 			MaxOutputTokens:      DefaultLLMMaxOutputTokens,
-			ReasoningMode:        LLMReasoningAuto,
+			ReasoningMode:        LLMReasoningOff,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -479,8 +479,8 @@ func (s Settings) Public() PublicSettings {
 				LlamaCPPModeExternal,
 			},
 			LLMReasoningModes: []string{
-				LLMReasoningAuto,
 				LLMReasoningOff,
+				LLMReasoningAuto,
 			},
 			LLMMaxOutputTokens: []int{128, 256, 512, 1024},
 			PromptSets: []string{

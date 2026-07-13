@@ -237,10 +237,22 @@ Still required (Phase 9B):
 - Managed llama.cpp still performs readiness/model checks during cold load and
   explicit status actions, but reuses successful readiness for warm calls.
 - Go request-shape tests prove exact provider payloads; frontend tests prove the
-  controls, tradeoff warnings, and persisted values. No model inference was run
-  for this change, so TTFT, prompt tokens/s, hidden reasoning tokens, visible
-  generation tokens/s, total latency, and malformed/repair rate remain to be
-  A/B measured on a fixed model/quantization/backend before claiming a speedup.
+  controls, tradeoff warnings, and persisted values.
+- A 2026-07-13 regression probe reused the exact latest failed conversation and
+  prompt against the loaded managed llama.cpp `b9966` CUDA runtime with a Gemma
+  4 12B Q4 model. Automatic reasoning with `max_tokens=256` ended `length` after
+  4.14 seconds with 897 reasoning characters and zero visible content; raising
+  the cap to 512 repeated the failure after 6.33 seconds with 1,943 reasoning
+  characters. `enable_thinking=false` at 256 produced valid 112-character JSON
+  in 1.05 seconds. Keeping automatic reasoning but setting
+  `thinking_budget_tokens=128` produced valid 112-character JSON in 2.35
+  seconds. These are diagnostic single-request observations, not a general
+  model-speed benchmark.
+- The resulting policy defaults reasoning off, bounds the current pinned managed
+  automatic path to half the selected total budget, recognizes provider length
+  finishes, and makes repair retain context while requesting reasoning off. Broader
+  malformed/repair-rate and quality A/B runs across fixed small models remain
+  required before claiming a general speedup.
 
 ## Procedure
 

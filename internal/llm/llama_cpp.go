@@ -43,11 +43,12 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 	defer cancel()
 
 	body := openAIChatRequest{
-		Model:       firstNonEmpty(request.Model, p.model),
-		Messages:    request.Messages,
-		Stream:      true,
-		Temperature: request.Temperature,
-		MaxTokens:   request.MaxTokens,
+		Model:                firstNonEmpty(request.Model, p.model),
+		Messages:             request.Messages,
+		Stream:               true,
+		Temperature:          request.Temperature,
+		MaxTokens:            request.MaxTokens,
+		ThinkingBudgetTokens: request.ReasoningBudgetTokens,
 		ResponseFormat: &openAIResponseFormat{
 			Type: "json_object",
 		},
@@ -166,13 +167,14 @@ func (p *LlamaCPPProvider) listModels(ctx context.Context) ([]string, error) {
 }
 
 type openAIChatRequest struct {
-	Model              string                    `json:"model"`
-	Messages           []Message                 `json:"messages"`
-	Stream             bool                      `json:"stream"`
-	Temperature        float64                   `json:"temperature"`
-	MaxTokens          int                       `json:"max_tokens,omitempty"`
-	ChatTemplateKwargs *openAIChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
-	ResponseFormat     *openAIResponseFormat     `json:"response_format,omitempty"`
+	Model                string                    `json:"model"`
+	Messages             []Message                 `json:"messages"`
+	Stream               bool                      `json:"stream"`
+	Temperature          float64                   `json:"temperature"`
+	MaxTokens            int                       `json:"max_tokens,omitempty"`
+	ThinkingBudgetTokens int                       `json:"thinking_budget_tokens,omitempty"`
+	ChatTemplateKwargs   *openAIChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
+	ResponseFormat       *openAIResponseFormat     `json:"response_format,omitempty"`
 }
 
 type openAIChatTemplateKwargs struct {
@@ -191,6 +193,7 @@ type openAIChatChunk struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 	Error *struct {
 		Message string `json:"message"`
@@ -202,6 +205,7 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 	scanner.Buffer(make([]byte, 0, 4096), 1024*1024)
 
 	var builder strings.Builder
+	finishReason := ""
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, ":") || strings.HasPrefix(line, "event:") {
@@ -212,6 +216,9 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if data == "[DONE]" {
+			if finishReason == "length" {
+				return builder.String(), ErrOutputTruncated
+			}
 			return builder.String(), nil
 		}
 
@@ -223,6 +230,9 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 			return builder.String(), errors.New(chunk.Error.Message)
 		}
 		for _, choice := range chunk.Choices {
+			if choice.FinishReason != "" {
+				finishReason = choice.FinishReason
+			}
 			delta := choice.Delta.Content
 			if delta == "" {
 				delta = choice.Message.Content
@@ -240,6 +250,9 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 	}
 	if err := scanner.Err(); err != nil {
 		return builder.String(), fmt.Errorf("read llama.cpp stream: %w", err)
+	}
+	if finishReason == "length" {
+		return builder.String(), ErrOutputTruncated
 	}
 	return builder.String(), nil
 }
