@@ -1,318 +1,338 @@
 <#
 .SYNOPSIS
-    Interactive installer for MagicHandy — a local-first AI controller for The Handy.
+    Builds and configures MagicHandy on a 64-bit Windows machine.
 
 .DESCRIPTION
-    Checks for the Go toolchain (offers to install it), builds MagicHandy, sets up
-    a data folder, optionally helps you get a local LLM running, can provision
-    offline Parakeet speech input, and launches the app. Model downloads are
-    always explicit, consented, and checksum-verified.
+    The installer can start on a machine without Go, Git, CMake, a C++ compiler,
+    CUDA, or Ollama. Missing selected dependencies are installed with WinGet
+    after explicit consent, then verified before the build continues. If WinGet
+    itself is unavailable, the script offers the official Microsoft repair path.
 
-    The runtime is a single Go binary that serves an embedded browser UI on
-    localhost. Nothing here downloads a model or installs software without asking.
+    The core app and all first-party Go voice adapters are built with CGO
+    disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
+    runner/model remain explicit choices. No model is downloaded at app startup.
 
-    Adults only. MagicHandy controls an intimate device; use it responsibly and at
-    your own risk.
+    Non-secret installation choices are stored under LocalAppData so update.ps1
+    can preserve or revise them. API keys and the Handy connection key are never
+    written to installer state.
 
 .PARAMETER Port
-    Local port to serve on (default 49717).
+    Local HTTP port. Default: 49717.
 
 .PARAMETER DataDir
-    Where to store settings and data. Default is your Windows profile; pass a path
-    (e.g. .\data) for a portable install.
-
-.PARAMETER Yes
-    Assume "yes" to prompts (non-interactive).
-
-.PARAMETER NoLaunch
-    Build and set up, but do not start the app.
+    Settings/model/data directory. The unattended default is the Windows profile
+    data directory. Interactive setup can instead choose a portable .\data folder.
 
 .PARAMETER LlamaBackend
-    Managed llama.cpp backend to build: auto, cpu, or cuda. Auto uses CUDA only
-    when both an NVIDIA GPU and the CUDA Toolkit compiler are available.
+    Managed llama.cpp backend: auto, cpu, or cuda. Auto selects CUDA only when an
+    NVIDIA GPU is detected and the user accepts installing a missing CUDA Toolkit.
 
 .PARAMETER SkipLlamaBuild
-    Do not build managed llama.cpp. Use an existing Ollama installation to save
-    the managed runtime space and avoid a model copy unless you explicitly
-    import one. Combine with -Yes for an unattended install.
+    Skip the app-owned llama.cpp source build and ensure Ollama is available.
 
 .PARAMETER OllamaModel
-    Optional Ollama model name to pull. In unattended -Yes mode, an empty value
-    skips pulling a model instead of prompting.
+    Optional model name to ensure with Ollama. Blank leaves its model library
+    unchanged.
+
+.PARAMETER SkipParakeet
+    Do not install the optional 644 MiB Parakeet ASR model and CPU runner.
+
+.PARAMETER NoLauncher
+    Do not create Start-MagicHandy.ps1.
+
+.PARAMETER Yes
+    Accept the documented defaults and third-party package/license prompts. This
+    installs the complete selected toolchain without stopping for input.
+
+.PARAMETER NoLaunch
+    Build and configure without starting the app.
+
+.PARAMETER StatePath
+    Override the installer-state path. Intended for testing or managed installs.
+
+.PARAMETER PlanOnly
+    Print the selected provisioning plan without installing, building, saving
+    state, or launching.
 
 .EXAMPLE
     .\install.ps1
 
 .EXAMPLE
-    .\install.ps1 -DataDir .\data -Port 49800
+    .\install.ps1 -Yes -LlamaBackend cuda -NoLaunch
+    Provision a full CUDA source-build toolchain, Ollama, Parakeet, and all app
+    binaries without launching.
 
 .EXAMPLE
     .\install.ps1 -Yes -SkipLlamaBuild -NoLaunch
-    Build MagicHandy without the managed llama.cpp runtime so an existing
-    Ollama installation can be used without duplicating runtime storage.
+    Use Ollama instead of storing an additional managed llama.cpp runtime.
 #>
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
+    [ValidateRange(1, 65535)]
     [int]$Port = 49717,
     [string]$DataDir,
     [ValidateSet('auto', 'cpu', 'cuda')]
     [string]$LlamaBackend = 'auto',
     [switch]$SkipLlamaBuild,
     [string]$OllamaModel,
+    [switch]$SkipParakeet,
+    [switch]$NoLauncher,
     [switch]$Yes,
-    [switch]$NoLaunch
+    [switch]$NoLaunch,
+    [string]$StatePath,
+    [switch]$PlanOnly,
+
+    # update.ps1 uses these mutually exclusive modes.
+    [switch]$UseSavedChoices,
+    [switch]$Reconfigure,
+    [switch]$UpdateRun
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Write-Head([string]$Text) {
-    Write-Host ''
-    Write-Host $Text -ForegroundColor Cyan
-    Write-Host ('-' * $Text.Length) -ForegroundColor DarkGray
-}
-function Test-Cmd([string]$Name) {
-    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
-}
-function Confirm-YesNo([string]$Question, [bool]$Default = $true) {
-    if ($Yes) { return $true }
-    $hint = if ($Default) { 'Y/n' } else { 'y/N' }
-    $answer = Read-Host "$Question [$hint]"
-    if ([string]::IsNullOrWhiteSpace($answer)) { return $Default }
-    return $answer -match '^(y|yes)$'
-}
-function Get-SHA256([string]$Path) {
-    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
-}
-function Install-VerifiedDownload([string]$Uri, [string]$Destination, [string]$ExpectedSHA256) {
-    $expected = $ExpectedSHA256.ToLowerInvariant()
-    $parent = Split-Path -Parent $Destination
-    New-Item -ItemType Directory -Force -Path $parent | Out-Null
-
-    if (Test-Path -LiteralPath $Destination) {
-        if ((Get-SHA256 $Destination) -eq $expected) {
-            Write-Host "Verified existing $(Split-Path -Leaf $Destination)." -ForegroundColor Green
-            return
-        }
-        Write-Warning "Existing $(Split-Path -Leaf $Destination) did not match its published SHA-256; replacing it."
-        Remove-Item -LiteralPath $Destination -Force
-    }
-
-    $partial = "$Destination.partial"
-    if (Test-Path -LiteralPath $partial) {
-        Remove-Item -LiteralPath $partial -Recurse -Force
-    }
-    Write-Host "Downloading $(Split-Path -Leaf $Destination)..."
-    Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $partial
-    $actual = Get-SHA256 $partial
-    if ($actual -ne $expected) {
-        Remove-Item -LiteralPath $partial -Force
-        throw "SHA-256 verification failed for $(Split-Path -Leaf $Destination)."
-    }
-    Move-Item -LiteralPath $partial -Destination $Destination -Force
-    Write-Host "Verified $(Split-Path -Leaf $Destination)." -ForegroundColor Green
-}
-
-Write-Host ''
-Write-Host '  MagicHandy installer' -ForegroundColor White
-Write-Host '  Local-first AI control for The Handy. Adults only; use responsibly.' -ForegroundColor DarkGray
-
-# Resolve and validate the repo root (this script lives at the project root).
 $Repo = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not (Test-Path (Join-Path $Repo 'cmd\magichandy'))) {
-    throw "This script must run from the MagicHandy project folder (couldn't find cmd\magichandy)."
+$support = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
+if (-not (Test-Path -LiteralPath $support)) {
+    throw "Installer support module not found at '$support'."
+}
+Import-Module $support -Force -DisableNameChecking
+
+if (-not (Test-Path -LiteralPath (Join-Path $Repo 'cmd\magichandy'))) {
+    throw "This script must run from the MagicHandy source folder."
+}
+if ($UseSavedChoices -and $Reconfigure) {
+    throw 'UseSavedChoices and Reconfigure cannot be combined.'
+}
+if ($Reconfigure -and $Yes) {
+    throw 'Reconfigure is interactive and cannot be combined with Yes.'
+}
+if (-not $StatePath) {
+    $StatePath = Get-MagicHandyInstallStatePath
 }
 Set-Location $Repo
 
-# --- 1. Go toolchain ---------------------------------------------------------
-Write-Head '1. Go toolchain'
-if (Test-Cmd 'go') {
-    Write-Host "Found $(& go version)"
-} else {
-    Write-Host 'Go is not installed. MagicHandy is built from source with Go 1.25+.'
-    if ((Test-Cmd 'winget') -and (Confirm-YesNo 'Install Go now with winget?')) {
-        winget install --id GoLang.Go -e --source winget
-        Write-Host 'Go installed. Close and reopen PowerShell so PATH updates, then re-run this script.' -ForegroundColor Yellow
-        return
+function Get-ProfileDataDir {
+    if (-not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
+        return Join-Path $env:APPDATA 'MagicHandy'
     }
-    Write-Host 'Install Go 1.25+ from https://go.dev/dl/ and re-run this script.' -ForegroundColor Yellow
+    return Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'MagicHandy'
+}
+
+function Resolve-InitialDataDir {
+    if (-not [string]::IsNullOrWhiteSpace($DataDir)) {
+        return [System.IO.Path]::GetFullPath($DataDir)
+    }
+    if ($Yes) {
+        return [System.IO.Path]::GetFullPath((Get-ProfileDataDir))
+    }
+    $portable = Confirm-MagicHandyChoice -Question 'Store app data in a portable .\data folder? (No uses your Windows profile)' -Default $false
+    if ($portable) {
+        return Join-Path $Repo 'data'
+    }
+    return [System.IO.Path]::GetFullPath((Get-ProfileDataDir))
+}
+
+function Resolve-InitialBackend([bool]$BuildManaged) {
+    if (-not $BuildManaged) {
+        return 'cpu'
+    }
+    if ($LlamaBackend -in @('cpu', 'cuda')) {
+        return $LlamaBackend
+    }
+    if (-not (Resolve-MagicHandyExecutable -Name 'nvidia-smi')) {
+        Write-Host 'No NVIDIA GPU was detected; managed llama.cpp will use the CPU backend.'
+        return 'cpu'
+    }
+    if (Resolve-MagicHandyExecutable -Name 'nvcc') {
+        Write-Host 'NVIDIA GPU and CUDA Toolkit detected; managed llama.cpp will use CUDA.' -ForegroundColor Green
+        return 'cuda'
+    }
+    Write-Host 'An NVIDIA GPU was detected, but the CUDA Toolkit compiler is not installed.'
+    Write-Host 'CUDA is proprietary and uses several GB. CPU mode avoids that dependency.' -ForegroundColor DarkGray
+    if (Confirm-MagicHandyChoice -Question 'Select CUDA and install the Toolkit?' -Default $false -AssumeYes:$Yes) {
+        return 'cuda'
+    }
+    return 'cpu'
+}
+
+function New-FreshConfiguration {
+    $resolvedDataDir = Resolve-InitialDataDir
+    $setupLLM = if ($Yes) {
+        $true
+    } else {
+        Confirm-MagicHandyChoice -Question 'Set up local LLM providers for chat?' -Default $true
+    }
+
+    $buildManaged = $false
+    $backend = 'cpu'
+    $ensureOllama = $false
+    $model = if ($null -eq $OllamaModel) { '' } else { $OllamaModel.Trim() }
+    if ($setupLLM) {
+        $buildManaged = if ($SkipLlamaBuild) {
+            $false
+        } elseif ($Yes) {
+            $true
+        } else {
+            Write-Host ''
+            Write-Host 'Managed llama.cpp gives MagicHandy direct control over runner version, startup, loading, and diagnostics.'
+            Write-Host 'It requires a source toolchain and a separate runtime build. Ollama saves that space and remains fully supported.' -ForegroundColor DarkGray
+            Confirm-MagicHandyChoice -Question 'Build the managed llama.cpp runtime?' -Default $true
+        }
+        $backend = Resolve-InitialBackend -BuildManaged $buildManaged
+
+        if (-not $buildManaged) {
+            $ensureOllama = $true
+        } elseif ($Yes) {
+            $ensureOllama = $true
+        } else {
+            $ollamaDefault = [bool](Resolve-MagicHandyExecutable -Name 'ollama')
+            $ensureOllama = Confirm-MagicHandyChoice -Question 'Install or keep Ollama as an additional provider?' -Default $ollamaDefault
+        }
+        if ($ensureOllama -and -not $Yes -and [string]::IsNullOrWhiteSpace($model)) {
+            $model = Read-MagicHandyValue -Question 'Optional Ollama model to ensure now (blank leaves models unchanged)'
+        }
+    }
+
+    $parakeet = if ($SkipParakeet) {
+        $false
+    } elseif ($Yes) {
+        $true
+    } else {
+        Write-Host ''
+        Write-Host 'Parakeet adds private offline speech recognition: 1.4 MB CPU runner plus a 644 MiB CC-BY-4.0 model.'
+        Confirm-MagicHandyChoice -Question 'Install managed Parakeet speech input?' -Default $false
+    }
+    $launcher = if ($NoLauncher) {
+        $false
+    } elseif ($Yes) {
+        $true
+    } else {
+        Confirm-MagicHandyChoice -Question 'Create Start-MagicHandy.ps1?' -Default $true
+    }
+
+    return New-MagicHandyInstallState `
+        -RepositoryPath $Repo `
+        -DataDir $resolvedDataDir `
+        -Port $Port `
+        -SetupLLM $setupLLM `
+        -BuildManagedLlama $buildManaged `
+        -LlamaBackend $backend `
+        -EnsureOllama $ensureOllama `
+        -OllamaModel $model `
+        -InstallParakeet $parakeet `
+        -CreateLauncher $launcher
+}
+
+function Read-ValidPort([int]$Default) {
+    while ($true) {
+        $raw = Read-MagicHandyValue -Question 'Local HTTP port' -Default ([string]$Default)
+        $parsed = 0
+        if ([int]::TryParse($raw, [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 65535) {
+            return $parsed
+        }
+        Write-Warning 'Enter a port from 1 through 65535.'
+    }
+}
+
+function Read-ReconfiguredState([object]$Existing) {
+    Write-InstallerHeading 'Modify installation choices'
+    $newDataDir = Read-MagicHandyValue -Question 'Data directory' -Default ([string]$Existing.data_dir)
+    $newDataDir = [System.IO.Path]::GetFullPath($newDataDir)
+    $newPort = Read-ValidPort -Default ([int]$Existing.port)
+    $setupLLM = Confirm-MagicHandyChoice -Question 'Set up local LLM providers for chat?' -Default ([bool]$Existing.setup_llm)
+
+    $buildManaged = $false
+    $backend = 'cpu'
+    $ensureOllama = $false
+    $model = ''
+    if ($setupLLM) {
+        $buildManaged = Confirm-MagicHandyChoice -Question 'Build or keep managed llama.cpp?' -Default ([bool]$Existing.build_managed_llama)
+        if ($buildManaged) {
+            $backendDefault = if ([string]$Existing.llama_backend -eq 'cuda') { 'cuda' } else { 'cpu' }
+            $backend = Read-MagicHandyBackend -Default $backendDefault
+        }
+        $ollamaDefault = if (-not $buildManaged) { $true } else { [bool]$Existing.ensure_ollama }
+        $ensureOllama = Confirm-MagicHandyChoice -Question 'Install or keep Ollama available?' -Default $ollamaDefault
+        if (-not $buildManaged -and -not $ensureOllama) {
+            Write-Host 'Ollama remains enabled because no managed llama.cpp runtime was selected.' -ForegroundColor Yellow
+            $ensureOllama = $true
+        }
+        if ($ensureOllama) {
+            $model = Read-MagicHandyOptionalValue -Question 'Ollama model to ensure' -Default ([string]$Existing.ollama_model)
+        }
+    }
+    $parakeet = Confirm-MagicHandyChoice -Question 'Install or keep managed Parakeet speech input?' -Default ([bool]$Existing.install_parakeet)
+    $launcher = Confirm-MagicHandyChoice -Question 'Create or refresh Start-MagicHandy.ps1?' -Default ([bool]$Existing.create_launcher)
+
+    return New-MagicHandyInstallState `
+        -RepositoryPath $Repo `
+        -DataDir $newDataDir `
+        -Port $newPort `
+        -SetupLLM $setupLLM `
+        -BuildManagedLlama $buildManaged `
+        -LlamaBackend $backend `
+        -EnsureOllama $ensureOllama `
+        -OllamaModel $model `
+        -InstallParakeet $parakeet `
+        -CreateLauncher $launcher `
+        -InstalledAt ([string]$Existing.installed_at)
+}
+
+function Copy-SavedState([object]$Existing) {
+    return New-MagicHandyInstallState `
+        -RepositoryPath $Repo `
+        -DataDir ([string]$Existing.data_dir) `
+        -Port ([int]$Existing.port) `
+        -SetupLLM ([bool]$Existing.setup_llm) `
+        -BuildManagedLlama ([bool]$Existing.build_managed_llama) `
+        -LlamaBackend ([string]$Existing.llama_backend) `
+        -EnsureOllama ([bool]$Existing.ensure_ollama) `
+        -OllamaModel ([string]$Existing.ollama_model) `
+        -InstallParakeet ([bool]$Existing.install_parakeet) `
+        -CreateLauncher ([bool]$Existing.create_launcher) `
+        -InstalledAt ([string]$Existing.installed_at)
+}
+
+if (-not $UpdateRun) {
+    Write-MagicHandyBanner -Operation Install
+}
+
+$state = if ($UseSavedChoices -or $Reconfigure) {
+    $existing = Read-MagicHandyInstallState -Path $StatePath
+    if ($Reconfigure) {
+        Read-ReconfiguredState -Existing $existing
+    } else {
+        Write-InstallerHeading 'Preserved installation choices'
+        Show-MagicHandyInstallState -State $existing
+        Copy-SavedState -Existing $existing
+    }
+} else {
+    New-FreshConfiguration
+}
+
+Write-InstallerHeading 'Selected installation'
+Show-MagicHandyInstallState -State $state
+Invoke-MagicHandyProvision -State $state -RepositoryPath $Repo -AssumeYes:$Yes -PlanOnly:$PlanOnly
+
+if ($PlanOnly) {
+    Write-Host ''
+    Write-Host 'Plan complete. No files, packages, state, or processes were changed.' -ForegroundColor Green
+    if (-not $UpdateRun) {
+        Write-MagicHandyCompletionArt -Operation InstallPlan
+    }
     return
 }
-$goVersion = & go version
-if ($goVersion -match 'go(\d+)\.(\d+)') {
-    $maj = [int]$Matches[1]; $min = [int]$Matches[2]
-    if ($maj -lt 1 -or ($maj -eq 1 -and $min -lt 25)) {
-        Write-Warning "Go $maj.$min detected; 1.25+ is recommended. Continuing anyway."
-    }
+
+Write-MagicHandyInstallState -State $state -Path $StatePath
+Write-Host "Saved non-secret installer choices to $StatePath" -ForegroundColor Green
+
+$launch = -not $NoLaunch -and ($Yes -or (Confirm-MagicHandyChoice -Question 'Start MagicHandy now?' -Default $true))
+if ($launch) {
+    Start-MagicHandyApp -RepositoryPath $Repo -DataDir ([string]$state.data_dir) -Port ([int]$state.port)
 }
 
-# --- 2. Build ----------------------------------------------------------------
-Write-Head '2. Build MagicHandy'
-$exe = Join-Path $Repo 'magichandy.exe'
-$env:CGO_ENABLED = '0'
-Write-Host 'Building (pure Go, no C compiler needed)...'
-& go build -o $exe ./cmd/magichandy
-if ($LASTEXITCODE -ne 0) { throw 'Build failed. See the output above.' }
-Write-Host "Built $exe" -ForegroundColor Green
-
-# --- 3. Data folder ----------------------------------------------------------
-Write-Head '3. Data folder'
-if (-not $DataDir) {
-    if (Confirm-YesNo 'Store data in a portable .\data folder next to the app? (No = your Windows profile)' $false) {
-        $DataDir = Join-Path $Repo 'data'
-    }
+if (-not $UpdateRun) {
+    Write-MagicHandyCompletionArt -Operation Install
 }
-if ($DataDir) {
-    Write-Host "Data will be stored in: $DataDir"
-} else {
-    Write-Host 'Data will be stored under your Windows profile (…\AppData\Roaming\MagicHandy).'
-}
-Write-Host 'Your settings, chat memory, and Handy connection key are stored locally only.'
-$voiceDataDir = if ($DataDir) {
-    [System.IO.Path]::GetFullPath($DataDir)
-} else {
-    Join-Path $env:APPDATA 'MagicHandy'
-}
-
-# --- 4. Local LLM (optional) -------------------------------------------------
-Write-Head '4. Local LLM (for chat)'
-$hasNVIDIA = Test-Cmd 'nvidia-smi'
-$hasNVCC = Test-Cmd 'nvcc'
-if ($hasNVIDIA) {
-    Write-Host 'NVIDIA GPU detected. A CUDA source build is the fast path when the CUDA Toolkit is installed.' -ForegroundColor Green
-} else {
-    Write-Host 'No NVIDIA GPU detected. The managed source build will use the CPU backend.'
-}
-if (Confirm-YesNo 'Set up a local LLM now? (you can always do this later in Settings > Model)') {
-    Write-Host 'Managed llama.cpp lets MagicHandy pin and directly control the runner, startup, model loading,'
-    Write-Host 'and diagnostics. No llama-server path is required; the build verifies b9966 at commit c749cb0.'
-    Write-Host ''
-    Write-Host 'You can skip this build and use an existing Ollama install instead.' -ForegroundColor White
-    Write-Host 'That is the space-saving choice: MagicHandy will use Ollama''s runtime and models in place,'
-    Write-Host 'without keeping a managed llama.cpp build or copying a model unless you explicitly import one.'
-    $effectiveBackend = $LlamaBackend
-    if ($SkipLlamaBuild) {
-        Write-Host 'Skipping managed llama.cpp as requested. Select Ollama in Settings > Model.' -ForegroundColor Green
-    } elseif (Confirm-YesNo 'Build MagicHandy managed llama.cpp now? (No = use Ollama or configure it later)') {
-        if ($effectiveBackend -eq 'auto' -and $hasNVIDIA -and -not $hasNVCC) {
-            Write-Host 'The CUDA Toolkit compiler (nvcc) was not found, so Auto will build the CPU backend.' -ForegroundColor Yellow
-            Write-Host 'Install Nvidia.CUDA with winget and rerun with -LlamaBackend cuda for GPU acceleration.'
-        }
-        $llamaBuilder = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
-        try {
-            & $llamaBuilder -DataDir $voiceDataDir -Backend $effectiveBackend
-        } catch {
-            Write-Warning "Managed llama.cpp build did not complete: $_"
-            Write-Host 'The source build needs Git, CMake, and Visual Studio C++ Build Tools.'
-            Write-Host 'The Model screen can retry the same pinned build after those tools are installed.'
-        }
-    }
-
-    if (Test-Cmd 'ollama') {
-        Write-Host 'Ollama is also installed and remains available as the external compatibility provider.'
-        $model = $OllamaModel
-        if (-not $Yes -and [string]::IsNullOrWhiteSpace($model)) {
-            $model = Read-Host 'Model to pull now (blank to skip, e.g. llama3.1:8b)'
-        }
-        if (-not [string]::IsNullOrWhiteSpace($model)) {
-            Write-Host "Heads up: '$model' is a multi-gigabyte download." -ForegroundColor Yellow
-            if (Confirm-YesNo "Pull '$model' with Ollama now?") {
-                try { & ollama pull $model } catch { Write-Warning "ollama pull failed: $_" }
-            }
-        }
-    } else {
-        Write-Host 'Ollama is not installed. That is fine when using MagicHandy managed llama.cpp.'
-    }
-}
-
-# --- 5. Offline speech input (optional) -------------------------------------
-Write-Head '5. Offline speech input (optional)'
-$parakeetRoot = Join-Path $voiceDataDir 'voice\parakeet'
-$runnerDir = Join-Path $parakeetRoot 'runner'
-$serverExe = Join-Path $runnerDir 'parakeet-server.exe'
-$modelPath = Join-Path $parakeetRoot 'tdt-0.6b-v3-q4_k.gguf'
-$workerExe = Join-Path $Repo 'voice-parakeet-worker.exe'
-
-Write-Host 'Parakeet adds private, offline speech recognition. It is optional and never starts on its own.'
-Write-Host 'The CPU setup downloads parakeet.cpp v0.4.0 (MIT, 1.4 MB) and the multilingual'
-Write-Host 'Parakeet TDT 0.6B v3 Q4_K model (CC-BY-4.0, 644 MiB). Both files are SHA-256 verified.'
-if (Confirm-YesNo 'Install offline Parakeet speech input now?' $false) {
-    $runnerArchive = Join-Path $parakeetRoot 'parakeet-v0.4.0-bin-win-cpu-x64.zip'
-    if (-not (Test-Path -LiteralPath $serverExe)) {
-        Install-VerifiedDownload `
-            'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip' `
-            $runnerArchive `
-            '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
-        $stage = Join-Path $parakeetRoot 'runner.partial'
-        if (Test-Path -LiteralPath $stage) {
-            Remove-Item -LiteralPath $stage -Recurse -Force
-        }
-        Expand-Archive -LiteralPath $runnerArchive -DestinationPath $stage -Force
-        $candidate = Get-ChildItem -LiteralPath $stage -Filter 'parakeet-server.exe' -File -Recurse | Select-Object -First 1
-        if ($null -eq $candidate) {
-            throw 'The parakeet.cpp archive did not contain parakeet-server.exe.'
-        }
-        if (Test-Path -LiteralPath $runnerDir) {
-            Write-Warning "Replacing incomplete Parakeet runner directory at $runnerDir."
-            Remove-Item -LiteralPath $runnerDir -Recurse -Force
-        }
-        New-Item -ItemType Directory -Force -Path $runnerDir | Out-Null
-        Get-ChildItem -LiteralPath $candidate.Directory.FullName -Force | Move-Item -Destination $runnerDir -Force
-        Remove-Item -LiteralPath $stage -Recurse -Force
-        Remove-Item -LiteralPath $runnerArchive -Force
-        Write-Host "Installed parakeet-server at $serverExe" -ForegroundColor Green
-    } else {
-        Write-Host "Using existing parakeet-server at $serverExe" -ForegroundColor Green
-    }
-
-    Install-VerifiedDownload `
-        'https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v3-q4_k.gguf?download=true' `
-        $modelPath `
-        '993d73feb4206dadda865ab25bd64b50c48dc4d013c3bf6126a721f28b1d5ee8'
-
-    Write-Host 'Building the small Go ASR worker...'
-    & go build -o $workerExe ./cmd/voice-parakeet-worker
-    if ($LASTEXITCODE -ne 0) { throw 'Parakeet worker build failed. See the output above.' }
-    Write-Host "Built $workerExe" -ForegroundColor Green
-    Write-Host ''
-    Write-Host 'In Settings > Voice, enable voice workers and set the ASR worker path to:' -ForegroundColor White
-    Write-Host "  $workerExe"
-    Write-Host 'Enter these ASR worker arguments one per line:' -ForegroundColor White
-    Write-Host '  -server-path'
-    Write-Host "  $serverExe"
-    Write-Host '  -server-model'
-    Write-Host "  $modelPath"
-    Write-Host 'Save settings, then Start and Load the Speech input worker. The managed server stays on 127.0.0.1.'
-} else {
-    Write-Host 'Skipping offline speech input. It can be installed by re-running this script later.'
-}
-
-# --- 6. Launch ---------------------------------------------------------------
-Write-Head '6. Launch'
-$startArgs = @('-addr', "127.0.0.1:$Port")
-if ($DataDir) { $startArgs += @('-data-dir', $DataDir) }
-$url = "http://127.0.0.1:$Port"
-
-if (Confirm-YesNo 'Create a Start-MagicHandy.ps1 launcher in this folder?') {
-    $argLine = ($startArgs | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
-    $launcher = @"
-# Starts MagicHandy and opens it in your browser.
-Start-Process -FilePath "$exe" -ArgumentList $argLine
-Start-Sleep -Seconds 1
-Start-Process "$url"
-"@
-    Set-Content -Path (Join-Path $Repo 'Start-MagicHandy.ps1') -Value $launcher -Encoding utf8
-    Write-Host 'Created Start-MagicHandy.ps1' -ForegroundColor Green
-}
-
-if (-not $NoLaunch -and (Confirm-YesNo 'Start MagicHandy now?')) {
-    Start-Process -FilePath $exe -ArgumentList $startArgs
-    Start-Sleep -Seconds 1
-    Start-Process $url
-    Write-Host "MagicHandy is starting at $url" -ForegroundColor Green
-}
-
-Write-Host ''
-Write-Host 'All set. Open Settings to connect your Handy and pick your model.' -ForegroundColor White
-Write-Host 'Emergency Stop is always on-screen (or press Esc).' -ForegroundColor DarkGray

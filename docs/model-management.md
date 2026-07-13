@@ -79,7 +79,10 @@ llama.cpp release `b9966` at commit
 `c749cb041706647f460bb918cccc9d91995205ab` and embeds the PowerShell build
 helper in the Go binary. **Build runtime** is an explicit, controller-gated
 action. The same helper is called by `install.ps1` when the user accepts its
-managed-runtime prompt.
+managed-runtime prompt. Direct helper and in-app builds still require the tools
+to exist; the source installer detects, installs, and verifies missing Git,
+CMake, Visual Studio Desktop C++/Windows SDK, and selected CUDA dependencies
+before invoking it.
 
 The helper:
 
@@ -114,6 +117,11 @@ control. Users with an existing Ollama setup can answer **No** (or pass
 `-SkipLlamaBuild`) to avoid the extra runtime. Ollama models remain in place
 unless the user separately chooses **Import from Ollama**, which intentionally
 creates a managed copy.
+
+Successful source installs persist only these non-secret provisioning choices
+under LocalAppData. `update.ps1` displays and preserves them by default, or can
+revisit the managed-build/backend/Ollama decisions before rebuilding. Disabling
+a choice never silently deletes an existing runtime or model library.
 
 ## Standalone GGUF Import
 

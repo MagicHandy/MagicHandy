@@ -174,10 +174,12 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
-8. **Release provisioning**: voice workers are optional external processes and
-   not all are installed by `install.ps1`; managed llama.cpp currently builds
-   from source. Phase 16 must provide checksummed prebuilt runtimes before the
-   GUI setup path can claim no Git/CMake/Visual Studio requirement.
+8. **Release provisioning**: `install.ps1` now builds every first-party Go voice
+   adapter and can provision a clean Windows source machine, including the
+   compiler; `update.ps1` preserves or revises those choices. External NeuTTS
+   assets and managed llama.cpp still build/provision outside the core. Phase 16
+   must provide checksummed prebuilt runtimes before the GUI setup path can avoid
+   installing Git/CMake/Visual Studio rather than merely automating them.
 
 ### UI Shell Redesign (Sidebar Navigation)
 
@@ -1123,14 +1125,16 @@ install and configure end to end without a source toolchain: prebuilt llama.cpp
 runtime choice, model downloads, voice provisioning, and StrokeGPT-ReVibed
 porting through a GUI. Source builds remain an advanced/developer fallback.
 
-Delivered ahead of this phase (#55, #56): the model-manager foundation now
+Delivered ahead of this phase (#55, #56, #60 follow-up): the model-manager foundation now
 owns schema v9 inventory, managed GGUF storage, standalone/Ollama import,
 ID-based selection, and the Model UI. The app also owns a pinned source-build
 lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build
 status, cancellation, manifest validation, and installer opt-out for existing
-Ollama users. Phase 16 still owns curated checksum-pinned model downloads,
-hardware-fit recommendations, and release packaging that removes the source
-toolchain prerequisite for non-developers.
+Ollama users. The source installer can bootstrap WinGet/Go/Git/CMake/MSVC/CUDA,
+build all first-party workers, persist non-secret choices, and reuse them from a
+fast-forward-only updater. Phase 16 still owns curated checksum-pinned model
+downloads, hardware-fit recommendations, and release packaging that avoids
+installing a source toolchain for non-developers.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive

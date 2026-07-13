@@ -75,3 +75,15 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  installer:
+    name: Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PowerShell 5.1 installer tests
+        shell: powershell
+        run: .\scripts\test-installer.ps1

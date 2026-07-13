@@ -19,6 +19,8 @@ coverage.out
 .env.*
 !.env.example
 /.local-data/
+/data/
+/Start-MagicHandy.ps1
 
 # Logs and diagnostics generated locally
 *.log
