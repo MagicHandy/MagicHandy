@@ -81,7 +81,7 @@ MagicHandy Go core itself.
    Parakeet assets are now discovered separately from custom local server paths,
    but turnkey in-app provider provisioning, managed browser-audio-to-Parakeet
    validation, arbitrary-WAV NeuTTS cloning, and any LAN/HTTPS story remain open
-   (R17/R18).
+   (managed browser audio: R24; NeuTTS cloning: R17; LAN/HTTPS: R18).
 
 ## Roadmap to parity
 

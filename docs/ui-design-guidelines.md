@@ -11,11 +11,11 @@ the companion to two docs and does not repeat them:
   rules.
 
 This file is the **live token-and-component reference** for the shipped
-React shell (status 2026-07-11: current). The tokens now live in
+React shell (status 2026-07-14: current). The tokens now live in
 `web/src/styles/tokens.css` (shell and component rules in
-`web/src/styles/shell.css` / `components.css`); values quoted from the
-pre-React `web/app.css` were carried over unchanged, and `web/app.css`
-itself is retired under `web/legacy/` (reference only, not embedded). The
+`web/src/styles/shell.css` / `components.css`); the pre-React `web/app.css` is
+retired under `web/legacy/` (reference only, not embedded). The current React
+styles are authoritative where legacy values differ. The
 do/don't rules keep the result from reading as generic AI output. A visual
 sketch of the shell as designed is
 [ui-shell-sketch.svg](ui-shell-sketch.svg) (historical artifact; the build
@@ -67,11 +67,12 @@ else is neutral graphite.
 | `--radius-sm` `8px` | Buttons, inputs, chips, chat bubbles, badges, nav rows |
 | `4px` | Chat bubble tail corner only |
 | `6px` | Keycap/shortcut hint |
-| `999px` | **State dots and the toggle thumb only** |
+| `999px` | Circular micro-elements: state dots, toggle track/thumb, chat avatars, range track/thumbs, scrollbar thumb |
 
-`999px` is currently also used on status pills, the visualizer frame, and the
-chat-provider chip. The redesign **retires the fully-round pill for status**
-(see Status readouts). Nothing button-sized or status-sized is a pill.
+The retired legacy CSS also used `999px` on status pills, the visualizer frame,
+and the chat-provider chip. The React shell has **retired the fully-round pill
+for status** (see Status readouts). Nothing button-sized or status-sized is a
+pill.
 
 ### Spacing, elevation, type
 
@@ -96,8 +97,8 @@ chat-provider chip. The redesign **retires the fully-round pill for status**
   right border. Not the page background — it is a distinct surface.
 - **Profile lockup** (top): 34–36px avatar as a `--radius-sm` squircle with the
   `--accent`→`--steel-deep` gradient (the existing brand/avatar gradient),
-  `MagicHandy` in `--text` `600`, session identity (`local · llama.cpp · cloud`)
-  in `--muted` `0.72rem`. It is a button → navigates to `#/settings`.
+  `MagicHandy` in `--text` `600`, and `local / {dispatch owner}` in `--muted`
+  `0.72rem`. It is a link to `#/settings`.
 - **Nav row**: 40px tall, `0 12px`, 18px icon + `0.9rem` label, `--radius-sm`.
   Default is a `--muted` label on a transparent background; hover uses
   `--surface-2`. Active uses the soft `--accent-tint` fill, `--text` label,
@@ -107,13 +108,10 @@ chat-provider chip. The redesign **retires the fully-round pill for status**
   treatment (full-width here) — `--danger`/`--danger-strong` red gradient, white
   `700`, `--radius-sm`, `--shadow`, with the `Esc` keycap. Present on every page.
 
-### Status readouts (changed — the headline fix)
+### Status readouts
 
-Today's status is a `.status-pill`: `border-radius: 999px`, `--surface-2` fill,
-`--line` border, and a glowing dot (`box-shadow: 0 0 6px …`). That fully-round,
-filled, glowing chip is exactly the "oversized round bubble" to remove.
-
-Replace with a compact readout in the status bar:
+The current React status bar uses compact readouts; the retired legacy
+`.status-pill` with a fully-round fill, border, and glowing dot must not return:
 
 - an 8–9px state **dot** + text label, inline; **no pill fill, no border, no dot
   glow**; group readouts with spacing or a 0.5px `--line` divider tick.
@@ -122,10 +120,9 @@ Replace with a compact readout in the status bar:
   text, never color alone.
 - the run timer is `--muted` label + tabular-nums value with a clock icon.
 
-The one authoritative visualizer keeps a compact Handy side profile in the
-status bar and its detailed form on the Chat page — a vertical body styled
-after The Handy 2 with the sleeve carriage travelling a right-edge channel.
-One component, engine-driven, position labeled as a commanded estimate.
+The one authoritative visualizer keeps a compact vertical Handy 2-inspired body
+and sleeve in the status bar and its detailed form on the Chat page. One
+component, engine-driven, with position labeled as a commanded estimate.
 
 ### Buttons
 
@@ -158,10 +155,10 @@ One component, engine-driven, position labeled as a commanded estimate.
   signal arcs, and the poster's tall capsule, domed body, LED, and square marker
   into one frame; no element may touch the frame edge. The arcs use intense blue
   `#168bff` only for connecting/connected states and cascade toward the device.
-  Disconnected/error hides every blue arc and shows one compact `--danger` X;
-  this is a semantic
-  status mark, not a red action competing with Stop. `prefers-reduced-motion`
-  disables the connecting animation.
+  Disconnected hides every blue arc and shows the device's red square marker.
+  Only a failed connection attempt adds the compact shaking `--danger` X; it is
+  a semantic status mark, not a red action competing with Stop.
+  `prefers-reduced-motion` disables the connecting animation.
 - Keep [connection-artwork.md](connection-artwork.md) aligned with any asset,
   SVG-coordinate, state, or panel-sizing change.
 - Open moves focus to Close; Close restores the trigger. Escape remains the
@@ -205,7 +202,8 @@ One component, engine-driven, position labeled as a commanded estimate.
 - Toast: fixed bottom-center, `--surface-3`, `--line-strong`, `--shadow`,
   `--radius-sm`; slides up on show. One at a time.
 - Backend banner: full-width alert, translucent `--danger` fill + border, white
-  text; lives in the status bar and stays above every workspace.
+  text; lives at the top of the workspace, immediately below the status bar and
+  above routed content.
 
 ### Icons
 
@@ -249,7 +247,9 @@ label for a control.
   transitions and the chat entry animation (wired in
   `web/src/styles/components.css`).
 - Focus is a `2px --focus` outline at `2px` offset on every interactive element;
-  routed views and any popover trap focus and restore it on close.
+  routed views focus their heading on entry. The connection disclosure is
+  non-modal: opening moves focus to Close and closing restores the trigger; it
+  does not trap focus.
 - Status is text + icon + color, never color alone. One polite live region for
   status; the visualizer is not a chatty live region.
 - Text and controls meet WCAG AA contrast on the dark surfaces.
@@ -259,7 +259,8 @@ label for a control.
 Do:
 
 - keep status as compact dot+text; cap radius at `--radius-sm` for anything
-  control- or status-sized; reserve `999px` for dots and the toggle thumb.
+  control- or status-sized; use `999px` only for circular micro-elements, never
+  a text or control container.
 - signal depth with the surface ladder; use the two defined shadows sparingly.
 - keep one interactive hue (`--accent`); green strictly for go, amber for warn,
   red for stop; left-aligned, information-dense, real hierarchy.

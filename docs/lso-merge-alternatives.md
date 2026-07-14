@@ -42,13 +42,15 @@ the binary can only ship one. Which is canonical, and what happens to the other?
 
 ---
 
-## Decision 2 — Intiface / Buttplug transport scope
+## Decision 2 — Intiface / Buttplug transport scope (resolved)
 
-The merge adds a Buttplug transport. MagicHandy is currently HSP-only with no
-fallback (ADR 0006).
+Resolved 2026-07-11 by ADR 0010 and implemented in Phase 14B as option A. The
+options below are retained as decision history; MagicHandy now has an Intiface
+owner alongside its two HSP owners, with no silent fallback between them.
 
 - **A. First-class dispatch owner** alongside Cloud REST and Browser Bluetooth.
-  - Pro: broadens device support to the whole Buttplug/Intiface ecosystem — a
+  - Pro: broadens device support to the linear-actuator subset of the
+    Buttplug/Intiface ecosystem — a
     core LSO capability; already implemented purely behind the transport
     interface.
   - Con: widens the supported surface (three dispatch owners to keep safe,
@@ -66,11 +68,10 @@ fallback (ADR 0006).
   HSP-only language, and with Stop/owner-switch/goroutine-lifecycle tests
   extended to the new transport. The "no silent fallback, stop-and-report" rule
   applies to every transport.
-- **Resolved (2026-07-11): option A.**
+- **Resolved and implemented (2026-07-11): option A.**
   [ADR 0010](decisions/0010-transport-neutral-frames-intiface.md) records the
   schema evaluation and the owner obligations; Phase 14B in
-  `IMPLEMENTATION_PLAN.md` carries the implementation. If the merge lands
-  LSO's Buttplug transport first, Phase 14B adapts it behind that contract.
+  `IMPLEMENTATION_PLAN.md` carries the implementation and validation status.
 
 ---
 

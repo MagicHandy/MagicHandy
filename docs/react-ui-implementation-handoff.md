@@ -7,7 +7,7 @@
 > guidance see [ui-design.md](ui-design.md),
 > [ui-navigation-redesign.md](ui-navigation-redesign.md) (as-built shell),
 > [ui-design-guidelines.md](ui-design-guidelines.md) (live tokens), and
-> [settings-compaction.md](settings-compaction.md) (next planned change).
+> [settings-compaction.md](settings-compaction.md) (implemented in Slice 13.5).
 
 ## Goal
 

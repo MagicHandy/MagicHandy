@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-13, Intiface pacing follow-up
+## Snapshot — 2026-07-14, progress and documentation audit
 
 ### Goal 1: Maintainability
 
@@ -31,11 +31,12 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **Met** | The advisory target has two focused guideline exceptions: the source-installer support module (861 lines) and the 1,194-line Intiface session/dispatch owner. Intiface timing, waiter, Stop, and websocket state remain one safety-critical lifecycle with a separate 658-line motion/pacer file and fake-server tests; both stay below the 1,500-line emergency ceiling. |
-| Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. The 544-line model panel and 372-line model stylesheet are separate from the routed Settings shell and shared controls; `web/dist` remains the single shipped build. |
-| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 946 lines, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening the safety lifecycle. |
+| Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,108 lines, `web/src/styles/components.css` 1,084, and retired reference-only `web/legacy/app.css` 846. `web/dist` remains the single shipped build. |
+| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 1,159 lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; split it when lifecycle boundaries can stay clear. |
+| Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
-| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 14 and the ahead-of-phase model/runtime work are merged by PR with code, tests, rendered UI evidence where applicable, migrations, risk updates, and budget measurements together. |
+| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 14C and the ahead-of-phase model/runtime/installer work are merged by PR with code, tests, migrations, risk updates, and budget measurements. Post-#63 rendered UI evidence still needs a refresh and is tracked explicitly. |
 
 ### Goal 2: Core Memory
 
@@ -74,7 +75,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence / Notes |
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
-| Full app path — Cloud REST | **Met** | A 2026-07-12 current-build run at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation (`docs/perf-baseline.md`, "Phase 14B Intiface Hardware Evidence"). |
+| Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. This predates PR #63's visible connection/limit refinements, whose rendered QA refresh remains open (`docs/perf-baseline.md`, "Phase 14B Intiface Hardware Evidence"). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
@@ -91,10 +92,10 @@ backend-authoritative preview and motion path.
 
 Ranked by threat to the stated goals:
 
-1. **Emergency Stop delivery gaps.** The mounted control and active engine
-   teardown are covered, but idle/no-engine paths do not always attempt a
-   transport Stop and backend loss prevents browser delivery. Close the
-   unconditional-attempt and failure-reporting gaps before a release claim.
+1. **Emergency Stop delivery gaps.** Active, paused, repeated-idle, and
+   no-engine paths attempt the selected owner and report failed delivery while
+   preserving local teardown. Backend loss still prevents Browser Bluetooth
+   delivery, and current Cloud/Browser retry hardware evidence remains open.
 2. **Cold start at the boundary.** Probably measurement overhead, but nobody
    has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
    it server-side.
@@ -109,6 +110,11 @@ Ranked by threat to the stated goals:
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-14** — Audited implementation progress after PRs #63-#67. Updated
+  phase status, Stop behavior, transport scope, voice acceptance, source-size
+  evidence, and the distinction between pre-asynchronous-ACK hardware evidence
+  and the current Intiface validation gap. No budget target was changed.
 
 - **2026-07-13** — Intiface pacing no longer waits for each Buttplug ACK before
   the next absolute deadline. A bounded asynchronous ledger, response deadlines,

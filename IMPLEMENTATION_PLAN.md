@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-13. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-14. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -29,17 +29,17 @@ design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
 decision.
 
-Current maintenance work bounds LLM output, exposes honest provider-native
-reasoning control, removes redundant warm managed-llama readiness probes,
-separates app-managed Parakeet assets from custom paths, and makes source updates
-survive merged/deleted feature upstreams without switching branches or
-discarding work. Source rebuilds Stop and terminate only their checkout-owned
-app tree before staged binary replacement, then verify the new server before
-opening the browser. A live small-model regression showed unbounded automatic
-reasoning consuming the full JSON budget; the current pinned managed runtime now
-bounds reasoning, repair retains context and requests reasoning off, and parser-valid examples end in
-an immutable output guard. Broader LLM quality/latency and real managed
-microphone acceptance are still measurements, not inferred completion claims.
+Recent maintenance in PRs #63-#67 has landed. It hardens connection and live-limit
+controls, bounds LLM output with honest provider-native reasoning control,
+separates app-managed Parakeet assets from custom paths, makes source updates
+survive merged/deleted feature upstreams, avoids reopening stale UI during
+updates, recovers malformed small-model structured responses, and replaces the
+Intiface queue-admission loop with deadline-driven asynchronous-ACK pacing.
+Source rebuilds Stop and terminate only their checkout-owned app tree before
+staged binary replacement, then verify the new server before opening the
+browser. Broader LLM quality/latency, the revised Intiface pacer on hardware,
+and real managed microphone acceptance are still measurements, not inferred
+completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider
@@ -74,10 +74,13 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
-| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; matched HW paths validated, feel confirmation open** | #59 |
-| 14C | Floating connection manager, live limits, conductor-hand connection animation | **Implemented; rendered QA green** | #60 |
-| 16-pre | LLM model manager + managed llama.cpp source-build lifecycle | **Complete** | #55, #56 |
-| 15-17 | Migration, packaging (Windows setup binary + first-run wizard), parity | Not started | — |
+| 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
+| 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
+| 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
+| 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
+| 15 | Migration importer and compatibility report | Not started | — |
+| 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
+| 17 | Final parity/default-app readiness review | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
 before any provider — the SQLite `messages`/`client_cursors` tables (schema
@@ -103,17 +106,17 @@ log with per-client cursors could introduce it as the single canonical
 history; building a separate Phase 10 history store would have created a
 second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 
-### What Exists On Main And The Current Phase Branch
+### What Exists On Main
 
 - Motion engine with retargeting, latency-aware lead, phase preservation, and
   goroutine-lifecycle safety tests, bound at runtime to the **selected dispatch
-  owner** (Cloud REST or Browser Bluetooth) from settings; a fake transport is
-  used only for tests and the diagnostics placeholder.
+  owner** (Cloud REST, Browser Bluetooth, or Intiface) from settings; a fake
+  transport is used only for tests and the diagnostics placeholder.
 - Cloud REST and Browser Bluetooth transports with diagnostics parity, SSE
   event endpoints, no-fallback behavior, and manual test endpoints.
-- Motion-first UI: persistent control bar, single engine-state visualizer,
-  always-visible Stop (plus Escape), immediate-apply quick controls,
-  diagnostics panel, trace export.
+- Motion-first UI: persistent navigation rail, status-only top bar, floating
+  connection/limit manager, routed controls, single engine-state visualizer,
+  always-visible Stop (plus Escape), diagnostics panel, and trace export.
 - Streaming LLM chat (managed llama.cpp primary, external llama.cpp, Ollama
   secondary) with a strict JSON contract, one repair pass, malformed-response
   indication, bounded output, explicit automatic/off reasoning policy, and
@@ -173,16 +176,12 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    motion items (differentiated retarget lead, semantic no-op guard,
    clamp-once speed test) carry explicit skepticism notes — contract shapes
    over copied constants.
-5. **Emergency Stop delivery**: the permanent UI control remains available and
-   active Stop cancels the engine before a best-effort transport Stop. An idle
-   engine currently returns without retrying the transport, a server with no
-   engine does not create a selected transport solely to stop it, and an
-   unreachable backend cannot deliver Browser Bluetooth Stop. Release readiness
-   requires unconditional transport-stop attempts where a dispatch owner is
-   available, regression coverage for idle/no-engine paths, and honest failure
-   reporting. No document may claim physical delivery after communication fails.
-   Tracked as risk R23 (verified against `internal/motion/engine.go` and
-   `internal/httpapi/motion.go` on 2026-07-11).
+5. **Emergency Stop delivery**: active, paused, repeated-idle, and no-engine
+   requests now attempt the selected dispatch owner's Stop while preserving
+   local stopped state and reporting transport failure honestly. An unreachable
+   backend still cannot deliver Browser Bluetooth Stop, and current Cloud REST /
+   Browser Bluetooth retry evidence remains open. No document may claim physical
+   delivery after communication fails. Tracked as risk R23.
 6. **Voice end-to-end acceptance**: browser push-to-talk records WebM/Opus or
    Ogg and forwards it unchanged, while the managed parakeet.cpp path is
    documented and tested with WAV. Provider adapters, source-installer asset
@@ -301,7 +300,7 @@ MagicHandy/
   internal/chat/           chat contract, prompt sets, service     [exists]
   internal/llm/            providers, model inventory/imports      [exists]
   internal/motion/         targets, plans, sampler, retargeting    [exists]
-  internal/transport/      Cloud REST + browser Bluetooth, HSP-only[exists]
+  internal/transport/      Cloud, browser Bluetooth, Intiface owners [exists]
   internal/diagnostics/    trace ring, export                      [exists]
   internal/validation/     retarget validation checklist           [exists]
   internal/modes/          freestyle, continuous-chat planners     [exists]
@@ -534,7 +533,7 @@ in diagnostics; stop interrupts instantly; settings apply during modes.
 ## Objective
 
 Replace the three independent JSON stores with one embedded, transactional
-SQLite datastore (ADR 0008) so the Phase 12 chat log and Phase 14 pattern
+SQLite datastore (ADR 0008) so the Phase 13.0 chat log and Phase 14 pattern
 library have a store shaped for them, without regressing the pure-Go,
 single-binary, low-memory guarantees.
 
@@ -603,7 +602,7 @@ still pass; budgets are re-measured.
 
 ## Out Of Scope
 
-- the chat message log and per-client cursors (Phase 12, ADR 0003)
+- the chat message log and per-client cursors (Phase 13.0, ADR 0003)
 - the pattern/program library tables (Phase 14)
 - StrokeGPT-ReVibed import (Phase 15) — same schema target, separate phase
 - at-rest encryption (the trust model stays a single local operator)
@@ -736,8 +735,10 @@ Status: **complete** in PR #46.
   of disabled controls.
 - Validate the external `/v1/models` fallback, parakeet.cpp `/health` readiness,
   managed startup-once behavior, port conflict, unload, EOF cleanup, and the
-  valid-WAV test request. A real model/microphone measurement remains required
-  before push-to-talk or hands-free UI ships.
+  valid-WAV test request. A real managed-Parakeet microphone measurement remains
+  required before claiming managed push-to-talk acceptance or release readiness;
+  the localhost UI may ship only with that limitation explicit. Hands-free UI
+  remains blocked on push-to-talk reliability evidence.
 
 ### Slice 13.5: Settings Compaction (Voice Provider Model)
 
@@ -851,10 +852,11 @@ mobile voice (see risk R18).
 
 ## Validation
 
-Provider-specific tests plus the standard suite. Manual checks with a real
-microphone: missing dependency reported clearly, provider loads, cancellation
-works, queue depth visible, app survives provider failure, and push-to-talk
-works with the default settings without touching advanced knobs.
+Provider-specific tests plus the standard suite. The managed path still requires
+manual checks with a real microphone: missing dependency reported clearly,
+provider loads, cancellation works, queue depth is visible, the app survives
+provider failure, and push-to-talk works with default settings without touching
+advanced knobs.
 
 ## Done Criteria
 
@@ -955,9 +957,10 @@ capped below 40% intensity; synthetic tests cannot establish physical feel.
 
 # Phase 14B: Intiface Dispatch Owner
 
-Status: implemented with automated contract, API, lifecycle, and UI coverage;
-the matched Handy paths and trace health are validated, with subjective feel
-confirmation still open.
+Status: implemented with automated contract, API, lifecycle, and UI coverage.
+Matched Handy paths passed before the deadline-driven asynchronous-ACK pacer;
+the revised pacer still needs a `motion_trace.v3` matched hardware run and
+subjective feel confirmation.
 Decision and schema evaluation recorded in
 [ADR 0010](docs/decisions/0010-transport-neutral-frames-intiface.md), which
 revises ADR 0006's HSP-only dispatch-owner scope and resolves
@@ -1012,8 +1015,8 @@ the Handy v3 API. Two modest modifications ship with this phase:
   measurement, plus one non-Handy Buttplug device if available. Setup and
   the capability boundary are documented (`docs/intiface.md`).
 
-If the LSO merge lands its Buttplug transport first, 14B.1 adapts that code
-behind this contract instead of writing a parallel implementation (R20).
+Phase 14B landed independently. Future LSO integration must reuse this contract
+and owner instead of adding a parallel Buttplug implementation (R20).
 
 ## Out Of Scope
 
@@ -1091,14 +1094,16 @@ Reduced-motion users get static state feedback. The non-modal disclosure
 restores focus on close, leaves Escape to Stop, and clears the reserved mobile
 Stop/footer region.
 
-The shared motion visualizer now uses a Handy side profile in both top-bar and
-Chat forms. Its physical rail displays the configured stroke envelope and its
-carriage moves to the backend's commanded position estimate; the detailed form
-also exposes state, target speed, and active target without becoming a control.
+The shared motion visualizer now uses a compact vertical Handy 2-inspired body
+and sleeve in both top-bar and Chat forms. It displays the configured stroke
+envelope and moves from the backend's commanded position estimate; the detailed
+form also exposes state, target speed, and active target without becoming a
+control.
 
-Validation: 41 React tests, typecheck/build, and rendered 1280×800 plus 390×844
-checks. The mobile manager has no horizontal overflow, exposes all four limits,
-and stays above Stop; desktop contains the full panel without internal scroll.
+Validation: the current source has 52 React test cases plus typecheck/build. The
+recorded 1280×800 and 390×844 rendered checks cover the initial Phase 14C state;
+PR #63 changed visible controls and the visualizer afterward, so a current-build
+rendered QA refresh remains open.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 
@@ -1153,7 +1158,8 @@ install and configure end to end without a source toolchain: prebuilt llama.cpp
 runtime choice, model downloads, voice provisioning, and StrokeGPT-ReVibed
 porting through a GUI. Source builds remain an advanced/developer fallback.
 
-Delivered ahead of this phase (#55, #56, #60 follow-up): the model-manager foundation now
+Delivered ahead of this phase (#55, #56, #61, #62, #64, #65): the
+model-manager foundation now
 owns schema v9 inventory, managed GGUF storage, standalone/Ollama import,
 ID-based selection, and the Model UI. The app also owns a pinned source-build
 lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build

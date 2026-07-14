@@ -10,13 +10,13 @@ exceptions — Autopilot renders as coming-soon until its planner ships (shell
 step 2), while Pattern Library's Phase 14 workspace is implemented. This
 document specifies the **shell and information architecture**; it does not
 restate the safety, accessibility, and parity rules in
-[ui-design.md](ui-design.md), which stay in force unchanged. Settings-page
-internals are being revised separately in
-[settings-compaction.md](settings-compaction.md) (Slice 13.5).
+[ui-design.md](ui-design.md), which stay in force unchanged. Provider-scoped
+Settings compaction is implemented in Slice 13.5; see
+[settings-compaction.md](settings-compaction.md).
 
-## Why Change The Shell
+## Why The Shell Changed
 
-Today MagicHandy is a two-surface app: one control view (chat + a single
+Before the React migration, MagicHandy was a two-surface app: one control view (chat + a single
 control sidebar) and a Settings **window** layered over it. That shape was
 correct while Settings was the only second surface (product decision
 2026-07-03). It stops being correct now that the app is growing into several
@@ -67,7 +67,7 @@ Because the sidebar is permanent, **Stop is visible on every page without any
 overlay logic** — the single strongest reason to prefer this shell. Stop leaves
 the status bar entirely (top-bar controls read as awkward — a standing
 finding), and it is no longer entangled with an overlay's stacking context (the
-bug that forced the sidebar to be non-sticky in the current build).
+bug that forced the sidebar to be non-sticky in the pre-migration build).
 
 ## Navigation Sidebar
 
@@ -76,12 +76,11 @@ scroll only if the link list overflows (Stop stays pinned regardless).
 
 ### Identity (top)
 
-A compact profile lockup: a modest avatar (34–36px, `--radius-sm` squircle —
-not a glowing gradient orb), the app/session identity beneath it
-(`local · llama.cpp · cloud`, driven by real provider/transport state), and the
-active persona/prompt-set name. The lockup is a button: activating it navigates
-to **Settings** (`#/settings`). This is the "click your profile to configure"
-affordance from the Python app, now a page rather than a window.
+A compact profile lockup: a modest 34px `--radius-sm` avatar with the restrained
+azure-to-steel brand gradient, `MagicHandy`, and `local / {dispatch owner}` from
+backend state. The lockup is a link to **Settings** (`#/settings`). This is the
+"click your profile to configure" affordance from the Python app, now a page
+rather than a window.
 
 ### Page links (middle)
 
@@ -95,13 +94,10 @@ One link per workspace, each an icon + label row:
 | 4 | Settings | `#/settings/*` | configuration |
 
 Row spec: 40px tall, `0 12px` padding, 18px icon + 0.9rem label, radius
-`--radius-sm` for default and hover states. Hover uses `--surface-2`. **Active
-state is an edge marker, not a fill blob**: a 3px `--accent` (steel azure) left
-border plus a one-step surface raise (`--surface-2`), `--text` label,
-`--accent` icon, and square row corners (`border-radius: 0`) so the single-side
-edge marker reads cleanly. Do not paint the active row as a saturated pill —
-that is the exact "oversized bubble" quirk this redesign avoids (see
-"Anti-Vibecoding Rules").
+`--radius-sm` for every state. Hover uses neutral `--surface-2`. Active uses the
+soft `--accent-tint` fill, `--text` label, and `--accent` icon on the rounded row,
+with no edge marker. It is neither a saturated pill nor the clipped inset bar
+retired during the React polish pass (see "Anti-Vibecoding Rules").
 
 Links are real `<a href="#/...">` elements so they are keyboard-focusable,
 middle-clickable, and deep-linkable. `aria-current="page"` marks the active
@@ -315,12 +311,11 @@ the user called out explicitly.
 
 1. **No oversized round bubbles around status or controls.** Status is a compact
    readout — an 8–9px state **dot + text** — not a fully-rounded filled pill.
-   Concretely: the current `.status-pill { border-radius: 999px }` filled chips
-   with glowing dots (`box-shadow: 0 0 6px …`) are the anti-pattern; replace
-   them with compact chips at `--radius-sm`, a hairline (`--line`) or no fill,
-   grouped with spacing/dividers, and drop the dot glow. Fully-round (`999px`)
-   is reserved for the state dot itself and toggle thumbs — never for status
-   chips, buttons, or nav rows.
+   Concretely: the retired legacy `.status-pill { border-radius: 999px }` filled
+   chips with glowing dots (`box-shadow: 0 0 6px …`) are the anti-pattern. The
+   React shell uses compact readouts with no fill or glow, grouped with spacing
+   and dividers. Fully-round (`999px`) is reserved for circular micro-elements,
+   never for status chips, buttons, or nav rows.
 2. **Cap the radius scale.** Controls and cards use `--radius-sm` (8px) to
    `--radius` (12px). Nothing control-sized is a pill. Avatars are modest
    squircles, not orbs.
@@ -339,8 +334,8 @@ the user called out explicitly.
 6. **Hue discipline (unchanged from app.css).** `--accent` steel azure is the
    only interactive hue; `--ok` green means running/go only; `--warn` amber is
    warning; `--danger` red is stop. Everything else is neutral graphite.
-   **No purple, no blue-green decorative tones.** The nav active state is an
-   edge marker + surface raise, not a saturated fill.
+   **No purple, no blue-green decorative tones.** The nav active state is a soft
+   `--accent-tint` fill on the rounded row, not an edge marker or saturated fill.
 7. **Motion is subtle and reduced-motion-aware.** Page transitions and the
    streaming cursor are quiet; `prefers-reduced-motion` disables non-essential
    animation. No bouncing, no pulsing glows.
@@ -353,15 +348,15 @@ Every ui-design.md safety property maps to a home in the new shell:
 | --- | --- |
 | Stop always visible/reachable | Pinned bottom of the permanent sidebar; mobile fixed bar |
 | One authoritative visualizer | Compact in status bar, detailed on Chat page — one component |
-| Immediate-apply quick controls | Chat page control column, no Save step |
+| Immediate-apply quick controls | Speed/stroke in the connection manager; behavior on Chat; no Save step |
 | One feedback channel, never occluded | Toast + backend banner above all pages |
 | Single active controller | Unchanged; extra clients read-only with Stop |
-| Backend-loss lock | Banner in status bar; `data-requires-backend` still locks |
+| Backend-loss lock | Banner at workspace top below status bar; required controls lock |
 | Motion through engine only | Preset Modes / Autopilot / Library are engine clients |
-| No `100vw`/`100vh` sizing | Popovers positioned from measured geometry |
+| Viewport-safe sizing | The shell may own `100vh`; no overflow-prone page-wide `100vw`; popovers stay bounded |
 | Flat navigation, no stacked modals | Router mounts one workspace; no overlay windows |
 
-## Migration
+## Historical Migration Sequence
 
 Ship incrementally; never lose a safety control mid-migration. The React
 implementation handoff is `docs/react-ui-implementation-handoff.md`. Each step
@@ -386,24 +381,16 @@ asset/UI tests, and re-checks the Functional Parity Baseline rows it touches.
   Phase 14 (browse/enable, import, player, authoring, curation, feedback).
   **Implemented on the Phase 14 review branch.**
 
-## Test Hooks That Change
+## Test Hooks
 
-The current `web/assets_test.go` asserts the settings-**window** shape
-(`#settings-overlay`, `#settings-window`, `#settings-close`, profile button
-`aria-haspopup="dialog"`, and no Stop inside `<header>`). The shell refactor
-changes these deliberately (not silently):
-
-- The status bar stays status-only; the `<header>` still must not contain Stop,
-  so the existing `barSection` containment check holds — Stop simply moves from
-  the sidebar panel to the sidebar's pinned footer.
-- `#settings-overlay`/`#settings-window`/dialog semantics are replaced by a
-  routed `#/settings` **workspace** with `aria-current` navigation; the profile
-  button becomes a link to `#/settings` rather than a dialog opener. The tests
-  assert the new nav/router hooks instead.
-- New assertions cover: the four nav links and their routes, the pinned Stop in
-  the sidebar footer (not in `<header>`, present in every workspace), the Chat
-  control column, the Preset Modes/Autopilot hooks, and the Library empty-state
-  or content.
+The pre-React `web/assets_test.go` asserted settings-window IDs and dialog
+semantics. The migration deliberately replaced those checks. Current
+`web/assets_test.go` verifies the generated Vite root and safety-critical strings
+in the embedded bundle, including Stop, routes, backend-authoritative labels,
+voice controls, and the Phase 14 library; it also rejects the retired
+`status-pill` class. `web/src/App.test.tsx` owns behavioral coverage of the four
+routes, pinned Stop, status-only top bar, routed Settings, connection manager,
+Chat controls, and library workspace.
 
 ## Relationship To Other Docs
 

@@ -10,8 +10,9 @@ core number.
 - Date: 2026-06-30 (Go idle), 2026-07-01 (Python baseline),
   2026-07-02 (Go active Cloud REST short run and one-hour soak; Browser
   Bluetooth UI/chat hardware run), 2026-07-06 (Phase 11B SQLite persistence),
-  2026-07-11 (Phase 14 pattern library, LLM model manager, managed llama.cpp,
-  Phase 14B Intiface owner, Phase 14C floating connection manager, and rendered UI)
+  2026-07-11 (Phase 14 pattern library, LLM model manager, managed llama.cpp),
+  2026-07-12 (Phase 14B hardware and Phase 14C UI evidence), and 2026-07-13
+  (Intiface deadline/ACK pacing follow-up)
 - OS and architecture: Windows / amd64
 - Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for Phase 11B and
   Phase 14 measurements
@@ -22,7 +23,7 @@ core number.
 | App | Commit | Command | Browser UI Opened | Child Worker/Model Processes Excluded | Steady RSS After Warmup | Peak RSS | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | StrokeGPT-ReVibed core idle | `6c56985` (2026-06-29) | `.venv\Scripts\python.exe app.py` with `STROKEGPT_OPEN_BROWSER=0`, `STROKEGPT_PORT=5017` | No, `Invoke-WebRequest` loaded `/` once (HTTP 200) | Yes — the 4.3 MB `.venv` shim process was excluded; the spawned real interpreter was measured; no LLM/TTS/ASR model loaded, no motion, no voice | 524.75-524.81 MB across 3 samples | Not measured separately | The idle number includes ML libraries imported at startup (Torch et al.), which is precisely the core-install-path overhead the rewrite removes. |
-| MagicHandy Go core idle | pending Phase 1 working tree | `CGO_ENABLED=0 go build -o $env:TEMP\magichandy-phase1.exe ./cmd/magichandy`, then run built binary with `-addr 127.0.0.1:49718` | No, `Invoke-WebRequest` loaded `/` once | Yes | 8.96 MB (9,392,128 bytes) across 3 samples | Not measured separately | `/healthz` returned `ok`; `/` returned HTTP 200. |
+| MagicHandy Go core idle | Phase 1 commit `8ef14fe0` | `CGO_ENABLED=0 go build -o $env:TEMP\magichandy-phase1.exe ./cmd/magichandy`, then run built binary with `-addr 127.0.0.1:49718` | No, `Invoke-WebRequest` loaded `/` once | Yes | 8.96 MB (9,392,128 bytes) across 3 samples | Not measured separately | `/healthz` returned `ok`; `/` returned HTTP 200. |
 | MagicHandy Go core active, Cloud REST short run | Phase 9B controller/SSE working tree | temp `CGO_ENABLED=0` binary, Cloud REST configured with real Handy, `POST /api/motion/start` at 25%, `GET /api/motion/events` held open, deterministic chat `stop` | No browser window; HTTP API exercised the app endpoints and SSE stream | Yes; no Ollama/llama.cpp/voice worker loaded | 16.75-16.76 MB (17,563,648-17,571,840 bytes) across 3 samples | Not measured separately | Real Cloud REST check returned OK/HSP available; motion SSE showed running `stroke` at 25%; chat `stop` returned `Stopping motion.` and cleanup Stop was sent. This is a short safety run, not the one-hour soak. |
 | MagicHandy Go core active, Cloud REST one-hour soak | Phase 9B soak-evidence working tree | temp `CGO_ENABLED=0` binary under `.tmp-phase9b-soak`, Cloud REST configured with real Handy, `POST /api/motion/start` at 25%, `GET /api/motion/events` held open, one sample per minute, deterministic chat `stop` cleanup | No browser window; HTTP API exercised the app endpoints and SSE stream | Yes; measured only the `magichandy` PID, excluding the PowerShell supervisor/SSE reader and direct-stop cleanup helper | 18.41-20.16 MB (19,300,352-21,139,456 bytes) across 56 warmed samples from 302s through 3600s | 20.16 MB (21,139,456 bytes) | 61 total samples from 2s through 3600s; all samples reported `running=true` at 25%; SSE log recorded 28,800 lines with 14,392 running events; warmed RSS range grew 9.53%, within the +20% Phase 9B gate; chat `stop`, motion stop, Cloud stop, and direct cleanup Stop all completed. |
 | MagicHandy Go core active, Browser Bluetooth UI/chat short run | Phase 9B Browser Bluetooth readiness/play patch working tree | temp binary under `.tmp-phase9b-manual`, running on `127.0.0.1:49736` with dispatch owner `browser_bluetooth`; Edge Web Bluetooth selected `OHD_hw0_29b3243120f4`; visible UI Start at 28%, deterministic chat `stop`, then a repeat UI Start/Stop for RSS samples | Yes; the user's running Edge profile owned the BLE GATT link | Yes; measured only the `magichandy` PID, excluding Edge, Codex, and automation helpers | First run active sample 17.23 MB (18,063,360 bytes; post-chat-stop 18,071,552 bytes). Repeat active RSS 17.52-17.53 MB (18,374,656-18,378,752 bytes) across 3 samples | Not measured separately | Visible Check connection returned `Connected: HSP ready / Unknown / 0 ms` without queuing `hsp/state`. First run: UI Start sent `stroke_window` 97 ms, `hsp_add` 236 ms, `hsp_play` 176 ms, all `browser_ack`; chat `stop` returned `Stopping motion.` and Stop ACKed in 163 ms. Repeat run: `stroke_window` 80 ms, `hsp_add` 235 ms, `hsp_play` 116 ms, UI Stop 71 ms. Speed remained 28%, below the 40% automated-test cap. |
@@ -40,12 +41,13 @@ Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
 pure-Go SQLite dependency, the stripped Go core idles around **54 MB**, still
 about **1/10th** of the Python core but above the original <40 MB idle target.
 
-Still required (Phase 9B):
+Still required for current-build evidence:
 
-- none for the current real-device app-path gate. Cloud REST has the one-hour
-  soak, and Browser Bluetooth now has a full short UI/chat hardware run with
-  active RSS samples. A longer Browser Bluetooth soak can be scheduled later if
-  BLE link endurance becomes a release criterion.
+- repeat active motion + transport + SSE + chat RSS and the one-hour soak on the
+  post-SQLite build; the 2026-07-02 measurements remain historical baselines
+- recheck Browser Bluetooth reverse/Stop behavior and endurance
+- repeat the matched Intiface run with the deadline-driven pacer and
+  `motion_trace.v3`, including subjective feel
 
 ## Full App Path Evidence
 
