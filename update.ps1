@@ -5,8 +5,9 @@
 .DESCRIPTION
     Reads the non-secret choices saved by install.ps1, displays them, and asks
     whether they should be modified. Unless reconfiguration is requested, the
-    same data directory, port, managed llama.cpp backend, Ollama preference,
-    Parakeet choice, and launcher choice are reused.
+    same data directory, port, managed llama.cpp/NeuTTS selection, Ollama
+    preference, Parakeet choice, and launcher choice are reused. NeuTTS is built
+    and installed with managed llama.cpp; skipping llama.cpp also skips NeuTTS.
 
     The updater refuses to update over local source changes and only performs a
     fast-forward Git update. Main follows origin/main, live feature branches
@@ -45,7 +46,7 @@
 
 .EXAMPLE
     .\update.ps1 -Reconfigure
-    Safely fast-forward, then revisit choices such as managed llama.cpp and Parakeet.
+    Safely fast-forward, then revisit choices such as managed llama.cpp/NeuTTS and Parakeet.
 #>
 #Requires -Version 5.1
 [CmdletBinding()]

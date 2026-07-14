@@ -77,7 +77,7 @@ of in a combined block at the bottom.
 | --- | --- |
 | None | none |
 | ElevenLabs (cloud) | API key (write-only, set-badge, clear toggle — existing secret handling unchanged) · voice ID (default Rachel) · model ID (default `eleven_multilingual_v2`) |
-| NeuTTS Air (local) | `stream_pcm` runner path · reference WAV provenance · pre-encoded `.npy` codes · reference transcript |
+| NeuTTS Air (local) | optional custom `stream_pcm` runner override (blank uses the installer-managed runtime) · reference WAV provenance · pre-encoded `.npy` codes · reference transcript |
 | Custom worker | worker path · worker args (one per line) |
 
 "Custom worker" is the escape hatch that keeps the general ADR 0003 worker
@@ -121,6 +121,10 @@ args back into fields), and violate backend-authoritative state. Instead:
    runtime files. `app_managed` resolves the fixed installer-owned runner/model
    paths under the app data directory and reports complete/incomplete/missing
    module state. `custom_local` alone reads the saved server/model paths.
+   NeuTTS follows the same ownership rule: a blank runner override resolves the
+   fixed installer-owned runtime and Hugging Face cache under the app data
+   directory's `voice/neutts/active` tree; an explicit runner remains a custom
+   runtime using its own cache.
 5. **Migration**: existing raw worker path/argument settings load as
    `provider: custom`; existing Parakeet server/model paths load as
    `parakeet_source: custom_local`. Values remain intact, so upgrades change

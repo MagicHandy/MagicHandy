@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -31,6 +32,12 @@ const voiceModelLoadTimeout = 30 * time.Second
 const (
 	maxVoiceAudioBase64Bytes = 44 << 20
 	maxVoiceRequestBytes     = maxVoiceAudioBase64Bytes + 1024
+	managedNeuTTSSource      = "ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f"
+	managedNeuTTSRust        = "1.94.0-x86_64-pc-windows-msvc"
+	managedNeuTTSBackbone    = "008555972590ff2c599dd43736ba31c81df3f0bf"
+	managedNeuTTSBackboneSHA = "bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff9a29062e4ac9119e"
+	managedNeuTTSCodec       = "30c1fdd19e68aee65d542cf043750d4c0165893e"
+	managedNeuTTSCodecSHA    = "30c3ea13ceeb2de693c56e5e33a1b7e00d44c95dcdd08a4ed0d552d0bf59ebdf"
 )
 
 func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) *voice.Manager {
@@ -55,9 +62,11 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 		tts.Env = ttsEnv
 	case config.VoiceTTSProviderNeuTTSAir:
 		command := resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")
-		if neuttsRuntimeReady(settings, command) {
+		runner, hfHome := resolveNeuTTSRuntime(settings, dataDir)
+		tts.Env = managedNeuTTSEnvironment(settings, hfHome)
+		if neuttsRuntimeReady(settings, command, runner, hfHome, dataDir) {
 			tts.Command = command
-			tts.Args = []string{"-runner", settings.NeuTTSRunnerPath, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone, "-ref-codes", settings.NeuTTSReferenceCodes}
+			tts.Args = []string{"-runner", runner, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone, "-ref-codes", settings.NeuTTSReferenceCodes}
 			if settings.NeuTTSReferenceWAV != "" {
 				tts.Args = append(tts.Args, "-ref-audio", settings.NeuTTSReferenceWAV)
 			}
@@ -102,6 +111,14 @@ func parakeetAppPaths(dataDir string) (string, string) {
 	return filepath.Join(root, "runner", "parakeet-server.exe"), filepath.Join(root, "tdt-0.6b-v3-q4_k.gguf")
 }
 
+func neuttsAppPaths(dataDir string) (string, string) {
+	if strings.TrimSpace(dataDir) == "" {
+		return "", ""
+	}
+	root := filepath.Join(dataDir, "voice", "neutts", "active")
+	return filepath.Join(root, "runtime", "stream_pcm.exe"), filepath.Join(root, "hf")
+}
+
 func isRegularFile(path string) bool {
 	if strings.TrimSpace(path) == "" {
 		return false
@@ -112,11 +129,108 @@ func isRegularFile(path string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-func neuttsRuntimeReady(settings config.VoiceSettings, command string) bool {
-	return isRegularFile(command) &&
-		isRegularFile(settings.NeuTTSRunnerPath) &&
-		neuttsWorkingDirectory(settings.NeuTTSRunnerPath) != "" &&
-		neuttsBackboneCached(settings.NeuTTSBackbone) &&
+func resolveNeuTTSRuntime(settings config.VoiceSettings, dataDir string) (string, string) {
+	if runner := strings.TrimSpace(settings.NeuTTSRunnerPath); runner != "" {
+		return runner, strings.TrimSpace(os.Getenv("HF_HOME"))
+	}
+	return neuttsAppPaths(dataDir)
+}
+
+func managedNeuTTSEnvironment(settings config.VoiceSettings, hfHome string) map[string]string {
+	if strings.TrimSpace(settings.NeuTTSRunnerPath) == "" && hfHome != "" {
+		return map[string]string{"HF_HOME": hfHome}
+	}
+	return nil
+}
+
+func neuttsRuntimeInstalled(runner, hfHome, backbone string) bool {
+	return isRegularFile(runner) &&
+		neuttsWorkingDirectory(runner) != "" &&
+		neuttsBackboneCached(backbone, hfHome)
+}
+
+func fileSHA256(path string) (string, bool) {
+	// #nosec G304 -- callers provide server-owned app data paths.
+	file, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer func() { _ = file.Close() }()
+	hash := sha256.New()
+	if _, err = io.Copy(hash, file); err != nil {
+		return "", false
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), true
+}
+
+var managedNeuTTSFileSHA256 = fileSHA256
+
+type managedNeuTTSManifest struct {
+	SchemaVersion     int    `json:"schema_version"`
+	SourceCommit      string `json:"source_commit"`
+	RustToolchain     string `json:"rust_toolchain"`
+	BackboneRevision  string `json:"backbone_revision"`
+	CodecRevision     string `json:"codec_revision"`
+	RunnerSHA256      string `json:"runner_sha256"`
+	DecoderSHA256     string `json:"decoder_sha256"`
+	BackboneSHA256    string `json:"backbone_sha256"`
+	CodecSourceSHA256 string `json:"codec_checkpoint_sha256"`
+}
+
+func readManagedNeuTTSManifest(dataDir string) (managedNeuTTSManifest, bool) {
+	var manifest managedNeuTTSManifest
+	if strings.TrimSpace(dataDir) == "" {
+		return manifest, false
+	}
+	path := filepath.Join(dataDir, "voice", "neutts", "active", "runtime", "runtime.json")
+	// #nosec G304 -- dataDir is the server-owned application data root.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return manifest, false
+	}
+	if json.Unmarshal(data, &manifest) != nil {
+		return manifest, false
+	}
+	valid := manifest.SchemaVersion == 1 &&
+		manifest.SourceCommit == managedNeuTTSSource &&
+		manifest.RustToolchain == managedNeuTTSRust &&
+		manifest.BackboneRevision == managedNeuTTSBackbone &&
+		manifest.CodecRevision == managedNeuTTSCodec &&
+		manifest.BackboneSHA256 == managedNeuTTSBackboneSHA &&
+		manifest.CodecSourceSHA256 == managedNeuTTSCodecSHA &&
+		manifest.RunnerSHA256 != "" && manifest.DecoderSHA256 != ""
+	return manifest, valid
+}
+
+func managedNeuTTSManifestReady(dataDir string, verifyRuntimeHashes bool) bool {
+	manifest, valid := readManagedNeuTTSManifest(dataDir)
+	if !valid {
+		return false
+	}
+	active := filepath.Join(dataDir, "voice", "neutts", "active")
+	backboneRepo := filepath.Join(active, "hf", "hub", "models--neuphonic--neutts-air-q4-gguf")
+	// #nosec G304 -- the cache path is rooted in the server-owned app data directory.
+	backboneRef, err := os.ReadFile(filepath.Join(backboneRepo, "refs", "main"))
+	backbonePath := filepath.Join(backboneRepo, "snapshots", managedNeuTTSBackbone, "neutts-air-Q4_0.gguf")
+	if err != nil || strings.TrimSpace(string(backboneRef)) != managedNeuTTSBackbone || !isRegularFile(backbonePath) {
+		return false
+	}
+	if !verifyRuntimeHashes {
+		return true
+	}
+	runtime := filepath.Join(active, "runtime")
+	runnerHash, runnerOK := managedNeuTTSFileSHA256(filepath.Join(runtime, "stream_pcm.exe"))
+	decoderHash, decoderOK := managedNeuTTSFileSHA256(filepath.Join(runtime, "models", "neucodec_decoder.safetensors"))
+	backboneHash, backboneOK := managedNeuTTSFileSHA256(backbonePath)
+	return runnerOK && decoderOK && backboneOK && runnerHash == manifest.RunnerSHA256 &&
+		decoderHash == manifest.DecoderSHA256 && backboneHash == managedNeuTTSBackboneSHA
+}
+
+func neuttsRuntimeReady(settings config.VoiceSettings, command, runner, hfHome, dataDir string) bool {
+	customRunner := strings.TrimSpace(settings.NeuTTSRunnerPath) != ""
+	managedReady := customRunner || (settings.NeuTTSBackbone == config.DefaultNeuTTSBackbone && managedNeuTTSManifestReady(dataDir, true))
+	return managedReady && isRegularFile(command) &&
+		neuttsRuntimeInstalled(runner, hfHome, settings.NeuTTSBackbone) &&
 		isRegularFile(settings.NeuTTSReferenceCodes) &&
 		strings.TrimSpace(settings.NeuTTSReferenceText) != ""
 }
@@ -153,32 +267,39 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 	return status
 }
 
-func inspectNeuTTSModule(settings config.VoiceSettings, adapterInstalled, configured bool) voiceModuleStatus {
+func inspectNeuTTSModule(settings config.VoiceSettings, adapterInstalled, configured bool, dataDir string) voiceModuleStatus {
+	runner, hfHome := resolveNeuTTSRuntime(settings, dataDir)
+	runtimeInstalled := neuttsRuntimeInstalled(runner, hfHome, settings.NeuTTSBackbone)
+	if strings.TrimSpace(settings.NeuTTSRunnerPath) == "" {
+		runtimeInstalled = runtimeInstalled && settings.NeuTTSBackbone == config.DefaultNeuTTSBackbone && managedNeuTTSManifestReady(dataDir, false)
+	}
 	status := voiceModuleStatus{
 		State:            "missing",
 		WorkerInstalled:  adapterInstalled,
-		RuntimeInstalled: configured,
-		Message:          "The NeuTTS Go adapter or one of its selected runtime files is unavailable.",
+		RuntimeInstalled: runtimeInstalled,
+		Message:          "NeuTTS is not installed. Rerun update.ps1 with managed llama.cpp enabled; skipping llama.cpp also skips NeuTTS.",
 	}
-	if adapterInstalled && configured {
+	if adapterInstalled && runtimeInstalled && configured {
 		status.State = "ready"
 		status.Installed = true
-		status.Message = "The NeuTTS adapter, stream_pcm runner, reference codes, and transcript are configured."
+		status.Message = "The NeuTTS adapter, app-managed runtime, reference codes, and transcript are configured."
 		return status
 	}
-	if !adapterInstalled {
+	if !adapterInstalled && !runtimeInstalled {
 		return status
 	}
 	status.State = "incomplete"
 	switch {
-	case strings.TrimSpace(settings.NeuTTSRunnerPath) == "":
-		status.Message = "NeuTTS needs an external stream_pcm runner. The source installer currently builds only its Go adapter."
+	case !runtimeInstalled && strings.TrimSpace(settings.NeuTTSRunnerPath) == "":
+		status.Message = "The app-managed NeuTTS runtime is incomplete. Rerun update.ps1 with managed llama.cpp enabled; skipping llama.cpp also skips NeuTTS."
+	case !runtimeInstalled:
+		status.Message = "The selected custom NeuTTS runner, decoder, or exact backbone cache entry is unavailable. Re-select the files and save settings."
 	case strings.TrimSpace(settings.NeuTTSReferenceCodes) == "":
-		status.Message = "NeuTTS needs a pre-encoded NeuCodec .npy reference file."
+		status.Message = "The NeuTTS runtime is installed. Add licensed pre-encoded NeuCodec .npy reference codes."
 	case strings.TrimSpace(settings.NeuTTSReferenceText) == "":
-		status.Message = "NeuTTS needs the exact transcript for the selected reference codes."
+		status.Message = "The NeuTTS runtime is installed. Add the exact transcript for the selected reference codes."
 	default:
-		status.Message = "A selected NeuTTS file, decoder, or exact backbone cache entry is unavailable. Re-select the files and save settings."
+		status.Message = "The NeuTTS runtime is installed, but a selected reference file is unavailable. Re-select it and save settings."
 	}
 	return status
 }
@@ -197,12 +318,15 @@ func neuttsWorkingDirectory(runnerPath string) string {
 	}
 }
 
-func neuttsBackboneCached(backbone string) bool {
+func neuttsBackboneCached(backbone, hfHome string) bool {
 	const filename = "neutts-air-Q4_0.gguf"
 	if !validHuggingFaceRepoID(backbone) {
 		return false
 	}
-	root := strings.TrimSpace(os.Getenv("HF_HOME"))
+	root := strings.TrimSpace(hfHome)
+	if root == "" {
+		root = strings.TrimSpace(os.Getenv("HF_HOME"))
+	}
 	if root == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -308,7 +432,7 @@ func (s *Server) voiceState() map[string]any {
 		"parakeet": inspectParakeetAppModule(settings.Voice.ASRWorkerPath, s.voiceExecutable, s.voiceDataDir),
 	}
 	if settings.Voice.TTSProvider == config.VoiceTTSProviderNeuTTSAir {
-		modules["neutts"] = inspectNeuTTSModule(settings.Voice, s.neuttsAdapterInstalled.Load(), status[voice.RoleTTS].Configured)
+		modules["neutts"] = inspectNeuTTSModule(settings.Voice, s.neuttsAdapterInstalled.Load(), status[voice.RoleTTS].Configured, s.voiceDataDir)
 	}
 	return map[string]any{
 		"enabled":          settings.Voice.Enabled,

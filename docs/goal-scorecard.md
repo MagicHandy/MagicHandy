@@ -103,13 +103,25 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 532,478 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 95,081 gzip bytes, 3,505 bytes over
-   the Phase 14C measurement; the stripped binary is 13,902,336 bytes. These
+   browser payload is 532,705 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 95,308 gzip bytes, 3,732 bytes over
+   the Phase 14C measurement; the stripped binary is 13,914,112 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-14** — Managed NeuTTS source installation: selecting managed
+  llama.cpp now also provisions LLVM/libclang and pinned Rust 1.94.0, builds
+  `neutts-rs` v0.1.1 with its CPU llama.cpp binding, converts a verified
+  NeuCodec checkpoint, and atomically installs the verified Air Q4 cache.
+  Skipping managed llama.cpp explicitly skips NeuTTS. Installer and app checks
+  pin revisions and rehash runtime/model bytes; reference codes remain user
+  supplied. Plain/stripped binaries are 19,853,312 / 13,914,112 bytes; embedded
+  UI is 779,541 raw / 532,705 gzip bytes (95,308 gzip excluding unchanged
+  artwork). This is a 15,872 / 11,776-byte Go binary increase and a 227-byte
+  gzip UI increase from the preceding voice audit, all within budget; RSS and a
+  full external NeuTTS build were not measured on this host.
 
 - **2026-07-14** — Voice installation/runtime audit: browser microphone data is
   converted to 16 kHz PCM WAV before managed Parakeet submission; NeuTTS now

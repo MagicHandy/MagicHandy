@@ -38,12 +38,14 @@ MagicHandy Go core itself.
   64-bit Windows machine. It repairs/installs WinGet through Microsoft's
   supported PowerShell path when needed, then installs and verifies Go. A
   selected managed llama.cpp source build additionally provisions Git, CMake,
-  the Visual Studio Desktop C++ workload/Windows SDK, and CUDA when selected.
-  Choosing Ollama avoids that compiler/runtime footprint; the installer can
-  provision Ollama too. It builds the core and all three first-party Go voice
-  adapters. Optional Parakeet assets remain consented, size/license-visible,
-  and SHA-256 verified, and voice remains disabled. The installer can write a
-  `Start-MagicHandy.ps1` launcher and open the app.
+  the Visual Studio Desktop C++ workload/Windows SDK, CUDA when selected, and
+  LLVM/libclang and pinned Rust 1.94.0 through Rustup for the coupled NeuTTS build. It builds the pinned `stream_pcm` runner
+  with its CPU llama.cpp binding, converts a verified NeuCodec checkpoint, and
+  installs the verified Air Q4 cache. Choosing Ollama avoids both managed source
+  builds; the installer can provision Ollama too. It builds the core and all
+  three first-party Go voice adapters. Optional Parakeet assets remain consented,
+  size/license-visible, and SHA-256 verified, and voice remains disabled. The
+  installer can write a `Start-MagicHandy.ps1` launcher and open the app.
 - **State-aware source updater (`update.ps1`):** atomically reads the non-secret
   install choices stored under LocalAppData, shows them, asks whether to revise
   them, refuses a dirty worktree, resolves an explicit safe fast-forward target,
@@ -77,11 +79,11 @@ MagicHandy Go core itself.
 4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
 5. Voice setup is partial: provider adapters, provider-scoped settings, browser
-   push-to-talk with WAV conversion, the Parakeet installer path, and guarded
-   local Windows path browsing exist. Installed app-managed Parakeet assets are
-   discovered separately from custom paths. Turnkey NeuTTS provisioning,
-   arbitrary-WAV cloning, a real managed-Parakeet browser smoke test, and any
-   LAN/HTTPS story remain open (managed browser audio: R24; NeuTTS: R17;
+   push-to-talk with WAV conversion, app-managed Parakeet and NeuTTS installer
+   paths, and guarded local Windows path browsing exist. App-managed assets are
+   discovered separately from custom overrides. NeuTTS still cannot encode an
+   arbitrary reference WAV, and a real managed-Parakeet browser smoke test plus
+   any LAN/HTTPS story remain open (managed browser audio: R24; NeuTTS: R17;
    LAN/HTTPS: R18).
 
 ## Roadmap to parity
@@ -122,11 +124,12 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    [docs/gui-installer.md](gui-installer.md) (Phase 16 slices 16.1-16.3),
    including voice provisioning moved behind API endpoints and the
    StrokeGPT-ReVibed porting step over the Phase 15 importer.
-8. **Voice setup (implemented adapters; provisioning remains).** Provider
-   selection, workers, push-to-talk, and browser playback have landed. Add
-   in-app guided provisioning and microphone/provider compatibility checks only
-   with real-provider evidence; providers stay optional and off the core install
-   path (ADR 0007).
+8. **Voice setup (implemented adapters and source provisioning).** Provider
+   selection, workers, push-to-talk, browser playback, and app-managed Parakeet
+   and NeuTTS runtime installation have landed. Add reference encoding, in-app
+   guided/prebuilt provisioning, and microphone/provider compatibility checks
+   only with real-provider evidence; providers stay optional and off the core
+   runtime path (ADR 0007).
 9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
 
@@ -161,7 +164,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - opt-in Parakeet is app-managed; NeuTTS is adapter-only with manual runner/model/reference assets and Browse controls | Phase 13 + Phase 16 provisioning |
+| Voice model setup | Partial - Parakeet and the NeuTTS runner/decoder/backbone are app-managed for source installs; NeuTTS reference codes remain manual | Phase 13 + Phase 16 prebuilt provisioning |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

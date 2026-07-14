@@ -80,11 +80,11 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Model ID</span><input type="text" value={voice.elevenlabs_model_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_model_id: event.target.value })} /></label>
       </>}
       {voice.tts_provider === "neutts_air" && <>
-        <HostPathField label="stream_pcm runner path" kind="executable" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(neutts_runner_path) => patch({ neutts_runner_path })} />
+        <HostPathField label="stream_pcm runner override" kind="executable" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(neutts_runner_path) => patch({ neutts_runner_path })} />
         <HostPathField label="Reference WAV" kind="wav" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(neutts_reference_wav) => patch({ neutts_reference_wav })} />
         <HostPathField label="Pre-encoded reference codes (.npy)" kind="npy" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(neutts_reference_codes) => patch({ neutts_reference_codes })} />
         <label className="field"><span className="label">Reference transcript</span><textarea rows={3} value={voice.neutts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_text: event.target.value })} /></label>
-        <p className="form-status">Manual runtime setup is required: the source installer builds the MagicHandy adapter, but not the external stream_pcm runner or model assets. The WAV is retained as provenance and is not encoded by MagicHandy.</p>
+        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. Skipping the llama.cpp build also skips NeuTTS. Licensed .npy reference codes and their exact transcript remain required; the WAV is provenance and is not encoded by MagicHandy.</p>
       </>}
       {voice.tts_provider === "custom" && <>
         <HostPathField label="TTS worker path" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />

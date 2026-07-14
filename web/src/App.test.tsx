@@ -804,8 +804,8 @@ describe("app shell safety invariants", () => {
     const providers = await screen.findAllByRole("combobox", { name: /provider/i });
     fireEvent.change(providers[1], { target: { value: "neutts_air" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /browse for stream_pcm runner path/i }));
-    await waitFor(() => expect(screen.getByRole("textbox", { name: /stream_pcm runner path/i })).toHaveValue("C:\\NeuTTS\\stream_pcm.exe"));
+    fireEvent.click(screen.getByRole("button", { name: /browse for stream_pcm runner override/i }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: /stream_pcm runner override/i })).toHaveValue("C:\\NeuTTS\\stream_pcm.exe"));
     const pickerCall = fetch.mock.calls.find(([url]) => String(url).includes("/api/host/path-picker"));
     expect(JSON.parse(String((pickerCall?.[1] as RequestInit).body))).toEqual({ kind: "executable", current: "" });
   });

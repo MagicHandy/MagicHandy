@@ -424,20 +424,22 @@ Level: Medium
 Description:
 ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
 adapter around the reviewed `neutts-rs stream_pcm` runner streams PCM without
-Python, but the source installer does not provision that runner or its assets.
-It requires pre-encoded `.npy` voice codes and the exact transcript because the
-public Rust encoder is still a stub. The pinned upstream hub client also does not
-honor `HF_HUB_OFFLINE=1`, and MagicHandy currently starts a fresh model process
-for each synthesis. Turnkey installation, enforced offline behavior,
-arbitrary-WAV cloning, preload reuse, and subjective quality remain unproven.
+Python. The source installer now builds the pinned runner and installs verified
+decoder/backbone assets with managed llama.cpp, but it still requires
+pre-encoded `.npy` voice codes and the exact transcript because the public Rust
+encoder is a stub. The pinned upstream hub client also does not honor
+`HF_HUB_OFFLINE=1`, and MagicHandy currently starts a fresh model process for
+each synthesis. Enforced offline behavior, arbitrary-WAV cloning, preload reuse,
+and subjective quality remain unproven.
 
 Mitigation:
 
 - keep the implemented adapter bounded and cancellable, request offline mode,
   require the exact local GGUF cache entry, run a bounded readiness synthesis,
   and avoid claiming network sandboxing without a network-denied test
-- report adapter-only and missing runner/decoder/codes/transcript states before
-  Start; provide a guarded local host-path chooser for manual setup
+- install immutable, checksum-verified inputs through the source installer;
+  report missing runner/decoder/codes/transcript states before Start and keep a
+  guarded local host-path chooser for custom overrides
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
@@ -451,11 +453,12 @@ Exit evidence:
 Status 2026-07-14: the spike and Slice 13.6 adapter landed
 (`docs/neutts-air-spike.md`, `docs/neutts-worker.md`). Non-Python decode and
 streaming are implemented through `neutts-rs`; the core wraps retained PCM at
-the playback boundary. Cloned-output listening, arbitrary-WAV encoding, and
-turnkey asset provisioning remain open. A follow-up audit removed the false
-offline capability, made decoder/cache/runtime preflight explicit, added a
-bounded readiness synthesis, and documented that per-request model startup and
-network-sandbox evidence remain open risks.
+the playback boundary. The Windows source installer now verifies and builds
+`neutts-rs` v0.1.1, converts a verified NeuCodec checkpoint, and installs the
+exact Air Q4 cache whenever managed llama.cpp is selected. Cloned-output
+listening and arbitrary-WAV encoding remain open. Runtime preflight and bounded
+readiness synthesis are explicit; per-request model startup and network-sandbox
+evidence remain open risks.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

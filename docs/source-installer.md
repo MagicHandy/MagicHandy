@@ -7,7 +7,8 @@ and builds must not be reimplemented in either entry script.
 
 This is not the Phase 16 prebuilt release path. It can begin with no development
 tools installed, but a managed llama.cpp source build installs those tools on
-the machine. A future packaged release avoids that footprint entirely.
+the machine. It also builds and installs the coupled NeuTTS runtime. A future
+packaged release avoids that source-toolchain footprint entirely.
 
 ## Supported Host
 
@@ -16,8 +17,8 @@ the machine. A future packaged release avoids that footprint entirely.
 - permission to approve package-manager/UAC prompts
 
 The embedded UI is already built, so Node.js is not an install dependency. The
-core and first-party workers remain `CGO_ENABLED=0`; MSVC/CUDA are used only for
-the external managed llama.cpp process.
+core and first-party workers remain `CGO_ENABLED=0`; MSVC/CUDA/LLVM/Rust are used
+only for external managed processes.
 
 ## Provisioned Packages
 
@@ -30,6 +31,8 @@ before consent. `-Yes` is explicit unattended consent to those prompts.
 | Managed llama.cpp | `Git.Git` | Fetch the checksum-pinned source revision |
 | Managed llama.cpp | `Kitware.CMake` | Configure/build `llama-server` |
 | Managed llama.cpp | `Microsoft.VisualStudio.BuildTools` | Desktop C++ workload and Windows SDK |
+| Managed llama.cpp + NeuTTS | `Rustlang.Rustup` | Build `stream_pcm` and its embedded CPU llama.cpp binding |
+| Managed llama.cpp + NeuTTS | `LLVM.LLVM` | Provide `libclang` for generated llama.cpp Rust bindings |
 | CUDA backend | `Nvidia.CUDA` | Provide `nvcc` and CUDA build/runtime files |
 | Ollama selected | `Ollama.Ollama` | External local-LLM daemon/runtime |
 
@@ -53,12 +56,12 @@ Every successful run builds these files beside the source checkout:
 The executables and generated `Start-MagicHandy.ps1` are ignored build/runtime
 artifacts. The optional portable `data/` directory is ignored too.
 
-These three voice executables are protocol adapters, not three complete voice
-runtimes. The selected Parakeet assets below are the only external voice runtime
-this installer provisions. In particular, it does not install Rust/Cargo,
-`stream_pcm.exe`, NeuCodec decoder weights, a NeuTTS backbone, or reference
-voice codes. A successful source build therefore ends with **configuration
-required**, not a claim that every provider is ready.
+These three voice executables are protocol adapters. The installer separately
+provisions selected Parakeet assets and, whenever managed llama.cpp is selected,
+an app-managed NeuTTS runtime. It still cannot create a reference voice:
+licensed pre-encoded `.npy` codes and their exact transcript are required. A
+successful source build therefore ends with **configuration required**, not a
+claim that every provider is ready.
 
 For manual/custom runtimes, Settings path fields provide **Browse...** on the
 Windows host. This is a controller-gated, loopback-only native dialog; it does
@@ -83,6 +86,38 @@ the deliberate activation sequence: Settings > Voice, select Parakeet and the
 MagicHandy module, enable voice, save, then Start. Installing files never enables
 or autostarts a microphone worker.
 
+NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
+
+1. installs LLVM/libclang and pinned Rust 1.94.0 for Windows MSVC through Rustup;
+2. clones `neutts-rs` v0.1.1 and verifies commit
+   `ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`;
+3. downloads the revision-pinned NeuCodec checkpoint and Air Q4 GGUF with fixed
+   SHA-256 verification;
+4. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
+   pure-Rust converter, without Python or PyTorch;
+5. builds `stream_pcm` with Cargo `--locked`, eSpeak, and its CPU
+   `llama-cpp-4` binding; and
+6. stages the runner/decoder and exact GGUF cache together, verifies their
+   hashes, then swaps them atomically under `<data-dir>/voice/neutts/active`.
+
+The active manifest records the built runner/decoder hashes, immutable model
+revisions, source checkpoint hashes, and exact Rust compiler identity. Updates
+reuse it without requiring Rustup only after the installer rehashes all active
+artifacts. An interrupted directory swap restores the newest preserved backup
+before retrying; rollback data is removed only after the replacement verifies.
+When app-managed NeuTTS is selected, the app independently pins the Air Q4 cache
+revision and rehashes the runner, decoder, and GGUF before it configures the
+worker. Status polling never performs these large hashes.
+
+The NeuTTS build does not reuse `llama-server.exe`; the upstream Rust runner
+embeds its own llama.cpp binding. Coupling the choices shares the explicit
+source-toolchain/download decision. It intentionally remains CPU-only even when
+the chat runner uses CUDA, avoiding voice/LLM GPU contention. The runtime is
+about 1.4 GiB installed; decoder conversion temporarily downloads another
+approximately 1.1 GiB checkpoint and Cargo/build files can use several GB.
+Skipping managed llama.cpp, including with `-SkipLlamaBuild`, skips Rustup,
+`stream_pcm`, and all NeuTTS model work. Existing files are not deleted.
+
 ## Install Commands
 
 Interactive setup:
@@ -103,7 +138,7 @@ Apply it:
 .\install.ps1 -Yes -LlamaBackend cuda
 ```
 
-Use Ollama and avoid the managed llama.cpp runtime/toolchain:
+Use Ollama and avoid the managed llama.cpp/NeuTTS runtime toolchain:
 
 ```powershell
 .\install.ps1 -Yes -SkipLlamaBuild
@@ -119,6 +154,8 @@ use). Schema v1 contains only:
 - data directory and local port
 - whether local LLM setup is selected
 - managed llama.cpp selection and concrete CPU/CUDA backend
+- NeuTTS selection is derived from managed llama.cpp rather than stored as a
+  separate choice
 - Ollama selection and optional public model name
 - Parakeet asset selection
 - launcher selection
@@ -173,7 +210,7 @@ voice asset. It only changes what subsequent runs ensure is present.
 
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion, managed
-CUDA versus Ollama-only plans, explicit NeuTTS adapter-only wording, and
+CUDA/NeuTTS versus Ollama-only plans, app-managed NeuTTS manifest discovery, and
 end-to-end plan-only install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response
 validation, exact physical-stop confirmation, unattended refusal, `main`, a

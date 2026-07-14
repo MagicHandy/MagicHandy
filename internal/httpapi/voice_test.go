@@ -158,8 +158,8 @@ func TestInspectNeuTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := config.DefaultSettings().Voice
-	status := inspectNeuTTSModule(settings, true, false)
-	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled || !strings.Contains(status.Message, "builds only its Go adapter") {
+	status := inspectNeuTTSModule(settings, true, false, "")
+	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled || !strings.Contains(status.Message, "skipping llama.cpp also skips NeuTTS") {
 		t.Fatalf("adapter-only NeuTTS status = %+v", status)
 	}
 
@@ -177,7 +177,7 @@ func TestInspectNeuTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "models", "neucodec_decoder.safetensors"), []byte("decoder"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	status = inspectNeuTTSModule(settings, true, true)
+	status = inspectNeuTTSModule(settings, true, true, "")
 	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
 		t.Fatalf("complete NeuTTS status = %+v", status)
 	}
@@ -189,11 +189,122 @@ func installTestNeuTTSBackbone(t *testing.T) {
 
 func TestNeuTTSBackboneCacheDiscoversPersistedCustomRepo(t *testing.T) {
 	installTestCachedBackbone(t, "example/custom-neutts", "custom-q8.gguf")
-	if !neuttsBackboneCached("example/custom-neutts") {
+	if !neuttsBackboneCached("example/custom-neutts", "") {
 		t.Fatal("custom persisted backbone cache was not discovered")
 	}
-	if neuttsBackboneCached(`..\escape/repo`) {
+	if neuttsBackboneCached(`..\escape/repo`, "") {
 		t.Fatal("invalid repository identifiers must not escape the cache root")
+	}
+}
+
+func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, string, []byte) {
+	t.Helper()
+	runner, hfHome := neuttsAppPaths(dataDir)
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(runner), "models"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range map[string]string{
+		runner: "runner",
+		filepath.Join(filepath.Dir(runner), "models", "neucodec_decoder.safetensors"): "decoder",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runnerHash, runnerOK := fileSHA256(runner)
+	decoderHash, decoderOK := fileSHA256(filepath.Join(filepath.Dir(runner), "models", "neucodec_decoder.safetensors"))
+	if !runnerOK || !decoderOK {
+		t.Fatal("could not hash app-managed NeuTTS fixtures")
+	}
+	manifest, err := json.Marshal(map[string]any{
+		"schema_version":          1,
+		"source_commit":           managedNeuTTSSource,
+		"rust_toolchain":          managedNeuTTSRust,
+		"backbone_revision":       managedNeuTTSBackbone,
+		"codec_revision":          managedNeuTTSCodec,
+		"runner_sha256":           runnerHash,
+		"decoder_sha256":          decoderHash,
+		"backbone_sha256":         managedNeuTTSBackboneSHA,
+		"codec_checkpoint_sha256": managedNeuTTSCodecSHA,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installTestCachedBackboneRevisionAt(t, hfHome, config.DefaultNeuTTSBackbone, managedNeuTTSBackbone, "neutts-air-Q4_0.gguf")
+	return runner, hfHome, manifest
+}
+
+func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
+	dataDir := t.TempDir()
+	runner, hfHome, manifest := installTestAppManagedNeuTTSRuntime(t, dataDir)
+	realFileSHA256 := managedNeuTTSFileSHA256
+	managedNeuTTSFileSHA256 = func(path string) (string, bool) {
+		if filepath.Base(path) == "neutts-air-Q4_0.gguf" {
+			return managedNeuTTSBackboneSHA, true
+		}
+		return realFileSHA256(path)
+	}
+	t.Cleanup(func() { managedNeuTTSFileSHA256 = realFileSHA256 })
+	root := t.TempDir()
+	adapter := filepath.Join(root, "voice-neutts-worker.exe")
+	codes := filepath.Join(root, "reference.npy")
+	for _, path := range []string{adapter, codes} {
+		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderNeuTTSAir
+	settings.TTSWorkerPath = adapter
+	settings.NeuTTSReferenceCodes = codes
+	settings.NeuTTSReferenceText = "Exact transcript."
+
+	got := voiceManagerConfig(settings, "", dataDir)
+	if got.TTS.Command != adapter || got.TTS.Env["HF_HOME"] != hfHome {
+		t.Fatalf("app-managed NeuTTS config = %+v", got.TTS)
+	}
+	if len(got.TTS.Args) < 2 || got.TTS.Args[1] != runner {
+		t.Fatalf("app-managed NeuTTS runner args = %q, want %q", got.TTS.Args, runner)
+	}
+	status := inspectNeuTTSModule(settings, true, true, dataDir)
+	if status.State != "ready" || !status.RuntimeInstalled || !status.Installed {
+		t.Fatalf("app-managed NeuTTS status = %+v", status)
+	}
+	installTestCachedBackboneAt(t, hfHome, "example/custom-neutts", "custom.gguf")
+	settings.NeuTTSBackbone = "example/custom-neutts"
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+		t.Fatalf("app-managed NeuTTS must not substitute a custom backbone: %+v", got.TTS)
+	}
+	settings.NeuTTSBackbone = config.DefaultNeuTTSBackbone
+	backboneRef := filepath.Join(hfHome, "hub", "models--neuphonic--neutts-air-q4-gguf", "refs", "main")
+	if err := os.WriteFile(backboneRef, []byte("unexpected-revision"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+		t.Fatalf("app-managed NeuTTS must reject an unexpected backbone revision: %+v", got.TTS)
+	}
+	if err := os.WriteFile(backboneRef, []byte(managedNeuTTSBackbone), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(runner, []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+		t.Fatalf("app-managed NeuTTS must reject changed runner bytes: %+v", got.TTS)
+	}
+	if err := os.WriteFile(runner, []byte("runner"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest = []byte(strings.Replace(string(manifest), managedNeuTTSSource, "untrusted-source", 1))
+	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+		t.Fatalf("app-managed NeuTTS must reject an unexpected manifest: %+v", got.TTS)
 	}
 }
 
@@ -201,14 +312,24 @@ func installTestCachedBackbone(t *testing.T, repo, filename string) {
 	t.Helper()
 	hfHome := t.TempDir()
 	t.Setenv("HF_HOME", hfHome)
+	installTestCachedBackboneAt(t, hfHome, repo, filename)
+}
+
+func installTestCachedBackboneAt(t *testing.T, hfHome, repo, filename string) {
+	t.Helper()
+	installTestCachedBackboneRevisionAt(t, hfHome, repo, "test-revision", filename)
+}
+
+func installTestCachedBackboneRevisionAt(t *testing.T, hfHome, repo, revision, filename string) {
+	t.Helper()
 	repoRoot := filepath.Join(hfHome, "hub", "models--"+strings.ReplaceAll(repo, "/", "--"))
 	if err := os.MkdirAll(filepath.Join(repoRoot, "refs"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(repoRoot, "refs", "main"), []byte("test-revision"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repoRoot, "refs", "main"), []byte(revision), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := filepath.Join(repoRoot, "snapshots", "test-revision")
+	snapshot := filepath.Join(repoRoot, "snapshots", revision)
 	if err := os.MkdirAll(snapshot, 0o750); err != nil {
 		t.Fatal(err)
 	}

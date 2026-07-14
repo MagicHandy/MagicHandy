@@ -98,7 +98,7 @@ try {
     Assert-True -Condition ($installCompletion -match 'INSTALL COMPLETE') -Message 'install completion should identify the finished operation'
     Assert-True -Condition ($installCompletion -match 'APP BUILD VERIFIED - CONFIGURATION REQUIRED') -Message 'install completion should distinguish a verified build from configured providers'
     Assert-True -Condition ($installCompletion -match 'Open Settings.+select a model, voice provider, and device transport') -Message 'install completion should give relevant next steps'
-    Assert-True -Condition ($installCompletion -match 'NeuTTS external runtime assets are not\s+installed') -Message 'install completion should disclose the NeuTTS boundary'
+    Assert-True -Condition ($installCompletion -match 'Managed NeuTTS still needs reference codes\s+and their exact transcript') -Message 'install completion should disclose the remaining NeuTTS reference boundary'
     Assert-True -Condition ($installCompletion -match '\|\|=+\[\]') -Message 'completion should include the Handy motion-rail text art'
     $updateCompletion = Write-MagicHandyCompletionArt -Operation Update 6>&1 | Out-String
     Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices were reapplied') -Message 'update completion should confirm preserved choices'
@@ -128,6 +128,63 @@ try {
     $json = Get-Content -LiteralPath $statePath -Raw
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
+
+    Write-Host 'Checking app-managed NeuTTS runtime manifest discovery...'
+    $supportModule = Get-Module InstallerSupport
+    $neuttsData = Join-Path $tempRoot 'neutts-data'
+    $neuttsRuntimeResult = & $supportModule {
+        param($DataDir)
+        $root = Join-Path $DataDir 'voice\neutts\active'
+        $runtime = Join-Path $root 'runtime'
+        $runner = Join-Path $runtime 'stream_pcm.exe'
+        $decoder = Join-Path $runtime 'models\neucodec_decoder.safetensors'
+        $gguf = Join-Path $root "hf\hub\models--neuphonic--neutts-air-q4-gguf\snapshots\$script:NeuTTSBackboneRevision\neutts-air-Q4_0.gguf"
+        foreach ($path in @($runner, $decoder, $gguf)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+            [System.IO.File]::WriteAllText($path, 'fixture')
+        }
+        $backboneRef = Join-Path $root 'hf\hub\models--neuphonic--neutts-air-q4-gguf\refs\main'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backboneRef) | Out-Null
+        [System.IO.File]::WriteAllText($backboneRef, $script:NeuTTSBackboneRevision)
+        $fixtureBackboneHash = Get-MagicHandySHA256 -Path $gguf
+        $originalBackboneHash = $script:NeuTTSBackboneSHA256
+        $script:NeuTTSBackboneSHA256 = $fixtureBackboneHash
+        $manifest = [pscustomobject]@{
+            schema_version = 1
+            source_commit = $script:NeuTTSSourceCommit
+            rust_toolchain = $script:NeuTTSRustToolchain
+            backbone_revision = $script:NeuTTSBackboneRevision
+            backbone_sha256 = $fixtureBackboneHash
+            codec_revision = $script:NeuTTSCodecRevision
+            codec_checkpoint_sha256 = $script:NeuTTSCodecSHA256
+            runner_sha256 = (Get-MagicHandySHA256 -Path $runner)
+            decoder_sha256 = (Get-MagicHandySHA256 -Path $decoder)
+        }
+        [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json))
+        try {
+            $valid = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
+            [System.IO.File]::AppendAllText($runner, 'tampered')
+            $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
+            [System.IO.File]::WriteAllText($runner, 'fixture')
+            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+1', '"schema_version":"invalid"'
+            [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), $malformedJSON)
+            $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
+            [pscustomobject]@{ Valid = $valid; Tampered = $tampered; Malformed = $malformed }
+        } finally {
+            $script:NeuTTSBackboneSHA256 = $originalBackboneHash
+        }
+    } $neuttsData
+    Assert-True -Condition ([bool]$neuttsRuntimeResult.Valid) -Message 'matching NeuTTS manifest and runtime files should be reusable'
+    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Tampered) -Message 'changed NeuTTS runtime bytes should require repair'
+    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Malformed) -Message 'a malformed NeuTTS manifest should request repair rather than abort setup'
+
+    Write-Host 'Checking interrupted NeuTTS swap recovery...'
+    $recoveryData = Join-Path $tempRoot 'neutts-recovery-data'
+    $backupRuntime = Join-Path $recoveryData 'voice\neutts\active.backup-fixture\runtime'
+    New-Item -ItemType Directory -Force -Path $backupRuntime | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $backupRuntime 'marker.txt'), 'previous runtime')
+    & $supportModule { param($DataDir) Restore-MagicHandyNeuTTSBackup -DataDir $DataDir } $recoveryData
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $recoveryData 'voice\neutts\active\runtime\marker.txt')) -Message 'an interrupted swap should restore its previous active runtime'
 
     Write-Host 'Checking generated launcher quoting and syntax...'
     $launcherRoot = Join-Path $tempRoot "launcher root's copy"
@@ -472,7 +529,9 @@ try {
     Assert-PlanContains -Plan $managedPlan -Pattern 'CUDA Toolkit'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
     Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air.*protocol adapters'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'external NeuTTS runtime/assets not included'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'LLVM/libclang, Rustup.*Rust 1\.94\.0.*MSVC toolchain'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'Build pinned neutts-rs stream_pcm.*llama\.cpp binding'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder'
 
     $ollamaState = New-MagicHandyInstallState `
         -RepositoryPath $Repo `
@@ -486,7 +545,8 @@ try {
         -CreateLauncher $false
     $ollamaPlan = @(Get-MagicHandyProvisionPlan -State $ollamaState)
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Ensure Ollama'
-    Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|Parakeet CPU runner'
+    Assert-PlanContains -Plan $ollamaPlan -Pattern 'Skip NeuTTS runtime build.*managed llama\.cpp is not selected'
+    Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|LLVM/libclang|Rustup|Build pinned neutts-rs|checksum-verified NeuTTS|Parakeet CPU runner'
 
     Write-Host 'Checking updater fast-forward and dirty-worktree refusal...'
     $git = Resolve-MagicHandyExecutable -Name 'git'
@@ -632,7 +692,8 @@ try {
     Assert-True -Condition (($capturedPrompts -join "`n") -match 'Modify previous installation choices') -Message 'updater should ask whether to modify choices'
     Assert-True -Condition ($reconfigureOutput -match 'Managed llama\.cpp: no') -Message 'reconfiguration should switch managed llama.cpp off'
     Assert-True -Condition ($reconfigureOutput -match 'Ollama model:\s+\(unchanged\)') -Message 'reconfiguration should clear the optional model'
-    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|CUDA Toolkit'
+    Assert-PlanContains -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Skip NeuTTS runtime build.*managed llama\.cpp is not selected'
+    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|CUDA Toolkit|LLVM/libclang|Rustup|Build pinned neutts-rs'
     Assert-Equal -Expected $beforeHash -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $statePath).Hash) -Message 'reconfiguration plan must not rewrite state'
     Assert-Equal -Expected 0 -Actual $remainingResponses -Message 'all expected prompts should be consumed'
 

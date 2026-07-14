@@ -7,6 +7,16 @@ $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/dow
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
 $script:ParakeetModelURL = 'https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v3-q4_k.gguf?download=true'
 $script:ParakeetModelSHA256 = '993d73feb4206dadda865ab25bd64b50c48dc4d013c3bf6126a721f28b1d5ee8'
+$script:NeuTTSSourceURL = 'https://github.com/eugenehp/neutts-rs.git'
+$script:NeuTTSSourceTag = 'v0.1.1'
+$script:NeuTTSSourceCommit = 'ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f'
+$script:NeuTTSRustToolchain = '1.94.0-x86_64-pc-windows-msvc'
+$script:NeuTTSBackboneRevision = '008555972590ff2c599dd43736ba31c81df3f0bf'
+$script:NeuTTSBackboneURL = "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/$($script:NeuTTSBackboneRevision)/neutts-air-Q4_0.gguf?download=true"
+$script:NeuTTSBackboneSHA256 = 'bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff9a29062e4ac9119e'
+$script:NeuTTSCodecRevision = '30c1fdd19e68aee65d542cf043750d4c0165893e'
+$script:NeuTTSCodecURL = "https://huggingface.co/neuphonic/neucodec/resolve/$($script:NeuTTSCodecRevision)/pytorch_model.bin?download=true"
+$script:NeuTTSCodecSHA256 = '30c3ea13ceeb2de693c56e5e33a1b7e00d44c95dcdd08a4ed0d552d0bf59ebdf'
 
 function Write-InstallerHeading([string]$Text) {
     Write-Host ''
@@ -44,7 +54,7 @@ function Write-MagicHandyCompletionArt {
     }
     $status = if ($Operation -like '*Plan') { 'NO CHANGES MADE' } else { 'APP BUILD VERIFIED - CONFIGURATION REQUIRED' }
     $detail = switch ($Operation) {
-        'Install' { 'Open Settings to select a model, voice provider, and device transport. NeuTTS external runtime assets are not installed.' }
+        'Install' { 'Open Settings to select a model, voice provider, and device transport. Managed NeuTTS still needs reference codes and their exact transcript.' }
         'Update' { 'Congratulations. Saved installation choices were reapplied to the current build.' }
         default { 'Review the plan above, then rerun without -PlanOnly when ready.' }
     }
@@ -163,6 +173,7 @@ function Resolve-MagicHandyExecutable {
         'cmake' { @((Join-Path $env:ProgramFiles 'CMake\bin\cmake.exe')) }
         'winget' { @((Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe')) }
         'ollama' { @((Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe')) }
+        'rustup' { @((Join-Path $env:USERPROFILE '.cargo\bin\rustup.exe')) }
         default { @() }
     }
     foreach ($candidate in $candidates) {
@@ -210,7 +221,16 @@ function Test-MagicHandyVCToolchain {
         return $false
     }
     $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    return -not [string]::IsNullOrWhiteSpace(($installation | Select-Object -First 1))
+    if ([string]::IsNullOrWhiteSpace(($installation | Select-Object -First 1))) {
+        return $false
+    }
+    $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
+    if (-not (Test-Path -LiteralPath $sdkRoot -PathType Container)) {
+        return $false
+    }
+    return [bool](Get-ChildItem -LiteralPath $sdkRoot -Directory -ErrorAction SilentlyContinue | Where-Object {
+        Test-Path -LiteralPath (Join-Path $_.FullName 'um\Windows.h') -PathType Leaf
+    } | Select-Object -First 1)
 }
 
 function Get-MagicHandyInstallStatePath {
@@ -341,12 +361,14 @@ function Show-MagicHandyInstallState {
     param([Parameter(Mandatory = $true)][object]$State)
 
     $managed = if ([bool]$State.build_managed_llama) { "yes ($($State.llama_backend))" } else { 'no' }
+    $neutts = if ([bool]$State.build_managed_llama) { 'yes (with managed llama.cpp)' } else { 'no (managed llama.cpp skipped)' }
     $ollama = if ([bool]$State.ensure_ollama) { 'yes' } else { 'no' }
     $parakeet = if ([bool]$State.install_parakeet) { 'yes' } else { 'no' }
     $launcher = if ([bool]$State.create_launcher) { 'yes' } else { 'no' }
     Write-Host "  Data directory:   $($State.data_dir)"
     Write-Host "  Local port:       $($State.port)"
     Write-Host "  Managed llama.cpp: $managed"
+    Write-Host "  NeuTTS runtime:   $neutts"
     Write-Host "  Ensure Ollama:    $ollama"
     Write-Host "  Ollama model:     $(if ([string]::IsNullOrWhiteSpace([string]$State.ollama_model)) { '(unchanged)' } else { $State.ollama_model })"
     Write-Host "  Parakeet ASR:     $parakeet"
@@ -360,7 +382,7 @@ function Get-MagicHandyProvisionPlan {
     $plan = New-Object System.Collections.Generic.List[string]
     $plan.Add('Ensure Go 1.25+ is installed')
     $plan.Add('Build magichandy.exe with CGO disabled')
-    $plan.Add('Build Parakeet, NeuTTS Air, and ElevenLabs Go protocol adapters (external NeuTTS runtime/assets not included)')
+    $plan.Add('Build Parakeet, NeuTTS Air, and ElevenLabs Go protocol adapters')
     if ([bool]$State.build_managed_llama) {
         $plan.Add('Ensure Git and CMake are installed')
         $plan.Add('Ensure the Visual Studio C++ Build Tools workload and Windows SDK are installed')
@@ -368,6 +390,11 @@ function Get-MagicHandyProvisionPlan {
             $plan.Add('Ensure the NVIDIA CUDA Toolkit is installed')
         }
         $plan.Add("Build and activate pinned managed llama.cpp ($($State.llama_backend))")
+        $plan.Add('Ensure LLVM/libclang, Rustup, and the pinned Rust 1.94.0 Windows MSVC toolchain are installed')
+        $plan.Add('Build pinned neutts-rs stream_pcm with its llama.cpp binding')
+        $plan.Add('Install checksum-verified NeuTTS Air Q4 and converted NeuCodec decoder assets (about 1.4 GiB installed; about 1.1 GiB additional transient download)')
+    } else {
+        $plan.Add('Skip NeuTTS runtime build and model assets because managed llama.cpp is not selected')
     }
     if ([bool]$State.ensure_ollama) {
         $plan.Add('Ensure Ollama is installed')
@@ -494,7 +521,7 @@ function Ensure-MagicHandyGit {
 
     $git = Resolve-MagicHandyExecutable -Name 'git'
     if (-not $git) {
-        Confirm-MagicHandyPackageInstall -Name 'Git for Windows' -Purpose 'updating MagicHandy and fetching pinned llama.cpp source' -License 'GPL-2.0; https://gitforwindows.org/' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'Git for Windows' -Purpose 'updating MagicHandy and fetching pinned llama.cpp and NeuTTS source' -License 'GPL-2.0; https://gitforwindows.org/' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Git.Git' -AssumeYes:$AssumeYes
         $git = Resolve-MagicHandyExecutable -Name 'git'
     }
@@ -510,7 +537,7 @@ function Ensure-MagicHandyCMake {
 
     $cmake = Resolve-MagicHandyCMake
     if (-not $cmake) {
-        Confirm-MagicHandyPackageInstall -Name 'CMake' -Purpose 'configuring the managed llama.cpp source build' -License 'BSD-3-Clause; https://cmake.org/licensing/' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'CMake' -Purpose 'configuring the managed llama.cpp and NeuTTS source builds' -License 'BSD-3-Clause; https://cmake.org/licensing/' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Kitware.CMake' -AssumeYes:$AssumeYes
         $cmake = Resolve-MagicHandyCMake
     }
@@ -527,12 +554,68 @@ function Ensure-MagicHandyVCToolchain {
     if (Test-MagicHandyVCToolchain) {
         return
     }
-    Confirm-MagicHandyPackageInstall -Name 'Visual Studio Build Tools with Desktop C++' -Purpose 'compiling the managed llama.cpp runner' -License 'Microsoft Visual Studio license; https://visualstudio.microsoft.com/license-terms/' -Size 'several GB' -AssumeYes:$AssumeYes
+    Confirm-MagicHandyPackageInstall -Name 'Visual Studio Build Tools with Desktop C++' -Purpose 'compiling the managed llama.cpp and NeuTTS runners' -License 'Microsoft Visual Studio license; https://visualstudio.microsoft.com/license-terms/' -Size 'several GB' -AssumeYes:$AssumeYes
     $override = '--wait --quiet --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
     Invoke-MagicHandyWinGetInstall -ID 'Microsoft.VisualStudio.BuildTools' -Override $override -AssumeYes:$AssumeYes
     if (-not (Test-MagicHandyVCToolchain)) {
         throw 'The Visual Studio C++ workload is still unavailable. Restart Windows if requested, then rerun install.ps1.'
     }
+}
+
+function Resolve-MagicHandyLibClang {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'LLVM\bin\libclang.dll')
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Split-Path -Parent $candidate)
+        }
+    }
+    return $null
+}
+
+function Ensure-MagicHandyRustup {
+    [CmdletBinding()]
+    param([switch]$AssumeYes)
+
+    $rustup = Resolve-MagicHandyExecutable -Name 'rustup'
+    if (-not $rustup) {
+        Confirm-MagicHandyPackageInstall -Name 'Rustup' -Purpose 'building the selected NeuTTS stream_pcm runner and its llama.cpp binding' -License 'Apache-2.0 or MIT; https://github.com/rust-lang/rustup' -Size 'toolchain and build cache use several GB temporarily' -AssumeYes:$AssumeYes
+        Invoke-MagicHandyWinGetInstall -ID 'Rustlang.Rustup' -AssumeYes:$AssumeYes
+        $rustup = Resolve-MagicHandyExecutable -Name 'rustup'
+    }
+    if (-not $rustup) {
+        throw 'Rustup installation completed but rustup.exe is unavailable. Restart PowerShell and rerun install.ps1.'
+    }
+    & $rustup toolchain install $script:NeuTTSRustToolchain --profile minimal | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Rustup could not install $($script:NeuTTSRustToolchain) (exit $LASTEXITCODE)."
+    }
+    $version = & $rustup run $script:NeuTTSRustToolchain rustc -vV
+    if ($LASTEXITCODE -ne 0 -or
+        ($version | Select-Object -First 1) -notmatch '^rustc 1\.94\.0 ' -or
+        ($version -join "`n") -notmatch 'host: x86_64-pc-windows-msvc') {
+        throw "The Rust $($script:NeuTTSRustToolchain) toolchain is unavailable."
+    }
+    Write-Host (($version | Select-Object -First 1) + " ($($script:NeuTTSRustToolchain))") -ForegroundColor Green
+    return $rustup
+}
+
+function Ensure-MagicHandyLibClang {
+    [CmdletBinding()]
+    param([switch]$AssumeYes)
+
+    $libClang = Resolve-MagicHandyLibClang
+    if (-not $libClang) {
+        Confirm-MagicHandyPackageInstall -Name 'LLVM' -Purpose 'providing libclang for the NeuTTS llama.cpp Rust bindings' -License 'Apache-2.0 with LLVM exceptions; https://llvm.org/LICENSE.txt' -Size 'approximately 2 GB' -AssumeYes:$AssumeYes
+        Invoke-MagicHandyWinGetInstall -ID 'LLVM.LLVM' -AssumeYes:$AssumeYes
+        $libClang = Resolve-MagicHandyLibClang
+    }
+    if (-not $libClang) {
+        throw 'LLVM installation completed but libclang.dll is unavailable. Restart PowerShell and rerun install.ps1.'
+    }
+    Write-Host "Found libclang at $libClang" -ForegroundColor Green
+    return $libClang
 }
 
 function Ensure-MagicHandyCUDA {
@@ -691,6 +774,292 @@ function Install-MagicHandyParakeet {
     Write-Host "Parakeet runner: $serverExe" -ForegroundColor Green
     Write-Host "Parakeet model:  $modelPath" -ForegroundColor Green
     Write-Host 'In MagicHandy, open Settings > Voice, select Parakeet and the MagicHandy module, enable voice workers, save, then choose Start.' -ForegroundColor Cyan
+}
+
+function Test-MagicHandyNeuTTSInstall {
+    param([Parameter(Mandatory = $true)][string]$DataDir)
+
+    return Test-MagicHandyNeuTTSInstallRoot -InstallRoot (Join-Path $DataDir 'voice\neutts\active')
+}
+
+function Test-MagicHandyNeuTTSInstallRoot {
+    param([Parameter(Mandatory = $true)][string]$InstallRoot)
+
+    $runtime = Join-Path $InstallRoot 'runtime'
+    $manifestPath = Join-Path $runtime 'runtime.json'
+    $runner = Join-Path $runtime 'stream_pcm.exe'
+    $decoder = Join-Path $runtime 'models\neucodec_decoder.safetensors'
+    $backboneRepo = Join-Path $InstallRoot 'hf\hub\models--neuphonic--neutts-air-q4-gguf'
+    $backboneRef = Join-Path $backboneRepo 'refs\main'
+    $gguf = Join-Path $backboneRepo "snapshots\$($script:NeuTTSBackboneRevision)\neutts-air-Q4_0.gguf"
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $runner -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $decoder -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $backboneRef -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $gguf -PathType Leaf)) {
+        return $false
+    }
+    try {
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $required = @(
+            'schema_version', 'source_commit', 'rust_toolchain', 'backbone_revision',
+            'backbone_sha256', 'codec_revision', 'codec_checkpoint_sha256',
+            'runner_sha256', 'decoder_sha256'
+        )
+        foreach ($name in $required) {
+            if ($manifest.PSObject.Properties.Name -notcontains $name) {
+                return $false
+            }
+        }
+        return [int]$manifest.schema_version -eq 1 -and
+            (Get-Content -LiteralPath $backboneRef -Raw).Trim() -eq $script:NeuTTSBackboneRevision -and
+            [string]$manifest.source_commit -eq $script:NeuTTSSourceCommit -and
+            [string]$manifest.rust_toolchain -eq $script:NeuTTSRustToolchain -and
+            [string]$manifest.backbone_revision -eq $script:NeuTTSBackboneRevision -and
+            [string]$manifest.backbone_sha256 -eq $script:NeuTTSBackboneSHA256 -and
+            [string]$manifest.codec_revision -eq $script:NeuTTSCodecRevision -and
+            [string]$manifest.codec_checkpoint_sha256 -eq $script:NeuTTSCodecSHA256 -and
+            [string]$manifest.runner_sha256 -eq (Get-MagicHandySHA256 -Path $runner) -and
+            [string]$manifest.decoder_sha256 -eq (Get-MagicHandySHA256 -Path $decoder) -and
+            $script:NeuTTSBackboneSHA256 -eq (Get-MagicHandySHA256 -Path $gguf)
+    } catch {
+        return $false
+    }
+}
+
+function Restore-MagicHandyNeuTTSBackup {
+    param([Parameter(Mandatory = $true)][string]$DataDir)
+
+    $root = Join-Path $DataDir 'voice\neutts'
+    $active = Join-Path $root 'active'
+    if (Test-Path -LiteralPath $active) {
+        return
+    }
+    $backup = Get-ChildItem -LiteralPath $root -Directory -Filter 'active.backup-*' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($null -ne $backup) {
+        Move-Item -LiteralPath $backup.FullName -Destination $active
+        Write-Warning "Recovered the previous NeuTTS runtime after an interrupted installer swap: $active"
+    }
+}
+
+function Confirm-MagicHandyNeuTTSInstall {
+    param([switch]$AssumeYes)
+
+    Write-Host 'NeuTTS runner: neutts-rs v0.1.1, Cargo metadata declares MIT; its espeak dependency includes GPL-3.0-or-later components.'
+    Write-Host "Source commit: $($script:NeuTTSSourceCommit); Rust toolchain: $($script:NeuTTSRustToolchain)." -ForegroundColor DarkGray
+    Write-Host 'NeuTTS models: Air Q4 and NeuCodec, Apache-2.0; about 1.4 GiB installed plus a temporary 1.1 GiB conversion checkpoint.'
+    Write-Host "Air Q4 SHA-256: $($script:NeuTTSBackboneSHA256)" -ForegroundColor DarkGray
+    Write-Host "NeuCodec SHA-256: $($script:NeuTTSCodecSHA256)" -ForegroundColor DarkGray
+    if (-not (Confirm-MagicHandyChoice -Question 'Download the pinned NeuTTS models and build the local runner now?' -Default $true -AssumeYes:$AssumeYes)) {
+        throw 'NeuTTS installation is required when managed llama.cpp is selected. Rerun with -SkipLlamaBuild to skip both.'
+    }
+}
+
+function Install-MagicHandyNeuTTS {
+    param(
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [Parameter(Mandatory = $true)][string]$GitExecutable,
+        [Parameter(Mandatory = $true)][string]$RustupExecutable,
+        [Parameter(Mandatory = $true)][string]$LibClangPath,
+        [Parameter(Mandatory = $true)][string]$CMakeExecutable
+    )
+
+    $root = Join-Path $DataDir 'voice\neutts'
+    Assert-MagicHandyChildPath -Root $DataDir -Candidate $root
+    if (Test-MagicHandyNeuTTSInstall -DataDir $DataDir) {
+        Write-Host "NeuTTS runtime is already verified at $(Join-Path $root 'active\runtime')." -ForegroundColor Green
+        return
+    }
+
+    $active = Join-Path $root 'active'
+    $activeStage = Join-Path $root "active.partial-$PID"
+    $activeBackup = Join-Path $root ("active.backup-" + [Guid]::NewGuid().ToString('N'))
+    $runtimeStage = Join-Path $activeStage 'runtime'
+    $buildRoot = Join-Path $root "build.partial-$PID"
+    $sourceRoot = Join-Path $buildRoot 'source'
+    $targetRoot = Join-Path $buildRoot 'target'
+    $cargoHome = Join-Path $buildRoot 'cargo-home'
+    $localBuildData = Join-Path $buildRoot 'local-app-data'
+    $hfRoot = Join-Path $activeStage 'hf'
+    $backboneRepo = Join-Path $hfRoot 'hub\models--neuphonic--neutts-air-q4-gguf'
+    $backboneSnapshot = Join-Path $backboneRepo "snapshots\$($script:NeuTTSBackboneRevision)"
+    $backbonePath = Join-Path $backboneSnapshot 'neutts-air-Q4_0.gguf'
+    $codecRepo = Join-Path $hfRoot 'hub\models--neuphonic--neucodec'
+    $codecSnapshot = Join-Path $codecRepo "snapshots\$($script:NeuTTSCodecRevision)"
+    $codecCheckpoint = Join-Path $codecSnapshot 'pytorch_model.bin'
+    $decoderStage = Join-Path $runtimeStage 'models\neucodec_decoder.safetensors'
+    foreach ($path in @($active, $activeStage, $activeBackup, $buildRoot, $hfRoot, $backbonePath, $codecCheckpoint)) {
+        Assert-MagicHandyChildPath -Root $root -Candidate $path
+    }
+
+    $previousCargoHome = $env:CARGO_HOME
+    $previousCargoTarget = $env:CARGO_TARGET_DIR
+    $previousHFHome = $env:HF_HOME
+    $previousOffline = $env:HF_HUB_OFFLINE
+    $previousLibClang = $env:LIBCLANG_PATH
+    $previousLocalAppData = $env:LOCALAPPDATA
+    $previousCMake = $env:CMAKE
+    $previousPath = $env:Path
+    try {
+        foreach ($path in @($activeStage, $buildRoot)) {
+            if (Test-Path -LiteralPath $path) {
+                Remove-Item -LiteralPath $path -Recurse -Force
+            }
+        }
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $decoderStage) | Out-Null
+        New-Item -ItemType Directory -Force -Path $buildRoot, $localBuildData | Out-Null
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSBackboneURL -Destination $backbonePath -ExpectedSHA256 $script:NeuTTSBackboneSHA256
+        New-Item -ItemType Directory -Force -Path (Join-Path $backboneRepo 'refs') | Out-Null
+        Write-MagicHandyUTF8 -Path (Join-Path $backboneRepo 'refs\main') -Content $script:NeuTTSBackboneRevision
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSCodecURL -Destination $codecCheckpoint -ExpectedSHA256 $script:NeuTTSCodecSHA256
+        New-Item -ItemType Directory -Force -Path (Join-Path $codecRepo 'refs') | Out-Null
+        Write-MagicHandyUTF8 -Path (Join-Path $codecRepo 'refs\main') -Content $script:NeuTTSCodecRevision
+
+        & $GitExecutable clone --branch $script:NeuTTSSourceTag --depth 1 $script:NeuTTSSourceURL $sourceRoot | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fetching neutts-rs $($script:NeuTTSSourceTag) failed (exit $LASTEXITCODE)."
+        }
+        $actualCommit = (& $GitExecutable -C $sourceRoot rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $actualCommit -ne $script:NeuTTSSourceCommit) {
+            throw "neutts-rs source verification failed: expected $($script:NeuTTSSourceCommit), got '$actualCommit'."
+        }
+
+        $env:CARGO_HOME = $cargoHome
+        $env:CARGO_TARGET_DIR = $targetRoot
+        $env:HF_HOME = $hfRoot
+        $env:HF_HUB_OFFLINE = '1'
+        $env:LIBCLANG_PATH = $LibClangPath
+        $env:LOCALAPPDATA = $localBuildData
+        $env:CMAKE = $CMakeExecutable
+        $env:Path = (Split-Path -Parent $CMakeExecutable) + ';' + $previousPath
+        Write-Host 'Converting the verified NeuCodec checkpoint without Python...'
+        & $RustupExecutable run $script:NeuTTSRustToolchain cargo run --locked --release --no-default-features --manifest-path (Join-Path $sourceRoot 'Cargo.toml') --example convert_weights -- --out $decoderStage | Out-Host
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $decoderStage)) {
+            throw "NeuCodec decoder conversion failed (exit $LASTEXITCODE)."
+        }
+
+        Write-Host 'Building pinned NeuTTS stream_pcm with its CPU llama.cpp binding...'
+        & $RustupExecutable run $script:NeuTTSRustToolchain cargo build --locked --release --manifest-path (Join-Path $sourceRoot 'Cargo.toml') --example stream_pcm --features espeak | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "NeuTTS stream_pcm build failed (exit $LASTEXITCODE)."
+        }
+        $runnerCandidate = Join-Path $targetRoot 'release\examples\stream_pcm.exe'
+        if (-not (Test-Path -LiteralPath $runnerCandidate)) {
+            throw "NeuTTS build did not produce '$runnerCandidate'."
+        }
+        & $runnerCandidate --help *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The built NeuTTS stream_pcm runner did not pass its help probe.'
+        }
+        Copy-Item -LiteralPath $runnerCandidate -Destination (Join-Path $runtimeStage 'stream_pcm.exe') -Force
+
+        $metadataDir = Join-Path $runtimeStage 'source-metadata'
+        New-Item -ItemType Directory -Force -Path $metadataDir | Out-Null
+        Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.toml') -Destination $metadataDir
+        Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.lock') -Destination $metadataDir
+        $licenseDir = Join-Path $runtimeStage 'licenses'
+        New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
+        $licenseIndex = New-Object System.Collections.Generic.List[string]
+        $licenseNumber = 0
+        foreach ($license in @(Get-ChildItem -LiteralPath $cargoHome -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(?i:LICENSE|COPYING|NOTICE)' })) {
+            $licenseNumber++
+            $package = $license.Directory.Name -replace '[^A-Za-z0-9_.-]', '_'
+            $name = ('{0:D3}-{1}-{2}' -f $licenseNumber, $package, $license.Name)
+            Copy-Item -LiteralPath $license.FullName -Destination (Join-Path $licenseDir $name)
+            $licenseIndex.Add("$name - Cargo source package $package")
+        }
+        Write-MagicHandyUTF8 -Path (Join-Path $licenseDir 'INDEX.txt') -Content ($licenseIndex -join "`r`n")
+
+        $notices = @"
+NeuTTS runtime installed by MagicHandy
+
+neutts-rs $($script:NeuTTSSourceTag) at $($script:NeuTTSSourceCommit)
+Source: $($script:NeuTTSSourceURL)
+Cargo package metadata license: MIT
+The build includes llama.cpp through llama-cpp-4 and eSpeak NG components through espeak-ng.
+Cargo dependency license files available in the downloaded sources are retained under licenses\.
+
+NeuTTS Air Q4 and NeuCodec model repositories declare Apache-2.0.
+Backbone revision: $($script:NeuTTSBackboneRevision)
+Codec revision: $($script:NeuTTSCodecRevision)
+"@
+        Write-MagicHandyUTF8 -Path (Join-Path $runtimeStage 'THIRD_PARTY_NOTICES.txt') -Content $notices
+        $rustVersion = (& $RustupExecutable run $script:NeuTTSRustToolchain rustc -vV) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not record the pinned Rust compiler identity.'
+        }
+        $runnerHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'stream_pcm.exe')
+        $decoderHash = Get-MagicHandySHA256 -Path $decoderStage
+        $manifest = [pscustomobject][ordered]@{
+            schema_version = 1
+            installed_at = [DateTimeOffset]::UtcNow.ToString('o')
+            source_tag = $script:NeuTTSSourceTag
+            source_commit = $script:NeuTTSSourceCommit
+            rust_toolchain = $script:NeuTTSRustToolchain
+            rust_version = $rustVersion
+            backbone_revision = $script:NeuTTSBackboneRevision
+            backbone_sha256 = $script:NeuTTSBackboneSHA256
+            codec_revision = $script:NeuTTSCodecRevision
+            codec_checkpoint_sha256 = $script:NeuTTSCodecSHA256
+            runner_sha256 = $runnerHash
+            decoder_sha256 = $decoderHash
+        }
+        Write-MagicHandyUTF8 -Path (Join-Path $runtimeStage 'runtime.json') -Content ($manifest | ConvertTo-Json -Depth 3)
+        Remove-Item -LiteralPath $codecRepo -Recurse -Force
+
+        if (-not (Test-MagicHandyNeuTTSInstallRoot -InstallRoot $activeStage)) {
+            throw 'The staged NeuTTS runtime did not pass checksum and manifest verification.'
+        }
+        if (Test-Path -LiteralPath $active) {
+            Move-Item -LiteralPath $active -Destination $activeBackup
+        }
+        try {
+            Move-Item -LiteralPath $activeStage -Destination $active
+            if (-not (Test-MagicHandyNeuTTSInstall -DataDir $DataDir)) {
+                throw 'The activated NeuTTS runtime did not pass final verification.'
+            }
+        } catch {
+            if (Test-Path -LiteralPath $active) {
+                Remove-Item -LiteralPath $active -Recurse -Force
+            }
+            if (Test-Path -LiteralPath $activeBackup) {
+                if (Test-Path -LiteralPath $active) {
+                    throw "NeuTTS rollback cannot restore '$activeBackup' because '$active' still exists. The backup was preserved."
+                }
+                Move-Item -LiteralPath $activeBackup -Destination $active -Force
+            }
+            throw
+        }
+        foreach ($staleBackup in @(Get-ChildItem -LiteralPath $root -Directory -Filter 'active.backup-*' -ErrorAction SilentlyContinue)) {
+            try {
+                Remove-Item -LiteralPath $staleBackup.FullName -Recurse -Force
+            } catch {
+                Write-Warning "The verified NeuTTS runtime is active, but old rollback data could not be removed from '$($staleBackup.FullName)': $_"
+            }
+        }
+    } finally {
+        $env:CARGO_HOME = $previousCargoHome
+        $env:CARGO_TARGET_DIR = $previousCargoTarget
+        $env:HF_HOME = $previousHFHome
+        $env:HF_HUB_OFFLINE = $previousOffline
+        $env:LIBCLANG_PATH = $previousLibClang
+        $env:LOCALAPPDATA = $previousLocalAppData
+        $env:CMAKE = $previousCMake
+        $env:Path = $previousPath
+        foreach ($path in @($activeStage, $buildRoot)) {
+            if (Test-Path -LiteralPath $path) {
+                Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    $runtime = Join-Path $active 'runtime'
+    $installedBackbone = Join-Path $active "hf\hub\models--neuphonic--neutts-air-q4-gguf\snapshots\$($script:NeuTTSBackboneRevision)\neutts-air-Q4_0.gguf"
+    Write-Host "NeuTTS runner:  $(Join-Path $runtime 'stream_pcm.exe')" -ForegroundColor Green
+    Write-Host "NeuTTS decoder: $(Join-Path $runtime 'models\neucodec_decoder.safetensors')" -ForegroundColor Green
+    Write-Host "NeuTTS backbone cache: $installedBackbone" -ForegroundColor Green
+    Write-Host 'In Settings > Voice, select NeuTTS Air and provide licensed .npy reference codes plus their exact transcript. Leave the runner override blank.' -ForegroundColor Cyan
 }
 
 function Test-MagicHandyHTTPReady {
@@ -1077,8 +1446,8 @@ function Invoke-MagicHandyProvision {
 
     if ([bool]$State.build_managed_llama) {
         Write-InstallerHeading "Managed llama.cpp ($($State.llama_backend))"
-        Ensure-MagicHandyGit -AssumeYes:$AssumeYes | Out-Null
-        Ensure-MagicHandyCMake -AssumeYes:$AssumeYes | Out-Null
+        $git = Ensure-MagicHandyGit -AssumeYes:$AssumeYes
+        $cmake = Ensure-MagicHandyCMake -AssumeYes:$AssumeYes
         Ensure-MagicHandyVCToolchain -AssumeYes:$AssumeYes
         if ([string]$State.llama_backend -eq 'cuda') {
             Ensure-MagicHandyCUDA -AssumeYes:$AssumeYes | Out-Null
@@ -1087,6 +1456,17 @@ function Invoke-MagicHandyProvision {
         & $builder -DataDir $State.data_dir -Backend $State.llama_backend
         if ($LASTEXITCODE -ne 0) {
             throw "Managed llama.cpp build failed (exit $LASTEXITCODE)."
+        }
+
+        Write-InstallerHeading 'NeuTTS Air runtime (with managed llama.cpp)'
+        Restore-MagicHandyNeuTTSBackup -DataDir $State.data_dir
+        if (Test-MagicHandyNeuTTSInstall -DataDir $State.data_dir) {
+            Write-Host "NeuTTS runtime is already checksum-verified at $(Join-Path $State.data_dir 'voice\neutts\active\runtime')." -ForegroundColor Green
+        } else {
+            Confirm-MagicHandyNeuTTSInstall -AssumeYes:$AssumeYes
+            $libClang = Ensure-MagicHandyLibClang -AssumeYes:$AssumeYes
+            $rustup = Ensure-MagicHandyRustup -AssumeYes:$AssumeYes
+            Install-MagicHandyNeuTTS -DataDir $State.data_dir -GitExecutable $git -RustupExecutable $rustup -LibClangPath $libClang -CMakeExecutable $cmake
         }
     }
 
