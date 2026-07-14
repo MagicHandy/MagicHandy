@@ -45,8 +45,19 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
+		writeError(w, http.StatusConflict, errors.New("chat requires the current Emergency Stop sequence"))
+		return
+	}
+	stopSequence, err := s.requestStopSequence(r)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	chatCtx, finishChat := s.beginChat(r.Context())
+	defer finishChat()
 
-	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
+	provider, err := s.newLLMProvider(chatCtx, settings.LLM)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
@@ -88,7 +99,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := service.Complete(r.Context(), chat.Request{
+	result, err := service.Complete(chatCtx, chat.Request{
 		Message: body.Message,
 		History: body.History,
 	}, func(event chat.StreamEvent) error {
@@ -109,7 +120,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 	})
-	s.emitChatCompletionResult(r, emit, result, err, settings.LLM.Provider)
+	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, err, settings.LLM.Provider)
 }
 
 func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent bool) int {
@@ -121,10 +132,15 @@ func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent boo
 	return settings.MaxOutputTokens / 2
 }
 
-func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, result chat.Result, err error, provider string) {
+func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, provider string) {
 	if err != nil {
 		s.logger.Warn("chat stream failed", "provider", provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})
+		_ = emit("done", map[string]any{"ok": false})
+		return
+	}
+	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
+		_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
 		_ = emit("done", map[string]any{"ok": false})
 		return
 	}
@@ -150,6 +166,16 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 	// shown. Error and malformed paths returned above — they never reach the
 	// log or TTS.
 	replySeq := s.appendChatMessage(chat.MessageRoleAssistant, result.Response.Reply, "")
+	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
+		if replySeq > 0 && s.chatLog != nil {
+			if err := s.chatLog.Delete(replySeq); err != nil {
+				s.logger.Warn("delete Stop-invalidated chat reply", "seq", replySeq, "error", err)
+			}
+		}
+		_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
+		_ = emit("done", map[string]any{"ok": false})
+		return
+	}
 
 	if err := emit("message", map[string]any{
 		"reply":             result.Response.Reply,
@@ -161,11 +187,19 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 		return
 	}
 
-	if speech := s.enqueueSpeech(result.Response.Reply); speech != nil {
+	speech := s.enqueueSpeech(result.Response.Reply)
+	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
+		if speech != nil {
+			s.voice.Worker(voice.RoleTTS).Cancel(speech)
+		}
+		_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
+		_ = emit("done", map[string]any{"ok": false})
+		return
+	}
+	dispatch, motionErr := s.dispatchChatMotionAt(ctx, result.Response.Motion, &stopSequence)
+	if speech != nil {
 		_ = emit("speech", map[string]any{"request_id": speech.ID})
 	}
-
-	dispatch, motionErr := s.dispatchChatMotion(r.Context(), result.Response.Motion)
 	if motionErr != nil {
 		dispatch.Error = motionErr.Error()
 		s.logger.Warn("chat motion dispatch failed", "action", dispatch.Action, "error", motionErr)
@@ -183,6 +217,21 @@ func (s *Server) emitChatCompletionResult(r *http.Request, emit sseEmitter, resu
 }
 
 func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
+	return s.dispatchChatMotionAt(ctx, command, nil)
+}
+
+func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
+	if stopSequence != nil && s.stopSequence.Load() != *stopSequence {
+		action := ""
+		if command != nil {
+			action = command.Action
+		}
+		return chatMotionDispatch{Action: action}, errors.New("chat motion canceled by Emergency Stop")
+	}
+	return s.dispatchChatMotionLocked(ctx, command)
+}
+
+func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
 	}
@@ -215,10 +264,12 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 	case chat.MotionActionStop:
 		// A chat stop is a user stop: modes end and keepalive stands down.
+		finishModeStop := func() {}
 		if s.modes != nil {
 			s.modes.NotifyChatStop()
-			s.modes.NotifyUserStop()
+			finishModeStop = s.modes.BeginUserStop()
 		}
+		defer finishModeStop()
 		engine := s.currentMotionEngine()
 		if engine == nil {
 			return chatMotionDispatch{Applied: true, Action: command.Action}, nil
@@ -227,6 +278,53 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
+	}
+}
+
+func (s *Server) requestStopSequence(r *http.Request) (uint64, error) {
+	current := s.stopSequence.Load()
+	value := strings.TrimSpace(r.Header.Get(stopSequenceHeader))
+	if value == "" {
+		return current, nil
+	}
+	expected, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, errors.New("invalid Emergency Stop sequence")
+	}
+	if expected != current {
+		return 0, errors.New("request was invalidated by Emergency Stop")
+	}
+	return expected, nil
+}
+
+func (s *Server) beginChat(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	s.chatCancelMu.Lock()
+	s.nextChatID++
+	id := s.nextChatID
+	if s.chatCancels == nil {
+		s.chatCancels = make(map[uint64]context.CancelFunc)
+	}
+	s.chatCancels[id] = cancel
+	s.chatCancelMu.Unlock()
+	return ctx, func() {
+		cancel()
+		s.chatCancelMu.Lock()
+		delete(s.chatCancels, id)
+		s.chatCancelMu.Unlock()
+	}
+}
+
+func (s *Server) cancelActiveChats() {
+	s.chatCancelMu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(s.chatCancels))
+	for id, cancel := range s.chatCancels {
+		cancels = append(cancels, cancel)
+		delete(s.chatCancels, id)
+	}
+	s.chatCancelMu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
 	}
 }
 
@@ -299,7 +397,7 @@ func (s *Server) enqueueSpeech(reply string) *voice.PendingRequest {
 	if !settings.Voice.Enabled || !settings.Voice.SpeakReplies {
 		return nil
 	}
-	pending, err := s.voice.Worker(voice.RoleTTS).Submit(voice.Request{
+	pending, err := s.voice.Submit(voice.RoleTTS, voice.Request{
 		Type: voice.RequestSpeak,
 		Text: reply,
 	})
@@ -307,7 +405,6 @@ func (s *Server) enqueueSpeech(reply string) *voice.PendingRequest {
 		s.logger.Warn("TTS enqueue skipped", "error", err)
 		return nil
 	}
-	s.voice.Track(pending)
 	return pending
 }
 

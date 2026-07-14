@@ -30,7 +30,8 @@ const voiceHealthTimeout = 3 * time.Second
 const voiceModelLoadTimeout = 30 * time.Second
 
 const (
-	maxVoiceAudioBase64Bytes = 44 << 20
+	maxVoiceAudioBytes       = 32 << 20
+	maxVoiceAudioBase64Bytes = ((maxVoiceAudioBytes + 2) / 3) * 4
 	maxVoiceRequestBytes     = maxVoiceAudioBase64Bytes + 1024
 	managedNeuTTSSource      = "ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f"
 	managedNeuTTSRust        = "1.94.0-x86_64-pc-windows-msvc"
@@ -40,10 +41,13 @@ const (
 	managedNeuTTSCodecSHA    = "30c3ea13ceeb2de693c56e5e33a1b7e00d44c95dcdd08a4ed0d552d0bf59ebdf"
 )
 
-func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) *voice.Manager {
+func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) (*voice.Manager, error) {
 	manager := voice.NewManager()
+	if err := manager.PrepareTranscriptionStaging(dataDir); err != nil {
+		return nil, err
+	}
 	manager.Configure(voiceManagerConfig(settings, executablePath, dataDir))
-	return manager
+	return manager, nil
 }
 
 func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir string) voice.Config {
@@ -615,7 +619,7 @@ func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 		request.Text = body.Text
 	}
 
-	pending, err := worker.Submit(request)
+	pending, err := s.voice.Submit(worker.Status().Role, request)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":  err.Error(),
@@ -623,7 +627,6 @@ func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	s.voice.Track(pending)
 	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
 }
 
@@ -670,6 +673,10 @@ func (s *Server) handleVoiceRequestAudio(w http.ResponseWriter, r *http.Request)
 	pending, ok := s.voice.Request(r.PathValue("id"))
 	if !ok {
 		writeError(w, http.StatusNotFound, errors.New("unknown voice request"))
+		return
+	}
+	if pending.Snapshot().State != voice.RequestStateDone {
+		writeError(w, http.StatusConflict, errors.New("voice audio is not available for a canceled or incomplete request"))
 		return
 	}
 	audio, format := pending.Audio()
@@ -724,29 +731,65 @@ func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request
 	if !s.requireController(w, r) {
 		return
 	}
-	var body struct {
-		AudioB64    string `json:"audio_b64"`
-		AudioFormat string `json:"audio_format"`
+	stopSequence, err := s.requestStopSequence(r)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxVoiceRequestBytes)
-	if err := decodeVoiceTranscriptionJSON(r, &body); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+
+	var audio []byte
+	var format string
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]))
+	if strings.HasPrefix(contentType, "audio/") {
+		format = strings.TrimPrefix(contentType, "audio/")
+		r.Body = http.MaxBytesReader(w, r.Body, maxVoiceAudioBytes)
+		var err error
+		audio, err = io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
+				return
+			}
+			writeError(w, http.StatusBadRequest, fmt.Errorf("read recorded audio: %w", err))
+			return
+		}
+	} else {
+		var body struct {
+			AudioB64    string `json:"audio_b64"`
+			AudioFormat string `json:"audio_format"`
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxVoiceRequestBytes)
+		if err := decodeVoiceTranscriptionJSON(r, &body); err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
+				return
+			}
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if len(body.AudioB64) > maxVoiceAudioBase64Bytes {
 			writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
 			return
 		}
-		writeError(w, http.StatusBadRequest, err)
-		return
+		var err error
+		audio, err = base64.StdEncoding.DecodeString(body.AudioB64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, errors.New("recorded audio is not valid base64"))
+			return
+		}
+		if len(audio) > maxVoiceAudioBytes {
+			writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
+			return
+		}
+		format = strings.ToLower(strings.TrimSpace(body.AudioFormat))
 	}
-	if body.AudioB64 == "" {
+	if len(audio) == 0 {
 		writeError(w, http.StatusBadRequest, errors.New("recorded audio is required"))
 		return
 	}
-	if len(body.AudioB64) > maxVoiceAudioBase64Bytes {
-		writeError(w, http.StatusRequestEntityTooLarge, errors.New("recorded audio exceeds 32 MiB"))
-		return
-	}
-	format := strings.ToLower(strings.TrimSpace(body.AudioFormat))
 	switch format {
 	case "webm", "ogg", "wav":
 		// Supported by MediaRecorder or the silent worker test.
@@ -756,45 +799,45 @@ func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request
 	}
 	settings, _ := s.store.Snapshot()
 	if settings.Voice.ASRProvider == config.VoiceASRProviderParakeet {
-		if format != "wav" || !hasCanonicalASRWAV(body.AudioB64) {
+		if format != "wav" || !hasCanonicalASRWAV(audio) {
 			writeError(w, http.StatusBadRequest, errors.New("managed Parakeet requires a WAV recording; refresh the MagicHandy page and record again"))
 			return
 		}
 	}
-	pending, err := s.voice.Worker(voice.RoleASR).Submit(voice.Request{
-		Type: voice.RequestTranscribe, AudioB64: body.AudioB64, AudioFormat: format,
-	})
+	if s.stopSequence.Load() != stopSequence {
+		writeError(w, http.StatusConflict, errors.New("recorded audio was invalidated by Emergency Stop"))
+		return
+	}
+	pending, err := s.voice.SubmitTranscription(audio, format, s.voiceDataDir)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	s.voice.Track(pending)
+	if s.stopSequence.Load() != stopSequence {
+		s.voice.Worker(voice.RoleASR).Cancel(pending)
+		writeError(w, http.StatusConflict, errors.New("recorded audio was invalidated by Emergency Stop"))
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
 }
 
-func hasCanonicalASRWAV(encoded string) bool {
-	decodedSize, err := io.Copy(io.Discard, base64.NewDecoder(base64.StdEncoding, strings.NewReader(encoded)))
-	if err != nil || decodedSize <= 44 || (decodedSize-44)%2 != 0 || decodedSize > int64(^uint32(0)) {
+func hasCanonicalASRWAV(audio []byte) bool {
+	decodedSize := len(audio)
+	if decodedSize <= 44 || (decodedSize-44)%2 != 0 || uint64(decodedSize) > uint64(^uint32(0)) {
 		return false
 	}
-	prefixLength := min(len(encoded), 60)
-	prefixLength -= prefixLength % 4
-	header, err := base64.StdEncoding.DecodeString(encoded[:prefixLength])
-	if err != nil || len(header) < 44 {
-		return false
-	}
-	return string(header[0:4]) == "RIFF" &&
-		binary.LittleEndian.Uint32(header[4:8]) == uint32(decodedSize-8) &&
-		string(header[8:12]) == "WAVE" && string(header[12:16]) == "fmt " &&
-		binary.LittleEndian.Uint32(header[16:20]) == 16 &&
-		binary.LittleEndian.Uint16(header[20:22]) == 1 &&
-		binary.LittleEndian.Uint16(header[22:24]) == 1 &&
-		binary.LittleEndian.Uint32(header[24:28]) == 16000 &&
-		binary.LittleEndian.Uint32(header[28:32]) == 32000 &&
-		binary.LittleEndian.Uint16(header[32:34]) == 2 &&
-		binary.LittleEndian.Uint16(header[34:36]) == 16 &&
-		string(header[36:40]) == "data" &&
-		binary.LittleEndian.Uint32(header[40:44]) == uint32(decodedSize-44)
+	return string(audio[0:4]) == "RIFF" &&
+		binary.LittleEndian.Uint32(audio[4:8]) == uint32(decodedSize-8) &&
+		string(audio[8:12]) == "WAVE" && string(audio[12:16]) == "fmt " &&
+		binary.LittleEndian.Uint32(audio[16:20]) == 16 &&
+		binary.LittleEndian.Uint16(audio[20:22]) == 1 &&
+		binary.LittleEndian.Uint16(audio[22:24]) == 1 &&
+		binary.LittleEndian.Uint32(audio[24:28]) == 16000 &&
+		binary.LittleEndian.Uint32(audio[28:32]) == 32000 &&
+		binary.LittleEndian.Uint16(audio[32:34]) == 2 &&
+		binary.LittleEndian.Uint16(audio[34:36]) == 16 &&
+		string(audio[36:40]) == "data" &&
+		binary.LittleEndian.Uint32(audio[40:44]) == uint32(decodedSize-44)
 }
 
 func decodeVoiceTranscriptionJSON(r *http.Request, target any) error {

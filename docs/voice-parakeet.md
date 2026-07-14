@@ -98,17 +98,29 @@ directly.
   decode path without inserting spoken content into chat or motion.
 - A failed automatic load fails Start and stops the just-started adapter; the UI
   never treats a running but unloaded worker as microphone-ready.
-- Browser MediaRecorder output is decoded in the browser, downmixed, resampled
-  to 16 kHz, and encoded as PCM16 WAV before upload. The managed API rejects a
-  compressed payload or a fake WAV header instead of forwarding it to the
-  runner and surfacing its opaque HTTP 400.
+- Browser MediaRecorder output is decoded in the browser, then downmixed,
+  resampled to 16 kHz, and encoded as PCM16 WAV in one output-rate pass. The
+  raw-WAV HTTP upload avoids browser base64/JSON expansion. The core validates
+  the bytes and stages a private, process-session `audio_ref` that is removed on
+  completion, cancellation, failure, or clean shutdown; stale crashed sessions
+  older than the bounded request window are reaped at startup. The managed API
+  rejects a compressed payload or fake WAV header instead of forwarding it to
+  the runner and surfacing its opaque HTTP 400.
 
-Browser microphone capture and push-to-talk are implemented on localhost.
+Browser microphone capture is implemented on localhost. The Chat control
+defaults to bounded click-on/click-off hands-free capture and also offers
+hold-to-talk plus browser-local input selection. Once permission is granted,
+the stream and decoder remain visibly ready for up to 60 seconds so subsequent
+speech starts do not wait for cold device/DSP acquisition. This does not claim
+unattended always-on recording or silence-triggered segmentation.
 Recognized speech uses the same chat and motion safety path as typed chat; it
 never bypasses limits, smoothing, controller ownership, or Emergency Stop. The
-WebM/Opus-to-WAV mismatch from R24 is fixed in code and covered by WAV encoder
-and managed-boundary tests. A real Chrome/Edge plus pinned-model transcription
-smoke test remains release evidence rather than an unresolved format design.
+Stop path also discards browser capture, invalidates voice results, cancels
+in-flight chat, and fences stale request generations before dispatch. The WebM/Opus-to-WAV
+mismatch and repeated cold-start path from R24 are fixed in code and covered by
+capture-lifecycle, WAV encoder, and managed-boundary tests. A real Chrome/Edge
+plus pinned-model transcription smoke test remains release evidence rather than
+an unresolved format design.
 
 ## Validation
 

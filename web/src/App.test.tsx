@@ -13,6 +13,7 @@ const baseState = {
   version: "test",
   commit: "abc",
   uptime_seconds: 1,
+  stop_sequence: 7,
   settings: {
     version: 1,
     server: { port: 49717 },
@@ -814,7 +815,7 @@ describe("app shell safety invariants", () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    expect(screen.queryByRole("button", { name: /hold to talk/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /start hands-free voice/i })).toBeNull();
     expect(screen.queryByText(/speak replies/i)).toBeNull();
   });
 
@@ -826,7 +827,7 @@ describe("app shell safety invariants", () => {
     };
     installFetch({ state });
     renderApp();
-    const mic = await screen.findByRole("button", { name: /hold to talk/i });
+    const mic = await screen.findByRole("button", { name: /start hands-free voice/i });
     expect(mic).toBeDisabled();
     expect(mic.getAttribute("title")).toMatch(/settings/i);
   });
@@ -839,9 +840,49 @@ describe("app shell safety invariants", () => {
     };
     installFetch({ state });
     renderApp();
-    const mic = await screen.findByRole("button", { name: /hold to talk/i });
+    const mic = await screen.findByRole("button", { name: /start hands-free voice/i });
     expect(mic).toBeDisabled();
     expect(mic.getAttribute("title")).toMatch(/start and load/i);
+  });
+
+  it("places Send beside the composer and exposes voice mode and input controls", async () => {
+    const state = {
+      ...baseState,
+      settings: { ...baseState.settings, voice: { ...baseState.settings.voice, enabled: true, asr_provider: "parakeet_managed" } },
+      voice: { enabled: true, protocol_version: 1, workers: { asr: { role: "asr", state: "running", configured: true, model_state: "ready", worker_queue_depth: 0, queue_depth: 0 } } },
+    };
+    installFetch({ state });
+    renderApp();
+
+    const mic = await screen.findByRole("button", { name: /start hands-free voice/i });
+    const message = screen.getByLabelText("Message");
+    const send = screen.getByRole("button", { name: "Send" });
+    const row = message.closest(".chat-compose-row");
+    expect(row).toContainElement(mic.closest(".voice-input"));
+    expect(row).toContainElement(send);
+    expect(mic.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(message.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const menu = screen.getByRole("button", { name: /open voice input menu/i });
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Hold to talk" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hands-free" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("combobox", { name: "Voice input" })).toHaveValue("default");
+    fireEvent.click(screen.getByRole("button", { name: /close voice input menu/i }));
+    expect(screen.getByRole("button", { name: /open voice input menu/i })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("stamps typed chat with the current Emergency Stop sequence", async () => {
+    const fetch = installFetch();
+    renderApp();
+    const message = await screen.findByLabelText("Message");
+    fireEvent.change(message, { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes("/api/chat/stream"))).toBe(true));
+    const call = fetch.mock.calls.find(([url]) => String(url).includes("/api/chat/stream"));
+    expect(new Headers((call?.[1] as RequestInit).headers).get("X-MagicHandy-Stop-Sequence")).toBe("7");
   });
 
   it("keeps the speak-replies toggle hidden while voice workers are globally disabled", async () => {

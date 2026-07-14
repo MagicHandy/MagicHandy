@@ -1,20 +1,15 @@
 const ASR_SAMPLE_RATE = 16000;
 
-export async function recordingToWAV(recording: Blob): Promise<Blob> {
-  const context = new AudioContext();
+export async function recordingToWAV(recording: Blob, decoder?: AudioContext): Promise<Blob> {
+  const context = decoder ?? new AudioContext();
   try {
     const decoded = await context.decodeAudioData(await recording.arrayBuffer());
     const frameCount = Math.max(1, Math.ceil(decoded.duration * ASR_SAMPLE_RATE));
     const resampler = new OfflineAudioContext(1, frameCount, ASR_SAMPLE_RATE);
-    const mono = resampler.createBuffer(1, decoded.length, decoded.sampleRate);
-    const monoSamples = mono.getChannelData(0);
-    for (let frame = 0; frame < decoded.length; frame += 1) {
-      let sample = 0;
-      for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) sample += decoded.getChannelData(channel)[frame];
-      monoSamples[frame] = sample / decoded.numberOfChannels;
-    }
     const source = resampler.createBufferSource();
-    source.buffer = mono;
+    // Web Audio performs filtered sample-rate conversion and its standard
+    // channel downmix without a browser-rate JavaScript copy.
+    source.buffer = decoded;
     source.connect(resampler.destination);
     source.start();
     const rendered = await resampler.startRendering();
@@ -26,7 +21,7 @@ export async function recordingToWAV(recording: Blob): Promise<Blob> {
     const detail = error instanceof Error ? `: ${error.message}` : "";
     throw new Error(`The browser could not convert the microphone recording to WAV${detail}`);
   } finally {
-    await context.close().catch(() => undefined);
+    if (!decoder) await context.close().catch(() => undefined);
   }
 }
 

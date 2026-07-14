@@ -44,6 +44,7 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	stopSequence := s.stopSequence.Load()
 	var body struct {
 		Mode string `json:"mode"`
 	}
@@ -54,6 +55,14 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	status, err := s.modes.Start(r.Context(), body.Mode)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if s.stopSequence.Load() != stopSequence {
+		s.modes.NotifyUserStop()
+		if engine := s.currentMotionEngine(); engine != nil {
+			_, _ = engine.Stop(context.Background(), "mode_start_invalidated")
+		}
+		writeError(w, http.StatusConflict, errors.New("mode start was invalidated by Emergency Stop"))
 		return
 	}
 	writeJSON(w, http.StatusOK, status)
@@ -79,7 +88,8 @@ func (s *Server) handleModeStop(w http.ResponseWriter, r *http.Request) {
 			stopMotion = *body.StopMotion
 		}
 	}
-	s.modes.Stop("mode_stop_requested")
+	finishModeStop := s.modes.BeginUserStop()
+	defer finishModeStop()
 	if stopMotion {
 		if engine := s.currentMotionEngine(); engine != nil {
 			if _, err := engine.Stop(r.Context(), "mode_stopped"); err != nil {

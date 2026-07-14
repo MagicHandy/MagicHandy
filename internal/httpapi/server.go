@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 )
 
 const serviceName = "magichandy"
+const stopSequenceHeader = "X-MagicHandy-Stop-Sequence"
 
 // VersionInfo identifies the build served by the HTTP API.
 type VersionInfo struct {
@@ -70,6 +73,10 @@ type Server struct {
 	voiceExecutable        string
 	voiceDataDir           string
 	neuttsAdapterInstalled atomic.Bool
+	stopSequence           atomic.Uint64
+	chatCancelMu           sync.Mutex
+	chatCancels            map[uint64]context.CancelFunc
+	nextChatID             uint64
 	hostPathPicker         hostPathPicker
 	chatLog                *chat.MessageLog
 	patterns               *patterns.Library
@@ -148,10 +155,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.modes = manager
 
 	settings, _ := store.Snapshot()
-	server.voiceExecutable = runtime.ExecutablePath
-	server.voiceDataDir = store.DataDir()
-	server.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(settings.Voice.TTSWorkerPath, server.voiceExecutable, server.voiceDataDir, "voice-neutts-worker")))
-	server.voice = newVoiceManager(settings.Voice, server.voiceExecutable, server.voiceDataDir)
+	if err := server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir()); err != nil {
+		return nil, server.voiceSetupError(err)
+	}
 
 	chatLog, err := chat.OpenMessageLog(store.DataDir())
 	if err != nil {
@@ -177,6 +183,26 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.handler = logRequests(logger, mux)
 
 	return server, nil
+}
+
+func (s *Server) configureVoice(settings config.VoiceSettings, executablePath, dataDir string) error {
+	s.voiceExecutable = executablePath
+	s.voiceDataDir = dataDir
+	s.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")))
+	manager, err := newVoiceManager(settings, executablePath, dataDir)
+	if err != nil {
+		return err
+	}
+	s.voice = manager
+	return nil
+}
+
+func (s *Server) voiceSetupError(err error) error {
+	s.modes.Shutdown()
+	s.managedLLM.Close()
+	_ = s.models.Close()
+	s.personalization.Close()
+	return fmt.Errorf("prepare voice input: %w", err)
 }
 
 // Handler returns the HTTP handler for use by net/http servers and tests.
@@ -293,6 +319,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"version":        s.version.Version,
 		"commit":         s.version.Commit,
 		"uptime_seconds": int64(time.Since(s.started).Seconds()),
+		"stop_sequence":  s.stopSequence.Load(),
 		"ui":             "embedded",
 		"settings": map[string]any{
 			"source":         status.Source,
@@ -320,6 +347,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"version":        s.version.Version,
 		"commit":         s.version.Commit,
 		"uptime_seconds": int64(time.Since(s.started).Seconds()),
+		"stop_sequence":  s.stopSequence.Load(),
 		"data_dir":       status.DataDir,
 		"settings_path":  status.SettingsPath,
 		"datastore_path": status.DatastorePath,

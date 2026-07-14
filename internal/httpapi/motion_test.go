@@ -86,6 +86,28 @@ func TestMotionStopWithoutEngineStillAttemptsConfiguredTransport(t *testing.T) {
 	}
 }
 
+func TestMotionStopSequencePublishesRepeatedEmergencyStops(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/state", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("state status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var state struct {
+		StopSequence uint64 `json:"stop_sequence"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.StopSequence != 2 {
+		t.Fatalf("stop_sequence = %d, want 2", state.StopSequence)
+	}
+}
+
 func TestMotionStopWithoutReachableTransportReportsFailure(t *testing.T) {
 	server := newTestServerWithRuntime(t, Runtime{})
 	t.Cleanup(server.Close)

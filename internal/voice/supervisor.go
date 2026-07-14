@@ -361,13 +361,14 @@ func (s *Supervisor) waitForExit(command *exec.Cmd, workerConn *conn, exited cha
 	close(exited)
 }
 
-// newRequestID allocates a process-unique request ID.
+// newRequestID allocates a process-unique request ID. The role prefix keeps
+// IDs unique in the manager's shared TTS/ASR request namespace.
 func (s *Supervisor) newRequestID() string {
 	s.mu.Lock()
 	s.nextID++
 	id := s.nextID
 	s.mu.Unlock()
-	return strconv.FormatUint(id, 10)
+	return string(s.role) + "-" + strconv.FormatUint(id, 10)
 }
 
 // roundTrip sends one unary request and waits for its terminal response.

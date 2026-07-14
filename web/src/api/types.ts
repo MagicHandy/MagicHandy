@@ -591,6 +591,7 @@ export interface AppState {
   version?: string;
   commit?: string;
   uptime_seconds?: number;
+  stop_sequence?: number;
   data_dir?: string;
   datastore_path?: string;
   settings?: PublicSettings;

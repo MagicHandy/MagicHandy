@@ -128,6 +128,23 @@ func TestConcurrentStopDuringStartupDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestStopInvalidatesPreviouslyAdmittedStart(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(32), time.Hour)
+	admission := engine.AdmissionGeneration()
+	if _, err := engine.Stop(context.Background(), "admission_test"); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if _, err := engine.StartAtGeneration(context.Background(), testTarget(), config.DefaultSettings().Motion, admission); err == nil {
+		t.Fatal("a Start admitted before Stop was accepted after Stop")
+	}
+	for _, command := range fake.Commands() {
+		if command.Kind != transport.CommandKindStop {
+			t.Fatalf("invalidated Start issued command after Stop: %+v", command)
+		}
+	}
+}
+
 // recoveryTransport reports unhealthy playback on demand so the dispatch loop
 // triggers recovery from inside the loop goroutine.
 type recoveryTransport struct {

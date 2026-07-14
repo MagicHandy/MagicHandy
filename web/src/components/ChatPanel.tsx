@@ -8,12 +8,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api, streamChat } from "../api/client";
 import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
-import { MicrophoneIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
-import { playBlob } from "../util/audio";
-import { recordingToWAV } from "../util/recording";
-
-const RECORDING_LIMIT_SECONDS = 30;
+import { audioPlaybackToken, playBlob } from "../util/audio";
+import { VoiceComposerControls } from "./VoiceComposerControls";
 
 interface Msg {
   id: string;
@@ -47,16 +44,23 @@ export function ChatPanel() {
   const seeded = useRef(false);
   const speechQueue = useRef<string[]>([]);
   const speaking = useRef(false);
-  const recorder = useRef<MediaRecorder | null>(null);
-  const microphoneStream = useRef<MediaStream | null>(null);
-  const microphoneChunks = useRef<Blob[]>([]);
-  const wantsRecording = useRef(false);
-  const recordingTimer = useRef<number | null>(null);
-  const countdownTimer = useRef<number | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState(RECORDING_LIMIT_SECONDS);
-  const [transcribing, setTranscribing] = useState(false);
-  const mounted = useRef(true);
+  const speechAbort = useRef<AbortController | null>(null);
+  const speechGeneration = useRef(0);
+  const [voiceActive, setVoiceActive] = useState(false);
+
+  useEffect(() => {
+    const cancelSpeech = () => {
+      speechGeneration.current++;
+      speechQueue.current = [];
+      speechAbort.current?.abort();
+      speechAbort.current = null;
+    };
+    window.addEventListener("magichandy:emergency-stop", cancelSpeech);
+    return () => {
+      window.removeEventListener("magichandy:emergency-stop", cancelSpeech);
+      cancelSpeech();
+    };
+  }, []);
 
   // Seed the panel from the canonical server log once.
   useEffect(() => {
@@ -78,18 +82,6 @@ export function ChatPanel() {
     })();
     return () => {
       cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      wantsRecording.current = false;
-      if (recordingTimer.current !== null) window.clearTimeout(recordingTimer.current);
-      if (countdownTimer.current !== null) window.clearInterval(countdownTimer.current);
-      if (recorder.current?.state === "recording") recorder.current.stop();
-      microphoneStream.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -132,13 +124,20 @@ export function ChatPanel() {
       while (speechQueue.current.length) {
         const id = speechQueue.current.shift();
         if (!id) continue;
+        const generation = speechGeneration.current;
         const done = await waitForSpeechDone(id);
-        if (!done) continue;
+        if (!done || generation !== speechGeneration.current) continue;
         try {
-          const blob = await api.voiceRequestAudio(id);
-          await playBlob(blob);
+          const playbackToken = audioPlaybackToken();
+          const abort = new AbortController();
+          speechAbort.current = abort;
+          const blob = await api.voiceRequestAudio(id, abort.signal);
+          if (generation !== speechGeneration.current) continue;
+          await playBlob(blob, playbackToken);
         } catch {
           // Missing/denied audio is not a chat failure.
+        } finally {
+          speechAbort.current = null;
         }
       }
     } finally {
@@ -167,7 +166,7 @@ export function ChatPanel() {
     setShowJump(false);
   }
 
-  const locked = !backendOnline || readOnly;
+  const locked = !backendOnline || !state || readOnly;
 
   // Speech input shows only when it can work: voice on and an ASR provider
   // selected. A configured-but-stopped worker leaves the button disabled with
@@ -177,7 +176,7 @@ export function ChatPanel() {
   const asrWorker = state?.voice?.workers?.asr;
   const asrReady = asrWorker?.state === "running" && asrWorker.model_state === "ready";
 
-  async function sendText(input: string) {
+  async function sendText(input: string, stopSequence?: number) {
     const text = input.trim();
     if (!text || busyRef.current || locked) return;
     const assistantId = uid();
@@ -222,7 +221,7 @@ export function ChatPanel() {
         } else if (ev.event === "done" && ev.data.ok === false && !finalReply) {
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || "Malformed model response.", warning: true } : x)));
         }
-      });
+      }, undefined, stopSequence);
       if (finalReply) {
         const nextHistory: ChatHistoryMessage[] = [
           ...history.current,
@@ -247,92 +246,7 @@ export function ChatPanel() {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    await sendText(text);
-  }
-
-  async function startRecording() {
-    if (recording || transcribing || busyRef.current || locked) return;
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      show("Microphone capture requires localhost or HTTPS in a supported browser.", "error");
-      return;
-    }
-    wantsRecording.current = true;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!wantsRecording.current) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      microphoneStream.current = stream;
-      microphoneChunks.current = [];
-      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"].find((mime) => MediaRecorder.isTypeSupported(mime));
-      const nextRecorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
-      recorder.current = nextRecorder;
-      nextRecorder.ondataavailable = (event) => { if (event.data.size > 0) microphoneChunks.current.push(event.data); };
-      nextRecorder.onstop = () => void finishRecording(nextRecorder.mimeType || preferred || "audio/webm");
-      nextRecorder.start(250);
-      setRecording(true);
-      // The recording cap is visible: the button counts the seconds down.
-      setRecordingSecondsLeft(RECORDING_LIMIT_SECONDS);
-      const startedAt = Date.now();
-      countdownTimer.current = window.setInterval(() => {
-        const left = RECORDING_LIMIT_SECONDS - Math.floor((Date.now() - startedAt) / 1000);
-        setRecordingSecondsLeft(Math.max(0, left));
-      }, 1000);
-      recordingTimer.current = window.setTimeout(stopRecording, RECORDING_LIMIT_SECONDS * 1000);
-    } catch (error) {
-      wantsRecording.current = false;
-      show(error instanceof Error ? error.message : "Microphone permission was denied.", "error");
-    }
-  }
-
-  function stopRecording() {
-    wantsRecording.current = false;
-    if (recordingTimer.current !== null) {
-      window.clearTimeout(recordingTimer.current);
-      recordingTimer.current = null;
-    }
-    if (countdownTimer.current !== null) {
-      window.clearInterval(countdownTimer.current);
-      countdownTimer.current = null;
-    }
-    if (recorder.current?.state === "recording") {
-      // Lock out a second recording until this recorder's asynchronous stop
-      // event has submitted or discarded its audio.
-      setTranscribing(true);
-      recorder.current.stop();
-    }
-    setRecording(false);
-  }
-
-  async function finishRecording(mimeType: string) {
-    microphoneStream.current?.getTracks().forEach((track) => track.stop());
-    microphoneStream.current = null;
-    recorder.current = null;
-    const blob = new Blob(microphoneChunks.current, { type: mimeType });
-    microphoneChunks.current = [];
-    if (blob.size === 0 || !mounted.current) {
-      if (mounted.current) setTranscribing(false);
-      return;
-    }
-    setTranscribing(true);
-    try {
-      // MediaRecorder normally returns WebM/Opus in Chrome and Edge, while the
-      // managed Parakeet server accepts WAV bytes only. Decode in the browser so
-      // no native audio dependency enters the Go core.
-      const wav = await recordingToWAV(blob);
-      const submitted = await api.voiceTranscribe(await blobBase64(wav), "wav");
-      const transcript = await waitForTranscript(submitted.request.id);
-      if (!transcript) {
-        show("No speech was recognized.", "error");
-        return;
-      }
-      await sendText(transcript);
-    } catch (error) {
-      show(error instanceof Error ? error.message : "Transcription failed.", "error");
-    } finally {
-      setTranscribing(false);
-    }
+    await sendText(text, state?.stop_sequence);
   }
 
   return (
@@ -360,42 +274,37 @@ export function ChatPanel() {
           void send();
         }}
       >
-        <label className="visually-hidden" htmlFor="chat-input">Message</label>
-        <textarea
-          id="chat-input"
-          rows={2}
-          maxLength={1000}
-          value={draft}
-          disabled={locked || recording || transcribing}
-          placeholder={readOnly ? "Read-only client — this tab cannot drive motion." : "Message MagicHandy — chat can start, adjust, and stop motion"}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-        />
-        <div className="chat-actions">
+        <div className="chat-compose-row" data-has-voice={asrConfigured || undefined}>
           {asrConfigured && (
-            <button
-              type="button"
-              className="btn btn-secondary mic-button"
-              data-recording={recording || undefined}
-              disabled={locked || busy || transcribing || !asrReady}
-              aria-pressed={recording}
-              title={asrReady ? `Records up to ${RECORDING_LIMIT_SECONDS} seconds` : "Start and load the speech-input worker in Settings → Voice"}
-              onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); void startRecording(); }}
-              onPointerUp={(event) => { event.preventDefault(); stopRecording(); }}
-              onPointerCancel={stopRecording}
-              onKeyDown={(event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); void startRecording(); } }}
-              onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); stopRecording(); } }}
-            ><MicrophoneIcon />{recording ? `Listening ${recordingSecondsLeft}s` : transcribing ? "Transcribing" : "Hold to talk"}</button>
+            <VoiceComposerControls
+              disabled={locked || busy}
+              ready={asrReady}
+              unavailableTitle="Start and load the speech-input worker in Settings → Voice"
+              stopSequence={state?.stop_sequence}
+              onActivityChange={setVoiceActive}
+              onTranscript={sendText}
+              showError={(message) => show(message, "error")}
+            />
           )}
-          <button type="submit" className="btn btn-primary" disabled={locked || busy || recording || transcribing || !draft.trim()}>Send</button>
-          <span className="form-status">{busy ? "Streaming…" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
-          <span className="hint-inline" aria-hidden="true">Ctrl+Enter to send</span>
+          <label className="visually-hidden" htmlFor="chat-input">Message</label>
+          <textarea
+            id="chat-input"
+            rows={2}
+            maxLength={1000}
+            value={draft}
+            disabled={locked || voiceActive}
+            placeholder={readOnly ? "Read-only client — this tab cannot drive motion." : "Message MagicHandy — chat can start, adjust, and stop motion"}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+          />
+          <button type="submit" className="btn btn-primary chat-send" disabled={locked || busy || voiceActive || !draft.trim()}>Send</button>
         </div>
+        <span className="visually-hidden" role="status">{busy ? "Streaming" : voiceActive ? "Voice input active" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
       </form>
     </div>
   );
@@ -417,36 +326,6 @@ async function waitForSpeechDone(requestId: string): Promise<boolean> {
     if (Date.now() > deadline) return false;
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
-}
-
-async function waitForTranscript(requestId: string): Promise<string> {
-  const deadline = Date.now() + 90000;
-  for (;;) {
-    const res = await api.voiceRequest(requestId);
-    const request = res.request;
-    if (request?.state === "done") return request.transcript?.[0]?.text?.trim() ?? "";
-    if (request?.state === "failed") throw new Error(request.error?.message || "Transcription failed.");
-    if (request?.state === "canceled") return "";
-    if (Date.now() > deadline) {
-      await api.voiceRequestCancel(requestId).catch(() => undefined);
-      throw new Error("Transcription timed out.");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-}
-
-function blobBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read recorded audio."));
-    reader.onload = () => {
-      const value = String(reader.result ?? "");
-      const comma = value.indexOf(",");
-      if (comma < 0) reject(new Error("Recorded audio could not be encoded."));
-      else resolve(value.slice(comma + 1));
-    };
-    reader.readAsDataURL(blob);
-  });
 }
 
 function extractReplyDraft(raw: string): string {

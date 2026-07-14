@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
 func TestResolveWorkerBinaryOrder(t *testing.T) {
@@ -406,12 +407,12 @@ func TestVoiceManagerConfigPreservesCustomAndDisablesNone(t *testing.T) {
 
 func TestSilentTestWAVBase64ProducesValidPCMSilence(t *testing.T) {
 	encoded := silentTestWAVBase64()
-	if !hasCanonicalASRWAV(encoded) {
-		t.Fatal("canonical managed-ASR validator rejected the generated WAV")
-	}
 	audio, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		t.Fatalf("decode test WAV: %v", err)
+	}
+	if !hasCanonicalASRWAV(audio) {
+		t.Fatal("canonical managed-ASR validator rejected the generated WAV")
 	}
 	if len(audio) < 44 || string(audio[0:4]) != "RIFF" || string(audio[8:12]) != "WAVE" || string(audio[12:16]) != "fmt " || string(audio[36:40]) != "data" {
 		t.Fatalf("test payload is not a canonical WAV header")
@@ -651,22 +652,121 @@ func TestVoiceTranscriptionUsesASRQueueAndReturnsTranscript(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &accepted); err != nil {
 		t.Fatal(err)
 	}
+	if !strings.HasPrefix(accepted.Request.ID, "asr-") {
+		t.Fatalf("ASR request ID = %q, want role-prefixed ID", accepted.Request.ID)
+	}
 
+	snapshot := waitForVoiceRequestDone(t, server, accepted.Request.ID)
+	if len(snapshot.Transcript) != 1 || snapshot.Transcript[0].Text != "stub transcript" {
+		t.Fatalf("transcript = %+v", snapshot)
+	}
+
+	raw := httptest.NewRequest(http.MethodPost, "/api/voice/transcriptions", strings.NewReader("browser-audio"))
+	raw.Header.Set("Content-Type", "audio/webm")
+	rawRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rawRecorder, withController(raw))
+	if rawRecorder.Code != http.StatusAccepted {
+		t.Fatalf("raw audio transcribe = %d: %s", rawRecorder.Code, rawRecorder.Body.String())
+	}
+	var rawAccepted struct {
+		Request struct {
+			ID string `json:"id"`
+		} `json:"request"`
+	}
+	if err := json.Unmarshal(rawRecorder.Body.Bytes(), &rawAccepted); err != nil {
+		t.Fatal(err)
+	}
+	waitForVoiceRequestDone(t, server, rawAccepted.Request.ID)
+	entries, err := os.ReadDir(filepath.Join(server.voiceDataDir, "voice", "inputs"))
+	if err != nil {
+		t.Fatalf("read staged voice inputs: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			t.Fatalf("unexpected file in voice input root: %s", entry.Name())
+		}
+		files, err := os.ReadDir(filepath.Join(server.voiceDataDir, "voice", "inputs", entry.Name()))
+		if err != nil {
+			t.Fatalf("read voice input session: %v", err)
+		}
+		if len(files) != 0 {
+			t.Fatalf("completed transcription retained staged audio: %+v", files)
+		}
+	}
+}
+
+func TestVoiceTranscriptionRejectsStaleStopSequence(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/transcriptions", strings.NewReader("audio")))
+	request.Header.Set("Content-Type", "audio/webm")
+	request.Header.Set(stopSequenceHeader, "0")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict || !strings.Contains(recorder.Body.String(), "invalidated") {
+		t.Fatalf("stale transcription = %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestEmergencyStopInvalidatesTrackedTTSAudio(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.Enabled = true
+		settings.Voice.TTSProvider = config.VoiceProviderCustom
+		settings.Voice.TTSWorkerPath = chatStubBinary(t)
+		settings.Voice.TTSWorkerArgs = []string{"-role", "tts", "-start-loaded"}
+		return settings
+	})
+	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
+	start := httptest.NewRecorder()
+	server.Handler().ServeHTTP(start, withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/tts/start", nil)))
+	if start.Code != http.StatusOK {
+		t.Fatalf("start TTS = %d: %s", start.Code, start.Body.String())
+	}
+
+	testRequest := withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/tts/test", strings.NewReader(`{"text":"hello","delay_ms":0}`)))
+	testRequest.Header.Set("Content-Type", "application/json")
+	testRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(testRecorder, testRequest)
+	if testRecorder.Code != http.StatusAccepted {
+		t.Fatalf("TTS test = %d: %s", testRecorder.Code, testRecorder.Body.String())
+	}
+	var accepted struct {
+		Request struct {
+			ID string `json:"id"`
+		} `json:"request"`
+	}
+	if err := json.Unmarshal(testRecorder.Body.Bytes(), &accepted); err != nil {
+		t.Fatal(err)
+	}
+	waitForVoiceRequestDone(t, server, accepted.Request.ID)
+
+	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+	audioRecorder := httptest.NewRecorder()
+	audioRequest := withController(httptest.NewRequest(http.MethodGet, "/api/voice/requests/"+accepted.Request.ID+"/audio", nil))
+	server.Handler().ServeHTTP(audioRecorder, audioRequest)
+	if audioRecorder.Code != http.StatusConflict {
+		t.Fatalf("canceled TTS audio status = %d, want conflict: %s", audioRecorder.Code, audioRecorder.Body.String())
+	}
+}
+
+func waitForVoiceRequestDone(t *testing.T, server *Server, id string) voice.RequestSnapshot {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		pending, ok := server.voice.Request(accepted.Request.ID)
+		pending, ok := server.voice.Request(id)
 		if !ok {
-			t.Fatal("accepted request was not tracked")
+			t.Fatalf("voice request %q was not tracked", id)
 		}
 		snapshot := pending.Snapshot()
-		if snapshot.State == "done" {
-			if len(snapshot.Transcript) != 1 || snapshot.Transcript[0].Text != "stub transcript" {
-				t.Fatalf("transcript = %+v", snapshot)
-			}
-			break
+		if snapshot.State == voice.RequestStateDone {
+			return snapshot
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("transcription did not finish: %+v", snapshot)
+			t.Fatalf("voice request %q did not finish: %+v", id, snapshot)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

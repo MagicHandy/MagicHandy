@@ -22,7 +22,8 @@ model-free implementation).
   the core captures a bounded tail and shows it on crash.
 - A frame must stay under 1 MiB. Real providers pass audio by reference
   (`audio_ref`), not inline base64; inline `audio_b64` exists for stubs and
-  tests.
+  tests. Browser audio references point into a private process-session staging
+  directory and are removed on every terminal path and core shutdown.
 - Workers must ignore unknown JSON fields (forward compatibility). Version
   compatibility is decided once, at hello — never silently degraded.
 - Logging on both sides excludes secrets and raw audio payloads.
@@ -40,8 +41,10 @@ model-free implementation).
 
 ## Requests (core → worker)
 
-Every request carries a `type` and a core-assigned `id`; responses echo it as
-`request_id`.
+Every request carries a `type` and a core-assigned, role-prefixed ID (for
+example, `asr-3` or `tts-3`); responses echo it as `request_id`. The prefix keeps
+the shared API request namespace collision-free while IDs remain opaque to
+workers.
 
 | `type` | Fields | Purpose |
 | --- | --- | --- |

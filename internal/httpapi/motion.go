@@ -11,6 +11,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
 var errMotionUnavailable = errors.New("motion engine is unavailable for the configured transport")
@@ -115,6 +116,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	stopSequence := s.stopSequence.Load()
 
 	var body motionRequest
 	if r.ContentLength != 0 {
@@ -129,7 +131,12 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	state, err := engine.Start(r.Context(), body.target(), settings.Motion)
+	admission := engine.AdmissionGeneration()
+	if s.stopSequence.Load() != stopSequence {
+		writeError(w, http.StatusConflict, errors.New("motion start was invalidated by Emergency Stop"))
+		return
+	}
+	state, err := engine.StartAtGeneration(r.Context(), body.target(), settings.Motion, admission)
 	s.writeMotionResult(w, state, err)
 }
 
@@ -212,11 +219,23 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
-	// An explicit user stop always ends autonomous modes first, so no
-	// keepalive or planner can restart motion the user just stopped.
+	// Publish every emergency-stop activation, including repeated idle stops,
+	// so browser-owned capture can discard pending speech in every client.
+	s.stopSequence.Add(1)
+	s.cancelActiveChats()
+	pendingASR := s.voice.InvalidateAll(voice.RoleASR)
+	pendingTTS := s.voice.InvalidateAll(voice.RoleTTS)
+	defer func() {
+		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
+		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
+	}()
+	// Mark autonomous modes stopped before touching the engine, but drain their
+	// goroutine only after Engine.Stop has canceled any blocked mode startup.
+	finishModeStop := func() {}
 	if s.modes != nil {
-		s.modes.NotifyUserStop()
+		finishModeStop = s.modes.BeginUserStop()
 	}
+	defer finishModeStop()
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		s.stopSelectedTransportWithoutEngine(w, r)

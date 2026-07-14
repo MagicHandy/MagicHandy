@@ -58,6 +58,7 @@ type Engine struct {
 	pausedTarget     MotionTarget
 	runMillisAccum   int64
 	generation       uint64
+	stopGeneration   uint64
 	streamID         string
 	plan             MotionPlan
 	settings         config.MotionSettings
@@ -118,6 +119,19 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 
 // Start begins continuous motion against the configured transport.
 func (e *Engine) Start(ctx context.Context, target MotionTarget, settings config.MotionSettings) (ActiveMotionState, error) {
+	return e.StartAtGeneration(ctx, target, settings, e.AdmissionGeneration())
+}
+
+// AdmissionGeneration snapshots the Stop epoch used to reject work admitted
+// before a concurrent Emergency Stop.
+func (e *Engine) AdmissionGeneration() uint64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.stopGeneration
+}
+
+// StartAtGeneration starts only when no Stop has occurred since admission.
+func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, settings config.MotionSettings, admission uint64) (ActiveMotionState, error) {
 	// Create the loop cancel handle up front and publish it atomically with
 	// running=true (in begin). The startup transport commands also run on
 	// loopCtx, so a concurrent Stop/Pause cancels not just the future loop but
@@ -126,7 +140,7 @@ func (e *Engine) Start(ctx context.Context, target MotionTarget, settings config
 	// starting motion the user just stopped. The loop must outlive the request,
 	// so loopCtx drops the request's cancellation while keeping its values.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	if err := e.begin(target, settings, cancel); err != nil {
+	if err := e.begin(ctx, target, settings, cancel, admission); err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
@@ -306,6 +320,9 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 	if reason == "" {
 		reason = "stop"
 	}
+	e.mu.Lock()
+	e.stopGeneration++
+	e.mu.Unlock()
 	cancel, done, active := e.stopLoop()
 	if !active {
 		e.mu.Lock()
@@ -339,9 +356,15 @@ func (e *Engine) Snapshot() ActiveMotionState {
 	return e.snapshotLocked()
 }
 
-func (e *Engine) begin(target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc) error {
+func (e *Engine) begin(ctx context.Context, target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc, admission uint64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if e.stopGeneration != admission {
+		return errors.New("motion start was invalidated by Stop")
+	}
 	if e.running || e.completing {
 		return errors.New("motion is already running")
 	}

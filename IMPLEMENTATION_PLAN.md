@@ -787,21 +787,33 @@ Status: **complete**.
 - Setup and the exact capability boundary are documented in
   [docs/neutts-worker.md](docs/neutts-worker.md).
 
-### Slice 13.7: Push-To-Talk Voice Input
+### Slice 13.7: Browser Voice Input
 
 Status: **complete** for the supported localhost browser path.
 
-- Press-and-hold browser recording captures the best browser format, then
-  decodes, downmixes, and resamples it into 16 kHz PCM WAV for the core ASR
-  queue. The accepted transcript calls the
+- The Chat microphone defaults to bounded click-on/click-off hands-free capture;
+  its adjacent disclosure also offers hold-to-talk and a browser audio-input
+  selector. The browser stream and decoder stay visibly warm for up to 60
+  seconds after use, avoiding repeated device/DSP startup that clipped the
+  beginning of speech. This is not unattended always-on/VAD capture.
+- Browser recording captures the best available format, then decodes,
+  downmixes, resamples, and encodes it into 16 kHz PCM WAV in one output-rate
+  pass. The browser uploads raw WAV; the pure-Go HTTP edge validates it and
+  hands the worker a private, short-lived `audio_ref` instead of a multi-megabyte
+  base64 NDJSON frame. The accepted transcript calls the
   same chat send function as typed text, preserving every motion limit,
   smoothing rule, controller lease, and Stop behavior.
 - Recording is bounded to 30 seconds; transcription has a visible busy state,
   queue status remains in Settings, and timeout cancels the worker request.
+  Emergency Stop discards capture and pending transcription immediately; a
+  backend stop sequence carries the same cancellation signal to other clients,
+  invalidates ASR/TTS results and playback, cancels in-flight LLM work, and
+  combines request stamps with an engine Stop-admission generation so stale
+  voice, typed-chat, manual, library, and mode starts cannot dispatch afterward.
 - `http://localhost` is the supported microphone origin. LAN/mobile use is not
   promised until Phase 16 provides an HTTPS and certificate design.
-- Always-on/hands-free recording remains out of scope until push-to-talk has
-  enough real-microphone reliability evidence.
+- Unattended always-on recording, silence-triggered segmentation, and VAD
+  calibration remain out of scope pending real-microphone reliability evidence.
 
 ### Slice 13.8: Voice UX Hardening
 
@@ -862,7 +874,7 @@ mobile voice (see risk R18).
 Provider-specific tests plus the standard suite. The managed path still requires
 manual checks with a real microphone: missing dependency reported clearly,
 provider loads, cancellation works, queue depth is visible, the app survives
-provider failure, and push-to-talk works with default settings without touching
+   provider failure, and both click-on and hold-to-talk work with default settings without touching
 advanced knobs.
 
 ## Done Criteria
@@ -875,7 +887,7 @@ advanced knobs.
 ## Out Of Scope
 
 - optional Python workers (Chatterbox, CosyVoice) — the protocol door stays open
-- always-on voice before push-to-talk reliability is proven
+- unattended always-on/VAD voice before bounded browser capture is proven
 
 # Phase 14: Pattern Library, Programs, And Authoring
 

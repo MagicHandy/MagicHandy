@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { useToast } from "../state/app-state";
-import { playBlob } from "../util/audio";
+import { audioPlaybackToken, playBlob } from "../util/audio";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
@@ -113,7 +113,8 @@ export function VoiceWorkers({
         const state = poll.request?.state;
         if (state === "done") {
           if (role === "tts" && (poll.request?.audio_bytes ?? 0) > 0) {
-            await playBlob(await api.voiceRequestAudio(id)).catch(() => undefined);
+            const token = audioPlaybackToken();
+            await playBlob(await api.voiceRequestAudio(id), token).catch(() => undefined);
           }
           break;
         }

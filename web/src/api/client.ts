@@ -78,6 +78,37 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return parsed as T;
 }
 
+async function uploadVoiceTranscription(audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal): Promise<{ request: VoiceRequestSnapshot }> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": `audio/${format}`,
+    [CLIENT_HEADER]: clientId,
+  };
+  if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
+  const res = await fetch("/api/voice/transcriptions", {
+    method: "POST",
+    headers,
+    body: audio,
+    signal,
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
+  if (!res.ok) {
+    const message = parsed && typeof parsed === "object" && "error" in parsed
+      ? String((parsed as { error: unknown }).error)
+      : `Transcription upload failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed as { request: VoiceRequestSnapshot };
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly body: unknown) {
     super(message);
@@ -235,14 +266,14 @@ export const api = {
     request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`),
   voiceRequestCancel: (id: string) =>
     request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/cancel`),
-  voiceTranscribe: (audio_b64: string, audio_format: string) =>
-    request<{ request: VoiceRequestSnapshot }>("POST", "/api/voice/transcriptions", { audio_b64, audio_format }),
+  voiceTranscribe: (audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal) => uploadVoiceTranscription(audio, format, stopSequence, signal),
   saveVoicePreferences: (speak_replies: boolean) =>
     request<{ speak_replies: boolean }>("PUT", "/api/voice/preferences", { speak_replies }),
   // Lease-gated audio: only the active controller may fetch a clip.
-  voiceRequestAudio: async (id: string): Promise<Blob> => {
+  voiceRequestAudio: async (id: string, signal?: AbortSignal): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {
       headers: { [CLIENT_HEADER]: clientId },
+      signal,
     });
     if (!res.ok) throw new ApiError(`Audio fetch failed (${res.status})`, res.status, null);
     return res.blob();
@@ -299,10 +330,13 @@ export async function streamChat(
   history: ChatHistoryMessage[],
   onEvent: (e: ChatStreamEvent) => void,
   signal?: AbortSignal,
+  stopSequence?: number,
 ): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", [CLIENT_HEADER]: clientId };
+  if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/chat/stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json", [CLIENT_HEADER]: clientId },
+    headers,
     body: JSON.stringify({ message, history }),
     signal,
   });

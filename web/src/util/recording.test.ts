@@ -27,48 +27,65 @@ describe("encodePCM16WAV", () => {
     expect(() => encodePCM16WAV([], 48000)).toThrow(/no samples/i);
   });
 
-  it("decodes, downmixes, and delegates browser-rate conversion to OfflineAudioContext", async () => {
+  it("delegates filtered browser-rate conversion and downmixing to Web Audio", async () => {
     const close = vi.fn(async () => undefined);
-    const channels = [new Float32Array([1, 0, -1]), new Float32Array([0, 0, 1])];
+    const decoded = {
+      numberOfChannels: 2,
+      length: 6,
+      duration: 6 / 48000,
+      sampleRate: 48000,
+      getChannelData: () => new Float32Array(6),
+    };
     class FakeAudioContext {
       close = close;
       async decodeAudioData() {
-        return {
-          numberOfChannels: 2,
-          length: 3,
-          duration: 3 / 48000,
-          sampleRate: 48000,
-          getChannelData: (channel: number) => channels[channel],
-        };
+        return decoded;
       }
     }
-    let monoSamples = new Float32Array();
+    const source = { buffer: null as typeof decoded | null, connect: vi.fn(), start: vi.fn() };
     class FakeOfflineAudioContext {
       destination = {};
-      constructor(channelsCount: number, frameCount: number, sampleRate: number) {
-        expect([channelsCount, frameCount, sampleRate]).toEqual([1, 1, 16000]);
+      constructor(channels: number, frames: number, sampleRate: number) {
+        expect([channels, frames, sampleRate]).toEqual([1, 2, 16000]);
       }
-      createBuffer(_channels: number, length: number, sampleRate: number) {
-        expect([length, sampleRate]).toEqual([3, 48000]);
-        monoSamples = new Float32Array(length);
-        return { getChannelData: () => monoSamples };
-      }
-      createBufferSource() {
-        return { buffer: null, connect: vi.fn(), start: vi.fn() };
-      }
+      createBufferSource() { return source; }
       async startRendering() {
-        return { getChannelData: () => new Float32Array([0.25]) };
+        return { getChannelData: () => new Float32Array([0.25, -0.25]) };
       }
     }
     vi.stubGlobal("AudioContext", FakeAudioContext);
     vi.stubGlobal("OfflineAudioContext", FakeOfflineAudioContext);
 
-    const recording = { arrayBuffer: async () => new ArrayBuffer(3) } as Blob;
+    const recording = { arrayBuffer: async () => new ArrayBuffer(6) } as Blob;
     const wav = await recordingToWAV(recording);
-    expect(Array.from(monoSamples)).toEqual([0.5, 0, 0]);
+    expect(source.buffer).toBe(decoded);
+    expect(source.connect).toHaveBeenCalledOnce();
+    expect(source.start).toHaveBeenCalledOnce();
     expect(wav.type).toBe("audio/wav");
-    expect(wav.size).toBe(46);
+    expect(wav.size).toBe(48);
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("reuses a warmed decoder without closing it", async () => {
+    const close = vi.fn(async () => undefined);
+    const decoder = {
+      close,
+      decodeAudioData: async () => ({
+        duration: 1 / 16000,
+        numberOfChannels: 1,
+        sampleRate: 16000,
+        getChannelData: () => new Float32Array([0]),
+      }),
+    } as unknown as AudioContext;
+    class FakeOfflineAudioContext {
+      destination = {};
+      createBufferSource() { return { buffer: null, connect: vi.fn(), start: vi.fn() }; }
+      async startRendering() { return { getChannelData: () => new Float32Array([0]) }; }
+    }
+    vi.stubGlobal("OfflineAudioContext", FakeOfflineAudioContext);
+
+    await recordingToWAV({ arrayBuffer: async () => new ArrayBuffer(1) } as Blob, decoder);
+    expect(close).not.toHaveBeenCalled();
   });
 
   it("closes the decoder when browser audio decoding fails", async () => {

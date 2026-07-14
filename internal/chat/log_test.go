@@ -51,6 +51,13 @@ func TestMessageLogAppendAndReadAfter(t *testing.T) {
 	if err != nil || latest != second {
 		t.Fatalf("LatestSeq = %d, %v; want %d", latest, err, second)
 	}
+	if err := log.Delete(second); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	tail, err = log.After(first, 0)
+	if err != nil || len(tail) != 0 {
+		t.Fatalf("deleted message remains visible: %+v, %v", tail, err)
+	}
 }
 
 func TestMessageLogRejectsEmptyAndBadRoles(t *testing.T) {
