@@ -2,7 +2,7 @@
 
 ## Status
 
-Active, 2026-07-08. This plan describes combining **MagicHandy** and
+Active, updated 2026-07-14. This plan describes combining **MagicHandy** and
 **LSO (Local Stroke Orchestrator)** into one project. It is a living document;
 the open decisions in the last section are tracked in
 [lso-merge-alternatives.md](lso-merge-alternatives.md) and become ADRs as they
@@ -14,10 +14,11 @@ The two projects are converging on the same goal — a local-first, LLM-driven
 controller for The Handy — from different starting points:
 
 - **MagicHandy** is the Go-first core established in this repo: a pure-Go
-  (`CGO_ENABLED=0`) backend, a semantic motion engine with an HSP transport
-  contract (Cloud REST + Browser Bluetooth), SQLite persistence, and a React
-  UI built at build time and embedded in the binary. Its guiding constraints are
-  efficiency (low RAM/CPU, small binary) and maintainability.
+  (`CGO_ENABLED=0`) backend, a semantic motion engine with a transport-neutral
+  frame (Cloud REST, Browser Bluetooth, and Intiface owners), SQLite persistence,
+  a pattern/program library, and a React UI built at build time and embedded in
+  the binary. Its guiding constraints are efficiency (low RAM/CPU, small binary)
+  and maintainability.
 - **LSO** brings a broader feature set from its Python/TypeScript heritage:
   Intiface/Buttplug device support, a motion "block" library and player,
   personas, a richer component-driven UI, and multi-language localization.
@@ -167,8 +168,8 @@ relevant to a large merge:
   duplicated large binaries; exactly one shipped UI `dist`.
 - Split oversized files rather than raising their budgets by default.
 - Re-measure RSS and binary size as the surface grows, and record it.
-- Preserve the safety gate and the single-motion-path rule as new sources and a
-  new transport arrive.
+- Preserve the safety gate and the single-motion-path rule as new sources arrive
+  and the implemented Intiface owner evolves.
 
 ## Open decisions
 
@@ -176,14 +177,17 @@ The merge has several genuinely valid shapes. These are the decisions to make
 deliberately — early, so they are chosen rather than defaulted-into by whichever
 branch merged first — and each should end as an ADR:
 
-1. Canonical frontend and how the other is retired/folded in.
-2. Intiface/Buttplug transport scope (first-class vs opt-in) and HSP-only-scope
-   reconciliation.
-3. Personalization model: personas vs prompt sets + memory (merge vs keep both).
-4. Motion-content field mapping into the Phase 14 Pattern/Program library and
-   Phase 11 arrangement contract (the shared engine target is settled).
-5. Repository/integration shape (single merged repo vs shared-backend split).
-6. Localization pipeline and translation source of truth.
+- **Decision 1:** canonical frontend and how the other is retired/folded in.
+- **Decision 3:** personalization model: personas vs prompt sets + memory.
+- **Decision 4:** motion-content field mapping into the Phase 14
+  Pattern/Program library and Phase 11 arrangement contract (the shared engine
+  target is settled).
+- **Decision 5:** repository/integration shape (single merged repo vs
+  shared-backend split).
+- **Decision 6:** localization pipeline and translation source of truth.
+
+The former Intiface/Buttplug scope decision is closed: ADR 0010 selected and
+Phase 14B implemented a first-class dispatch owner for one linear actuator.
 
 Each is laid out with trade-offs and a recommended default in
 [lso-merge-alternatives.md](lso-merge-alternatives.md).

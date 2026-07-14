@@ -1,10 +1,11 @@
 # MagicHandy
 
 **MagicHandy is a free, open-source, local-first app that lets a local AI
-control your [Handy](https://www.thehandy.com/).** You chat with an assistant,
-or let it take over, and it moves your device in real time. Conversations,
-settings, and credentials are stored locally. Browser Bluetooth and local
-LLM/voice providers can keep processing on your machine; the optional Handy
+control your [Handy](https://www.thehandy.com/).** You chat with an assistant to
+drive motion, or use Freestyle for autonomous non-LLM motion; LLM-driven
+Autopilot is planned. Conversations, settings, and credentials are stored
+locally. Browser Bluetooth and local LLM/voice providers can keep processing on
+your machine; the optional Handy
 Cloud and ElevenLabs providers send the data required by those selected
 services. MagicHandy itself has no account or tracking.
 
@@ -30,7 +31,11 @@ services. MagicHandy itself has no account or tracking.
 
 ## Requirements
 
-- A **Handy** with firmware v4 and API v3 access.
+- For Handy Cloud REST or Browser Bluetooth: a **Handy** with firmware v4 and
+  API v3 access.
+- For Intiface: a user-run Intiface Central server and one supported
+  `LinearCmd` actuator. The Handy path is validated; non-Handy linear-device
+  hardware acceptance remains open.
 - **Windows** is the primary platform today; Linux and macOS builds are
   best-effort.
 - A **local LLM** for chat. MagicHandy can build and own a pinned

@@ -2,18 +2,19 @@
 
 ## Status
 
-Accepted and implemented in Phase 14B. Matched live Handy runs validate the
-Intiface and Cloud REST transport/trace paths; subjective feel confirmation
-remains open. Revises the dispatch-owner scope of ADR 0006; everything ADR
-0006 dropped stays dropped.
+Accepted and implemented in Phase 14B. Matched live Handy runs validated the
+pre-asynchronous-ACK Intiface and Cloud REST transport/trace paths. The deadline-driven
+asynchronous-ACK pacer added in PR #67 still needs a matched `motion_trace.v3`
+hardware run and subjective feel confirmation. Revises the dispatch-owner scope
+of ADR 0006; everything ADR 0006 dropped stays dropped.
 
 ## Context
 
 Intiface Central (buttplug.io) is the de-facto open device layer: it owns the
 radios and drivers for a wide range of devices and exposes them to
 applications over a local websocket speaking the Buttplug protocol (spec v3).
-Supporting it broadens MagicHandy beyond the Handy to the whole
-Buttplug-compatible ecosystem, and it is a defining capability of the LSO
+Supporting it broadens MagicHandy beyond the Handy to the linear-actuator subset
+of the Buttplug-compatible ecosystem, and it is a defining capability of the LSO
 codebase the project intends to merge with
 (`docs/lso-merge-alternatives.md`, Decision 2).
 
@@ -26,14 +27,14 @@ the Handy v3 API?**
 
 ## Evaluation
 
-What the schema already guarantees (verified against the code at `main`
+What the schema guaranteed at decision time (verified against `main` commit
 581e5833):
 
 - **One engine, one frame.** Every motion source (chat, Freestyle, patterns,
   funscript programs) flows through the shared sampler into
   `transport.TimedPoint{position_percent, time_ms}` chunks
-  (`internal/motion/dispatch.go`), plus three control commands:
-  `SetStrokeWindow`, `AppendPoints`, `Play`, and `Stop`
+  (`internal/motion/dispatch.go`), plus four transport methods then named
+  `SetStrokeWindow`, `AddHSP`, `PlayHSP`, and `Stop`
   (`internal/transport/types.go`). ADR
   0002 keeps intent semantic and pushes stroke window and reverse direction
   to the transport boundary; the engine emits the semantic 0–100 relative
@@ -71,19 +72,19 @@ stroke-window/play/stop control commands remain the canonical
 transport-neutral frame. An Intiface owner fits behind the existing
 `transport.Transport` interface without changing its shape.
 
-**2. Two modest schema modifications land with Phase 14B:**
+**2. Two modest schema modifications landed with Phase 14B:**
 
-- **Neutral naming.** The interface and command kinds currently say HSP
-  (`AddHSP`, `PlayHSP`, `CommandKindHSPAdd`, …), which wrongly implies the
-  frame itself is Handy-specific. Rename to transport-neutral terms
+- **Neutral naming.** The interface and command kinds said HSP (`AddHSP`,
+  `PlayHSP`, `CommandKindHSPAdd`, …), which wrongly implied the frame itself was
+  Handy-specific. Phase 14B renamed them to transport-neutral terms
   (`AppendPoints`, `Play`; kinds `points_add`, `points_play`) with a
   diagnostics/trace naming migration. HSP remains the name of the *Handy
   encoding* of the frame, applied inside the two Handy owners.
 - **Float positions.** `MotionSample.PositionPercent` and
-  `TimedPoint.PositionPercent` widen from `int` to `float64`. Pattern
-  content and PCHIP sampling are already `float64`
-  (`internal/motion/content.go`); today `plan.go` rounds to whole percent at
-  the sample boundary. The Handy cannot resolve finer than ~1%, but
+  `TimedPoint.PositionPercent` widened from `int` to `float64`. Pattern content
+  and PCHIP sampling were already `float64` (`internal/motion/content.go`); the
+  old sample boundary rounded to whole percent. The Handy cannot resolve finer
+  than ~1%, but
   Buttplug-side actuators (OSR/SR6-class hardware takes 0.01%-resolution
   TCode) can, and slow shallow strokes visibly stair-step at 1% steps. Each
   owner quantizes at encode time: the Handy owners round to integer percent,
@@ -120,7 +121,7 @@ and does not add a second quantizer.
 
 The existing HSP invariant suite generalizes into an owner-agnostic contract
 suite run against all owners (the fake transport, the Cloud builder, the
-Bluetooth builder, and the future Buttplug owner).
+Bluetooth builder, and the implemented Intiface owner).
 
 Implementation note: the durable/API field remains `hsp_dispatch_owner` for
 settings compatibility. New UI and documentation call it "Dispatch owner";
@@ -148,16 +149,17 @@ RFC 6455.
 
 **6. LSO merge alignment.** This resolves `docs/lso-merge-alternatives.md`
 Decision 2 as **option A — first-class dispatch owner** (the owner selector
-already makes it opt-in per user). If the LSO merge lands first, adopt and
-adapt LSO's Buttplug transport behind this interface and these obligations
-rather than writing a parallel one.
+already makes it opt-in per user). Phase 14B landed independently; future LSO
+integration must adapt to this interface and owner rather than add a parallel
+Buttplug implementation.
 
 ## Consequences
 
 Positive:
 
-- The whole Buttplug/Intiface device ecosystem becomes reachable while the
-  motion engine, planners, patterns, and safety semantics stay untouched.
+- The linear-actuator subset of the Buttplug/Intiface device ecosystem becomes
+  reachable while the motion engine, planners, patterns, and safety semantics
+  stay untouched.
 - The contract stops implying Handy-only semantics; the same frame is
   provably consistent across three delivery paths, and the Handy itself is
   reachable through all three — which gives a direct like-for-like

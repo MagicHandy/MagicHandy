@@ -8,7 +8,10 @@ Accepted for the rewrite plan.
 
 StrokeGPT-ReVibed motion regressions repeatedly came from mixing semantic intent, transport command shape, live sampled state, settings envelopes, and device recovery behavior. MagicHandy must make those boundaries explicit.
 
-The motion engine must describe what motion should feel like. The transport layer must describe how that motion is encoded for the Handy. Settings such as stroke range and reverse direction are physical transport constraints, not changes to the meaning of user or LLM intent.
+The motion engine must describe what motion should feel like. The transport
+layer must describe how that motion is encoded for the selected device owner.
+Settings such as stroke range and reverse direction are physical transport
+constraints, not changes to the meaning of user or LLM intent.
 
 ## Decision
 
@@ -25,9 +28,10 @@ Semantic motion intent includes:
 
 Physical transport output includes:
 
-- HSP timed-point positions and timestamps
-- HSP stroke-window commands
+- transport-neutral timed-point positions and timestamps
+- stroke-window projection at the selected transport boundary
 - local reverse-direction mapping
+- owner-specific encoding (HSP for Handy owners, `LinearCmd` for Intiface)
 - physical speed/velocity limits where the selected transport requires them
 - transport command latency and recovery state
 
@@ -37,7 +41,8 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 
 - The LLM and mode planners can produce only semantic targets/plans, not raw Handy API commands.
 - Semantic speed remains an intent percent until transport encoding.
-- HSP encodes speed through timed-point spacing and point deltas.
+- Speed is encoded through timed-point spacing and point deltas; each owner maps
+  the neutral frame to its wire protocol without resampling it.
 - Transport code may calculate physical duration, lead time, or safety budgets, but those values never feed back into semantic intent.
 - Stroke range settings are physical envelope settings and are applied at the transport boundary.
 - Reverse direction is a physical orientation setting and is applied at the transport boundary.
@@ -64,7 +69,8 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 - Serialize commands according to the selected transport.
 - Send commands and capture safe diagnostics.
 - Never log or export secrets.
-- Report HSP unavailable with a clear, actionable error; there is no fallback transport (see ADR 0006).
+- Report owner-specific prerequisites with a clear, actionable error; owners do
+  not silently fall back to one another (see ADR 0006 and ADR 0010).
 - Expose latest command status, latency, and device playback state.
 
 ## Emergency Stop Contract

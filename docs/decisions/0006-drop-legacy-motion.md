@@ -23,11 +23,12 @@ them. The old repo remains for reference, so nothing is lost by dropping them.
 
 ## Decision
 
-MagicHandy supports exactly one transport family -- HSP (Handy firmware v4 /
-API v3) -- over two dispatch owners: Cloud REST and browser Web Bluetooth. These
-are dispatch owners for the same command family, not separate motion engines or
-fallback backends. There is one motion backend: the continuous sampler. Modes are
-thin planners on that engine. Everything in "Dropped" is removed, not ported.
+MagicHandy supports exactly one continuous motion backend and one
+transport-neutral timed-point frame. Cloud REST and browser Web Bluetooth encode
+that frame as HSP for firmware-v4/API-v3 Handy devices; Intiface maps it to
+Buttplug `LinearCmd` for one selected linear actuator. These are dispatch owners,
+not separate motion engines or fallback backends. Modes are thin planners on the
+shared sampler. Everything in "Dropped" is removed, not ported.
 
 ### Dropped entirely
 
@@ -44,6 +45,8 @@ thin planners on that engine. Everything in "Dropped" is removed, not ported.
 
 - HSP over Cloud REST (primary) and HSP over browser Web Bluetooth (local) --
   same semantics, different dispatch owner (see `bluetooth-ownership.md`)
+- Intiface/Buttplug `LinearCmd` for one selected linear actuator, behind the
+  same transport contract and Stop semantics (ADR 0010)
 - the continuous sampler and retargeting model (`docs/motion-retargeting.md`)
 - Freestyle and plain-chat continuous motion as motion-engine clients
 - fixed patterns, programs (funscripts), anchor loops, and area focus as content
@@ -54,8 +57,8 @@ thin planners on that engine. Everything in "Dropped" is removed, not ported.
 
 Positive:
 
-- transports collapse from three to one; backends from three to one; the backend
-  selector disappears
+- legacy command families collapse to one neutral frame; backends collapse from
+  three to one; the backend selector disappears
 - removes every `if backend == hamp`/`hdsp_fallback` branch, the slide-window
   math, finite-position playback, and the scripted stop/go planner -- the
   largest sources of motion complexity and the recurring stop/go-after-morph bug
@@ -65,11 +68,12 @@ Positive:
 
 Negative / deliberate trade-offs:
 
-- MagicHandy requires Handy firmware v4 plus API v3 access. Firmware v3
-  hardware, or users blocked from API v3, are unsupported and stay on
-  StrokeGPT-ReVibed.
-- there is no fallback transport: if HSP prerequisites fail, the app reports HSP
-  unavailable with a clear, actionable error and does not move the device.
+- Cloud REST and Browser Bluetooth require Handy firmware v4 plus API v3 access.
+  Firmware v3 Handy hardware, or users blocked from API v3, are unsupported and
+  stay on StrokeGPT-ReVibed. Intiface instead requires a user-run server and a
+  supported linear actuator; non-Handy hardware acceptance remains open.
+- there is no silent owner fallback: if the selected owner's prerequisites fail,
+  the app reports an actionable error and does not move the device.
   Recovery is "stop and report," never a silent downgrade (see
   `docs/motion-retargeting.md`, Recovery Behavior).
 - the app should ship and manage its own API v3 Application ID if Handy API terms
@@ -80,4 +84,5 @@ Negative / deliberate trade-offs:
 ## Supersedes
 
 Earlier "HAMP/HDSP fallback only when explicitly selected" language in the plan
-and the HSP invariants. Those references are updated to HSP-only.
+and HSP-specific frame wording. ADR 0010 extends the neutral frame to Intiface;
+HAMP, HDSP, and firmware-v3 fallback remain dropped.

@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted for the rewrite plan. Updated 2026-07-09: the first managed ASR
-implementation uses parakeet.cpp rather than a direct sherpa-onnx binding.
+Accepted and implemented. Updated 2026-07-14: managed ASR uses parakeet.cpp;
+NeuTTS Air uses the Slice 13.6 Go adapter around the reviewed `neutts-rs`
+`stream_pcm` process.
 
 ## Context
 
@@ -35,9 +36,10 @@ Implement three non-Python voice backends behind the ADR 0003 worker protocol:
    upgrade.
 2. **Local TTS (cloning) — NeuTTS Air**: a 748M Qwen-backbone speech LLM +
    NeuCodec, real-time on CPU (so it does **not** contend with the LLM for the
-   GPU), zero-shot cloning from ~3 s of reference audio, contextual
-   expressiveness. Runs via the llama.cpp-family runner pattern (ADR 0005) plus a
-   native codec decoder.
+   GPU). A Go ADR 0003 adapter runs the reviewed `neutts-rs stream_pcm` process
+   and forwards live PCM without Python. The current runner requires pre-encoded
+   `.npy` reference codes plus the exact transcript; its public Rust reference
+   encoder is a stub, so the WAV is provenance rather than runtime input.
 3. **Cloud TTS (premium) — ElevenLabs**: HTTP from Go, expressive and
    high-fidelity instant cloning, low latency, no Python and no local VRAM.
 
@@ -64,9 +66,9 @@ in the first implementation set.
   server. A direct sherpa-onnx path would add a native runtime/binding and a
   custom HTTP surface to this first slice.
 - **NeuTTS Air** is the best "fast + cloning + non-Python + fits a shared 5070"
-  option in the survey: CPU real-time avoids GPU contention with the LLM, the
-  Qwen backbone reuses the llama.cpp runner, and 3-second cloning covers the core
-  use case. Its one integration cost is a native NeuCodec decoder.
+  option in the survey: CPU real-time avoids GPU contention with the LLM. The
+  implemented adapter proves non-Python decode and streaming, while arbitrary-WAV
+  reference encoding remains outside the current capability boundary.
 - **ElevenLabs** covers the "expressive AND faithfully-cloned voice together"
   case that no mature local non-Python model does today, at the lowest latency,
   at the cost of cloud/privacy — an explicit user choice, not a default.
@@ -87,13 +89,14 @@ in the first implementation set.
 Positive:
 
 - non-Python default voice *with* cloning; private local + premium cloud
-- fits a shared 12 GB GPU; reuses the llama.cpp runner
+- fits beside a local LLM on a shared 12 GB GPU by running TTS on CPU in a
+  separate worker process
 - no Torch/CUDA/NeMo install path in the core
 
 Negative / risks:
 
-- NeuTTS Air's cloning quality and its native codec decoder are unproven for this
-  app — prototype early (tracked as R17)
+- NeuTTS Air's subjective cloning quality and arbitrary-WAV reference encoding
+  remain unproven; the current pre-encoded-code boundary is explicit (R17)
 - expressive emotion *tags* on a cloned voice are not covered by the initial set;
   that stays a cloud (ElevenLabs) or optional-Python capability
 - ElevenLabs needs internet + API key and sends text/reference audio to a cloud
@@ -103,9 +106,11 @@ Negative / risks:
 
 ## Implementation Note
 
-NeuTTS Air integration (codec decoder + cloning quality/latency) is an explicit
-spike in Phase 13. If it fails to meet quality/latency, fall back to F5-TTS
-(ONNX) or an optional Python worker while keeping ElevenLabs as the premium path.
+The NeuTTS Air spike and Slice 13.6 adapter are complete. Setup and the exact
+pre-encoded-code boundary are documented in `docs/neutts-worker.md`. Subjective
+quality and arbitrary-WAV encoding remain open; if they fail acceptance, use a
+documented non-Python fallback or an optional Python worker while keeping
+ElevenLabs as the premium path.
 
 The first Parakeet integration is documented in `docs/voice-parakeet.md`: a
 managed parakeet.cpp v0.4.0 process with explicit, checksum-verified installer
@@ -114,6 +119,5 @@ downloads. It is a worker-owned runner, not a CGo link or a new motion path.
 ## Relationship
 
 - ADR 0003: the worker boundary and delivery-ordering rules this builds on
-- ADR 0005: the llama.cpp runner pattern NeuTTS Air reuses
 - `docs/voice-tts-survey.md`: the evidence base
 - `docs/risk-register.md`: R17 (NeuTTS Air cloning/codec spike)

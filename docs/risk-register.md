@@ -28,13 +28,12 @@ Exit evidence:
 
 - real-device checklist passes for area focus, speed changes, stroke range changes, reverse changes, same-pattern updates, cross-pattern retargets, and emergency stop
 
-Status 2026-07-11: Phase 7 and both Phase 9B shipped app paths (Cloud REST and
-Browser Bluetooth) passed capped real-device checks. Phase 14 adds generated
-and imported curves; automated sampling/safety checks pass, but its 6.6 s
-routine-cycle feel threshold remains an explicit capped hardware check. The
-risk therefore remains open for new motion-content behavior. A Phase 14 Edge
-attempt selected Browser Bluetooth and capped speed at 35%, but the chooser saw
-no compatible advertisement; no motion command was sent.
+Status 2026-07-14: Phase 7 and Cloud REST have current capped real-device
+evidence. The 2026-07-02 Browser Bluetooth run moved and stopped the device but
+predates the reverse-direction fix and lacks endurance evidence. Phase 14's
+generated/imported curves pass automated safety checks, but routine-cycle feel
+still needs a capped hardware check. The revised Intiface pacer also needs a
+matched `motion_trace.v3` hardware run and subjective feel confirmation.
 
 ## R2: Two-Codebase Drift
 
@@ -383,17 +382,18 @@ Exit evidence:
   `TestModelErrorsNeverEnterHistoryOrTTS`. The risk stays listed until a
   real provider (not the stub) has exercised the same path end to end.
 
-## R16: Firmware v4 / API v3 Only
+## R16: Handy HSP Firmware v4 / API v3 Scope
 
 Level: Medium
 
 Description:
-Dropping HAMP, HDSP, and firmware v3 (ADR 0006) means MagicHandy requires Handy
-firmware v4 plus API v3 access and has no fallback transport. Firmware v3
-hardware is unsupported. A missing, revoked, or incompatible app Application ID
-also blocks Cloud REST HSP until fixed, even if the user's connection key is
-valid. This is a deliberate scope cut, but it can surface as "the app does not
-move my device" if handled quietly.
+Dropping HAMP, HDSP, and firmware v3 (ADR 0006) means MagicHandy's Cloud REST
+and Browser Bluetooth owners require Handy firmware v4 plus API v3 access and
+have no fallback owner. Firmware v3 Handy hardware is unsupported. A missing,
+revoked, or incompatible app Application ID also blocks Cloud REST HSP until
+fixed, even if the user's connection key is valid. Intiface is a separate
+transport-neutral owner for one selected `LinearCmd` actuator and does not
+restore legacy Handy protocols.
 
 Mitigation:
 
@@ -402,7 +402,8 @@ Mitigation:
   override for testing or future revocation
 - the connection key stays the user's private credential
 - detect and clearly report HSP-unavailable with concrete fix steps (Invariant 8)
-- document the firmware v4 / API v3 requirement up front in README/setup
+- document the Handy-owner firmware v4 / API v3 requirement up front in
+  README/setup, separately from Intiface requirements
 - before Phase 16 packaging claims device support: review current Handy API
   docs for Handy 2 / Handy 2 Pro deltas (including the documented overclock
   mode) and expose per-device max-speed limits only from documentation —
@@ -421,33 +422,31 @@ Exit evidence:
 Level: Medium
 
 Description:
-ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS, but its cloning
-quality and a native (non-Python) NeuCodec decoder are unproven for this app. If
-it under-delivers on quality or latency, the local non-Python cloning path is at
-risk and voice could drift back toward a Python worker.
+ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
+adapter around the reviewed `neutts-rs stream_pcm` runner now streams PCM without
+Python, but it requires pre-encoded `.npy` voice codes and the exact transcript
+because the public Rust encoder is still a stub. Arbitrary-WAV cloning and
+subjective cloning quality remain unproven.
 
 Mitigation:
 
-- treat NeuTTS Air integration as an explicit early spike in Phase 13 (codec
-  decoder + cloning quality/latency), not an assumption
+- keep the implemented adapter bounded, offline, cancellable, and explicit
+  about its pre-encoded-code capability boundary
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
 
 Exit evidence:
 
-- a Phase 13 spike shows acceptable NeuTTS Air cloning quality and latency with a
-  non-Python decoder, or a documented fallback is chosen
+- a capped listening run shows acceptable cloning quality and latency with the
+  non-Python adapter, and arbitrary-WAV encoding either lands behind the worker
+  boundary or remains an explicit documented limitation/fallback
 
-Status 2026-07-09: the spike ran (`docs/neutts-air-spike.md`). Non-Python
-decode is proven twice over (official ONNX NeuCodec decoder; independent
-pure-Rust FSQ+Vocos+ISTFT decoder in the `neutts` crate). Measured on this
-project's Windows dev machine, CPU-only, Q4 GGUF via llama.cpp: RTF
-0.51-0.62 (faster than real time), ~2 s first-sentence latency, one-time
-14 s reference encode. Cloned-output WAVs await subjective listening, and
-the worker integration (Rust-crate host preferred; Go+onnxruntime as the
-alternate) is the follow-on 13.1 PR — the risk drops from "unproven tech"
-to ordinary integration work.
+Status 2026-07-14: the spike and Slice 13.6 adapter landed
+(`docs/neutts-air-spike.md`, `docs/neutts-worker.md`). Non-Python decode and
+streaming are implemented through `neutts-rs`; the core wraps retained PCM at
+the playback boundary. Cloned-output listening, arbitrary-WAV encoding, and
+turnkey asset provisioning remain open.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 
@@ -677,13 +676,11 @@ coverage), and R20 (LSO merge integration).
 Level: Critical
 
 Description:
-The permanent Stop control is mounted outside routes and active engine Stop
-cancels local work before attempting transport Stop. However, an idle engine can
-return without retrying transport Stop, the no-engine HTTP path returns success
-without creating the selected transport solely to stop it, and an unreachable
-backend cannot forward a Browser Bluetooth command. These gaps can make the UI
-report a locally stopped engine without proving that the physical device
-received a Stop.
+The permanent Stop control is mounted outside routes. Active, paused,
+repeated-idle, and no-engine requests cancel local work and attempt the selected
+owner, with explicit errors when transport delivery fails. An unreachable
+backend still cannot forward a Browser Bluetooth command, and no path may infer
+physical delivery from local stopped state alone.
 
 Implementation status (2026-07-12): active, paused, idle-engine, and no-engine
 paths now attempt the selected transport; unavailable owners preserve local
@@ -694,13 +691,13 @@ evidence remain open, so the risk stays Critical.
 
 Mitigation:
 
-- make every Stop request attempt the selected dispatch owner's Stop whenever
-  that owner is available, including idle-engine and no-engine states
+- retain regression coverage that every Stop request attempts the selected
+  dispatch owner whenever available, including idle-engine and no-engine states
 - preserve the current invariant that local planners and motion state stop even
   when transport delivery fails; surface the failure instead of claiming
   physical delivery
-- add idle/no-engine/read-only/backend-loss coverage for Cloud REST and Browser
-  Bluetooth, plus real-device checks for retry and owner-switch cases
+- complete current Cloud REST and Browser Bluetooth hardware checks for retry,
+  owner-switch, and failed-delivery reporting; retain backend-loss coverage
 - keep Stop mounted outside routes and controller ownership gates
 
 Exit evidence:

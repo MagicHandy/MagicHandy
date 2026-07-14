@@ -47,8 +47,9 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > manager stays available on every route and owns live provider actions plus
 > speed/stroke limits. Chat keeps
 > motion behavior, manual test, and the visualizer; Settings is a routed page with sibling sections
-> (`#/settings/device|model|voice|prompts|diagnostics` — compaction planned
-> in [settings-compaction.md](settings-compaction.md)). Token and component
+> (`#/settings/device|model|voice|prompts|diagnostics` — provider-scoped
+> compaction implemented in Slice 13.5; see
+> [settings-compaction.md](settings-compaction.md)). Token and component
 > specifics live in [ui-design-guidelines.md](ui-design-guidelines.md).
 >
 > The subsections below marked **Historical** describe the pre-React shell
@@ -141,11 +142,10 @@ One component, one source of truth.
 - Distinguishes commanded/estimated position from device-confirmed position, and
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
-- Uses a restrained Handy side profile rather than an abstract progress bar:
-  a vertical body styled after The Handy 2, whose right-edge channel carries the
-  configured stroke envelope while the sleeve carriage moves to the backend
-  sample position. Detailed telemetry names state, target speed, and active
-  target without adding controls to the artwork.
+- Uses a restrained vertical Handy 2-inspired body and sleeve rather than an
+  abstract progress bar. The configured stroke envelope surrounds the moving
+  sleeve, which follows the backend sample position. Detailed telemetry names
+  state, target speed, and active target without adding controls to the artwork.
 - Is never itself a click target: controls are separate, labeled elements
   (limits live in the connection manager and behavior lives in Chat), not
   artwork turned into a mystery button.
@@ -365,10 +365,10 @@ checklist of functional behaviors the old app proved out; a MagicHandy phase
 that touches an area owns the corresponding rows. Compared 2026-07-01 against
 `main` (post-Phase 9).
 
-### Regressed — implemented in MagicHandy but functionally weaker
+### Historical post-Phase-9 snapshot — all rows now closed
 
-These exist in some form today but lost behavior the old app had already
-learned the hard way. They are scheduled (Phase 9B unless noted):
+The following rows were open on 2026-07-01. The closure evidence appears in the
+sections below; none remains an active parity regression:
 
 1. **Backend-loss handling.** The old app showed a persistent connection-lost
    banner and locked `data-requires-backend` controls the moment any fetch
@@ -488,7 +488,8 @@ disabled until the backend reports the ASR model ready.
 ### Not yet built — planned, not regressions
 
 Still planned rather than regressed: the Autopilot planner and its richer mode
-events (including "I'm close"), migration/setup wizard (Phase 15/17),
+events (including "I'm close"), the Phase 15 importer and Phase 16 setup
+wizard,
 curated model downloads/hardware-fit recommendations (`docs/model-management.md`),
 the bounded speed-test button, raw-model diagnostics, and live device-position layer
 (post-parity backlog). Modes, memory/prompts, voice controls, multi-tab
@@ -498,11 +499,10 @@ landed.
 ### Second parity sweep (2026-07-09)
 
 A re-read of the legacy working notes and StrokeGPT-ReVibed PRs #319–#333
-after Phase 13.4 added a small UI backlog, each with a design-conforming
-placement decided up front (`docs/legacy-parity-sweep-2026-07.md` §E/§F):
+after Phase 13.4 added a small UI backlog. The Chat speak-replies quick toggle
+has since landed; the remaining follow-ups have design-conforming placements
+(`docs/legacy-parity-sweep-2026-07.md` §E/§F):
 
-- a speak-replies quick toggle in the **Chat control column** (the status
-  bar stays status-only, so the legacy "top-bar voice toggle" moves there);
 - a scrolling motion-history readout fed by the trace ring — a readout,
   never a control; the library kept this out of the authoring surface, so it
   remains a diagnostics follow-up;
