@@ -10,12 +10,14 @@ import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
 
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error" | "initializing";
 
-// Concentric circular arcs (center 180,76; radii 56/78/100; ±42° span) so all
-// three waves share one curvature and cascade evenly between hand and device.
+// Similar circular arcs (uniform sag/half-width ratio 0.33, widths 70/114/158)
+// so all three waves share one curvature while keeping a wide, low cascade
+// between hand and device. Control points put each curve through its true
+// circle bottom.
 const SIGNAL_PATHS = [
-  "M142.5 117.6 Q180 146.4 217.5 117.6",
-  "M127.8 134 Q180 174 232.2 134",
-  "M113.1 150.3 Q180 201.7 246.9 150.3",
+  "M145 123 Q180 146.1 215 123",
+  "M123 137 Q180 174.6 237 137",
+  "M101 151 Q180 203.1 259 151",
 ];
 
 const emptyIntiface: IntifaceTransportSnapshot = {
