@@ -151,8 +151,8 @@ version = "0.1.0"
     [System.IO.File]::WriteAllText($lockPath, $lockFixture)
     & $supportModule { param($SourceRoot) Repair-MagicHandyNeuTTSCargoLock -SourceRoot $SourceRoot } $lockSource
     $correctedLock = [System.IO.File]::ReadAllText($lockPath)
-    Assert-True -Condition ($correctedLock -match '(?m)^name = "neutts"\r?\nversion = "0\.1\.1"$') -Message 'known upstream root package version should be corrected'
-    Assert-True -Condition ($correctedLock -match '(?m)^name = "fixture"\r?\nversion = "0\.1\.0"$') -Message 'dependency versions should remain unchanged'
+    Assert-True -Condition ($correctedLock -match '(?m)^name = "neutts"\r?\nversion = "0\.1\.1"\r?$') -Message 'known upstream root package version should be corrected'
+    Assert-True -Condition ($correctedLock -match '(?m)^name = "fixture"\r?\nversion = "0\.1\.0"\r?$') -Message 'dependency versions should remain unchanged'
 
     $unexpectedLockSource = Join-Path $tempRoot 'unexpected-neutts-lock-source'
     New-Item -ItemType Directory -Force -Path $unexpectedLockSource | Out-Null
