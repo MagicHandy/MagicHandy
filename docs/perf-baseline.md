@@ -33,6 +33,7 @@ core number.
 | MagicHandy Go core idle, Phase 14B Intiface owner | Final Phase 14B working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds; fresh stripped binary on `127.0.0.1:49764` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS | Yes; no Intiface Central, device, model, or voice worker included | 53.20 MiB (55,779,328 bytes) across 3 equal samples | Not measured separately | Plain binary 19,205,632 bytes; stripped binary 13,309,952 bytes. Embedded JS is 270,506 bytes / 79,435 gzip; CSS 32,443 / 7,177 gzip; HTML 454 / 281 gzip; combined gzip 86,893 bytes (+1,175 / 1.4%). The pure-Go websocket owner and unconditional Stop hardening add 278,016 stripped bytes (+2.1%) over the managed-runtime baseline. |
 | MagicHandy Go core idle, Phase 14C compacted connection manager | Final Phase 14C working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%\MagicHandy-connection-final`; fresh stripped binary on `127.0.0.1:49781` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS; rendered UI checked separately | Yes; no device, model, or voice worker included | 53.47 MiB (56,066,048 bytes) across 3 equal samples | Not measured separately | Final artwork/visualizer refinement: plain binary 19,675,648 bytes; stripped binary 13,779,968 bytes. JS 281,698 / 82,637 gzip; CSS 41,123 / 8,653 gzip; HTML 454 / 286 gzip; isolated PNG 444,236 / 437,427 gzip; total embedded browser payload 767,511 raw / 529,003 gzip. RSS is retained from the preceding Phase 14C sample because only embedded browser assets changed. |
 | MagicHandy source-installer/compiler bootstrap | Source-installer follow-up working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%`; clean pinned llama.cpp CPU build in ignored scratch data, followed by manifest and `--version` probes | No browser window; no app process needed for script-only runtime change | Yes; the external CPU runner was built/probed, then scratch data was removed | Retained 53.47 MiB Phase 14C idle sample; the changed embedded script runs only during an explicit managed-runtime build | Not measured separately | Plain binary 19,677,696 bytes; stripped binary 13,782,016 bytes (+2,048 each). Browser payload is unchanged. CMake selected Visual Studio 18/MSVC 19.51 plus Windows SDK 10.0.28000.0; the clean build completed in 70.8 s and the runner reported pinned commit `c749cb0`. |
+| MagicHandy Intiface deadline/ACK pacing | Intiface smoothness follow-up working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%`; canonical frontend production build and level-9 gzip measurement | No browser window; no app process or physical device used | Yes; no Intiface Central, device, model, or voice worker included | Retained 53.47 MiB Phase 14C idle sample; RSS not re-measured for this transport-only follow-up | Not measured separately | Plain binary 19,793,920 bytes; stripped binary 13,870,080 bytes. Embedded UI is 777,057 raw / 531,309 gzip bytes; HTML/CSS/JS excluding unchanged artwork is 332,821 raw / 93,912 gzip bytes. Automated timing evidence is recorded below; a live matched run remains required. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -128,10 +129,11 @@ Still required (Phase 9B):
   20% in a 20–80% window for two seconds, paused with a successful
   `StopDeviceCmd`, resumed with phase preserved, then applied a 30–70% reverse
   refresh while running before a successful final Stop.
-- The exported `motion_trace.v2` envelope had 19 rows. All transport results
+- The historical exported `motion_trace.v2` envelope had 19 rows. All transport results
   were successful, command kinds were neutral `points_add`/`points_play`, no
   starvation occurred, final playback was idle, and queue depth was zero.
-  Local command latency rounded to 0 ms at the current millisecond resolution.
+  Local queue-admission latency rounded to 0 ms at the current millisecond
+  resolution; this did not measure paced wire writes or acknowledgements.
 - A rebuilt final binary then ran the pattern at 20% for one second. Active Stop
   `intiface-000005` and repeated idle Stop `intiface-000006` were distinct,
   successful commands. Disconnect recorded another successful close-time Stop.
@@ -144,6 +146,20 @@ Still required (Phase 9B):
 - The test process was stopped and runtime trace/log files stayed under `%TEMP%`;
   no generated evidence or credential entered the repository. No non-Handy
   linear device was available. Subjective matched feel remains open.
+
+Follow-up implementation evidence from 2026-07-13:
+
+- The host pacer no longer serializes its 125 ms deadlines on each Buttplug
+  response. Fake-server tests hold the first movement ACK while proving the next
+  movement is written on its independent absolute deadline.
+- `motion_trace.v3` adds bounded paced-wire records: scheduled stream time,
+  actual UTC write completion, effective duration, lateness, ACK RTT/status,
+  device/actuator, startup-anchor marker, and explicit truncation/total counts.
+- Missing/rejected ACKs and unsafe live lateness stop and report
+  deterministically. Fully expired segments are counted and skipped when a
+  later segment is still safely live; they are never replayed as a burst. This
+  is automated evidence only; the revised pacer still needs the matched Handy
+  run listed in `docs/intiface.md`.
 
 ## Phase 14C Floating Connection Manager Evidence
 

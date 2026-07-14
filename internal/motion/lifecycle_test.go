@@ -21,6 +21,44 @@ type blockingPlayTransport struct {
 	once    int32
 }
 
+type delayedPlayTransport struct {
+	*transport.Fake
+	delay     time.Duration
+	startedAt time.Time
+}
+
+func (d *delayedPlayTransport) Play(ctx context.Context, command transport.PlayCommand) (transport.CommandResult, error) {
+	timer := time.NewTimer(d.delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return transport.CommandResult{}, ctx.Err()
+	case <-timer.C:
+		result, err := d.Fake.Play(ctx, command)
+		d.startedAt = time.Now()
+		return result, err
+	}
+}
+
+func (d *delayedPlayTransport) PlaybackStartTime() time.Time { return d.startedAt }
+
+func TestEnginePlaybackClockStartsAfterTransportPlay(t *testing.T) {
+	commandTransport := &delayedPlayTransport{Fake: transport.NewFake(), delay: 40 * time.Millisecond}
+	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(32), time.Hour)
+	started := time.Now()
+	state, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = engine.Stop(context.Background(), "clock_test_cleanup") }()
+	if time.Since(started) < 35*time.Millisecond {
+		t.Fatal("transport Play did not exercise the startup delay")
+	}
+	if state.RunningMillis > 15 {
+		t.Fatalf("running clock advanced %dms during transport setup", state.RunningMillis)
+	}
+}
+
 func (b *blockingPlayTransport) Play(ctx context.Context, command transport.PlayCommand) (transport.CommandResult, error) {
 	if atomic.CompareAndSwapInt32(&b.once, 0, 1) {
 		close(b.entered)

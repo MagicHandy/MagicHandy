@@ -1001,6 +1001,45 @@ describe("app shell safety invariants", () => {
     expect(screen.getByRole("button", { name: /the handy intiface connection failed/i })).toBeInTheDocument();
   });
 
+  it("shows and copies paced Intiface diagnostics", async () => {
+    const writeText = vi.fn(async (_text: string) => undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    installFetch({
+      state: {
+        ...baseState,
+        intiface_transport: {
+          dispatch_owner: "intiface",
+          address: "ws://127.0.0.1:12345",
+          status: {
+            connected: true,
+            scanning: false,
+            playback_state: "playing",
+            max_ping_time_ms: 1000,
+            queue_depth: 8,
+            queue_coverage_ms: 875,
+            pending_acks: 2,
+            last_ack_latency_ms: 11,
+            max_ack_latency_ms: 29,
+            last_send_lateness_ms: 3,
+            max_send_lateness_ms: 8,
+            selected_resolution_percent: 1,
+            devices: [],
+          },
+          diagnostics: {},
+        },
+      },
+    });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/diagnostics");
+    expect(await screen.findByText("8 queued / 875ms")).toBeInTheDocument();
+    expect(screen.getByText("11ms last / 29ms max")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /copy summary/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(String(writeText.mock.calls[0][0])).toContain('"intiface_transport"');
+    expect(String(writeText.mock.calls[0][0])).toContain('"pending_acks": 2');
+  });
+
   it("seeds chat history from the shared server log", async () => {
     installFetch({
       chatLog: [

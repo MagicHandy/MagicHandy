@@ -149,7 +149,7 @@ func TestTraceExportReturnsStableJSON(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
 	}
-	want := `{"schema_version":"motion_trace.v2","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"export","transport_result":{"command_id":"fake-000001","kind":"points_play","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":3,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0}` + "\n"
+	want := `{"schema_version":"motion_trace.v3","rows":[{"sequence":1,"timestamp":"2026-06-30T12:00:00Z","source":"test","reason":"export","transport_result":{"command_id":"fake-000001","kind":"points_play","transport":"fake_handy","ok":true,"status":"recorded","latency_ms":3,"completed_at":"2026-06-30T12:00:00Z"}}],"dropped_rows":0,"intiface_dispatches_dropped":0,"intiface_linear_sent_count":0}` + "\n"
 	if recorder.Body.String() != want {
 		t.Fatalf("trace export mismatch\nwant: %s\ngot:  %s", want, recorder.Body.String())
 	}

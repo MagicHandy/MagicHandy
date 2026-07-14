@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-13, Phase 14C/source-installer follow-up
+## Snapshot — 2026-07-13, Intiface pacing follow-up
 
 ### Goal 1: Maintainability
 
@@ -31,7 +31,7 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **Met** | All authored Go files remain under the 800-line advisory target. Runtime build state stays isolated from provider/HTTP code; the embedded helper is 283 lines. The source-installer support module is a focused 861-line guideline exception, with 338/122-line install/update entry points and separate tests/docs. |
+| Size norms — Go core | no core file over ~600-800 lines | **Met** | The advisory target has two focused guideline exceptions: the source-installer support module (861 lines) and the 1,194-line Intiface session/dispatch owner. Intiface timing, waiter, Stop, and websocket state remain one safety-critical lifecycle with a separate 658-line motion/pacer file and fake-server tests; both stay below the 1,500-line emergency ceiling. |
 | Size norms — web | same norms for `web/` | **Met** | React TS/TSX and authored CSS modules remain under 800 lines. The 544-line model panel and 372-line model stylesheet are separate from the routed Settings shell and shared controls; `web/dist` remains the single shipped build. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; no grandfathered source-file override remains. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
@@ -57,7 +57,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Source-installer follow-up: 19,677,696 bytes plain and 13,782,016 bytes stripped with `-ldflags "-s -w"`; the embedded compiler-discovery helper adds 2,048 bytes to each Phase 14C build and remains well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Intiface pacing follow-up: 19,793,920 bytes plain and 13,870,080 bytes stripped with `-ldflags "-s -w"`; bounded ACK/timing diagnostics add 83,456 / 62,464 bytes over the preceding small-model build and remain well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -76,7 +76,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
 | Full app path — Cloud REST | **Met** | A 2026-07-12 current-build run at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation (`docs/perf-baseline.md`, "Phase 14B Intiface Hardware Evidence"). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
-| Full app path — Intiface | **Met** | A 2026-07-12 live Handy run at 20% passed Start, Pause, phase-preserving Resume, reverse quick refresh, active/repeated-idle Stop, and disconnect Stop with no starvation. The matched Cloud transport/trace comparison also passed; subjective feel confirmation remains (`docs/intiface.md`). |
+| Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
@@ -102,13 +102,22 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 531,099 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 93,702 gzip bytes, 2,126 bytes over
-   the Phase 14C measurement; the stripped binary is 13,807,616 bytes. These
+   browser payload is 531,309 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 93,912 gzip bytes, 2,336 bytes over
+   the Phase 14C measurement; the stripped binary is 13,870,080 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-13** — Intiface pacing no longer waits for each Buttplug ACK before
+  the next absolute deadline. A bounded asynchronous ledger, response deadlines,
+  stale-frame suppression, startup anchoring, append-time reverse mapping,
+  device timing capabilities, generation-safe Stop/Close barriers, and
+  `motion_trace.v3` wire telemetry close the static smoothness deficiencies.
+  Plain/stripped binaries are 19,793,920 / 13,870,080 bytes; embedded UI is
+  777,057 raw / 531,309 gzip bytes (93,912 gzip excluding unchanged artwork).
+  The revised path still needs a matched live Handy feel/timing run.
 
 - **2026-07-13** — A live managed Gemma 4 12B Q4 reproduction confirmed that
   automatic reasoning consumed the complete 256-token JSON budget and returned

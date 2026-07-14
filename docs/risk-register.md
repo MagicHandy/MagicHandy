@@ -634,6 +634,17 @@ Mitigation:
   floors) stays engine/generator-side so owners cannot diverge by design
 - the pacer detects its own underrun and reports honest playback state; the
   stop-and-report rule (ADR 0006) applies — never a silent fallback
+- absolute-deadline writes do not await the preceding ACK; an eight-command
+  bounded ledger correlates responses under transport-owned deadlines, while
+  missing/rejected ACKs invalidate the generation and force Stop without retry
+- expired segments are discarded instead of replayed in a burst; live lateness
+  has a 25% duration-compression bound, and per-wire timing/ACK telemetry is
+  included in `motion_trace.v3`
+- startup anchors the first neutral point before the shared playback clock
+  starts; reverse mapping is fixed at append time while the min/max envelope
+  retains the cross-owner immediate-update contract
+- selected `DeviceMessageTimingGap` raises the shared sampler cadence and
+  selected `StepCount` is exposed as an honest physical resolution limit
 - Buttplug ping keepalive stays enabled so Intiface stops devices if
   MagicHandy dies
 - live validation drives the same Handy through all three owners as a direct
@@ -646,13 +657,17 @@ Exit evidence:
   the same Handy over Cloud REST and Intiface and clean stop behavior on a
   non-Handy Buttplug device if available
 
-Implementation status (2026-07-12): the neutral-frame and shared Stop-preemption
+Implementation status (updated 2026-07-13): the neutral-frame and shared Stop-preemption
 suites plus fake-server handshake, keepalive, selection, underrun, rejection,
 Stop, Close, HTTP runtime, and UI tests are implemented. Matched capped Handy
 runs over Intiface and Cloud REST passed Start, Pause, phase-preserving Resume,
 reverse quick refresh, active and repeated-idle Stop, and close-time Stop where
-applicable, without starvation. The risk remains Medium until subjective feel
-is confirmed; no non-Handy linear device was available for the conditional run.
+applicable, without starvation. Automated delayed/missing/rejected ACK,
+deadline, coalescing, startup-anchor, timing-capability, concurrent Stop/Close,
+and wire-telemetry cases now cover the immediate-mode deficiencies found in the
+follow-up review. The risk remains Medium until the revised pacer receives a
+matched subjective run; no non-Handy linear device was available for the
+conditional run.
 
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).

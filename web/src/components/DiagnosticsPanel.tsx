@@ -24,6 +24,7 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
   const { show } = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
   const engine = state?.motion?.engine;
+  const intiface = state?.intiface_transport?.status;
 
   const rows: Array<[string, string]> = [
     ["Version", String(state?.version ?? "dev")],
@@ -34,6 +35,16 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
     ["Data dir", String(state?.data_dir ?? "—")],
     ["Datastore", String(state?.datastore_path ?? "—")],
   ];
+  if (intiface) {
+    rows.push(
+      ["Intiface playback", intiface.playback_state || "idle"],
+      ["Intiface buffer", `${intiface.queue_depth} queued / ${intiface.queue_coverage_ms ?? 0}ms`],
+      ["Intiface pending ACKs", String(intiface.pending_acks ?? 0)],
+      ["Intiface ACK latency", `${intiface.last_ack_latency_ms ?? 0}ms last / ${intiface.max_ack_latency_ms ?? 0}ms max`],
+      ["Intiface send lateness", `${intiface.last_send_lateness_ms ?? 0}ms last / ${intiface.max_send_lateness_ms ?? 0}ms max`],
+      ["Intiface resolution", intiface.selected_resolution_percent ? `${intiface.selected_resolution_percent.toFixed(3)}%` : "—"],
+    );
+  }
 
   async function copy() {
     const bundle = JSON.stringify(
@@ -43,6 +54,7 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
         uptime_seconds: state?.uptime_seconds,
         motion: state?.motion,
         transport: state?.transport,
+        intiface_transport: state?.intiface_transport,
         controller: state?.controller,
         settings_status: state?.settings_status,
       },

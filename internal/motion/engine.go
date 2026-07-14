@@ -107,6 +107,12 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		streamIDPrefix:   options.StreamIDPrefix,
 	}
 	engine.applyDefaults()
+	if provider, ok := options.Transport.(transport.MotionTimingCapabilitiesProvider); ok {
+		capabilities := provider.MotionTimingCapabilities()
+		if capabilities.MinimumPointInterval > engine.sampleInterval {
+			engine.sampleInterval = capabilities.MinimumPointInterval
+		}
+	}
 	return engine, nil
 }
 
@@ -136,6 +142,7 @@ func (e *Engine) Start(ctx context.Context, target MotionTarget, settings config
 		e.forceStopped(err)
 		return e.Snapshot(), err
 	}
+	e.alignPlaybackStart()
 
 	e.startLoop(loopCtx)
 	return e.Snapshot(), nil
@@ -248,6 +255,7 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 		e.restorePaused()
 		return e.Snapshot(), err
 	}
+	e.alignPlaybackStart()
 
 	e.startLoop(loopCtx)
 	return e.Snapshot(), nil
@@ -608,6 +616,22 @@ func (e *Engine) estimatedPlaybackMillisLocked(now time.Time) int64 {
 		return 0
 	}
 	return elapsed
+}
+
+func (e *Engine) alignPlaybackStart() {
+	provider, ok := e.transport.(transport.PlaybackStartTimeProvider)
+	if !ok {
+		return
+	}
+	startedAt := provider.PlaybackStartTime()
+	if startedAt.IsZero() {
+		return
+	}
+	e.mu.Lock()
+	if e.running {
+		e.startedAt = startedAt
+	}
+	e.mu.Unlock()
 }
 
 func (e *Engine) leadMillisLocked() int64 {
