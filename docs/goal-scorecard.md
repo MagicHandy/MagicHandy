@@ -32,7 +32,7 @@ Scoring key:
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 946 lines, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening the safety lifecycle. |
-| Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,108 lines, `web/src/styles/components.css` 1,084, and retired reference-only `web/legacy/app.css` 846. `web/dist` remains the single shipped build. |
+| Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,164 lines, `web/src/styles/components.css` 1,279, and retired reference-only `web/legacy/app.css` 846. The focused 482-line voice capture component keeps its lifecycle out of ChatPanel; `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 1,159 lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; split it when lifecycle boundaries can stay clear. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Intiface pacing follow-up: 19,793,920 bytes plain and 13,870,080 bytes stripped with `-ldflags "-s -w"`; bounded ACK/timing diagnostics add 83,456 / 62,464 bytes over the preceding small-model build and remain well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Voice latency/control follow-up: 19,918,336 bytes plain and 13,962,752 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -103,13 +103,25 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 532,705 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 95,308 gzip bytes, 3,732 bytes over
-   the Phase 14C measurement; the stripped binary is 13,914,112 bytes. These
+   browser payload is 535,498 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 98,101 gzip bytes, 2,793 bytes over
+   the preceding voice audit, and the stripped binary is 13,962,752 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-14** — Browser voice startup/latency hardening: the Chat microphone
+  now keeps a visibly releasable warm stream, supports bounded click-on
+  hands-free and hold modes plus input selection, performs filtered browser WAV
+  conversion without the old JavaScript copy, uploads raw audio, and hands ASR a
+  private session-scoped `audio_ref`. Emergency Stop now invalidates voice and
+  in-flight chat generations before motion dispatch. Plain/stripped binaries
+  are 19,918,336 / 13,962,752 bytes; embedded UI is 789,765 raw / 535,498 gzip
+  bytes (98,101 gzip excluding unchanged artwork). This is a 65,024 / 48,640-byte
+  binary increase and a 10,224 raw / 2,793 gzip UI increase from the preceding
+  managed-NeuTTS measurement, all within budget; RSS and real-microphone latency
+  were not remeasured.
 
 - **2026-07-14** — Managed NeuTTS source installation: selecting managed
   llama.cpp now also provisions LLVM/libclang and pinned Rust 1.94.0, builds

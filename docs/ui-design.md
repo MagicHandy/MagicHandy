@@ -485,6 +485,16 @@ server/model paths. With voice off, text explicitly says Enable, Save, then
 Start. A successful Start includes model load, and microphone input remains
 disabled until the backend reports the ASR model ready.
 
+The Chat composer is one compact row: microphone split control, flexible text
+entry, then Send. The graphite microphone uses the existing mic artwork with
+inset physical depth, not a decorative glow. Its primary action defaults to
+bounded hands-free click-on/click-off recording; the adjacent moving triangle
+opens upward to hold-to-talk and browser input selection. Active/ready states use
+steel azure, never Stop red or running green. A warmed microphone is explicitly
+indicated and can be released from the menu. Emergency Stop closes capture and
+invalidates pending transcription and speech playback before recognized text can
+enter Chat; stale request generations cannot dispatch motion afterward.
+
 ### Not yet built — planned, not regressions
 
 Still planned rather than regressed: the Autopilot planner and its richer mode

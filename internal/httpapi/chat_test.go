@@ -5,9 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -20,6 +22,20 @@ type scriptedLLMProvider struct {
 	mu        sync.Mutex
 	responses []string
 	requests  []llm.ChatRequest
+}
+
+type blockingLLMProvider struct {
+	started chan struct{}
+}
+
+func (p *blockingLLMProvider) StreamChat(ctx context.Context, _ llm.ChatRequest, _ func(string) error) (string, error) {
+	close(p.started)
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func (p *blockingLLMProvider) Status(context.Context) llm.ProviderStatus {
+	return llm.ProviderStatus{Provider: "blocking", Available: true}
 }
 
 func (p *scriptedLLMProvider) StreamChat(_ context.Context, request llm.ChatRequest, onDelta func(string) error) (string, error) {
@@ -171,6 +187,64 @@ func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	}
 }
 
+func TestEmergencyStopCancelsInflightChatBeforeMotionDispatch(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &blockingLLMProvider{started: make(chan struct{})}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"start moving"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(stopSequenceHeader, "0")
+	chatRecorder := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		server.Handler().ServeHTTP(chatRecorder, request)
+		close(done)
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("chat provider did not start")
+	}
+	stopRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(stopRecorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`)))
+	if stopRecorder.Code != http.StatusOK {
+		t.Fatalf("stop status = %d: %s", stopRecorder.Code, stopRecorder.Body.String())
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight chat did not cancel")
+	}
+	for _, command := range fake.Commands() {
+		if command.Kind != transport.CommandKindStop {
+			t.Fatalf("post-Stop chat issued motion command: %+v", command)
+		}
+	}
+}
+
+func TestChatRejectsStaleStopSequence(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{`{"reply":"Starting.","motion":{"action":"start"}}`}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"start"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(stopSequenceHeader, "0")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict || provider.callCount() != 0 {
+		t.Fatalf("stale chat = %d, provider calls = %d: %s", recorder.Code, provider.callCount(), recorder.Body.String())
+	}
+}
+
 func TestChatSpeedOnlyTargetPreservesActiveProgram(t *testing.T) {
 	program := motion.ProgramDefinition{
 		ID: "active-program", Name: "Active program", DurationMillis: 1000,
@@ -220,6 +294,7 @@ func postChatStream(t *testing.T, server *Server, body string) string {
 	request := httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(body))
 	request = withController(request)
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(stopSequenceHeader, strconv.FormatUint(server.stopSequence.Load(), 10))
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {

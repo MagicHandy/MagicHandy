@@ -171,6 +171,7 @@ func (s *Server) handleLibraryPatternPlay(w http.ResponseWriter, r *http.Request
 	if !s.requireController(w, r) {
 		return
 	}
+	stopSequence := s.stopSequence.Load()
 	request, ok := decodeLibraryPlayRequest(w, r)
 	if !ok {
 		return
@@ -185,7 +186,7 @@ func (s *Server) handleLibraryPatternPlay(w http.ResponseWriter, r *http.Request
 		Label: definition.Name, Source: "pattern_library", PatternID: definition.ID,
 		SpeedPercent: request.Intensity, Pattern: &definition,
 	}
-	state, err := s.playLibraryPattern(r, target)
+	state, err := s.playLibraryPattern(r, target, stopSequence)
 	s.writeMotionResult(w, state, err)
 }
 
@@ -193,6 +194,7 @@ func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request
 	if !s.requireController(w, r) {
 		return
 	}
+	stopSequence := s.stopSequence.Load()
 	request, ok := decodeLibraryPlayRequest(w, r)
 	if !ok {
 		return
@@ -207,11 +209,11 @@ func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request
 		Label: definition.Name, Source: "program_player", ProgramID: definition.ID,
 		SpeedPercent: request.Intensity, Program: &definition,
 	}
-	state, err := s.playLibraryProgram(r, target)
+	state, err := s.playLibraryProgram(r, target, stopSequence)
 	s.writeMotionResult(w, state, err)
 }
 
-func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget) (motion.ActiveMotionState, error) {
+func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget, stopSequence uint64) (motion.ActiveMotionState, error) {
 	if s.modes != nil {
 		s.modes.NotifyUserStop()
 	}
@@ -224,13 +226,20 @@ func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget)
 		return current, errors.New("stop or resume paused motion before playing a pattern")
 	}
 	if current.Running {
+		if s.stopSequence.Load() != stopSequence {
+			return current, errors.New("pattern play was invalidated by Emergency Stop")
+		}
 		return engine.ApplyTarget(r.Context(), target, "library_pattern")
 	}
 	settings, _ := s.store.Snapshot()
-	return engine.Start(r.Context(), target, settings.Motion)
+	admission := engine.AdmissionGeneration()
+	if s.stopSequence.Load() != stopSequence {
+		return engine.Snapshot(), errors.New("pattern play was invalidated by Emergency Stop")
+	}
+	return engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
 }
 
-func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget) (motion.ActiveMotionState, error) {
+func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget, stopSequence uint64) (motion.ActiveMotionState, error) {
 	if s.modes != nil {
 		s.modes.NotifyUserStop()
 	}
@@ -240,12 +249,19 @@ func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget)
 	}
 	current := engine.Snapshot()
 	if current.Running || current.Paused {
+		if s.stopSequence.Load() != stopSequence {
+			return current, errors.New("program play was invalidated by Emergency Stop")
+		}
 		if _, err := engine.Stop(r.Context(), "program_player_replace"); err != nil {
 			return engine.Snapshot(), err
 		}
 	}
 	settings, _ := s.store.Snapshot()
-	return engine.Start(r.Context(), target, settings.Motion)
+	admission := engine.AdmissionGeneration()
+	if s.stopSequence.Load() != stopSequence {
+		return engine.Snapshot(), errors.New("program play was invalidated by Emergency Stop")
+	}
+	return engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
 }
 
 func (s *Server) handleLibraryFeedback(w http.ResponseWriter, r *http.Request) {

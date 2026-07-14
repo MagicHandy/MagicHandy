@@ -2,6 +2,8 @@ package voice
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -243,6 +245,65 @@ func TestSubmitSpeakCompletesWithChunks(t *testing.T) {
 	}
 }
 
+func TestRequestIDsAreUniqueAcrossWorkerRoles(t *testing.T) {
+	tts := NewSupervisor(RoleTTS)
+	asr := NewSupervisor(RoleASR)
+	if ttsID, asrID := tts.newRequestID(), asr.newRequestID(); ttsID == asrID || !strings.HasPrefix(ttsID, "tts-") || !strings.HasPrefix(asrID, "asr-") {
+		t.Fatalf("request IDs = %q and %q, want distinct role-prefixed IDs", ttsID, asrID)
+	}
+}
+
+func TestSubmittedInputAudioIsReleasedAfterDispatch(t *testing.T) {
+	supervisor := newTestSupervisor(t, RoleASR, "-start-loaded")
+	if err := supervisor.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitForState(t, supervisor, StateRunning)
+	requireReadyModel(t, supervisor)
+
+	pending, err := supervisor.Submit(Request{Type: RequestTranscribe, AudioB64: "c3BlZWNo", AudioFormat: "wav"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	waitForRequestState(t, pending, RequestStateDone)
+	pending.mu.Lock()
+	retained := pending.request.AudioB64
+	pending.mu.Unlock()
+	if retained != "" {
+		t.Fatal("completed transcription retained its input audio")
+	}
+}
+
+func TestInvalidateAllRejectsCompletedASRResults(t *testing.T) {
+	manager := NewManager()
+	pending := &PendingRequest{ID: "asr-1", Role: RoleASR, Type: RequestTranscribe, state: RequestStateDone}
+	manager.Track(pending)
+	if active := manager.InvalidateAll(RoleASR); len(active) != 0 {
+		t.Fatalf("completed request returned as active: %+v", active)
+	}
+	if state := pending.Snapshot().State; state != RequestStateCanceled {
+		t.Fatalf("invalidated transcript state = %q, want canceled", state)
+	}
+}
+
+func TestTranscriptionStagingIsSessionScopedAndRemovedOnShutdown(t *testing.T) {
+	manager := NewManager()
+	if err := manager.PrepareTranscriptionStaging(t.TempDir()); err != nil {
+		t.Fatalf("prepare staging: %v", err)
+	}
+	dir := manager.stagingDir
+	if filepath.Base(filepath.Dir(dir)) != "inputs" || !strings.HasPrefix(filepath.Base(dir), "session-") {
+		t.Fatalf("staging directory = %q, want voice/inputs/session-*", dir)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "capture.wav"), []byte("private"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager.Shutdown()
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staging session survives shutdown: %v", err)
+	}
+}
+
 func TestCancelStopsActiveRequest(t *testing.T) {
 	supervisor := newTestSupervisor(t, RoleTTS, "-start-loaded")
 
@@ -365,6 +426,18 @@ func TestCompletedSpeakRetainsBoundedAudio(t *testing.T) {
 		if !wantAudio && len(audio) != 0 {
 			t.Fatalf("request %d should have dropped audio", i)
 		}
+	}
+}
+
+func TestRequestLogNeverEvictsActiveWork(t *testing.T) {
+	manager := NewManager()
+	active := &PendingRequest{ID: "asr-active", Role: RoleASR, state: RequestStateActive}
+	manager.Track(active)
+	for i := 0; i < requestLogLimit+4; i++ {
+		manager.Track(&PendingRequest{ID: fmt.Sprintf("done-%d", i), state: RequestStateDone})
+	}
+	if got, ok := manager.Request(active.ID); !ok || got != active {
+		t.Fatal("active voice request was evicted from the request index")
 	}
 }
 

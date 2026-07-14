@@ -614,17 +614,177 @@ textarea:disabled {
 .chat-form {
   flex: 0 0 auto;
   margin-top: 14px;
+}
+.chat-compose-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 8px;
 }
-.chat-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.chat-compose-row[data-has-voice="true"] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
-.mic-button[data-recording="true"] {
-  border-color: var(--danger);
-  color: var(--danger);
+.chat-send {
+  min-height: 60px;
+  padding-inline: 18px;
+}
+.voice-input {
+  position: relative;
+  height: 60px;
+}
+.voice-input-control {
+  display: flex;
+  height: 100%;
+}
+.voice-mic-button,
+.voice-menu-trigger {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  background: linear-gradient(180deg, #3a3f47 0%, #24282e 46%, #17191d 100%);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 -2px rgba(0, 0, 0, 0.42),
+    var(--shadow-soft);
+  cursor: pointer;
+}
+.voice-mic-button {
+  width: 52px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.voice-menu-trigger {
+  width: 32px;
+  border-left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.voice-mic-button:hover:not(:disabled),
+.voice-menu-trigger:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.voice-mic-button:active:not(:disabled),
+.voice-menu-trigger:active:not(:disabled),
+.voice-mic-button[data-active="true"] {
+  background: linear-gradient(180deg, #202a34 0%, #17212a 100%);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.52);
+}
+.voice-mic-button:disabled,
+.voice-menu-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.voice-mic-button[data-state="arming"] svg,
+.voice-mic-button[data-state="processing"] svg {
+  opacity: 0.55;
+}
+.voice-mic-button[data-state="ready"]::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.voice-mic-countdown {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  min-width: 16px;
+  font-size: 0.62rem;
+  line-height: 1;
+  text-align: center;
+  color: var(--text);
+}
+.voice-capture-label {
+  position: absolute;
+  left: -1px;
+  bottom: calc(100% + 6px);
+  width: max-content;
+  max-width: 180px;
+  padding: 4px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.voice-menu-triangle {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid currentColor;
+  transform: translateY(2px);
+  transition: transform 0.16s ease;
+}
+.voice-input[data-open="true"] .voice-menu-triangle {
+  transform: translateY(-2px) rotate(180deg);
+}
+.voice-input-menu {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: clamp(240px, 32vw, 300px);
+  max-width: calc(100dvw - 40px);
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+}
+.voice-input-menu .field-label {
+  display: block;
+  margin: 0 0 5px;
+}
+.voice-input-menu select {
+  width: 100%;
+}
+.voice-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 12px;
+}
+.voice-mode-toggle button {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+}
+.voice-mode-toggle button:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.voice-mode-toggle button:last-child {
+  margin-left: -1px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.voice-mode-toggle button[aria-pressed="true"] {
+  position: relative;
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-tint);
+}
+.voice-release-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
 }
 .voice-quick-toggle {
   min-height: 32px;
@@ -683,6 +843,21 @@ textarea:disabled {
     min-height: 0;
     height: 45vh;
     height: clamp(240px, 45dvh, 480px);
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-compose-row {
+    gap: 6px;
+  }
+  .voice-mic-button {
+    width: 44px;
+  }
+  .voice-menu-trigger {
+    width: 30px;
+  }
+  .chat-send {
+    padding-inline: 12px;
   }
 }
 
@@ -891,6 +1066,7 @@ textarea:disabled {
   .viz-carriage,
   .toast,
   .toggle .track::before,
+  .voice-menu-triangle,
   .chat-message {
     transition: none;
     animation: none;

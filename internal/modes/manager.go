@@ -189,11 +189,37 @@ func (m *Manager) Stop(reason string) {
 // NotifyUserStop records an explicit user stop: the active mode ends and no
 // keepalive may restart motion afterwards.
 func (m *Manager) NotifyUserStop() {
+	finish := m.BeginUserStop()
+	finish()
+}
+
+// BeginUserStop marks autonomous work unable to restart and cancels its loop
+// without waiting. The caller can stop the motion engine first, then invoke the
+// returned function to drain and trace the mode goroutine.
+func (m *Manager) BeginUserStop() func() {
 	m.mu.Lock()
 	m.userStopped = true
 	m.chatTarget = nil
+	if m.mode == "" {
+		m.mu.Unlock()
+		return func() {}
+	}
+	mode := m.mode
+	cancel := m.cancel
+	done := m.done
+	m.mode = ""
+	m.cancel = nil
+	m.done = nil
 	m.mu.Unlock()
-	m.Stop("user_stop")
+	if cancel != nil {
+		cancel()
+	}
+	return func() {
+		if done != nil {
+			<-done
+		}
+		m.trace(mode, "mode_stopped", nil, "user_stop")
+	}
 }
 
 // NotifyChatTarget adopts a chat-applied target for chat keepalive.

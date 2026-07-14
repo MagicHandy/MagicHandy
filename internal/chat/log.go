@@ -90,6 +90,18 @@ func (l *MessageLog) Append(role string, content string, clientID string) (int64
 	return seq, nil
 }
 
+// Delete removes one message that was invalidated before it became visible.
+// Sequence numbers are intentionally not reused.
+func (l *MessageLog) Delete(seq int64) error {
+	if seq <= 0 {
+		return nil
+	}
+	if _, err := l.db.SQL().ExecContext(context.Background(), `DELETE FROM messages WHERE seq = ?`, seq); err != nil {
+		return fmt.Errorf("delete chat message: %w", err)
+	}
+	return nil
+}
+
 // After returns messages with seq greater than after, oldest first, capped
 // at limit (or the full bounded log when limit <= 0).
 func (l *MessageLog) After(after int64, limit int) ([]LogMessage, error) {

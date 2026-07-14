@@ -4,7 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"strconv"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,6 +43,7 @@ type PendingRequest struct {
 
 	request  Request
 	canceled bool
+	cleanup  func()
 
 	chunks         int
 	audio          []byte
@@ -138,8 +141,30 @@ func (p *PendingRequest) dropAudio() {
 	p.mu.Unlock()
 }
 
+func (p *PendingRequest) dropInlineAudio() {
+	p.mu.Lock()
+	p.request.AudioB64 = ""
+	p.mu.Unlock()
+}
+
+func (p *PendingRequest) releaseInput() {
+	p.mu.Lock()
+	p.request.AudioB64 = ""
+	p.request.AudioRef = ""
+	cleanup := p.cleanup
+	p.cleanup = nil
+	p.mu.Unlock()
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
 func (p *PendingRequest) setState(state string) {
 	p.mu.Lock()
+	if p.canceled && state != RequestStateCanceled {
+		p.mu.Unlock()
+		return
+	}
 	p.state = state
 	p.mu.Unlock()
 }
@@ -168,31 +193,45 @@ func (p *PendingRequest) fail(err *WorkerError) {
 // rejects new work when full (catch-up flooding protection; a configurable
 // drop-oldest policy arrives with real audio playback).
 func (s *Supervisor) Submit(request Request) (*PendingRequest, error) {
+	return s.submit(request, nil)
+}
+
+func (s *Supervisor) submit(request Request, cleanup func()) (*PendingRequest, error) {
 	expected := RequestSpeak
 	if s.role == RoleASR {
 		expected = RequestTranscribe
 	}
 	if request.Type != expected {
+		if cleanup != nil {
+			cleanup()
+		}
 		return nil, fmt.Errorf("%s worker cannot handle %q requests", s.role, request.Type)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.queue == nil || s.state != StateRunning {
+		if cleanup != nil {
+			cleanup()
+		}
 		return nil, fmt.Errorf("%s worker is not running", s.role)
 	}
 	if s.lastHealth.ModelState != ModelStateReady {
+		if cleanup != nil {
+			cleanup()
+		}
 		return nil, fmt.Errorf("%s worker model is not ready", s.role)
 	}
 
 	s.nextID++
 	pending := &PendingRequest{
-		ID:        strconv.FormatUint(s.nextID, 10),
+		ID:        fmt.Sprintf("%s-%d", s.role, s.nextID),
 		Role:      s.role,
 		Type:      request.Type,
 		state:     RequestStateQueued,
 		createdAt: time.Now().UTC(),
 		request:   request,
+		cleanup:   cleanup,
 	}
 	pending.request.ID = pending.ID
 
@@ -201,6 +240,7 @@ func (s *Supervisor) Submit(request Request) (*PendingRequest, error) {
 		s.queued++
 		return pending, nil
 	default:
+		pending.releaseInput()
 		return nil, fmt.Errorf("%s worker queue is full", s.role)
 	}
 }
@@ -234,6 +274,8 @@ func (s *Supervisor) dispatchLoop(workerConn *conn, queue chan *PendingRequest) 
 
 		if !pending.isCanceled() {
 			s.execute(workerConn, pending)
+		} else {
+			pending.releaseInput()
 		}
 
 		s.mu.Lock()
@@ -246,6 +288,7 @@ func (s *Supervisor) dispatchLoop(workerConn *conn, queue chan *PendingRequest) 
 // Model errors stay in the request record — they never propagate into chat
 // history, TTS playback, or motion (ADR 0003).
 func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
+	defer pending.releaseInput()
 	responses, release, err := workerConn.register(pending.ID)
 	if err != nil {
 		pending.fail(&WorkerError{Code: ErrorCodeInternal, Message: err.Error()})
@@ -253,7 +296,14 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 	}
 	defer release()
 
-	if err := workerConn.send(pending.request); err != nil {
+	pending.mu.Lock()
+	request := pending.request
+	pending.mu.Unlock()
+	err = workerConn.send(request)
+	// send serializes synchronously, so inline test audio no longer needs to be
+	// retained in the core once the worker frame has been written.
+	pending.dropInlineAudio()
+	if err != nil {
 		pending.fail(&WorkerError{Code: ErrorCodeInternal, Message: err.Error()})
 		return
 	}
@@ -280,6 +330,14 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 
 // applyResponse folds one frame into the request record; true means terminal.
 func (s *Supervisor) applyResponse(pending *PendingRequest, response Response) bool {
+	if pending.isCanceled() {
+		switch response.Type {
+		case ResponseTranscript, ResponseDone, ResponseCanceled, ResponseError:
+			return true
+		default:
+			return false
+		}
+	}
 	switch response.Type {
 	case ResponseAudioChunk:
 		pending.mu.Lock()
@@ -324,9 +382,10 @@ func (s *Supervisor) applyResponse(pending *PendingRequest, response Response) b
 // Manager owns the per-role supervisors and a bounded log of recent
 // requests. It is the single voice entry point for the HTTP edge.
 type Manager struct {
-	mu       sync.Mutex
-	workers  map[Role]*Supervisor
-	requests []*PendingRequest
+	mu         sync.Mutex
+	workers    map[Role]*Supervisor
+	requests   []*PendingRequest
+	stagingDir string
 }
 
 // requestLogLimit bounds the recent-request log used by the status API.
@@ -339,6 +398,99 @@ func NewManager() *Manager {
 		workers[role] = NewSupervisor(role)
 	}
 	return &Manager{workers: workers}
+}
+
+// PrepareTranscriptionStaging creates this manager's process-session directory
+// and reaps only sessions old enough that no bounded ASR request can own them.
+func (m *Manager) PrepareTranscriptionStaging(dataDir string) error {
+	parent := filepath.Join(dataDir, "voice", "inputs")
+	if err := os.MkdirAll(parent, 0o700); err != nil {
+		return fmt.Errorf("create voice input staging: %w", err)
+	}
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return fmt.Errorf("inspect voice input staging: %w", err)
+	}
+	staleBefore := time.Now().Add(-5 * time.Minute)
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "session-") {
+			continue
+		}
+		info, err := entry.Info()
+		if err == nil && info.ModTime().Before(staleBefore) {
+			_ = os.RemoveAll(filepath.Join(parent, entry.Name()))
+		}
+	}
+	dir, err := os.MkdirTemp(parent, fmt.Sprintf("session-%d-*", os.Getpid()))
+	if err != nil {
+		return fmt.Errorf("create voice input session: %w", err)
+	}
+	// #nosec G302 -- this is a directory; owner execute permission is required
+	// to reach the private 0600 capture files inside it.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		_ = os.RemoveAll(dir)
+		return fmt.Errorf("protect voice input session: %w", err)
+	}
+	m.stagingDir = dir
+	return nil
+}
+
+// SubmitTranscription stages raw browser audio as a private short-lived file
+// and sends only its reference over the worker protocol. This keeps real audio
+// below the protocol's NDJSON frame bound and avoids a second base64 copy.
+func (m *Manager) SubmitTranscription(audio []byte, format, dataDir string) (*PendingRequest, error) {
+	if m.stagingDir == "" {
+		if err := m.PrepareTranscriptionStaging(dataDir); err != nil {
+			return nil, err
+		}
+	}
+	// Another process can reap an old empty session; recreate ours before use.
+	if err := os.MkdirAll(m.stagingDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create voice input session: %w", err)
+	}
+	format = strings.TrimSpace(format)
+	file, err := os.CreateTemp(m.stagingDir, "capture-*."+format)
+	if err != nil {
+		return nil, fmt.Errorf("stage voice input: %w", err)
+	}
+	path := file.Name()
+	cleanup := func() { _ = os.Remove(path) }
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		cleanup()
+		return nil, fmt.Errorf("protect voice input: %w", err)
+	}
+	if _, err := file.Write(audio); err != nil {
+		_ = file.Close()
+		cleanup()
+		return nil, fmt.Errorf("stage voice input: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("stage voice input: %w", err)
+	}
+	return m.submitAndTrack(RoleASR, Request{
+		Type: RequestTranscribe, AudioRef: path, AudioFormat: format,
+	}, cleanup)
+
+}
+
+// Submit queues and tracks non-staged work atomically with respect to Stop
+// invalidation.
+func (m *Manager) Submit(role Role, request Request) (*PendingRequest, error) {
+	return m.submitAndTrack(role, request, nil)
+}
+
+func (m *Manager) submitAndTrack(role Role, request Request, cleanup func()) (*PendingRequest, error) {
+	m.mu.Lock()
+	pending, err := m.workers[role].submit(request, cleanup)
+	if err != nil {
+		m.mu.Unlock()
+		return nil, err
+	}
+	m.trackLocked(pending)
+	m.mu.Unlock()
+	return pending, nil
 }
 
 // Config is the manager-level configuration derived from settings.
@@ -372,9 +524,24 @@ func (m *Manager) Status() map[Role]WorkerStatus {
 func (m *Manager) Track(pending *PendingRequest) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.trackLocked(pending)
+}
+
+func (m *Manager) trackLocked(pending *PendingRequest) {
 	m.requests = append(m.requests, pending)
-	if len(m.requests) > requestLogLimit {
-		m.requests = m.requests[len(m.requests)-requestLogLimit:]
+	for len(m.requests) > requestLogLimit {
+		evict := -1
+		for i, request := range m.requests {
+			state := request.Snapshot().State
+			if state != RequestStateQueued && state != RequestStateActive {
+				evict = i
+				break
+			}
+		}
+		if evict < 0 {
+			break
+		}
+		m.requests = append(m.requests[:evict], m.requests[evict+1:]...)
 	}
 	for i := 0; i < len(m.requests)-audioRetainCount; i++ {
 		m.requests[i].dropAudio()
@@ -393,6 +560,41 @@ func (m *Manager) Request(id string) (*PendingRequest, bool) {
 	return nil, false
 }
 
+// InvalidateAll marks every visible request for a role canceled immediately
+// and returns work that still needs a worker-side cancel frame. Emergency Stop
+// uses this local phase before touching the transport so stale ASR results can
+// no longer be consumed even if the worker is slow to accept cancellation.
+func (m *Manager) InvalidateAll(role Role) []*PendingRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	active := make([]*PendingRequest, 0, len(m.requests))
+	for _, pending := range m.requests {
+		if pending.Role != role {
+			continue
+		}
+		snapshot := pending.Snapshot()
+		if snapshot.State == RequestStateQueued || snapshot.State == RequestStateActive {
+			active = append(active, pending)
+		}
+		if snapshot.State != RequestStateFailed && snapshot.State != RequestStateCanceled {
+			pending.markCanceled()
+			pending.dropAudio()
+			pending.releaseInput()
+		}
+	}
+	return active
+}
+
+// CancelInvalidated sends worker-side cancellation after the caller has
+// completed its higher-priority safety work.
+func (m *Manager) CancelInvalidated(role Role, requests []*PendingRequest) {
+	worker := m.workers[role]
+	for _, pending := range requests {
+		worker.Cancel(pending)
+	}
+}
+
 // Requests lists tracked request snapshots, newest first.
 func (m *Manager) Requests() []RequestSnapshot {
 	m.mu.Lock()
@@ -408,5 +610,8 @@ func (m *Manager) Requests() []RequestSnapshot {
 func (m *Manager) Shutdown() {
 	for _, worker := range m.workers {
 		worker.Shutdown()
+	}
+	if m.stagingDir != "" {
+		_ = os.RemoveAll(m.stagingDir)
 	}
 }

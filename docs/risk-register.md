@@ -726,11 +726,13 @@ safety regression).
 Level: High
 
 Description:
-Browser push-to-talk records WebM/Opus or Ogg, while the managed parakeet.cpp
+Browser voice input records WebM/Opus or Ogg, while the managed parakeet.cpp
 path accepts WAV input. The original implementation forwarded compressed bytes
 unchanged and was incompatible with the default managed microphone path. The UI
 now decodes the recording, downmixes and resamples it to 16 kHz mono, and emits
 real PCM16 WAV before submission; the managed API rejects non-WAV content.
+The original control also acquired and destroyed the microphone for every
+utterance, so speech begun during browser device/DSP startup was unrecoverable.
 
 Mitigation:
 
@@ -738,6 +740,12 @@ Mitigation:
   runner before claiming push-to-talk acceptance
 - keep browser-side WAV conversion bounded; native audio dependencies must not
   enter the pure-Go core
+- retain the browser stream briefly and expose its ready state; the browser,
+  not a native Go capture service, remains the permission/device owner
+- upload raw audio and use a private process-session worker `audio_ref`; never
+  log or diagnose captures, remove terminal work immediately, remove the owned
+  session on shutdown, and reap stale crashed sessions after the bounded request
+  window
 - reject unsupported formats with a visible actionable error rather than
   forwarding bytes optimistically
 - retain fixture tests for every accepted browser format and the WAV provider
@@ -749,9 +757,13 @@ Exit evidence:
   the pinned managed Parakeet install, with format/error tests and no core CGo
   dependency
 
-Status 2026-07-14: the deterministic format mismatch is fixed with browser-side
-WAV conversion and managed-boundary regression tests. A real Chrome/Edge run
-through the pinned runner/model remains required to close the risk.
+Status 2026-07-14: the deterministic format mismatch and repeated cold-start
+path are fixed with warm browser capture, one-pass WAV conversion, raw HTTP
+upload, session-scoped `audio_ref` staging, backend Stop-generation fencing, and
+lifecycle/boundary regression tests. The engine also rejects starts admitted
+before its latest Stop, covering delayed non-chat motion requests.
+A real Chrome/Edge run through the pinned runner/model remains required to close
+the risk and quantify first-word accuracy and end-to-end latency.
 
 Relates to R17 (voice dependency and latency risk) and R18 (browser security and
 LAN microphone access).

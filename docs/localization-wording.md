@@ -153,6 +153,25 @@ Motion pattern names (mild, kept short):
 | Malformed model JSON | JSON del modelo mal formado | JSON do modelo malformado | 模型 JSON 格式错误 | モデル JSON の形式が不正です |
 | Malformed model response. | Respuesta del modelo mal formada. | Resposta do modelo malformada. | 模型响应格式错误。 | モデルの応答形式が不正です。 |
 | Stopping motion. | Deteniendo el movimiento. | Parando o movimento. | 正在停止运动。 | モーションを停止します。 |
+| Start hands-free voice | Iniciar voz manos libres | Iniciar voz com mãos livres | 启动免提语音 | ハンズフリー音声を開始 |
+| Stop and transcribe | Detener y transcribir | Parar e transcrever | 停止并转写 | 停止して文字起こし |
+| Hold to talk | Mantener pulsado para hablar | Mantenha pressionado para falar | 按住说话 | 長押しして話す |
+| Hands-free | Manos libres | Mãos livres | 免提 | ハンズフリー |
+| Voice mode | Modo de voz | Modo de voz | 语音模式 | 音声モード |
+| Voice input | Entrada de voz | Entrada de voz | 语音输入 | 音声入力 |
+| Default microphone | Micrófono predeterminado | Microfone padrão | 默认麦克风 | 既定のマイク |
+| Release microphone | Liberar micrófono | Liberar microfone | 释放麦克风 | マイクを解放 |
+| Open voice input menu (aria) | Abrir menú de entrada de voz | Abrir menu de entrada de voz | 打开语音输入菜单 | 音声入力メニューを開く |
+| Close voice input menu (aria) | Cerrar menú de entrada de voz | Fechar menu de entrada de voz | 关闭语音输入菜单 | 音声入力メニューを閉じる |
+| Starting microphone | Iniciando micrófono | Iniciando microfone | 正在启动麦克风 | マイクを起動中 |
+| Cancel microphone startup | Cancelar inicio del micrófono | Cancelar inicialização do microfone | 取消启动麦克风 | マイクの起動をキャンセル |
+| Listening | Escuchando | Ouvindo | 正在聆听 | 聞き取り中 |
+| Transcribing | Transcribiendo | Transcrevendo | 正在转写 | 文字起こし中 |
+| Voice input active (aria) | Entrada de voz activa | Entrada de voz ativa | 语音输入已启用 | 音声入力中 |
+| No speech was recognized. | No se reconoció ninguna voz. | Nenhuma fala foi reconhecida. | 未识别到语音。 | 音声を認識できませんでした。 |
+| Transcription upload timed out. | Se agotó el tiempo para subir la transcripción. | O envio da transcrição expirou. | 转写上传超时。 | 文字起こしのアップロードがタイムアウトしました。 |
+| The selected microphone became unavailable. | El micrófono seleccionado dejó de estar disponible. | O microfone selecionado ficou indisponível. | 所选麦克风不可用。 | 選択したマイクが利用できなくなりました。 |
+| Chat canceled by Emergency Stop. | Chat cancelado por la parada de emergencia. | Chat cancelado pela parada de emergência. | 聊天已被紧急停止取消。 | 緊急停止によりチャットをキャンセルしました。 |
 
 ## Settings — Shell
 
