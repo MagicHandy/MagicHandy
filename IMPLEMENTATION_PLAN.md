@@ -188,15 +188,17 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    Provider adapters, source-installer asset discovery, app-managed/custom
    separation, explicit enable/save/Start UI, and guarded Windows host-path
    browsing are implemented. A real Chrome/Edge transcription run remains R24
-   exit evidence. NeuTTS is explicitly adapter-only in the source installer;
-   runner/model/reference provisioning and enforced offline operation remain R17.
+   exit evidence. The source installer now builds and discovers a pinned NeuTTS
+   runner/decoder/backbone with managed llama.cpp. Reference-code generation and
+   enforced offline operation remain R17.
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
 8. **Release provisioning**: `install.ps1` now builds every first-party Go voice
    adapter and can provision a clean Windows source machine, including the
-   compiler; `update.ps1` preserves or revises those choices. External NeuTTS
-   assets and managed llama.cpp still build/provision outside the core. Phase 16
+   compiler; `update.ps1` preserves or revises those choices. Managed llama.cpp
+   and the coupled NeuTTS runtime/assets still build/provision outside the core.
+   Phase 16
    must provide checksummed prebuilt runtimes before the GUI setup path can avoid
    installing Git/CMake/Visual Studio rather than merely automating them.
 
@@ -774,9 +776,10 @@ Status: **complete**.
   the final samples without delaying worker-side streaming or cancellation.
 - The child requests Hugging Face offline mode. Because the pinned client does
   not enforce that flag, the default Air Q4 path requires an exact local cache
-  entry before a bounded readiness synthesis can run. A network-denied test,
-  persistent model host, and turnkey assets remain R17 rather than completed
-  adapter claims.
+  entry before a bounded readiness synthesis can run. The Windows source
+  installer now builds and checksum-verifies the runtime assets with managed
+  llama.cpp. A network-denied test, persistent model host, prebuilt packaging,
+  and reference-code generation remain R17/Phase 16 rather than adapter claims.
 - The current `neutts-rs` 0.1.1 encoder export is a stub despite example text
   suggesting otherwise. This slice requires pre-encoded `.npy` reference
   codes plus the transcript. The WAV path is provenance only; MagicHandy does
@@ -1203,7 +1206,7 @@ Implement, as slices:
   CPU/CUDA download by default, advanced managed source build, skip-for-Ollama
   with store import, or external URL)
   → LLM model (import or curated download) → optional voice provisioning
-  (Parakeet runner+model and NeuTTS assets moved from `install.ps1` into
+  (Parakeet runner+model and source-built NeuTTS assets moved from `install.ps1` into
   checksummed, size/license-visible, progress-reporting API endpoints;
   ElevenLabs key entry) → finish. Every step skippable; every step is the
   existing settings/API surface, never a second implementation

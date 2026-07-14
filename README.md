@@ -62,14 +62,17 @@ verify SHA-256; they never modify the Ollama library.
 The source installer can start on a clean 64-bit Windows machine. With consent,
 it repairs Windows Package Manager when needed; installs Go; and provisions
 Git, CMake, the Visual Studio Desktop C++ workload, and CUDA only when the
-selected managed llama.cpp build requires them. Choosing Ollama instead avoids
-that managed runtime and compiler toolchain. It builds the core plus the
-Parakeet, NeuTTS Air, and ElevenLabs Go adapters; the optional Parakeet runner
-and 644 MiB model remain a separate, checksum-verified prompt. NeuTTS is
-adapter-only: its external `stream_pcm` runner, decoder/backbone files, and
-reference voice codes are not installed by this source bootstrap.
+selected managed llama.cpp build requires them. That choice also provisions
+LLVM/libclang and pinned Rust 1.94.0 through Rustup, builds the pinned NeuTTS `stream_pcm` runner and its CPU llama.cpp
+binding, and installs a checksum-verified Air Q4 backbone plus a decoder
+converted from a checksum-verified NeuCodec checkpoint. Choosing Ollama instead
+avoids the managed source builds and also skips NeuTTS. The installer builds all
+three Go voice adapters; the optional Parakeet runner and 644 MiB model remain a
+separate, checksum-verified prompt. NeuTTS reference `.npy` codes and their exact
+transcript remain user supplied because the upstream Rust encoder is still a
+stub.
 
-Use `-SkipLlamaBuild` to choose Ollama without the extra managed runtime, or
+Use `-SkipLlamaBuild` to choose Ollama without managed llama.cpp or NeuTTS, or
 `-Yes -LlamaBackend cuda` for an unattended CUDA source-toolchain setup. `-Yes`
 accepts the displayed third-party package licenses and large-download choices;
 use `-PlanOnly` to inspect the work first. When setup is done the app opens at
@@ -83,8 +86,8 @@ without losing those choices with:
 .\update.ps1
 ```
 
-The updater shows the saved data directory, port, llama.cpp/Ollama selection,
-Parakeet choice, and launcher choice, then asks whether to modify them. It
+The updater shows the saved data directory, port, llama.cpp/NeuTTS/Ollama
+selection, Parakeet choice, and launcher choice, then asks whether to modify it. It
 refuses to update over local source changes and only fast-forwards: `main`
 follows `origin/main`, a live feature follows its configured upstream, and a
 merged feature whose remote branch was deleted can safely advance from
@@ -141,10 +144,10 @@ today: local chat driving real motion (Cloud REST and browser Bluetooth), live
 controls, Freestyle, long-term memory, editable prompt sets, pattern/program
 library and authoring, voice provider adapters and push-to-talk UI, model
 management, Intiface dispatch, and the React UI. The source installer can
-provision the app-managed Parakeet module. Browser recordings are converted to
-16 kHz mono WAV before managed transcription, and local path fields provide a
-guarded Windows Browse action. NeuTTS still requires a separately prepared
-runner/model/reference-code installation. Planned work includes Autopilot,
+provision the app-managed Parakeet and NeuTTS runtime modules. Browser recordings
+are converted to 16 kHz mono WAV before managed transcription, and local path
+fields provide a guarded Windows Browse action. NeuTTS still requires licensed
+pre-encoded reference codes and their exact transcript. Planned work includes Autopilot,
 migration, guided setup, curated downloads, and packaged releases. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for acceptance gaps as well as
 implemented scope.

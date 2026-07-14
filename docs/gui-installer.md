@@ -120,9 +120,10 @@ non-blocking — the app must remain fully usable with everything declined
    recommendations once those land.
 5. **Voice (optional)** — Parakeet ASR: download the pinned parakeet.cpp
    runner + model (sizes, licenses, SHA-256 — lifted from `install.ps1`
-   into API endpoints so the wizard and the script share one checksummed
-    path). NeuTTS: runner + reference codes with the same rules. ElevenLabs:
-    write-only key entry. Installing assets does not enable or start voice;
+    into API endpoints so the wizard and the script share one checksummed
+    path). NeuTTS: prebuilt runner + decoder/backbone using the source
+    installer's pins, followed by user-supplied licensed reference codes and
+    exact transcript. ElevenLabs: write-only key entry. Installing assets does not enable or start voice;
     enablement is explicit and a separate Start action confirms model readiness.
     App-managed modules and custom local paths are separate choices.
     Speak-replies and push-to-talk explained.

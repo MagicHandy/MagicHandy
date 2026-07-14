@@ -3,8 +3,8 @@
 ## Status
 
 Accepted and implemented. Updated 2026-07-14: managed ASR uses parakeet.cpp;
-NeuTTS Air uses the Slice 13.6 Go adapter around the reviewed `neutts-rs`
-`stream_pcm` process.
+NeuTTS Air uses the Slice 13.6 Go adapter around pinned `neutts-rs` v0.1.1
+`stream_pcm`, which the source installer builds with managed llama.cpp.
 
 ## Context
 
@@ -43,10 +43,11 @@ Implement three non-Python voice backends behind the ADR 0003 worker protocol:
 3. **Cloud TTS (premium) — ElevenLabs**: HTTP from Go, expressive and
    high-fidelity instant cloning, low latency, no Python and no local VRAM.
 
-The core app, Parakeet, ElevenLabs, and an already prepared NeuTTS runtime run
-with **no Python present**. The current source installer does not prepare the
-external NeuTTS runner/model/reference assets; generating new reference codes
-may still require upstream Python tooling.
+The core app, Parakeet, ElevenLabs, and the installer-managed NeuTTS runtime run
+with **no Python present**. Selecting managed llama.cpp in the source installer
+also builds the NeuTTS runner and installs its decoder/backbone; skipping
+llama.cpp skips NeuTTS. Generating new reference codes may still require upstream
+Python tooling because the public Rust encoder remains a stub.
 Kokoro/Piper (non-cloning) may be added later as an instant fallback but are not
 in the first implementation set.
 
@@ -100,10 +101,11 @@ Negative / risks:
 
 - NeuTTS Air's subjective cloning quality and arbitrary-WAV reference encoding
   remain unproven; the current pre-encoded-code boundary is explicit (R17)
-- NeuTTS is adapter-only in the source installer. MagicHandy compensates for the
-  pinned runner not enforcing `HF_HUB_OFFLINE=1` with exact-cache preflight, but
-  it reloads in a new process for every request; turnkey provisioning,
-  network-denied evidence, and persistent preload remain R17
+- NeuTTS source provisioning is coupled to managed llama.cpp and adds Rust plus
+  about 1.4 GiB of installed voice assets. MagicHandy compensates for the pinned
+  runner not enforcing `HF_HUB_OFFLINE=1` with exact-cache preflight, but it
+  reloads in a new process for every request; network-denied evidence,
+  persistent preload, and arbitrary-WAV encoding remain R17
 - expressive emotion *tags* on a cloned voice are not covered by the initial set;
   that stays a cloud (ElevenLabs) or optional-Python capability
 - ElevenLabs needs internet + API key and sends text/reference audio to a cloud
@@ -113,10 +115,10 @@ Negative / risks:
 
 ## Implementation Note
 
-The NeuTTS Air spike and Slice 13.6 protocol adapter are complete. Setup and the
-exact pre-encoded-code boundary are documented in `docs/neutts-worker.md`.
-Turnkey installation, network-denied evidence, persistent preload,
-subjective quality, and arbitrary-WAV encoding remain open; if they fail
+The NeuTTS Air spike, Slice 13.6 protocol adapter, and checksum-pinned Windows
+source installation are complete. Setup and the exact pre-encoded-code boundary
+are documented in `docs/neutts-worker.md`. Network-denied evidence, persistent
+preload, subjective quality, and arbitrary-WAV encoding remain open; if they fail
 acceptance, use a documented non-Python fallback or an optional Python worker
 while keeping ElevenLabs as the premium path.
 
