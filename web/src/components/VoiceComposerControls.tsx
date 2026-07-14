@@ -415,7 +415,7 @@ export function VoiceComposerControls({
             }
           } : undefined}
         >
-          <MicrophoneIcon size={18} />
+          <MicrophoneIcon size={20} />
           {recording && <span className="voice-mic-countdown" aria-hidden="true">{recordingSecondsLeft}</span>}
           {active && (
             <span className="voice-capture-label" aria-hidden="true">

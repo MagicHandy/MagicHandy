@@ -624,13 +624,17 @@ textarea:disabled {
 .chat-compose-row[data-has-voice="true"] {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
+.chat-compose-row textarea {
+  min-height: 52px;
+  height: 52px;
+}
 .chat-send {
-  min-height: 60px;
+  min-height: 52px;
   padding-inline: 18px;
 }
 .voice-input {
   position: relative;
-  height: 60px;
+  height: 52px;
 }
 .voice-input-control {
   display: flex;
@@ -648,11 +652,11 @@ textarea:disabled {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .voice-mic-button {
-  width: 46px;
+  width: 44px;
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 .voice-menu-trigger {
-  width: 28px;
+  width: 20px;
   border-left: 0;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
@@ -847,10 +851,10 @@ textarea:disabled {
     gap: 6px;
   }
   .voice-mic-button {
-    width: 42px;
+    width: 40px;
   }
   .voice-menu-trigger {
-    width: 26px;
+    width: 18px;
   }
   .chat-send {
     padding-inline: 12px;
