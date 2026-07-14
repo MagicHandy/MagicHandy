@@ -81,10 +81,12 @@ checkout again.
 
 Parakeet's external CPU runner and 644 MiB model are separate explicit assets.
 The script displays their size/license, verifies their pinned SHA-256 values,
-and installs them atomically under `<data-dir>/voice/parakeet`. It then prints
-the deliberate activation sequence: Settings > Voice, select Parakeet and the
-MagicHandy module, enable voice, save, then Start. Installing files never enables
-or autostarts a microphone worker.
+downloads with a compact inline progress bar, and installs them atomically under
+`<data-dir>/voice/parakeet`. Transient transport and server failures are retried
+with validated byte-range resume. It then prints the deliberate activation
+sequence: Settings > Voice, select Parakeet and the MagicHandy module, enable
+voice, save, then Start. Installing files never enables or autostarts a
+microphone worker.
 
 NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
 
@@ -94,7 +96,8 @@ NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
 3. requires and corrects the tag's single stale root-package version in
    `Cargo.lock` from 0.1.0 to 0.1.1, without changing dependency versions;
 4. downloads the revision-pinned NeuCodec checkpoint and Air Q4 GGUF with fixed
-   SHA-256 verification;
+   SHA-256 verification, bounded retries, and resumable partial files under
+   `<data-dir>/voice/neutts/downloads`;
 5. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
    pure-Rust converter, without Python or PyTorch;
 6. builds `stream_pcm` with Cargo `--locked`, eSpeak, and its CPU
@@ -211,13 +214,14 @@ voice asset. It only changes what subsequent runs ensure is present.
 ## Validation
 
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
-all script syntax, atomic state round trips and secret-field exclusion, managed
-CUDA/NeuTTS versus Ollama-only plans, app-managed NeuTTS manifest discovery, and
-end-to-end plan-only install/update behavior.
+all script syntax, atomic state round trips and secret-field exclusion,
+interrupted HTTP byte-range resume and checksum promotion, managed CUDA/NeuTTS
+versus Ollama-only plans, app-managed NeuTTS manifest discovery, and end-to-end
+plan-only install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response
 validation, exact physical-stop confirmation, unattended refusal, `main`, a
 live feature upstream, a single-branch
 merged/deleted feature fallback, unmerged/deleted refusal, and dirty-tree
 refusal. A real temporary app verifies Emergency Stop, checkout-scoped
-process-tree teardown, and stale executable-backup cleanup. It intentionally
-performs no package or model download.
+process-tree teardown, and stale executable-backup cleanup. Download tests use a
+small loopback fixture; CI performs no package or external model download.
