@@ -625,16 +625,16 @@ textarea:disabled {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 .chat-compose-row textarea {
-  min-height: 52px;
-  height: 52px;
+  min-height: 44px;
+  height: 44px;
 }
 .chat-send {
-  min-height: 52px;
+  min-height: 44px;
   padding-inline: 18px;
 }
 .voice-input {
   position: relative;
-  height: 52px;
+  height: 44px;
 }
 .voice-input-control {
   display: flex;
