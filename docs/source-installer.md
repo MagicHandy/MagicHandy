@@ -140,6 +140,14 @@ The updater:
 9. optionally launches the app, opening the browser only after `/api/state`
    confirms that the new process owns the configured port.
 
+Windows PowerShell treats a non-2xx response as an exception, but the updater
+still reads MagicHandy's JSON Stop payload. If motion was already inactive and
+the payload confirms local stopped state, the updater still does not infer
+physical delivery. Any unavailable, stale, or failed transport Stop requires the
+operator to verify the device is physically stopped and type `STOPPED` in an
+interactive update. Unattended updates, malformed responses, and unreachable
+responses fail closed and leave the old app running.
+
 Use `-Yes -NoLaunch` for an unattended update with unchanged choices,
 `-Reconfigure` to walk every choice, `-NoPull` to rebuild the current checkout,
 or `-PlanOnly` to inspect the saved dependency graph without changing anything.
@@ -154,7 +162,9 @@ voice asset. It only changes what subsequent runs ensure is present.
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion, managed
 CUDA versus Ollama-only plans, and end-to-end plan-only install/update behavior.
-Updater fixtures cover `main`, a live feature upstream, a single-branch
+Updater fixtures cover non-2xx Stop response parsing, strict response
+validation, exact physical-stop confirmation, unattended refusal, `main`, a
+live feature upstream, a single-branch
 merged/deleted feature fallback, unmerged/deleted refusal, and dirty-tree
 refusal. A real temporary app verifies Emergency Stop, checkout-scoped
 process-tree teardown, and stale executable-backup cleanup. It intentionally

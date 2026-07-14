@@ -787,18 +787,153 @@ function Stop-MagicHandyProcessTree {
     }
 }
 
-function Assert-MagicHandyRebuildStopResponse {
-    param([Parameter(Mandatory = $true)][object]$Response)
+function ConvertFrom-MagicHandyStopErrorResponse {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord)
 
-    $errorMessage = if ($Response.PSObject.Properties.Name -contains 'error') { [string]$Response.error } else { '' }
+    $body = if ($null -ne $ErrorRecord.ErrorDetails) { [string]$ErrorRecord.ErrorDetails.Message } else { '' }
+    if ([string]::IsNullOrWhiteSpace($body)) {
+        $httpResponse = if ($null -ne $ErrorRecord.Exception -and $ErrorRecord.Exception.PSObject.Properties.Name -contains 'Response') {
+            $ErrorRecord.Exception.Response
+        } else {
+            $null
+        }
+        if ($null -ne $httpResponse -and $httpResponse.PSObject.Methods.Name -contains 'GetResponseStream') {
+            $stream = $httpResponse.GetResponseStream()
+            if ($null -ne $stream) {
+                $reader = New-Object System.IO.StreamReader($stream)
+                try {
+                    $body = $reader.ReadToEnd()
+                } finally {
+                    $reader.Dispose()
+                    $stream.Dispose()
+                }
+            }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($body)) {
+        return $null
+    }
+    try {
+        return $body | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Invoke-MagicHandyRebuildStopRequest {
+    param([Parameter(Mandatory = $true)][ValidateRange(1, 65535)][int]$Port)
+
+    try {
+        return Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/api/motion/stop" -TimeoutSec 15
+    } catch {
+        $response = ConvertFrom-MagicHandyStopErrorResponse -ErrorRecord $_
+        if ($null -eq $response) {
+            throw
+        }
+        if ($response -isnot [System.Management.Automation.PSCustomObject]) {
+            throw
+        }
+        $response | Add-Member -NotePropertyName '_http_error' -NotePropertyValue $true -Force
+        return $response
+    }
+}
+
+function Test-MagicHandyEngineActive {
+    param([AllowNull()][object]$Engine)
+
+    if ($null -eq $Engine) {
+        return $false
+    }
+    foreach ($name in @('running', 'paused', 'completing')) {
+        if ($Engine.PSObject.Properties.Name -contains $name -and [bool]$Engine.$name) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Assert-MagicHandyRebuildStopResponse {
+    param(
+        [Parameter(Mandatory = $true)][object]$Response,
+        [switch]$AllowPhysicalStopConfirmation,
+        [scriptblock]$PhysicalStopConfirmation
+    )
+
+    if ($Response -isnot [System.Management.Automation.PSCustomObject]) {
+        throw 'Emergency Stop response was not a JSON object.'
+    }
+    $propertyNames = @($Response.PSObject.Properties.Name)
+    if ($propertyNames -notcontains 'available') {
+        throw 'Emergency Stop response was missing required field ''available''.'
+    }
+    foreach ($name in @('available', 'stopped', '_http_error')) {
+        if ($propertyNames -contains $name -and $Response.$name -isnot [bool]) {
+            throw "Emergency Stop response field '$name' was not boolean."
+        }
+    }
+    $locallyStopped = $propertyNames -contains 'stopped' -and [bool]$Response.stopped
+    $hasEngineState = $propertyNames -contains 'engine'
+    if ($hasEngineState) {
+        if ($null -eq $Response.engine -or $Response.engine -isnot [System.Management.Automation.PSCustomObject]) {
+            throw 'Emergency Stop response field ''engine'' was not an object.'
+        }
+        $engineProperties = @($Response.engine.PSObject.Properties.Name)
+        foreach ($name in @('running', 'paused', 'completing')) {
+            if ($engineProperties -notcontains $name -or $Response.engine.$name -isnot [bool]) {
+                throw "Emergency Stop engine field '$name' was missing or not boolean."
+            }
+        }
+    }
+    if ($hasEngineState -and -not (Test-MagicHandyEngineActive -Engine $Response.engine)) {
+        $locallyStopped = $true
+    }
+    $hasTransportResult = $propertyNames -contains 'transport_result'
+    if ($hasTransportResult) {
+        if ($null -eq $Response.transport_result -or $Response.transport_result -isnot [System.Management.Automation.PSCustomObject]) {
+            throw 'Emergency Stop response field ''transport_result'' was not an object.'
+        }
+        $resultProperties = @($Response.transport_result.PSObject.Properties.Name)
+        if ($resultProperties -notcontains 'ok' -or $Response.transport_result.ok -isnot [bool]) {
+            throw 'Emergency Stop transport result field ''ok'' was missing or not boolean.'
+        }
+        if (-not $hasEngineState -and [bool]$Response.transport_result.ok) {
+            $locallyStopped = $true
+        }
+    }
+    if ($propertyNames -contains 'error' -and $Response.error -isnot [string]) {
+        throw 'Emergency Stop response field ''error'' was not text.'
+    }
+    $errorMessage = if ($propertyNames -contains 'error') { $Response.error } else { '' }
+    $fromHTTPError = $propertyNames -contains '_http_error' -and [bool]$Response._http_error
+    if ($fromHTTPError -and [string]::IsNullOrWhiteSpace($errorMessage)) {
+        throw 'Emergency Stop HTTP error response did not contain an error message.'
+    }
+    $reportedTransportFailure = -not [bool]$Response.available -or `
+        ($hasTransportResult -and -not [bool]$Response.transport_result.ok)
+    if ($reportedTransportFailure -and [string]::IsNullOrWhiteSpace($errorMessage)) {
+        throw 'Emergency Stop response reported transport failure without an error message.'
+    }
     if ([string]::IsNullOrWhiteSpace($errorMessage)) {
+        if (-not $locallyStopped) {
+            throw 'Emergency Stop response did not confirm local stopped state.'
+        }
         return
     }
-    $locallyStopped = $Response.PSObject.Properties.Name -contains 'stopped' -and [bool]$Response.stopped
-    $transportUnavailable = $Response.PSObject.Properties.Name -contains 'available' -and -not [bool]$Response.available
-    if ($locallyStopped -and $transportUnavailable) {
-        Write-Warning "Emergency Stop marked the local engine stopped but could not reach a configured transport: $errorMessage"
-        return
+    $recognizedLegacyResponse = $propertyNames -contains 'available' -and `
+        ($locallyStopped -or ($hasTransportResult -and -not $hasEngineState))
+    if ($recognizedLegacyResponse) {
+        if ($AllowPhysicalStopConfirmation) {
+            Write-Warning "Physical transport Stop delivery was not confirmed: $errorMessage"
+            $confirmation = if ($null -ne $PhysicalStopConfirmation) {
+                & $PhysicalStopConfirmation
+            } else {
+                Read-Host 'Verify the device is physically stopped, then type STOPPED to continue'
+            }
+            if ($confirmation.Trim() -ceq 'STOPPED') {
+                return
+            }
+        }
+        throw "Physical Stop delivery was not confirmed. Verify the device is stopped, close the app, and rerun update.ps1. Transport error: $errorMessage"
     }
     throw "Emergency Stop failed before rebuild: $errorMessage"
 }
@@ -806,7 +941,9 @@ function Assert-MagicHandyRebuildStopResponse {
 function Stop-MagicHandyAppForRebuild {
     param(
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
-        [Parameter(Mandatory = $true)][ValidateRange(1, 65535)][int]$Port
+        [Parameter(Mandatory = $true)][ValidateRange(1, 65535)][int]$Port,
+        [switch]$AllowPhysicalStopConfirmation,
+        [scriptblock]$PhysicalStopConfirmation
     )
 
     $listeners = @(Get-MagicHandyLoopbackListeners -Port $Port)
@@ -833,8 +970,8 @@ function Stop-MagicHandyAppForRebuild {
 
     Write-Host "Stopping the running MagicHandy process before rebuilding..." -ForegroundColor Cyan
     try {
-        $stopResponse = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/api/motion/stop" -TimeoutSec 15
-        Assert-MagicHandyRebuildStopResponse -Response $stopResponse
+        $stopResponse = Invoke-MagicHandyRebuildStopRequest -Port $Port
+        Assert-MagicHandyRebuildStopResponse -Response $stopResponse -AllowPhysicalStopConfirmation:$AllowPhysicalStopConfirmation -PhysicalStopConfirmation $PhysicalStopConfirmation
     } catch {
         throw "Emergency Stop failed before rebuild. The running app was left in place: $($_.Exception.Message)"
     }
@@ -934,7 +1071,7 @@ function Invoke-MagicHandyProvision {
     if ($RunningPort -eq 0) {
         $RunningPort = [int]$State.port
     }
-    Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $RunningPort
+    Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $RunningPort -AllowPhysicalStopConfirmation:(-not $AssumeYes)
     $go = Ensure-MagicHandyGo -AssumeYes:$AssumeYes
     Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $go
 

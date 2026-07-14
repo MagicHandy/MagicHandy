@@ -202,7 +202,7 @@ try {
         [System.IO.File]::WriteAllText("$runtimeExe~", 'stale build backup')
         & $supportModule {
             param($RepositoryPath, $Port)
-            Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port
+            Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' }
         } $runtimeRepo $runtimePort
         $runtimeProcess.Refresh()
         Assert-True -Condition $runtimeProcess.HasExited -Message 'rebuild preparation should stop the running app tree'
@@ -234,17 +234,186 @@ try {
         $javascript = (Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$relaunchPort$asset" -TimeoutSec 5).Content
         Assert-True -Condition ($javascript -match 'Maximum output') -Message 'verified relaunch should serve the current embedded UI'
     } finally {
-        & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port } $runtimeRepo $relaunchPort
+        & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' } } $runtimeRepo $relaunchPort
     }
 
     Write-Host 'Checking rebuild Stop response classification...'
+    $stopErrorJSON = '{"available":true,"engine":{"running":false,"paused":false,"completing":false},"error":"Intiface connection is stale"}'
+    $stopErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+        [System.Net.WebException]::new('The remote server returned an error: (502) Bad Gateway.'),
+        'MagicHandyStop502',
+        [System.Management.Automation.ErrorCategory]::InvalidOperation,
+        $null
+    )
+    $stopErrorRecord.ErrorDetails = [System.Management.Automation.ErrorDetails]::new($stopErrorJSON)
+    $parsedStopError = & $supportModule {
+        param($ErrorRecord)
+        ConvertFrom-MagicHandyStopErrorResponse -ErrorRecord $ErrorRecord
+    } $stopErrorRecord
+    Assert-Equal -Expected 'Intiface connection is stale' -Actual ([string]$parsedStopError.error) -Message '502 Stop JSON should remain available for classification'
+    $emptyStopErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+        [System.Net.WebException]::new('connection failed'),
+        'MagicHandyStopNoBody',
+        [System.Management.Automation.ErrorCategory]::ConnectionError,
+        $null
+    )
+    $emptyStopError = & $supportModule {
+        param($ErrorRecord)
+        ConvertFrom-MagicHandyStopErrorResponse -ErrorRecord $ErrorRecord
+    } $emptyStopErrorRecord
+    Assert-True -Condition ($null -eq $emptyStopError) -Message 'a missing HTTP error body should fail parsing without a strict-mode exception'
+
     & $supportModule {
-        Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+        Assert-MagicHandyRebuildStopResponse -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' } -Response ([pscustomobject]@{
             available = $false
             stopped = $true
             error = 'configured transport unavailable'
         })
     } 3>$null
+    & $supportModule {
+        Assert-MagicHandyRebuildStopResponse -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' } -Response ([pscustomobject]@{
+            available = $true
+            stopped = $true
+            transport_result = [pscustomobject]@{ ok = $false }
+            error = 'Intiface connection is stale'
+        })
+    } 3>$null
+    & $supportModule {
+        Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+            available = $true
+            transport_result = [pscustomobject]@{ ok = $true }
+        })
+    }
+    $legacyTransportFailureRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                engine = [pscustomobject]@{
+                    running = $false
+                    paused = $false
+                    completing = $false
+                }
+                error = 'older endpoint transport failure'
+            })
+        }
+    } catch {
+        $legacyTransportFailureRejected = $_.Exception.Message -match 'Physical Stop delivery was not confirmed'
+    }
+    Assert-True -Condition $legacyTransportFailureRejected -Message 'an older endpoint failure must require explicit physical-stop confirmation'
+    $wrongConfirmationRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'stopped' } -Response ([pscustomobject]@{
+                available = $false
+                stopped = $true
+                error = 'configured transport unavailable'
+            })
+        }
+    } catch {
+        $wrongConfirmationRejected = $_.Exception.Message -match 'Physical Stop delivery was not confirmed'
+    }
+    Assert-True -Condition $wrongConfirmationRejected -Message 'physical-stop confirmation must require exact STOPPED text'
+    $malformedStopRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{ message = 'gateway failure' })
+        }
+    } catch {
+        $malformedStopRejected = $_.Exception.Message -match 'missing required field'
+    }
+    Assert-True -Condition $malformedStopRejected -Message 'an unexpected JSON response must fail closed'
+    $runningStopRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                engine = [pscustomobject]@{
+                    running = $true
+                    paused = $false
+                    completing = $false
+                }
+            })
+        }
+    } catch {
+        $runningStopRejected = $_.Exception.Message -match 'did not confirm local stopped state'
+    }
+    Assert-True -Condition $runningStopRejected -Message 'a response that still reports running motion must fail closed'
+    $invalidBooleanRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                stopped = 'false'
+            })
+        }
+    } catch {
+        $invalidBooleanRejected = $_.Exception.Message -match 'not boolean'
+    }
+    Assert-True -Condition $invalidBooleanRejected -Message 'string boolean fields must fail closed'
+    $nullErrorRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                stopped = $true
+                error = $null
+            })
+        }
+    } catch {
+        $nullErrorRejected = $_.Exception.Message -match 'was not text'
+    }
+    Assert-True -Condition $nullErrorRejected -Message 'null error fields must fail closed'
+    $incompleteEngineRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                engine = [pscustomobject]@{ running = $false }
+            })
+        }
+    } catch {
+        $incompleteEngineRejected = $_.Exception.Message -match 'missing or not boolean'
+    }
+    Assert-True -Condition $incompleteEngineRejected -Message 'incomplete engine state must fail closed'
+    $httpErrorWithoutMessageRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                stopped = $true
+                _http_error = $true
+            })
+        }
+    } catch {
+        $httpErrorWithoutMessageRejected = $_.Exception.Message -match 'did not contain an error message'
+    }
+    Assert-True -Condition $httpErrorWithoutMessageRejected -Message 'an HTTP error without a backend error message must fail closed'
+    $unavailableWithoutMessageRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $false
+                stopped = $true
+            })
+        }
+    } catch {
+        $unavailableWithoutMessageRejected = $_.Exception.Message -match 'transport failure without an error message'
+    }
+    Assert-True -Condition $unavailableWithoutMessageRejected -Message 'unavailable transport without an error message must fail closed'
+    $failedResultWithoutMessageRejected = $false
+    try {
+        & $supportModule {
+            Assert-MagicHandyRebuildStopResponse -Response ([pscustomobject]@{
+                available = $true
+                stopped = $true
+                transport_result = [pscustomobject]@{ ok = $false }
+            })
+        }
+    } catch {
+        $failedResultWithoutMessageRejected = $_.Exception.Message -match 'transport failure without an error message'
+    }
+    Assert-True -Condition $failedResultWithoutMessageRejected -Message 'failed transport result without an error message must fail closed'
     $stopFailureRejected = $false
     try {
         & $supportModule {
