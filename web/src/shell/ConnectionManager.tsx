@@ -10,10 +10,12 @@ import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
 
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error" | "initializing";
 
+// Concentric circular arcs (center 180,76; radii 56/78/100; ±42° span) so all
+// three waves share one curvature and cascade evenly between hand and device.
 const SIGNAL_PATHS = [
-  "M145 124 Q180 150 215 124",
-  "M123 138 Q180 180 237 138",
-  "M100 149 Q180 197 260 149",
+  "M142.5 117.6 Q180 146.4 217.5 117.6",
+  "M127.8 134 Q180 174 232.2 134",
+  "M113.1 150.3 Q180 201.7 246.9 150.3",
 ];
 
 const emptyIntiface: IntifaceTransportSnapshot = {
@@ -265,7 +267,7 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
       role="img"
       aria-label={phase === "initializing" ? "The Handy connection status loading" : phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
     >
-      <image className="connection-hand" href={conductorHand} x="30" y="-77" width="300" height="300" preserveAspectRatio="xMidYMid meet" />
+      <image className="connection-hand" href={conductorHand} x="47" y="-70" width="260" height="260" preserveAspectRatio="xMidYMid meet" />
       <g className="connection-signal" aria-hidden="true">
         {SIGNAL_PATHS.map((path, index) => <path key={path} d={path} style={{ "--signal-index": index } as CSSProperties} />)}
       </g>
