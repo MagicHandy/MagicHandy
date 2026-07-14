@@ -447,7 +447,7 @@ describe("app shell safety invariants", () => {
   it("locks command controls for a read-only client but keeps Stop", async () => {
     installFetch({ state: { ...baseState, controller: { active: false, read_only: true } } });
     renderApp();
-    const box = await screen.findByPlaceholderText(/read-only client/i);
+    const box = await screen.findByPlaceholderText(/read-only/i);
     expect(box).toBeDisabled();
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
   });

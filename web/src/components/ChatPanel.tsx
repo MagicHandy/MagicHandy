@@ -293,7 +293,7 @@ export function ChatPanel() {
             maxLength={1000}
             value={draft}
             disabled={locked || voiceActive}
-            placeholder={readOnly ? "Read-only client — this tab cannot drive motion." : "Message MagicHandy — chat can start, adjust, and stop motion"}
+            placeholder={readOnly ? "Read-only — this tab can't drive motion." : "Message MagicHandy…"}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
