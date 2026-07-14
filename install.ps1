@@ -10,7 +10,9 @@
 
     The core app and all first-party Go voice adapters are built with CGO
     disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
-    runner/model remain explicit choices. No model is downloaded at app startup.
+    runner/model remain explicit choices. The external NeuTTS stream_pcm runner,
+    decoder, backbone, and reference voice assets are not installed. No model is
+    downloaded at app startup.
 
     Non-secret installation choices are stored under LocalAppData so update.ps1
     can preserve or revise them. API keys and the Handy connection key are never
@@ -42,7 +44,8 @@
 
 .PARAMETER Yes
     Accept the documented defaults and third-party package/license prompts. This
-    installs the complete selected toolchain without stopping for input.
+    installs the complete selected source-build toolchain without stopping for
+    input; it does not turn adapter-only providers into provisioned runtimes.
 
 .PARAMETER NoLaunch
     Build and configure without starting the app.
@@ -59,8 +62,8 @@
 
 .EXAMPLE
     .\install.ps1 -Yes -LlamaBackend cuda -NoLaunch
-    Provision a full CUDA source-build toolchain, Ollama, Parakeet, and all app
-    binaries without launching.
+    Provision the CUDA source-build toolchain, Ollama, Parakeet, and all app/voice
+    adapter binaries without launching. NeuTTS runtime assets remain manual.
 
 .EXAMPLE
     .\install.ps1 -Yes -SkipLlamaBuild -NoLaunch

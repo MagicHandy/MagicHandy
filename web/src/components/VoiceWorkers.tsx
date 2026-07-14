@@ -39,7 +39,7 @@ const ROLE_LABEL: Record<string, string> = { tts: "Speech output (TTS)", asr: "S
 // dirty means the surrounding settings form has unsaved voice changes; the
 // controls act on the *saved* config, so they lock until the form is saved.
 export function VoiceWorkers({
-  locked, role: selectedRole, dirty, enabled, providerSelected, showParakeetModule,
+  locked, role: selectedRole, dirty, enabled, providerSelected, showParakeetModule, showNeuTTSModule,
 }: {
   locked: boolean;
   role?: "tts" | "asr";
@@ -47,6 +47,7 @@ export function VoiceWorkers({
   enabled?: boolean;
   providerSelected?: boolean;
   showParakeetModule?: boolean;
+  showNeuTTSModule?: boolean;
 }) {
   const { show } = useToast();
   const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
@@ -130,6 +131,9 @@ export function VoiceWorkers({
   const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
   const activeRequests = requests.filter((r) => r.state === "queued" || r.state === "active");
   const parakeetModule = modules.parakeet;
+  const neuttsModule = modules.neutts;
+  const visibleModule = showParakeetModule ? parakeetModule : showNeuTTSModule ? neuttsModule : undefined;
+  const visibleModuleName = showParakeetModule ? "Parakeet" : "NeuTTS";
 
   return (
     <div className="voice-workers">
@@ -137,6 +141,12 @@ export function VoiceWorkers({
         <div className="voice-module-readout" role="status" aria-label="MagicHandy Parakeet module">
           <span className="status-dot" data-state={parakeetModule?.installed ? "ok" : parakeetModule?.state === "incomplete" ? "warn" : "idle"} />
           <span>{parakeetModule?.message || "Checking the MagicHandy Parakeet module."}</span>
+        </div>
+      )}
+      {showNeuTTSModule && (
+        <div className="voice-module-readout" role="status" aria-label="NeuTTS module">
+          <span className="status-dot" data-state={visibleModule?.installed ? "ok" : visibleModule?.state === "incomplete" ? "warn" : "idle"} />
+          <span>{visibleModule?.message || `Checking the ${visibleModuleName} module.`}</span>
         </div>
       )}
       {roles.map((role) => {
@@ -164,7 +174,7 @@ export function VoiceWorkers({
               )}
             </div>
             {state === "not_configured" && (
-              <p className="form-status">{showParakeetModule && role === "asr" ? "The app-managed module is not ready; follow the module status above before starting it." : "The selected worker is not configured. Check its provider fields or installation, then save."}</p>
+              <p className="form-status">{(showParakeetModule || showNeuTTSModule) ? "The selected module is not ready; follow the module status above before starting it." : "The selected worker is not configured. Check its provider fields or installation, then save."}</p>
             )}
             {state === "disabled" && providerSelected && (
               <p className="form-status">{enabled ? "Save these voice settings; Start will appear here once the worker is configured." : "Enable voice workers and save; Start will appear here when the worker is ready."}</p>

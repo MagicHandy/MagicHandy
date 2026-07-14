@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
@@ -50,29 +51,31 @@ type Runtime struct {
 
 // Server owns the local HTTP routes and embedded static asset serving.
 type Server struct {
-	static          fs.FS
-	logger          *slog.Logger
-	store           *config.Store
-	traces          *diagnostics.TraceRing
-	transport       transport.DiagnosticsProvider
-	cloud           cloudRuntime
-	bluetooth       bluetoothRuntime
-	intiface        intifaceRuntime
-	motion          motionRuntime
-	llm             llmRuntime
-	models          *llm.ModelManager
-	managedLLM      *llm.ManagedLlamaRuntimeManager
-	controller      controllerRuntime
-	personalization personalizationRuntime
-	modes           *modes.Manager
-	voice           *voice.Manager
-	voiceExecutable string
-	voiceDataDir    string
-	chatLog         *chat.MessageLog
-	patterns        *patterns.Library
-	started         time.Time
-	version         VersionInfo
-	handler         http.Handler
+	static                 fs.FS
+	logger                 *slog.Logger
+	store                  *config.Store
+	traces                 *diagnostics.TraceRing
+	transport              transport.DiagnosticsProvider
+	cloud                  cloudRuntime
+	bluetooth              bluetoothRuntime
+	intiface               intifaceRuntime
+	motion                 motionRuntime
+	llm                    llmRuntime
+	models                 *llm.ModelManager
+	managedLLM             *llm.ManagedLlamaRuntimeManager
+	controller             controllerRuntime
+	personalization        personalizationRuntime
+	modes                  *modes.Manager
+	voice                  *voice.Manager
+	voiceExecutable        string
+	voiceDataDir           string
+	neuttsAdapterInstalled atomic.Bool
+	hostPathPicker         hostPathPicker
+	chatLog                *chat.MessageLog
+	patterns               *patterns.Library
+	started                time.Time
+	version                VersionInfo
+	handler                http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.
@@ -129,6 +132,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		models:          modelManager,
 		managedLLM:      managedLLM,
 		controller:      newControllerRuntime(),
+		hostPathPicker:  systemHostPathPicker,
 		personalization: personalization,
 		started:         time.Now().UTC(),
 		version:         version,
@@ -146,6 +150,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	server.voiceExecutable = runtime.ExecutablePath
 	server.voiceDataDir = store.DataDir()
+	server.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(settings.Voice.TTSWorkerPath, server.voiceExecutable, server.voiceDataDir, "voice-neutts-worker")))
 	server.voice = newVoiceManager(settings.Voice, server.voiceExecutable, server.voiceDataDir)
 
 	chatLog, err := chat.OpenMessageLog(store.DataDir())
@@ -188,6 +193,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
+	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
 	s.llmRoutes(mux)
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)

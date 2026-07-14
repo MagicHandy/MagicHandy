@@ -129,11 +129,20 @@ path only as provenance and does not claim arbitrary-WAV cloning without
 Python. This is a narrower result than the original item 3 above, but it is
 the capability the non-Python runner actually provides today.
 
-All runner children receive `HF_HUB_OFFLINE=1`. Model artifacts and voice
-codes must be installed explicitly before load/speech; status and speech can
-never initiate a model download. A later Rust release with a working,
-redistributable encoder can replace the `.npy` requirement behind the same
-settings and worker protocol.
+All runner children receive `HF_HUB_OFFLINE=1`, and the adapter supplies the
+exact Air Q4 filename to avoid repository discovery. Follow-up audit found that
+the pinned upstream `hf-hub` client does not enforce that environment variable;
+a missing cache could otherwise initiate network access on synthesis.
+MagicHandy now requires the external decoder and exact GGUF cache entry before
+running a bounded readiness synthesis, and no longer advertises an offline
+capability. A network-denied integration test and hard sandbox remain R17. A
+later Rust release with a working, redistributable encoder can replace the `.npy`
+requirement behind the same settings and worker protocol.
+
+The current adapter starts one `stream_pcm` process per speech request, so the
+upstream example's preload-once performance does not carry across replies. A
+persistent runner protocol or equivalent model-host process remains follow-up
+work rather than a completed latency guarantee.
 
 ## Constraints hit during the spike
 
@@ -143,9 +152,9 @@ settings and worker protocol.
   `rustup` install; a Go+CGo worker does not (CGo needs gcc/clang). This
   strengthens the Rust-worker preference. Workers ship as prebuilt
   binaries either way (R7 packaging).
-- espeak-ng is a hard dependency of the official pipeline. It is small,
-  winget-installable, and worker-side only — but it is a native system
-  package the install docs must cover (installation-automation doc).
+- The historical Python harness used system eSpeak. The pinned Rust runner's
+  `espeak` feature now uses bundled pure-Rust phonemization data, so no separate
+  eSpeak package belongs in the current installation instructions.
 - The Python harness environment (~4 GB venv incl. torch) exists only in
   the session scratchpad for this measurement; nothing of it enters the
   product or the repo — the shipped worker has no Python.

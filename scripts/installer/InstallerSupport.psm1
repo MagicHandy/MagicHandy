@@ -42,9 +42,9 @@ function Write-MagicHandyCompletionArt {
         'InstallPlan' { 'INSTALL PLAN READY' }
         'UpdatePlan' { 'UPDATE PLAN READY' }
     }
-    $status = if ($Operation -like '*Plan') { 'NO CHANGES MADE' } else { 'BUILD VERIFIED - READY' }
+    $status = if ($Operation -like '*Plan') { 'NO CHANGES MADE' } else { 'APP BUILD VERIFIED - CONFIGURATION REQUIRED' }
     $detail = switch ($Operation) {
-        'Install' { 'Congratulations. Open Settings to select a model, voice provider, and device transport.' }
+        'Install' { 'Open Settings to select a model, voice provider, and device transport. NeuTTS external runtime assets are not installed.' }
         'Update' { 'Congratulations. Saved installation choices were reapplied to the current build.' }
         default { 'Review the plan above, then rerun without -PlanOnly when ready.' }
     }
@@ -360,7 +360,7 @@ function Get-MagicHandyProvisionPlan {
     $plan = New-Object System.Collections.Generic.List[string]
     $plan.Add('Ensure Go 1.25+ is installed')
     $plan.Add('Build magichandy.exe with CGO disabled')
-    $plan.Add('Build Parakeet, NeuTTS Air, and ElevenLabs Go workers')
+    $plan.Add('Build Parakeet, NeuTTS Air, and ElevenLabs Go protocol adapters (external NeuTTS runtime/assets not included)')
     if ([bool]$State.build_managed_llama) {
         $plan.Add('Ensure Git and CMake are installed')
         $plan.Add('Ensure the Visual Studio C++ Build Tools workload and Windows SDK are installed')

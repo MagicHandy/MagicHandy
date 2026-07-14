@@ -65,10 +65,12 @@ Git, CMake, the Visual Studio Desktop C++ workload, and CUDA only when the
 selected managed llama.cpp build requires them. Choosing Ollama instead avoids
 that managed runtime and compiler toolchain. It builds the core plus the
 Parakeet, NeuTTS Air, and ElevenLabs Go adapters; the optional Parakeet runner
-and 644 MiB model remain a separate, checksum-verified prompt.
+and 644 MiB model remain a separate, checksum-verified prompt. NeuTTS is
+adapter-only: its external `stream_pcm` runner, decoder/backbone files, and
+reference voice codes are not installed by this source bootstrap.
 
 Use `-SkipLlamaBuild` to choose Ollama without the extra managed runtime, or
-`-Yes -LlamaBackend cuda` for an unattended full CUDA source setup. `-Yes`
+`-Yes -LlamaBackend cuda` for an unattended CUDA source-toolchain setup. `-Yes`
 accepts the displayed third-party package licenses and large-download choices;
 use `-PlanOnly` to inspect the work first. When setup is done the app opens at
 <http://127.0.0.1:49717>.
@@ -139,9 +141,10 @@ today: local chat driving real motion (Cloud REST and browser Bluetooth), live
 controls, Freestyle, long-term memory, editable prompt sets, pattern/program
 library and authoring, voice provider adapters and push-to-talk UI, model
 management, Intiface dispatch, and the React UI. The source installer can
-provision the app-managed Parakeet module, while custom local server paths stay
-separate in Voice settings; real microphone compatibility with the managed
-Parakeet path remains to be validated. Planned work includes Autopilot,
+provision the app-managed Parakeet module. Browser recordings are converted to
+16 kHz mono WAV before managed transcription, and local path fields provide a
+guarded Windows Browse action. NeuTTS still requires a separately prepared
+runner/model/reference-code installation. Planned work includes Autopilot,
 migration, guided setup, curated downloads, and packaged releases. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for acceptance gaps as well as
 implemented scope.

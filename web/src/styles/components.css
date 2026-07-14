@@ -156,6 +156,16 @@
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+.host-path-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+}
+.host-path-row .btn {
+  min-height: 40px;
+  padding-inline: 14px;
+}
 input[type="text"],
 input[type="password"],
 input[type="number"],
@@ -944,6 +954,15 @@ textarea:disabled {
 }
 .advanced-fields[open] summary {
   margin-bottom: 10px;
+}
+
+@media (max-width: 560px) {
+  .host-path-row {
+    grid-template-columns: 1fr;
+  }
+  .host-path-row .btn {
+    justify-self: start;
+  }
 }
 
 /* ---- Dual-thumb range slider (speed / stroke low+high in one control) ---- */

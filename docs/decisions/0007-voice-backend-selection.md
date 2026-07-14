@@ -43,7 +43,10 @@ Implement three non-Python voice backends behind the ADR 0003 worker protocol:
 3. **Cloud TTS (premium) — ElevenLabs**: HTTP from Go, expressive and
    high-fidelity instant cloning, low latency, no Python and no local VRAM.
 
-The core app plus this stack install and run with **no Python present**.
+The core app, Parakeet, ElevenLabs, and an already prepared NeuTTS runtime run
+with **no Python present**. The current source installer does not prepare the
+external NeuTTS runner/model/reference assets; generating new reference codes
+may still require upstream Python tooling.
 Kokoro/Piper (non-cloning) may be added later as an instant fallback but are not
 in the first implementation set.
 
@@ -97,6 +100,10 @@ Negative / risks:
 
 - NeuTTS Air's subjective cloning quality and arbitrary-WAV reference encoding
   remain unproven; the current pre-encoded-code boundary is explicit (R17)
+- NeuTTS is adapter-only in the source installer. MagicHandy compensates for the
+  pinned runner not enforcing `HF_HUB_OFFLINE=1` with exact-cache preflight, but
+  it reloads in a new process for every request; turnkey provisioning,
+  network-denied evidence, and persistent preload remain R17
 - expressive emotion *tags* on a cloned voice are not covered by the initial set;
   that stays a cloud (ElevenLabs) or optional-Python capability
 - ElevenLabs needs internet + API key and sends text/reference audio to a cloud
@@ -106,11 +113,12 @@ Negative / risks:
 
 ## Implementation Note
 
-The NeuTTS Air spike and Slice 13.6 adapter are complete. Setup and the exact
-pre-encoded-code boundary are documented in `docs/neutts-worker.md`. Subjective
-quality and arbitrary-WAV encoding remain open; if they fail acceptance, use a
-documented non-Python fallback or an optional Python worker while keeping
-ElevenLabs as the premium path.
+The NeuTTS Air spike and Slice 13.6 protocol adapter are complete. Setup and the
+exact pre-encoded-code boundary are documented in `docs/neutts-worker.md`.
+Turnkey installation, network-denied evidence, persistent preload,
+subjective quality, and arbitrary-WAV encoding remain open; if they fail
+acceptance, use a documented non-Python fallback or an optional Python worker
+while keeping ElevenLabs as the premium path.
 
 The first Parakeet integration is documented in `docs/voice-parakeet.md`: a
 managed parakeet.cpp v0.4.0 process with explicit, checksum-verified installer

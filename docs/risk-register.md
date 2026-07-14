@@ -423,15 +423,21 @@ Level: Medium
 
 Description:
 ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
-adapter around the reviewed `neutts-rs stream_pcm` runner now streams PCM without
-Python, but it requires pre-encoded `.npy` voice codes and the exact transcript
-because the public Rust encoder is still a stub. Arbitrary-WAV cloning and
-subjective cloning quality remain unproven.
+adapter around the reviewed `neutts-rs stream_pcm` runner streams PCM without
+Python, but the source installer does not provision that runner or its assets.
+It requires pre-encoded `.npy` voice codes and the exact transcript because the
+public Rust encoder is still a stub. The pinned upstream hub client also does not
+honor `HF_HUB_OFFLINE=1`, and MagicHandy currently starts a fresh model process
+for each synthesis. Turnkey installation, enforced offline behavior,
+arbitrary-WAV cloning, preload reuse, and subjective quality remain unproven.
 
 Mitigation:
 
-- keep the implemented adapter bounded, offline, cancellable, and explicit
-  about its pre-encoded-code capability boundary
+- keep the implemented adapter bounded and cancellable, request offline mode,
+  require the exact local GGUF cache entry, run a bounded readiness synthesis,
+  and avoid claiming network sandboxing without a network-denied test
+- report adapter-only and missing runner/decoder/codes/transcript states before
+  Start; provide a guarded local host-path chooser for manual setup
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
@@ -446,7 +452,10 @@ Status 2026-07-14: the spike and Slice 13.6 adapter landed
 (`docs/neutts-air-spike.md`, `docs/neutts-worker.md`). Non-Python decode and
 streaming are implemented through `neutts-rs`; the core wraps retained PCM at
 the playback boundary. Cloned-output listening, arbitrary-WAV encoding, and
-turnkey asset provisioning remain open.
+turnkey asset provisioning remain open. A follow-up audit removed the false
+offline capability, made decoder/cache/runtime preflight explicit, added a
+bounded readiness synthesis, and documented that per-request model startup and
+network-sandbox evidence remain open risks.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 
@@ -536,7 +545,7 @@ Relates to R8 (user migration) and R11 (goals unmeasured).
 
 ## R20: MagicHandy + LSO Merge Integration Risk
 
-Level: High
+Level: Medium
 
 Description:
 Merging LSO's feature set (Intiface/Buttplug transport, motion blocks/queue,
@@ -714,18 +723,18 @@ safety regression).
 Level: High
 
 Description:
-Browser push-to-talk records WebM/Opus or Ogg and sends that payload unchanged
-through the core. The managed parakeet.cpp path is documented and tested with
-WAV input, and the worker changes multipart metadata without decoding or
-transcoding. The UI and adapters can therefore be implementation-complete while
-the default managed microphone path remains incompatible on real browsers.
+Browser push-to-talk records WebM/Opus or Ogg, while the managed parakeet.cpp
+path accepts WAV input. The original implementation forwarded compressed bytes
+unchanged and was incompatible with the default managed microphone path. The UI
+now decodes the recording, downmixes and resamples it to 16 kHz mono, and emits
+real PCM16 WAV before submission; the managed API rejects non-WAV content.
 
 Mitigation:
 
 - run an end-to-end browser MediaRecorder sample through the pinned managed
   runner before claiming push-to-talk acceptance
-- either negotiate a format the runner decodes or add bounded decoding at the
-  worker boundary; native audio dependencies must not enter the pure-Go core
+- keep browser-side WAV conversion bounded; native audio dependencies must not
+  enter the pure-Go core
 - reject unsupported formats with a visible actionable error rather than
   forwarding bytes optimistically
 - retain fixture tests for every accepted browser format and the WAV provider
@@ -736,6 +745,10 @@ Exit evidence:
 - Chrome/Edge localhost push-to-talk produces an accurate transcript through
   the pinned managed Parakeet install, with format/error tests and no core CGo
   dependency
+
+Status 2026-07-14: the deterministic format mismatch is fixed with browser-side
+WAV conversion and managed-boundary regression tests. A real Chrome/Edge run
+through the pinned runner/model remains required to close the risk.
 
 Relates to R17 (voice dependency and latency risk) and R18 (browser security and
 LAN microphone access).

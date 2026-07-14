@@ -54,13 +54,13 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 		tts.Args = []string{"-voice-id", settings.ElevenLabsVoiceID, "-model-id", settings.ElevenLabsModelID}
 		tts.Env = ttsEnv
 	case config.VoiceTTSProviderNeuTTSAir:
-		tts.Command = resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")
-		tts.Args = []string{"-runner", settings.NeuTTSRunnerPath, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone}
-		if settings.NeuTTSReferenceWAV != "" {
-			tts.Args = append(tts.Args, "-ref-audio", settings.NeuTTSReferenceWAV)
-		}
-		if settings.NeuTTSReferenceCodes != "" {
-			tts.Args = append(tts.Args, "-ref-codes", settings.NeuTTSReferenceCodes)
+		command := resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")
+		if neuttsRuntimeReady(settings, command) {
+			tts.Command = command
+			tts.Args = []string{"-runner", settings.NeuTTSRunnerPath, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone, "-ref-codes", settings.NeuTTSReferenceCodes}
+			if settings.NeuTTSReferenceWAV != "" {
+				tts.Args = append(tts.Args, "-ref-audio", settings.NeuTTSReferenceWAV)
+			}
 		}
 	case config.VoiceProviderCustom:
 		tts.Command, tts.Args = settings.TTSWorkerPath, settings.TTSWorkerArgs
@@ -106,8 +106,19 @@ func isRegularFile(path string) bool {
 	if strings.TrimSpace(path) == "" {
 		return false
 	}
+	// #nosec G703 -- this checks an explicit local settings path without reading
+	// content; provider processes receive the same path after validation.
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
+}
+
+func neuttsRuntimeReady(settings config.VoiceSettings, command string) bool {
+	return isRegularFile(command) &&
+		isRegularFile(settings.NeuTTSRunnerPath) &&
+		neuttsWorkingDirectory(settings.NeuTTSRunnerPath) != "" &&
+		neuttsBackboneCached(settings.NeuTTSBackbone) &&
+		isRegularFile(settings.NeuTTSReferenceCodes) &&
+		strings.TrimSpace(settings.NeuTTSReferenceText) != ""
 }
 
 type voiceModuleStatus struct {
@@ -140,6 +151,113 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 		status.Message = "The MagicHandy Parakeet module is incomplete. Rerun update.ps1 with Parakeet enabled."
 	}
 	return status
+}
+
+func inspectNeuTTSModule(settings config.VoiceSettings, adapterInstalled, configured bool) voiceModuleStatus {
+	status := voiceModuleStatus{
+		State:            "missing",
+		WorkerInstalled:  adapterInstalled,
+		RuntimeInstalled: configured,
+		Message:          "The NeuTTS Go adapter or one of its selected runtime files is unavailable.",
+	}
+	if adapterInstalled && configured {
+		status.State = "ready"
+		status.Installed = true
+		status.Message = "The NeuTTS adapter, stream_pcm runner, reference codes, and transcript are configured."
+		return status
+	}
+	if !adapterInstalled {
+		return status
+	}
+	status.State = "incomplete"
+	switch {
+	case strings.TrimSpace(settings.NeuTTSRunnerPath) == "":
+		status.Message = "NeuTTS needs an external stream_pcm runner. The source installer currently builds only its Go adapter."
+	case strings.TrimSpace(settings.NeuTTSReferenceCodes) == "":
+		status.Message = "NeuTTS needs a pre-encoded NeuCodec .npy reference file."
+	case strings.TrimSpace(settings.NeuTTSReferenceText) == "":
+		status.Message = "NeuTTS needs the exact transcript for the selected reference codes."
+	default:
+		status.Message = "A selected NeuTTS file, decoder, or exact backbone cache entry is unavailable. Re-select the files and save settings."
+	}
+	return status
+}
+
+func neuttsWorkingDirectory(runnerPath string) string {
+	directory := filepath.Dir(runnerPath)
+	for {
+		if isRegularFile(filepath.Join(directory, "models", "neucodec_decoder.safetensors")) {
+			return directory
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return ""
+		}
+		directory = parent
+	}
+}
+
+func neuttsBackboneCached(backbone string) bool {
+	const filename = "neutts-air-Q4_0.gguf"
+	if !validHuggingFaceRepoID(backbone) {
+		return false
+	}
+	root := strings.TrimSpace(os.Getenv("HF_HOME"))
+	if root == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		root = filepath.Join(home, ".cache", "huggingface")
+	}
+	repoRoot := filepath.Join(root, "hub", "models--"+strings.ReplaceAll(backbone, "/", "--"))
+	// #nosec G304,G703 -- backbone is constrained to an ASCII owner/name pair and the
+	// resulting path remains under the Hugging Face cache root.
+	revision, err := os.ReadFile(filepath.Join(repoRoot, "refs", "main"))
+	if err != nil {
+		return false
+	}
+	commit := strings.TrimSpace(string(revision))
+	if commit == "" || strings.ContainsAny(commit, `/\`) {
+		return false
+	}
+	snapshot := filepath.Join(repoRoot, "snapshots", commit)
+	if backbone == config.DefaultNeuTTSBackbone {
+		return isRegularFile(filepath.Join(snapshot, filename))
+	}
+	entries, err := os.ReadDir(snapshot)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".gguf") {
+			return true
+		}
+	}
+	return false
+}
+
+func validHuggingFaceRepoID(repo string) bool {
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+		for _, character := range part {
+			switch {
+			case character >= 'a' && character <= 'z':
+			case character >= 'A' && character <= 'Z':
+			case character >= '0' && character <= '9':
+			case strings.ContainsRune("-_.", character):
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func resolveWorkerBinary(explicit, executablePath, dataDir, name string) string {
@@ -186,13 +304,17 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 func (s *Server) voiceState() map[string]any {
 	settings, _ := s.store.Snapshot()
 	status := s.voice.Status()
+	modules := map[string]any{
+		"parakeet": inspectParakeetAppModule(settings.Voice.ASRWorkerPath, s.voiceExecutable, s.voiceDataDir),
+	}
+	if settings.Voice.TTSProvider == config.VoiceTTSProviderNeuTTSAir {
+		modules["neutts"] = inspectNeuTTSModule(settings.Voice, s.neuttsAdapterInstalled.Load(), status[voice.RoleTTS].Configured)
+	}
 	return map[string]any{
 		"enabled":          settings.Voice.Enabled,
 		"protocol_version": voice.ProtocolVersion,
 		"workers":          status,
-		"modules": map[string]any{
-			"parakeet": inspectParakeetAppModule(settings.Voice.ASRWorkerPath, s.voiceExecutable, s.voiceDataDir),
-		},
+		"modules":          modules,
 	}
 }
 
@@ -470,6 +592,7 @@ func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request
 // A changed command or a disable stops the affected worker; nothing starts
 // implicitly. Unchanged configs are a no-op inside SetConfig.
 func (s *Server) applyVoiceSettingsTransition(next config.Settings) {
+	s.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(next.Voice.TTSWorkerPath, s.voiceExecutable, s.voiceDataDir, "voice-neutts-worker")))
 	s.voice.Configure(voiceManagerConfig(next.Voice, s.voiceExecutable, s.voiceDataDir))
 }
 
@@ -507,6 +630,13 @@ func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, errors.New("recorded audio format must be webm, ogg, or wav"))
 		return
 	}
+	settings, _ := s.store.Snapshot()
+	if settings.Voice.ASRProvider == config.VoiceASRProviderParakeet {
+		if format != "wav" || !hasCanonicalASRWAV(body.AudioB64) {
+			writeError(w, http.StatusBadRequest, errors.New("managed Parakeet requires a WAV recording; refresh the MagicHandy page and record again"))
+			return
+		}
+	}
 	pending, err := s.voice.Worker(voice.RoleASR).Submit(voice.Request{
 		Type: voice.RequestTranscribe, AudioB64: body.AudioB64, AudioFormat: format,
 	})
@@ -516,6 +646,31 @@ func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request
 	}
 	s.voice.Track(pending)
 	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
+}
+
+func hasCanonicalASRWAV(encoded string) bool {
+	decodedSize, err := io.Copy(io.Discard, base64.NewDecoder(base64.StdEncoding, strings.NewReader(encoded)))
+	if err != nil || decodedSize <= 44 || (decodedSize-44)%2 != 0 || decodedSize > int64(^uint32(0)) {
+		return false
+	}
+	prefixLength := min(len(encoded), 60)
+	prefixLength -= prefixLength % 4
+	header, err := base64.StdEncoding.DecodeString(encoded[:prefixLength])
+	if err != nil || len(header) < 44 {
+		return false
+	}
+	return string(header[0:4]) == "RIFF" &&
+		binary.LittleEndian.Uint32(header[4:8]) == uint32(decodedSize-8) &&
+		string(header[8:12]) == "WAVE" && string(header[12:16]) == "fmt " &&
+		binary.LittleEndian.Uint32(header[16:20]) == 16 &&
+		binary.LittleEndian.Uint16(header[20:22]) == 1 &&
+		binary.LittleEndian.Uint16(header[22:24]) == 1 &&
+		binary.LittleEndian.Uint32(header[24:28]) == 16000 &&
+		binary.LittleEndian.Uint32(header[28:32]) == 32000 &&
+		binary.LittleEndian.Uint16(header[32:34]) == 2 &&
+		binary.LittleEndian.Uint16(header[34:36]) == 16 &&
+		string(header[36:40]) == "data" &&
+		binary.LittleEndian.Uint32(header[40:44]) == uint32(decodedSize-44)
 }
 
 func decodeVoiceTranscriptionJSON(r *http.Request, target any) error {

@@ -96,8 +96,9 @@ try {
     Assert-True -Condition ($updateBanner -match 'UPDATE - local-first AI control for The Handy') -Message 'update banner should identify the product and operation'
     $installCompletion = Write-MagicHandyCompletionArt -Operation Install 6>&1 | Out-String
     Assert-True -Condition ($installCompletion -match 'INSTALL COMPLETE') -Message 'install completion should identify the finished operation'
-    Assert-True -Condition ($installCompletion -match 'BUILD VERIFIED - READY') -Message 'install completion should report a verified build'
-    Assert-True -Condition ($installCompletion -match 'Congratulations.+select a model, voice provider, and device transport') -Message 'install completion should give relevant next steps'
+    Assert-True -Condition ($installCompletion -match 'APP BUILD VERIFIED - CONFIGURATION REQUIRED') -Message 'install completion should distinguish a verified build from configured providers'
+    Assert-True -Condition ($installCompletion -match 'Open Settings.+select a model, voice provider, and device transport') -Message 'install completion should give relevant next steps'
+    Assert-True -Condition ($installCompletion -match 'NeuTTS external runtime assets are not\s+installed') -Message 'install completion should disclose the NeuTTS boundary'
     Assert-True -Condition ($installCompletion -match '\|\|=+\[\]') -Message 'completion should include the Handy motion-rail text art'
     $updateCompletion = Write-MagicHandyCompletionArt -Operation Update 6>&1 | Out-String
     Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices were reapplied') -Message 'update completion should confirm preserved choices'
@@ -470,7 +471,8 @@ try {
     Assert-PlanContains -Plan $managedPlan -Pattern 'Visual Studio C\+\+'
     Assert-PlanContains -Plan $managedPlan -Pattern 'CUDA Toolkit'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air.*protocol adapters'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'external NeuTTS runtime/assets not included'
 
     $ollamaState = New-MagicHandyInstallState `
         -RepositoryPath $Repo `

@@ -182,13 +182,14 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    backend still cannot deliver Browser Bluetooth Stop, and current Cloud REST /
    Browser Bluetooth retry evidence remains open. No document may claim physical
    delivery after communication fails. Tracked as risk R23.
-6. **Voice end-to-end acceptance**: browser push-to-talk records WebM/Opus or
-   Ogg and forwards it unchanged, while the managed parakeet.cpp path is
-   documented and tested with WAV. Provider adapters, source-installer asset
-   discovery, app-managed/custom separation, and explicit enable/save/Start UI
-   are implemented, but real microphone-to-managed-Parakeet compatibility and
-   in-app download/repair are not yet proven. Tracked as risk R24 (third legacy
-   sweep, item A1).
+6. **Voice end-to-end acceptance**: browser push-to-talk now decodes
+   MediaRecorder output and submits 16 kHz mono PCM WAV to the managed
+   parakeet.cpp path; compressed/fake-WAV payloads fail at the API boundary.
+   Provider adapters, source-installer asset discovery, app-managed/custom
+   separation, explicit enable/save/Start UI, and guarded Windows host-path
+   browsing are implemented. A real Chrome/Edge transcription run remains R24
+   exit evidence. NeuTTS is explicitly adapter-only in the source installer;
+   runner/model/reference provisioning and enforced offline operation remain R17.
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
@@ -763,7 +764,7 @@ Status: **complete**. Design and implementation notes:
 - Model and Device tabs get the same disclosure rule (llama.cpp vs Ollama
   fields; managed vs external mode; developer app-ID only on override).
 
-### Slice 13.6: NeuTTS Air Offline Stream Adapter
+### Slice 13.6: NeuTTS Air Stream Adapter
 
 Status: **complete**.
 
@@ -771,9 +772,11 @@ Status: **complete**.
   runner to ADR 0003 and forwards live signed 16-bit 24 kHz PCM chunks.
   The core wraps retained PCM as WAV only at the playback boundary, preserving
   the final samples without delaying worker-side streaming or cancellation.
-- The child runs with Hugging Face offline mode forced. Model and voice-code
-  downloads are explicit installer/user actions, never a load, status, or
-  speech side effect.
+- The child requests Hugging Face offline mode. Because the pinned client does
+  not enforce that flag, the default Air Q4 path requires an exact local cache
+  entry before a bounded readiness synthesis can run. A network-denied test,
+  persistent model host, and turnkey assets remain R17 rather than completed
+  adapter claims.
 - The current `neutts-rs` 0.1.1 encoder export is a stub despite example text
   suggesting otherwise. This slice requires pre-encoded `.npy` reference
   codes plus the transcript. The WAV path is provenance only; MagicHandy does
@@ -785,8 +788,9 @@ Status: **complete**.
 
 Status: **complete** for the supported localhost browser path.
 
-- Press-and-hold browser recording submits WebM/Opus (or the best supported
-  browser format) to the core ASR queue. The accepted transcript calls the
+- Press-and-hold browser recording captures the best browser format, then
+  decodes, downmixes, and resamples it into 16 kHz PCM WAV for the core ASR
+  queue. The accepted transcript calls the
   same chat send function as typed text, preserving every motion limit,
   smoothing rule, controller lease, and Stop behavior.
 - Recording is bounded to 30 seconds; transcription has a visible busy state,

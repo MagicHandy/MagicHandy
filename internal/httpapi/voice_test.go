@@ -105,6 +105,118 @@ func TestVoiceManagerConfigUsesAppManagedParakeetAssets(t *testing.T) {
 	}
 }
 
+func TestVoiceManagerConfigRequiresCompleteNeuTTSRuntime(t *testing.T) {
+	root := t.TempDir()
+	installTestNeuTTSBackbone(t)
+	adapter := filepath.Join(root, "voice-neutts-worker.exe")
+	runner := filepath.Join(root, "stream_pcm.exe")
+	codes := filepath.Join(root, "reference.npy")
+	for _, path := range []string{adapter, runner, codes} {
+		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "models"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "models", "neucodec_decoder.safetensors"), []byte("decoder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderNeuTTSAir
+	settings.TTSWorkerPath = adapter
+	settings.NeuTTSRunnerPath = runner
+	settings.NeuTTSReferenceCodes = codes
+
+	if got := voiceManagerConfig(settings, "", ""); got.TTS.Command != "" {
+		t.Fatalf("NeuTTS without a transcript must remain unconfigured: %+v", got.TTS)
+	}
+	settings.NeuTTSReferenceText = "Exact reference transcript."
+	got := voiceManagerConfig(settings, "", "")
+	if got.TTS.Command != adapter {
+		t.Fatalf("complete NeuTTS command = %q", got.TTS.Command)
+	}
+	wantArgs := strings.Join([]string{"-runner", runner, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone, "-ref-codes", codes}, "|")
+	if strings.Join(got.TTS.Args, "|") != wantArgs {
+		t.Fatalf("NeuTTS args = %q, want %q", strings.Join(got.TTS.Args, "|"), wantArgs)
+	}
+}
+
+func TestInspectNeuTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
+	root := t.TempDir()
+	installTestNeuTTSBackbone(t)
+	appDir := filepath.Join(root, "app")
+	if err := os.MkdirAll(appDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	workerName := "voice-neutts-worker"
+	if runtime.GOOS == "windows" {
+		workerName += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(appDir, workerName), []byte("worker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := config.DefaultSettings().Voice
+	status := inspectNeuTTSModule(settings, true, false)
+	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled || !strings.Contains(status.Message, "builds only its Go adapter") {
+		t.Fatalf("adapter-only NeuTTS status = %+v", status)
+	}
+
+	settings.NeuTTSRunnerPath = filepath.Join(root, "stream_pcm.exe")
+	settings.NeuTTSReferenceCodes = filepath.Join(root, "reference.npy")
+	settings.NeuTTSReferenceText = "Exact transcript."
+	for _, path := range []string{settings.NeuTTSRunnerPath, settings.NeuTTSReferenceCodes} {
+		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "models"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "models", "neucodec_decoder.safetensors"), []byte("decoder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status = inspectNeuTTSModule(settings, true, true)
+	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
+		t.Fatalf("complete NeuTTS status = %+v", status)
+	}
+}
+
+func installTestNeuTTSBackbone(t *testing.T) {
+	installTestCachedBackbone(t, config.DefaultNeuTTSBackbone, "neutts-air-Q4_0.gguf")
+}
+
+func TestNeuTTSBackboneCacheDiscoversPersistedCustomRepo(t *testing.T) {
+	installTestCachedBackbone(t, "example/custom-neutts", "custom-q8.gguf")
+	if !neuttsBackboneCached("example/custom-neutts") {
+		t.Fatal("custom persisted backbone cache was not discovered")
+	}
+	if neuttsBackboneCached(`..\escape/repo`) {
+		t.Fatal("invalid repository identifiers must not escape the cache root")
+	}
+}
+
+func installTestCachedBackbone(t *testing.T, repo, filename string) {
+	t.Helper()
+	hfHome := t.TempDir()
+	t.Setenv("HF_HOME", hfHome)
+	repoRoot := filepath.Join(hfHome, "hub", "models--"+strings.ReplaceAll(repo, "/", "--"))
+	if err := os.MkdirAll(filepath.Join(repoRoot, "refs"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "refs", "main"), []byte("test-revision"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := filepath.Join(repoRoot, "snapshots", "test-revision")
+	if err := os.MkdirAll(snapshot, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(snapshot, filename), []byte("gguf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestVoiceManagerConfigDoesNotStartIncompleteCustomParakeet(t *testing.T) {
 	settings := config.DefaultSettings().Voice
 	settings.Enabled = true
@@ -172,7 +284,11 @@ func TestVoiceManagerConfigPreservesCustomAndDisablesNone(t *testing.T) {
 }
 
 func TestSilentTestWAVBase64ProducesValidPCMSilence(t *testing.T) {
-	audio, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
+	encoded := silentTestWAVBase64()
+	if !hasCanonicalASRWAV(encoded) {
+		t.Fatal("canonical managed-ASR validator rejected the generated WAV")
+	}
+	audio, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		t.Fatalf("decode test WAV: %v", err)
 	}
@@ -442,6 +558,46 @@ func TestVoiceTranscriptionRejectsUnsupportedAudioFormat(t *testing.T) {
 	server.Handler().ServeHTTP(recorder, withController(httptest.NewRequest(http.MethodPost, "/api/voice/transcriptions", body)))
 	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "webm, ogg, or wav") {
 		t.Fatalf("unsupported format = %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestManagedParakeetTranscriptionRejectsCompressedOrFakeWAV(t *testing.T) {
+	server := newTestServer(t)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.ASRProvider = config.VoiceASRProviderParakeet
+		return settings
+	})
+	forgedHeader := make([]byte, 46)
+	copy(forgedHeader[0:4], "RIFF")
+	copy(forgedHeader[8:12], "WAVE")
+	copy(forgedHeader[12:16], "junk")
+	oddPCM := make([]byte, 45)
+	copy(oddPCM[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(oddPCM[4:8], 37)
+	copy(oddPCM[8:12], "WAVE")
+	copy(oddPCM[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(oddPCM[16:20], 16)
+	binary.LittleEndian.PutUint16(oddPCM[20:22], 1)
+	binary.LittleEndian.PutUint16(oddPCM[22:24], 1)
+	binary.LittleEndian.PutUint32(oddPCM[24:28], 16000)
+	binary.LittleEndian.PutUint32(oddPCM[28:32], 32000)
+	binary.LittleEndian.PutUint16(oddPCM[32:34], 2)
+	binary.LittleEndian.PutUint16(oddPCM[34:36], 16)
+	copy(oddPCM[36:40], "data")
+	binary.LittleEndian.PutUint32(oddPCM[40:44], 1)
+	for name, body := range map[string]string{
+		"webm":          `{"audio_b64":"AA==","audio_format":"webm"}`,
+		"headerless":    `{"audio_b64":"ZmFrZS13YXYtYnl0ZXM=","audio_format":"wav"}`,
+		"forged header": `{"audio_b64":"` + base64.StdEncoding.EncodeToString(forgedHeader) + `","audio_format":"wav"}`,
+		"odd PCM":       `{"audio_b64":"` + base64.StdEncoding.EncodeToString(oddPCM) + `","audio_format":"wav"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, withController(httptest.NewRequest(http.MethodPost, "/api/voice/transcriptions", strings.NewReader(body))))
+			if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "requires a WAV") {
+				t.Fatalf("managed format rejection = %d: %s", recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }
 

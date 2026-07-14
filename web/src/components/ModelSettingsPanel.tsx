@@ -15,6 +15,7 @@ import type {
 import { RefreshIcon, TrashIcon, UploadIcon } from "../shell/icons";
 import { useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
+import { HostPathField } from "./HostPathField";
 
 type LLMSettings = PublicSettings["llm"];
 
@@ -364,7 +365,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
 
       {showGGUFImport && (
         <div className="model-import-form" aria-label="Import GGUF model">
-          <label className="field"><span className="label">GGUF file path</span><input type="text" value={ggufPath} disabled={locked || busy === "gguf"} onChange={(event) => setGGUFPath(event.target.value)} /></label>
+          <HostPathField label="GGUF file path" kind="gguf" value={ggufPath} disabled={locked || busy === "gguf"} onChange={setGGUFPath} />
           <label className="field"><span className="label">Display name <span className="hint-inline">optional</span></span><input type="text" value={ggufName} disabled={locked || busy === "gguf"} onChange={(event) => setGGUFName(event.target.value)} /></label>
           <button type="button" className="btn btn-primary" disabled={locked || !ggufPath.trim() || busy === "gguf"} onClick={() => void importGGUF()}>{busy === "gguf" ? "Starting..." : "Import copy"}</button>
         </div>
@@ -373,7 +374,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       {showOllamaImport && (
         <div className="ollama-import" aria-label="Import models from Ollama">
           <div className="model-import-path">
-            <label className="field"><span className="label">Ollama models path</span><input type="text" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(event) => patch({ ollama_models_path: event.target.value })} /></label>
+            <HostPathField label="Ollama models path" kind="directory" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(ollama_models_path) => patch({ ollama_models_path })} />
             <button type="button" className="btn btn-primary" disabled={locked || scanning} onClick={() => void scanOllama()}>{scanning ? "Scanning..." : "Scan library"}</button>
           </div>
           {scan && <OllamaCandidates candidates={scan.candidates} managed={manager?.models ?? []} locked={locked} busy={busy} onImport={importOllama} />}

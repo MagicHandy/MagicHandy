@@ -11,6 +11,7 @@ import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
 import { MicrophoneIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
 import { playBlob } from "../util/audio";
+import { recordingToWAV } from "../util/recording";
 
 const RECORDING_LIMIT_SECONDS = 30;
 
@@ -316,9 +317,11 @@ export function ChatPanel() {
     }
     setTranscribing(true);
     try {
-      const audioB64 = await blobBase64(blob);
-      const format = mimeType.includes("ogg") ? "ogg" : mimeType.includes("wav") ? "wav" : "webm";
-      const submitted = await api.voiceTranscribe(audioB64, format);
+      // MediaRecorder normally returns WebM/Opus in Chrome and Edge, while the
+      // managed Parakeet server accepts WAV bytes only. Decode in the browser so
+      // no native audio dependency enters the Go core.
+      const wav = await recordingToWAV(blob);
+      const submitted = await api.voiceTranscribe(await blobBase64(wav), "wav");
       const transcript = await waitForTranscript(submitted.request.id);
       if (!transcript) {
         show("No speech was recognized.", "error");
