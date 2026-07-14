@@ -91,13 +91,15 @@ NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
 1. installs LLVM/libclang and pinned Rust 1.94.0 for Windows MSVC through Rustup;
 2. clones `neutts-rs` v0.1.1 and verifies commit
    `ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`;
-3. downloads the revision-pinned NeuCodec checkpoint and Air Q4 GGUF with fixed
+3. requires and corrects the tag's single stale root-package version in
+   `Cargo.lock` from 0.1.0 to 0.1.1, without changing dependency versions;
+4. downloads the revision-pinned NeuCodec checkpoint and Air Q4 GGUF with fixed
    SHA-256 verification;
-4. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
+5. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
    pure-Rust converter, without Python or PyTorch;
-5. builds `stream_pcm` with Cargo `--locked`, eSpeak, and its CPU
+6. builds `stream_pcm` with Cargo `--locked`, eSpeak, and its CPU
    `llama-cpp-4` binding; and
-6. stages the runner/decoder and exact GGUF cache together, verifies their
+7. stages the runner/decoder and exact GGUF cache together, verifies their
    hashes, then swaps them atomically under `<data-dir>/voice/neutts/active`.
 
 The active manifest records the built runner/decoder hashes, immutable model

@@ -23,8 +23,11 @@ not install a reference voice. Skipping managed llama.cpp also skips NeuTTS.
 ## Installer-managed runtime
 
 The source installer pins `neutts-rs` v0.1.1 at
-`ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`. Its Cargo lockfile is honored with
-`--locked`; the older `65771f3...` revision previously shown here had mismatched
+`ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`. That tag changed the manifest
+package version to 0.1.1 but left its root `Cargo.lock` package entry at 0.1.0.
+After verifying the commit, the installer requires and corrects exactly that one
+metadata entry, then builds with `--locked`; all dependency versions remain
+pinned. The older `65771f3...` revision previously shown here had mismatched
 `llama-cpp-4` manifest and lockfile versions and is no longer supported.
 
 The installer installs LLVM/libclang plus pinned Rust 1.94.0 for x64 Windows
@@ -74,6 +77,7 @@ eSpeak-enabled streaming example:
 git clone --branch v0.1.1 --depth 1 https://github.com/eugenehp/neutts-rs.git
 cd neutts-rs
 git rev-parse HEAD # ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f
+# Change only the neutts root package entry in Cargo.lock from 0.1.0 to 0.1.1.
 cargo build --locked --release --example stream_pcm --features espeak
 ```
 

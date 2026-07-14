@@ -844,6 +844,44 @@ function Restore-MagicHandyNeuTTSBackup {
     }
 }
 
+function Repair-MagicHandyNeuTTSCargoLock {
+    param([Parameter(Mandatory = $true)][string]$SourceRoot)
+
+    $lockPath = Join-Path $SourceRoot 'Cargo.lock'
+    if (-not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "Pinned neutts-rs source is missing '$lockPath'."
+    }
+
+    $content = [System.IO.File]::ReadAllText($lockPath)
+    $pattern = '(?m)(\[\[package\]\]\r?\nname = "neutts"\r?\nversion = ")0\.1\.0("\r?\ndependencies = \[)'
+    $matches = [System.Text.RegularExpressions.Regex]::Matches($content, $pattern)
+    if ($matches.Count -ne 1) {
+        throw 'Pinned neutts-rs Cargo.lock no longer contains the expected v0.1.1 root-package metadata defect.'
+    }
+
+    $patched = [System.Text.RegularExpressions.Regex]::Replace($content, $pattern, '${1}0.1.1${2}')
+    Write-MagicHandyUTF8 -Path $lockPath -Content $patched
+}
+
+function Test-MagicHandyNativeProbe {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [string[]]$ArgumentList = @()
+    )
+
+    $probeErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $global:LASTEXITCODE = -1
+        & $Executable @ArgumentList *> $null
+        return ($global:LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $probeErrorAction
+    }
+}
+
 function Confirm-MagicHandyNeuTTSInstall {
     param([switch]$AssumeYes)
 
@@ -910,13 +948,6 @@ function Install-MagicHandyNeuTTS {
         }
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $decoderStage) | Out-Null
         New-Item -ItemType Directory -Force -Path $buildRoot, $localBuildData | Out-Null
-        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSBackboneURL -Destination $backbonePath -ExpectedSHA256 $script:NeuTTSBackboneSHA256
-        New-Item -ItemType Directory -Force -Path (Join-Path $backboneRepo 'refs') | Out-Null
-        Write-MagicHandyUTF8 -Path (Join-Path $backboneRepo 'refs\main') -Content $script:NeuTTSBackboneRevision
-        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSCodecURL -Destination $codecCheckpoint -ExpectedSHA256 $script:NeuTTSCodecSHA256
-        New-Item -ItemType Directory -Force -Path (Join-Path $codecRepo 'refs') | Out-Null
-        Write-MagicHandyUTF8 -Path (Join-Path $codecRepo 'refs\main') -Content $script:NeuTTSCodecRevision
-
         & $GitExecutable clone --branch $script:NeuTTSSourceTag --depth 1 $script:NeuTTSSourceURL $sourceRoot | Out-Host
         if ($LASTEXITCODE -ne 0) {
             throw "Fetching neutts-rs $($script:NeuTTSSourceTag) failed (exit $LASTEXITCODE)."
@@ -925,6 +956,14 @@ function Install-MagicHandyNeuTTS {
         if ($LASTEXITCODE -ne 0 -or $actualCommit -ne $script:NeuTTSSourceCommit) {
             throw "neutts-rs source verification failed: expected $($script:NeuTTSSourceCommit), got '$actualCommit'."
         }
+        Repair-MagicHandyNeuTTSCargoLock -SourceRoot $sourceRoot
+
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSBackboneURL -Destination $backbonePath -ExpectedSHA256 $script:NeuTTSBackboneSHA256
+        New-Item -ItemType Directory -Force -Path (Join-Path $backboneRepo 'refs') | Out-Null
+        Write-MagicHandyUTF8 -Path (Join-Path $backboneRepo 'refs\main') -Content $script:NeuTTSBackboneRevision
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSCodecURL -Destination $codecCheckpoint -ExpectedSHA256 $script:NeuTTSCodecSHA256
+        New-Item -ItemType Directory -Force -Path (Join-Path $codecRepo 'refs') | Out-Null
+        Write-MagicHandyUTF8 -Path (Join-Path $codecRepo 'refs\main') -Content $script:NeuTTSCodecRevision
 
         $env:CARGO_HOME = $cargoHome
         $env:CARGO_TARGET_DIR = $targetRoot
@@ -949,8 +988,7 @@ function Install-MagicHandyNeuTTS {
         if (-not (Test-Path -LiteralPath $runnerCandidate)) {
             throw "NeuTTS build did not produce '$runnerCandidate'."
         }
-        & $runnerCandidate --help *> $null
-        if ($LASTEXITCODE -ne 0) {
+        if (-not (Test-MagicHandyNativeProbe -Executable $runnerCandidate -ArgumentList @('--help'))) {
             throw 'The built NeuTTS stream_pcm runner did not pass its help probe.'
         }
         Copy-Item -LiteralPath $runnerCandidate -Destination (Join-Path $runtimeStage 'stream_pcm.exe') -Force

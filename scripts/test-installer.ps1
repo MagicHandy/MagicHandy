@@ -129,8 +129,61 @@ try {
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
 
-    Write-Host 'Checking app-managed NeuTTS runtime manifest discovery...'
+    Write-Host 'Checking pinned NeuTTS Cargo lock correction...'
     $supportModule = Get-Module InstallerSupport
+    $lockSource = Join-Path $tempRoot 'neutts-lock-source'
+    New-Item -ItemType Directory -Force -Path $lockSource | Out-Null
+    $lockPath = Join-Path $lockSource 'Cargo.lock'
+    $lockFixture = @'
+version = 4
+
+[[package]]
+name = "neutts"
+version = "0.1.0"
+dependencies = [
+ "fixture",
+]
+
+[[package]]
+name = "fixture"
+version = "0.1.0"
+'@
+    [System.IO.File]::WriteAllText($lockPath, $lockFixture)
+    & $supportModule { param($SourceRoot) Repair-MagicHandyNeuTTSCargoLock -SourceRoot $SourceRoot } $lockSource
+    $correctedLock = [System.IO.File]::ReadAllText($lockPath)
+    Assert-True -Condition ($correctedLock -match '(?m)^name = "neutts"\r?\nversion = "0\.1\.1"$') -Message 'known upstream root package version should be corrected'
+    Assert-True -Condition ($correctedLock -match '(?m)^name = "fixture"\r?\nversion = "0\.1\.0"$') -Message 'dependency versions should remain unchanged'
+
+    $unexpectedLockSource = Join-Path $tempRoot 'unexpected-neutts-lock-source'
+    New-Item -ItemType Directory -Force -Path $unexpectedLockSource | Out-Null
+    $unexpectedLockPath = Join-Path $unexpectedLockSource 'Cargo.lock'
+    [System.IO.File]::WriteAllText($unexpectedLockPath, ($lockFixture -replace 'version = "0\.1\.0"', 'version = "0.1.2"'))
+    $unexpectedLockRejected = $false
+    try {
+        & $supportModule { param($SourceRoot) Repair-MagicHandyNeuTTSCargoLock -SourceRoot $SourceRoot } $unexpectedLockSource
+    } catch {
+        $unexpectedLockRejected = $true
+    }
+    Assert-True -Condition $unexpectedLockRejected -Message 'unexpected upstream lock content should fail closed'
+
+    Write-Host 'Checking native executable probe classification...'
+    $probeExecutable = (Get-Process -Id $PID).Path
+    $probeResults = & $supportModule {
+        param($ProbeExecutable, $MissingProbe)
+        $ErrorActionPreference = 'Stop'
+        [pscustomobject]@{
+            StderrSuccess = Test-MagicHandyNativeProbe -Executable $ProbeExecutable -ArgumentList @('-NoProfile', '-Command', '[Console]::Error.WriteLine(''usage''); exit 0')
+            Nonzero = Test-MagicHandyNativeProbe -Executable $ProbeExecutable -ArgumentList @('-NoProfile', '-Command', 'exit 7')
+            Missing = Test-MagicHandyNativeProbe -Executable $MissingProbe
+            RestoredErrorAction = $ErrorActionPreference
+        }
+    } $probeExecutable (Join-Path $tempRoot 'missing-probe.exe')
+    Assert-True -Condition ([bool]$probeResults.StderrSuccess) -Message 'stderr with exit zero should pass a native probe'
+    Assert-True -Condition (-not [bool]$probeResults.Nonzero) -Message 'nonzero exit should fail a native probe'
+    Assert-True -Condition (-not [bool]$probeResults.Missing) -Message 'an executable launch failure should fail closed'
+    Assert-Equal -Expected 'Stop' -Actual ([string]$probeResults.RestoredErrorAction) -Message 'native probe should restore ErrorActionPreference'
+
+    Write-Host 'Checking app-managed NeuTTS runtime manifest discovery...'
     $neuttsData = Join-Path $tempRoot 'neutts-data'
     $neuttsRuntimeResult = & $supportModule {
         param($DataDir)
