@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $support = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
 Import-Module $support -Force -DisableNameChecking
+$supportModule = Get-Module InstallerSupport
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) {
@@ -129,8 +130,121 @@ try {
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
 
+    Write-Host 'Checking interrupted download resume and verification...'
+    $downloadPort = Get-AvailableLoopbackPort
+    $downloadSize = 256KB
+    $downloadCut = 64KB
+    $downloadSeed = 49717
+    $downloadFixture = New-Object byte[] $downloadSize
+    $downloadRandom = [System.Random]::new($downloadSeed)
+    $downloadRandom.NextBytes($downloadFixture)
+    $downloadFixturePath = Join-Path $tempRoot 'download-fixture.bin'
+    $downloadDestination = Join-Path $tempRoot 'downloaded.bin'
+    $downloadPartial = Join-Path $tempRoot 'download-cache\downloaded.partial'
+    [System.IO.File]::WriteAllBytes($downloadFixturePath, $downloadFixture)
+    $downloadHash = (Get-FileHash -LiteralPath $downloadFixturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $downloadJob = Start-Job -ArgumentList $downloadPort, $downloadSize, $downloadCut, $downloadSeed -ScriptBlock {
+        param($Port, $Size, $Cut, $Seed)
+
+        $payload = New-Object byte[] $Size
+        $random = [System.Random]::new($Seed)
+        $random.NextBytes($payload)
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+        $ranges = New-Object System.Collections.Generic.List[string]
+        try {
+            $listener.Start()
+            'READY'
+            for ($requestNumber = 0; $requestNumber -lt 2; $requestNumber++) {
+                $client = $listener.AcceptTcpClient()
+                try {
+                    $stream = $client.GetStream()
+                    $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII, $false, 1024, $true)
+                    $range = ''
+                    while ($true) {
+                        $line = $reader.ReadLine()
+                        if ([string]::IsNullOrEmpty($line)) {
+                            break
+                        }
+                        if ($line.StartsWith('Range:', [StringComparison]::OrdinalIgnoreCase)) {
+                            $range = $line.Substring(6).Trim()
+                        }
+                    }
+                    $ranges.Add($range)
+
+                    if ($requestNumber -eq 0) {
+                        $header = "HTTP/1.1 200 OK`r`nContent-Length: $Size`r`nContent-Type: application/octet-stream`r`nConnection: close`r`n`r`n"
+                        $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
+                        $stream.Write($headerBytes, 0, $headerBytes.Length)
+                        $stream.Write($payload, 0, $Cut)
+                    } else {
+                        if ($range -notmatch '^bytes=(\d+)-$') {
+                            throw "Expected a resume Range header, got '$range'."
+                        }
+                        $start = [int]$Matches[1]
+                        $remaining = $Size - $start
+                        $end = $Size - 1
+                        $header = "HTTP/1.1 206 Partial Content`r`nContent-Length: $remaining`r`nContent-Range: bytes $start-$end/$Size`r`nContent-Type: application/octet-stream`r`nConnection: close`r`n`r`n"
+                        $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
+                        $stream.Write($headerBytes, 0, $headerBytes.Length)
+                        $stream.Write($payload, $start, $remaining)
+                    }
+                    $stream.Flush()
+                } finally {
+                    $client.Dispose()
+                }
+            }
+            [pscustomobject]@{
+                Requests = $ranges.Count
+                FirstRange = $ranges[0]
+                SecondRange = $ranges[1]
+            }
+        } finally {
+            $listener.Stop()
+        }
+    }
+    try {
+        $downloadReady = $false
+        $downloadReadyDeadline = [DateTime]::UtcNow.AddSeconds(10)
+        do {
+            $downloadJobOutput = @(Receive-Job -Job $downloadJob -Keep)
+            if ($downloadJobOutput -contains 'READY') {
+                $downloadReady = $true
+                break
+            }
+            if ($downloadJob.State -eq 'Failed') {
+                throw 'The interrupted-download test server failed before accepting requests.'
+            }
+            Start-Sleep -Milliseconds 50
+        } while ([DateTime]::UtcNow -lt $downloadReadyDeadline)
+        Assert-True -Condition $downloadReady -Message 'interrupted-download test server should become ready'
+
+        & $supportModule {
+            param($Uri, $Destination, $ExpectedSHA256, $PartialPath)
+            Install-MagicHandyVerifiedDownload -Uri $Uri -Destination $Destination -ExpectedSHA256 $ExpectedSHA256 -PartialPath $PartialPath -MaxAttempts 3 -RetryDelayMilliseconds 1
+        } "http://127.0.0.1:$downloadPort/model.bin" $downloadDestination $downloadHash $downloadPartial
+
+        Wait-Job -Job $downloadJob -Timeout 10 | Out-Null
+        $downloadResults = @(Receive-Job -Job $downloadJob | Where-Object { $_.PSObject.Properties.Name -contains 'SecondRange' })
+        Assert-Equal -Expected 2 -Actual ([int]$downloadResults[-1].Requests) -Message 'interrupted download request count'
+        Assert-Equal -Expected "bytes=$downloadCut-" -Actual ([string]$downloadResults[-1].SecondRange) -Message 'interrupted download should resume at the saved byte count'
+        Assert-Equal -Expected $downloadHash -Actual ((Get-FileHash -LiteralPath $downloadDestination -Algorithm SHA256).Hash.ToLowerInvariant()) -Message 'resumed download checksum'
+        Assert-True -Condition (-not (Test-Path -LiteralPath $downloadPartial)) -Message 'verified partial should be atomically promoted'
+    } finally {
+        Stop-Job -Job $downloadJob -ErrorAction SilentlyContinue
+        Remove-Job -Job $downloadJob -Force -ErrorAction SilentlyContinue
+    }
+
+    $originalConsoleOutput = [Console]::Out
+    $progressOutput = [System.IO.StringWriter]::new()
+    try {
+        [Console]::SetOut($progressOutput)
+        & $supportModule { Write-MagicHandyDownloadProgress -Name 'model.bin' -CompletedBytes 1MB -TotalBytes 4MB } | Out-Null
+    } finally {
+        [Console]::SetOut($originalConsoleOutput)
+    }
+    Assert-True -Condition ($progressOutput.ToString() -match '25[\.,]0%') -Message 'inline download progress should preserve fractional percentages'
+
     Write-Host 'Checking pinned NeuTTS Cargo lock correction...'
-    $supportModule = Get-Module InstallerSupport
     $lockSource = Join-Path $tempRoot 'neutts-lock-source'
     New-Item -ItemType Directory -Force -Path $lockSource | Out-Null
     $lockPath = Join-Path $lockSource 'Cargo.lock'

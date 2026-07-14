@@ -139,8 +139,9 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 `AGENTS.md`):
 
 - **Downloads are explicit user actions** with visible size, license, checksum,
-  and disk-use; verify before install and move files atomically. Startup and
-  status checks must never kick off a multi-GB download.
+  and disk-use; show compact inline progress, retry transient failures, retain
+  resumable partials, verify before install, and move files atomically. Startup
+  and status checks must never kick off a multi-GB download.
 - **Build-tool installation is explicit too.** WinGet package agreements are
   accepted only after the script names the package, purpose, license, and large
   disk impact. `-Yes` is the unattended form of that consent.

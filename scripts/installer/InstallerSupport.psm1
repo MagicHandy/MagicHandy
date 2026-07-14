@@ -654,12 +654,58 @@ function Get-MagicHandySHA256([string]$Path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
 }
 
+function Format-MagicHandyByteCount([long]$Bytes) {
+    if ($Bytes -ge 1GB) {
+        return ('{0:N2} GiB' -f ($Bytes / 1GB))
+    }
+    if ($Bytes -ge 1MB) {
+        return ('{0:N1} MiB' -f ($Bytes / 1MB))
+    }
+    if ($Bytes -ge 1KB) {
+        return ('{0:N1} KiB' -f ($Bytes / 1KB))
+    }
+    return "$Bytes B"
+}
+
+function Write-MagicHandyDownloadProgress {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][long]$CompletedBytes,
+        [long]$TotalBytes = -1,
+        [int]$PreviousWidth = 0
+    )
+
+    if ($TotalBytes -gt 0) {
+        $fraction = [Math]::Min(1.0, [double]$CompletedBytes / [double]$TotalBytes)
+        $filled = [int][Math]::Floor($fraction * 20)
+        $bar = ('#' * $filled) + ('-' * (20 - $filled))
+        $line = '{0} [{1}] {2,5:N1}%  {3} / {4}' -f $Name, $bar, ($fraction * 100), (Format-MagicHandyByteCount $CompletedBytes), (Format-MagicHandyByteCount $TotalBytes)
+    } else {
+        $line = '{0}  {1} downloaded' -f $Name, (Format-MagicHandyByteCount $CompletedBytes)
+    }
+    $padding = ' ' * [Math]::Max(0, $PreviousWidth - $line.Length)
+    [Console]::Write("`r$line$padding")
+    return $line.Length
+}
+
 function Install-MagicHandyVerifiedDownload {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,
         [Parameter(Mandatory = $true)][string]$Destination,
-        [Parameter(Mandatory = $true)][string]$ExpectedSHA256
+        [Parameter(Mandatory = $true)][string]$ExpectedSHA256,
+        [string]$PartialPath = '',
+        [ValidateRange(1, 10)][int]$MaxAttempts = 6,
+        [ValidateRange(0, 60000)][int]$RetryDelayMilliseconds = 1000
     )
+
+    $downloadUri = $null
+    if (-not [Uri]::TryCreate($Uri, [UriKind]::Absolute, [ref]$downloadUri) -or
+        $downloadUri.Scheme -notin @('http', 'https')) {
+        throw 'Download URI must be an absolute HTTP or HTTPS URI.'
+    }
+    if ($ExpectedSHA256 -notmatch '^[0-9a-fA-F]{64}$') {
+        throw 'Expected download SHA-256 must contain exactly 64 hexadecimal characters.'
+    }
     $expected = $ExpectedSHA256.ToLowerInvariant()
     $parent = Split-Path -Parent $Destination
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
@@ -672,24 +718,274 @@ function Install-MagicHandyVerifiedDownload {
         Remove-Item -LiteralPath $Destination -Force
     }
 
-    $partial = "$Destination.partial"
-    if (Test-Path -LiteralPath $partial) {
-        Remove-Item -LiteralPath $partial -Recurse -Force
+    $partial = if ([string]::IsNullOrWhiteSpace($PartialPath)) { "$Destination.$expected.partial" } else { $PartialPath }
+    if ([System.IO.Path]::GetFullPath($partial) -eq [System.IO.Path]::GetFullPath($Destination)) {
+        throw 'Download partial path must differ from its destination.'
     }
+    $destinationVolume = [System.IO.Path]::GetPathRoot([System.IO.Path]::GetFullPath($Destination))
+    $partialVolume = [System.IO.Path]::GetPathRoot([System.IO.Path]::GetFullPath($partial))
+    if (-not $destinationVolume.Equals($partialVolume, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Download partial and destination paths must be on the same volume for atomic promotion.'
+    }
+    $partialParent = Split-Path -Parent $partial
+    New-Item -ItemType Directory -Force -Path $partialParent | Out-Null
+    if (Test-Path -LiteralPath $partial -PathType Container) {
+        throw "Download partial path is a directory: '$partial'."
+    }
+
+    $name = Split-Path -Leaf $Destination
+    $startingBytes = if (Test-Path -LiteralPath $partial -PathType Leaf) { (Get-Item -LiteralPath $partial).Length } else { 0 }
+    if ($startingBytes -gt 0) {
+        Write-Host "Resuming $name from $(Format-MagicHandyByteCount $startingBytes)..."
+    } else {
+        Write-Host "Downloading $name..."
+    }
+
+    $showInlineProgress = $Host.Name -eq 'ConsoleHost'
     try {
-        Write-Host "Downloading $(Split-Path -Leaf $Destination)..."
-        Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $partial
-        $actual = Get-MagicHandySHA256 -Path $partial
-        if ($actual -ne $expected) {
-            throw "SHA-256 verification failed for $(Split-Path -Leaf $Destination)."
+        if ([Console]::IsOutputRedirected) {
+            $showInlineProgress = $false
         }
-        Move-Item -LiteralPath $partial -Destination $Destination -Force
-        Write-Host "Verified $(Split-Path -Leaf $Destination)." -ForegroundColor Green
-    } finally {
-        if (Test-Path -LiteralPath $partial) {
-            Remove-Item -LiteralPath $partial -Recurse -Force -ErrorAction SilentlyContinue
+    } catch {
+        $showInlineProgress = $false
+    }
+
+    $progressWidth = 0
+    $rangeReset = $false
+    $downloadComplete = $false
+    $knownTotal = -1L
+    $lastRetryReason = ''
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $response = $null
+        $input = $null
+        $output = $null
+        $retryReason = ''
+        $retryAfterMilliseconds = 0
+        $offset = if (Test-Path -LiteralPath $partial -PathType Leaf) { (Get-Item -LiteralPath $partial).Length } else { 0 }
+        try {
+            $requestUri = $downloadUri
+            $redirectCount = 0
+            while ($true) {
+                $request = [System.Net.HttpWebRequest][System.Net.WebRequest]::Create($requestUri)
+                $request.Method = 'GET'
+                $request.UserAgent = 'MagicHandy-Installer/1.0'
+                $request.AllowAutoRedirect = $false
+                $request.AutomaticDecompression = [System.Net.DecompressionMethods]::None
+                $request.Headers['Accept-Encoding'] = 'identity'
+                $request.Timeout = 60000
+                $request.ReadWriteTimeout = 60000
+                $request.CachePolicy = [System.Net.Cache.RequestCachePolicy]::new([System.Net.Cache.RequestCacheLevel]::NoCacheNoStore)
+                if ($offset -gt 0) {
+                    $request.AddRange([long]$offset)
+                }
+
+                try {
+                    $response = [System.Net.HttpWebResponse]$request.GetResponse()
+                } catch [System.Net.WebException] {
+                    $webError = $_.Exception
+                    $response = [System.Net.HttpWebResponse]$webError.Response
+                    if ($null -ne $response) {
+                        $statusCode = [int]$response.StatusCode
+                        if ($statusCode -eq 416 -and $offset -gt 0) {
+                            $contentRange = $response.Headers['Content-Range']
+                            if ($contentRange -match '^bytes\s+\*/(\d+)$' -and [long]$Matches[1] -eq $offset) {
+                                $knownTotal = $offset
+                                $downloadComplete = $true
+                            } elseif (-not $rangeReset) {
+                                Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+                                $rangeReset = $true
+                                $retryReason = 'the server rejected the saved partial; restarting from zero'
+                            } else {
+                                throw 'Download server repeatedly rejected the saved partial range.'
+                            }
+                        } elseif (@(408, 429, 500, 502, 503, 504) -contains $statusCode) {
+                            $retryReason = "HTTP $statusCode"
+                            $retryAfter = $response.Headers['Retry-After']
+                            $retryAfterSeconds = 0
+                            $retryAfterDate = [DateTimeOffset]::MinValue
+                            if ([int]::TryParse($retryAfter, [ref]$retryAfterSeconds)) {
+                                $retryAfterMilliseconds = [int][Math]::Min(30000.0, [Math]::Max(0.0, [double]$retryAfterSeconds * 1000.0))
+                            } elseif ([DateTimeOffset]::TryParse($retryAfter, [ref]$retryAfterDate)) {
+                                $retryAfterMilliseconds = [int][Math]::Min(30000.0, [Math]::Max(0.0, ($retryAfterDate - [DateTimeOffset]::UtcNow).TotalMilliseconds))
+                            }
+                        } else {
+                            throw "Download request failed with HTTP $statusCode ($($response.StatusDescription))."
+                        }
+                    } elseif (@(
+                            [System.Net.WebExceptionStatus]::NameResolutionFailure,
+                            [System.Net.WebExceptionStatus]::ProxyNameResolutionFailure,
+                            [System.Net.WebExceptionStatus]::ConnectFailure,
+                            [System.Net.WebExceptionStatus]::ConnectionClosed,
+                            [System.Net.WebExceptionStatus]::KeepAliveFailure,
+                            [System.Net.WebExceptionStatus]::PipelineFailure,
+                            [System.Net.WebExceptionStatus]::ReceiveFailure,
+                            [System.Net.WebExceptionStatus]::SendFailure,
+                            [System.Net.WebExceptionStatus]::Timeout
+                        ) -contains $webError.Status) {
+                        $retryReason = $webError.Status.ToString()
+                    } else {
+                        throw "Download request failed: $($webError.Status)."
+                    }
+                }
+
+                if ($downloadComplete -or -not [string]::IsNullOrWhiteSpace($retryReason)) {
+                    break
+                }
+                $statusCode = [int]$response.StatusCode
+                if (@(301, 302, 303, 307, 308) -notcontains $statusCode) {
+                    break
+                }
+                $location = $response.Headers['Location']
+                if ([string]::IsNullOrWhiteSpace($location)) {
+                    throw 'Download server returned a redirect without a Location header.'
+                }
+                $nextUri = [Uri]::new($requestUri, $location)
+                if ($requestUri.Scheme -eq 'https' -and $nextUri.Scheme -ne 'https') {
+                    throw 'Download refused an HTTPS-to-HTTP redirect.'
+                }
+                $response.Dispose()
+                $response = $null
+                $redirectCount++
+                if ($redirectCount -gt 10) {
+                    throw 'Download server exceeded the redirect limit.'
+                }
+                $requestUri = $nextUri
+            }
+
+            if (-not $downloadComplete -and [string]::IsNullOrWhiteSpace($retryReason)) {
+                if (-not [string]::IsNullOrWhiteSpace($response.ContentEncoding) -and $response.ContentEncoding -ne 'identity') {
+                    throw "Download server returned unsupported content encoding '$($response.ContentEncoding)'."
+                }
+
+                $statusCode = [int]$response.StatusCode
+                $append = $false
+                $expectedSegmentBytes = -1L
+                if ($statusCode -eq 206) {
+                    $contentRange = $response.Headers['Content-Range']
+                    if ($contentRange -notmatch '^bytes\s+(\d+)-(\d+)/(\d+|\*)$') {
+                        throw "Download server returned an invalid Content-Range: '$contentRange'."
+                    }
+                    $rangeStart = [long]$Matches[1]
+                    $rangeEnd = [long]$Matches[2]
+                    $rangeTotal = $Matches[3]
+                    if ($rangeStart -ne $offset -or $rangeEnd -lt $rangeStart) {
+                        throw "Download server returned an unexpected byte range beginning at $rangeStart; expected $offset."
+                    }
+                    $expectedSegmentBytes = $rangeEnd - $rangeStart + 1
+                    if ($response.ContentLength -ge 0 -and $response.ContentLength -ne $expectedSegmentBytes) {
+                        throw 'Download Content-Length did not match Content-Range.'
+                    }
+                    if ($rangeTotal -ne '*') {
+                        $knownTotal = [long]$rangeTotal
+                        if ($rangeEnd -ge $knownTotal) {
+                            throw 'Download Content-Range exceeded the advertised total size.'
+                        }
+                    }
+                    $append = $offset -gt 0
+                } elseif ($statusCode -eq 200) {
+                    if ($response.ContentLength -ge 0) {
+                        $knownTotal = $response.ContentLength
+                        $expectedSegmentBytes = $response.ContentLength
+                    }
+                    $offset = 0
+                } else {
+                    throw "Download server returned unexpected HTTP status $statusCode."
+                }
+
+                $fileMode = if ($append) { [System.IO.FileMode]::OpenOrCreate } else { [System.IO.FileMode]::Create }
+                $output = [System.IO.File]::Open($partial, $fileMode, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                if ($append) {
+                    if ($output.Length -ne $offset) {
+                        throw 'Download partial changed while opening it for resume.'
+                    }
+                    $output.Position = $offset
+                }
+                $input = $response.GetResponseStream()
+                $buffer = New-Object byte[] (1MB)
+                $segmentBytes = 0L
+                $nextProgress = [DateTime]::UtcNow
+                while ($true) {
+                    try {
+                        $count = $input.Read($buffer, 0, $buffer.Length)
+                    } catch [System.IO.IOException] {
+                        $retryReason = 'the response stream was interrupted'
+                        break
+                    } catch [System.Net.WebException] {
+                        $retryReason = 'the response stream was interrupted'
+                        break
+                    }
+                    if ($count -eq 0) {
+                        break
+                    }
+                    $output.Write($buffer, 0, $count)
+                    $segmentBytes += $count
+                    if ($showInlineProgress -and [DateTime]::UtcNow -ge $nextProgress) {
+                        $progressWidth = Write-MagicHandyDownloadProgress -Name $name -CompletedBytes $output.Position -TotalBytes $knownTotal -PreviousWidth $progressWidth
+                        $nextProgress = [DateTime]::UtcNow.AddMilliseconds(250)
+                    }
+                }
+                $output.Flush()
+
+                if ([string]::IsNullOrWhiteSpace($retryReason) -and
+                    $expectedSegmentBytes -ge 0 -and $segmentBytes -ne $expectedSegmentBytes) {
+                    $retryReason = 'the response ended before its advertised length'
+                }
+                if ([string]::IsNullOrWhiteSpace($retryReason) -and $knownTotal -ge 0) {
+                    if ($output.Length -lt $knownTotal) {
+                        $retryReason = 'the response ended before the complete file arrived'
+                    } elseif ($output.Length -gt $knownTotal) {
+                        throw 'Downloaded bytes exceeded the advertised file size.'
+                    }
+                }
+                if ([string]::IsNullOrWhiteSpace($retryReason)) {
+                    $downloadComplete = $true
+                }
+            }
+        } finally {
+            if ($null -ne $input) {
+                $input.Dispose()
+            }
+            if ($null -ne $output) {
+                $output.Dispose()
+            }
+            if ($null -ne $response) {
+                $response.Dispose()
+            }
+        }
+
+        if ($downloadComplete) {
+            break
+        }
+        $lastRetryReason = $retryReason
+        if ($showInlineProgress -and $progressWidth -gt 0) {
+            [Console]::Write("`r$(' ' * $progressWidth)`r")
+            $progressWidth = 0
+        }
+        if ($attempt -eq $MaxAttempts) {
+            throw "Downloading $name failed after $MaxAttempts attempts ($lastRetryReason). Partial data was retained at '$partial' for resume."
+        }
+        $resumeBytes = if (Test-Path -LiteralPath $partial -PathType Leaf) { (Get-Item -LiteralPath $partial).Length } else { 0 }
+        Write-Warning "Download interrupted ($retryReason). Attempt $($attempt + 1) of $MaxAttempts will resume from $(Format-MagicHandyByteCount $resumeBytes)."
+        $exponentialDelay = $RetryDelayMilliseconds * [Math]::Pow(2, $attempt - 1)
+        $delay = [int][Math]::Min(30000, [Math]::Max($retryAfterMilliseconds, $exponentialDelay))
+        if ($delay -gt 0) {
+            Start-Sleep -Milliseconds $delay
         }
     }
+
+    $completedBytes = (Get-Item -LiteralPath $partial).Length
+    if ($showInlineProgress) {
+        $progressWidth = Write-MagicHandyDownloadProgress -Name $name -CompletedBytes $completedBytes -TotalBytes $knownTotal -PreviousWidth $progressWidth
+        [Console]::WriteLine()
+    }
+    Write-Host "Verifying $name SHA-256..."
+    $actual = Get-MagicHandySHA256 -Path $partial
+    if ($actual -ne $expected) {
+        Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+        throw "SHA-256 verification failed for $name."
+    }
+    Move-Item -LiteralPath $partial -Destination $Destination -Force
+    Write-Host "Verified $name." -ForegroundColor Green
 }
 
 function Build-MagicHandyBinaries {
@@ -927,8 +1223,11 @@ function Install-MagicHandyNeuTTS {
     $codecRepo = Join-Path $hfRoot 'hub\models--neuphonic--neucodec'
     $codecSnapshot = Join-Path $codecRepo "snapshots\$($script:NeuTTSCodecRevision)"
     $codecCheckpoint = Join-Path $codecSnapshot 'pytorch_model.bin'
+    $downloadRoot = Join-Path $root 'downloads'
+    $backbonePartial = Join-Path $downloadRoot "$($script:NeuTTSBackboneSHA256)-neutts-air-Q4_0.gguf.partial"
+    $codecPartial = Join-Path $downloadRoot "$($script:NeuTTSCodecSHA256)-pytorch_model.bin.partial"
     $decoderStage = Join-Path $runtimeStage 'models\neucodec_decoder.safetensors'
-    foreach ($path in @($active, $activeStage, $activeBackup, $buildRoot, $hfRoot, $backbonePath, $codecCheckpoint)) {
+    foreach ($path in @($active, $activeStage, $activeBackup, $buildRoot, $hfRoot, $backbonePath, $codecCheckpoint, $downloadRoot, $backbonePartial, $codecPartial)) {
         Assert-MagicHandyChildPath -Root $root -Candidate $path
     }
 
@@ -958,10 +1257,10 @@ function Install-MagicHandyNeuTTS {
         }
         Repair-MagicHandyNeuTTSCargoLock -SourceRoot $sourceRoot
 
-        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSBackboneURL -Destination $backbonePath -ExpectedSHA256 $script:NeuTTSBackboneSHA256
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSBackboneURL -Destination $backbonePath -ExpectedSHA256 $script:NeuTTSBackboneSHA256 -PartialPath $backbonePartial
         New-Item -ItemType Directory -Force -Path (Join-Path $backboneRepo 'refs') | Out-Null
         Write-MagicHandyUTF8 -Path (Join-Path $backboneRepo 'refs\main') -Content $script:NeuTTSBackboneRevision
-        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSCodecURL -Destination $codecCheckpoint -ExpectedSHA256 $script:NeuTTSCodecSHA256
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSCodecURL -Destination $codecCheckpoint -ExpectedSHA256 $script:NeuTTSCodecSHA256 -PartialPath $codecPartial
         New-Item -ItemType Directory -Force -Path (Join-Path $codecRepo 'refs') | Out-Null
         Write-MagicHandyUTF8 -Path (Join-Path $codecRepo 'refs\main') -Content $script:NeuTTSCodecRevision
 
