@@ -77,11 +77,12 @@ MagicHandy Go core itself.
 4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
 5. Voice setup is partial: provider adapters, provider-scoped settings, browser
-   push-to-talk, and the Parakeet installer path exist. Installed app-managed
-   Parakeet assets are now discovered separately from custom local server paths,
-   but turnkey in-app provider provisioning, managed browser-audio-to-Parakeet
-   validation, arbitrary-WAV NeuTTS cloning, and any LAN/HTTPS story remain open
-   (managed browser audio: R24; NeuTTS cloning: R17; LAN/HTTPS: R18).
+   push-to-talk with WAV conversion, the Parakeet installer path, and guarded
+   local Windows path browsing exist. Installed app-managed Parakeet assets are
+   discovered separately from custom paths. Turnkey NeuTTS provisioning,
+   arbitrary-WAV cloning, a real managed-Parakeet browser smoke test, and any
+   LAN/HTTPS story remain open (managed browser audio: R24; NeuTTS: R17;
+   LAN/HTTPS: R18).
 
 ## Roadmap to parity
 
@@ -152,7 +153,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | StrokeGPT-ReVibed setup capability | MagicHandy status | Where |
 | --- | --- | --- |
 | One-command environment setup | **Implemented for source installs** — bootstraps dependencies and compiler | `install.ps1` |
-| No Python/venv/torch to install | **Better** — pure-Go core, none needed | by design |
+| No Python/venv/torch to install | **Implemented for core, Parakeet, and ElevenLabs runtime**; custom NeuTTS reference-code generation is external | by design + R17 |
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
 | Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
@@ -160,7 +161,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - opt-in Parakeet source install is detected as an app-managed module; in-app download/repair remains planned | Phase 13 + Phase 16 provisioning |
+| Voice model setup | Partial - opt-in Parakeet is app-managed; NeuTTS is adapter-only with manual runner/model/reference assets and Browse controls | Phase 13 + Phase 16 provisioning |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

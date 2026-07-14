@@ -98,13 +98,17 @@ directly.
   decode path without inserting spoken content into chat or motion.
 - A failed automatic load fails Start and stops the just-started adapter; the UI
   never treats a running but unloaded worker as microphone-ready.
+- Browser MediaRecorder output is decoded in the browser, downmixed, resampled
+  to 16 kHz, and encoded as PCM16 WAV before upload. The managed API rejects a
+  compressed payload or a fake WAV header instead of forwarding it to the
+  runner and surfacing its opaque HTTP 400.
 
 Browser microphone capture and push-to-talk are implemented on localhost.
 Recognized speech uses the same chat and motion safety path as typed chat; it
-never bypasses limits, smoothing, controller ownership, or Emergency Stop.
-However, browsers currently record WebM/Opus or Ogg while the pinned managed
-runner path is documented with WAV. End-to-end format compatibility remains an
-acceptance gap (risk R24); hands-free routing is still planned.
+never bypasses limits, smoothing, controller ownership, or Emergency Stop. The
+WebM/Opus-to-WAV mismatch from R24 is fixed in code and covered by WAV encoder
+and managed-boundary tests. A real Chrome/Edge plus pinned-model transcription
+smoke test remains release evidence rather than an unresolved format design.
 
 ## Validation
 

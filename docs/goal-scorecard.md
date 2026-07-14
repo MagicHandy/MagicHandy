@@ -103,13 +103,23 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 531,309 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 93,912 gzip bytes, 2,336 bytes over
-   the Phase 14C measurement; the stripped binary is 13,870,080 bytes. These
+   browser payload is 532,478 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 95,081 gzip bytes, 3,505 bytes over
+   the Phase 14C measurement; the stripped binary is 13,902,336 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-14** — Voice installation/runtime audit: browser microphone data is
+  converted to 16 kHz PCM WAV before managed Parakeet submission; NeuTTS now
+  preflights adapter, runner, decoder, exact backbone cache, reference codes,
+  transcript, and a bounded synthesis before reporting ready; and local path
+  fields use a controller-gated Windows host picker. Source-install completion
+  now distinguishes built adapters from configured external runtimes. Plain /
+  stripped binaries are 19,837,440 / 13,902,336 bytes; embedded UI is 779,484
+  raw / 532,478 gzip bytes (95,081 gzip excluding unchanged artwork). This is a
+  1,169-byte gzip UI increase and remains within budget; RSS was not remeasured.
 
 - **2026-07-14** — Audited implementation progress after PRs #63-#67. Updated
   phase status, Stop behavior, transport scope, voice acceptance, source-size

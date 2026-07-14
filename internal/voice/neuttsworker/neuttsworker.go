@@ -1,6 +1,6 @@
 // Package neuttsworker adapts the non-Python neutts-rs stream_pcm runner to
-// MagicHandy's voice worker protocol. Model artifacts must be installed
-// explicitly: child processes run with Hugging Face offline mode enabled.
+// MagicHandy's voice worker protocol. Model artifacts remain external to the
+// core; child processes request Hugging Face offline mode where supported.
 package neuttsworker
 
 import (
@@ -14,18 +14,24 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
 )
 
 const (
-	providerName    = "neutts-air"
-	providerVersion = "1.0.0"
-	queueCapacity   = 8
-	maxPCMBytes     = 32 << 20
-	audioChunkBytes = 32 << 10
+	providerName      = "neutts-air"
+	providerVersion   = "1.0.0"
+	defaultBackbone   = "neuphonic/neutts-air-q4-gguf"
+	defaultGGUFFile   = "neutts-air-Q4_0.gguf"
+	modelProbeTimeout = 25 * time.Second
+	queueCapacity     = 8
+	maxPCMBytes       = 32 << 20
+	audioChunkBytes   = 32 << 10
 )
 
 // Options configure the neutts-rs stream_pcm adapter.
@@ -35,6 +41,7 @@ type Options struct {
 	ReferenceText  string
 	ReferenceWAV   string // provenance only until neutts-rs ships an encoder
 	Backbone       string
+	GGUFFile       string
 	ChunkTokens    int
 }
 
@@ -42,6 +49,15 @@ type Options struct {
 func Run(reader io.Reader, writer io.Writer, options Options) error {
 	if options.ChunkTokens == 0 {
 		options.ChunkTokens = 25
+	}
+	if options.Backbone == "" {
+		options.Backbone = defaultBackbone
+	}
+	if options.GGUFFile == "" && options.Backbone == defaultBackbone {
+		options.GGUFFile = defaultGGUFFile
+	}
+	if options.GGUFFile == "" {
+		options.GGUFFile = cachedBackboneFile(options.Backbone, "")
 	}
 	s := &session{
 		options:  options,
@@ -53,6 +69,8 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	done := make(chan struct{})
 	go func() { defer close(done); s.workLoop() }()
 	err := s.readLoop(reader)
+	s.cancelLoad()
+	s.loadWG.Wait()
 	s.setLoaded(false)
 	s.cancelAll()
 	close(s.queue)
@@ -65,12 +83,16 @@ type session struct {
 	writer  io.Writer
 	writeMu sync.Mutex
 
-	mu       sync.Mutex
-	loaded   bool
-	pending  int
-	cancels  map[string]context.CancelFunc
-	canceled map[string]bool
-	queue    chan protocol.Request
+	mu         sync.Mutex
+	loaded     bool
+	loading    bool
+	loadSeq    uint64
+	loadCancel context.CancelFunc
+	loadWG     sync.WaitGroup
+	pending    int
+	cancels    map[string]context.CancelFunc
+	canceled   map[string]bool
+	queue      chan protocol.Request
 }
 
 func (s *session) readLoop(reader io.Reader) error {
@@ -93,12 +115,16 @@ func (s *session) readLoop(reader io.Reader) error {
 		case protocol.RequestLoad:
 			s.load(request.ID)
 		case protocol.RequestUnload:
+			s.cancelLoad()
+			s.loadWG.Wait()
 			s.setLoaded(false)
 			s.cancelAll()
 			s.send(s.health(request.ID))
 		case protocol.RequestCancel:
 			s.markCanceled(request.TargetID)
 		case protocol.RequestShutdown:
+			s.cancelLoad()
+			s.loadWG.Wait()
 			s.setLoaded(false)
 			s.cancelAll()
 			s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
@@ -121,17 +147,47 @@ func (s *session) hello(request protocol.Request) {
 		Type: protocol.ResponseHello, RequestID: request.ID,
 		ProtocolVersion: protocol.Version, Provider: providerName,
 		ProviderVersion: providerVersion, Role: protocol.RoleTTS,
-		Capabilities: []string{"cancel", "load", "unload", "local", "offline"},
+		Capabilities: []string{"cancel", "load", "unload", "local"},
 	})
 }
 
 func (s *session) load(id string) {
-	if err := validateOptions(s.options); err != nil {
-		s.sendError(id, protocol.ErrorCodeMissingDependency, err.Error(), false)
-		return
-	}
-	s.setLoaded(true)
-	s.send(s.health(id))
+	s.cancelLoad()
+	s.loadWG.Wait()
+	ctx, cancel := context.WithTimeout(context.Background(), modelProbeTimeout)
+	s.mu.Lock()
+	s.loadSeq++
+	sequence := s.loadSeq
+	s.loaded = false
+	s.loading = true
+	s.loadCancel = cancel
+	s.mu.Unlock()
+	s.loadWG.Add(1)
+	go func() {
+		defer s.loadWG.Done()
+		defer cancel()
+		err := validateOptions(s.options)
+		if err == nil {
+			err = probeRunner(ctx, s.options)
+		}
+		s.mu.Lock()
+		current := sequence == s.loadSeq && s.loading
+		if current {
+			s.loading = false
+			s.loadCancel = nil
+			s.loaded = err == nil
+		}
+		s.mu.Unlock()
+		if !current || errors.Is(ctx.Err(), context.Canceled) {
+			s.sendError(id, protocol.ErrorCodeCanceled, "NeuTTS model load was canceled", false)
+			return
+		}
+		if err != nil {
+			s.sendError(id, protocol.ErrorCodeMissingDependency, err.Error(), false)
+			return
+		}
+		s.send(s.health(id))
+	}()
 }
 
 func validateOptions(options Options) error {
@@ -149,6 +205,12 @@ func validateOptions(options Options) error {
 	}
 	if strings.TrimSpace(options.ReferenceText) == "" {
 		return errors.New("NeuTTS reference transcript is required")
+	}
+	if runnerWorkingDirectory(options.RunnerPath) == "" {
+		return errors.New("NeuTTS decoder weights are unavailable; place models/neucodec_decoder.safetensors in the stream_pcm project directory")
+	}
+	if options.GGUFFile == "" || !backboneCached(options.Backbone, options.GGUFFile) {
+		return fmt.Errorf("NeuTTS backbone is not cached: %s/%s; run stream_pcm directly once to prepare and verify the model", options.Backbone, options.GGUFFile)
 	}
 	return nil
 }
@@ -211,18 +273,11 @@ func (s *session) speak(request protocol.Request) {
 		s.mu.Unlock()
 	}()
 
-	args := []string{
-		"--codes", s.options.ReferenceCodes,
-		"--ref-text", s.options.ReferenceText,
-		"--text", request.Text,
-		"--chunk", fmt.Sprintf("%d", s.options.ChunkTokens),
-	}
-	if s.options.Backbone != "" {
-		args = append(args, "--backbone", s.options.Backbone)
-	}
+	args := runnerArgs(s.options, request.Text)
 	// #nosec G204 -- both executable and arguments are explicit local settings,
 	// invoked directly without shell expansion.
 	command := exec.CommandContext(ctx, s.options.RunnerPath, args...)
+	command.Dir = runnerWorkingDirectory(s.options.RunnerPath)
 	command.Env = offlineEnvironment()
 	var stderr tailBuffer
 	command.Stderr = &stderr
@@ -278,6 +333,155 @@ func (s *session) speak(request protocol.Request) {
 	s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
 }
 
+func runnerArgs(options Options, text string) []string {
+	args := []string{
+		"--codes", options.ReferenceCodes,
+		"--ref-text", options.ReferenceText,
+		"--text", text,
+		"--chunk", fmt.Sprintf("%d", options.ChunkTokens),
+	}
+	if options.Backbone != "" {
+		args = append(args, "--backbone", options.Backbone)
+	}
+	if options.GGUFFile != "" {
+		args = append(args, "--gguf-file", options.GGUFFile)
+	}
+	return args
+}
+
+func probeRunner(ctx context.Context, options Options) error {
+	// #nosec G204 -- executable and arguments are explicit local settings,
+	// invoked directly without shell expansion.
+	command := exec.CommandContext(ctx, options.RunnerPath, runnerArgs(options, "MagicHandy voice ready.")...)
+	command.Dir = runnerWorkingDirectory(options.RunnerPath)
+	command.Env = offlineEnvironment()
+	var audio boundedByteCounter
+	command.Stdout = &audio
+	var stderr tailBuffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return errors.New("NeuTTS model readiness probe timed out")
+		}
+		message := "NeuTTS model readiness probe failed"
+		if detail := strings.TrimSpace(stderr.String()); detail != "" {
+			message += ": " + detail
+		}
+		return errors.New(message)
+	}
+	if audio.total == 0 || audio.total%2 != 0 {
+		return errors.New("NeuTTS model readiness probe returned invalid PCM")
+	}
+	return nil
+}
+
+type boundedByteCounter struct {
+	total int
+}
+
+func (counter *boundedByteCounter) Write(data []byte) (int, error) {
+	if counter.total+len(data) > maxPCMBytes {
+		return 0, errors.New("NeuTTS model readiness probe returned oversized PCM")
+	}
+	counter.total += len(data)
+	return len(data), nil
+}
+
+func runnerWorkingDirectory(runnerPath string) string {
+	directory := filepath.Dir(runnerPath)
+	for {
+		decoder := filepath.Join(directory, "models", "neucodec_decoder.safetensors")
+		if info, err := os.Stat(decoder); err == nil && info.Mode().IsRegular() {
+			return directory
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return ""
+		}
+		directory = parent
+	}
+}
+
+func backboneCached(repo, filename string) bool {
+	return cachedBackboneFile(repo, filename) != ""
+}
+
+func cachedBackboneFile(repo, filename string) string {
+	if !validHuggingFaceRepo(repo) {
+		return ""
+	}
+	root := strings.TrimSpace(os.Getenv("HF_HOME"))
+	if root == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		root = filepath.Join(home, ".cache", "huggingface")
+	}
+	hub := filepath.Join(root, "hub")
+	repoRoot := filepath.Join(hub, "models--"+strings.ReplaceAll(repo, "/", "--"))
+	// #nosec G304,G703 -- repo is constrained to an ASCII owner/name pair and the
+	// resulting path remains under the Hugging Face cache root.
+	revision, err := os.ReadFile(filepath.Join(repoRoot, "refs", "main"))
+	if err != nil {
+		return ""
+	}
+	commit := strings.TrimSpace(string(revision))
+	if commit == "" || strings.ContainsAny(commit, `/\`) {
+		return ""
+	}
+	snapshot := filepath.Join(repoRoot, "snapshots", commit)
+	if filename != "" {
+		if filepath.Base(filename) != filename || !strings.EqualFold(filepath.Ext(filename), ".gguf") {
+			return ""
+		}
+		// #nosec G703 -- filename is a basename with a .gguf extension and snapshot
+		// is rooted in the validated local Hugging Face cache.
+		if info, err := os.Stat(filepath.Join(snapshot, filename)); err == nil && info.Mode().IsRegular() {
+			return filename
+		}
+		return ""
+	}
+	entries, err := os.ReadDir(snapshot)
+	if err != nil {
+		return ""
+	}
+	var candidates []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".gguf") {
+			candidates = append(candidates, entry.Name())
+		}
+	}
+	sort.Strings(candidates)
+	if len(candidates) == 0 {
+		return ""
+	}
+	return candidates[0]
+}
+
+func validHuggingFaceRepo(repo string) bool {
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+		for _, character := range part {
+			switch {
+			case character >= 'a' && character <= 'z':
+			case character >= 'A' && character <= 'Z':
+			case character >= '0' && character <= '9':
+			case strings.ContainsRune("-_.", character):
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func offlineEnvironment() []string {
 	environment := make([]string, 0, len(os.Environ())+2)
 	for _, entry := range os.Environ() {
@@ -294,7 +498,9 @@ func (s *session) health(id string) protocol.Response {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := protocol.ModelStateUnloaded
-	if s.loaded {
+	if s.loading {
+		state = protocol.ModelStateLoading
+	} else if s.loaded {
 		state = protocol.ModelStateReady
 	}
 	return protocol.Response{Type: protocol.ResponseHealth, RequestID: id, ModelState: state, QueueDepth: s.pending}
@@ -302,6 +508,19 @@ func (s *session) health(id string) protocol.Response {
 
 func (s *session) setLoaded(loaded bool) { s.mu.Lock(); s.loaded = loaded; s.mu.Unlock() }
 func (s *session) isLoaded() bool        { s.mu.Lock(); defer s.mu.Unlock(); return s.loaded }
+
+func (s *session) cancelLoad() {
+	s.mu.Lock()
+	s.loadSeq++
+	s.loading = false
+	s.loaded = false
+	cancel := s.loadCancel
+	s.loadCancel = nil
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
 
 func (s *session) markCanceled(id string) {
 	if id == "" {

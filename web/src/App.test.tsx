@@ -120,7 +120,7 @@ type TestState = typeof baseState & {
   intiface_transport?: IntifaceTransportSnapshot;
 };
 
-function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; stateGate?: Promise<void>; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot } = {}) {
+function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; stateGate?: Promise<void>; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot; pickedPath?: string } = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as TestState;
   const chatLog = opts.chatLog ?? [];
   let intiface: IntifaceTransportSnapshot = state.intiface_transport ?? {
@@ -157,6 +157,7 @@ function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolea
     if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0 });
     if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
     if (u.includes("/api/voice/status")) return jsonRes(opts.voiceStatus ?? {});
+    if (u.includes("/api/host/path-picker")) return jsonRes({ path: opts.pickedPath ?? "C:\\selected\\file.exe", canceled: false });
     if (u.includes("/api/library")) return jsonRes({ library: opts.library ?? libraryFixture });
     if (u.includes("/api/llm/ollama/scan")) return jsonRes(ollamaScanFixture);
     if (u.includes("/api/llm/ollama/models")) return jsonRes({ available: true, models: [{ name: "qwen-test:latest", size_bytes: 4_294_967_296, format: "gguf", family: "qwen", parameter_size: "7B", quantization: "Q4_K_M" }] });
@@ -793,6 +794,20 @@ describe("app shell safety invariants", () => {
     expect(screen.getByLabelText(/reference transcript/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^api key/i)).toBeNull();
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("uses the host path picker for the NeuTTS runner", async () => {
+    const fetch = installFetch({ pickedPath: "C:\\NeuTTS\\stream_pcm.exe" });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+    const providers = await screen.findAllByRole("combobox", { name: /provider/i });
+    fireEvent.change(providers[1], { target: { value: "neutts_air" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /browse for stream_pcm runner path/i }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: /stream_pcm runner path/i })).toHaveValue("C:\\NeuTTS\\stream_pcm.exe"));
+    const pickerCall = fetch.mock.calls.find(([url]) => String(url).includes("/api/host/path-picker"));
+    expect(JSON.parse(String((pickerCall?.[1] as RequestInit).body))).toEqual({ kind: "executable", current: "" });
   });
 
   it("hides the chat voice controls when voice is not configured", async () => {

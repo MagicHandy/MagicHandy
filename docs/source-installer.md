@@ -53,6 +53,18 @@ Every successful run builds these files beside the source checkout:
 The executables and generated `Start-MagicHandy.ps1` are ignored build/runtime
 artifacts. The optional portable `data/` directory is ignored too.
 
+These three voice executables are protocol adapters, not three complete voice
+runtimes. The selected Parakeet assets below are the only external voice runtime
+this installer provisions. In particular, it does not install Rust/Cargo,
+`stream_pcm.exe`, NeuCodec decoder weights, a NeuTTS backbone, or reference
+voice codes. A successful source build therefore ends with **configuration
+required**, not a claim that every provider is ready.
+
+For manual/custom runtimes, Settings path fields provide **Browse...** on the
+Windows host. This is a controller-gated, loopback-only native dialog; it does
+not expose directory listings to remote browser clients. Typed paths remain
+available for advanced or non-Windows setups.
+
 Builds are written to per-process temporary executable paths and moved into
 place only after Go succeeds. Before replacement, the installer finds only
 `magichandy.exe` processes owned by the selected checkout, calls the local
@@ -79,7 +91,7 @@ Interactive setup:
 .\install.ps1
 ```
 
-Inspect an unattended full CUDA setup without changing the machine:
+Inspect an unattended CUDA source-toolchain setup without changing the machine:
 
 ```powershell
 .\install.ps1 -Yes -LlamaBackend cuda -PlanOnly -NoLaunch
@@ -161,7 +173,8 @@ voice asset. It only changes what subsequent runs ensure is present.
 
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion, managed
-CUDA versus Ollama-only plans, and end-to-end plan-only install/update behavior.
+CUDA versus Ollama-only plans, explicit NeuTTS adapter-only wording, and
+end-to-end plan-only install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response
 validation, exact physical-stop confirmation, unattended refusal, `main`, a
 live feature upstream, a single-branch

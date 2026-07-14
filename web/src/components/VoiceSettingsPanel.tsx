@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { PublicSettings } from "../api/types";
+import { HostPathField } from "./HostPathField";
 import { VoiceWorkers } from "./VoiceWorkers";
 
 const joinArgs = (args?: string[]) => (args ?? []).join("\n");
@@ -53,8 +54,8 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Runtime source</span><select value={parakeetSource} disabled={locked} onChange={(event) => patch({ parakeet_source: event.target.value })}>{(s.options.parakeet_sources?.length ? s.options.parakeet_sources : [parakeetSource]).map((source) => <option key={source} value={source}>{PARAKEET_SOURCE_LABELS[source] ?? source}</option>)}</select></label>
         {parakeetSource === "app_managed" && <p className="form-status">Uses the worker, runner, and model installed by MagicHandy. No custom paths are required.</p>}
         {parakeetSource === "custom_local" && <>
-          <label className="field"><span className="label">Custom parakeet-server path</span><input type="text" value={voice.parakeet_server_path ?? ""} disabled={locked} onChange={(event) => patch({ parakeet_server_path: event.target.value })} /></label>
-          <label className="field"><span className="label">Custom GGUF model path</span><input type="text" value={voice.parakeet_model_path ?? ""} disabled={locked} onChange={(event) => patch({ parakeet_model_path: event.target.value })} /></label>
+          <HostPathField label="Custom parakeet-server path" kind="executable" value={voice.parakeet_server_path ?? ""} disabled={locked} onChange={(parakeet_server_path) => patch({ parakeet_server_path })} />
+          <HostPathField label="Custom GGUF model path" kind="gguf" value={voice.parakeet_model_path ?? ""} disabled={locked} onChange={(parakeet_model_path) => patch({ parakeet_model_path })} />
           <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>
         </>}
       </>}
@@ -63,10 +64,10 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Model name</span><input type="text" value={voice.asr_model ?? ""} disabled={locked} onChange={(event) => patch({ asr_model: event.target.value })} /></label>
       </>}
       {voice.asr_provider === "custom" && <>
-        <label className="field"><span className="label">Worker path</span><input type="text" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ asr_worker_path: event.target.value })} /></label>
+        <HostPathField label="ASR worker path" kind="file" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(asr_worker_path) => patch({ asr_worker_path })} />
         <label className="field"><span className="label">Worker arguments</span><textarea rows={4} value={joinArgs(voice.asr_worker_args)} disabled={locked} onChange={(event) => patch({ asr_worker_args: splitArgs(event.target.value) })} /></label>
       </>}
-      {voice.asr_provider !== "none" && voice.asr_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary>{voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed" && <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>}<label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ asr_worker_path: event.target.value })} /></label></details>}
+      {voice.asr_provider !== "none" && voice.asr_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary>{voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed" && <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>}<HostPathField label="ASR worker binary override" kind="file" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(asr_worker_path) => patch({ asr_worker_path })} /></details>}
       <VoiceWorkers locked={locked} role="asr" dirty={dirty} enabled={voice.enabled} providerSelected={voice.asr_provider !== "none"} showParakeetModule={voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed"} />
 
       <div className="divider" />
@@ -79,19 +80,19 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Model ID</span><input type="text" value={voice.elevenlabs_model_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_model_id: event.target.value })} /></label>
       </>}
       {voice.tts_provider === "neutts_air" && <>
-        <label className="field"><span className="label">stream_pcm runner path</span><input type="text" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(event) => patch({ neutts_runner_path: event.target.value })} /></label>
-        <label className="field"><span className="label">Reference WAV</span><input type="text" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_wav: event.target.value })} /></label>
-        <label className="field"><span className="label">Pre-encoded reference codes (.npy)</span><input type="text" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_codes: event.target.value })} /></label>
+        <HostPathField label="stream_pcm runner path" kind="executable" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(neutts_runner_path) => patch({ neutts_runner_path })} />
+        <HostPathField label="Reference WAV" kind="wav" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(neutts_reference_wav) => patch({ neutts_reference_wav })} />
+        <HostPathField label="Pre-encoded reference codes (.npy)" kind="npy" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(neutts_reference_codes) => patch({ neutts_reference_codes })} />
         <label className="field"><span className="label">Reference transcript</span><textarea rows={3} value={voice.neutts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_text: event.target.value })} /></label>
-        <p className="form-status">The current non-Python runner requires pre-encoded voice codes. The WAV is retained as provenance and is not encoded by MagicHandy.</p>
+        <p className="form-status">Manual runtime setup is required: the source installer builds the MagicHandy adapter, but not the external stream_pcm runner or model assets. The WAV is retained as provenance and is not encoded by MagicHandy.</p>
       </>}
       {voice.tts_provider === "custom" && <>
-        <label className="field"><span className="label">Worker path</span><input type="text" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ tts_worker_path: event.target.value })} /></label>
+        <HostPathField label="TTS worker path" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />
         <label className="field"><span className="label">Worker arguments</span><textarea rows={4} value={joinArgs(voice.tts_worker_args)} disabled={locked} onChange={(event) => patch({ tts_worker_args: splitArgs(event.target.value) })} /></label>
       </>}
-      {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><label className="field"><span className="label">Worker binary override</span><input type="text" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(event) => patch({ tts_worker_path: event.target.value })} /></label></details>}
+      {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><HostPathField label="TTS worker binary override" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} /></details>}
       {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies</span></label>}
-      <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} />
+      <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} showNeuTTSModule={voice.tts_provider === "neutts_air"} />
     </>
   );
 }

@@ -171,6 +171,8 @@ export const api = {
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
+  pickHostPath: (kind: "executable" | "gguf" | "wav" | "npy" | "file" | "directory", current: string) =>
+    request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
   resetSettings: () => request("POST", "/api/settings/reset", {}),
