@@ -890,11 +890,13 @@ Status: **complete**.
   across requests. A bounded binary protocol carries readiness, PCM, completion,
   error, and cancellation frames; unload, shutdown, and Emergency Stop tear down
   the child. Legacy custom `stream_pcm` overrides retain one-shot compatibility.
-- The source installer builds CPU/eSpeak or CUDA/eSpeak/WGPU according to the
-  selected managed llama.cpp backend. The pinned CUDA patch explicitly sets
-  all llama.cpp layers for offload. Schema-3 manifests record protocol and
-  acceleration plus checksums for the five CUDA llama/ggml DLLs, so the updater
-  rebuilds stale CPU-only schema-2 installs and refuses incomplete GPU packages.
+- The source installer builds CPU or CUDA/WGPU according to the selected
+  managed llama.cpp backend. The pinned CUDA patch explicitly sets
+  all llama.cpp layers for offload. It provisions eSpeak NG 1.52 for the IPA
+  NeuTTS expects; the inaccurate pure-Rust phonemizer is excluded. Schema-4
+  manifests record protocol, acceleration, and phonemizer identity plus
+  checksums for the five CUDA llama/ggml DLLs, so the updater rebuilds older
+  installs and refuses incomplete GPU packages.
 - Measured on the RTX 5070 Ti development host, the old CPU one-shot path took
   127.27 s wall time and 90.86 s to first audio. The persistent GPU path loaded
   in 1.87 s, reached first audio in 1.01 s on its first request and 0.47 s warm,
@@ -916,6 +918,13 @@ Status: **complete**.
   and logged no browser warnings or errors. The shell unlocks one persistent Web
   Audio context during a real pointer or keyboard gesture so asynchronous speech
   completion is not rejected by autoplay policy.
+- Quality hardening compared the official Dave reference, direct codec
+  reconstruction, generated speech, and Parakeet round trips. The reference and
+  codec were valid; the old phonemizer dropped/mispronounced words and isolated
+  codec chunks introduced discontinuities. System eSpeak plus Neuphonic's
+  overlap-aware stream retained every substantive target word across four random
+  controlled clips, with two exact sentence transcriptions. Subjective voice
+  similarity still requires wider listener/reference acceptance under R17.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

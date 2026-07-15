@@ -36,7 +36,7 @@ Python question far more than the model does:
 
 | Model | Size / VRAM | Speed | Cloning | Expressiveness | Notes |
 |---|---|---|---|---|---|
-| **NeuTTS Air** | 748M (Qwen); CPU or CUDA/WGPU | upstream claimed CPU real-time; MagicHandy measured 66.72x RTF on CPU and 1.39x RTF on CUDA/WGPU | 3-sec instant | Contextual (moderate) | On-device, 24 kHz, NeuCodec. CPU saves VRAM but was not interactive on the test host; persistent GPU first audio measured 0.47-1.01 s |
+| **NeuTTS Air** | 748M (Qwen); CPU or CUDA/WGPU | upstream claimed CPU real-time; MagicHandy measured 66.72x RTF on CPU, while quality-corrected persistent GPU TTFA was 1.06-2.05 s | 3-sec instant | Contextual (moderate) | On-device, 24 kHz, NeuCodec. The earlier 0.47-1.01 s TTFA used an inaccurate phonemizer/chunk path; eSpeak plus overlap streaming passed controlled ASR round trips |
 | **Kani-TTS-2** | 400-450M / ~3 GB | near-instant (NanoCodec) | Yes | Contextual (moderate) | Edge-optimized, low latency, tiny |
 | **Orpheus-3B** | 3B (Llama-3.2) / Q8 ~6 GB, Q4 ~4 GB | TTFA ~180-300 ms | Yes, but **tone/timbre only** (loses prosody; repetition glitches) | **Explicit tags** `<laugh>`/`<sigh>` (8), near-human — but tags weaken during cloning | Apache-2.0, GGUF widely available. Expressive with *stock* voices |
 | **Llama-OuteTTS-1.0** | 1B / small | ~real-time | Yes | Contextual (moderate) | WavTokenizer codec; earlier version of this pattern |

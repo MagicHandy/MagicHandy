@@ -37,6 +37,8 @@ const (
 	managedNeuTTSSource      = "ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f"
 	managedNeuTTSRust        = "1.94.0-x86_64-pc-windows-msvc"
 	managedNeuTTSProtocol    = "magichandy_neutts_stream_v1"
+	managedNeuTTSPhonemizer  = "espeak-ng"
+	managedNeuTTSPhonemeVer  = "1.52.0"
 	managedNeuTTSBackbone    = "008555972590ff2c599dd43736ba31c81df3f0bf"
 	managedNeuTTSBackboneSHA = "bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff9a29062e4ac9119e"
 	managedNeuTTSCodec       = "30c1fdd19e68aee65d542cf043750d4c0165893e"
@@ -199,6 +201,8 @@ type managedNeuTTSManifest struct {
 	RustToolchain      string            `json:"rust_toolchain"`
 	Backend            string            `json:"backend"`
 	RunnerProtocol     string            `json:"runner_protocol"`
+	Phonemizer         string            `json:"phonemizer"`
+	PhonemizerVersion  string            `json:"phonemizer_version"`
 	BackboneBackend    string            `json:"backbone_acceleration"`
 	CodecBackend       string            `json:"codec_acceleration"`
 	BackboneRevision   string            `json:"backbone_revision"`
@@ -234,10 +238,12 @@ func readManagedNeuTTSManifest(dataDir string) (managedNeuTTSManifest, bool) {
 
 func validManagedNeuTTSManifest(manifest managedNeuTTSManifest) bool {
 	checks := []bool{
-		manifest.SchemaVersion == 3,
+		manifest.SchemaVersion == 4,
 		manifest.SourceCommit == managedNeuTTSSource,
 		manifest.RustToolchain == managedNeuTTSRust,
 		manifest.RunnerProtocol == managedNeuTTSProtocol,
+		manifest.Phonemizer == managedNeuTTSPhonemizer,
+		manifest.PhonemizerVersion == managedNeuTTSPhonemeVer,
 		manifest.BackboneRevision == managedNeuTTSBackbone,
 		manifest.CodecRevision == managedNeuTTSCodec,
 		manifest.BackboneSHA256 == managedNeuTTSBackboneSHA,

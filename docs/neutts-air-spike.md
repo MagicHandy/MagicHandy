@@ -162,8 +162,8 @@ produced 101,760 bytes of valid PCM. The process took 2m2.576s and emitted its
 first audio after 87.98s on this CPU. The pinned runner also wrote a 93-byte
 `NeuCodec decoder:` diagnostic to stdout before the PCM; the adapter now strips
 only that bounded known prefix. This evidence supports a five-minute synthesis
-job timeout, not a model-heavy readiness probe. Subjective listening quality is
-still unmeasured.
+job timeout, not a model-heavy readiness probe. Later audit found that this run
+also used an inaccurate experimental phonemizer, so it is not quality evidence.
 
 A 2026-07-15 reference-encoding follow-up used the 7.45 second, 44.1 kHz stereo
 Dave WAV. The native ONNX worker produced 373 bounded codes in about 1.3 seconds.
@@ -176,10 +176,11 @@ quality or the repeated model-start latency risk.
 ## Implementation update (Slice 13.10)
 
 The installer now builds a first-party persistent runner against the exact
-pinned source. CPU builds use eSpeak and the upstream CPU codec. CUDA builds add
+pinned source. CPU builds use system eSpeak NG and the upstream CPU codec. CUDA builds add
 an exact patch that sets every llama.cpp backbone layer for GPU offload and use
-the Burn WGPU codec. The app-managed schema-3 manifest records that choice and
-checksums all five required CUDA llama/ggml DLLs.
+the Burn WGPU codec. The app-managed schema-4 manifest records that choice, the
+verified phonemizer/version, and checksums all five required CUDA llama/ggml
+DLLs.
 
 The worker starts this runner during model load and exchanges bounded framed
 commands and PCM over standard streams. Backbone, codec, reference codes, and
@@ -195,8 +196,13 @@ seconds. Through the persistent Go worker, first request TTFA/total were
 cancellation after the first audio chunk reached `canceled`; the same process
 then completed a recovery request with 96,960 PCM bytes and exited cleanly.
 These measurements close repeated startup and interactive-latency concerns on
-the tested GPU, while subjective quality, network denial, and shared-LLM VRAM
-acceptance remain open.
+the tested GPU. A quality audit then found that the pinned pure-Rust phonemizer
+mispronounced common words and dropped text, while independent 25-token codec
+decodes inserted discontinuities and long silence. Replacing it with eSpeak NG
+1.52 and Neuphonic's 50-token lookback, 5-token lookahead, overlap-add stream
+produced four clips whose Parakeet round trips retained every substantive target
+word; two were exact sentence transcriptions. Subjective clone fidelity,
+network denial, and shared-LLM VRAM acceptance remain open.
 
 ## Constraints hit during the spike
 
@@ -206,9 +212,11 @@ acceptance remain open.
   `rustup` install; a Go+CGo worker does not (CGo needs gcc/clang). This
   strengthens the Rust-worker preference. Workers ship as prebuilt
   binaries either way (R7 packaging).
-- The historical Python harness used system eSpeak. The pinned Rust runner's
-  `espeak` feature now uses bundled pure-Rust phonemization data, so no separate
-  eSpeak package belongs in the current installation instructions.
+- The historical Python harness used system eSpeak. Direct comparison proved
+  that pinned `neutts-rs`'s experimental pure-Rust replacement did not reproduce
+  it: common words were emitted as the wrong phonemes and one reference word
+  disappeared. The installer therefore provisions eSpeak NG 1.52 and the runner
+  invokes it directly without Python.
 - The Python harness environment (~4 GB venv incl. torch) exists only in
   the session scratchpad for this measurement; nothing of it enters the
   product or the repo — the shipped worker has no Python.

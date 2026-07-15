@@ -33,6 +33,7 @@ before consent. `-Yes` is explicit unattended consent to those prompts.
 | Managed llama.cpp | `Microsoft.VisualStudio.BuildTools` | Desktop C++ workload and Windows SDK |
 | Managed llama.cpp + NeuTTS | `Rustlang.Rustup` | Build MagicHandy's persistent NeuTTS runner with the selected CPU/CUDA backend |
 | Managed llama.cpp + NeuTTS | `LLVM.LLVM` | Provide `libclang` for generated llama.cpp Rust bindings |
+| Managed llama.cpp + NeuTTS | `eSpeak-NG.eSpeak-NG` | Produce the English IPA expected by the NeuTTS backbone |
 | CUDA backend | `Nvidia.CUDA` | Provide `nvcc` and CUDA build/runtime files |
 | Ollama selected | `Ollama.Ollama` | External local-LLM daemon/runtime |
 
@@ -91,7 +92,8 @@ configured, speech input autoloads its worker on later app starts.
 
 NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
 
-1. installs LLVM/libclang and pinned Rust 1.94.0 for Windows MSVC through Rustup;
+1. installs LLVM/libclang, eSpeak NG 1.52+, and pinned Rust 1.94.0 for Windows
+   MSVC through Rustup;
 2. clones `neutts-rs` v0.1.1 and verifies commit
    `ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`;
 3. requires and corrects the tag's single stale root-package version in
@@ -102,21 +104,22 @@ NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
 5. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
    pure-Rust converter, without Python or PyTorch;
 6. applies MagicHandy's exact pinned all-layer CUDA offload patch, copies the
-   reviewed persistent runner source, and builds it with Cargo `--locked` plus
-   eSpeak; CPU installs use the CPU backbone/codec, while CUDA installs use the
-   CUDA llama.cpp backbone and WGPU codec;
+   reviewed persistent runner source, and builds it with Cargo `--locked`;
+   CPU installs use the CPU backbone/codec, while CUDA installs use the CUDA
+   llama.cpp backbone and WGPU codec. The runner invokes system eSpeak directly
+   and runs a pronunciation quality probe before publication;
 7. builds the first-party Rust/ONNX reference encoder with the same pinned
    toolchain and locked dependency graph; and
 8. stages both workers, DirectML, decoder, encoder model, exact GGUF cache, and
    the five required llama/ggml DLLs for CUDA together; verifies their hashes;
    then swaps them atomically under `<data-dir>/voice/neutts/active`.
 
-The schema-3 active manifest records the runner protocol, selected backend,
-backbone/codec acceleration, native dependency hashes, built runner/decoder
-hashes, immutable model revisions, source checkpoint hashes, and exact Rust
-compiler identity. Updates reuse it without requiring Rustup only after the
-installer rehashes all active artifacts. A schema-2 CPU runtime is stale and is
-rebuilt once. An interrupted directory swap restores the newest preserved
+The schema-4 active manifest records the runner protocol, selected backend,
+backbone/codec acceleration, eSpeak phonemizer/version, native dependency hashes,
+built runner/decoder hashes, immutable model revisions, source checkpoint
+hashes, and exact Rust compiler identity. Updates reuse it without requiring
+Rustup only after the installer rehashes all active artifacts. Schema-3 and older
+runtimes are stale and rebuilt once. An interrupted directory swap restores the newest preserved
 backup before retrying; rollback data is removed only after the replacement
 verifies.
 When app-managed NeuTTS is selected, the app independently validates the pinned
@@ -133,7 +136,7 @@ is loaded; CPU avoids that VRAM cost. The CPU runtime is about 1.9 GiB installed
 and the CUDA runtime about 2.0 GiB. Decoder conversion temporarily downloads
 another approximately 1.1 GiB checkpoint and Cargo/build files can use several
 GB. Skipping managed llama.cpp, including with `-SkipLlamaBuild`, skips Rustup,
-the persistent runner, and all NeuTTS model work. Existing files are not
+the persistent runner, eSpeak, and all NeuTTS model work. Existing files are not
 deleted.
 
 ## Install Commands
@@ -229,7 +232,7 @@ voice asset. It only changes what subsequent runs ensure is present.
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion,
 interrupted HTTP byte-range resume and checksum promotion, managed CUDA/NeuTTS
-versus Ollama-only plans, app-managed NeuTTS schema-3 CPU/CUDA manifest
+versus Ollama-only plans, app-managed NeuTTS schema-4 CPU/CUDA manifest
 discovery, native-DLL and encoder tamper detection, and end-to-end plan-only
 install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response

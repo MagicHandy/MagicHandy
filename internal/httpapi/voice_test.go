@@ -386,11 +386,13 @@ func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, s
 		t.Fatal("could not hash app-managed NeuTTS fixtures")
 	}
 	manifest, err := json.Marshal(map[string]any{
-		"schema_version":            3,
+		"schema_version":            4,
 		"source_commit":             managedNeuTTSSource,
 		"rust_toolchain":            managedNeuTTSRust,
 		"backend":                   "cpu",
 		"runner_protocol":           managedNeuTTSProtocol,
+		"phonemizer":                managedNeuTTSPhonemizer,
+		"phonemizer_version":        managedNeuTTSPhonemeVer,
 		"backbone_acceleration":     "cpu",
 		"codec_acceleration":        "cpu",
 		"native_dependencies":       map[string]string{},
@@ -508,6 +510,13 @@ func assertAppManagedNeuTTSManifestValidation(t *testing.T, settings config.Voic
 	}
 	if err := os.WriteFile(runner, []byte("runner"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	badPhonemizer := []byte(strings.Replace(string(manifest), managedNeuTTSPhonemizer, "experimental-phonemizer", 1))
+	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), badPhonemizer, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+		t.Fatalf("app-managed NeuTTS must reject an unverified phonemizer: %+v", got.TTS)
 	}
 	manifest = []byte(strings.Replace(string(manifest), managedNeuTTSSource, "untrusted-source", 1))
 	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), manifest, 0o600); err != nil {

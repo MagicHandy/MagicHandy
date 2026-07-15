@@ -39,8 +39,8 @@ optional managed NeuTTS runner), never for the MagicHandy Go core itself.
   supported PowerShell path when needed, then installs and verifies Go. A
   selected managed llama.cpp source build additionally provisions Git, CMake,
   the Visual Studio Desktop C++ workload/Windows SDK, CUDA when selected, and
-  LLVM/libclang and pinned Rust 1.94.0 through Rustup for the coupled NeuTTS
-  build. It builds MagicHandy's persistent NeuTTS runner with the same CPU/CUDA
+  LLVM/libclang, eSpeak NG 1.52, and pinned Rust 1.94.0 through Rustup for the
+  coupled NeuTTS build. It builds MagicHandy's persistent NeuTTS runner with the same CPU/CUDA
   backend and a first-party ONNX reference encoder, converts a verified NeuCodec
   checkpoint, and installs the verified Air Q4 and DistillNeuCodec assets.
   Choosing Ollama avoids both managed source builds; the installer can provision

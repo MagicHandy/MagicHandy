@@ -107,9 +107,10 @@ Positive:
 
 Negative / risks:
 
-- NeuTTS Air's subjective cloning quality remains unproven; arbitrary-WAV
-  reference encoding is implemented and compatibility-tested, but needs wider
-  sample-quality acceptance (R17)
+- NeuTTS Air's controlled intelligibility now has ASR round-trip evidence after
+  replacing the inaccurate experimental phonemizer with eSpeak NG 1.52 and
+  restoring overlap-aware codec streaming. Subjective cloning similarity still
+  needs wider reference/listener acceptance (R17)
 - NeuTTS source provisioning is coupled to managed llama.cpp and adds Rust plus
   about 1.9 GiB of CPU or 2.0 GiB of CUDA voice assets. The CUDA process reserves
   VRAM alongside the local LLM, so smaller GPUs may need the CPU fallback or an
@@ -128,7 +129,8 @@ Negative / risks:
 The NeuTTS Air spike, Slice 13.6 protocol adapter, persistent GPU runtime, and
 checksum-pinned Windows source installation are complete. A pinned
 DistillNeuCodec ONNX worker generates compatible reference codes from WAV
-without Python. Enabled ASR and chat-speech roles autoload their configured
+without Python. The installer provisions eSpeak NG 1.52 and schema-4 manifests
+reject the older inaccurate phonemizer path. Enabled ASR and chat-speech roles autoload their configured
 workers on app startup; failures remain isolated and visible. Setup, measured
 latency, and manual pre-encoded fallback are documented in
 `docs/neutts-worker.md`. Network-denied evidence and subjective quality remain
