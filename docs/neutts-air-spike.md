@@ -121,15 +121,18 @@ worker forwards those chunks immediately and the core wraps retained PCM as a
 WAV only when the controller fetches completed audio. Cancellation kills the
 active runner process and final-sample preservation is covered by tests.
 
-The crate's public `NeuCodecEncoder` in v0.1.1 is still a stub. Some examples
-on its current branch describe a future Burn encoder, but the exported type
-still rejects `new`, `load`, and `encode_wav`. MagicHandy therefore requires
-pre-encoded reference codes and the exact transcript. Its pure-Go preparation
-path can safely extract the single contiguous int32 tensor used by official
-sample-style Torch ZIP `.pt` files or validate a one-dimensional int32 `.npy`,
-then normalize either to canonical NPY without executing pickle. An optional
-matching WAV is copied only for preview and transcription guidance. MagicHandy
-does not claim arbitrary-WAV cloning without a neural encoder.
+The crate's public `NeuCodecEncoder` in v0.1.1 is still a stub. Some examples on
+its current branch describe a future Burn encoder, but the exported type still
+rejects `new`, `load`, and `encode_wav`. That does not require a Python fallback:
+MagicHandy now builds a separate GPL-3.0-only Rust worker around the pinned
+Apache-2.0 DistillNeuCodec ONNX encoder. It parses and bounds WAV input,
+downmixes/resamples to the encoder's 16 kHz contract, and writes int32 NPY. The
+Go boundary then re-parses and range-validates that output before storing it.
+
+The older pure-Go preparation path remains for manual pre-encoded input. It can
+safely extract the single contiguous int32 tensor used by official sample-style
+Torch ZIP `.pt` files or validate a one-dimensional int32 `.npy` without
+executing pickle.
 
 All runner children receive `HF_HUB_OFFLINE=1`, and the adapter supplies the
 exact Air Q4 filename to avoid repository discovery. Follow-up audit found that
@@ -139,9 +142,8 @@ MagicHandy now requires the external decoder and exact GGUF cache entry before
 starting the worker. Load probes `stream_pcm --help` for the required CLI
 contract rather than running an expensive synthesis. It does not advertise an
 offline capability: a network-denied integration test and hard sandbox remain
-R17. A
-later Rust release with a working, redistributable encoder can replace the `.npy`
-requirement behind the same settings and worker protocol.
+R17. A later upstream Rust encoder can be evaluated against the same managed
+WAV and NPY contract without changing the Go core or settings model.
 
 The current adapter starts one `stream_pcm` process per speech request, so the
 upstream example's preload-once performance does not carry across replies. A
@@ -155,6 +157,14 @@ first audio after 87.98s on this CPU. The pinned runner also wrote a 93-byte
 only that bounded known prefix. This evidence supports a five-minute synthesis
 job timeout, not a model-heavy readiness probe. Subjective listening quality is
 still unmeasured.
+
+A 2026-07-15 reference-encoding follow-up used the 7.45 second, 44.1 kHz stereo
+Dave WAV. The native ONNX worker produced 373 bounded codes in about 1.3 seconds.
+The installed `stream_pcm` runner accepted those generated codes and produced
+106,560 PCM bytes (2.22 seconds of audio) for a 122-token test. First audio took
+93.51 seconds and total synthesis took 128.37 seconds on this CPU. This proves
+encoder/runner format compatibility; it does not close subjective cloning
+quality or the repeated model-start latency risk.
 
 ## Constraints hit during the spike
 

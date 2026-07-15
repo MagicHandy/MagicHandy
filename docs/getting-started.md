@@ -20,15 +20,16 @@ installs is named, licensed, and consented to before it happens:
   the Visual Studio Desktop C++ workload, and CUDA when selected. That choice
   also provisions LLVM/libclang and pinned Rust 1.94.0 through Rustup, builds
   the pinned NeuTTS `stream_pcm` runner and its CPU llama.cpp binding, and
-  installs a checksum-verified Air Q4 backbone plus a decoder converted from a
-  checksum-verified NeuCodec checkpoint.
+  installs a checksum-verified Air Q4 backbone, a decoder converted from a
+  checksum-verified NeuCodec checkpoint, and a pinned ONNX reference encoder.
 - Choosing **Ollama** instead avoids the managed source builds and also skips
   NeuTTS; the installer can provision Ollama too.
 - The installer builds the core and all three first-party Go voice adapters.
   The optional Parakeet runner and its 644 MiB model remain a separate,
   checksum-verified prompt, and voice remains disabled until you enable it.
-- NeuTTS reference `.npy` codes and their exact transcript remain user
-  supplied because the upstream Rust encoder is still a stub.
+- For NeuTTS, users supply a reference WAV and its exact transcript; Settings
+  generates the `.npy` reference codes locally without Python. Manual
+  pre-encoded paths remain available under Advanced.
 - It can write a `Start-MagicHandy.ps1` launcher, and when setup is done the
   app opens at <http://127.0.0.1:49717>.
 

@@ -39,9 +39,10 @@ MagicHandy Go core itself.
   supported PowerShell path when needed, then installs and verifies Go. A
   selected managed llama.cpp source build additionally provisions Git, CMake,
   the Visual Studio Desktop C++ workload/Windows SDK, CUDA when selected, and
-  LLVM/libclang and pinned Rust 1.94.0 through Rustup for the coupled NeuTTS build. It builds the pinned `stream_pcm` runner
-  with its CPU llama.cpp binding, converts a verified NeuCodec checkpoint, and
-  installs the verified Air Q4 cache. Choosing Ollama avoids both managed source
+  LLVM/libclang and pinned Rust 1.94.0 through Rustup for the coupled NeuTTS
+  build. It builds the pinned `stream_pcm` runner and first-party ONNX reference
+  encoder, converts a verified NeuCodec checkpoint, and installs the verified
+  Air Q4 and DistillNeuCodec assets. Choosing Ollama avoids both managed source
   builds; the installer can provision Ollama too. It builds the core and all
   three first-party Go voice adapters. Optional Parakeet assets remain consented,
   size/license-visible, and SHA-256 verified, and voice remains disabled. The
@@ -128,9 +129,10 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    StrokeGPT-ReVibed porting step over the Phase 15 importer.
 8. **Voice setup (implemented adapters and source provisioning).** Provider
    selection, workers, push-to-talk, browser playback, and app-managed Parakeet
-   and NeuTTS runtime installation have landed. Guided preparation of existing
-   `.pt`/`.npy` codes has landed; arbitrary-WAV encoding, prebuilt provisioning,
-   and microphone/provider compatibility checks require real-provider evidence.
+   and NeuTTS runtime installation have landed. Local WAV-to-reference-code
+   generation has landed through a pinned native ONNX worker; prebuilt
+   provisioning and broader microphone/provider compatibility checks still
+   require release evidence.
    Providers stay optional and off the core runtime path (ADR 0007).
 9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
@@ -159,7 +161,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | StrokeGPT-ReVibed setup capability | MagicHandy status | Where |
 | --- | --- | --- |
 | One-command environment setup | **Implemented for source installs** — bootstraps dependencies and compiler | `install.ps1` |
-| No Python/venv/torch to install | **Implemented for core, Parakeet, ElevenLabs, NeuTTS synthesis, and preparation of compatible pre-encoded codes**; arbitrary WAV encoding is external | by design + R17 |
+| No Python/venv/torch to install | **Implemented for core, Parakeet, ElevenLabs, NeuTTS synthesis, and WAV reference encoding** | by design + R17 |
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
 | Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
@@ -167,7 +169,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - Parakeet and the NeuTTS runner/decoder/backbone are app-managed; Settings prepares compatible `.pt`/`.npy` references with audio preview, while arbitrary WAV encoding remains external | Phase 13 + Phase 16 prebuilt provisioning |
+| Voice model setup | Partial - Parakeet and the NeuTTS runner/decoder/backbone/encoder are app-managed; Settings generates a reference from WAV with audio preview; prebuilt release provisioning remains | Phase 13 + Phase 16 prebuilt provisioning |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

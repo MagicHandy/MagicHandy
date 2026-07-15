@@ -329,6 +329,7 @@ export interface VoiceModuleStatus {
   installed: boolean;
   worker_installed: boolean;
   runtime_installed: boolean;
+  reference_encoder_installed?: boolean;
   message: string;
 }
 

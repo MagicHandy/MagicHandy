@@ -73,6 +73,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
+| 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | current PR |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
@@ -190,10 +191,10 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    separation, explicit enable/save/Start UI, and guarded Windows host-path
    browsing are implemented. A real Chrome/Edge transcription run remains R24
    exit evidence. The source installer now builds and discovers a pinned NeuTTS
-   runner/decoder/backbone with managed llama.cpp. Settings can safely normalize
-   official sample-style `.pt` files and compatible one-dimensional int32 `.npy`
-   files without Python; arbitrary-WAV encoding and enforced offline operation
-   remain R17.
+   runner/decoder/backbone and DistillNeuCodec ONNX reference encoder with
+   managed llama.cpp. Settings generates validated reference codes directly
+   from WAV without Python; enforced offline operation, repeated model startup,
+   and subjective cloning quality remain R17.
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
@@ -785,15 +786,13 @@ Status: **complete**.
   entry before the worker starts. Worker load probes the pinned runner's CLI
   contract without loading the model or synthesizing audio. The Windows source
   installer now builds and checksum-verifies the runtime assets with managed
-  llama.cpp. A network-denied test, persistent model host, prebuilt packaging,
-  and arbitrary-WAV reference encoding remain R17/Phase 16 rather than adapter
-  claims.
+  llama.cpp. A network-denied test, persistent model host, and prebuilt
+  packaging remain R17/Phase 16 rather than adapter claims.
 - The current `neutts-rs` 0.1.1 encoder export is a stub despite example text
-  suggesting otherwise. Settings provides a controller-gated reference window
-  that safely normalizes the official sample-style Torch ZIP `.pt` layout or a
-  compatible one-dimensional int32 `.npy`, copies an optional validated WAV for
-  preview, and guides exact transcript entry. It never executes pickle and does
-  not silently invoke Python or claim to encode an arbitrary WAV.
+  suggesting otherwise. Slice 13.9 adds a separate native ONNX encoder behind a
+  controller-gated WAV-plus-transcript window. The original bounded Torch/NPY
+  normalizer remains available for manual pre-encoded input and never executes
+  pickle.
 - Setup and the exact capability boundary are documented in
   [docs/neutts-worker.md](docs/neutts-worker.md).
 
@@ -856,6 +855,26 @@ neutral graphite.
 - Polish: worker controls disabled while the section has unsaved changes,
   labeled controller readout at narrow widths, visible 30s recording cap
   (M6, L1, L3).
+
+### Slice 13.9: Voice Playback And Reference Generation
+
+Status: **complete**.
+
+- A shell-owned TTS player follows backend request state until the worker's
+  terminal timeout, survives route changes, serializes clips, reports media
+  failures, and stops immediately with Emergency Stop. Browser-side 15/30-second
+  deadlines no longer discard valid NeuTTS cold inference.
+- Settings owns one coherent voice-status snapshot and presents active ASR and
+  TTS work in one labeled queue with per-request cancellation. Role panels no
+  longer duplicate the same request rows.
+- A first-party Rust worker runs the pinned DistillNeuCodec ONNX encoder outside
+  the pure-Go core. The source installer builds it, verifies both model files,
+  and publishes it atomically with the NeuTTS runtime. The controller-only
+  reference dialog now generates validated codes from a source WAV and exact
+  transcript; manual pre-encoded NPY input remains under Advanced.
+- Compatibility evidence: the encoder produced 373 valid codes from the 7.45 s
+  Dave WAV in about 1.3 s, and the installed NeuTTS runner accepted those codes
+  and emitted 106,560 PCM bytes.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

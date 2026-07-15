@@ -6,12 +6,14 @@ package referencecodes
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -43,6 +45,20 @@ type Request struct {
 	ReferenceWAV string
 }
 
+// GenerateRequest contains the only user inputs needed to create a NeuCodec
+// reference. The exact transcript conditions TTS but is not an encoder input.
+type GenerateRequest struct {
+	ReferenceWAV string
+	Transcript   string
+}
+
+// Encoder identifies the app-managed native worker and its pinned ONNX model.
+// Neither path is accepted from the browser.
+type Encoder struct {
+	Executable string
+	Model      string
+}
+
 // Result describes the app-managed reference bundle.
 type Result struct {
 	ID           string `json:"id"`
@@ -65,6 +81,8 @@ type torchBundle struct {
 	data      *zip.File
 	byteorder *zip.File
 }
+
+var encodeReferenceWAV = runEncoder
 
 // Prepare validates and canonicalizes a supported reference-code source.
 func Prepare(dataDir string, request Request) (Result, error) {
@@ -106,6 +124,107 @@ func Prepare(dataDir string, request Request) (Result, error) {
 		SourceFormat: sourceFormat,
 		Reused:       bundle.reused,
 	}, nil
+}
+
+// Generate encodes a local WAV with the installer-managed, non-Python worker,
+// then parses and canonicalizes its output before publishing a managed bundle.
+func Generate(ctx context.Context, dataDir string, request GenerateRequest, encoder Encoder) (Result, error) {
+	root, err := managedReferenceRoot(dataDir)
+	if err != nil {
+		return Result{}, err
+	}
+	wavPath, err := regularPath(request.ReferenceWAV, maxReferenceWAV)
+	if err != nil {
+		return Result{}, fmt.Errorf("reference audio: %w", err)
+	}
+	wav, err := os.ReadFile(wavPath) // #nosec G304 -- explicit controller-selected local WAV.
+	if err != nil {
+		return Result{}, fmt.Errorf("read reference audio: %w", err)
+	}
+	if !validWAV(wav) {
+		return Result{}, errors.New("reference audio must be a valid RIFF/WAVE file")
+	}
+	transcript := strings.TrimSpace(request.Transcript)
+	if transcript == "" {
+		return Result{}, errors.New("the exact reference transcript is required")
+	}
+	if len(transcript) > maxTranscriptBytes {
+		return Result{}, fmt.Errorf("reference transcript must not exceed %d KiB", maxTranscriptBytes>>10)
+	}
+
+	temporary, err := os.MkdirTemp(root, ".encode-")
+	if err != nil {
+		return Result{}, fmt.Errorf("create reference encoding workspace: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(temporary) }()
+	encodedPath := filepath.Join(temporary, "reference.npy")
+	if err = encodeReferenceWAV(ctx, encoder, wavPath, encodedPath); err != nil {
+		return Result{}, err
+	}
+	codes, _, err := readReferenceCodes(encodedPath)
+	if err != nil {
+		return Result{}, fmt.Errorf("validate generated reference codes: %w", err)
+	}
+	if err = validateCodes(codes); err != nil {
+		return Result{}, fmt.Errorf("validate generated reference codes: %w", err)
+	}
+	canonical := encodeNPY(codes)
+	hash := sha256.New()
+	_, _ = hash.Write(canonical)
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write(wav)
+	id := fmt.Sprintf("%x", hash.Sum(nil))[:referenceIDLength]
+	bundle, err := storeManagedBundle(root, id, canonical, wav)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{
+		ID:           id,
+		CodesPath:    bundle.codesPath,
+		AudioPath:    bundle.audioPath,
+		Transcript:   transcript,
+		TokenCount:   len(codes),
+		SourceFormat: "neucodec_onnx",
+		Reused:       bundle.reused,
+	}, nil
+}
+
+func runEncoder(ctx context.Context, encoder Encoder, wavPath, outputPath string) error {
+	executable, err := regularPath(encoder.Executable, 128<<20)
+	if err != nil {
+		return fmt.Errorf("NeuCodec reference encoder: %w", err)
+	}
+	model, err := regularPath(encoder.Model, 1<<30)
+	if err != nil {
+		return fmt.Errorf("NeuCodec encoder model: %w", err)
+	}
+	if _, err = regularPath(model+".data", 1<<30); err != nil {
+		return fmt.Errorf("NeuCodec encoder model data: %w", err)
+	}
+	// #nosec G204 -- executable and model are fixed app-managed paths; the WAV
+	// is an explicit local controller selection and no shell is involved.
+	command := exec.CommandContext(ctx, executable,
+		"--model", model,
+		"--input", wavPath,
+		"--output", outputPath,
+	)
+	command.Dir = filepath.Dir(executable)
+	output, runErr := command.CombinedOutput()
+	if runErr == nil {
+		return nil
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return errors.New("NeuCodec reference encoding timed out")
+	}
+	message := "NeuCodec reference encoding failed"
+	if detail := strings.TrimSpace(string(output)); detail != "" {
+		const maxDetail = 1024
+		if len(detail) > maxDetail {
+			detail = detail[:maxDetail]
+		}
+		message += ": " + detail
+	}
+	return errors.New(message)
 }
 
 func managedReferenceRoot(dataDir string) (string, error) {

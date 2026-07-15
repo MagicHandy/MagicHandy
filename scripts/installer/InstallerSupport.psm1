@@ -17,6 +17,11 @@ $script:NeuTTSBackboneSHA256 = 'bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff
 $script:NeuTTSCodecRevision = '30c1fdd19e68aee65d542cf043750d4c0165893e'
 $script:NeuTTSCodecURL = "https://huggingface.co/neuphonic/neucodec/resolve/$($script:NeuTTSCodecRevision)/pytorch_model.bin?download=true"
 $script:NeuTTSCodecSHA256 = '30c3ea13ceeb2de693c56e5e33a1b7e00d44c95dcdd08a4ed0d552d0bf59ebdf'
+$script:NeuTTSEncoderRevision = '2cd5cf022b7a1e689e561f0492787768cfe8395d'
+$script:NeuTTSEncoderModelURL = "https://huggingface.co/KevinAHM/distill-neucodec-onnx/resolve/$($script:NeuTTSEncoderRevision)/onnx/distill_neucodec_encoder.onnx?download=true"
+$script:NeuTTSEncoderModelSHA256 = '04af54f6af51a7573a8bbcfd691b4f2c68b6dbd03aef72b983cbb4e5140c3a23'
+$script:NeuTTSEncoderWeightsURL = "https://huggingface.co/KevinAHM/distill-neucodec-onnx/resolve/$($script:NeuTTSEncoderRevision)/onnx/distill_neucodec_encoder.onnx.data?download=true"
+$script:NeuTTSEncoderWeightsSHA256 = '935859ed7904671dc82da1c533b9bf2fd8bcf6d8fc702bdba5bc25c8f7329e4f'
 
 function Write-InstallerHeading([string]$Text) {
     Write-Host ''
@@ -54,7 +59,7 @@ function Write-MagicHandyCompletionArt {
     }
     $status = if ($Operation -like '*Plan') { 'NO CHANGES MADE' } else { 'APP BUILD VERIFIED - CONFIGURATION REQUIRED' }
     $detail = switch ($Operation) {
-        'Install' { 'Open Settings to select a model, voice provider, and device transport. Managed NeuTTS still needs reference codes and their exact transcript.' }
+        'Install' { 'Open Settings to select a model, voice provider, and device transport. Managed NeuTTS can create reference codes locally from a WAV and exact transcript.' }
         'Update' { 'Congratulations. Saved installation choices were reapplied to the current build.' }
         default { 'Review the plan above, then rerun without -PlanOnly when ready.' }
     }
@@ -392,7 +397,8 @@ function Get-MagicHandyProvisionPlan {
         $plan.Add("Build and activate pinned managed llama.cpp ($($State.llama_backend))")
         $plan.Add('Ensure LLVM/libclang, Rustup, and the pinned Rust 1.94.0 Windows MSVC toolchain are installed')
         $plan.Add('Build pinned neutts-rs stream_pcm with its llama.cpp binding')
-        $plan.Add('Install checksum-verified NeuTTS Air Q4 and converted NeuCodec decoder assets (about 1.4 GiB installed; about 1.1 GiB additional transient download)')
+        $plan.Add('Build the MagicHandy NeuCodec ONNX reference encoder worker')
+        $plan.Add('Install checksum-verified NeuTTS Air Q4, NeuCodec decoder, and reference encoder assets (about 1.9 GiB installed; about 1.3 GiB additional transient download)')
     } else {
         $plan.Add('Skip NeuTTS runtime build and model assets because managed llama.cpp is not selected')
     }
@@ -1085,12 +1091,20 @@ function Test-MagicHandyNeuTTSInstallRoot {
     $manifestPath = Join-Path $runtime 'runtime.json'
     $runner = Join-Path $runtime 'stream_pcm.exe'
     $decoder = Join-Path $runtime 'models\neucodec_decoder.safetensors'
+    $encoder = Join-Path $runtime 'magichandy-neucodec-encoder.exe'
+    $directML = Join-Path $runtime 'DirectML.dll'
+    $encoderModel = Join-Path $InstallRoot 'encoder\distill_neucodec_encoder.onnx'
+    $encoderWeights = "$encoderModel.data"
     $backboneRepo = Join-Path $InstallRoot 'hf\hub\models--neuphonic--neutts-air-q4-gguf'
     $backboneRef = Join-Path $backboneRepo 'refs\main'
     $gguf = Join-Path $backboneRepo "snapshots\$($script:NeuTTSBackboneRevision)\neutts-air-Q4_0.gguf"
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf) -or
         -not (Test-Path -LiteralPath $runner -PathType Leaf) -or
         -not (Test-Path -LiteralPath $decoder -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $encoder -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $directML -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $encoderModel -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $encoderWeights -PathType Leaf) -or
         -not (Test-Path -LiteralPath $backboneRef -PathType Leaf) -or
         -not (Test-Path -LiteralPath $gguf -PathType Leaf)) {
         return $false
@@ -1100,14 +1114,15 @@ function Test-MagicHandyNeuTTSInstallRoot {
         $required = @(
             'schema_version', 'source_commit', 'rust_toolchain', 'backbone_revision',
             'backbone_sha256', 'codec_revision', 'codec_checkpoint_sha256',
-            'runner_sha256', 'decoder_sha256'
+            'runner_sha256', 'decoder_sha256', 'encoder_revision', 'encoder_sha256',
+            'encoder_model_sha256', 'encoder_model_data_sha256', 'directml_sha256'
         )
         foreach ($name in $required) {
             if ($manifest.PSObject.Properties.Name -notcontains $name) {
                 return $false
             }
         }
-        return [int]$manifest.schema_version -eq 1 -and
+        return [int]$manifest.schema_version -eq 2 -and
             (Get-Content -LiteralPath $backboneRef -Raw).Trim() -eq $script:NeuTTSBackboneRevision -and
             [string]$manifest.source_commit -eq $script:NeuTTSSourceCommit -and
             [string]$manifest.rust_toolchain -eq $script:NeuTTSRustToolchain -and
@@ -1115,8 +1130,15 @@ function Test-MagicHandyNeuTTSInstallRoot {
             [string]$manifest.backbone_sha256 -eq $script:NeuTTSBackboneSHA256 -and
             [string]$manifest.codec_revision -eq $script:NeuTTSCodecRevision -and
             [string]$manifest.codec_checkpoint_sha256 -eq $script:NeuTTSCodecSHA256 -and
+            [string]$manifest.encoder_revision -eq $script:NeuTTSEncoderRevision -and
             [string]$manifest.runner_sha256 -eq (Get-MagicHandySHA256 -Path $runner) -and
             [string]$manifest.decoder_sha256 -eq (Get-MagicHandySHA256 -Path $decoder) -and
+            [string]$manifest.encoder_sha256 -eq (Get-MagicHandySHA256 -Path $encoder) -and
+            [string]$manifest.directml_sha256 -eq (Get-MagicHandySHA256 -Path $directML) -and
+            [string]$manifest.encoder_model_sha256 -eq $script:NeuTTSEncoderModelSHA256 -and
+            [string]$manifest.encoder_model_sha256 -eq (Get-MagicHandySHA256 -Path $encoderModel) -and
+            [string]$manifest.encoder_model_data_sha256 -eq $script:NeuTTSEncoderWeightsSHA256 -and
+            [string]$manifest.encoder_model_data_sha256 -eq (Get-MagicHandySHA256 -Path $encoderWeights) -and
             $script:NeuTTSBackboneSHA256 -eq (Get-MagicHandySHA256 -Path $gguf)
     } catch {
         return $false
@@ -1183,9 +1205,10 @@ function Confirm-MagicHandyNeuTTSInstall {
 
     Write-Host 'NeuTTS runner: neutts-rs v0.1.1, Cargo metadata declares MIT; its espeak dependency includes GPL-3.0-or-later components.'
     Write-Host "Source commit: $($script:NeuTTSSourceCommit); Rust toolchain: $($script:NeuTTSRustToolchain)." -ForegroundColor DarkGray
-    Write-Host 'NeuTTS models: Air Q4 and NeuCodec, Apache-2.0; about 1.4 GiB installed plus a temporary 1.1 GiB conversion checkpoint.'
+    Write-Host 'NeuTTS models: Air Q4, NeuCodec, and DistillNeuCodec ONNX, Apache-2.0; about 1.9 GiB installed plus temporary build and conversion assets.'
     Write-Host "Air Q4 SHA-256: $($script:NeuTTSBackboneSHA256)" -ForegroundColor DarkGray
     Write-Host "NeuCodec SHA-256: $($script:NeuTTSCodecSHA256)" -ForegroundColor DarkGray
+    Write-Host "Reference encoder model SHA-256: $($script:NeuTTSEncoderModelSHA256)" -ForegroundColor DarkGray
     if (-not (Confirm-MagicHandyChoice -Question 'Download the pinned NeuTTS models and build the local runner now?' -Default $true -AssumeYes:$AssumeYes)) {
         throw 'NeuTTS installation is required when managed llama.cpp is selected. Rerun with -SkipLlamaBuild to skip both.'
     }
@@ -1211,6 +1234,9 @@ function Install-MagicHandyNeuTTS {
     $activeStage = Join-Path $root "active.partial-$PID"
     $activeBackup = Join-Path $root ("active.backup-" + [Guid]::NewGuid().ToString('N'))
     $runtimeStage = Join-Path $activeStage 'runtime'
+    $encoderStage = Join-Path $activeStage 'encoder'
+    $encoderModel = Join-Path $encoderStage 'distill_neucodec_encoder.onnx'
+    $encoderWeights = "$encoderModel.data"
     $buildRoot = Join-Path $root "build.partial-$PID"
     $sourceRoot = Join-Path $buildRoot 'source'
     $targetRoot = Join-Path $buildRoot 'target'
@@ -1226,8 +1252,16 @@ function Install-MagicHandyNeuTTS {
     $downloadRoot = Join-Path $root 'downloads'
     $backbonePartial = Join-Path $downloadRoot "$($script:NeuTTSBackboneSHA256)-neutts-air-Q4_0.gguf.partial"
     $codecPartial = Join-Path $downloadRoot "$($script:NeuTTSCodecSHA256)-pytorch_model.bin.partial"
+    $encoderModelPartial = Join-Path $downloadRoot "$($script:NeuTTSEncoderModelSHA256)-distill_neucodec_encoder.onnx.partial"
+    $encoderWeightsPartial = Join-Path $downloadRoot "$($script:NeuTTSEncoderWeightsSHA256)-distill_neucodec_encoder.onnx.data.partial"
     $decoderStage = Join-Path $runtimeStage 'models\neucodec_decoder.safetensors'
-    foreach ($path in @($active, $activeStage, $activeBackup, $buildRoot, $hfRoot, $backbonePath, $codecCheckpoint, $downloadRoot, $backbonePartial, $codecPartial)) {
+    $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+    $encoderManifest = Join-Path $repositoryRoot 'workers\neucodec-encoder\Cargo.toml'
+    $encoderLock = Join-Path $repositoryRoot 'workers\neucodec-encoder\Cargo.lock'
+    if (-not (Test-Path -LiteralPath $encoderManifest -PathType Leaf) -or -not (Test-Path -LiteralPath $encoderLock -PathType Leaf)) {
+        throw 'MagicHandy NeuCodec encoder source is missing from workers\neucodec-encoder.'
+    }
+    foreach ($path in @($active, $activeStage, $activeBackup, $buildRoot, $hfRoot, $backbonePath, $codecCheckpoint, $encoderModel, $encoderWeights, $downloadRoot, $backbonePartial, $codecPartial, $encoderModelPartial, $encoderWeightsPartial)) {
         Assert-MagicHandyChildPath -Root $root -Candidate $path
     }
 
@@ -1263,6 +1297,8 @@ function Install-MagicHandyNeuTTS {
         Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSCodecURL -Destination $codecCheckpoint -ExpectedSHA256 $script:NeuTTSCodecSHA256 -PartialPath $codecPartial
         New-Item -ItemType Directory -Force -Path (Join-Path $codecRepo 'refs') | Out-Null
         Write-MagicHandyUTF8 -Path (Join-Path $codecRepo 'refs\main') -Content $script:NeuTTSCodecRevision
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSEncoderModelURL -Destination $encoderModel -ExpectedSHA256 $script:NeuTTSEncoderModelSHA256 -PartialPath $encoderModelPartial
+        Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSEncoderWeightsURL -Destination $encoderWeights -ExpectedSHA256 $script:NeuTTSEncoderWeightsSHA256 -PartialPath $encoderWeightsPartial
 
         $env:CARGO_HOME = $cargoHome
         $env:CARGO_TARGET_DIR = $targetRoot
@@ -1292,10 +1328,28 @@ function Install-MagicHandyNeuTTS {
         }
         Copy-Item -LiteralPath $runnerCandidate -Destination (Join-Path $runtimeStage 'stream_pcm.exe') -Force
 
+        Write-Host 'Building the pinned MagicHandy NeuCodec ONNX reference encoder...'
+        & $RustupExecutable run $script:NeuTTSRustToolchain cargo build --locked --release --manifest-path $encoderManifest | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "NeuCodec reference encoder build failed (exit $LASTEXITCODE)."
+        }
+        $encoderCandidate = Join-Path $targetRoot 'release\magichandy-neucodec-encoder.exe'
+        $directMLCandidate = Join-Path $targetRoot 'release\DirectML.dll'
+        if (-not (Test-Path -LiteralPath $encoderCandidate -PathType Leaf) -or -not (Test-Path -LiteralPath $directMLCandidate -PathType Leaf)) {
+            throw 'The NeuCodec encoder build did not produce its executable and DirectML runtime.'
+        }
+        if (-not (Test-MagicHandyNativeProbe -Executable $encoderCandidate -ArgumentList @('--help'))) {
+            throw 'The built NeuCodec reference encoder did not pass its help probe.'
+        }
+        Copy-Item -LiteralPath $encoderCandidate -Destination (Join-Path $runtimeStage 'magichandy-neucodec-encoder.exe') -Force
+        Copy-Item -LiteralPath $directMLCandidate -Destination (Join-Path $runtimeStage 'DirectML.dll') -Force
+
         $metadataDir = Join-Path $runtimeStage 'source-metadata'
         New-Item -ItemType Directory -Force -Path $metadataDir | Out-Null
-        Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.toml') -Destination $metadataDir
-        Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.lock') -Destination $metadataDir
+        Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.toml') -Destination (Join-Path $metadataDir 'neutts-Cargo.toml')
+        Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.lock') -Destination (Join-Path $metadataDir 'neutts-Cargo.lock')
+        Copy-Item -LiteralPath $encoderManifest -Destination (Join-Path $metadataDir 'encoder-Cargo.toml')
+        Copy-Item -LiteralPath $encoderLock -Destination (Join-Path $metadataDir 'encoder-Cargo.lock')
         $licenseDir = Join-Path $runtimeStage 'licenses'
         New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
         $licenseIndex = New-Object System.Collections.Generic.List[string]
@@ -1321,6 +1375,13 @@ Cargo dependency license files available in the downloaded sources are retained 
 NeuTTS Air Q4 and NeuCodec model repositories declare Apache-2.0.
 Backbone revision: $($script:NeuTTSBackboneRevision)
 Codec revision: $($script:NeuTTSCodecRevision)
+
+MagicHandy NeuCodec reference encoder worker: GPL-3.0-only.
+Its ort, rubato, audioadapter, and hound dependencies declare MIT and/or Apache-2.0 licenses.
+ONNX Runtime and Microsoft DirectML declare the MIT license.
+DistillNeuCodec ONNX model: Apache-2.0.
+Model source: https://huggingface.co/KevinAHM/distill-neucodec-onnx
+Encoder model revision: $($script:NeuTTSEncoderRevision)
 "@
         Write-MagicHandyUTF8 -Path (Join-Path $runtimeStage 'THIRD_PARTY_NOTICES.txt') -Content $notices
         $rustVersion = (& $RustupExecutable run $script:NeuTTSRustToolchain rustc -vV) -join "`n"
@@ -1329,8 +1390,10 @@ Codec revision: $($script:NeuTTSCodecRevision)
         }
         $runnerHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'stream_pcm.exe')
         $decoderHash = Get-MagicHandySHA256 -Path $decoderStage
+        $encoderHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'magichandy-neucodec-encoder.exe')
+        $directMLHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'DirectML.dll')
         $manifest = [pscustomobject][ordered]@{
-            schema_version = 1
+            schema_version = 2
             installed_at = [DateTimeOffset]::UtcNow.ToString('o')
             source_tag = $script:NeuTTSSourceTag
             source_commit = $script:NeuTTSSourceCommit
@@ -1342,6 +1405,11 @@ Codec revision: $($script:NeuTTSCodecRevision)
             codec_checkpoint_sha256 = $script:NeuTTSCodecSHA256
             runner_sha256 = $runnerHash
             decoder_sha256 = $decoderHash
+            encoder_revision = $script:NeuTTSEncoderRevision
+            encoder_sha256 = $encoderHash
+            encoder_model_sha256 = $script:NeuTTSEncoderModelSHA256
+            encoder_model_data_sha256 = $script:NeuTTSEncoderWeightsSHA256
+            directml_sha256 = $directMLHash
         }
         Write-MagicHandyUTF8 -Path (Join-Path $runtimeStage 'runtime.json') -Content ($manifest | ConvertTo-Json -Depth 3)
         Remove-Item -LiteralPath $codecRepo -Recurse -Force
@@ -1395,8 +1463,9 @@ Codec revision: $($script:NeuTTSCodecRevision)
     $installedBackbone = Join-Path $active "hf\hub\models--neuphonic--neutts-air-q4-gguf\snapshots\$($script:NeuTTSBackboneRevision)\neutts-air-Q4_0.gguf"
     Write-Host "NeuTTS runner:  $(Join-Path $runtime 'stream_pcm.exe')" -ForegroundColor Green
     Write-Host "NeuTTS decoder: $(Join-Path $runtime 'models\neucodec_decoder.safetensors')" -ForegroundColor Green
+    Write-Host "NeuCodec encoder: $(Join-Path $runtime 'magichandy-neucodec-encoder.exe')" -ForegroundColor Green
     Write-Host "NeuTTS backbone cache: $installedBackbone" -ForegroundColor Green
-    Write-Host 'In Settings > Voice, select NeuTTS Air and provide licensed .npy reference codes plus their exact transcript. Leave the runner override blank.' -ForegroundColor Cyan
+    Write-Host 'In Settings > Voice, select NeuTTS Air and generate a reference voice from a WAV plus its exact transcript. Leave the runner override blank.' -ForegroundColor Cyan
 }
 
 function Test-MagicHandyHTTPReady {

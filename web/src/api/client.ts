@@ -282,11 +282,11 @@ export const api = {
     input_silence_ms: number;
     input_noise_suppression: boolean;
   }>("PUT", "/api/voice/input-preferences", patch),
-  prepareNeuTTSReference: (source_path: string, reference_wav: string, signal?: AbortSignal) =>
+  generateNeuTTSReference: (reference_wav: string, transcript: string, signal?: AbortSignal) =>
     request<{ reference: NeuTTSReference; preview_url: string }>(
       "POST",
       "/api/voice/neutts/references",
-      { source_path, reference_wav },
+      { reference_wav, transcript },
       signal,
     ),
   // Lease-gated audio: only the active controller may fetch a clip.

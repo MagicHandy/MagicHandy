@@ -77,7 +77,7 @@ of in a combined block at the bottom.
 | --- | --- |
 | None | none |
 | ElevenLabs (cloud) | API key (write-only, set-badge, clear toggle — existing secret handling unchanged) · voice ID (default Rachel) · model ID (default `eleven_multilingual_v2`) |
-| NeuTTS Air (local) | optional custom `stream_pcm` runner override (blank uses the installer-managed runtime) · **Prepare reference voice** modal for compatible `.pt`/`.npy`, audio preview, and exact transcript · manual managed-code/WAV paths under Advanced |
+| NeuTTS Air (local) | optional custom `stream_pcm` runner override (blank uses the installer-managed runtime) · **Generate reference voice** modal for source WAV, exact transcript, local encoding, and audio preview · manual pre-encoded code/WAV paths under Advanced |
 | Custom worker | worker path · worker args (one per line) |
 
 "Custom worker" is the escape hatch that keeps the general ADR 0003 worker
@@ -123,8 +123,10 @@ args back into fields), and violate backend-authoritative state. Instead:
    module state. `custom_local` alone reads the saved server/model paths.
    NeuTTS follows the same ownership rule: a blank runner override resolves the
    fixed installer-owned runtime and Hugging Face cache under the app data
-   directory's `voice/neutts/active` tree; an explicit runner remains a custom
-   runtime using its own cache.
+   directory's `voice/neutts/active` tree, including the installer-owned
+   reference encoder; an explicit runner remains a custom runtime using its own
+   cache. ASR and TTS requests render in one labeled voice queue rather than in
+   duplicated provider sections.
 5. **Migration**: existing raw worker path/argument settings load as
    `provider: custom`; existing Parakeet server/model paths load as
    `parakeet_source: custom_local`. Values remain intact, so upgrades change

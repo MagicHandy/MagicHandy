@@ -496,12 +496,13 @@ Stop red or running green. Emergency Stop closes capture and invalidates queued
 transcription and speech playback before recognized text can enter Chat; stale
 request generations cannot dispatch motion afterward.
 
-NeuTTS reference preparation is a focused modal rather than another permanent
-settings block. It lets the controller select compatible pre-encoded codes and
-an optional matching WAV, then presents an audio preview and a short exact-
-transcription guide before applying the managed paths. The dialog must state
-that this is safe normalization of existing codes, not arbitrary WAV encoding;
-manual paths remain in Advanced as an escape hatch.
+NeuTTS reference generation is a focused modal rather than another permanent
+settings block. It lets the controller select a source WAV, enter the exact
+spoken transcript, generate codes locally without Python, preview the stored
+audio, and correct the transcript before applying managed paths. The UI must
+show generation as a bounded in-progress action and retain manual pre-encoded
+paths under Advanced. Active ASR and TTS work shares one labeled, boxed voice
+queue; provider sections show worker state but do not repeat request rows.
 
 ### Not yet built — planned, not regressions
 
