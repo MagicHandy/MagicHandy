@@ -19,40 +19,74 @@ interface AppStateValue {
   stale: boolean;
   motion: MotionInfo | null;
   readOnly: boolean;
+  startupError: string;
   refresh: () => void;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
 
 const POLL_MS = 2000;
+const STATE_TIMEOUT_MS = 8000;
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState | null>(null);
   const [backendOnline, setBackendOnline] = useState(true);
   const [stale, setStale] = useState(false);
   const [liveMotion, setLiveMotion] = useState<MotionInfo | null>(null);
-  const tick = useRef(0);
+  const [startupError, setStartupError] = useState("");
+  const inFlight = useRef<Promise<void> | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
 
-  const refresh = useCallback(async () => {
-    const seq = ++tick.current;
-    try {
-      const next = await api.getState();
-      if (seq !== tick.current) return;
-      setState(next);
-      setBackendOnline(true);
-      setStale(false);
-    } catch {
-      if (seq !== tick.current) return;
-      setBackendOnline(false);
-      setStale(true);
-    }
+  const performRefresh = useCallback((): Promise<void> => {
+    if (inFlight.current) return inFlight.current;
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), STATE_TIMEOUT_MS);
+    const task = (async () => {
+      try {
+        const next = await api.getState(controller.signal);
+        if (controller.signal.aborted) return;
+        setState(next);
+        setBackendOnline(true);
+        setStale(false);
+        setStartupError("");
+      } catch (error) {
+        if (controller.signal.aborted && activeRequest.current !== controller) return;
+        setBackendOnline(false);
+        setStale(true);
+        setStartupError(error instanceof DOMException && error.name === "AbortError"
+          ? "The core is taking longer than expected to become ready."
+          : "The core did not return its startup state.");
+      } finally {
+        window.clearTimeout(timeout);
+        if (activeRequest.current === controller) activeRequest.current = null;
+      }
+    })();
+    const tracked = task.finally(() => {
+      if (inFlight.current === tracked) inFlight.current = null;
+    });
+    inFlight.current = tracked;
+    return tracked;
   }, []);
 
+  const refresh = useCallback(() => { void performRefresh(); }, [performRefresh]);
+
   useEffect(() => {
-    refresh();
-    const id = window.setInterval(refresh, POLL_MS);
-    return () => window.clearInterval(id);
-  }, [refresh]);
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      await performRefresh();
+      if (!stopped) timer = window.setTimeout(() => void poll(), POLL_MS);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      const controller = activeRequest.current;
+      activeRequest.current = null;
+      controller?.abort();
+    };
+  }, [performRefresh]);
 
   // Live motion over SSE for a responsive visualizer; the poll snapshot remains
   // the source of truth and reconciles this between events.
@@ -79,7 +113,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const motion = liveMotion ?? state?.motion ?? null;
 
   return (
-    <AppStateContext.Provider value={{ state, backendOnline, stale, motion, readOnly, refresh }}>
+    <AppStateContext.Provider value={{ state, backendOnline, stale, motion, readOnly, startupError, refresh }}>
       {children}
     </AppStateContext.Provider>
   );

@@ -132,10 +132,41 @@ func TestWorkerStreamsCompletePCMAndRequestsOfflineMode(t *testing.T) {
 	}
 }
 
-func TestShutdownCancelsReadinessProbe(t *testing.T) {
-	startedPath := filepath.Join(t.TempDir(), "probe-started")
+func TestInstalledRunnerCompatibility(t *testing.T) {
+	runner := os.Getenv("MAGICHANDY_NEUTTS_RUNNER")
+	if runner == "" {
+		t.Skip("set MAGICHANDY_NEUTTS_RUNNER to an installed stream_pcm binary")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), modelProbeTimeout)
+	defer cancel()
+	if err := probeRunner(ctx, Options{RunnerPath: runner}); err != nil {
+		t.Fatalf("installed runner compatibility: %v", err)
+	}
+}
+
+func TestRunnerPCMReaderStripsOnlyKnownDiagnostic(t *testing.T) {
+	input := runnerDiagnostic + " hidden=1024, depth=12\n" + "12345678"
+	reader, err := runnerPCMReader(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcm, err := io.ReadAll(reader)
+	if err != nil || string(pcm) != "12345678" {
+		t.Fatalf("PCM = %q, %v", pcm, err)
+	}
+
+	reader, err = runnerPCMReader(strings.NewReader("ordinary pcm bytes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcm, _ = io.ReadAll(reader)
+	if string(pcm) != "ordinary pcm bytes" {
+		t.Fatalf("non-diagnostic prefix was removed: %q", pcm)
+	}
+}
+
+func TestLoadDoesNotRunSynthesis(t *testing.T) {
 	t.Setenv("MAGICHANDY_TEST_BLOCK", "1")
-	t.Setenv("MAGICHANDY_TEST_STARTED", startedPath)
 	runner := buildPCMRunner(t)
 	codes := filepath.Join(t.TempDir(), "voice.npy")
 	if err := os.WriteFile(codes, []byte("codes"), 0o600); err != nil {
@@ -162,15 +193,13 @@ func TestShutdownCancelsReadinessProbe(t *testing.T) {
 		_, _ = inWriter.Write(append(data, '\n'))
 	}
 	send(protocol.Request{Type: protocol.RequestLoad, ID: "load"})
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, err := os.Stat(startedPath); err == nil {
-			break
+	select {
+	case response := <-frames:
+		if response.ModelState != protocol.ModelStateReady {
+			t.Fatalf("load = %+v, want quick compatibility-only readiness", response)
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("readiness probe did not start")
-		}
-		time.Sleep(10 * time.Millisecond)
+	case <-time.After(5 * time.Second):
+		t.Fatal("load attempted synthesis instead of the compatibility check")
 	}
 	send(protocol.Request{Type: protocol.RequestShutdown, ID: "shutdown"})
 	for {
@@ -180,7 +209,7 @@ func TestShutdownCancelsReadinessProbe(t *testing.T) {
 				goto stopped
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatal("shutdown did not cancel the readiness probe")
+			t.Fatal("shutdown did not finish")
 		}
 	}
 
@@ -193,7 +222,7 @@ stopped:
 			t.Fatal(err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("worker did not exit after readiness cancellation")
+		t.Fatal("worker did not exit")
 	}
 }
 
@@ -231,7 +260,9 @@ import ("fmt"; "os"; "time")
 func main() {
   if os.Getenv("HF_HUB_OFFLINE") != "1" { fmt.Fprintln(os.Stderr, "offline mode missing"); os.Exit(2) }
   if _, err := os.Stat("models/neucodec_decoder.safetensors"); err != nil { fmt.Fprintln(os.Stderr, "runner working directory is wrong"); os.Exit(3) }
-  if os.Getenv("MAGICHANDY_TEST_BLOCK") == "1" { _ = os.WriteFile(os.Getenv("MAGICHANDY_TEST_STARTED"), []byte("started"), 0600); time.Sleep(30 * time.Second) }
+  if len(os.Args) == 2 && os.Args[1] == "--help" { fmt.Println("stream_pcm --codes FILE --ref-text TEXT"); return }
+	if os.Getenv("MAGICHANDY_TEST_BLOCK") == "1" { time.Sleep(30 * time.Second) }
+	_, _ = fmt.Fprintln(os.Stdout, "NeuCodec decoder: hidden=1024, depth=12")
   _, _ = os.Stdout.Write([]byte("12345678"))
 }`
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(source), 0o600); err != nil {

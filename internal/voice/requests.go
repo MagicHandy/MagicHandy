@@ -3,6 +3,7 @@ package voice
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -309,7 +310,13 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 	}
 	pending.setState(RequestStateActive)
 
-	timer := time.NewTimer(defaultJobTimeout)
+	s.mu.Lock()
+	jobTimeout := s.config.JobTimeout
+	s.mu.Unlock()
+	if jobTimeout <= 0 {
+		jobTimeout = defaultJobTimeout
+	}
+	timer := time.NewTimer(jobTimeout)
 	defer timer.Stop()
 	for {
 		select {
@@ -321,7 +328,7 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 			s.Cancel(pending)
 			pending.fail(&WorkerError{
 				Code:    ErrorCodeTimeout,
-				Message: fmt.Sprintf("%s request timed out after %s", pending.Type, defaultJobTimeout),
+				Message: fmt.Sprintf("%s request timed out after %s", pending.Type, jobTimeout),
 			})
 			return
 		}
@@ -386,6 +393,8 @@ type Manager struct {
 	workers    map[Role]*Supervisor
 	requests   []*PendingRequest
 	stagingDir string
+	stagingOps sync.WaitGroup
+	closed     bool
 }
 
 // requestLogLimit bounds the recent-request log used by the status API.
@@ -403,6 +412,18 @@ func NewManager() *Manager {
 // PrepareTranscriptionStaging creates this manager's process-session directory
 // and reaps only sessions old enough that no bounded ASR request can own them.
 func (m *Manager) PrepareTranscriptionStaging(dataDir string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.prepareTranscriptionStagingLocked(dataDir)
+}
+
+func (m *Manager) prepareTranscriptionStagingLocked(dataDir string) error {
+	if m.closed {
+		return errors.New("voice manager is shut down")
+	}
+	if m.stagingDir != "" {
+		return nil
+	}
 	parent := filepath.Join(dataDir, "voice", "inputs")
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return fmt.Errorf("create voice input staging: %w", err)
@@ -439,17 +460,21 @@ func (m *Manager) PrepareTranscriptionStaging(dataDir string) error {
 // and sends only its reference over the worker protocol. This keeps real audio
 // below the protocol's NDJSON frame bound and avoids a second base64 copy.
 func (m *Manager) SubmitTranscription(audio []byte, format, dataDir string) (*PendingRequest, error) {
-	if m.stagingDir == "" {
-		if err := m.PrepareTranscriptionStaging(dataDir); err != nil {
-			return nil, err
-		}
+	m.mu.Lock()
+	if err := m.prepareTranscriptionStagingLocked(dataDir); err != nil {
+		m.mu.Unlock()
+		return nil, err
 	}
+	stagingDir := m.stagingDir
+	m.stagingOps.Add(1)
+	m.mu.Unlock()
+	defer m.stagingOps.Done()
 	// Another process can reap an old empty session; recreate ours before use.
-	if err := os.MkdirAll(m.stagingDir, 0o700); err != nil {
+	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create voice input session: %w", err)
 	}
 	format = strings.TrimSpace(format)
-	file, err := os.CreateTemp(m.stagingDir, "capture-*."+format)
+	file, err := os.CreateTemp(stagingDir, "capture-*."+format)
 	if err != nil {
 		return nil, fmt.Errorf("stage voice input: %w", err)
 	}
@@ -483,6 +508,13 @@ func (m *Manager) Submit(role Role, request Request) (*PendingRequest, error) {
 
 func (m *Manager) submitAndTrack(role Role, request Request, cleanup func()) (*PendingRequest, error) {
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, errors.New("voice manager is shut down")
+	}
 	pending, err := m.workers[role].submit(request, cleanup)
 	if err != nil {
 		m.mu.Unlock()
@@ -608,10 +640,20 @@ func (m *Manager) Requests() []RequestSnapshot {
 
 // Shutdown stops every worker; called at app close.
 func (m *Manager) Shutdown() {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return
+	}
+	m.closed = true
+	stagingDir := m.stagingDir
+	m.stagingDir = ""
+	m.mu.Unlock()
 	for _, worker := range m.workers {
 		worker.Shutdown()
 	}
-	if m.stagingDir != "" {
-		_ = os.RemoveAll(m.stagingDir)
+	m.stagingOps.Wait()
+	if stagingDir != "" {
+		_ = os.RemoveAll(stagingDir)
 	}
 }

@@ -277,9 +277,15 @@ export function ChatPanel() {
         <div className="chat-compose-row" data-has-voice={asrConfigured || undefined}>
           {asrConfigured && (
             <VoiceComposerControls
-              disabled={locked || busy}
+              disabled={locked}
               ready={asrReady}
               unavailableTitle="Start and load the speech-input worker in Settings → Voice"
+              preferences={{
+                input_mode: voiceSettings?.input_mode ?? "hands_free",
+                input_sensitivity: voiceSettings?.input_sensitivity ?? 55,
+                input_silence_ms: voiceSettings?.input_silence_ms ?? 900,
+                input_noise_suppression: voiceSettings?.input_noise_suppression ?? true,
+              }}
               stopSequence={state?.stop_sequence}
               onActivityChange={setVoiceActive}
               onTranscript={sendText}

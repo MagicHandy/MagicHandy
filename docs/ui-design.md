@@ -487,13 +487,21 @@ disabled until the backend reports the ASR model ready.
 
 The Chat composer is one compact row: microphone split control, flexible text
 entry, then Send. The graphite microphone uses the existing mic artwork with
-inset physical depth, not a decorative glow. Its primary action defaults to
-bounded hands-free click-on/click-off recording; the adjacent moving triangle
-opens upward to hold-to-talk and browser input selection. Active/ready states use
-steel azure, never Stop red or running green. A warmed microphone is explicitly
-indicated and can be released from the menu. Emergency Stop closes capture and
-invalidates pending transcription and speech playback before recognized text can
-enter Chat; stale request generations cannot dispatch motion afterward.
+inset physical depth, not a decorative glow. Its primary action starts or stops
+a continuous hands-free session; silence ends a phrase for transcription but
+does not turn off the microphone. The adjacent moving triangle opens upward to
+hold-to-talk, browser input selection, sensitivity, end-of-speech delay, noise
+suppression, level, and queue status. Active/ready states use steel azure, never
+Stop red or running green. Emergency Stop closes capture and invalidates queued
+transcription and speech playback before recognized text can enter Chat; stale
+request generations cannot dispatch motion afterward.
+
+NeuTTS reference preparation is a focused modal rather than another permanent
+settings block. It lets the controller select compatible pre-encoded codes and
+an optional matching WAV, then presents an audio preview and a short exact-
+transcription guide before applying the managed paths. The dialog must state
+that this is safe normalization of existing codes, not arbitrary WAV encoding;
+manual paths remain in Advanced as an escape hatch.
 
 ### Not yet built — planned, not regressions
 

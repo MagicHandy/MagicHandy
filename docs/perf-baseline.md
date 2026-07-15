@@ -11,11 +11,12 @@ core number.
   2026-07-02 (Go active Cloud REST short run and one-hour soak; Browser
   Bluetooth UI/chat hardware run), 2026-07-06 (Phase 11B SQLite persistence),
   2026-07-11 (Phase 14 pattern library, LLM model manager, managed llama.cpp),
-  2026-07-12 (Phase 14B hardware and Phase 14C UI evidence), and 2026-07-13
-  (Intiface deadline/ACK pacing follow-up)
+  2026-07-12 (Phase 14B hardware and Phase 14C UI evidence), 2026-07-13
+  (Intiface deadline/ACK pacing follow-up), and 2026-07-15 (startup,
+  continuous voice, and managed NeuTTS follow-up)
 - OS and architecture: Windows / amd64
 - Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for Phase 11B and
-  Phase 14 measurements
+  later measurements
 - Python runtime: CPython 3.11 in the StrokeGPT-ReVibed `.venv`
 
 ## Measurements
@@ -35,6 +36,7 @@ core number.
 | MagicHandy Go core idle, Phase 14C compacted connection manager | Final Phase 14C working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%\MagicHandy-connection-final`; fresh stripped binary on `127.0.0.1:49781` with isolated data; `/healthz`, two-second warmup, then three one-second samples | No browser window for RSS; rendered UI checked separately | Yes; no device, model, or voice worker included | 53.47 MiB (56,066,048 bytes) across 3 equal samples | Not measured separately | Final artwork/visualizer refinement: plain binary 19,675,648 bytes; stripped binary 13,779,968 bytes. JS 281,698 / 82,637 gzip; CSS 41,123 / 8,653 gzip; HTML 454 / 286 gzip; isolated PNG 444,236 / 437,427 gzip; total embedded browser payload 767,511 raw / 529,003 gzip. RSS is retained from the preceding Phase 14C sample because only embedded browser assets changed. |
 | MagicHandy source-installer/compiler bootstrap | Source-installer follow-up working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%`; clean pinned llama.cpp CPU build in ignored scratch data, followed by manifest and `--version` probes | No browser window; no app process needed for script-only runtime change | Yes; the external CPU runner was built/probed, then scratch data was removed | Retained 53.47 MiB Phase 14C idle sample; the changed embedded script runs only during an explicit managed-runtime build | Not measured separately | Plain binary 19,677,696 bytes; stripped binary 13,782,016 bytes (+2,048 each). Browser payload is unchanged. CMake selected Visual Studio 18/MSVC 19.51 plus Windows SDK 10.0.28000.0; the clean build completed in 70.8 s and the runner reported pinned commit `c749cb0`. |
 | MagicHandy Intiface deadline/ACK pacing | Intiface smoothness follow-up working tree | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `%TEMP%`; canonical frontend production build and level-9 gzip measurement | No browser window; no app process or physical device used | Yes; no Intiface Central, device, model, or voice worker included | Retained 53.47 MiB Phase 14C idle sample; RSS not re-measured for this transport-only follow-up | Not measured separately | Plain binary 19,793,920 bytes; stripped binary 13,870,080 bytes. Embedded UI is 777,057 raw / 531,309 gzip bytes; HTML/CSS/JS excluding unchanged artwork is 332,821 raw / 93,912 gzip bytes. Automated timing evidence is recorded below; a live matched run remains required. |
+| MagicHandy startup with managed NeuTTS configured | Startup/continuous-voice hardening working tree on `22f61110` | plain and `-ldflags "-s -w"` `CGO_ENABLED=0` builds under `.scratch`; copied SQLite data with NeuTTS selected and a junction to the installed managed runtime; three isolated launches on ports 49894-49896, polling `/healthz` every 10 ms with one pre-created `HttpClient` | No browser window for timing; rendered UI checked separately | Yes; no model or voice worker process was started | RSS not re-measured | Not measured separately | Client-side cold-start samples were 679 / 282 / 287 ms, including process-spawn and request overhead. `/api/state` confirmed `neutts_air`, voice enabled, and codes/transcript configured. Startup traversed that configuration without hashing roughly 1.1 GiB before listening. Plain binary 20,226,560 bytes; stripped binary 14,183,936 bytes. Embedded UI is 814,809 raw / 542,571 gzip bytes; HTML/CSS/JS excluding unchanged artwork is 370,573 raw / 105,144 gzip bytes. |
 
 Core idle result: the pre-SQLite Go core idled at roughly **1/58th** of the
 Python core (8.96 MB vs ~525 MB) on the same machine. After the Phase 11B
@@ -48,6 +50,31 @@ Still required for current-build evidence:
 - recheck Browser Bluetooth reverse/Stop behavior and endurance
 - repeat the matched Intiface run with the deadline-driven pacer and
   `motion_trace.v3`, including subjective feel
+
+## Voice Startup and NeuTTS Evidence
+
+- The installed app-managed `stream_pcm.exe` passed the bounded `--help` CLI
+  contract probe in about 10 ms. A synthesis using the official Dave sample's
+  372 codes and exact transcript took 122.576 s on this host, produced its first
+  audio at 87.98 s, and yielded 101,760 valid 24 kHz mono PCM bytes after the
+  adapter removed the runner's 93-byte `NeuCodec decoder:` diagnostic. This is
+  why readiness probes the CLI contract while audible model verification stays
+  behind **Send test** with a five-minute request timeout.
+- The production embedded UI was exercised at 1280×720 and 390×844. The
+  continuous voice menu, reference preparation dialog, audio preview,
+  transcription guide, and fixed Stop control remained reachable without
+  horizontal overflow. The official Dave WAV reached browser media
+  `readyState=4`; the dialog prepared 372 codes and restored focus on Escape.
+  Browser warning/error logs were empty. Real microphone segmentation and
+  latency remain unmeasured on hardware.
+- The final stripped app also exercised the installed managed-Parakeet CPU
+  module through its production HTTP boundary. The official 7.45 s Dave WAV was
+  normalized to canonical 16 kHz mono PCM16, the worker started, the upload was
+  accepted, and the request reached `done` with a recognizable transcript in
+  under one second after submission. The worker was stopped and all app,
+  adapter, and model-server processes were gone afterward. This isolates the
+  real model/runner integration from the still-unmeasured browser microphone,
+  DSP, and VAD path.
 
 ## Full App Path Evidence
 

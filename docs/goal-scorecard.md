@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-14, progress and documentation audit
+## Snapshot — 2026-07-15, startup and continuous-voice hardening
 
 ### Goal 1: Maintainability
 
@@ -31,8 +31,8 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 946 lines, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening the safety lifecycle. |
-| Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,164 lines, `web/src/styles/components.css` 1,279, and retired reference-only `web/legacy/app.css` 846. The focused 482-line voice capture component keeps its lifecycle out of ChatPanel; `web/dist` remains the single shipped build. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 1,013 lines, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening the safety lifecycle. |
+| Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,191 lines, `web/src/styles/components.css` 1,279, and retired reference-only `web/legacy/app.css` 846. Continuous capture is isolated in a 698-line component and 225-line stylesheet rather than expanding ChatPanel or the shared component stylesheet; `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 1,159 lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; split it when lifecycle boundaries can stay clear. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Voice latency/control follow-up: 19,918,336 bytes plain and 13,962,752 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
-| Cold start to serving UI | < 500 ms | **At Risk** | 556 / 534 / 533 ms over 3 runs (client-side probe: spawn + poll `/healthz` at 10 ms granularity via PowerShell, which includes process and HTTP-client overhead). Re-measure with server-side timestamps in Phase 16 before judging. |
+| Binary size | < 30 MB | **Met** | Startup/continuous-voice build: 20,226,560 bytes plain and 14,183,936 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -96,20 +96,43 @@ Ranked by threat to the stated goals:
    no-engine paths attempt the selected owner and report failed delivery while
    preserving local teardown. Backend loss still prevents Browser Bluetooth
    delivery, and current Cloud/Browser retry hardware evidence remains open.
-2. **Cold start at the boundary.** Probably measurement overhead, but nobody
-   has proven that yet; treat 500 ms as unconfirmed until Phase 16 measures
-   it server-side.
+2. **Cold start at the boundary.** Two warmed managed-NeuTTS-configured runs
+   were below the target, but the 679 ms cold run was not. Client probe overhead
+   and host caching are not separated; treat 500 ms as unconfirmed until Phase
+   16 measures it server-side.
 3. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 535,498 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 98,101 gzip bytes, 2,793 bytes over
-   the preceding voice audit, and the stripped binary is 13,962,752 bytes. These
+   browser payload is 542,571 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 105,144 gzip bytes, 7,043 bytes over
+   the preceding voice audit, and the stripped binary is 14,183,936 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 
 ## History
+
+- **2026-07-15** — Startup, continuous voice, and NeuTTS hardening: optional
+  voice staging is lazy, state polling is serialized and abortable, the static
+  shell and React startup/error states remain responsive, and app startup no
+  longer rehashes the managed NeuTTS runtime. User-started hands-free capture
+  now segments and serially transcribes phrases until manually stopped, with
+  persisted microphone, sensitivity, end-of-speech, and noise-suppression
+  controls. A bounded pure-Go parser prepares compatible Torch ZIP/NPY reference
+  codes without executing pickle; the focused dialog requires an audio preview
+  and exact transcript before applying app-managed paths. The installed runner
+  passed its CLI probe in about 10 ms; a real Dave synthesis took 122.576 s,
+  produced its first audio at 87.98 s, and yielded 101,760 PCM bytes after the
+  known diagnostic was removed. The installed managed-Parakeet CPU module also
+  completed an API transcription of the official 7.45 s Dave sample after it
+  was normalized to the browser's canonical 16 kHz WAV contract; worker stop
+  left no app, adapter, or model-server process running. Plain/stripped binaries
+  are 20,226,560 / 14,183,936 bytes; embedded UI is 814,809 raw / 542,571 gzip
+  bytes (105,144 gzip excluding unchanged artwork). This is a 308,224 /
+  221,184-byte binary increase and a 25,044 raw / 7,073 gzip UI increase. RSS
+  and browser-microphone
+  segmentation/latency were not remeasured; desktop/mobile rendered checks were
+  console-clean.
 
 - **2026-07-14** — Browser voice startup/latency hardening: the Chat microphone
   now keeps a visibly releasable warm stream, supports bounded click-on

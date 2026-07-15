@@ -54,6 +54,127 @@ func TestResolveWorkerBinaryOrder(t *testing.T) {
 	}
 }
 
+func TestNeuTTSReferencePreparationAndPrivatePreview(t *testing.T) {
+	server := newTestServer(t)
+	directory := t.TempDir()
+	source := filepath.Join(directory, "reference.npy")
+	header := "{'descr': '<i4', 'fortran_order': False, 'shape': (3,), }          \n"
+	npy := make([]byte, 10+len(header)+12)
+	copy(npy, []byte("\x93NUMPY"))
+	npy[6] = 1
+	binary.LittleEndian.PutUint16(npy[8:10], uint16(len(header))) // #nosec G115 -- fixed test header is below 64 KiB.
+	copy(npy[10:], header)
+	for index, value := range []uint32{3, 5, 8} {
+		binary.LittleEndian.PutUint32(npy[10+len(header)+index*4:], value)
+	}
+	if err := os.WriteFile(source, npy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wav, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wavPath := filepath.Join(directory, "reference.wav")
+	if err := os.WriteFile(wavPath, wav, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]string{"source_path": source, "reference_wav": wavPath})
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/neutts/references", strings.NewReader(string(body))))
+	prepareLocalPathPickerRequest(request)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("prepare status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Reference struct {
+			ID        string `json:"id"`
+			CodesPath string `json:"codes_path"`
+			AudioPath string `json:"audio_path"`
+		} `json:"reference"`
+		PreviewURL string `json:"preview_url"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Reference.ID == "" || response.PreviewURL == "" || !strings.HasPrefix(response.Reference.CodesPath, server.voiceDataDir) || !strings.HasPrefix(response.Reference.AudioPath, server.voiceDataDir) {
+		t.Fatalf("prepare response = %+v", response)
+	}
+
+	request = withController(httptest.NewRequest(http.MethodGet, response.PreviewURL, nil))
+	prepareLocalPathPickerRequest(request)
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "audio/wav" || !strings.HasPrefix(recorder.Header().Get("Cache-Control"), "no-store") {
+		t.Fatalf("preview response = %d, headers=%v", recorder.Code, recorder.Header())
+	}
+	if !strings.HasPrefix(recorder.Body.String(), "RIFF") {
+		t.Fatal("preview did not return the managed WAV")
+	}
+
+	request = httptest.NewRequest(http.MethodGet, response.PreviewURL, nil)
+	prepareLocalPathPickerRequest(request)
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("preview without controller = %d, want 409", recorder.Code)
+	}
+}
+
+func TestNeuTTSReferencePreparationRejectsRemoteHostPaths(t *testing.T) {
+	server := newTestServer(t)
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/neutts/references", strings.NewReader(`{"source_path":"C:\\private\\voice.pt"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	request.Host = "127.0.0.1:49717"
+	request.RemoteAddr = "192.0.2.10:54321"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("remote reference preparation = %d, want 403: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestVoiceInputPreferencesPersistAndValidate(t *testing.T) {
+	server := newTestServer(t)
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/voice/input-preferences", strings.NewReader(`{
+		"input_mode":"hold",
+		"input_sensitivity":72,
+		"input_silence_ms":1300,
+		"input_noise_suppression":false
+	}`)))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("save input preferences = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	saved, _ := server.store.Snapshot()
+	if saved.Voice.InputMode != config.VoiceInputModeHold || saved.Voice.InputSensitivity != 72 ||
+		saved.Voice.InputSilenceMillis != 1300 || saved.Voice.InputNoiseSuppress {
+		t.Fatalf("saved input preferences = %+v", saved.Voice)
+	}
+
+	invalid := []string{
+		`{"input_mode":"timed"}`,
+		`{"input_sensitivity":0}`,
+		`{"input_sensitivity":101}`,
+		`{"input_silence_ms":0}`,
+		`{"input_silence_ms":3001}`,
+	}
+	for _, body := range invalid {
+		request = withController(httptest.NewRequest(http.MethodPut, "/api/voice/input-preferences", strings.NewReader(body)))
+		recorder = httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("invalid input preferences %s = %d, want 400", body, recorder.Code)
+		}
+		unchanged, _ := server.store.Snapshot()
+		if unchanged.Voice.InputMode != config.VoiceInputModeHold || unchanged.Voice.InputSensitivity != 72 ||
+			unchanged.Voice.InputSilenceMillis != 1300 || unchanged.Voice.InputNoiseSuppress {
+			t.Fatalf("invalid update %s changed preferences to %+v", body, unchanged.Voice)
+		}
+	}
+}
+
 func TestVoiceManagerConfigComposesFirstPartyProviders(t *testing.T) {
 	settings := config.DefaultSettings().Voice
 	settings.Enabled = true
@@ -242,7 +363,9 @@ func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
 	dataDir := t.TempDir()
 	runner, hfHome, manifest := installTestAppManagedNeuTTSRuntime(t, dataDir)
 	realFileSHA256 := managedNeuTTSFileSHA256
+	hashCalls := 0
 	managedNeuTTSFileSHA256 = func(path string) (string, bool) {
+		hashCalls++
 		if filepath.Base(path) == "neutts-air-Q4_0.gguf" {
 			return managedNeuTTSBackboneSHA, true
 		}
@@ -264,8 +387,18 @@ func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
 	settings.NeuTTSReferenceCodes = codes
 	settings.NeuTTSReferenceText = "Exact transcript."
 
+	assertAppManagedNeuTTSStartup(t, settings, dataDir, runner, hfHome, &hashCalls)
+	assertAppManagedNeuTTSBackboneValidation(t, &settings, dataDir, hfHome)
+	assertAppManagedNeuTTSManifestValidation(t, settings, dataDir, runner, manifest)
+}
+
+func assertAppManagedNeuTTSStartup(t *testing.T, settings config.VoiceSettings, dataDir, runner, hfHome string, hashCalls *int) {
+	t.Helper()
 	got := voiceManagerConfig(settings, "", dataDir)
-	if got.TTS.Command != adapter || got.TTS.Env["HF_HOME"] != hfHome {
+	if *hashCalls != 0 {
+		t.Fatalf("startup configuration hashed managed runtime files %d times", *hashCalls)
+	}
+	if got.TTS.Command != settings.TTSWorkerPath || got.TTS.Env["HF_HOME"] != hfHome {
 		t.Fatalf("app-managed NeuTTS config = %+v", got.TTS)
 	}
 	if len(got.TTS.Args) < 2 || got.TTS.Args[1] != runner {
@@ -275,9 +408,16 @@ func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
 	if status.State != "ready" || !status.RuntimeInstalled || !status.Installed {
 		t.Fatalf("app-managed NeuTTS status = %+v", status)
 	}
+	if !managedNeuTTSManifestReady(dataDir, true) {
+		t.Fatal("explicit managed runtime integrity verification failed")
+	}
+}
+
+func assertAppManagedNeuTTSBackboneValidation(t *testing.T, settings *config.VoiceSettings, dataDir, hfHome string) {
+	t.Helper()
 	installTestCachedBackboneAt(t, hfHome, "example/custom-neutts", "custom.gguf")
 	settings.NeuTTSBackbone = "example/custom-neutts"
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+	if got := voiceManagerConfig(*settings, "", dataDir); got.TTS.Command != "" {
 		t.Fatalf("app-managed NeuTTS must not substitute a custom backbone: %+v", got.TTS)
 	}
 	settings.NeuTTSBackbone = config.DefaultNeuTTSBackbone
@@ -285,17 +425,24 @@ func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
 	if err := os.WriteFile(backboneRef, []byte("unexpected-revision"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+	if got := voiceManagerConfig(*settings, "", dataDir); got.TTS.Command != "" {
 		t.Fatalf("app-managed NeuTTS must reject an unexpected backbone revision: %+v", got.TTS)
 	}
 	if err := os.WriteFile(backboneRef, []byte(managedNeuTTSBackbone), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func assertAppManagedNeuTTSManifestValidation(t *testing.T, settings config.VoiceSettings, dataDir, runner string, manifest []byte) {
+	t.Helper()
 	if err := os.WriteFile(runner, []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
-		t.Fatalf("app-managed NeuTTS must reject changed runner bytes: %+v", got.TTS)
+	if managedNeuTTSManifestReady(dataDir, true) {
+		t.Fatal("explicit integrity verification accepted changed runner bytes")
+	}
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command == "" {
+		t.Fatalf("startup should trust the installer-published manifest without re-hashing large artifacts: %+v", got.TTS)
 	}
 	if err := os.WriteFile(runner, []byte("runner"), 0o600); err != nil {
 		t.Fatal(err)

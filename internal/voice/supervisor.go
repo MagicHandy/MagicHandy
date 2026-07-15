@@ -34,15 +34,17 @@ const (
 // Env carries provider credentials (e.g. the ElevenLabs API key) to the
 // worker process privately — never on the command line, never in status.
 type WorkerConfig struct {
-	Enabled bool
-	Command string
-	Args    []string
-	Env     map[string]string
+	Enabled    bool
+	Command    string
+	Args       []string
+	Env        map[string]string
+	JobTimeout time.Duration
 }
 
 func (c WorkerConfig) equal(other WorkerConfig) bool {
 	if c.Enabled != other.Enabled ||
 		c.Command != other.Command ||
+		c.JobTimeout != other.JobTimeout ||
 		strings.Join(c.Args, "\x00") != strings.Join(other.Args, "\x00") ||
 		len(c.Env) != len(other.Env) {
 		return false

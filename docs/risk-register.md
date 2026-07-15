@@ -425,9 +425,10 @@ Description:
 ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
 adapter around the reviewed `neutts-rs stream_pcm` runner streams PCM without
 Python. The source installer now builds the pinned runner and installs verified
-decoder/backbone assets with managed llama.cpp, but it still requires
-pre-encoded `.npy` voice codes and the exact transcript because the public Rust
-encoder is a stub. The pinned upstream hub client also does not honor
+decoder/backbone assets with managed llama.cpp. MagicHandy can safely normalize
+the official sample-style Torch ZIP `.pt` layout and compatible one-dimensional
+int32 `.npy` files, but it still requires pre-encoded voice codes because the
+public Rust encoder is a stub. The pinned upstream hub client also does not honor
 `HF_HUB_OFFLINE=1`, and MagicHandy currently starts a fresh model process for
 each synthesis. Enforced offline behavior, arbitrary-WAV cloning, preload reuse,
 and subjective quality remain unproven.
@@ -435,11 +436,15 @@ and subjective quality remain unproven.
 Mitigation:
 
 - keep the implemented adapter bounded and cancellable, request offline mode,
-  require the exact local GGUF cache entry, run a bounded readiness synthesis,
-  and avoid claiming network sandboxing without a network-denied test
+  require the exact local GGUF cache entry, use a CLI-contract readiness probe
+  that does not synthesize, and avoid claiming network sandboxing without a
+  network-denied test
 - install immutable, checksum-verified inputs through the source installer;
   report missing runner/decoder/codes/transcript states before Start and keep a
   guarded local host-path chooser for custom overrides
+- parse only the bounded official sample-style `.pt` layout or one-dimensional
+  int32 `.npy` without executing pickle; keep arbitrary WAV encoding explicitly
+  unavailable until a reviewed neural encoder exists
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
@@ -450,15 +455,18 @@ Exit evidence:
   non-Python adapter, and arbitrary-WAV encoding either lands behind the worker
   boundary or remains an explicit documented limitation/fallback
 
-Status 2026-07-14: the spike and Slice 13.6 adapter landed
+Status 2026-07-15: the spike and Slice 13.6 adapter landed
 (`docs/neutts-air-spike.md`, `docs/neutts-worker.md`). Non-Python decode and
 streaming are implemented through `neutts-rs`; the core wraps retained PCM at
 the playback boundary. The Windows source installer now verifies and builds
 `neutts-rs` v0.1.1, converts a verified NeuCodec checkpoint, and installs the
-exact Air Q4 cache whenever managed llama.cpp is selected. Cloned-output
-listening and arbitrary-WAV encoding remain open. Runtime preflight and bounded
-readiness synthesis are explicit; per-request model startup and network-sandbox
-evidence remain open risks.
+exact Air Q4 cache whenever managed llama.cpp is selected. A pure-Go bounded
+normalizer prepared the official Dave `.pt` sample's 372 codes, and Settings now
+provides an audio-preview/transcription dialog around that path. A real Dave
+synthesis produced 101,760 PCM bytes in 2m2.576s with first audio at 87.98s;
+the adapter strips the runner's observed 93-byte stdout diagnostic before PCM.
+Subjective listening, arbitrary-WAV encoding, per-request model startup, and
+network-sandbox evidence remain open risks.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 
@@ -733,6 +741,8 @@ now decodes the recording, downmixes and resamples it to 16 kHz mono, and emits
 real PCM16 WAV before submission; the managed API rejects non-WAV content.
 The original control also acquired and destroyed the microphone for every
 utterance, so speech begun during browser device/DSP startup was unrecoverable.
+Its first "hands-free" revision merely recorded one fixed interval and stopped,
+which did not satisfy the interaction contract.
 
 Mitigation:
 
@@ -740,8 +750,10 @@ Mitigation:
   runner before claiming push-to-talk acceptance
 - keep browser-side WAV conversion bounded; native audio dependencies must not
   enter the pure-Go core
-- retain the browser stream briefly and expose its ready state; the browser,
-  not a native Go capture service, remains the permission/device owner
+- keep user-started hands-free capture active until manual stop; use bounded
+  browser VAD with pre-roll, calibration, sensitivity/end-of-speech controls,
+  and a three-phrase pending queue while the browser remains the
+  permission/device owner
 - upload raw audio and use a private process-session worker `audio_ref`; never
   log or diagnose captures, remove terminal work immediately, remove the owned
   session on shutdown, and reap stale crashed sessions after the bounded request
@@ -753,15 +765,19 @@ Mitigation:
 
 Exit evidence:
 
-- Chrome/Edge localhost push-to-talk produces an accurate transcript through
-  the pinned managed Parakeet install, with format/error tests and no core CGo
-  dependency
+- Chrome/Edge localhost push-to-talk and repeated hands-free phrases produce
+  accurate transcripts through the pinned managed Parakeet install, with
+  format/error tests and no core CGo dependency
 
-Status 2026-07-14: the deterministic format mismatch and repeated cold-start
-path are fixed with warm browser capture, one-pass WAV conversion, raw HTTP
-upload, session-scoped `audio_ref` staging, backend Stop-generation fencing, and
-lifecycle/boundary regression tests. The engine also rejects starts admitted
-before its latest Stop, covering delayed non-chat motion requests.
+Status 2026-07-15: the deterministic format mismatch, repeated cold-start path,
+and fixed-interval pseudo-hands-free behavior are fixed. Hands-free now uses an
+AudioWorklet, bounded VAD/pre-roll, sequential phrase submission, persisted
+tuning controls, raw HTTP upload, session-scoped `audio_ref` staging, backend
+Stop-generation fencing, and lifecycle/boundary regression tests. The engine
+also rejects starts admitted before its latest Stop, covering delayed non-chat
+motion requests. A production-boundary fixture run started the installed CPU
+runner and pinned model, transcribed the official Dave WAV after canonical
+16 kHz normalization, stopped the worker, and left no related process running.
 A real Chrome/Edge run through the pinned runner/model remains required to close
 the risk and quantify first-word accuracy and end-to-end latency.
 

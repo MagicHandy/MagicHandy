@@ -6,15 +6,18 @@ continues to work when NeuTTS is absent or fails.
 
 ## Current capability boundary
 
-The runner can synthesize and stream from pre-encoded NeuCodec `.npy` voice
-codes plus the exact reference transcript. Its public Rust reference encoder
-is still a stub. MagicHandy therefore does not encode an arbitrary reference
-WAV and does not invoke Python behind the scenes.
+The runner can synthesize and stream from pre-encoded NeuCodec voice codes plus
+the exact reference transcript. Its public Rust reference encoder is still a
+stub. MagicHandy therefore does not encode an arbitrary reference WAV and does
+not invoke Python behind the scenes.
 
-The reference WAV field records which clip produced the configured codes. It
-is provenance, not a runtime input. MagicHandy does not bundle a reference
-voice. A separately licensed, previously generated `.npy`/transcript pair can
-be used with no Python installation at runtime.
+Settings can prepare a separately licensed official sample-style Torch ZIP
+`.pt` or compatible one-dimensional int32 `.npy` without Python. The pure-Go
+parser never executes pickle; it validates strict size, shape, dtype, token,
+and archive bounds and writes a canonical app-managed `.npy`. A matching WAV
+may be copied into the managed reference store for preview and exact transcript
+entry, but the runner does not consume that WAV. MagicHandy does not bundle a
+reference voice.
 
 The Windows source installer builds `voice-neutts-worker.exe` and, when managed
 llama.cpp is selected, installs the runner, decoder, and Air Q4 backbone. It does
@@ -62,10 +65,13 @@ GiB, with several additional GB potentially needed during the build.
 No startup/status path downloads files. Rerun `update.ps1` with managed
 llama.cpp selected to repair or update the pinned runtime. `-SkipLlamaBuild` and
 declining the managed llama.cpp prompt skip all NeuTTS provisioning.
-The installer rehashes the active runner, decoder, and GGUF before reuse, and
-the app repeats those checks once when app-managed NeuTTS is configured. Custom
-runner overrides retain their own explicit cache contract instead of being
-silently paired with the app-managed Air model.
+The installer rehashes the active runner, decoder, and GGUF before reuse and
+atomically publishes the verified runtime. Application startup validates the
+manifest and required paths without rehashing roughly 1.1 GiB of assets before
+the HTTP listener can start. Explicit integrity verification and installer
+updates still perform the full hashes. Custom runner overrides retain their own
+explicit cache contract instead of being silently paired with the app-managed
+Air model.
 
 ## Custom runner build
 
@@ -97,9 +103,11 @@ directory's `tools` folder, or select it with the advanced worker override.
 For the app-managed runtime, leave the runner override blank. For a custom
 runtime, use the runner project's model conversion command and ensure
 `models\neucodec_decoder.safetensors` exists above the selected runner;
-MagicHandy walks upward to find it. In either mode obtain a compatible, licensed
-`.npy` reference-code file and its verbatim transcript. Confirm a custom **Air
-Q4** setup works directly before selecting the provider:
+MagicHandy walks upward to find it. In either mode obtain compatible, licensed
+pre-encoded codes and the verbatim transcript. Settings can normalize the
+official sample-style `.pt` layout or a one-dimensional int32 `.npy`; arbitrary
+WAV-to-code encoding still requires an external neural encoder. Confirm a
+custom **Air Q4** setup works directly before selecting the provider:
 
 ```powershell
 .\stream_pcm.exe --codes C:\voices\reference.npy `
@@ -122,16 +130,21 @@ described as fully app-managed/offline.
 1. Open **Settings > Voice** and enable voice workers.
 2. Under **Speech output (TTS)** choose **NeuTTS Air (local)**.
 3. Leave the runner override blank for the app-managed runtime, or use
-   **Browse...** for a custom runner. Select the optional reference WAV and
-   required `.npy` codes on the computer running MagicHandy, then enter the exact
-   transcript.
+   **Browse...** for a custom runner. Open **Prepare reference voice**, select a
+   compatible `.pt` or `.npy` plus its matching WAV, preview the audio, and enter
+   exactly the words heard. Applying the dialog saves only app-managed paths and
+   the transcript. Manual paths remain under **Advanced**.
 4. Save, then use the TTS status row to start and load the worker.
 5. Send a test request before enabling **Speak chat replies**.
 
 Start validates the adapter, runner, decoder, codes, transcript, and exact
-backbone cache, then runs a bounded synthesis probe before reporting ready.
-**Send test** remains the audible verification. Worker PCM streams while
-synthesis runs. The core retains a bounded copy and
+backbone cache, then probes `stream_pcm --help` for the required CLI contract;
+it does not synthesize during readiness. **Send test** is the audible and
+model-load verification. First synthesis can take minutes on CPU, so NeuTTS
+requests have a five-minute worker timeout. Worker PCM streams while synthesis
+runs. The pinned runner currently emits one bounded `NeuCodec decoder:` line on
+stdout before PCM; the adapter strips only that known diagnostic. The core
+retains a bounded copy and
 wraps it as a 24 kHz mono WAV for controller-owned browser playback. Stop or
 request cancellation terminates the active runner process.
 
@@ -140,4 +153,6 @@ request cancellation terminates the active runner process.
 NeuTTS input and audio remain local after installation; see the network
 limitation above. Paths and transcripts are ordinary local settings, not
 secrets. Generated audio is retained only for the bounded recent request window
-defined by the voice manager.
+defined by the voice manager. Reference preparation and audio-preview endpoints
+accept only loopback, same-origin, controller-owned requests; a remote client
+cannot ask the server to read or preview an arbitrary host path.

@@ -28,11 +28,14 @@ const (
 	providerVersion   = "1.0.0"
 	defaultBackbone   = "neuphonic/neutts-air-q4-gguf"
 	defaultGGUFFile   = "neutts-air-Q4_0.gguf"
-	modelProbeTimeout = 25 * time.Second
+	modelProbeTimeout = 5 * time.Second
 	queueCapacity     = 8
 	maxPCMBytes       = 32 << 20
 	audioChunkBytes   = 32 << 10
+	runnerDiagnostic  = "NeuCodec decoder:"
 )
+
+var errOversizedPCM = errors.New("NeuTTS runner returned oversized PCM")
 
 // Options configure the neutts-rs stream_pcm adapter.
 type Options struct {
@@ -290,38 +293,34 @@ func (s *session) speak(request protocol.Request) {
 		s.sendError(request.ID, protocol.ErrorCodeMissingDependency, "NeuTTS runner could not start: "+err.Error(), true)
 		return
 	}
-	buffer := make([]byte, audioChunkBytes)
-	total := 0
-	seq := 0
-	for {
-		n, readErr := stdout.Read(buffer)
-		if n > 0 {
-			total += n
-			if total > maxPCMBytes {
-				_ = command.Process.Kill()
-				_ = command.Wait()
-				s.sendError(request.ID, protocol.ErrorCodeInternal, "NeuTTS runner returned oversized PCM", false)
-				return
-			}
-			s.send(protocol.Response{Type: protocol.ResponseAudioChunk, RequestID: request.ID, Seq: seq, AudioB64: base64.StdEncoding.EncodeToString(buffer[:n]), AudioFormat: "pcm_s16le_24000"})
-			seq++
-		}
-		if readErr != nil {
-			if !errors.Is(readErr, io.EOF) {
-				_ = command.Process.Kill()
-			}
-			break
-		}
+	audioReader, err := runnerPCMReader(stdout)
+	if err != nil {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		s.sendError(request.ID, protocol.ErrorCodeInternal, err.Error(), false)
+		return
+	}
+	total, readErr := s.streamPCM(request.ID, audioReader)
+	if errors.Is(readErr, errOversizedPCM) {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		s.sendError(request.ID, protocol.ErrorCodeInternal, errOversizedPCM.Error(), false)
+		return
+	}
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		_ = command.Process.Kill()
 	}
 	err = command.Wait()
 	if errors.Is(ctx.Err(), context.Canceled) {
 		s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
 		return
 	}
-	if err != nil {
+	if err != nil || (readErr != nil && !errors.Is(readErr, io.EOF)) {
 		message := "NeuTTS synthesis failed"
 		if detail := strings.TrimSpace(stderr.String()); detail != "" {
 			message += ": " + detail
+		} else if err == nil {
+			message += ": " + readErr.Error()
 		}
 		s.sendError(request.ID, protocol.ErrorCodeInternal, message, true)
 		return
@@ -331,6 +330,50 @@ func (s *session) speak(request protocol.Request) {
 		return
 	}
 	s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
+}
+
+func (s *session) streamPCM(requestID string, audioReader io.Reader) (int, error) {
+	buffer := make([]byte, audioChunkBytes)
+	total := 0
+	seq := 0
+	for {
+		n, err := audioReader.Read(buffer)
+		if n > 0 {
+			total += n
+			if total > maxPCMBytes {
+				return total, errOversizedPCM
+			}
+			s.send(protocol.Response{
+				Type:        protocol.ResponseAudioChunk,
+				RequestID:   requestID,
+				Seq:         seq,
+				AudioB64:    base64.StdEncoding.EncodeToString(buffer[:n]),
+				AudioFormat: "pcm_s16le_24000",
+			})
+			seq++
+		}
+		if err != nil {
+			return total, err
+		}
+	}
+}
+
+func runnerPCMReader(stdout io.Reader) (io.Reader, error) {
+	reader := bufio.NewReaderSize(stdout, 512)
+	prefix, err := reader.Peek(len(runnerDiagnostic))
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return reader, nil
+		}
+		return nil, fmt.Errorf("NeuTTS runner output is unavailable: %w", err)
+	}
+	if string(prefix) != runnerDiagnostic {
+		return reader, nil
+	}
+	if _, err = reader.ReadSlice('\n'); err != nil {
+		return nil, errors.New("NeuTTS runner returned a malformed stdout diagnostic")
+	}
+	return reader, nil
 }
 
 func runnerArgs(options Options, text string) []string {
@@ -352,39 +395,25 @@ func runnerArgs(options Options, text string) []string {
 func probeRunner(ctx context.Context, options Options) error {
 	// #nosec G204 -- executable and arguments are explicit local settings,
 	// invoked directly without shell expansion.
-	command := exec.CommandContext(ctx, options.RunnerPath, runnerArgs(options, "MagicHandy voice ready.")...)
+	command := exec.CommandContext(ctx, options.RunnerPath, "--help")
 	command.Dir = runnerWorkingDirectory(options.RunnerPath)
 	command.Env = offlineEnvironment()
-	var audio boundedByteCounter
-	command.Stdout = &audio
-	var stderr tailBuffer
-	command.Stderr = &stderr
-	if err := command.Run(); err != nil {
+	output, err := command.CombinedOutput()
+	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return errors.New("NeuTTS model readiness probe timed out")
+			return errors.New("NeuTTS runner compatibility check timed out")
 		}
-		message := "NeuTTS model readiness probe failed"
-		if detail := strings.TrimSpace(stderr.String()); detail != "" {
+		message := "NeuTTS runner compatibility check failed"
+		if detail := strings.TrimSpace(string(output)); detail != "" {
 			message += ": " + detail
 		}
 		return errors.New(message)
 	}
-	if audio.total == 0 || audio.total%2 != 0 {
-		return errors.New("NeuTTS model readiness probe returned invalid PCM")
+	help := strings.ToLower(string(output))
+	if !strings.Contains(help, "stream_pcm") || !strings.Contains(help, "--codes") || !strings.Contains(help, "--ref-text") {
+		return errors.New("NeuTTS runner is incompatible: stream_pcm --help did not advertise the required reference-code options")
 	}
 	return nil
-}
-
-type boundedByteCounter struct {
-	total int
-}
-
-func (counter *boundedByteCounter) Write(data []byte) (int, error) {
-	if counter.total+len(data) > maxPCMBytes {
-		return 0, errors.New("NeuTTS model readiness probe returned oversized PCM")
-	}
-	counter.total += len(data)
-	return len(data), nil
 }
 
 func runnerWorkingDirectory(runnerPath string) string {

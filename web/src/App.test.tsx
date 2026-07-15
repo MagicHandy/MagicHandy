@@ -20,7 +20,7 @@ const baseState = {
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
-    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", speak_replies: false, elevenlabs_key_set: false },
+    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth", "intiface"],
@@ -276,6 +276,28 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /the handy connection key required/i });
   });
 
+  it("never overlaps slow backend-state polls", async () => {
+    vi.useFakeTimers();
+    try {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const fetch = installFetch({ stateGate: gate });
+      const rendered = renderApp();
+      await act(async () => { await Promise.resolve(); });
+      expect(fetch.mock.calls.filter(([url]) => String(url).includes("/api/state"))).toHaveLength(1);
+      expect(screen.getByText("core starting")).toBeInTheDocument();
+      expect(screen.queryByText("controller: you")).not.toBeInTheDocument();
+
+      await act(async () => { vi.advanceTimersByTime(7000); });
+      expect(fetch.mock.calls.filter(([url]) => String(url).includes("/api/state"))).toHaveLength(1);
+
+      await act(async () => release());
+      rendered.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("composes the hand, three signals, and Handy target without a runtime mask", async () => {
     installFetch();
     renderApp();
@@ -431,15 +453,12 @@ describe("app shell safety invariants", () => {
     expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "connected");
   });
 
-  it("shows the backend-loss banner when the core is unreachable", async () => {
+  it("shows startup recovery without exposing controls backed by missing state", async () => {
     installFetch({ fail: true });
     renderApp();
-    expect(await screen.findByText(/core connection lost/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /the handy core offline/i }));
-    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
-    expect(artwork).toHaveAttribute("data-phase", "disconnected");
-    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
-    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
+    expect(await screen.findByText(/core did not return its startup state/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry core connection/i })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /the handy wireless connection/i })).toBeNull();
     // Stop is still present so an offline client can still attempt it.
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeInTheDocument();
   });
@@ -793,6 +812,14 @@ describe("app shell safety invariants", () => {
 
     fireEvent.change(providers[1], { target: { value: "neutts_air" } });
     expect(screen.getByLabelText(/reference transcript/i)).toBeInTheDocument();
+    const prepareReference = screen.getByRole("button", { name: /prepare reference voice/i });
+    fireEvent.click(prepareReference);
+    expect(screen.getByRole("dialog", { name: /prepare reference voice/i })).toBeInTheDocument();
+    expect(screen.getByText(/validates the tensor without running python/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /reference code source/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /close reference voice window/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /prepare reference voice/i })).toBeNull());
+    await waitFor(() => expect(prepareReference).toHaveFocus());
     expect(screen.queryByLabelText(/^api key/i)).toBeNull();
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
   });
@@ -815,7 +842,7 @@ describe("app shell safety invariants", () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    expect(screen.queryByRole("button", { name: /start hands-free voice/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /start hands-free listening/i })).toBeNull();
     expect(screen.queryByText(/speak replies/i)).toBeNull();
   });
 
@@ -827,7 +854,7 @@ describe("app shell safety invariants", () => {
     };
     installFetch({ state });
     renderApp();
-    const mic = await screen.findByRole("button", { name: /start hands-free voice/i });
+    const mic = await screen.findByRole("button", { name: /start hands-free listening/i });
     expect(mic).toBeDisabled();
     expect(mic.getAttribute("title")).toMatch(/settings/i);
   });
@@ -840,7 +867,7 @@ describe("app shell safety invariants", () => {
     };
     installFetch({ state });
     renderApp();
-    const mic = await screen.findByRole("button", { name: /start hands-free voice/i });
+    const mic = await screen.findByRole("button", { name: /start hands-free listening/i });
     expect(mic).toBeDisabled();
     expect(mic.getAttribute("title")).toMatch(/start and load/i);
   });
@@ -854,7 +881,7 @@ describe("app shell safety invariants", () => {
     installFetch({ state });
     renderApp();
 
-    const mic = await screen.findByRole("button", { name: /start hands-free voice/i });
+    const mic = await screen.findByRole("button", { name: /start hands-free listening/i });
     const message = screen.getByLabelText("Message");
     const send = screen.getByRole("button", { name: "Send" });
     const row = message.closest(".chat-compose-row");
@@ -868,7 +895,7 @@ describe("app shell safety invariants", () => {
     expect(menu).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "Hold to talk" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Hands-free" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("combobox", { name: "Voice input" })).toHaveValue("default");
+    expect(screen.getByRole("combobox", { name: "Microphone" })).toHaveValue("default");
     fireEvent.click(screen.getByRole("button", { name: /close voice input menu/i }));
     expect(screen.getByRole("button", { name: /open voice input menu/i })).toHaveAttribute("aria-expanded", "false");
   });

@@ -77,7 +77,7 @@ of in a combined block at the bottom.
 | --- | --- |
 | None | none |
 | ElevenLabs (cloud) | API key (write-only, set-badge, clear toggle — existing secret handling unchanged) · voice ID (default Rachel) · model ID (default `eleven_multilingual_v2`) |
-| NeuTTS Air (local) | optional custom `stream_pcm` runner override (blank uses the installer-managed runtime) · reference WAV provenance · pre-encoded `.npy` codes · reference transcript |
+| NeuTTS Air (local) | optional custom `stream_pcm` runner override (blank uses the installer-managed runtime) · **Prepare reference voice** modal for compatible `.pt`/`.npy`, audio preview, and exact transcript · manual managed-code/WAV paths under Advanced |
 | Custom worker | worker path · worker args (one per line) |
 
 "Custom worker" is the escape hatch that keeps the general ADR 0003 worker

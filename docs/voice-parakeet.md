@@ -108,11 +108,13 @@ directly.
   the runner and surfacing its opaque HTTP 400.
 
 Browser microphone capture is implemented on localhost. The Chat control
-defaults to bounded click-on/click-off hands-free capture and also offers
-hold-to-talk plus browser-local input selection. Once permission is granted,
-the stream and decoder remain visibly ready for up to 60 seconds so subsequent
-speech starts do not wait for cold device/DSP acquisition. This does not claim
-unattended always-on recording or silence-triggered segmentation.
+defaults to a user-started hands-free session that transcribes successive
+silence-delimited phrases until the user stops it. An AudioWorklet supplies mono
+PCM to a bounded browser VAD; sensitivity, end-of-speech delay, noise
+suppression, input selection, level, and queue status are available in the
+microphone menu and persisted by the backend. Hold-to-talk remains available
+and capped at 30 seconds. This does not claim background auto-start or recording
+without a visible user-owned session.
 Recognized speech uses the same chat and motion safety path as typed chat; it
 never bypasses limits, smoothing, controller ownership, or Emergency Stop. The
 Stop path also discards browser capture, invalidates voice results, cancels
@@ -126,11 +128,19 @@ an unresolved format design.
 
 The worker tests cover external `/v1/models` compatibility, parakeet.cpp
 `/health` readiness, a managed child process starting only once, port conflict
-errors, unload, shutdown, cancellation, and no-speech handling. A real-model
-check remains required before managed push-to-talk is called validated: capture
-the browser format, runner version, model checksum, CPU/GPU mode, load time,
-transcription latency, and the no-speech result in diagnostics without recording
-raw audio or credentials.
+errors, unload, shutdown, cancellation, and no-speech handling. On 2026-07-15,
+the final stripped app started the installed CPU runner and pinned
+`tdt-0.6b-v3-q4_k.gguf` model through the production API. The official 7.45 s
+Dave WAV was normalized to the browser contract (16 kHz mono PCM16 with a
+canonical 44-byte header), accepted as a raw `audio/wav` upload, completed in
+the managed queue, and produced a recognizable transcript. The API then
+unloaded the worker and no MagicHandy, adapter, or `parakeet-server` process
+remained. This validates the app/worker/runner boundary with a real model; it is
+not evidence for microphone permission, browser DSP, VAD segmentation, or
+first-word behavior. A real Chrome/Edge microphone run remains required before
+closing R24 and should record runner version, model checksum, CPU/GPU mode,
+load time, phrase latency, and the no-speech result without retaining raw audio
+or credentials.
 
 ## Related
 

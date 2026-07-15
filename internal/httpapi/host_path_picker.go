@@ -31,6 +31,8 @@ func pathPickerSpec(kind string) (hostPathPickerSpec, bool) {
 		return hostPathPickerSpec{Title: "Choose a WAV recording", Filter: "WAV audio (*.wav)|*.wav|All files (*.*)|*.*"}, true
 	case "npy":
 		return hostPathPickerSpec{Title: "Choose NeuCodec reference codes", Filter: "NumPy files (*.npy)|*.npy|All files (*.*)|*.*"}, true
+	case "neutts_codes":
+		return hostPathPickerSpec{Title: "Choose NeuTTS reference codes", Filter: "NeuTTS code tensors (*.pt;*.npy)|*.pt;*.npy|Torch tensors (*.pt)|*.pt|NumPy files (*.npy)|*.npy|All files (*.*)|*.*"}, true
 	case "file":
 		return hostPathPickerSpec{Title: "Choose a file", Filter: "All files (*.*)|*.*"}, true
 	case "directory":
@@ -66,7 +68,7 @@ func (s *Server) handleHostPathPicker(w http.ResponseWriter, r *http.Request) {
 	}
 	spec, ok := pathPickerSpec(strings.TrimSpace(body.Kind))
 	if !ok {
-		writeError(w, http.StatusBadRequest, errors.New("path picker kind must be executable, gguf, wav, npy, file, or directory"))
+		writeError(w, http.StatusBadRequest, errors.New("path picker kind must be executable, gguf, wav, npy, neutts_codes, file, or directory"))
 		return
 	}
 	path, canceled, err := s.hostPathPicker(r.Context(), spec, strings.TrimSpace(body.Current))

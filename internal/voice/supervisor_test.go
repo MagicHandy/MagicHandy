@@ -288,7 +288,8 @@ func TestInvalidateAllRejectsCompletedASRResults(t *testing.T) {
 
 func TestTranscriptionStagingIsSessionScopedAndRemovedOnShutdown(t *testing.T) {
 	manager := NewManager()
-	if err := manager.PrepareTranscriptionStaging(t.TempDir()); err != nil {
+	dataDir := t.TempDir()
+	if err := manager.PrepareTranscriptionStaging(dataDir); err != nil {
 		t.Fatalf("prepare staging: %v", err)
 	}
 	dir := manager.stagingDir
@@ -301,6 +302,9 @@ func TestTranscriptionStagingIsSessionScopedAndRemovedOnShutdown(t *testing.T) {
 	manager.Shutdown()
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("staging session survives shutdown: %v", err)
+	}
+	if err := manager.PrepareTranscriptionStaging(dataDir); err == nil {
+		t.Fatal("shut-down manager recreated transcription staging")
 	}
 }
 
@@ -324,6 +328,29 @@ func TestCancelStopsActiveRequest(t *testing.T) {
 	waitForRequestState(t, pending, RequestStateCanceled)
 	if elapsed := time.Since(start); elapsed > 3*time.Second {
 		t.Fatalf("cancellation took %s; must not wait out the full request delay", elapsed)
+	}
+}
+
+func TestConfiguredJobTimeoutOverridesDefault(t *testing.T) {
+	supervisor := NewSupervisor(RoleTTS)
+	supervisor.SetConfig(WorkerConfig{
+		Enabled:    true,
+		Command:    stubBinary(t),
+		Args:       []string{"-role", string(RoleTTS), "-start-loaded"},
+		JobTimeout: 25 * time.Millisecond,
+	})
+	t.Cleanup(supervisor.Shutdown)
+	if err := supervisor.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	requireReadyModel(t, supervisor)
+	pending, err := supervisor.Submit(Request{Type: RequestSpeak, Text: "slow", DelayMillis: 1000})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	snapshot := waitForRequestState(t, pending, RequestStateFailed)
+	if snapshot.Error == nil || snapshot.Error.Code != ErrorCodeTimeout || !strings.Contains(snapshot.Error.Message, "25ms") {
+		t.Fatalf("timeout error = %+v", snapshot.Error)
 	}
 }
 
