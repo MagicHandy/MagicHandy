@@ -208,6 +208,10 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	current.Voice.ParakeetSource = ParakeetSourceApp
 	current.Voice.ParakeetServerPath = `C:\retained\server.exe`
 	current.Voice.ParakeetModelPath = `C:\retained\model.gguf`
+	current.Voice.InputMode = VoiceInputModeHold
+	current.Voice.InputSensitivity = 68
+	current.Voice.InputSilenceMillis = 1400
+	current.Voice.InputNoiseSuppress = false
 	llmUpdate := LLMUpdateFromSettings(current.LLM)
 	llmUpdate.MaxOutputTokens = nil
 	llmUpdate.ReasoningMode = nil
@@ -235,7 +239,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal old update: %v", err)
 	}
-	if strings.Contains(string(encoded), "max_output_tokens") || strings.Contains(string(encoded), "reasoning_mode") || strings.Contains(string(encoded), "parakeet_source") {
+	if strings.Contains(string(encoded), "max_output_tokens") || strings.Contains(string(encoded), "reasoning_mode") || strings.Contains(string(encoded), "parakeet_source") || strings.Contains(string(encoded), "input_sensitivity") {
 		t.Fatalf("old update unexpectedly contains new fields: %s", encoded)
 	}
 	var decoded SettingsUpdate
@@ -251,6 +255,10 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	}
 	if next.Voice.ParakeetSource != ParakeetSourceApp {
 		t.Fatalf("older update changed Parakeet source to %q", next.Voice.ParakeetSource)
+	}
+	if next.Voice.InputMode != VoiceInputModeHold || next.Voice.InputSensitivity != 68 ||
+		next.Voice.InputSilenceMillis != 1400 || next.Voice.InputNoiseSuppress {
+		t.Fatalf("older update reset voice input tuning: %+v", next.Voice)
 	}
 }
 
@@ -516,6 +524,10 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if defaults.Voice.ParakeetSource != ParakeetSourceApp {
 		t.Fatalf("Parakeet source = %q, want %q", defaults.Voice.ParakeetSource, ParakeetSourceApp)
 	}
+	if defaults.Voice.InputMode != VoiceInputModeHandsFree || defaults.Voice.InputSensitivity != DefaultVoiceInputSensitivity ||
+		defaults.Voice.InputSilenceMillis != DefaultVoiceInputSilenceMillis || !defaults.Voice.InputNoiseSuppress {
+		t.Fatalf("voice input defaults = %+v", defaults.Voice)
+	}
 
 	settings := defaults
 	settings.Voice = VoiceSettings{
@@ -614,12 +626,20 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	}
 
 	current, _ := store.Snapshot()
+	inputMode := VoiceInputModeHold
+	inputSensitivity := 72
+	inputSilence := 1250
+	noiseSuppression := false
 	update := SettingsUpdate{
-		Server:      current.Server,
-		Device:      DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
-		Motion:      current.Motion,
-		LLM:         LLMUpdateFromSettings(current.LLM),
-		Voice:       VoiceUpdate{Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"}},
+		Server: current.Server,
+		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
+		Motion: current.Motion,
+		LLM:    LLMUpdateFromSettings(current.LLM),
+		Voice: VoiceUpdate{
+			Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"},
+			InputMode: &inputMode, InputSensitivity: &inputSensitivity, InputSilenceMillis: &inputSilence,
+			InputNoiseSuppress: &noiseSuppression,
+		},
 		Diagnostics: current.Diagnostics,
 	}
 	next, err := current.ApplyUpdate(update)
@@ -637,6 +657,10 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	got, _ := reloaded.Snapshot()
 	if !got.Voice.Enabled || got.Voice.ASRWorkerPath == "" || len(got.Voice.ASRWorkerArgs) != 2 {
 		t.Fatalf("voice settings did not survive reload: %+v", got.Voice)
+	}
+	if got.Voice.InputMode != inputMode || got.Voice.InputSensitivity != inputSensitivity ||
+		got.Voice.InputSilenceMillis != inputSilence || got.Voice.InputNoiseSuppress {
+		t.Fatalf("voice input preferences did not survive reload: %+v", got.Voice)
 	}
 }
 

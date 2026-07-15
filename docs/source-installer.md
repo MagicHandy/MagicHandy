@@ -58,10 +58,11 @@ artifacts. The optional portable `data/` directory is ignored too.
 
 These three voice executables are protocol adapters. The installer separately
 provisions selected Parakeet assets and, whenever managed llama.cpp is selected,
-an app-managed NeuTTS runtime. It still cannot create a reference voice:
-licensed pre-encoded `.npy` codes and their exact transcript are required. A
-successful source build therefore ends with **configuration required**, not a
-claim that every provider is ready.
+an app-managed NeuTTS runtime. It does not install a reference voice. Settings
+can safely normalize licensed official sample-style `.pt` or compatible `.npy`
+codes and pair them with an audio preview and exact transcript, but it cannot
+encode an arbitrary WAV. A successful source build therefore ends with
+**configuration required**, not a claim that every provider is ready.
 
 For manual/custom runtimes, Settings path fields provide **Browse...** on the
 Windows host. This is a controller-gated, loopback-only native dialog; it does
@@ -110,9 +111,11 @@ revisions, source checkpoint hashes, and exact Rust compiler identity. Updates
 reuse it without requiring Rustup only after the installer rehashes all active
 artifacts. An interrupted directory swap restores the newest preserved backup
 before retrying; rollback data is removed only after the replacement verifies.
-When app-managed NeuTTS is selected, the app independently pins the Air Q4 cache
-revision and rehashes the runner, decoder, and GGUF before it configures the
-worker. Status polling never performs these large hashes.
+When app-managed NeuTTS is selected, the app independently validates the pinned
+manifest, Air Q4 cache revision, and required paths before it configures the
+worker. The installer performs the full hashes before atomic publication and
+reuse; application startup and status polling do not rehash roughly 1.1 GiB of
+runtime assets before serving HTTP.
 
 The NeuTTS build does not reuse `llama-server.exe`; the upstream Rust runner
 embeds its own llama.cpp binding. Coupling the choices shares the explicit

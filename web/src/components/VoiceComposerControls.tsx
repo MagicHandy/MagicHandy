@@ -1,19 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { MicrophoneIcon } from "../shell/icons";
-import { recordingToWAV } from "../util/recording";
+import { encodePCM16WAV, recordingToWAV } from "../util/recording";
+import { VoiceActivitySegmenter } from "../util/voice-activity";
+import { openPCMStream, type PCMStream } from "../util/voice-capture";
 
-const RECORDING_LIMIT_SECONDS = 30;
+const HOLD_RECORDING_LIMIT_SECONDS = 30;
 const WARM_MICROPHONE_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
+const MAX_PENDING_SEGMENTS = 3;
 const VOICE_STOP_EVENT = "magichandy:emergency-stop";
 
-type CaptureMode = "hands-free" | "hold";
+type CaptureMode = "hands_free" | "hold";
+
+export interface VoiceInputPreferences {
+  input_mode: CaptureMode | string;
+  input_sensitivity: number;
+  input_silence_ms: number;
+  input_noise_suppression: boolean;
+}
 
 interface VoiceComposerControlsProps {
   disabled: boolean;
   ready: boolean;
   unavailableTitle: string;
+  preferences: VoiceInputPreferences;
   stopSequence?: number;
   onActivityChange: (active: boolean) => void;
   onTranscript: (transcript: string, stopSequence?: number) => Promise<void>;
@@ -25,36 +36,57 @@ interface AudioInput {
   label: string;
 }
 
+interface PendingSegment {
+  samples: Float32Array;
+  sampleRate: number;
+  session: number;
+  stopSequence?: number;
+}
+
 export function VoiceComposerControls({
   disabled,
   ready,
   unavailableTitle,
+  preferences,
   stopSequence,
   onActivityChange,
   onTranscript,
   showError,
 }: VoiceComposerControlsProps) {
-  const [mode, setMode] = useState<CaptureMode>("hands-free");
+  const [mode, setMode] = useState<CaptureMode>(normalizeMode(preferences.input_mode));
+  const [sensitivity, setSensitivity] = useState(preferences.input_sensitivity);
+  const [silenceMillis, setSilenceMillis] = useState(preferences.input_silence_ms);
+  const [noiseSuppression, setNoiseSuppression] = useState(preferences.input_noise_suppression);
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState("default");
   const [audioInputs, setAudioInputs] = useState<AudioInput[]>([]);
   const [arming, setArming] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speechDetected, setSpeechDetected] = useState(false);
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [microphoneReady, setMicrophoneReady] = useState(false);
-  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState(RECORDING_LIMIT_SECONDS);
+  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState(HOLD_RECORDING_LIMIT_SECONDS);
+  const [inputLevel, setInputLevel] = useState(0);
+  const [queuedSegments, setQueuedSegments] = useState(0);
   const mounted = useRef(true);
-  const wantsRecording = useRef(false);
+  const wantsCapture = useRef(false);
   const recorder = useRef<MediaRecorder | null>(null);
   const discardedRecorders = useRef(new WeakSet<MediaRecorder>());
   const microphoneStream = useRef<MediaStream | null>(null);
   const decoderContext = useRef<AudioContext | null>(null);
+  const pcmStream = useRef<PCMStream | null>(null);
+  const segmenter = useRef<VoiceActivitySegmenter | null>(null);
+  const segmentQueue = useRef<PendingSegment[]>([]);
+  const drainingSegments = useRef(false);
   const activeRequestID = useRef("");
-  const activeUpload = useRef<AbortController | null>(null);
+  const activeRequestAbort = useRef<AbortController | null>(null);
   const captureSession = useRef(0);
   const recordingTimer = useRef<number | null>(null);
   const countdownTimer = useRef<number | null>(null);
   const warmTimer = useRef<number | null>(null);
+  const lastLevelUpdate = useRef(0);
   const lastStopSequence = useRef<number | undefined>(undefined);
   const stopSequenceRef = useRef(stopSequence);
   const selectedDeviceRef = useRef(selectedDevice);
@@ -64,9 +96,22 @@ export function VoiceComposerControls({
   onTranscriptRef.current = onTranscript;
   stopSequenceRef.current = stopSequence;
   selectedDeviceRef.current = selectedDevice;
-  const active = arming || recording || processing;
+  const active = arming || listening || recording || processing;
 
   useEffect(() => onActivityChange(active), [active, onActivityChange]);
+
+  useEffect(() => {
+    if (active) return;
+    setMode(normalizeMode(preferences.input_mode));
+    setSensitivity(preferences.input_sensitivity);
+    setSilenceMillis(preferences.input_silence_ms);
+    setNoiseSuppression(preferences.input_noise_suppression);
+  }, [
+    preferences.input_mode,
+    preferences.input_sensitivity,
+    preferences.input_silence_ms,
+    preferences.input_noise_suppression,
+  ]);
 
   useEffect(() => {
     mounted.current = true;
@@ -87,12 +132,8 @@ export function VoiceComposerControls({
   }, [stopSequence]);
 
   useEffect(() => {
-    if (!ready) abortCapture();
-  }, [ready]);
-
-  useEffect(() => {
-    if (disabled && active) abortCapture();
-  }, [disabled, active]);
+    if (!ready || disabled) abortCapture();
+  }, [ready, disabled]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -126,25 +167,28 @@ export function VoiceComposerControls({
         setSelectedDevice("default");
       }
     } catch {
-      // Device enumeration can be denied before microphone permission.
+      // Device labels can remain unavailable until microphone permission is granted.
     }
   }
 
   async function acquireMicrophone(session: number): Promise<MediaStream | null> {
     const current = microphoneStream.current;
     if (current?.getAudioTracks().some((track) => track.readyState === "live")) return current;
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    if (!navigator.mediaDevices?.getUserMedia) {
       showError("Microphone capture requires localhost or HTTPS in a supported browser.");
       return null;
     }
 
     setArming(true);
     try {
-      const audio: MediaTrackConstraints | boolean = selectedDevice === "default"
-        ? true
-        : { deviceId: { exact: selectedDevice } };
+      const audio: MediaTrackConstraints = {
+        echoCancellation: true,
+        autoGainControl: true,
+        noiseSuppression,
+        ...(selectedDevice === "default" ? {} : { deviceId: { exact: selectedDevice } }),
+      };
       const stream = await navigator.mediaDevices.getUserMedia({ audio });
-      if (!mounted.current || !wantsRecording.current || session !== captureSession.current) {
+      if (!mounted.current || !wantsCapture.current || session !== captureSession.current) {
         stream.getTracks().forEach((track) => track.stop());
         return null;
       }
@@ -158,7 +202,6 @@ export function VoiceComposerControls({
           if (mounted.current) showError("The selected microphone became unavailable.");
         }, { once: true });
       }
-      decoderContext.current ??= new AudioContext();
       void refreshAudioInputs();
       return stream;
     } catch (error) {
@@ -170,19 +213,133 @@ export function VoiceComposerControls({
     }
   }
 
-  async function startRecording() {
-    if (disabled || !ready || active || recorder.current) return;
-    wantsRecording.current = true;
+  async function startHandsFree() {
+    if (disabled || !ready || active) return;
+    wantsCapture.current = true;
     clearWarmTimer();
     const session = ++captureSession.current;
     const captureStopSequence = stopSequenceRef.current;
     const stream = await acquireMicrophone(session);
-    if (!stream || !mounted.current) {
-      wantsRecording.current = false;
+    if (!stream || !mounted.current || session !== captureSession.current) {
+      wantsCapture.current = false;
       return;
     }
-    if (!wantsRecording.current || session !== captureSession.current) {
+    const buffered: Float32Array[] = [];
+    let vad: VoiceActivitySegmenter | null = null;
+    try {
+      const pcm = await openPCMStream(stream, (samples) => {
+        if (vad) handlePCMSamples(vad, samples, pcm.sampleRate, session, captureStopSequence);
+        else buffered.push(samples);
+      });
+      if (!wantsCapture.current || session !== captureSession.current) {
+        pcm.stop();
+        releaseMicrophone();
+        return;
+      }
+      vad = new VoiceActivitySegmenter({
+        sampleRate: pcm.sampleRate,
+        sensitivity,
+        silenceMillis,
+      });
+      pcmStream.current = pcm;
+      segmenter.current = vad;
+      setListening(true);
+      setSpeechDetected(false);
+      for (const samples of buffered) handlePCMSamples(vad, samples, pcm.sampleRate, session, captureStopSequence);
+    } catch (error) {
+      wantsCapture.current = false;
       releaseMicrophone();
+      if (mounted.current) showError(error instanceof Error ? error.message : "Continuous microphone capture could not start.");
+    }
+  }
+
+  function handlePCMSamples(vad: VoiceActivitySegmenter, samples: Float32Array, sampleRate: number, session: number, captureStopSequence?: number) {
+    if (session !== captureSession.current || !wantsCapture.current) return;
+    const result = vad.push(samples);
+    setSpeechDetected(result.speaking);
+    const now = performance.now();
+    if (now - lastLevelUpdate.current >= 80) {
+      lastLevelUpdate.current = now;
+      setInputLevel(result.level);
+    }
+    if (result.segment) enqueueSegment({ samples: result.segment, sampleRate, session, stopSequence: captureStopSequence });
+  }
+
+  function stopHandsFree(discard = false) {
+    wantsCapture.current = false;
+    const activeVAD = segmenter.current;
+    const sampleRate = pcmStream.current?.sampleRate;
+    pcmStream.current?.stop();
+    pcmStream.current = null;
+    segmenter.current = null;
+    setListening(false);
+    setSpeechDetected(false);
+    setInputLevel(0);
+    releaseMicrophone();
+    if (!discard && activeVAD && sampleRate) {
+      const finalSegment = activeVAD.flush();
+      if (finalSegment) enqueueSegment({
+        samples: finalSegment,
+        sampleRate,
+        session: captureSession.current,
+        stopSequence: stopSequenceRef.current,
+      });
+    }
+  }
+
+  function enqueueSegment(next: PendingSegment) {
+    if (next.session !== captureSession.current) return;
+    if (segmentQueue.current.length >= MAX_PENDING_SEGMENTS) {
+      showError("Voice transcription is falling behind; pause briefly before continuing.");
+      return;
+    }
+    segmentQueue.current.push(next);
+    setQueuedSegments(segmentQueue.current.length);
+    setProcessing(true);
+    void drainSegmentQueue();
+  }
+
+  async function drainSegmentQueue() {
+    if (drainingSegments.current) return;
+    drainingSegments.current = true;
+    try {
+      while (segmentQueue.current.length) {
+        const next = segmentQueue.current.shift();
+        setQueuedSegments(segmentQueue.current.length);
+        if (!next || next.session !== captureSession.current) continue;
+        try {
+          const bytes = encodePCM16WAV([next.samples], next.sampleRate);
+          const payload = new Uint8Array(bytes.byteLength);
+          payload.set(bytes);
+          const transcript = await transcribe(new Blob([payload], { type: "audio/wav" }), next.session, next.stopSequence);
+          if (transcript && next.session === captureSession.current) {
+            await onTranscriptRef.current(transcript, next.stopSequence);
+          }
+        } catch (error) {
+          if (mounted.current && next.session === captureSession.current) {
+            showError(error instanceof Error ? error.message : "Transcription failed.");
+          }
+        }
+      }
+    } finally {
+      drainingSegments.current = false;
+      if (mounted.current) setProcessing(false);
+    }
+  }
+
+  async function startHoldRecording() {
+    if (disabled || !ready || active || recorder.current) return;
+    if (typeof MediaRecorder === "undefined") {
+      showError("Hold-to-talk requires MediaRecorder support in this browser.");
+      return;
+    }
+    wantsCapture.current = true;
+    clearWarmTimer();
+    const session = ++captureSession.current;
+    const captureStopSequence = stopSequenceRef.current;
+    const stream = await acquireMicrophone(session);
+    if (!stream || !mounted.current || session !== captureSession.current) {
+      wantsCapture.current = false;
       return;
     }
 
@@ -192,13 +349,11 @@ export function VoiceComposerControls({
       const nextRecorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
       const chunks: Blob[] = [];
       recorder.current = nextRecorder;
-      nextRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.push(event.data);
-      };
+      nextRecorder.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
       nextRecorder.onerror = () => {
         discardedRecorders.current.add(nextRecorder);
         showError("The browser could not record from the selected microphone.");
-        stopRecording(true);
+        stopHoldRecording(true);
       };
       nextRecorder.onstart = () => {
         if (!mounted.current || nextRecorder !== recorder.current) return;
@@ -211,24 +366,23 @@ export function VoiceComposerControls({
         clearRecordingTimers();
         scheduleWarmRelease();
         if (mounted.current) setRecording(false);
-        const discarded = discardedRecorders.current.has(nextRecorder);
-        if (discarded) {
+        if (discardedRecorders.current.has(nextRecorder)) {
           if (mounted.current) setProcessing(false);
           return;
         }
-        void finishRecording(nextRecorder.mimeType || preferred || "audio/webm", chunks, session, captureStopSequence);
+        void finishHoldRecording(nextRecorder.mimeType || preferred || "audio/webm", chunks, session, captureStopSequence);
       };
       nextRecorder.start(100);
     } catch (error) {
       recorder.current = null;
-      wantsRecording.current = false;
+      wantsCapture.current = false;
       releaseMicrophone();
       if (mounted.current) showError(error instanceof Error ? error.message : "The browser could not start microphone recording.");
     }
   }
 
-  function stopRecording(discard = false) {
-    wantsRecording.current = false;
+  function stopHoldRecording(discard = false) {
+    wantsCapture.current = false;
     clearRecordingTimers();
     const current = recorder.current;
     if (current && current.state !== "inactive") {
@@ -242,72 +396,89 @@ export function VoiceComposerControls({
     }
   }
 
-  async function finishRecording(mimeType: string, chunks: Blob[], session: number, captureStopSequence?: number) {
-    let handedOffToChat = false;
+  async function finishHoldRecording(mimeType: string, chunks: Blob[], session: number, captureStopSequence?: number) {
     const blob = new Blob(chunks, { type: mimeType });
     if (blob.size === 0 || !mounted.current || session !== captureSession.current) {
       if (mounted.current) setProcessing(false);
-      scheduleWarmRelease();
       return;
     }
-    setProcessing(true);
     try {
       const context = decoderContext.current ?? new AudioContext();
       decoderContext.current = context;
       const wav = await recordingToWAV(blob, context);
-      if (!mounted.current || session !== captureSession.current) return;
-      const upload = new AbortController();
-      activeUpload.current = upload;
-      const uploadTimer = window.setTimeout(() => upload.abort(), UPLOAD_TIMEOUT_MS);
-      let submitted;
+      const transcript = await transcribe(wav, session, captureStopSequence);
+      if (transcript && mounted.current && session === captureSession.current) {
+        await onTranscriptRef.current(transcript, captureStopSequence);
+      } else if (mounted.current && session === captureSession.current) {
+        showError("No speech was recognized.");
+      }
+    } catch (error) {
+      if (mounted.current && session === captureSession.current) showError(error instanceof Error ? error.message : "Transcription failed.");
+    } finally {
+      if (mounted.current && session === captureSession.current) setProcessing(false);
+      scheduleWarmRelease();
+    }
+  }
+
+  async function transcribe(wav: Blob, session: number, captureStopSequence?: number): Promise<string> {
+    const requestAbort = new AbortController();
+    activeRequestAbort.current = requestAbort;
+    let uploadTimedOut = false;
+    const uploadTimer = window.setTimeout(() => {
+      uploadTimedOut = true;
+      requestAbort.abort();
+    }, UPLOAD_TIMEOUT_MS);
+    try {
+      const submitted = await api.voiceTranscribe(wav, "wav", captureStopSequence, requestAbort.signal);
+      window.clearTimeout(uploadTimer);
+      activeRequestID.current = submitted.request.id;
+      let transcriptionTimedOut = false;
+      const transcriptionTimer = window.setTimeout(() => {
+        transcriptionTimedOut = true;
+        requestAbort.abort();
+        void api.voiceRequestCancel(submitted.request.id).catch(() => undefined);
+      }, 90_000);
       try {
-        submitted = await api.voiceTranscribe(wav, "wav", captureStopSequence, upload.signal);
+        return await waitForTranscript(submitted.request.id, () => session !== captureSession.current, requestAbort.signal);
       } catch (error) {
-        if (upload.signal.aborted && session === captureSession.current) throw new Error("Transcription upload timed out.");
+        if (transcriptionTimedOut && session === captureSession.current) throw new Error("Transcription timed out.");
         throw error;
       } finally {
-        window.clearTimeout(uploadTimer);
-        if (activeUpload.current === upload) activeUpload.current = null;
+        window.clearTimeout(transcriptionTimer);
       }
-      activeRequestID.current = submitted.request.id;
-      const transcript = await waitForTranscript(submitted.request.id, () => session !== captureSession.current);
-      activeRequestID.current = "";
-      if (!mounted.current || session !== captureSession.current) return;
-      if (!transcript) {
-        showError("No speech was recognized.");
-        return;
-      }
-      if (mounted.current && session === captureSession.current) {
-        setProcessing(false);
-        scheduleWarmRelease();
-      }
-      handedOffToChat = true;
-      await onTranscriptRef.current(transcript, captureStopSequence);
     } catch (error) {
-      if (mounted.current && session === captureSession.current) {
-        showError(error instanceof Error ? error.message : "Transcription failed.");
-      }
+      if (uploadTimedOut && session === captureSession.current) throw new Error("Transcription upload timed out.");
+      throw error;
     } finally {
+      window.clearTimeout(uploadTimer);
       activeRequestID.current = "";
-      if (mounted.current && session === captureSession.current) setProcessing(false);
-      if (!handedOffToChat) scheduleWarmRelease();
+      if (activeRequestAbort.current === requestAbort) activeRequestAbort.current = null;
     }
   }
 
   function abortCapture() {
     captureSession.current++;
-    wantsRecording.current = false;
+    wantsCapture.current = false;
+    segmentQueue.current = [];
+    setQueuedSegments(0);
+    segmenter.current?.reset();
+    segmenter.current = null;
+    pcmStream.current?.stop();
+    pcmStream.current = null;
     const requestID = activeRequestID.current;
     activeRequestID.current = "";
-    activeUpload.current?.abort();
-    activeUpload.current = null;
+    activeRequestAbort.current?.abort();
+    activeRequestAbort.current = null;
     if (requestID) void api.voiceRequestCancel(requestID).catch(() => undefined);
-    stopRecording(true);
+    stopHoldRecording(true);
     releaseMicrophone();
     if (mounted.current) {
       setArming(false);
+      setListening(false);
+      setSpeechDetected(false);
       setRecording(false);
       setProcessing(false);
+      setInputLevel(0);
     }
   }
 
@@ -323,13 +494,13 @@ export function VoiceComposerControls({
 
   function startRecordingTimers() {
     clearRecordingTimers();
-    setRecordingSecondsLeft(RECORDING_LIMIT_SECONDS);
+    setRecordingSecondsLeft(HOLD_RECORDING_LIMIT_SECONDS);
     const startedAt = Date.now();
     countdownTimer.current = window.setInterval(() => {
-      const left = RECORDING_LIMIT_SECONDS - Math.floor((Date.now() - startedAt) / 1000);
+      const left = HOLD_RECORDING_LIMIT_SECONDS - Math.floor((Date.now() - startedAt) / 1000);
       setRecordingSecondsLeft(Math.max(0, left));
     }, 1000);
-    recordingTimer.current = window.setTimeout(() => stopRecording(), RECORDING_LIMIT_SECONDS * 1000);
+    recordingTimer.current = window.setTimeout(() => stopHoldRecording(), HOLD_RECORDING_LIMIT_SECONDS * 1000);
   }
 
   function clearRecordingTimers() {
@@ -340,8 +511,7 @@ export function VoiceComposerControls({
   }
 
   function scheduleWarmRelease() {
-    if (warmTimer.current !== null) return;
-    if (!microphoneStream.current || !mounted.current) return;
+    if (warmTimer.current !== null || !microphoneStream.current || !mounted.current) return;
     warmTimer.current = window.setTimeout(() => {
       warmTimer.current = null;
       if (!recorder.current) releaseMicrophone();
@@ -353,9 +523,23 @@ export function VoiceComposerControls({
     warmTimer.current = null;
   }
 
-  function selectMode(nextMode: CaptureMode) {
-    if (active) return;
-    setMode(nextMode);
+  async function savePreference(patch: Partial<VoiceInputPreferences>) {
+    setSavingPreferences(true);
+    try {
+      const saved = await api.saveVoiceInputPreferences(patch as Parameters<typeof api.saveVoiceInputPreferences>[0]);
+      setMode(normalizeMode(saved.input_mode));
+      setSensitivity(saved.input_sensitivity);
+      setSilenceMillis(saved.input_silence_ms);
+      setNoiseSuppression(saved.input_noise_suppression);
+    } catch (error) {
+      setMode(normalizeMode(preferences.input_mode));
+      setSensitivity(preferences.input_sensitivity);
+      setSilenceMillis(preferences.input_silence_ms);
+      setNoiseSuppression(preferences.input_noise_suppression);
+      showError(error instanceof Error ? error.message : "Voice input preference could not be saved.");
+    } finally {
+      setSavingPreferences(false);
+    }
   }
 
   function selectInput(deviceId: string) {
@@ -366,18 +550,16 @@ export function VoiceComposerControls({
 
   const label = arming
     ? "Cancel microphone startup"
-    : recording
-      ? `Stop and transcribe, ${recordingSecondsLeft} seconds remaining`
-      : processing
-        ? "Transcribing"
-        : mode === "hands-free"
-          ? "Start hands-free voice"
-          : "Hold to talk";
-  const title = ready
-    ? microphoneReady
-      ? `${label}. Microphone is warmed for faster starts.`
-      : label
-    : unavailableTitle;
+    : listening
+      ? "Stop hands-free listening"
+      : recording
+        ? `Stop and transcribe, ${recordingSecondsLeft} seconds remaining`
+        : processing
+          ? "Finishing voice transcription"
+          : mode === "hands_free"
+            ? "Start hands-free listening"
+            : "Hold to talk";
+  const title = ready ? label : unavailableTitle;
 
   return (
     <div className="voice-input" ref={menuRef} data-open={menuOpen || undefined}>
@@ -385,43 +567,38 @@ export function VoiceComposerControls({
         <button
           type="button"
           className="voice-mic-button"
-          data-active={recording || undefined}
+          data-active={listening || recording || undefined}
           data-state={arming ? "arming" : processing ? "processing" : microphoneReady ? "ready" : undefined}
-          disabled={disabled || processing || !ready}
+          disabled={disabled || !ready || (processing && !listening)}
           aria-label={label}
-          aria-pressed={recording}
+          aria-pressed={listening || recording}
           title={title}
-          onClick={mode === "hands-free" ? () => arming ? abortCapture() : recording ? stopRecording() : void startRecording() : undefined}
+          onClick={mode === "hands_free" ? () => arming ? abortCapture() : listening ? stopHandsFree() : void startHandsFree() : undefined}
           onPointerDown={mode === "hold" ? (event) => {
             event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
-            void startRecording();
+            void startHoldRecording();
           } : undefined}
-          onPointerUp={mode === "hold" ? (event) => {
-            event.preventDefault();
-            stopRecording();
-          } : undefined}
-          onPointerCancel={mode === "hold" ? () => stopRecording() : undefined}
+          onPointerUp={mode === "hold" ? (event) => { event.preventDefault(); stopHoldRecording(); } : undefined}
+          onPointerCancel={mode === "hold" ? () => stopHoldRecording() : undefined}
           onKeyDown={mode === "hold" ? (event) => {
             if ((event.key === " " || event.key === "Enter") && !event.repeat) {
               event.preventDefault();
-              void startRecording();
+              void startHoldRecording();
             }
           } : undefined}
           onKeyUp={mode === "hold" ? (event) => {
             if (event.key === " " || event.key === "Enter") {
               event.preventDefault();
-              stopRecording();
+              stopHoldRecording();
             }
           } : undefined}
         >
           <MicrophoneIcon size={20} />
           {recording && <span className="voice-mic-countdown" aria-hidden="true">{recordingSecondsLeft}</span>}
-          {active && (
-            <span className="voice-capture-label" aria-hidden="true">
-              {arming ? "Starting microphone" : processing ? "Transcribing" : "Listening"}
-            </span>
-          )}
+          {active && <span className="voice-capture-label" aria-hidden="true">
+            {arming ? "Starting microphone" : listening ? (speechDetected ? "Speech detected" : "Listening continuously") : processing ? "Transcribing" : "Listening"}
+          </span>}
         </button>
         <button
           type="button"
@@ -439,44 +616,83 @@ export function VoiceComposerControls({
       <div id="voice-input-menu" className="voice-input-menu" hidden={!menuOpen} aria-label="Voice input options">
         <span className="field-label">Voice mode</span>
         <div className="voice-mode-toggle" aria-label="Voice mode">
-          <button type="button" aria-pressed={mode === "hold"} onClick={() => selectMode("hold")}>Hold to talk</button>
-          <button type="button" aria-pressed={mode === "hands-free"} onClick={() => selectMode("hands-free")}>Hands-free</button>
+          <button type="button" disabled={savingPreferences} aria-pressed={mode === "hold"} onClick={() => { setMode("hold"); void savePreference({ input_mode: "hold" }); }}>Hold to talk</button>
+          <button type="button" disabled={savingPreferences} aria-pressed={mode === "hands_free"} onClick={() => { setMode("hands_free"); void savePreference({ input_mode: "hands_free" }); }}>Hands-free</button>
         </div>
-        <label className="field-label" htmlFor="voice-input-device">Voice input</label>
-        <select
-          id="voice-input-device"
-          value={selectedDevice}
-          disabled={active}
-          onChange={(event) => selectInput(event.target.value)}
-        >
+        <label className="field-label" htmlFor="voice-input-device">Microphone</label>
+        <select id="voice-input-device" value={selectedDevice} disabled={active} onChange={(event) => selectInput(event.target.value)}>
           <option value="default">Default microphone</option>
           {audioInputs.filter((input) => input.deviceId && input.deviceId !== "default").map((input) => (
             <option key={input.deviceId} value={input.deviceId}>{input.label}</option>
           ))}
         </select>
+        <label className="voice-range-label" htmlFor="voice-input-sensitivity">
+          <span>Sensitivity</span><output>{sensitivity}</output>
+        </label>
+        <input
+          id="voice-input-sensitivity"
+          type="range"
+          min={1}
+          max={100}
+          value={sensitivity}
+          disabled={active || savingPreferences}
+          onChange={(event) => setSensitivity(Number(event.target.value))}
+          onPointerUp={() => void savePreference({ input_sensitivity: sensitivity })}
+          onKeyUp={() => void savePreference({ input_sensitivity: sensitivity })}
+        />
+        <label className="voice-range-label" htmlFor="voice-input-silence">
+          <span>End-of-speech delay</span><output>{(silenceMillis / 1000).toFixed(1)} s</output>
+        </label>
+        <input
+          id="voice-input-silence"
+          type="range"
+          min={300}
+          max={3000}
+          step={100}
+          value={silenceMillis}
+          disabled={active || savingPreferences}
+          onChange={(event) => setSilenceMillis(Number(event.target.value))}
+          onPointerUp={() => void savePreference({ input_silence_ms: silenceMillis })}
+          onKeyUp={() => void savePreference({ input_silence_ms: silenceMillis })}
+        />
+        <label className="voice-menu-toggle">
+          <input
+            type="checkbox"
+            checked={noiseSuppression}
+            disabled={active || savingPreferences}
+            onChange={(event) => {
+              setNoiseSuppression(event.target.checked);
+              void savePreference({ input_noise_suppression: event.target.checked });
+            }}
+          />
+          <span>Noise suppression</span>
+        </label>
+        <div className="voice-level" aria-label={`Microphone level ${Math.round(inputLevel * 100)} percent`}>
+          <span style={{ width: `${Math.round(inputLevel * 100)}%` }} />
+        </div>
+        {queuedSegments > 0 && <span className="voice-queue-status" role="status">{queuedSegments} phrase{queuedSegments === 1 ? "" : "s"} queued</span>}
         {microphoneReady && <button type="button" className="voice-release-button" disabled={active} onClick={abortCapture}>Release microphone</button>}
       </div>
     </div>
   );
 }
 
-async function waitForTranscript(requestID: string, canceled: () => boolean): Promise<string> {
-  const deadline = Date.now() + 90_000;
+function normalizeMode(mode: string): CaptureMode {
+  return mode === "hold" ? "hold" : "hands_free";
+}
+
+async function waitForTranscript(requestID: string, canceled: () => boolean, signal: AbortSignal): Promise<string> {
   for (;;) {
-    if (canceled()) {
+    if (canceled() || signal.aborted) {
       await api.voiceRequestCancel(requestID).catch(() => undefined);
       return "";
     }
-    const res = await api.voiceRequest(requestID);
+    const res = await api.voiceRequest(requestID, signal);
     const request = res.request;
     if (request.role !== "asr" || request.type !== "transcribe") throw new Error("The voice worker returned the wrong request.");
     if (request.state === "done") return request.transcript?.[0]?.text?.trim() ?? "";
     if (request.state === "failed") throw new Error(request.error?.message || "Transcription failed.");
     if (request.state === "canceled") return "";
-    if (Date.now() > deadline) {
-      await api.voiceRequestCancel(requestID).catch(() => undefined);
-      throw new Error("Transcription timed out.");
-    }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 }

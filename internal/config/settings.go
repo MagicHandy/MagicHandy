@@ -111,6 +111,14 @@ const (
 	DefaultElevenLabsModelID = "eleven_multilingual_v2"
 	// DefaultNeuTTSBackbone is the reviewed Q4 local runner model.
 	DefaultNeuTTSBackbone = "neuphonic/neutts-air-q4-gguf"
+	// VoiceInputModeHandsFree keeps listening and segments phrases at silence.
+	VoiceInputModeHandsFree = "hands_free"
+	// VoiceInputModeHold records only while the microphone control is held.
+	VoiceInputModeHold = "hold"
+	// DefaultVoiceInputSensitivity balances quiet speech against room noise.
+	DefaultVoiceInputSensitivity = 55
+	// DefaultVoiceInputSilenceMillis closes a phrase after this quiet period.
+	DefaultVoiceInputSilenceMillis = 900
 )
 
 // Settings is the versioned on-disk application settings schema.
@@ -199,6 +207,10 @@ type VoiceSettings struct {
 	ParakeetSource     string `json:"parakeet_source"`
 	ASRBaseURL         string `json:"asr_base_url,omitempty"`
 	ASRModel           string `json:"asr_model,omitempty"`
+	InputMode          string `json:"input_mode"`
+	InputSensitivity   int    `json:"input_sensitivity"`
+	InputSilenceMillis int    `json:"input_silence_ms"`
+	InputNoiseSuppress bool   `json:"input_noise_suppression"`
 
 	NeuTTSRunnerPath     string `json:"neutts_runner_path,omitempty"`
 	NeuTTSReferenceWAV   string `json:"neutts_reference_wav,omitempty"`
@@ -233,6 +245,10 @@ type PublicVoiceSettings struct {
 	ParakeetSource       string   `json:"parakeet_source"`
 	ASRBaseURL           string   `json:"asr_base_url,omitempty"`
 	ASRModel             string   `json:"asr_model,omitempty"`
+	InputMode            string   `json:"input_mode"`
+	InputSensitivity     int      `json:"input_sensitivity"`
+	InputSilenceMillis   int      `json:"input_silence_ms"`
+	InputNoiseSuppress   bool     `json:"input_noise_suppression"`
 	NeuTTSRunnerPath     string   `json:"neutts_runner_path,omitempty"`
 	NeuTTSReferenceWAV   string   `json:"neutts_reference_wav,omitempty"`
 	NeuTTSReferenceCodes string   `json:"neutts_reference_codes,omitempty"`
@@ -260,6 +276,10 @@ type VoiceUpdate struct {
 	ParakeetSource       *string  `json:"parakeet_source,omitempty"`
 	ASRBaseURL           string   `json:"asr_base_url"`
 	ASRModel             string   `json:"asr_model"`
+	InputMode            *string  `json:"input_mode,omitempty"`
+	InputSensitivity     *int     `json:"input_sensitivity,omitempty"`
+	InputSilenceMillis   *int     `json:"input_silence_ms,omitempty"`
+	InputNoiseSuppress   *bool    `json:"input_noise_suppression,omitempty"`
 	NeuTTSRunnerPath     string   `json:"neutts_runner_path"`
 	NeuTTSReferenceWAV   string   `json:"neutts_reference_wav"`
 	NeuTTSReferenceCodes string   `json:"neutts_reference_codes"`
@@ -402,6 +422,10 @@ func DefaultSettings() Settings {
 			ElevenLabsModelID:  DefaultElevenLabsModelID,
 			ParakeetServerPort: DefaultParakeetServerPort,
 			ParakeetSource:     ParakeetSourceApp,
+			InputMode:          VoiceInputModeHandsFree,
+			InputSensitivity:   DefaultVoiceInputSensitivity,
+			InputSilenceMillis: DefaultVoiceInputSilenceMillis,
+			InputNoiseSuppress: true,
 			NeuTTSBackbone:     DefaultNeuTTSBackbone,
 		},
 		Diagnostics: DiagnosticsSettings{
@@ -442,6 +466,10 @@ func (s Settings) Public() PublicSettings {
 			ParakeetSource:       s.Voice.ParakeetSource,
 			ASRBaseURL:           s.Voice.ASRBaseURL,
 			ASRModel:             s.Voice.ASRModel,
+			InputMode:            s.Voice.InputMode,
+			InputSensitivity:     s.Voice.InputSensitivity,
+			InputSilenceMillis:   s.Voice.InputSilenceMillis,
+			InputNoiseSuppress:   s.Voice.InputNoiseSuppress,
 			NeuTTSRunnerPath:     s.Voice.NeuTTSRunnerPath,
 			NeuTTSReferenceWAV:   s.Voice.NeuTTSReferenceWAV,
 			NeuTTSReferenceCodes: s.Voice.NeuTTSReferenceCodes,
@@ -545,6 +573,22 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.Voice.ParakeetSource != nil {
 		parakeetSource = *update.Voice.ParakeetSource
 	}
+	inputMode := s.Voice.InputMode
+	if update.Voice.InputMode != nil {
+		inputMode = *update.Voice.InputMode
+	}
+	inputSensitivity := s.Voice.InputSensitivity
+	if update.Voice.InputSensitivity != nil {
+		inputSensitivity = *update.Voice.InputSensitivity
+	}
+	inputSilenceMillis := s.Voice.InputSilenceMillis
+	if update.Voice.InputSilenceMillis != nil {
+		inputSilenceMillis = *update.Voice.InputSilenceMillis
+	}
+	inputNoiseSuppress := s.Voice.InputNoiseSuppress
+	if update.Voice.InputNoiseSuppress != nil {
+		inputNoiseSuppress = *update.Voice.InputNoiseSuppress
+	}
 	next.Voice = normalizeVoiceStrings(VoiceSettings{
 		Enabled:              update.Voice.Enabled,
 		TTSProvider:          update.Voice.TTSProvider,
@@ -562,6 +606,10 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		ParakeetSource:       parakeetSource,
 		ASRBaseURL:           update.Voice.ASRBaseURL,
 		ASRModel:             update.Voice.ASRModel,
+		InputMode:            inputMode,
+		InputSensitivity:     inputSensitivity,
+		InputSilenceMillis:   inputSilenceMillis,
+		InputNoiseSuppress:   inputNoiseSuppress,
 		NeuTTSRunnerPath:     update.Voice.NeuTTSRunnerPath,
 		NeuTTSReferenceWAV:   update.Voice.NeuTTSReferenceWAV,
 		NeuTTSReferenceCodes: update.Voice.NeuTTSReferenceCodes,
@@ -793,6 +841,15 @@ func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	if settings.NeuTTSBackbone == "" {
 		settings.NeuTTSBackbone = defaults.NeuTTSBackbone
 	}
+	if settings.InputMode == "" {
+		settings.InputMode = defaults.InputMode
+	}
+	if settings.InputSensitivity == 0 {
+		settings.InputSensitivity = defaults.InputSensitivity
+	}
+	if settings.InputSilenceMillis == 0 {
+		settings.InputSilenceMillis = defaults.InputSilenceMillis
+	}
 	return settings
 }
 
@@ -886,6 +943,7 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.ParakeetSource = strings.TrimSpace(settings.ParakeetSource)
 	settings.ASRBaseURL = strings.TrimRight(strings.TrimSpace(settings.ASRBaseURL), "/")
 	settings.ASRModel = strings.TrimSpace(settings.ASRModel)
+	settings.InputMode = strings.TrimSpace(settings.InputMode)
 	settings.NeuTTSRunnerPath = strings.TrimSpace(settings.NeuTTSRunnerPath)
 	settings.NeuTTSReferenceWAV = strings.TrimSpace(settings.NeuTTSReferenceWAV)
 	settings.NeuTTSReferenceCodes = strings.TrimSpace(settings.NeuTTSReferenceCodes)
@@ -906,6 +964,15 @@ func validateVoiceSettings(settings VoiceSettings) error {
 	}
 	if !oneOf(settings.ParakeetSource, ParakeetSourceApp, ParakeetSourceCustom) {
 		return fmt.Errorf("unknown Parakeet source %q", settings.ParakeetSource)
+	}
+	if !oneOf(settings.InputMode, VoiceInputModeHandsFree, VoiceInputModeHold) {
+		return fmt.Errorf("unknown voice input mode %q", settings.InputMode)
+	}
+	if settings.InputSensitivity < 1 || settings.InputSensitivity > 100 {
+		return errors.New("voice input sensitivity must be between 1 and 100")
+	}
+	if settings.InputSilenceMillis < 300 || settings.InputSilenceMillis > 3000 {
+		return errors.New("voice input silence delay must be between 300 and 3000 milliseconds")
 	}
 	return nil
 }

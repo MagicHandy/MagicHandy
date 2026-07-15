@@ -1,6 +1,7 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { PublicSettings } from "../api/types";
 import { HostPathField } from "./HostPathField";
+import { NeuTTSReferenceDialog } from "./NeuTTSReferenceDialog";
 import { VoiceWorkers } from "./VoiceWorkers";
 
 const joinArgs = (args?: string[]) => (args ?? []).join("\n");
@@ -36,6 +37,12 @@ interface Props {
 export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, setNewKey, clearKey, setClearKey }: Props) {
   const voice = s.voice;
   const parakeetSource = voice.parakeet_source || "app_managed";
+  const [referenceOpen, setReferenceOpen] = useState(false);
+  const referenceTrigger = useRef<HTMLButtonElement>(null);
+  const closeReference = useCallback(() => {
+    setReferenceOpen(false);
+    window.requestAnimationFrame(() => referenceTrigger.current?.focus());
+  }, []);
   const providerSelect = (value: string, options: string[] | undefined, onChange: (value: string) => void) => (
     <select value={value} disabled={locked} onChange={(event) => onChange(event.target.value)}>
       {(options?.length ? options : [value]).map((option) => <option key={option} value={option}>{PROVIDER_LABELS[option] ?? option}</option>)}
@@ -81,10 +88,19 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       </>}
       {voice.tts_provider === "neutts_air" && <>
         <HostPathField label="stream_pcm runner override" kind="executable" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(neutts_runner_path) => patch({ neutts_runner_path })} />
-        <HostPathField label="Reference WAV" kind="wav" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(neutts_reference_wav) => patch({ neutts_reference_wav })} />
-        <HostPathField label="Pre-encoded reference codes (.npy)" kind="npy" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(neutts_reference_codes) => patch({ neutts_reference_codes })} />
-        <label className="field"><span className="label">Reference transcript</span><textarea rows={3} value={voice.neutts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_text: event.target.value })} /></label>
-        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. Skipping the llama.cpp build also skips NeuTTS. Licensed .npy reference codes and their exact transcript remain required; the WAV is provenance and is not encoded by MagicHandy.</p>
+        <div className="reference-voice-control">
+          <div>
+            <strong>Reference voice</strong>
+            <span>{voice.neutts_reference_codes && voice.neutts_reference_text ? "Configured" : "Not configured"}</span>
+          </div>
+          <button ref={referenceTrigger} type="button" className="btn btn-secondary" disabled={locked} onClick={() => setReferenceOpen(true)}>Prepare reference voice</button>
+        </div>
+        <details className="advanced-fields"><summary>Manual reference paths</summary>
+          <HostPathField label="Reference WAV" kind="wav" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(neutts_reference_wav) => patch({ neutts_reference_wav })} />
+          <HostPathField label="Pre-encoded reference codes (.npy)" kind="npy" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(neutts_reference_codes) => patch({ neutts_reference_codes })} />
+          <label className="field"><span className="label">Reference transcript</span><textarea rows={3} value={voice.neutts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_text: event.target.value })} /></label>
+        </details>
+        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. Skipping that build also skips NeuTTS. MagicHandy can safely prepare official pre-encoded <code>.pt</code> or <code>.npy</code> codes; encoding arbitrary WAV files still requires an upstream neural encoder.</p>
       </>}
       {voice.tts_provider === "custom" && <>
         <HostPathField label="TTS worker path" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />
@@ -93,6 +109,17 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><HostPathField label="TTS worker binary override" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} /></details>}
       {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies</span></label>}
       <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} showNeuTTSModule={voice.tts_provider === "neutts_air"} />
+      {referenceOpen && <NeuTTSReferenceDialog
+        initialCodes={voice.neutts_reference_codes ?? ""}
+        initialWAV={voice.neutts_reference_wav ?? ""}
+        initialTranscript={voice.neutts_reference_text ?? ""}
+        onApply={(reference) => patch({
+          neutts_reference_codes: reference.codes,
+          neutts_reference_wav: reference.wav,
+          neutts_reference_text: reference.transcript,
+        })}
+        onClose={closeReference}
+      />}
     </>
   );
 }

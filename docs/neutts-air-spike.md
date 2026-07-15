@@ -124,18 +124,22 @@ active runner process and final-sample preservation is covered by tests.
 The crate's public `NeuCodecEncoder` in v0.1.1 is still a stub. Some examples
 on its current branch describe a future Burn encoder, but the exported type
 still rejects `new`, `load`, and `encode_wav`. MagicHandy therefore requires
-pre-encoded `.npy` reference codes and the exact transcript. It stores the WAV
-path only as provenance and does not claim arbitrary-WAV cloning without
-Python. This is a narrower result than the original item 3 above, but it is
-the capability the non-Python runner actually provides today.
+pre-encoded reference codes and the exact transcript. Its pure-Go preparation
+path can safely extract the single contiguous int32 tensor used by official
+sample-style Torch ZIP `.pt` files or validate a one-dimensional int32 `.npy`,
+then normalize either to canonical NPY without executing pickle. An optional
+matching WAV is copied only for preview and transcription guidance. MagicHandy
+does not claim arbitrary-WAV cloning without a neural encoder.
 
 All runner children receive `HF_HUB_OFFLINE=1`, and the adapter supplies the
 exact Air Q4 filename to avoid repository discovery. Follow-up audit found that
 the pinned upstream `hf-hub` client does not enforce that environment variable;
 a missing cache could otherwise initiate network access on synthesis.
 MagicHandy now requires the external decoder and exact GGUF cache entry before
-running a bounded readiness synthesis, and no longer advertises an offline
-capability. A network-denied integration test and hard sandbox remain R17. A
+starting the worker. Load probes `stream_pcm --help` for the required CLI
+contract rather than running an expensive synthesis. It does not advertise an
+offline capability: a network-denied integration test and hard sandbox remain
+R17. A
 later Rust release with a working, redistributable encoder can replace the `.npy`
 requirement behind the same settings and worker protocol.
 
@@ -143,6 +147,14 @@ The current adapter starts one `stream_pcm` process per speech request, so the
 upstream example's preload-once performance does not carry across replies. A
 persistent runner protocol or equivalent model-host process remains follow-up
 work rather than a completed latency guarantee.
+
+A 2026-07-15 run using the official Dave sample normalized 372 codes and
+produced 101,760 bytes of valid PCM. The process took 2m2.576s and emitted its
+first audio after 87.98s on this CPU. The pinned runner also wrote a 93-byte
+`NeuCodec decoder:` diagnostic to stdout before the PCM; the adapter now strips
+only that bounded known prefix. This evidence supports a five-minute synthesis
+job timeout, not a model-heavy readiness probe. Subjective listening quality is
+still unmeasured.
 
 ## Constraints hit during the spike
 

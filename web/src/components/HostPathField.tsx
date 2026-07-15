@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { api } from "../api/client";
 
-export type HostPathKind = "executable" | "gguf" | "wav" | "npy" | "file" | "directory";
+export type HostPathKind = "executable" | "gguf" | "wav" | "npy" | "neutts_codes" | "file" | "directory";
 
 export function HostPathField({
   label, value, kind, disabled, placeholder, onChange,

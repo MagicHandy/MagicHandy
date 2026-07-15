@@ -5,10 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>MagicHandy</title>
-    <script type="module" crossorigin src="/assets/index-CRQcB5CH.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Ca8sa9Fp.css">
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; }
+      body { background: #0e0f11; color: #eae9e4; font: 15px/1.5 system-ui, sans-serif; }
+      .static-startup { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; }
+      .static-startup strong { font-size: 24px; font-weight: 650; }
+      .static-startup span { color: #98a0a9; }
+      .static-startup i { width: 160px; height: 3px; overflow: hidden; background: #2d3138; position: relative; }
+      .static-startup i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 42%; background: #5b9dd9; animation: startup-slide 1.2s ease-in-out infinite; }
+      .static-startup button { border: 1px solid #3d434c; background: #1e2126; color: inherit; padding: 8px 14px; cursor: pointer; }
+      @keyframes startup-slide { from { transform: translateX(-110%); } to { transform: translateX(350%); } }
+      @media (prefers-reduced-motion: reduce) { .static-startup i::after { animation: none; width: 55%; } }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BQWCh_GE.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BT4Hb1mC.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="static-startup" data-static-startup role="status" aria-live="polite">
+        <strong>MagicHandy</strong>
+        <span data-startup-message>Loading the application...</span>
+        <i aria-hidden="true"></i>
+        <button type="button" hidden onclick="location.reload()">Reload application</button>
+      </div>
+    </div>
+    <script>
+      setTimeout(function () {
+        var startup = document.querySelector("[data-static-startup]");
+        if (!startup) return;
+        startup.querySelector("[data-startup-message]").textContent = "The interface did not finish loading.";
+        startup.querySelector("button").hidden = false;
+      }, 12000);
+    </script>
   </body>
 </html>

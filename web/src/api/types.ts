@@ -244,6 +244,10 @@ export interface VoiceSettings {
   parakeet_source: string;
   asr_base_url?: string;
   asr_model?: string;
+  input_mode: "hands_free" | "hold" | string;
+  input_sensitivity: number;
+  input_silence_ms: number;
+  input_noise_suppression: boolean;
   neutts_runner_path?: string;
   neutts_reference_wav?: string;
   neutts_reference_codes?: string;
@@ -273,6 +277,10 @@ export interface VoiceSettingsUpdate {
   parakeet_source: string;
   asr_base_url: string;
   asr_model: string;
+  input_mode: "hands_free" | "hold" | string;
+  input_sensitivity: number;
+  input_silence_ms: number;
+  input_noise_suppression: boolean;
   neutts_runner_path: string;
   neutts_reference_wav: string;
   neutts_reference_codes: string;
@@ -336,6 +344,16 @@ export interface VoiceRequestSnapshot {
   transcript?: { text: string; confidence: number }[];
   rejected?: string;
   error?: { code: string; message: string; retryable?: boolean };
+}
+
+export interface NeuTTSReference {
+  id: string;
+  codes_path: string;
+  audio_path?: string;
+  transcript?: string;
+  token_count: number;
+  source_format: "torch_int32" | "npy_int32" | string;
+  reused: boolean;
 }
 
 export interface OptionHints {

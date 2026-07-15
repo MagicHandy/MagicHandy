@@ -6,13 +6,13 @@ import { NavRail } from "./NavRail";
 import { StatusBar } from "./StatusBar";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { backendOnline } = useAppState();
+  const { backendOnline, state } = useAppState();
   return (
     <div className="app-shell">
       <NavRail />
       <StatusBar />
       <main className="workspace" id="workspace">
-        {!backendOnline && (
+        {!backendOnline && state && (
           <div className="backend-banner" role="alert">
             <strong>Core connection lost.</strong>
             <span>Backend-required controls are locked until the core responds.</span>

@@ -155,9 +155,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.modes = manager
 
 	settings, _ := store.Snapshot()
-	if err := server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir()); err != nil {
-		return nil, server.voiceSetupError(err)
-	}
+	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
 
 	chatLog, err := chat.OpenMessageLog(store.DataDir())
 	if err != nil {
@@ -185,24 +183,11 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	return server, nil
 }
 
-func (s *Server) configureVoice(settings config.VoiceSettings, executablePath, dataDir string) error {
+func (s *Server) configureVoice(settings config.VoiceSettings, executablePath, dataDir string) {
 	s.voiceExecutable = executablePath
 	s.voiceDataDir = dataDir
 	s.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")))
-	manager, err := newVoiceManager(settings, executablePath, dataDir)
-	if err != nil {
-		return err
-	}
-	s.voice = manager
-	return nil
-}
-
-func (s *Server) voiceSetupError(err error) error {
-	s.modes.Shutdown()
-	s.managedLLM.Close()
-	_ = s.models.Close()
-	s.personalization.Close()
-	return fmt.Errorf("prepare voice input: %w", err)
+	s.voice = newVoiceManager(settings, executablePath, dataDir)
 }
 
 // Handler returns the HTTP handler for use by net/http servers and tests.

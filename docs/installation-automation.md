@@ -78,11 +78,13 @@ MagicHandy Go core itself.
    but does not yet recommend a model from detected VRAM.
 4. No in-app first-run setup wizard (the installer script is the current
    stand-in).
-5. Voice setup is partial: provider adapters, provider-scoped settings, browser
-   push-to-talk with WAV conversion, app-managed Parakeet and NeuTTS installer
-   paths, and guarded local Windows path browsing exist. App-managed assets are
-   discovered separately from custom overrides. NeuTTS still cannot encode an
-   arbitrary reference WAV, and a real managed-Parakeet browser smoke test plus
+5. Voice setup is partial: provider adapters, provider-scoped settings,
+   continuous hands-free and hold-to-talk browser capture, app-managed Parakeet
+   and NeuTTS installer paths, and guarded local Windows path browsing exist.
+   App-managed assets are discovered separately from custom overrides. NeuTTS
+   can normalize official sample-style `.pt` and compatible `.npy` codes but
+   still cannot encode an arbitrary reference WAV. A real managed-Parakeet
+   browser smoke test plus
    any LAN/HTTPS story remain open (managed browser audio: R24; NeuTTS: R17;
    LAN/HTTPS: R18).
 
@@ -126,10 +128,10 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    StrokeGPT-ReVibed porting step over the Phase 15 importer.
 8. **Voice setup (implemented adapters and source provisioning).** Provider
    selection, workers, push-to-talk, browser playback, and app-managed Parakeet
-   and NeuTTS runtime installation have landed. Add reference encoding, in-app
-   guided/prebuilt provisioning, and microphone/provider compatibility checks
-   only with real-provider evidence; providers stay optional and off the core
-   runtime path (ADR 0007).
+   and NeuTTS runtime installation have landed. Guided preparation of existing
+   `.pt`/`.npy` codes has landed; arbitrary-WAV encoding, prebuilt provisioning,
+   and microphone/provider compatibility checks require real-provider evidence.
+   Providers stay optional and off the core runtime path (ADR 0007).
 9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
 
@@ -157,7 +159,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | StrokeGPT-ReVibed setup capability | MagicHandy status | Where |
 | --- | --- | --- |
 | One-command environment setup | **Implemented for source installs** — bootstraps dependencies and compiler | `install.ps1` |
-| No Python/venv/torch to install | **Implemented for core, Parakeet, and ElevenLabs runtime**; custom NeuTTS reference-code generation is external | by design + R17 |
+| No Python/venv/torch to install | **Implemented for core, Parakeet, ElevenLabs, NeuTTS synthesis, and preparation of compatible pre-encoded codes**; arbitrary WAV encoding is external | by design + R17 |
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
 | Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
@@ -165,7 +167,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - Parakeet and the NeuTTS runner/decoder/backbone are app-managed for source installs; NeuTTS reference codes remain manual | Phase 13 + Phase 16 prebuilt provisioning |
+| Voice model setup | Partial - Parakeet and the NeuTTS runner/decoder/backbone are app-managed; Settings prepares compatible `.pt`/`.npy` references with audio preview, while arbitrary WAV encoding remains external | Phase 13 + Phase 16 prebuilt provisioning |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

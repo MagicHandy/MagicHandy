@@ -19,6 +19,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
+	"github.com/mapledaemon/MagicHandy/internal/voice/referencecodes"
 )
 
 // voiceHealthTimeout bounds the live health probe on the status endpoint so
@@ -41,13 +42,10 @@ const (
 	managedNeuTTSCodecSHA    = "30c3ea13ceeb2de693c56e5e33a1b7e00d44c95dcdd08a4ed0d552d0bf59ebdf"
 )
 
-func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) (*voice.Manager, error) {
+func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) *voice.Manager {
 	manager := voice.NewManager()
-	if err := manager.PrepareTranscriptionStaging(dataDir); err != nil {
-		return nil, err
-	}
 	manager.Configure(voiceManagerConfig(settings, executablePath, dataDir))
-	return manager, nil
+	return manager
 }
 
 func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir string) voice.Config {
@@ -65,6 +63,7 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 		tts.Args = []string{"-voice-id", settings.ElevenLabsVoiceID, "-model-id", settings.ElevenLabsModelID}
 		tts.Env = ttsEnv
 	case config.VoiceTTSProviderNeuTTSAir:
+		tts.JobTimeout = 5 * time.Minute
 		command := resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")
 		runner, hfHome := resolveNeuTTSRuntime(settings, dataDir)
 		tts.Env = managedNeuTTSEnvironment(settings, hfHome)
@@ -232,7 +231,10 @@ func managedNeuTTSManifestReady(dataDir string, verifyRuntimeHashes bool) bool {
 
 func neuttsRuntimeReady(settings config.VoiceSettings, command, runner, hfHome, dataDir string) bool {
 	customRunner := strings.TrimSpace(settings.NeuTTSRunnerPath) != ""
-	managedReady := customRunner || (settings.NeuTTSBackbone == config.DefaultNeuTTSBackbone && managedNeuTTSManifestReady(dataDir, true))
+	// The managed installer verifies the pinned artifacts before publishing the
+	// active runtime. Re-hashing the 1.1 GB backbone here used to block every
+	// application start before the HTTP listener was available.
+	managedReady := customRunner || (settings.NeuTTSBackbone == config.DefaultNeuTTSBackbone && managedNeuTTSManifestReady(dataDir, false))
 	return managedReady && isRegularFile(command) &&
 		neuttsRuntimeInstalled(runner, hfHome, settings.NeuTTSBackbone) &&
 		isRegularFile(settings.NeuTTSReferenceCodes) &&
@@ -425,6 +427,78 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/voice/requests/{id}/cancel", s.handleVoiceRequestCancel)
 	mux.HandleFunc("POST /api/voice/transcriptions", s.handleVoiceTranscription)
 	mux.HandleFunc("PUT /api/voice/preferences", s.handleVoicePreferences)
+	mux.HandleFunc("PUT /api/voice/input-preferences", s.handleVoiceInputPreferences)
+	mux.HandleFunc("POST /api/voice/neutts/references", s.handleNeuTTSReferencePrepare)
+	mux.HandleFunc("GET /api/voice/neutts/references/{id}/audio", s.handleNeuTTSReferenceAudio)
+}
+
+func (s *Server) handleNeuTTSReferencePrepare(w http.ResponseWriter, r *http.Request) {
+	if !isLoopbackRemote(r.RemoteAddr) || !isLoopbackHost(r.Host) || !isSameOriginBrowserRequest(r) {
+		writeError(w, http.StatusForbidden, errors.New("NeuTTS reference preparation is available only from the computer running MagicHandy"))
+		return
+	}
+	if mediaType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])); mediaType != "application/json" {
+		writeError(w, http.StatusUnsupportedMediaType, errors.New("NeuTTS reference preparation requires application/json"))
+		return
+	}
+	if !s.requireControllerID(w, strings.TrimSpace(r.Header.Get(controllerHeaderName))) {
+		return
+	}
+	var body struct {
+		SourcePath   string `json:"source_path"`
+		ReferenceWAV string `json:"reference_wav"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := referencecodes.Prepare(s.voiceDataDir, referencecodes.Request{
+		SourcePath:   body.SourcePath,
+		ReferenceWAV: body.ReferenceWAV,
+	})
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	previewURL := ""
+	if result.AudioPath != "" {
+		previewURL = "/api/voice/neutts/references/" + result.ID + "/audio"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"reference":   result,
+		"preview_url": previewURL,
+	})
+}
+
+func (s *Server) handleNeuTTSReferenceAudio(w http.ResponseWriter, r *http.Request) {
+	if !isLoopbackRemote(r.RemoteAddr) || !isLoopbackHost(r.Host) || !isSameOriginBrowserRequest(r) {
+		writeError(w, http.StatusForbidden, errors.New("NeuTTS reference audio is available only from the computer running MagicHandy"))
+		return
+	}
+	if !s.requireController(w, r) {
+		return
+	}
+	path, err := referencecodes.AudioPath(s.voiceDataDir, r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, errors.New("NeuTTS reference audio is unavailable"))
+		return
+	}
+	file, err := os.Open(path) // #nosec G304,G703 -- referencecodes resolves a validated ID only inside the app-managed reference root.
+	if err != nil {
+		writeError(w, http.StatusNotFound, errors.New("NeuTTS reference audio is unavailable"))
+		return
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("NeuTTS reference audio could not be read"))
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "audio/wav")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, filepath.Base(path), info.ModTime(), file)
 }
 
 // voiceState is the /api/state block: lifecycle snapshots only, no live IPC
@@ -872,4 +946,75 @@ func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"speak_replies": body.SpeakReplies})
+}
+
+type voiceInputPreferencesPatch struct {
+	Mode             *string `json:"input_mode"`
+	Sensitivity      *int    `json:"input_sensitivity"`
+	SilenceMillis    *int    `json:"input_silence_ms"`
+	NoiseSuppression *bool   `json:"input_noise_suppression"`
+}
+
+func (p voiceInputPreferencesPatch) validate() error {
+	if p.Mode == nil && p.Sensitivity == nil && p.SilenceMillis == nil && p.NoiseSuppression == nil {
+		return errors.New("at least one voice input preference is required")
+	}
+	if p.Mode != nil && *p.Mode != config.VoiceInputModeHandsFree && *p.Mode != config.VoiceInputModeHold {
+		return errors.New("voice input mode must be hands_free or hold")
+	}
+	if p.Sensitivity != nil && (*p.Sensitivity < 1 || *p.Sensitivity > 100) {
+		return errors.New("voice input sensitivity must be between 1 and 100")
+	}
+	if p.SilenceMillis != nil && (*p.SilenceMillis < 300 || *p.SilenceMillis > 3000) {
+		return errors.New("voice input silence delay must be between 300 and 3000 milliseconds")
+	}
+	return nil
+}
+
+func (p voiceInputPreferencesPatch) apply(settings *config.Settings) {
+	if p.Mode != nil {
+		settings.Voice.InputMode = *p.Mode
+	}
+	if p.Sensitivity != nil {
+		settings.Voice.InputSensitivity = *p.Sensitivity
+	}
+	if p.SilenceMillis != nil {
+		settings.Voice.InputSilenceMillis = *p.SilenceMillis
+	}
+	if p.NoiseSuppression != nil {
+		settings.Voice.InputNoiseSuppress = *p.NoiseSuppression
+	}
+}
+
+func (s *Server) handleVoiceInputPreferences(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body voiceInputPreferencesPatch
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := body.validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	body.apply(&settings)
+	normalized, err := config.NormalizeSettings(settings)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	saved, err := s.store.Save(normalized)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("voice input preferences could not be saved"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"input_mode":              saved.Voice.InputMode,
+		"input_sensitivity":       saved.Voice.InputSensitivity,
+		"input_silence_ms":        saved.Voice.InputSilenceMillis,
+		"input_noise_suppression": saved.Voice.InputNoiseSuppress,
+	})
 }

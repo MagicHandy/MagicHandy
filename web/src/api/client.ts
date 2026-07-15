@@ -7,6 +7,7 @@ import type {
   ChatStreamEvent,
   MemoryState,
   MotionStyle,
+  NeuTTSReference,
   BluetoothAckPayload,
   BluetoothClientStatus,
   BluetoothCommandsResponse,
@@ -51,13 +52,14 @@ export const clientId: string = (() => {
 
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json", [CLIENT_HEADER]: clientId };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
   const text = await res.text();
   let parsed: unknown = null;
@@ -116,7 +118,7 @@ export class ApiError extends Error {
 }
 
 export const api = {
-  getState: () => request<AppState>("GET", "/api/state"),
+  getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
 
   // Motion — semantic commands only.
   stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
@@ -202,7 +204,7 @@ export const api = {
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
-  pickHostPath: (kind: "executable" | "gguf" | "wav" | "npy" | "file" | "directory", current: string) =>
+  pickHostPath: (kind: "executable" | "gguf" | "wav" | "npy" | "neutts_codes" | "file" | "directory", current: string) =>
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
@@ -262,13 +264,31 @@ export const api = {
     request<{ model_state?: string; worker: VoiceWorkerStatus }>("POST", `/api/voice/workers/${role}/model`, { loaded }),
   voiceWorkerTest: (role: "tts" | "asr", body: { text: string; delay_ms: number }) =>
     request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/workers/${role}/test`, body),
-  voiceRequest: (id: string) =>
-    request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`),
+  voiceRequest: (id: string, signal?: AbortSignal) =>
+    request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`, undefined, signal),
   voiceRequestCancel: (id: string) =>
     request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/cancel`),
   voiceTranscribe: (audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal) => uploadVoiceTranscription(audio, format, stopSequence, signal),
   saveVoicePreferences: (speak_replies: boolean) =>
     request<{ speak_replies: boolean }>("PUT", "/api/voice/preferences", { speak_replies }),
+  saveVoiceInputPreferences: (patch: Partial<{
+    input_mode: "hands_free" | "hold";
+    input_sensitivity: number;
+    input_silence_ms: number;
+    input_noise_suppression: boolean;
+  }>) => request<{
+    input_mode: "hands_free" | "hold";
+    input_sensitivity: number;
+    input_silence_ms: number;
+    input_noise_suppression: boolean;
+  }>("PUT", "/api/voice/input-preferences", patch),
+  prepareNeuTTSReference: (source_path: string, reference_wav: string, signal?: AbortSignal) =>
+    request<{ reference: NeuTTSReference; preview_url: string }>(
+      "POST",
+      "/api/voice/neutts/references",
+      { source_path, reference_wav },
+      signal,
+    ),
   // Lease-gated audio: only the active controller may fetch a clip.
   voiceRequestAudio: async (id: string, signal?: AbortSignal): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {

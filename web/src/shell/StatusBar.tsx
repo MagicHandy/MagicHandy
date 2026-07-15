@@ -9,6 +9,7 @@ import { ClockIcon } from "./icons";
 export function StatusBar() {
   const { backendOnline, motion, readOnly, state } = useAppState();
   const engine = motion?.engine;
+  const awaitingState = state == null;
 
   // Voice earns a readout only when it is enabled and unhealthy: a crashed
   // worker, or speak-replies promised while the TTS worker cannot deliver.
@@ -23,12 +24,16 @@ export function StatusBar() {
       voiceSettings.tts_provider !== "none" &&
       !(voiceWorkers?.tts?.state === "running" && voiceWorkers?.tts?.model_state === "ready"),
   );
-  const phaseState = engine?.paused ? "paused" : engine?.running ? "running" : "idle";
-  const phaseLabel = engine?.paused
+  const phaseState = awaitingState ? "pending" : engine?.paused ? "paused" : engine?.running ? "running" : "idle";
+  const phaseLabel = awaitingState
+    ? "state pending"
+    : engine?.paused
     ? "paused"
     : engine?.running
       ? engine.target?.label || "running"
       : motion?.available === false ? "unavailable" : "idle";
+  const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
+  const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
 
   return (
     <div className="status-bar" role="region" aria-label="Status">
@@ -38,17 +43,17 @@ export function StatusBar() {
       </span>
       <span className="status-divider" aria-hidden="true" />
       <span className="status-readout">
-        <span className="status-dot" data-state={backendOnline ? "ok" : "error"} />
-        <span className="status-text">{backendOnline ? "core ok" : "core offline"}</span>
+        <span className="status-dot" data-state={coreState} />
+        <span className="status-text">{coreLabel}</span>
       </span>
-      <span
+      {state && <span
         className="status-readout status-readout-controller"
         title={readOnly ? "Read-only client" : "This tab is the controller"}
         aria-label={readOnly ? "Read-only client" : "This tab is the controller"}
       >
         <span className="status-dot" data-state={readOnly ? "warn" : "ok"} />
         <span className="status-text">{readOnly ? "read-only" : "controller: you"}</span>
-      </span>
+      </span>}
       {(voiceCrashed || speakNotReady) && (
         <span className="status-readout">
           <span className="status-dot" data-state={voiceCrashed ? "error" : "warn"} />

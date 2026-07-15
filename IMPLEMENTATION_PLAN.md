@@ -182,15 +182,18 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    backend still cannot deliver Browser Bluetooth Stop, and current Cloud REST /
    Browser Bluetooth retry evidence remains open. No document may claim physical
    delivery after communication fails. Tracked as risk R23.
-6. **Voice end-to-end acceptance**: browser push-to-talk now decodes
-   MediaRecorder output and submits 16 kHz mono PCM WAV to the managed
-   parakeet.cpp path; compressed/fake-WAV payloads fail at the API boundary.
+6. **Voice end-to-end acceptance**: hold-to-talk decodes MediaRecorder output,
+   while hands-free capture remains active until the user stops it and uses
+   browser VAD to submit each phrase as PCM WAV to the managed parakeet.cpp
+   path; compressed/fake-WAV payloads fail at the API boundary.
    Provider adapters, source-installer asset discovery, app-managed/custom
    separation, explicit enable/save/Start UI, and guarded Windows host-path
    browsing are implemented. A real Chrome/Edge transcription run remains R24
    exit evidence. The source installer now builds and discovers a pinned NeuTTS
-   runner/decoder/backbone with managed llama.cpp. Reference-code generation and
-   enforced offline operation remain R17.
+   runner/decoder/backbone with managed llama.cpp. Settings can safely normalize
+   official sample-style `.pt` files and compatible one-dimensional int32 `.npy`
+   files without Python; arbitrary-WAV encoding and enforced offline operation
+   remain R17.
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
@@ -738,10 +741,13 @@ Status: **complete** in PR #46.
   of disabled controls.
 - Validate the external `/v1/models` fallback, parakeet.cpp `/health` readiness,
   managed startup-once behavior, port conflict, unload, EOF cleanup, and the
-  valid-WAV test request. A real managed-Parakeet microphone measurement remains
-  required before claiming managed push-to-talk acceptance or release readiness;
-  the localhost UI may ship only with that limitation explicit. Hands-free UI
-  remains blocked on push-to-talk reliability evidence.
+  valid-WAV test request. A production-boundary run now starts the installed
+  CPU runner and pinned model, transcribes a canonical 16 kHz Dave fixture, and
+  proves worker/process cleanup. A real managed-Parakeet browser-microphone run
+  remains required before closing R24 or claiming microphone-path release
+  readiness. The user-started hands-free UI is implemented with bounded VAD and
+  manual Stop; its real-microphone segmentation and latency remain release
+  evidence rather than a runner-format blocker.
 
 ### Slice 13.5: Settings Compaction (Voice Provider Model)
 
@@ -776,14 +782,18 @@ Status: **complete**.
   the final samples without delaying worker-side streaming or cancellation.
 - The child requests Hugging Face offline mode. Because the pinned client does
   not enforce that flag, the default Air Q4 path requires an exact local cache
-  entry before a bounded readiness synthesis can run. The Windows source
+  entry before the worker starts. Worker load probes the pinned runner's CLI
+  contract without loading the model or synthesizing audio. The Windows source
   installer now builds and checksum-verifies the runtime assets with managed
   llama.cpp. A network-denied test, persistent model host, prebuilt packaging,
-  and reference-code generation remain R17/Phase 16 rather than adapter claims.
+  and arbitrary-WAV reference encoding remain R17/Phase 16 rather than adapter
+  claims.
 - The current `neutts-rs` 0.1.1 encoder export is a stub despite example text
-  suggesting otherwise. This slice requires pre-encoded `.npy` reference
-  codes plus the transcript. The WAV path is provenance only; MagicHandy does
-  not silently invoke Python.
+  suggesting otherwise. Settings provides a controller-gated reference window
+  that safely normalizes the official sample-style Torch ZIP `.pt` layout or a
+  compatible one-dimensional int32 `.npy`, copies an optional validated WAV for
+  preview, and guides exact transcript entry. It never executes pickle and does
+  not silently invoke Python or claim to encode an arbitrary WAV.
 - Setup and the exact capability boundary are documented in
   [docs/neutts-worker.md](docs/neutts-worker.md).
 
@@ -791,11 +801,13 @@ Status: **complete**.
 
 Status: **complete** for the supported localhost browser path.
 
-- The Chat microphone defaults to bounded click-on/click-off hands-free capture;
-  its adjacent disclosure also offers hold-to-talk and a browser audio-input
-  selector. The browser stream and decoder stay visibly warm for up to 60
-  seconds after use, avoiding repeated device/DSP startup that clipped the
-  beginning of speech. This is not unattended always-on/VAD capture.
+- The Chat microphone defaults to user-started hands-free capture that remains
+  active until manually stopped. An AudioWorklet supplies mono PCM to a bounded
+  VAD segmenter; speech phrases are queued serially for transcription while the
+  microphone continues listening. The adjacent disclosure also offers
+  hold-to-talk, browser audio-input selection, sensitivity, end-of-speech delay,
+  noise suppression, input level, and queue status. These preferences persist
+  through the backend settings store.
 - Browser recording captures the best available format, then decodes,
   downmixes, resamples, and encodes it into 16 kHz PCM WAV in one output-rate
   pass. The browser uploads raw WAV; the pure-Go HTTP edge validates it and
@@ -803,8 +815,9 @@ Status: **complete** for the supported localhost browser path.
   base64 NDJSON frame. The accepted transcript calls the
   same chat send function as typed text, preserving every motion limit,
   smoothing rule, controller lease, and Stop behavior.
-- Recording is bounded to 30 seconds; transcription has a visible busy state,
-  queue status remains in Settings, and timeout cancels the worker request.
+- Individual hands-free phrases and the pending queue are bounded; hold-to-talk
+  remains capped at 30 seconds. Transcription has a visible busy/queue state and
+  timeout cancels the worker request without stranding later queued phrases.
   Emergency Stop discards capture and pending transcription immediately; a
   backend stop sequence carries the same cancellation signal to other clients,
   invalidates ASR/TTS results and playback, cancels in-flight LLM work, and
@@ -812,8 +825,9 @@ Status: **complete** for the supported localhost browser path.
   voice, typed-chat, manual, library, and mode starts cannot dispatch afterward.
 - `http://localhost` is the supported microphone origin. LAN/mobile use is not
   promised until Phase 16 provides an HTTPS and certificate design.
-- Unattended always-on recording, silence-triggered segmentation, and VAD
-  calibration remain out of scope pending real-microphone reliability evidence.
+- Background auto-start and capture that continues without a visible user-owned
+  session remain out of scope. Real-microphone calibration and first-word
+  accuracy remain R24 release evidence.
 
 ### Slice 13.8: Voice UX Hardening
 
@@ -874,8 +888,9 @@ mobile voice (see risk R18).
 Provider-specific tests plus the standard suite. The managed path still requires
 manual checks with a real microphone: missing dependency reported clearly,
 provider loads, cancellation works, queue depth is visible, the app survives
-   provider failure, and both click-on and hold-to-talk work with default settings without touching
-advanced knobs.
+  provider failure, continuous segmented hands-free capture and hold-to-talk
+  both work with default settings, and sensitivity/end-of-speech controls remain
+  usable without exposing provider internals.
 
 ## Done Criteria
 
@@ -887,7 +902,8 @@ advanced knobs.
 ## Out Of Scope
 
 - optional Python workers (Chatterbox, CosyVoice) — the protocol door stays open
-- unattended always-on/VAD voice before bounded browser capture is proven
+- background or unattended microphone auto-start without a visible user-owned
+  capture session
 
 # Phase 14: Pattern Library, Programs, And Authoring
 
