@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { api } from "../api/client";
-import { audioPlaybackToken, playBlob } from "../util/audio";
+import { audioPlaybackToken, installAudioPlaybackUnlock, playBlob } from "../util/audio";
 import { useToast } from "./app-state";
 
 interface VoicePlaybackValue {
@@ -100,6 +100,7 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
   }, [drain]);
 
   useEffect(() => {
+    const removePlaybackUnlock = installAudioPlaybackUnlock();
     const cancel = () => {
       pending.current = [];
       tracked.current.clear();
@@ -108,6 +109,7 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("magichandy:emergency-stop", cancel);
     return () => {
+      removePlaybackUnlock();
       window.removeEventListener("magichandy:emergency-stop", cancel);
       cancel();
     };

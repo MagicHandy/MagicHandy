@@ -15,6 +15,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../util/audio", () => ({
   audioPlaybackToken: vi.fn(() => 0),
+  installAudioPlaybackUnlock: vi.fn(() => () => undefined),
   playBlob: vi.fn(async () => undefined),
 }));
 
