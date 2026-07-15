@@ -12,6 +12,8 @@ $script:NeuTTSSourceTag = 'v0.1.1'
 $script:NeuTTSSourceCommit = 'ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f'
 $script:NeuTTSRustToolchain = '1.94.0-x86_64-pc-windows-msvc'
 $script:NeuTTSRunnerProtocol = 'magichandy_neutts_stream_v1'
+$script:NeuTTSPhonemizer = 'espeak-ng'
+$script:NeuTTSPhonemizerVersion = '1.52.0'
 $script:NeuTTSBackboneRevision = '008555972590ff2c599dd43736ba31c81df3f0bf'
 $script:NeuTTSBackboneURL = "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/$($script:NeuTTSBackboneRevision)/neutts-air-Q4_0.gguf?download=true"
 $script:NeuTTSBackboneSHA256 = 'bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff9a29062e4ac9119e'
@@ -397,6 +399,7 @@ function Get-MagicHandyProvisionPlan {
         }
         $plan.Add("Build and activate pinned managed llama.cpp ($($State.llama_backend))")
         $plan.Add('Ensure LLVM/libclang, Rustup, and the pinned Rust 1.94.0 Windows MSVC toolchain are installed')
+        $plan.Add("Ensure eSpeak NG $($script:NeuTTSPhonemizerVersion)+ is installed for NeuTTS phonemization")
         $neuttsAcceleration = if ([string]$State.llama_backend -eq 'cuda') { 'CUDA backbone + WGPU codec' } else { 'CPU backbone + CPU codec' }
         $neuttsInstalledSize = if ([string]$State.llama_backend -eq 'cuda') { 'about 2.0 GiB installed' } else { 'about 1.9 GiB installed' }
         $plan.Add("Build MagicHandy's persistent NeuTTS runner from pinned neutts-rs ($neuttsAcceleration)")
@@ -538,6 +541,54 @@ function Ensure-MagicHandyGit {
         throw 'Git installation completed but git.exe is unavailable. Restart PowerShell and rerun the script.'
     }
     return $git
+}
+
+function Resolve-MagicHandyESpeak {
+    $resolved = Resolve-MagicHandyExecutable -Name 'espeak-ng'
+    if ($resolved) {
+        return $resolved
+    }
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'eSpeak NG\espeak-ng.exe')
+    )
+    if (${env:ProgramFiles(x86)}) {
+        $candidates += Join-Path ${env:ProgramFiles(x86)} 'eSpeak NG\espeak-ng.exe'
+    }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return [System.IO.Path]::GetFullPath($candidate)
+        }
+    }
+    return $null
+}
+
+function Get-MagicHandyESpeakVersion {
+    param([Parameter(Mandatory = $true)][string]$Executable)
+
+    $output = (& $Executable --version 2>&1) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $output -notmatch '(\d+\.\d+\.\d+)') {
+        return $null
+    }
+    return [Version]$Matches[1]
+}
+
+function Ensure-MagicHandyESpeak {
+    [CmdletBinding()]
+    param([switch]$AssumeYes)
+
+    $executable = Resolve-MagicHandyESpeak
+    $version = if ($executable) { Get-MagicHandyESpeakVersion -Executable $executable } else { $null }
+    if ($null -eq $version -or $version -lt [Version]$script:NeuTTSPhonemizerVersion) {
+        Confirm-MagicHandyPackageInstall -Name 'eSpeak NG' -Purpose 'producing the phonemes NeuTTS was trained to synthesize' -License 'GPL-3.0-or-later; https://github.com/espeak-ng/espeak-ng' -Size 'about 25 MB' -AssumeYes:$AssumeYes
+        Invoke-MagicHandyWinGetInstall -ID 'eSpeak-NG.eSpeak-NG' -AssumeYes:$AssumeYes
+        $executable = Resolve-MagicHandyESpeak
+        $version = if ($executable) { Get-MagicHandyESpeakVersion -Executable $executable } else { $null }
+    }
+    if ($null -eq $version -or $version -lt [Version]$script:NeuTTSPhonemizerVersion) {
+        throw "eSpeak NG $($script:NeuTTSPhonemizerVersion) or newer is required for intelligible NeuTTS output."
+    }
+    Write-Host "Found eSpeak NG $version at $executable" -ForegroundColor Green
+    return $executable
 }
 
 function Ensure-MagicHandyCMake {
@@ -1123,6 +1174,7 @@ function Test-MagicHandyNeuTTSInstallRoot {
         $required = @(
             'schema_version', 'source_commit', 'rust_toolchain', 'backend',
             'runner_protocol', 'backbone_acceleration', 'codec_acceleration', 'backbone_revision',
+            'phonemizer', 'phonemizer_version',
             'backbone_sha256', 'codec_revision', 'codec_checkpoint_sha256',
             'runner_sha256', 'decoder_sha256', 'encoder_revision', 'encoder_sha256',
             'encoder_model_sha256', 'encoder_model_data_sha256', 'directml_sha256',
@@ -1150,12 +1202,14 @@ function Test-MagicHandyNeuTTSInstallRoot {
                 return $false
             }
         }
-        return [int]$manifest.schema_version -eq 3 -and
+        return [int]$manifest.schema_version -eq 4 -and
             (Get-Content -LiteralPath $backboneRef -Raw).Trim() -eq $script:NeuTTSBackboneRevision -and
             [string]$manifest.source_commit -eq $script:NeuTTSSourceCommit -and
             [string]$manifest.rust_toolchain -eq $script:NeuTTSRustToolchain -and
             [string]$manifest.backend -eq $Backend -and
             [string]$manifest.runner_protocol -eq $script:NeuTTSRunnerProtocol -and
+            [string]$manifest.phonemizer -eq $script:NeuTTSPhonemizer -and
+            [string]$manifest.phonemizer_version -eq $script:NeuTTSPhonemizerVersion -and
             [string]$manifest.backbone_acceleration -eq $expectedBackboneAcceleration -and
             [string]$manifest.codec_acceleration -eq $expectedCodecAcceleration -and
             [string]$manifest.backbone_revision -eq $script:NeuTTSBackboneRevision -and
@@ -1261,7 +1315,7 @@ function Confirm-MagicHandyNeuTTSInstall {
         [switch]$AssumeYes
     )
 
-    Write-Host 'NeuTTS runner: neutts-rs v0.1.1, Cargo metadata declares MIT; its espeak dependency includes GPL-3.0-or-later components.'
+    Write-Host "NeuTTS runner: neutts-rs v0.1.1 (MIT) with system eSpeak NG $($script:NeuTTSPhonemizerVersion)+ (GPL-3.0-or-later)."
     Write-Host "Source commit: $($script:NeuTTSSourceCommit); Rust toolchain: $($script:NeuTTSRustToolchain)." -ForegroundColor DarkGray
     $installedSize = if ($Backend -eq 'cuda') { 'about 2.0 GiB' } else { 'about 1.9 GiB' }
     Write-Host "NeuTTS models: Air Q4, NeuCodec, and DistillNeuCodec ONNX, Apache-2.0; $installedSize installed plus temporary build and conversion assets."
@@ -1285,6 +1339,7 @@ function Install-MagicHandyNeuTTS {
         [Parameter(Mandatory = $true)][string]$RustupExecutable,
         [Parameter(Mandatory = $true)][string]$LibClangPath,
         [Parameter(Mandatory = $true)][string]$CMakeExecutable,
+        [Parameter(Mandatory = $true)][string]$ESpeakExecutable,
         [Parameter(Mandatory = $true)][ValidateSet('cpu', 'cuda')][string]$Backend,
         [string]$CUDAExecutable = ''
     )
@@ -1394,7 +1449,7 @@ function Install-MagicHandyNeuTTS {
             throw "NeuCodec decoder conversion failed (exit $LASTEXITCODE)."
         }
 
-        $runnerFeatures = if ($Backend -eq 'cuda') { 'espeak,cuda,wgpu' } else { 'espeak' }
+        $runnerFeatures = if ($Backend -eq 'cuda') { 'cuda,wgpu' } else { 'backbone' }
         Write-Host "Building MagicHandy's persistent NeuTTS runner ($Backend; features $runnerFeatures)..."
         & $RustupExecutable run $script:NeuTTSRustToolchain cargo build --locked --release --manifest-path (Join-Path $sourceRoot 'Cargo.toml') --example magichandy_neutts --features $runnerFeatures | Out-Host
         if ($LASTEXITCODE -ne 0) {
@@ -1406,6 +1461,23 @@ function Install-MagicHandyNeuTTS {
         }
         if (-not (Test-MagicHandyNativeProbe -Executable $runnerCandidate -ArgumentList @('--help'))) {
             throw 'The built NeuTTS stream_pcm runner did not pass its help probe.'
+        }
+        $phonemes = (& $runnerCandidate --espeak $ESpeakExecutable --phonemize 'clearly naturally completely misspoken' 2>&1) -join ' '
+        $runnerExitCode = $LASTEXITCODE
+        # Keep this module ASCII-safe for Windows PowerShell 5.1, which decodes
+        # UTF-8 source without a BOM using the active ANSI code page.
+        $expectedPhonemes = @(
+            (@('k', 'l', [char]0x02C8, [char]0x026A, [char]0x0279, 'l', 'i') -join ''),
+            (@('n', [char]0x02C8, [char]0x00E6, 't', [char]0x0283, [char]0x025A, [char]0x0279, [char]0x0259, 'l', 'i') -join ''),
+            (@('k', [char]0x0259, 'm', 'p', 'l', [char]0x02C8, 'i', [char]0x02D0, 't', 'l', 'i') -join ''),
+            (@('m', [char]0x026A, 's', 's', 'p', [char]0x02C8, 'o', [char]0x028A, 'k', [char]0x0259, 'n') -join '')
+        )
+        $phonemeProbePassed = $runnerExitCode -eq 0
+        foreach ($expected in $expectedPhonemes) {
+            $phonemeProbePassed = $phonemeProbePassed -and $phonemes.Contains($expected)
+        }
+        if (-not $phonemeProbePassed) {
+            throw "The built NeuTTS runner failed its eSpeak NG phonemizer quality probe: $phonemes"
         }
         Copy-Item -LiteralPath $runnerCandidate -Destination (Join-Path $runtimeStage 'stream_pcm.exe') -Force
         $nativeDependencyHashes = [ordered]@{}
@@ -1464,7 +1536,8 @@ NeuTTS runtime installed by MagicHandy
 neutts-rs $($script:NeuTTSSourceTag) at $($script:NeuTTSSourceCommit)
 Source: $($script:NeuTTSSourceURL)
 Cargo package metadata license: MIT
-The build includes llama.cpp through llama-cpp-4 and eSpeak NG components through espeak-ng.
+The build includes llama.cpp through llama-cpp-4. NeuTTS phonemization invokes the separately
+installed eSpeak NG $($script:NeuTTSPhonemizerVersion)+ package (GPL-3.0-or-later).
 Cargo dependency license files available in the downloaded sources are retained under licenses\.
 MagicHandy's persistent NeuTTS runner and CUDA offload patch are GPL-3.0-only.
 Execution backend: $Backend. CUDA builds use all-layer llama.cpp offload and the Burn WGPU codec.
@@ -1490,7 +1563,7 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
         $encoderHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'magichandy-neucodec-encoder.exe')
         $directMLHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'DirectML.dll')
         $manifest = [pscustomobject][ordered]@{
-            schema_version = 3
+            schema_version = 4
             installed_at = [DateTimeOffset]::UtcNow.ToString('o')
             source_tag = $script:NeuTTSSourceTag
             source_commit = $script:NeuTTSSourceCommit
@@ -1498,6 +1571,8 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
             rust_version = $rustVersion
             backend = $Backend
             runner_protocol = $script:NeuTTSRunnerProtocol
+            phonemizer = $script:NeuTTSPhonemizer
+            phonemizer_version = $script:NeuTTSPhonemizerVersion
             backbone_acceleration = if ($Backend -eq 'cuda') { 'cuda_all_layers' } else { 'cpu' }
             codec_acceleration = if ($Backend -eq 'cuda') { 'wgpu' } else { 'cpu' }
             native_dependencies = $nativeDependencyHashes
@@ -1971,6 +2046,7 @@ function Invoke-MagicHandyProvision {
         }
 
         Write-InstallerHeading 'NeuTTS Air runtime (with managed llama.cpp)'
+        $espeak = Ensure-MagicHandyESpeak -AssumeYes:$AssumeYes
         Restore-MagicHandyNeuTTSBackup -DataDir $State.data_dir
         if (Test-MagicHandyNeuTTSInstall -DataDir $State.data_dir -Backend $State.llama_backend) {
             Write-Host "NeuTTS runtime is already checksum-verified at $(Join-Path $State.data_dir 'voice\neutts\active\runtime')." -ForegroundColor Green
@@ -1978,7 +2054,7 @@ function Invoke-MagicHandyProvision {
             Confirm-MagicHandyNeuTTSInstall -Backend $State.llama_backend -AssumeYes:$AssumeYes
             $libClang = Ensure-MagicHandyLibClang -AssumeYes:$AssumeYes
             $rustup = Ensure-MagicHandyRustup -AssumeYes:$AssumeYes
-            Install-MagicHandyNeuTTS -DataDir $State.data_dir -GitExecutable $git -RustupExecutable $rustup -LibClangPath $libClang -CMakeExecutable $cmake -Backend $State.llama_backend -CUDAExecutable $cuda
+            Install-MagicHandyNeuTTS -DataDir $State.data_dir -GitExecutable $git -RustupExecutable $rustup -LibClangPath $libClang -CMakeExecutable $cmake -ESpeakExecutable $espeak -Backend $State.llama_backend -CUDAExecutable $cuda
         }
     }
 

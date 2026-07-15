@@ -68,6 +68,23 @@ Still required for current-build evidence:
   s. Cancellation after the first chunk reached terminal `canceled`; the same
   process then completed a recovery request with 96,960 PCM bytes and exited
   cleanly. CPU fallback retains the five-minute request timeout.
+- A quality investigation used the official 7.45 s Dave WAV/transcript and its
+  372 official codes. Managed Parakeet transcribed the source and a direct Rust
+  NeuCodec reconstruction essentially exactly, but recovered only fragments
+  from the old generated output. The old pure-Rust phonemizer emitted incorrect
+  IPA for common words and dropped one word. With eSpeak NG 1.52 plus the
+  upstream 50-token lookback, 5-token lookahead, and overlap-add decode, four
+  random controlled requests retained every substantive target word in ASR;
+  two transcriptions were exact. TTFA was 1.06-2.05 s, synthesis was
+  2.06-3.89 s, and generated clip duration was 3.10-6.08 s on the same RTX 5070
+  Ti. Subjective speaker similarity remains separate acceptance evidence.
+- A clean full-feature Windows PowerShell 5.1 update migrated the installed
+  schema-3 CUDA/WGPU runtime to schema 4 in 11 minutes; the pinned native runner
+  build took 8 minutes 32 seconds. An initial quality-probe failure left the old
+  runtime active and removed all partial directories. After making the Unicode
+  IPA comparison ASCII-safe for PowerShell 5.1, the retry activated a manifest
+  whose runner hash matched disk, relaunched both voice workers, and completed a
+  browser-triggered 141,120-byte NeuTTS request with an empty terminal queue.
 - A clean full-feature `update.ps1 -Yes` run migrated the installed schema-2
   runtime to schema 3 CUDA/WGPU in 11 minutes 40 seconds; the pinned native
   runner build accounted for 8 minutes 44 seconds. The active NeuTTS tree is

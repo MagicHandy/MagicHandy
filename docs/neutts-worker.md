@@ -17,6 +17,13 @@ transcript, encodes the WAV without Python, validates the resulting token range
 again in Go, and stores canonical app-managed `.npy` codes with the source WAV.
 The transcript conditions synthesis but is not an encoder input.
 
+Phonemization uses the official eSpeak NG 1.52 engine that NeuTTS expects. The
+installer provisions it through WinGet and the persistent runner invokes it
+directly; Python is not involved. The runner preserves punctuation and verifies
+known English pronunciations during installation. The optional pure-Rust
+`espeak-ng` crate in pinned `neutts-rs` is deliberately not enabled because its
+output dropped words and mispronounced common words in the acceptance corpus.
+
 The older pure-Go preparation path remains available to advanced/manual
 clients. It can normalize a separately licensed official sample-style Torch
 ZIP `.pt` or compatible one-dimensional int32 `.npy` without executing pickle.
@@ -41,8 +48,8 @@ The installer installs LLVM/libclang plus pinned Rust 1.94.0 for x64 Windows
 MSVC. It copies the reviewed runner in `workers/neutts-runner`, applies the
 exact pinned CUDA offload patch, and builds one of these variants:
 
-- managed CPU llama.cpp: eSpeak, CPU backbone, and CPU NeuCodec;
-- managed CUDA llama.cpp: eSpeak, all-layer CUDA backbone offload, and WGPU
+- managed CPU llama.cpp: system eSpeak NG, CPU backbone, and CPU NeuCodec;
+- managed CUDA llama.cpp: system eSpeak NG, all-layer CUDA backbone offload, and WGPU
   NeuCodec.
 
 It stages the persistent executable under the stable `stream_pcm.exe` filename
@@ -69,8 +76,9 @@ llama.cpp backend determines the NeuTTS build too. CUDA substantially reduces
 speech latency but keeps additional VRAM resident while chat speech is enabled;
 CPU avoids that VRAM cost but can be much slower than real time. The runtime
 manifest records the selected backend, runner protocol, backbone/codec
-acceleration, and checksums for every required native DLL. Schema-2 CPU runtimes
-are intentionally rebuilt by `update.ps1`.
+acceleration, phonemizer/version, and checksums for every required native DLL.
+Schema-3 and older runtimes are intentionally rebuilt by `update.ps1` so the
+inaccurate bundled phonemizer cannot remain active after an update.
 
 The Air Q4 GGUF is downloaded from immutable Hugging Face revision
 `008555972590ff2c599dd43736ba31c81df3f0bf` and verified as
@@ -112,12 +120,14 @@ git rev-parse HEAD # ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f
 # Change only the neutts root package entry in Cargo.lock from 0.1.0 to 0.1.1.
 git apply ..\MagicHandy\workers\neutts-runner\neutts-rs-v0.1.1-cuda.patch
 Copy-Item ..\MagicHandy\workers\neutts-runner\main.rs .\examples\magichandy_neutts.rs
-cargo build --locked --release --example magichandy_neutts --features espeak,cuda,wgpu
+cargo build --locked --release --example magichandy_neutts --features cuda,wgpu
 ```
 
 Adjust the repository-relative paths when the checkouts are elsewhere. For a
-CPU build, use `--features espeak`; the CUDA patch is inactive when that feature
-is absent. Copy the executable and every generated llama/ggml DLL together,
+CPU build, use `--features backbone`; the CUDA patch is inactive when that
+feature is absent. Install eSpeak NG 1.52 or newer and ensure `espeak-ng` is on
+`PATH` (or beside the runner). Copy the executable and every generated
+llama/ggml DLL together,
 then set **stream_pcm runner override** to that executable. Build the MagicHandy
 protocol adapter with:
 
@@ -185,11 +195,16 @@ asynchronous request finishes; this avoids browser autoplay rejection without
 creating a second speech queue. On the RTX 5070 Ti test host, the previous CPU
 one-shot path took 127.27 seconds wall time, with first audio at 90.86 seconds
 and a 66.72x real-time factor. The CUDA/WGPU build loaded in 1.90 seconds and a
-one-shot synthesis completed in 2.45 seconds. Through the persistent Go worker,
-the first request produced audio at 1.01 seconds and completed in 2.18 seconds;
-a warm second request produced audio at 0.47 seconds and completed in 1.17
-seconds. These are single-host engineering measurements, not universal latency
-claims.
+one-shot synthesis completed in 2.45 seconds. Those early timing probes used an
+inaccurate experimental phonemizer and independent codec chunks, so they are
+retained only as performance history, not quality evidence. With system eSpeak
+and Neuphonic's overlap-aware 25-token stream, four random controlled requests
+reached first audio in 1.06-2.05 seconds and synthesis completed in 2.06-3.89
+seconds. Output duration was 3.10-6.08 seconds and can overlap synthesis during
+playback; synthesis time alone is not the listener's total completion time.
+Managed Parakeet recovered every substantive target word in all four clips,
+including two exact sentence transcriptions. These are single-host engineering
+measurements, not universal latency or subjective cloning-quality claims.
 
 CPU requests retain the five-minute timeout because fallback synthesis can be
 slow. PCM stays bounded and streams as 24 kHz mono samples. Cancellation sends a

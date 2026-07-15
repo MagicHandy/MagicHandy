@@ -18,7 +18,7 @@ installs is named, licensed, and consented to before it happens:
   path when needed, then installs and verifies Go.
 - Choosing the **managed llama.cpp build** additionally provisions Git, CMake,
   the Visual Studio Desktop C++ workload, and CUDA when selected. That choice
-  also provisions LLVM/libclang and pinned Rust 1.94.0 through Rustup, builds
+  also provisions LLVM/libclang, eSpeak NG 1.52, and pinned Rust 1.94.0 through Rustup, builds
   MagicHandy's persistent NeuTTS runner with the same CPU/CUDA backend, and
   installs a checksum-verified Air Q4 backbone, a decoder converted from a
   checksum-verified NeuCodec checkpoint, and a pinned ONNX reference encoder.

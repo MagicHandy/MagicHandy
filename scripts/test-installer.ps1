@@ -57,6 +57,9 @@ try {
         [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
+    $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
+    $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
+    Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
 
     Write-Host 'Checking same-process CUDA environment initialization...'
     $builderPath = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
@@ -325,11 +328,13 @@ version = "0.1.0"
         $script:NeuTTSEncoderModelSHA256 = Get-MagicHandySHA256 -Path $encoderModel
         $script:NeuTTSEncoderWeightsSHA256 = Get-MagicHandySHA256 -Path $encoderWeights
         $manifest = [pscustomobject]@{
-            schema_version = 3
+            schema_version = 4
             source_commit = $script:NeuTTSSourceCommit
             rust_toolchain = $script:NeuTTSRustToolchain
             backend = 'cpu'
             runner_protocol = $script:NeuTTSRunnerProtocol
+            phonemizer = $script:NeuTTSPhonemizer
+            phonemizer_version = $script:NeuTTSPhonemizerVersion
             backbone_acceleration = 'cpu'
             codec_acceleration = 'cpu'
             native_dependencies = [ordered]@{}
@@ -352,7 +357,7 @@ version = "0.1.0"
             [System.IO.File]::AppendAllText($runner, 'tampered')
             $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
             [System.IO.File]::WriteAllText($runner, 'fixture')
-            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+3', '"schema_version":"invalid"'
+            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+4', '"schema_version":"invalid"'
             [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), $malformedJSON)
             $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
 
@@ -744,6 +749,7 @@ version = "0.1.0"
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
     Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air.*protocol adapters'
     Assert-PlanContains -Plan $managedPlan -Pattern 'LLVM/libclang, Rustup.*Rust 1\.94\.0.*MSVC toolchain'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'eSpeak NG 1\.52\.0'
     Assert-PlanContains -Plan $managedPlan -Pattern 'persistent NeuTTS runner from pinned neutts-rs.*CUDA backbone \+ WGPU codec'
     Assert-PlanContains -Plan $managedPlan -Pattern 'MagicHandy NeuCodec ONNX reference encoder worker'
     Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder.*reference encoder assets.*about 2\.0 GiB installed'
@@ -761,7 +767,7 @@ version = "0.1.0"
     $ollamaPlan = @(Get-MagicHandyProvisionPlan -State $ollamaState)
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Ensure Ollama'
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Skip NeuTTS runtime build.*managed llama\.cpp is not selected'
-    Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|LLVM/libclang|Rustup|Build pinned neutts-rs|checksum-verified NeuTTS|Parakeet CPU runner'
+    Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|LLVM/libclang|Rustup|eSpeak NG|Build pinned neutts-rs|checksum-verified NeuTTS|Parakeet CPU runner'
 
     Write-Host 'Checking updater fast-forward and dirty-worktree refusal...'
     $git = Resolve-MagicHandyExecutable -Name 'git'

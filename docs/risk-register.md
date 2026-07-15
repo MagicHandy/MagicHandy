@@ -430,8 +430,9 @@ llama.cpp. A first-party Rust worker runs a pinned DistillNeuCodec ONNX encoder
 and generates validated reference codes from a local WAV without Python. The
 older bounded `.pt`/`.npy` normalizer remains an advanced fallback. The pinned
 upstream hub client still does not honor `HF_HUB_OFFLINE=1`. Enforced offline
-behavior, GPU-memory coexistence with the chat LLM, and subjective quality
-remain unproven.
+behavior, GPU-memory coexistence with the chat LLM, and subjective speaker
+similarity across representative references remain unproven. Controlled
+intelligibility now has ASR round-trip evidence.
 
 Mitigation:
 
@@ -451,6 +452,9 @@ Mitigation:
 - record CPU/CUDA/WGPU acceleration and every required native DLL checksum in
   the managed manifest; surface the selected backend and explain the CUDA
   latency/VRAM versus CPU compatibility tradeoff before installation
+- provision eSpeak NG 1.52, quality-probe its IPA during installation, reject
+  manifests without that phonemizer identity, and preserve Neuphonic's codec
+  lookback/lookahead overlap-add instead of concatenating independent chunks
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
@@ -487,7 +491,13 @@ requests completed in 2.018 and 0.874 seconds with valid retained WAVs and
 same-process reuse; a visible Edge request completed without an autoplay error
 after the shell adopted a gesture-unlocked Web Audio sink. Subjective listening,
 representative-source quality, CUDA/LLM VRAM coexistence, and network-sandbox
-evidence remain open risks.
+evidence remain open risks. A follow-up quality audit isolated severe slurring
+to the experimental pure-Rust phonemizer (wrong IPA and a dropped reference
+word) and independent codec chunks. System eSpeak NG 1.52 plus Neuphonic's
+overlap-aware stream retained every substantive target word in four random
+Parakeet round trips, with two exact sentence transcriptions. Schema 4 forces
+older managed runtimes to rebuild; wider listening and speaker-similarity
+acceptance still remain open.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

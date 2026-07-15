@@ -116,6 +116,22 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-15** - NeuTTS intelligibility correction: direct reconstruction of
+  the official Dave codes transcribed correctly, isolating the defect from the
+  reference encoder and codec. The pinned pure-Rust phonemizer mispronounced
+  common words and dropped one reference word; isolated 25-token codec decodes
+  also created discontinuities. The runner now invokes eSpeak NG 1.52 and uses
+  Neuphonic's lookback/lookahead overlap-add stream. Four random controlled
+  clips reached first audio in 1.06-2.05 s and synthesis completion in
+  2.06-3.89 s; managed Parakeet recovered every substantive target word and
+  exactly transcribed two clips. Clip duration was 3.10-6.08 s and overlaps
+  synthesis during streaming playback, so synthesis timing is not presented as
+  end-to-end audible completion. Schema-4 manifests force older runtimes to
+  rebuild onto the verified phonemizer path. A clean full-feature schema-3-to-4
+  update completed in 11 minutes, left no partial directories, verified the
+  activated runner hash, relaunched both voice workers, and completed a
+  141,120-byte browser request with an empty terminal queue.
+
 - **2026-07-15** - Persistent accelerated NeuTTS and voice startup: source
   inspection found the installed runner was CPU-only (`n_gpu_layers=0` plus CPU
   codec) and started a fresh model process per request. The old path measured
