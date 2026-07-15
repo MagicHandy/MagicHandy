@@ -112,6 +112,21 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-15** - NeuTTS playback and native reference generation: a
+  shell-owned browser player now follows backend TTS requests through the
+  five-minute worker deadline, while Settings renders ASR/TTS requests once in
+  a shared voice queue. A short-lived Rust/ONNX worker generates NeuCodec
+  reference codes from WAV without Python. Its executable, DirectML runtime,
+  ONNX graph, and external weights total 558,141,816 bytes (532.3 MiB) of
+  optional installed assets; the 7.45 s Dave reference encoded in about
+  1.0-1.3 s and observed approximately 1.3 GiB peak worker working set. The
+  installed NeuTTS runner accepted its 373 codes and emitted 106,560 PCM bytes.
+  Plain/stripped core binaries are 20,249,600 / 14,202,368 bytes; embedded UI is
+  817,572 raw / 542,975 gzip bytes. Against the preceding entry this is a
+  23,040 / 18,432-byte core increase and a 2,763 raw / 404 gzip UI increase.
+  The optional worker/model process remains excluded from core RSS by the
+  scorecard measurement rules.
+
 - **2026-07-15** — Startup, continuous voice, and NeuTTS hardening: optional
   voice staging is lazy, state polling is serialized and abortable, the static
   shell and React startup/error states remain responsive, and app startup no

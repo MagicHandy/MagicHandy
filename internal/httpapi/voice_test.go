@@ -134,6 +134,43 @@ func TestNeuTTSReferencePreparationRejectsRemoteHostPaths(t *testing.T) {
 	}
 }
 
+func TestNeuTTSReferenceGenerationRejectsUntrustedManagedRuntime(t *testing.T) {
+	server := newTestServer(t)
+	runner, _, _ := installTestAppManagedNeuTTSRuntime(t, server.voiceDataDir)
+	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), []byte(`{"schema_version":2,"source_commit":"untrusted"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if neuttsReferenceEncoderInstalled(server.voiceDataDir) {
+		t.Fatal("reference encoder reported installed with an untrusted manifest")
+	}
+
+	wav, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wavPath := filepath.Join(t.TempDir(), "reference.wav")
+	if err := os.WriteFile(wavPath, wav, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(map[string]string{
+		"reference_wav": wavPath,
+		"transcript":    "Exact transcript.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/neutts/references", strings.NewReader(string(body))))
+	prepareLocalPathPickerRequest(request)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("reference generation status = %d, want 422: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "app-managed NeuCodec reference encoder is unavailable") {
+		t.Fatalf("reference generation error did not identify the untrusted runtime: %s", recorder.Body.String())
+	}
+}
+
 func TestVoiceInputPreferencesPersistAndValidate(t *testing.T) {
 	server := newTestServer(t)
 	request := withController(httptest.NewRequest(http.MethodPut, "/api/voice/input-preferences", strings.NewReader(`{
@@ -322,12 +359,20 @@ func TestNeuTTSBackboneCacheDiscoversPersistedCustomRepo(t *testing.T) {
 func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, string, []byte) {
 	t.Helper()
 	runner, hfHome := neuttsAppPaths(dataDir)
+	encoder, encoderModel := neuttsEncoderPaths(dataDir)
 	if err := os.MkdirAll(filepath.Join(filepath.Dir(runner), "models"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(encoderModel), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	for path, content := range map[string]string{
 		runner: "runner",
 		filepath.Join(filepath.Dir(runner), "models", "neucodec_decoder.safetensors"): "decoder",
+		encoder:                "encoder",
+		encoderModel:           "encoder model",
+		encoderModel + ".data": "encoder weights",
+		filepath.Join(filepath.Dir(runner), "DirectML.dll"): "directml",
 	} {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
@@ -335,19 +380,26 @@ func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, s
 	}
 	runnerHash, runnerOK := fileSHA256(runner)
 	decoderHash, decoderOK := fileSHA256(filepath.Join(filepath.Dir(runner), "models", "neucodec_decoder.safetensors"))
-	if !runnerOK || !decoderOK {
+	encoderHash, encoderOK := fileSHA256(encoder)
+	directMLHash, directMLOK := fileSHA256(filepath.Join(filepath.Dir(runner), "DirectML.dll"))
+	if !runnerOK || !decoderOK || !encoderOK || !directMLOK {
 		t.Fatal("could not hash app-managed NeuTTS fixtures")
 	}
 	manifest, err := json.Marshal(map[string]any{
-		"schema_version":          1,
-		"source_commit":           managedNeuTTSSource,
-		"rust_toolchain":          managedNeuTTSRust,
-		"backbone_revision":       managedNeuTTSBackbone,
-		"codec_revision":          managedNeuTTSCodec,
-		"runner_sha256":           runnerHash,
-		"decoder_sha256":          decoderHash,
-		"backbone_sha256":         managedNeuTTSBackboneSHA,
-		"codec_checkpoint_sha256": managedNeuTTSCodecSHA,
+		"schema_version":            2,
+		"source_commit":             managedNeuTTSSource,
+		"rust_toolchain":            managedNeuTTSRust,
+		"backbone_revision":         managedNeuTTSBackbone,
+		"codec_revision":            managedNeuTTSCodec,
+		"runner_sha256":             runnerHash,
+		"decoder_sha256":            decoderHash,
+		"backbone_sha256":           managedNeuTTSBackboneSHA,
+		"codec_checkpoint_sha256":   managedNeuTTSCodecSHA,
+		"encoder_revision":          managedNeuTTSEncoder,
+		"encoder_sha256":            encoderHash,
+		"encoder_model_sha256":      managedNeuTTSEncoderSHA,
+		"encoder_model_data_sha256": managedNeuTTSWeightsSHA,
+		"directml_sha256":           directMLHash,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -366,8 +418,13 @@ func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
 	hashCalls := 0
 	managedNeuTTSFileSHA256 = func(path string) (string, bool) {
 		hashCalls++
-		if filepath.Base(path) == "neutts-air-Q4_0.gguf" {
+		switch filepath.Base(path) {
+		case "neutts-air-Q4_0.gguf":
 			return managedNeuTTSBackboneSHA, true
+		case "distill_neucodec_encoder.onnx":
+			return managedNeuTTSEncoderSHA, true
+		case "distill_neucodec_encoder.onnx.data":
+			return managedNeuTTSWeightsSHA, true
 		}
 		return realFileSHA256(path)
 	}

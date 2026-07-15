@@ -11,10 +11,10 @@
     The core app and all first-party Go voice adapters are built with CGO
     disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
     runner/model remain explicit choices. Selecting managed llama.cpp also builds
-    the pinned NeuTTS stream_pcm runner and installs its verified decoder and Air
-    Q4 backbone. Skipping managed llama.cpp skips NeuTTS. Reference voice codes
-    and their exact transcript remain user supplied. No model is downloaded at
-    app startup.
+    the pinned NeuTTS stream_pcm runner and installs its verified decoder, Air
+    Q4 backbone, and local WAV-to-reference encoder. Skipping managed llama.cpp
+    skips NeuTTS. Users supply a reference WAV and its exact transcript; the app
+    generates the codes without Python. No model is downloaded at app startup.
 
     Non-secret installation choices are stored under LocalAppData so update.ps1
     can preserve or revise them. API keys and the Handy connection key are never
@@ -183,7 +183,7 @@ function New-FreshConfiguration {
         } else {
             Write-Host ''
             Write-Host 'Managed llama.cpp gives MagicHandy direct control over runner version, startup, loading, and diagnostics.'
-            Write-Host 'This choice also builds NeuTTS with its llama.cpp binding and installs about 1.4 GiB of voice assets.'
+            Write-Host 'This choice also builds NeuTTS with its llama.cpp binding and local reference encoder, installing about 1.9 GiB of voice assets.'
             Write-Host 'Skipping managed llama.cpp also skips NeuTTS. Ollama saves that source-build and voice-runtime space and remains fully supported.' -ForegroundColor DarkGray
             Confirm-MagicHandyChoice -Question 'Build managed llama.cpp and install NeuTTS?' -Default $true
         }

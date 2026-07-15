@@ -1,0 +1,18 @@
+[package]
+name = "magichandy-neucodec-encoder"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "MagicHandy NeuCodec reference encoder worker"
+publish = false
+
+[dependencies]
+audioadapter-buffers = "=4.0.0"
+hound = "=3.5.1"
+ort = { version = "=2.0.0-rc.12", default-features = false, features = ["std", "download-binaries", "tls-native", "copy-dylibs", "api-24"] }
+rubato = "=4.0.0"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"

@@ -87,3 +87,37 @@ jobs:
       - name: PowerShell 5.1 installer tests
         shell: powershell
         run: .\scripts\test-installer.ps1
+
+  neucodec-encoder:
+    name: NeuCodec encoder
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: workers/neucodec-encoder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        shell: powershell
+        run: rustup toolchain install 1.94.0 --profile minimal --component rustfmt
+
+      - name: Check formatting
+        shell: powershell
+        run: rustup run 1.94.0 cargo fmt -- --check
+
+      - name: Build release worker
+        shell: powershell
+        run: rustup run 1.94.0 cargo build --locked --release
+
+      - name: Test worker
+        shell: powershell
+        run: rustup run 1.94.0 cargo test --locked --release
+
+      - name: Verify release payload
+        shell: powershell
+        run: |
+          if (-not (Test-Path .\target\release\magichandy-neucodec-encoder.exe)) { throw 'encoder executable is missing' }
+          if (-not (Test-Path .\target\release\DirectML.dll)) { throw 'DirectML.dll is missing' }
+          .\target\release\magichandy-neucodec-encoder.exe --help

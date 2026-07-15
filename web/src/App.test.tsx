@@ -798,7 +798,24 @@ describe("app shell safety invariants", () => {
   });
 
   it("discloses only fields for the selected voice provider and keeps status visible", async () => {
-    installFetch();
+    installFetch({
+      voiceStatus: {
+        voice: {
+          workers: {},
+          modules: {
+            neutts: {
+              state: "incomplete",
+              installed: false,
+              worker_installed: true,
+              runtime_installed: true,
+              reference_encoder_installed: true,
+              message: "Generate a reference voice from a WAV and its exact transcript.",
+            },
+          },
+        },
+        requests: [],
+      },
+    });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
@@ -812,14 +829,16 @@ describe("app shell safety invariants", () => {
 
     fireEvent.change(providers[1], { target: { value: "neutts_air" } });
     expect(screen.getByLabelText(/reference transcript/i)).toBeInTheDocument();
-    const prepareReference = screen.getByRole("button", { name: /prepare reference voice/i });
-    fireEvent.click(prepareReference);
-    expect(screen.getByRole("dialog", { name: /prepare reference voice/i })).toBeInTheDocument();
-    expect(screen.getByText(/validates the tensor without running python/i)).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: /reference code source/i })).toBeInTheDocument();
+    const generateReference = await screen.findByRole("button", { name: /generate reference voice/i });
+    await waitFor(() => expect(generateReference).toBeEnabled());
+    fireEvent.click(generateReference);
+    expect(screen.getByRole("dialog", { name: /create reference voice/i })).toBeInTheDocument();
+    expect(screen.getByText(/python is not used/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /source voice/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /exact source transcript/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /close reference voice window/i }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /prepare reference voice/i })).toBeNull());
-    await waitFor(() => expect(prepareReference).toHaveFocus());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /create reference voice/i })).toBeNull());
+    await waitFor(() => expect(generateReference).toHaveFocus());
     expect(screen.queryByLabelText(/^api key/i)).toBeNull();
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
   });

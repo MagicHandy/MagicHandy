@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, streamChat } from "../api/client";
 import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
-import { audioPlaybackToken, playBlob } from "../util/audio";
+import { useVoicePlayback } from "../state/voice-playback";
 import { VoiceComposerControls } from "./VoiceComposerControls";
 
 interface Msg {
@@ -32,6 +32,7 @@ function toLlmHistory(message: ChatLogMessage): ChatHistoryMessage {
 export function ChatPanel() {
   const { backendOnline, readOnly, state } = useAppState();
   const { show } = useToast();
+  const { queueSpeech } = useVoicePlayback();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,25 +43,7 @@ export function ChatPanel() {
   const history = useRef<ChatHistoryMessage[]>([]);
   const lastSeq = useRef(0);
   const seeded = useRef(false);
-  const speechQueue = useRef<string[]>([]);
-  const speaking = useRef(false);
-  const speechAbort = useRef<AbortController | null>(null);
-  const speechGeneration = useRef(0);
   const [voiceActive, setVoiceActive] = useState(false);
-
-  useEffect(() => {
-    const cancelSpeech = () => {
-      speechGeneration.current++;
-      speechQueue.current = [];
-      speechAbort.current?.abort();
-      speechAbort.current = null;
-    };
-    window.addEventListener("magichandy:emergency-stop", cancelSpeech);
-    return () => {
-      window.removeEventListener("magichandy:emergency-stop", cancelSpeech);
-      cancelSpeech();
-    };
-  }, []);
 
   // Seed the panel from the canonical server log once.
   useEffect(() => {
@@ -109,41 +92,6 @@ export function ChatPanel() {
       cancelled = true;
     };
   }, [latestSeq, busy]);
-
-  // Sequential playback of completed TTS clips. Only this (controller) tab
-  // receives speech events, and the backend lease refuses everyone else, so
-  // two tabs never speak the same clip.
-  function queueSpeech(requestId: string) {
-    speechQueue.current.push(requestId);
-    void drainSpeech();
-  }
-  async function drainSpeech() {
-    if (speaking.current) return;
-    speaking.current = true;
-    try {
-      while (speechQueue.current.length) {
-        const id = speechQueue.current.shift();
-        if (!id) continue;
-        const generation = speechGeneration.current;
-        const done = await waitForSpeechDone(id);
-        if (!done || generation !== speechGeneration.current) continue;
-        try {
-          const playbackToken = audioPlaybackToken();
-          const abort = new AbortController();
-          speechAbort.current = abort;
-          const blob = await api.voiceRequestAudio(id, abort.signal);
-          if (generation !== speechGeneration.current) continue;
-          await playBlob(blob, playbackToken);
-        } catch {
-          // Missing/denied audio is not a chat failure.
-        } finally {
-          speechAbort.current = null;
-        }
-      }
-    } finally {
-      speaking.current = false;
-    }
-  }
 
   useEffect(() => {
     if (stick.current) {
@@ -314,24 +262,6 @@ export function ChatPanel() {
       </form>
     </div>
   );
-}
-
-// waitForSpeechDone polls a TTS request until it completes; false means it
-// failed, was canceled, or timed out (nothing to play).
-async function waitForSpeechDone(requestId: string): Promise<boolean> {
-  const deadline = Date.now() + 30000;
-  for (;;) {
-    try {
-      const res = await api.voiceRequest(requestId);
-      const state = res.request?.state;
-      if (state === "done") return (res.request?.audio_bytes ?? 0) > 0;
-      if (state === "failed" || state === "canceled") return false;
-    } catch {
-      return false;
-    }
-    if (Date.now() > deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, 400));
-  }
 }
 
 function extractReplyDraft(raw: string): string {

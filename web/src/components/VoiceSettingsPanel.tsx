@@ -1,7 +1,9 @@
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { PublicSettings } from "../api/types";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { api } from "../api/client";
+import type { PublicSettings, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { HostPathField } from "./HostPathField";
 import { NeuTTSReferenceDialog } from "./NeuTTSReferenceDialog";
+import { VoiceRequestQueue } from "./VoiceRequestQueue";
 import { VoiceWorkers } from "./VoiceWorkers";
 
 const joinArgs = (args?: string[]) => (args ?? []).join("\n");
@@ -36,6 +38,8 @@ interface Props {
 
 export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, setNewKey, clearKey, setClearKey }: Props) {
   const voice = s.voice;
+  const voiceRuntime = useVoiceRuntimeStatus();
+  const referenceEncoderInstalled = voiceRuntime.modules.neutts?.reference_encoder_installed ?? false;
   const parakeetSource = voice.parakeet_source || "app_managed";
   const [referenceOpen, setReferenceOpen] = useState(false);
   const referenceTrigger = useRef<HTMLButtonElement>(null);
@@ -75,7 +79,15 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Worker arguments</span><textarea rows={4} value={joinArgs(voice.asr_worker_args)} disabled={locked} onChange={(event) => patch({ asr_worker_args: splitArgs(event.target.value) })} /></label>
       </>}
       {voice.asr_provider !== "none" && voice.asr_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary>{voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed" && <label className="field"><span className="label">Server port</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>}<HostPathField label="ASR worker binary override" kind="file" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(asr_worker_path) => patch({ asr_worker_path })} /></details>}
-      <VoiceWorkers locked={locked} role="asr" dirty={dirty} enabled={voice.enabled} providerSelected={voice.asr_provider !== "none"} showParakeetModule={voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed"} />
+      <VoiceWorkers
+        locked={locked}
+        role="asr"
+        dirty={dirty}
+        enabled={voice.enabled}
+        providerSelected={voice.asr_provider !== "none"}
+        showParakeetModule={voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed"}
+        {...voiceRuntime}
+      />
 
       <div className="divider" />
       <h3 className="group-title">Speech output (TTS)</h3>
@@ -93,14 +105,21 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
             <strong>Reference voice</strong>
             <span>{voice.neutts_reference_codes && voice.neutts_reference_text ? "Configured" : "Not configured"}</span>
           </div>
-          <button ref={referenceTrigger} type="button" className="btn btn-secondary" disabled={locked} onClick={() => setReferenceOpen(true)}>Prepare reference voice</button>
+          <button
+            ref={referenceTrigger}
+            type="button"
+            className="btn btn-secondary"
+            disabled={locked || !referenceEncoderInstalled}
+            title={referenceEncoderInstalled ? "" : "Install or update the managed NeuTTS reference encoder first"}
+            onClick={() => setReferenceOpen(true)}
+          >Generate reference voice</button>
         </div>
         <details className="advanced-fields"><summary>Manual reference paths</summary>
           <HostPathField label="Reference WAV" kind="wav" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(neutts_reference_wav) => patch({ neutts_reference_wav })} />
           <HostPathField label="Pre-encoded reference codes (.npy)" kind="npy" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(neutts_reference_codes) => patch({ neutts_reference_codes })} />
           <label className="field"><span className="label">Reference transcript</span><textarea rows={3} value={voice.neutts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_text: event.target.value })} /></label>
         </details>
-        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. Skipping that build also skips NeuTTS. MagicHandy can safely prepare official pre-encoded <code>.pt</code> or <code>.npy</code> codes; encoding arbitrary WAV files still requires an upstream neural encoder.</p>
+        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. The managed module includes local WAV-to-reference encoding without Python. Pre-encoded <code>.npy</code> files remain available under Manual reference paths.</p>
       </>}
       {voice.tts_provider === "custom" && <>
         <HostPathField label="TTS worker path" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />
@@ -108,9 +127,18 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       </>}
       {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><HostPathField label="TTS worker binary override" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} /></details>}
       {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies</span></label>}
-      <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} showNeuTTSModule={voice.tts_provider === "neutts_air"} />
+      <VoiceWorkers
+        locked={locked}
+        role="tts"
+        dirty={dirty}
+        enabled={voice.enabled}
+        providerSelected={voice.tts_provider !== "none"}
+        showNeuTTSModule={voice.tts_provider === "neutts_air"}
+        {...voiceRuntime}
+      />
+      <div className="divider" />
+      <VoiceRequestQueue locked={locked} requests={voiceRuntime.requests} refresh={voiceRuntime.refresh} />
       {referenceOpen && <NeuTTSReferenceDialog
-        initialCodes={voice.neutts_reference_codes ?? ""}
         initialWAV={voice.neutts_reference_wav ?? ""}
         initialTranscript={voice.neutts_reference_text ?? ""}
         onApply={(reference) => patch({
@@ -122,4 +150,36 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       />}
     </>
   );
+}
+
+function useVoiceRuntimeStatus() {
+  const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
+  const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
+  const [modules, setModules] = useState<Record<string, VoiceModuleStatus>>({});
+  const alive = useRef(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await api.voiceStatus();
+      if (!alive.current) return;
+      setWorkers(response.voice.workers ?? {});
+      setModules(response.voice.modules ?? {});
+      setRequests(response.requests ?? []);
+    } catch {
+      // Core-offline state is rendered by the persistent shell. Keep the last
+      // coherent snapshot until the status endpoint recovers.
+    }
+  }, []);
+
+  useEffect(() => {
+    alive.current = true;
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => {
+      alive.current = false;
+      window.clearInterval(timer);
+    };
+  }, [refresh]);
+
+  return { workers, requests, modules, refresh };
 }

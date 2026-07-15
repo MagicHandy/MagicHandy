@@ -4,20 +4,18 @@ import type { NeuTTSReference } from "../api/types";
 import { HostPathField } from "./HostPathField";
 
 interface Props {
-  initialCodes: string;
   initialWAV: string;
   initialTranscript: string;
   onApply: (reference: { codes: string; wav: string; transcript: string }) => void;
   onClose: () => void;
 }
 
-export function NeuTTSReferenceDialog({ initialCodes, initialWAV, initialTranscript, onApply, onClose }: Props) {
-  const [sourcePath, setSourcePath] = useState(initialCodes);
+export function NeuTTSReferenceDialog({ initialWAV, initialTranscript, onApply, onClose }: Props) {
   const [wavPath, setWAVPath] = useState(initialWAV);
   const [transcript, setTranscript] = useState(initialTranscript);
-  const [prepared, setPrepared] = useState<NeuTTSReference | null>(null);
+  const [generated, setGenerated] = useState<NeuTTSReference | null>(null);
   const [previewURL, setPreviewURL] = useState("");
-  const [preparing, setPreparing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const request = useRef<AbortController | null>(null);
@@ -55,49 +53,51 @@ export function NeuTTSReferenceDialog({ initialCodes, initialWAV, initialTranscr
     };
   }, [onClose]);
 
-  function invalidatePrepared(clearTranscript = false) {
+  function invalidateAudio() {
     request.current?.abort();
     request.current = null;
-    setPrepared(null);
+    setGenerated(null);
     setPreviewURL("");
     setError("");
-    setPreparing(false);
-    if (clearTranscript) setTranscript("");
+    setGenerating(false);
   }
 
-  async function prepare() {
-    const source = sourcePath.trim();
-    if (!source) {
-      setError("Choose an official NeuTTS .pt tensor or an int32 .npy file.");
+  async function generate() {
+    const wav = wavPath.trim();
+    const exactTranscript = transcript.trim();
+    if (!wav) {
+      setError("Choose the source WAV used for this reference voice.");
+      return;
+    }
+    if (!exactTranscript) {
+      setError("Enter the exact words spoken in the source WAV.");
       return;
     }
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    setPreparing(true);
+    setGenerating(true);
     setError("");
-    setPrepared(null);
+    setGenerated(null);
     setPreviewURL("");
     try {
-      const result = await api.prepareNeuTTSReference(source, wavPath.trim(), controller.signal);
+      const result = await api.generateNeuTTSReference(wav, exactTranscript, controller.signal);
       if (controller.signal.aborted) return;
-      setPrepared(result.reference);
+      setGenerated(result.reference);
       setPreviewURL(result.preview_url);
-      setTranscript((current) => current.trim() || result.reference.transcript || "");
-      if (result.reference.audio_path) setWAVPath(result.reference.audio_path);
     } catch (reason) {
       if (!controller.signal.aborted) {
-        setError(reason instanceof Error ? reason.message : "The reference voice could not be prepared.");
+        setError(reason instanceof Error ? reason.message : "The reference voice could not be generated.");
       }
     } finally {
       if (request.current === controller) request.current = null;
-      if (!controller.signal.aborted) setPreparing(false);
+      if (!controller.signal.aborted) setGenerating(false);
     }
   }
 
   function apply() {
-    if (!prepared || !previewURL || !transcript.trim()) return;
-    onApply({ codes: prepared.codes_path, wav: prepared.audio_path ?? "", transcript: transcript.trim() });
+    if (!generated || !previewURL || !transcript.trim()) return;
+    onApply({ codes: generated.codes_path, wav: generated.audio_path ?? "", transcript: transcript.trim() });
     onClose();
   }
 
@@ -119,70 +119,60 @@ export function NeuTTSReferenceDialog({ initialCodes, initialWAV, initialTranscr
         <header className="reference-dialog-header">
           <div>
             <p className="eyebrow">NeuTTS Air</p>
-            <h2 id="neutts-reference-title">Prepare reference voice</h2>
+            <h2 id="neutts-reference-title">Create reference voice</h2>
           </div>
-          <button type="button" className="reference-dialog-close" aria-label="Close reference voice window" title="Close" onClick={onClose}>×</button>
+          <button type="button" className="reference-dialog-close" aria-label="Close reference voice window" title="Close" onClick={onClose}>{"\u00d7"}</button>
         </header>
 
         <div className="reference-dialog-body">
           <p id="neutts-reference-description" className="form-status">
-            Import pre-encoded NeuCodec tokens from an official sample-style <code>.pt</code> file or a one-dimensional int32 <code>.npy</code> file. MagicHandy validates the tensor without running Python or pickle code.
+            Generate NeuCodec reference codes locally from a WAV and its exact transcript. Python is not used.
           </p>
           <HostPathField
-            label="Reference code source (.pt or .npy)"
-            kind="neutts_codes"
-            value={sourcePath}
-            disabled={preparing}
-            onChange={(value) => { invalidatePrepared(true); setSourcePath(value); }}
-          />
-          <HostPathField
-            label="Matching reference audio (.wav)"
+            label="Source voice (.wav)"
             kind="wav"
             value={wavPath}
-            disabled={preparing}
-            placeholder="Optional when a same-name WAV is beside the code source"
-            onChange={(value) => { invalidatePrepared(true); setWAVPath(value); }}
+            disabled={generating}
+            placeholder="Choose a clean 3-15 second voice sample"
+            onChange={(value) => { invalidateAudio(); setWAVPath(value); }}
           />
+          <label className="field">
+            <span className="label">Exact source transcript</span>
+            <textarea
+              rows={4}
+              value={transcript}
+              disabled={generating}
+              onChange={(event) => { setTranscript(event.target.value); setError(""); }}
+              placeholder="Type exactly what the speaker says"
+            />
+          </label>
+          <div className="reference-guide">
+            <strong>Reference quality</strong>
+            <ul>
+              <li>Use one speaker with little background noise and few long pauses.</li>
+              <li>Preserve contractions and numbers exactly as spoken.</li>
+              <li>Exclude speaker labels, timestamps, and stage directions.</li>
+            </ul>
+          </div>
           <div className="reference-prepare-row">
-            <button type="button" className="btn btn-secondary" disabled={preparing || !sourcePath.trim()} onClick={() => void prepare()}>
-              {preparing ? "Preparing..." : "Prepare preview"}
+            <button type="button" className="btn btn-secondary" disabled={generating || !wavPath.trim() || !transcript.trim()} onClick={() => void generate()}>
+              {generating ? "Generating..." : "Generate reference codes"}
             </button>
-            {prepared && <span className="reference-token-count" role="status">{prepared.token_count.toLocaleString()} tokens validated</span>}
+            {generated && <span className="reference-token-count" role="status">{generated.token_count.toLocaleString()} codes generated</span>}
           </div>
           {error && <p className="form-status voice-worker-error" role="alert">{error}</p>}
 
-          {prepared && (
+          {generated && previewSource && (
             <div className="reference-transcription">
-              {previewSource ? (
-                <audio key={previewSource} controls preload="metadata" src={previewSource} aria-label="NeuTTS reference audio preview" />
-              ) : (
-                <p className="form-status voice-worker-error" role="alert">No matching WAV was found. Choose the audio used to create these codes, then prepare the preview again.</p>
-              )}
-              <div className="reference-guide">
-                <strong>Transcription guide</strong>
-                <ol>
-                  <li>Play the whole clip and listen for every spoken word.</li>
-                  <li>Enter the words exactly as spoken, preserving contractions and numbers as heard.</li>
-                  <li>Do not add speaker labels, stage directions, or words that are not in the audio.</li>
-                </ol>
-              </div>
-              <label className="field">
-                <span className="label">Exact reference transcript</span>
-                <textarea
-                  rows={4}
-                  value={transcript}
-                  disabled={preparing}
-                  onChange={(event) => setTranscript(event.target.value)}
-                  placeholder="Type exactly what the reference speaker says"
-                />
-              </label>
+              <audio key={previewSource} controls preload="metadata" src={previewSource} aria-label="NeuTTS reference audio preview" />
+              <p className="form-status">Listen once before applying. Correcting the transcript does not require regenerating the audio codes.</p>
             </div>
           )}
         </div>
 
         <footer className="reference-dialog-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-primary" disabled={!prepared || !previewURL || !transcript.trim()} onClick={apply}>Use reference</button>
+          <button type="button" className="btn btn-primary" disabled={!generated || !previewURL || !transcript.trim()} onClick={apply}>Use reference</button>
         </footer>
       </section>
     </div>

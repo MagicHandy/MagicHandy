@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted and implemented. Updated 2026-07-14: managed ASR uses parakeet.cpp;
+Accepted and implemented. Updated 2026-07-15: managed ASR uses parakeet.cpp;
 NeuTTS Air uses the Slice 13.6 Go adapter around pinned `neutts-rs` v0.1.1
-`stream_pcm`, which the source installer builds with managed llama.cpp.
+`stream_pcm`; a separate Rust/ONNX worker generates reference codes from WAV.
 
 ## Context
 
@@ -37,17 +37,18 @@ Implement three non-Python voice backends behind the ADR 0003 worker protocol:
 2. **Local TTS (cloning) — NeuTTS Air**: a 748M Qwen-backbone speech LLM +
    NeuCodec, real-time on CPU (so it does **not** contend with the LLM for the
    GPU). A Go ADR 0003 adapter runs the reviewed `neutts-rs stream_pcm` process
-   and forwards live PCM without Python. The current runner requires pre-encoded
-   `.npy` reference codes plus the exact transcript; its public Rust reference
-   encoder is a stub, so the WAV is provenance rather than runtime input.
+   and forwards live PCM without Python. A separate first-party Rust worker runs
+   a pinned DistillNeuCodec ONNX encoder to create the required `.npy` reference
+   codes from a local WAV. The exact transcript remains separate conditioning
+   input for synthesis.
 3. **Cloud TTS (premium) — ElevenLabs**: HTTP from Go, expressive and
    high-fidelity instant cloning, low latency, no Python and no local VRAM.
 
 The core app, Parakeet, ElevenLabs, and the installer-managed NeuTTS runtime run
 with **no Python present**. Selecting managed llama.cpp in the source installer
 also builds the NeuTTS runner and installs its decoder/backbone; skipping
-llama.cpp skips NeuTTS. Generating new reference codes may still require upstream
-Python tooling because the public Rust encoder remains a stub.
+llama.cpp skips NeuTTS. Reference generation does not require Python; the
+upstream Rust stub is not used for that path.
 Kokoro/Piper (non-cloning) may be added later as an instant fallback but are not
 in the first implementation set.
 
@@ -71,8 +72,9 @@ in the first implementation set.
   custom HTTP surface to this first slice.
 - **NeuTTS Air** is the best "fast + cloning + non-Python + fits a shared 5070"
   option in the survey: CPU real-time avoids GPU contention with the LLM. The
-  implemented adapter proves non-Python decode and streaming, while arbitrary-WAV
-  reference encoding remains outside the current capability boundary.
+  implemented adapter proves non-Python decode and streaming. The pinned ONNX
+  encoder closes the arbitrary-WAV reference gap without adding CGo or Python to
+  the core.
 - **ElevenLabs** covers the "expressive AND faithfully-cloned voice together"
   case that no mature local non-Python model does today, at the lowest latency,
   at the cost of cloud/privacy — an explicit user choice, not a default.
@@ -99,13 +101,14 @@ Positive:
 
 Negative / risks:
 
-- NeuTTS Air's subjective cloning quality and arbitrary-WAV reference encoding
-  remain unproven; the current pre-encoded-code boundary is explicit (R17)
+- NeuTTS Air's subjective cloning quality remains unproven; arbitrary-WAV
+  reference encoding is implemented and compatibility-tested, but needs wider
+  sample-quality acceptance (R17)
 - NeuTTS source provisioning is coupled to managed llama.cpp and adds Rust plus
-  about 1.4 GiB of installed voice assets. MagicHandy compensates for the pinned
+  about 1.9 GiB of installed voice assets. MagicHandy compensates for the pinned
   runner not enforcing `HF_HUB_OFFLINE=1` with exact-cache preflight, but it
   reloads in a new process for every request; network-denied evidence,
-  persistent preload, and arbitrary-WAV encoding remain R17
+  persistent preload, and subjective voice acceptance remain R17
 - expressive emotion *tags* on a cloned voice are not covered by the initial set;
   that stays a cloud (ElevenLabs) or optional-Python capability
 - ElevenLabs needs internet + API key and sends text/reference audio to a cloud
@@ -116,9 +119,10 @@ Negative / risks:
 ## Implementation Note
 
 The NeuTTS Air spike, Slice 13.6 protocol adapter, and checksum-pinned Windows
-source installation are complete. Setup and the exact pre-encoded-code boundary
-are documented in `docs/neutts-worker.md`. Network-denied evidence, persistent
-preload, subjective quality, and arbitrary-WAV encoding remain open; if they fail
+source installation are complete. A pinned DistillNeuCodec ONNX worker now
+generates compatible reference codes from WAV without Python; setup and manual
+pre-encoded fallback are documented in `docs/neutts-worker.md`. Network-denied
+evidence, persistent preload, and subjective quality remain open; if they fail
 acceptance, use a documented non-Python fallback or an optional Python worker
 while keeping ElevenLabs as the premium path.
 

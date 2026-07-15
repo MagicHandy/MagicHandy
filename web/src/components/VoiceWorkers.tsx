@@ -1,20 +1,19 @@
-// Live status + controls for the optional voice workers (ADR 0003). Voice is
-// entirely optional: every state here (disabled, not configured, stopped,
-// crashed) is a visible readout, never a blocker for the rest of the app.
-// Status readouts follow the design guidelines: dot + text, no pills.
-import { useCallback, useEffect, useRef, useState } from "react";
+// Live status and controls for one optional voice worker (ADR 0003). The
+// settings parent owns the shared status poll so ASR, TTS, and their request
+// queue render one coherent backend snapshot.
+import { useState } from "react";
 import { api } from "../api/client";
 import type { VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { useToast } from "../state/app-state";
-import { audioPlaybackToken, playBlob } from "../util/audio";
+import { useVoicePlayback } from "../state/voice-playback";
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
+const message = (error: unknown) => error instanceof Error ? error.message : "Request failed";
 
 const STATE_LABEL: Record<string, string> = {
   disabled: "disabled",
   not_configured: "not configured",
   stopped: "stopped",
-  starting: "starting…",
+  starting: "starting...",
   running: "running",
   crashed: "crashed",
 };
@@ -34,13 +33,12 @@ function dotState(state: string): string {
   }
 }
 
-const ROLE_LABEL: Record<string, string> = { tts: "Speech output (TTS)", asr: "Speech input (ASR)" };
+const ROLE_LABEL: Record<string, string> = {
+  tts: "Speech output (TTS)",
+  asr: "Speech input (ASR)",
+};
 
-// dirty means the surrounding settings form has unsaved voice changes; the
-// controls act on the *saved* config, so they lock until the form is saved.
-export function VoiceWorkers({
-  locked, role: selectedRole, dirty, enabled, providerSelected, showParakeetModule, showNeuTTSModule,
-}: {
+interface Props {
   locked: boolean;
   role?: "tts" | "asr";
   dirty?: boolean;
@@ -48,81 +46,50 @@ export function VoiceWorkers({
   providerSelected?: boolean;
   showParakeetModule?: boolean;
   showNeuTTSModule?: boolean;
-}) {
+  workers: Record<string, VoiceWorkerStatus>;
+  requests: VoiceRequestSnapshot[];
+  modules: Record<string, VoiceModuleStatus>;
+  refresh: () => Promise<void>;
+}
+
+// dirty means the surrounding settings form has unsaved voice changes; these
+// controls act on saved config and therefore lock until that config is saved.
+export function VoiceWorkers({
+  locked,
+  role: selectedRole,
+  dirty,
+  enabled,
+  providerSelected,
+  showParakeetModule,
+  showNeuTTSModule,
+  workers,
+  requests,
+  modules,
+  refresh,
+}: Props) {
   const { show } = useToast();
-  const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
-  const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
-  const [modules, setModules] = useState<Record<string, VoiceModuleStatus>>({});
+  const { queueSpeech } = useVoicePlayback();
   const [busyRole, setBusyRole] = useState<string | null>(null);
-  const alive = useRef(true);
-
-  const refresh = useCallback(async () => {
-    try {
-      const res = await api.voiceStatus();
-      if (!alive.current) return;
-      setWorkers(res.voice.workers ?? {});
-      setModules(res.voice.modules ?? {});
-      setRequests(res.requests ?? []);
-    } catch {
-      // The settings page surfaces core-offline globally; keep the last view.
-    }
-  }, []);
-
-  useEffect(() => {
-    alive.current = true;
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 3000);
-    return () => {
-      alive.current = false;
-      window.clearInterval(timer);
-    };
-  }, [refresh]);
 
   async function run(role: "tts" | "asr", action: () => Promise<unknown>, doing: string) {
     setBusyRole(role);
     try {
       await action();
-    } catch (e) {
-      show(`${doing} failed: ${msg(e)}`, "error");
+    } catch (error) {
+      show(`${doing} failed: ${message(error)}`, "error");
     } finally {
       setBusyRole(null);
       void refresh();
     }
   }
 
-  async function cancelRequest(id: string) {
-    try {
-      await api.voiceRequestCancel(id);
-    } catch (e) {
-      show(msg(e), "error");
-    }
-    void refresh();
-  }
-
-  // A test is only useful with a visible outcome: follow the request to its
-  // terminal state and, for TTS, play the produced clip (this tab holds the
-  // controller lease whenever the button is enabled).
   async function sendTest(role: "tts" | "asr") {
     setBusyRole(role);
     try {
-      const res = await api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 });
-      const id = res.request?.id;
-      const deadline = Date.now() + 15000;
-      while (id) {
-        const poll = await api.voiceRequest(id);
-        const state = poll.request?.state;
-        if (state === "done") {
-          if (role === "tts" && (poll.request?.audio_bytes ?? 0) > 0) {
-            const token = audioPlaybackToken();
-            await playBlob(await api.voiceRequestAudio(id), token).catch(() => undefined);
-          }
-          break;
-        }
-        if (state === "failed" || state === "canceled" || Date.now() > deadline) break;
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-    } catch (e) {
-      show(`Test request failed: ${msg(e)}`, "error");
+      const result = await api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 });
+      if (role === "tts" && result.request?.id) queueSpeech(result.request.id);
+    } catch (error) {
+      show(`Test request failed: ${message(error)}`, "error");
     } finally {
       setBusyRole(null);
       void refresh();
@@ -130,7 +97,6 @@ export function VoiceWorkers({
   }
 
   const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
-  const activeRequests = requests.filter((r) => r.state === "queued" || r.state === "active");
   const parakeetModule = modules.parakeet;
   const neuttsModule = modules.neutts;
   const visibleModule = showParakeetModule ? parakeetModule : showNeuTTSModule ? neuttsModule : undefined;
@@ -170,7 +136,7 @@ export function VoiceWorkers({
               </span>
               {worker?.provider && state === "running" && (
                 <span className="hint-inline">
-                  {worker.provider} v{worker.provider_version} · protocol v{worker.protocol_version} · model {worker.model_state ?? "unknown"} · queue {worker.queue_depth}
+                  {worker.provider} v{worker.provider_version} / protocol v{worker.protocol_version} / model {worker.model_state ?? "unknown"} / queue {worker.queue_depth}
                 </span>
               )}
             </div>
@@ -186,9 +152,9 @@ export function VoiceWorkers({
             {lastResult && (
               <p className="form-status voice-last-result">
                 {`Last request ${lastResult.state}`}
-                {lastResult.state === "done" && lastResult.transcript?.[0]?.text ? ` — “${lastResult.transcript[0].text}”` : ""}
-                {lastResult.state === "done" && (lastResult.audio_bytes ?? 0) > 0 ? ` — ${lastResult.audio_bytes} bytes of audio` : ""}
-                {lastResult.state === "failed" && lastResult.error ? ` — ${lastResult.error.code}: ${lastResult.error.message}` : ""}
+                {lastResult.state === "done" && lastResult.transcript?.[0]?.text ? ` - "${lastResult.transcript[0].text}"` : ""}
+                {lastResult.state === "done" && (lastResult.audio_bytes ?? 0) > 0 ? ` - ${lastResult.audio_bytes} bytes of audio` : ""}
+                {lastResult.state === "failed" && lastResult.error ? ` - ${lastResult.error.code}: ${lastResult.error.message}` : ""}
               </p>
             )}
             {state !== "disabled" && state !== "not_configured" && dirty && (
@@ -206,20 +172,6 @@ export function VoiceWorkers({
           </div>
         );
       })}
-
-      {activeRequests.length > 0 && (
-        <div className="voice-requests">
-          {activeRequests.map((request) => (
-            <div key={request.id} className="voice-request-row">
-              <span className="status-readout">
-                <span className="status-dot" data-state={request.state === "active" ? "active" : "pending"} />
-                <span className="status-text">{request.role} {request.type} #{request.id} — {request.state}</span>
-              </span>
-              <button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void cancelRequest(request.id)}>Cancel</button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

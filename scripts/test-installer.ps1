@@ -99,7 +99,7 @@ try {
     Assert-True -Condition ($installCompletion -match 'INSTALL COMPLETE') -Message 'install completion should identify the finished operation'
     Assert-True -Condition ($installCompletion -match 'APP BUILD VERIFIED - CONFIGURATION REQUIRED') -Message 'install completion should distinguish a verified build from configured providers'
     Assert-True -Condition ($installCompletion -match 'Open Settings.+select a model, voice provider, and device transport') -Message 'install completion should give relevant next steps'
-    Assert-True -Condition ($installCompletion -match 'Managed NeuTTS still needs reference codes\s+and their exact transcript') -Message 'install completion should disclose the remaining NeuTTS reference boundary'
+    Assert-True -Condition ($installCompletion -match 'Managed NeuTTS can create reference codes\s+locally from a WAV and exact transcript') -Message 'install completion should describe the local NeuTTS reference workflow'
     Assert-True -Condition ($installCompletion -match '\|\|=+\[\]') -Message 'completion should include the Handy motion-rail text art'
     $updateCompletion = Write-MagicHandyCompletionArt -Operation Update 6>&1 | Out-String
     Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices were reapplied') -Message 'update completion should confirm preserved choices'
@@ -305,8 +305,12 @@ version = "0.1.0"
         $runtime = Join-Path $root 'runtime'
         $runner = Join-Path $runtime 'stream_pcm.exe'
         $decoder = Join-Path $runtime 'models\neucodec_decoder.safetensors'
+        $encoder = Join-Path $runtime 'magichandy-neucodec-encoder.exe'
+        $directML = Join-Path $runtime 'DirectML.dll'
+        $encoderModel = Join-Path $root 'encoder\distill_neucodec_encoder.onnx'
+        $encoderWeights = "$encoderModel.data"
         $gguf = Join-Path $root "hf\hub\models--neuphonic--neutts-air-q4-gguf\snapshots\$script:NeuTTSBackboneRevision\neutts-air-Q4_0.gguf"
-        foreach ($path in @($runner, $decoder, $gguf)) {
+        foreach ($path in @($runner, $decoder, $encoder, $directML, $encoderModel, $encoderWeights, $gguf)) {
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
             [System.IO.File]::WriteAllText($path, 'fixture')
         }
@@ -315,9 +319,13 @@ version = "0.1.0"
         [System.IO.File]::WriteAllText($backboneRef, $script:NeuTTSBackboneRevision)
         $fixtureBackboneHash = Get-MagicHandySHA256 -Path $gguf
         $originalBackboneHash = $script:NeuTTSBackboneSHA256
+        $originalEncoderModelHash = $script:NeuTTSEncoderModelSHA256
+        $originalEncoderWeightsHash = $script:NeuTTSEncoderWeightsSHA256
         $script:NeuTTSBackboneSHA256 = $fixtureBackboneHash
+        $script:NeuTTSEncoderModelSHA256 = Get-MagicHandySHA256 -Path $encoderModel
+        $script:NeuTTSEncoderWeightsSHA256 = Get-MagicHandySHA256 -Path $encoderWeights
         $manifest = [pscustomobject]@{
-            schema_version = 1
+            schema_version = 2
             source_commit = $script:NeuTTSSourceCommit
             rust_toolchain = $script:NeuTTSRustToolchain
             backbone_revision = $script:NeuTTSBackboneRevision
@@ -326,6 +334,11 @@ version = "0.1.0"
             codec_checkpoint_sha256 = $script:NeuTTSCodecSHA256
             runner_sha256 = (Get-MagicHandySHA256 -Path $runner)
             decoder_sha256 = (Get-MagicHandySHA256 -Path $decoder)
+            encoder_revision = $script:NeuTTSEncoderRevision
+            encoder_sha256 = (Get-MagicHandySHA256 -Path $encoder)
+            encoder_model_sha256 = $script:NeuTTSEncoderModelSHA256
+            encoder_model_data_sha256 = $script:NeuTTSEncoderWeightsSHA256
+            directml_sha256 = (Get-MagicHandySHA256 -Path $directML)
         }
         [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json))
         try {
@@ -333,12 +346,14 @@ version = "0.1.0"
             [System.IO.File]::AppendAllText($runner, 'tampered')
             $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
             [System.IO.File]::WriteAllText($runner, 'fixture')
-            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+1', '"schema_version":"invalid"'
+            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+2', '"schema_version":"invalid"'
             [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), $malformedJSON)
             $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
             [pscustomobject]@{ Valid = $valid; Tampered = $tampered; Malformed = $malformed }
         } finally {
             $script:NeuTTSBackboneSHA256 = $originalBackboneHash
+            $script:NeuTTSEncoderModelSHA256 = $originalEncoderModelHash
+            $script:NeuTTSEncoderWeightsSHA256 = $originalEncoderWeightsHash
         }
     } $neuttsData
     Assert-True -Condition ([bool]$neuttsRuntimeResult.Valid) -Message 'matching NeuTTS manifest and runtime files should be reusable'
@@ -698,7 +713,8 @@ version = "0.1.0"
     Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air.*protocol adapters'
     Assert-PlanContains -Plan $managedPlan -Pattern 'LLVM/libclang, Rustup.*Rust 1\.94\.0.*MSVC toolchain'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Build pinned neutts-rs stream_pcm.*llama\.cpp binding'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'MagicHandy NeuCodec ONNX reference encoder worker'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder.*reference encoder assets'
 
     $ollamaState = New-MagicHandyInstallState `
         -RepositoryPath $Repo `

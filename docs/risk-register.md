@@ -425,13 +425,13 @@ Description:
 ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
 adapter around the reviewed `neutts-rs stream_pcm` runner streams PCM without
 Python. The source installer now builds the pinned runner and installs verified
-decoder/backbone assets with managed llama.cpp. MagicHandy can safely normalize
-the official sample-style Torch ZIP `.pt` layout and compatible one-dimensional
-int32 `.npy` files, but it still requires pre-encoded voice codes because the
-public Rust encoder is a stub. The pinned upstream hub client also does not honor
-`HF_HUB_OFFLINE=1`, and MagicHandy currently starts a fresh model process for
-each synthesis. Enforced offline behavior, arbitrary-WAV cloning, preload reuse,
-and subjective quality remain unproven.
+decoder/backbone assets with managed llama.cpp. A first-party Rust worker now
+runs a pinned DistillNeuCodec ONNX encoder and generates validated reference
+codes from a local WAV without Python. The older bounded `.pt`/`.npy` normalizer
+remains an advanced fallback. The pinned upstream hub client still does not
+honor `HF_HUB_OFFLINE=1`, and MagicHandy starts a fresh model process for each
+synthesis. Enforced offline behavior, preload reuse, and subjective quality
+remain unproven.
 
 Mitigation:
 
@@ -442,9 +442,9 @@ Mitigation:
 - install immutable, checksum-verified inputs through the source installer;
   report missing runner/decoder/codes/transcript states before Start and keep a
   guarded local host-path chooser for custom overrides
-- parse only the bounded official sample-style `.pt` layout or one-dimensional
-  int32 `.npy` without executing pickle; keep arbitrary WAV encoding explicitly
-  unavailable until a reviewed neural encoder exists
+- keep reference encoding in a short-lived worker, pin and checksum its ONNX
+  graph/external weights, constrain WAV duration/rate/channels, and re-parse and
+  range-check generated NPY in Go before publishing it
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
@@ -452,8 +452,8 @@ Mitigation:
 Exit evidence:
 
 - a capped listening run shows acceptable cloning quality and latency with the
-  non-Python adapter, and arbitrary-WAV encoding either lands behind the worker
-  boundary or remains an explicit documented limitation/fallback
+  non-Python adapter; the native encoder remains compatible across representative
+  WAV formats and source voices
 
 Status 2026-07-15: the spike and Slice 13.6 adapter landed
 (`docs/neutts-air-spike.md`, `docs/neutts-worker.md`). Non-Python decode and
@@ -461,12 +461,14 @@ streaming are implemented through `neutts-rs`; the core wraps retained PCM at
 the playback boundary. The Windows source installer now verifies and builds
 `neutts-rs` v0.1.1, converts a verified NeuCodec checkpoint, and installs the
 exact Air Q4 cache whenever managed llama.cpp is selected. A pure-Go bounded
-normalizer prepared the official Dave `.pt` sample's 372 codes, and Settings now
-provides an audio-preview/transcription dialog around that path. A real Dave
-synthesis produced 101,760 PCM bytes in 2m2.576s with first audio at 87.98s;
-the adapter strips the runner's observed 93-byte stdout diagnostic before PCM.
-Subjective listening, arbitrary-WAV encoding, per-request model startup, and
-network-sandbox evidence remain open risks.
+normalizer prepared the official Dave `.pt` sample's 372 codes. A pinned
+DistillNeuCodec ONNX encoder then generated 373 valid codes directly from the
+7.45 second, 44.1 kHz stereo Dave WAV in about 1.3 seconds. The installed
+NeuTTS runner accepted those generated codes and produced 106,560 PCM bytes
+(2.22 seconds of audio), proving format compatibility. Settings now exposes the
+actual WAV-plus-transcript generation flow and keeps pre-encoded paths under
+Advanced. Subjective listening, representative-source quality, per-request
+model startup, and network-sandbox evidence remain open risks.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

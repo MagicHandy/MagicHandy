@@ -58,10 +58,10 @@ artifacts. The optional portable `data/` directory is ignored too.
 
 These three voice executables are protocol adapters. The installer separately
 provisions selected Parakeet assets and, whenever managed llama.cpp is selected,
-an app-managed NeuTTS runtime. It does not install a reference voice. Settings
-can safely normalize licensed official sample-style `.pt` or compatible `.npy`
-codes and pair them with an audio preview and exact transcript, but it cannot
-encode an arbitrary WAV. A successful source build therefore ends with
+an app-managed NeuTTS runtime and reference encoder. It does not install a
+reference voice. Settings generates validated reference codes from a
+user-selected WAV and exact transcript without Python; manual `.npy` paths
+remain available. A successful source build therefore ends with
 **configuration required**, not a claim that every provider is ready.
 
 For manual/custom runtimes, Settings path fields provide **Browse...** on the
@@ -96,15 +96,18 @@ NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
    `ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`;
 3. requires and corrects the tag's single stale root-package version in
    `Cargo.lock` from 0.1.0 to 0.1.1, without changing dependency versions;
-4. downloads the revision-pinned NeuCodec checkpoint and Air Q4 GGUF with fixed
-   SHA-256 verification, bounded retries, and resumable partial files under
-   `<data-dir>/voice/neutts/downloads`;
+4. downloads the revision-pinned NeuCodec checkpoint, Air Q4 GGUF, and two-file
+   DistillNeuCodec ONNX encoder with fixed SHA-256 verification, bounded retries,
+   and resumable partial files under `<data-dir>/voice/neutts/downloads`;
 5. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
    pure-Rust converter, without Python or PyTorch;
 6. builds `stream_pcm` with Cargo `--locked`, eSpeak, and its CPU
-   `llama-cpp-4` binding; and
-7. stages the runner/decoder and exact GGUF cache together, verifies their
-   hashes, then swaps them atomically under `<data-dir>/voice/neutts/active`.
+   `llama-cpp-4` binding;
+7. builds the first-party Rust/ONNX reference encoder with the same pinned
+   toolchain and locked dependency graph; and
+8. stages both workers, DirectML, decoder, encoder model, and exact GGUF cache
+   together, verifies their hashes, then swaps them atomically under
+   `<data-dir>/voice/neutts/active`.
 
 The active manifest records the built runner/decoder hashes, immutable model
 revisions, source checkpoint hashes, and exact Rust compiler identity. Updates
@@ -114,14 +117,14 @@ before retrying; rollback data is removed only after the replacement verifies.
 When app-managed NeuTTS is selected, the app independently validates the pinned
 manifest, Air Q4 cache revision, and required paths before it configures the
 worker. The installer performs the full hashes before atomic publication and
-reuse; application startup and status polling do not rehash roughly 1.1 GiB of
-runtime assets before serving HTTP.
+reuse; application startup and status polling do not rehash large runtime
+assets before serving HTTP.
 
 The NeuTTS build does not reuse `llama-server.exe`; the upstream Rust runner
 embeds its own llama.cpp binding. Coupling the choices shares the explicit
 source-toolchain/download decision. It intentionally remains CPU-only even when
 the chat runner uses CUDA, avoiding voice/LLM GPU contention. The runtime is
-about 1.4 GiB installed; decoder conversion temporarily downloads another
+about 1.9 GiB installed; decoder conversion temporarily downloads another
 approximately 1.1 GiB checkpoint and Cargo/build files can use several GB.
 Skipping managed llama.cpp, including with `-SkipLlamaBuild`, skips Rustup,
 `stream_pcm`, and all NeuTTS model work. Existing files are not deleted.
@@ -219,8 +222,8 @@ voice asset. It only changes what subsequent runs ensure is present.
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion,
 interrupted HTTP byte-range resume and checksum promotion, managed CUDA/NeuTTS
-versus Ollama-only plans, app-managed NeuTTS manifest discovery, and end-to-end
-plan-only install/update behavior.
+versus Ollama-only plans, app-managed NeuTTS schema-2 manifest discovery and
+encoder tamper detection, and end-to-end plan-only install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response
 validation, exact physical-stop confirmation, unattended refusal, `main`, a
 live feature upstream, a single-branch

@@ -2,6 +2,7 @@ package referencecodes
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"os"
@@ -11,6 +12,67 @@ import (
 )
 
 const officialTensorPickleHex = "800263746f7263682e5f7574696c730a5f72656275696c645f74656e736f725f76320a71002828580700000073746f72616765710163746f7263680a496e7453746f726167650a71025801000000307103580300000063707571044d7401747105514b004d74018571064b018571078963636f6c6c656374696f6e730a4f726465726564446963740a71082952710974710a52710b2e"
+
+func TestGenerateReferenceFromWAV(t *testing.T) {
+	directory := t.TempDir()
+	wavPath := filepath.Join(directory, "speaker.wav")
+	wav := fixtureWAV()
+	if err := os.WriteFile(wavPath, wav, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previous := encodeReferenceWAV
+	encodeReferenceWAV = func(_ context.Context, _ Encoder, inputPath, outputPath string) error {
+		if inputPath != wavPath {
+			t.Fatalf("encoder input = %q, want %q", inputPath, wavPath)
+		}
+		return os.WriteFile(outputPath, encodeNPY([]int32{10, 20, 30}), 0o600)
+	}
+	defer func() { encodeReferenceWAV = previous }()
+
+	result, err := Generate(context.Background(), filepath.Join(directory, "data"), GenerateRequest{
+		ReferenceWAV: wavPath,
+		Transcript:   "  The exact words spoken.  ",
+	}, Encoder{})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if result.SourceFormat != "neucodec_onnx" || result.TokenCount != 3 || result.Transcript != "The exact words spoken." {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.CodesPath == "" || result.AudioPath == "" {
+		t.Fatalf("managed paths missing: %+v", result)
+	}
+	gotCodes, err := readNPY(result.CodesPath)
+	if err != nil || !reflect.DeepEqual(gotCodes, []int32{10, 20, 30}) {
+		t.Fatalf("generated codes = %v, %v", gotCodes, err)
+	}
+	gotWAV, err := os.ReadFile(result.AudioPath) // #nosec G304 -- app-managed test path.
+	if err != nil || !reflect.DeepEqual(gotWAV, wav) {
+		t.Fatalf("generated WAV = %d bytes, %v", len(gotWAV), err)
+	}
+}
+
+func TestGenerateRequiresTranscriptBeforeRunningEncoder(t *testing.T) {
+	directory := t.TempDir()
+	wavPath := filepath.Join(directory, "speaker.wav")
+	if err := os.WriteFile(wavPath, fixtureWAV(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	previous := encodeReferenceWAV
+	encodeReferenceWAV = func(context.Context, Encoder, string, string) error {
+		called = true
+		return nil
+	}
+	defer func() { encodeReferenceWAV = previous }()
+
+	if _, err := Generate(context.Background(), filepath.Join(directory, "data"), GenerateRequest{ReferenceWAV: wavPath}, Encoder{}); err == nil {
+		t.Fatal("blank transcript was accepted")
+	}
+	if called {
+		t.Fatal("encoder ran before transcript validation")
+	}
+}
 
 func TestPrepareOfficialTorchTensorWithPreview(t *testing.T) {
 	directory := t.TempDir()

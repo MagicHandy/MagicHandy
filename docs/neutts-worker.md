@@ -6,22 +6,23 @@ continues to work when NeuTTS is absent or fails.
 
 ## Current capability boundary
 
-The runner can synthesize and stream from pre-encoded NeuCodec voice codes plus
-the exact reference transcript. Its public Rust reference encoder is still a
-stub. MagicHandy therefore does not encode an arbitrary reference WAV and does
-not invoke Python behind the scenes.
+The runner synthesizes from NeuCodec reference codes plus the exact reference
+transcript. Although the encoder exported by `neutts-rs` is still a stub,
+MagicHandy now ships a separate native reference worker around the pinned
+DistillNeuCodec ONNX encoder. Settings accepts a local WAV and its exact
+transcript, encodes the WAV without Python, validates the resulting token range
+again in Go, and stores canonical app-managed `.npy` codes with the source WAV.
+The transcript conditions synthesis but is not an encoder input.
 
-Settings can prepare a separately licensed official sample-style Torch ZIP
-`.pt` or compatible one-dimensional int32 `.npy` without Python. The pure-Go
-parser never executes pickle; it validates strict size, shape, dtype, token,
-and archive bounds and writes a canonical app-managed `.npy`. A matching WAV
-may be copied into the managed reference store for preview and exact transcript
-entry, but the runner does not consume that WAV. MagicHandy does not bundle a
-reference voice.
+The older pure-Go preparation path remains available to advanced/manual
+clients. It can normalize a separately licensed official sample-style Torch
+ZIP `.pt` or compatible one-dimensional int32 `.npy` without executing pickle.
+MagicHandy does not bundle a reference voice.
 
 The Windows source installer builds `voice-neutts-worker.exe` and, when managed
-llama.cpp is selected, installs the runner, decoder, and Air Q4 backbone. It does
-not install a reference voice. Skipping managed llama.cpp also skips NeuTTS.
+llama.cpp is selected, installs the runner, decoder, Air Q4 backbone, native
+reference worker, and pinned ONNX encoder. It does not install a reference
+voice. Skipping managed llama.cpp also skips NeuTTS.
 
 ## Installer-managed runtime
 
@@ -39,9 +40,13 @@ MSVC, builds the eSpeak-enabled `stream_pcm` example, and stages:
 ```text
 <data-dir>\voice\neutts\
   active\runtime\stream_pcm.exe
+  active\runtime\magichandy-neucodec-encoder.exe
+  active\runtime\DirectML.dll
   active\runtime\models\neucodec_decoder.safetensors
   active\runtime\runtime.json
   active\runtime\THIRD_PARTY_NOTICES.txt
+  active\encoder\distill_neucodec_encoder.onnx
+  active\encoder\distill_neucodec_encoder.onnx.data
   active\hf\hub\models--neuphonic--neutts-air-q4-gguf\...
 ```
 
@@ -57,21 +62,24 @@ The Air Q4 GGUF is downloaded from immutable Hugging Face revision
 The NeuCodec checkpoint comes from revision
 `30c1fdd19e68aee65d542cf043750d4c0165893e`, is verified as
 `30c3ea13ceeb2de693c56e5e33a1b7e00d44c95dcdd08a4ed0d552d0bf59ebdf`,
-and is converted by the upstream pure-Rust converter. The
-1.1 GiB source checkpoint and temporary Cargo/build trees are removed after the
-atomic runtime stage succeeds. The resulting runtime/backbone uses about 1.4
-GiB, with several additional GB potentially needed during the build.
+and is converted by the upstream pure-Rust converter. The reference encoder is
+the Apache-2.0 DistillNeuCodec ONNX export pinned at
+`2cd5cf022b7a1e689e561f0492787768cfe8395d`; both graph and external weights
+are checksum-verified before publication. The 1.1 GiB source checkpoint and
+temporary Cargo/build trees are removed after the atomic runtime stage
+succeeds. The resulting runtime/backbone/encoder uses about 1.9 GiB, with
+several additional GB potentially needed during the build.
 
 No startup/status path downloads files. Rerun `update.ps1` with managed
 llama.cpp selected to repair or update the pinned runtime. `-SkipLlamaBuild` and
 declining the managed llama.cpp prompt skip all NeuTTS provisioning.
-The installer rehashes the active runner, decoder, and GGUF before reuse and
-atomically publishes the verified runtime. Application startup validates the
-manifest and required paths without rehashing roughly 1.1 GiB of assets before
-the HTTP listener can start. Explicit integrity verification and installer
-updates still perform the full hashes. Custom runner overrides retain their own
-explicit cache contract instead of being silently paired with the app-managed
-Air model.
+The installer rehashes the active runner, decoder, GGUF, reference worker, and
+encoder assets before reuse and atomically publishes the verified runtime.
+Application startup validates the manifest and required paths without rehashing
+large assets before the HTTP listener can start. Explicit integrity verification
+and installer updates still perform the full hashes. Custom runner overrides
+retain their own explicit cache contract instead of being silently paired with
+the app-managed Air model.
 
 ## Custom runner build
 
@@ -100,14 +108,20 @@ directory's `tools` folder, or select it with the advanced worker override.
 
 ## Reference voice and custom assets
 
-For the app-managed runtime, leave the runner override blank. For a custom
-runtime, use the runner project's model conversion command and ensure
-`models\neucodec_decoder.safetensors` exists above the selected runner;
-MagicHandy walks upward to find it. In either mode obtain compatible, licensed
-pre-encoded codes and the verbatim transcript. Settings can normalize the
-official sample-style `.pt` layout or a one-dimensional int32 `.npy`; arbitrary
-WAV-to-code encoding still requires an external neural encoder. Confirm a
-custom **Air Q4** setup works directly before selecting the provider:
+For the app-managed runtime, leave the runner override blank. Open **Generate
+reference voice**, choose a clean 1-30 second WAV sampled at 16-48 kHz, and
+enter the words exactly as spoken. Three to fifteen seconds with one speaker,
+little noise, and few long pauses is the quality target. The encoder downmixes
+up to eight channels and resamples to 16 kHz before inference. It runs in a
+short-lived process; a measured 7.45 second reference encoded in about one
+second after warm filesystem caches and peaked near 1.3 GiB working set.
+
+For a custom runtime, use the runner project's model conversion command and
+ensure `models\neucodec_decoder.safetensors` exists above the selected runner;
+MagicHandy walks upward to find it. The managed reference encoder remains
+available when its installer-owned files are present. Manual pre-encoded `.npy`
+paths and transcript entry remain under Advanced. Confirm a custom **Air Q4**
+setup works directly before selecting the provider:
 
 ```powershell
 .\stream_pcm.exe --codes C:\voices\reference.npy `
@@ -130,10 +144,10 @@ described as fully app-managed/offline.
 1. Open **Settings > Voice** and enable voice workers.
 2. Under **Speech output (TTS)** choose **NeuTTS Air (local)**.
 3. Leave the runner override blank for the app-managed runtime, or use
-   **Browse...** for a custom runner. Open **Prepare reference voice**, select a
-   compatible `.pt` or `.npy` plus its matching WAV, preview the audio, and enter
-   exactly the words heard. Applying the dialog saves only app-managed paths and
-   the transcript. Manual paths remain under **Advanced**.
+   **Browse...** for a custom runner. Open **Generate reference voice**, select
+   the source WAV, and enter exactly the words heard. Generate the codes, preview
+   the stored audio, correct the transcript if needed, and apply. Manual
+   pre-encoded paths remain under **Advanced**.
 4. Save, then use the TTS status row to start and load the worker.
 5. Send a test request before enabling **Speak chat replies**.
 
@@ -141,12 +155,14 @@ Start validates the adapter, runner, decoder, codes, transcript, and exact
 backbone cache, then probes `stream_pcm --help` for the required CLI contract;
 it does not synthesize during readiness. **Send test** is the audible and
 model-load verification. First synthesis can take minutes on CPU, so NeuTTS
-requests have a five-minute worker timeout. Worker PCM streams while synthesis
-runs. The pinned runner currently emits one bounded `NeuCodec decoder:` line on
-stdout before PCM; the adapter strips only that known diagnostic. The core
-retains a bounded copy and
-wraps it as a 24 kHz mono WAV for controller-owned browser playback. Stop or
-request cancellation terminates the active runner process.
+requests have a five-minute worker timeout. The browser follows the backend
+request until that terminal timeout instead of abandoning valid cold inference
+after 15 or 30 seconds. Worker PCM streams while synthesis runs. The pinned
+runner currently emits one bounded `NeuCodec decoder:` line on stdout before
+PCM; the adapter strips only that known diagnostic. The core retains a bounded
+copy and wraps it as a 24 kHz mono WAV for controller-owned browser playback.
+Stop or request cancellation terminates the active runner process and
+invalidates browser playback.
 
 ## Security and privacy
 
