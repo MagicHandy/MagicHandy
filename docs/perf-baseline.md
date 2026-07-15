@@ -78,6 +78,13 @@ Still required for current-build evidence:
   two transcriptions were exact. TTFA was 1.06-2.05 s, synthesis was
   2.06-3.89 s, and generated clip duration was 3.10-6.08 s on the same RTX 5070
   Ti. Subjective speaker similarity remains separate acceptance evidence.
+- A clean full-feature Windows PowerShell 5.1 update migrated the installed
+  schema-3 CUDA/WGPU runtime to schema 4 in 11 minutes; the pinned native runner
+  build took 8 minutes 32 seconds. An initial quality-probe failure left the old
+  runtime active and removed all partial directories. After making the Unicode
+  IPA comparison ASCII-safe for PowerShell 5.1, the retry activated a manifest
+  whose runner hash matched disk, relaunched both voice workers, and completed a
+  browser-triggered 141,120-byte NeuTTS request with an empty terminal queue.
 - A clean full-feature `update.ps1 -Yes` run migrated the installed schema-2
   runtime to schema 3 CUDA/WGPU in 11 minutes 40 seconds; the pinned native
   runner build accounted for 8 minutes 44 seconds. The active NeuTTS tree is

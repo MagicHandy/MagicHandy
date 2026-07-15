@@ -57,6 +57,9 @@ try {
         [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
+    $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
+    $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
+    Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
 
     Write-Host 'Checking same-process CUDA environment initialization...'
     $builderPath = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
