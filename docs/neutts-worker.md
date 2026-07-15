@@ -77,8 +77,10 @@ speech latency but keeps additional VRAM resident while chat speech is enabled;
 CPU avoids that VRAM cost but can be much slower than real time. The runtime
 manifest records the selected backend, runner protocol, backbone/codec
 acceleration, phonemizer/version, and checksums for every required native DLL.
-Schema-3 and older runtimes are intentionally rebuilt by `update.ps1` so the
-inaccurate bundled phonemizer cannot remain active after an update.
+Schema-4 and older runtimes are intentionally rebuilt by `update.ps1`. Schema 5
+records the deterministic sampler, incremental overlap assembly, and bounded
+PCM cache in addition to the phonemizer and acceleration contract, so neither
+the inaccurate phonemizer nor the random-output runner can remain after update.
 
 The Air Q4 GGUF is downloaded from immutable Hugging Face revision
 `008555972590ff2c599dd43736ba31c81df3f0bf` and verified as
@@ -205,6 +207,18 @@ playback; synthesis time alone is not the listener's total completion time.
 Managed Parakeet recovered every substantive target word in all four clips,
 including two exact sentence transcriptions. These are single-host engineering
 measurements, not universal latency or subjective cloning-quality claims.
+
+A follow-up consistency run isolated upstream per-request random sampling as a
+second source of intermittent output. The managed runner now uses validated
+seed 3, performs overlap-add incrementally, and caches up to eight successful
+exact-text clips in 8 MiB of process memory. Four mixed-corpus clips retained all
+target words and were byte-identical before/after the overlap optimization. A
+repeated 4.70 second clip fell from 1.91 seconds warm synthesis to a 0 ms cache
+replay. See `docs/neutts-quality-performance.md` for the corpus, alternatives,
+limits, and remaining incremental-playback work. Advanced diagnostics can use
+`--seed random` or `MAGICHANDY_NEUTTS_SEED=random` when running a custom/direct
+runner; app-managed workers explicitly pin the schema-5 seed. Random mode
+disables caching.
 
 CPU requests retain the five-minute timeout because fallback synthesis can be
 slow. PCM stays bounded and streams as 24 kHz mono samples. Cancellation sends a

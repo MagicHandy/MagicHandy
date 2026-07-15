@@ -78,6 +78,27 @@ Still required for current-build evidence:
   two transcriptions were exact. TTFA was 1.06-2.05 s, synthesis was
   2.06-3.89 s, and generated clip duration was 3.10-6.08 s on the same RTX 5070
   Ti. Subjective speaker similarity remains separate acceptance evidence.
+- A consistency sweep then found 4.60-9.10 s output durations across 12 warm
+  random generations of identical text. In a four-sentence fixed-seed corpus,
+  seed 5 truncated one 17-word request to 0.14 s/silence and seed 10 garbled a
+  time/name phrase; seed 3 retained every target word. The schema-5 runner fixes
+  seed 3 by default, replaces repeated full-history overlap-add with a
+  sample-identical incremental accumulator, and keeps an 8-entry/8 MiB
+  process-local exact-text PCM cache. Its four corpus WAVs matched the prior
+  seed-3 SHA-256 hashes exactly. A 4.70 s repeat measured 1.91 s on cache miss
+  and 0 ms on hit with identical WAV bytes. Unique corpus synthesis was
+  1.37-2.73 s with 0.52-0.63 s runner TTFA. Browser completion polling was also
+  reduced from 1000 to 250 ms; playback still begins only after full synthesis.
+- A clean full-feature `update.ps1 -Yes` run rebuilt schema 4 to schema 5 in
+  10 minutes 56 seconds, including 8 minutes 45 seconds for the pinned runner,
+  and preserved the saved managed llama.cpp, Ollama, Parakeet, and NeuTTS
+  choices. The activated manifest records seed 3, incremental overlap-add, and
+  the 8-entry/8 MiB cache; its runner checksum matched disk. Both voice workers
+  relaunched `running` / model `ready`. Through the production HTTP boundary,
+  an uncached request reached `done` in 2.799 seconds and an exact repeat in
+  34 ms. Both returned the same 277,484-byte WAV with SHA-256
+  `f8ef77eee28a70ba649c5e0ee2811a4beccf15af3d7755c5399a04235f4b6eec`;
+  the shared queue returned to zero and the runner process remained resident.
 - A clean full-feature Windows PowerShell 5.1 update migrated the installed
   schema-3 CUDA/WGPU runtime to schema 4 in 11 minutes; the pinned native runner
   build took 8 minutes 32 seconds. An initial quality-probe failure left the old

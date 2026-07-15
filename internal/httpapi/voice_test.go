@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -386,11 +387,15 @@ func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, s
 		t.Fatal("could not hash app-managed NeuTTS fixtures")
 	}
 	manifest, err := json.Marshal(map[string]any{
-		"schema_version":            4,
+		"schema_version":            5,
 		"source_commit":             managedNeuTTSSource,
 		"rust_toolchain":            managedNeuTTSRust,
 		"backend":                   "cpu",
 		"runner_protocol":           managedNeuTTSProtocol,
+		"sampler_seed":              managedNeuTTSSamplerSeed,
+		"audio_assembly":            managedNeuTTSAudioMix,
+		"pcm_cache_max_bytes":       managedNeuTTSCacheBytes,
+		"pcm_cache_max_entries":     managedNeuTTSCacheItems,
 		"phonemizer":                managedNeuTTSPhonemizer,
 		"phonemizer_version":        managedNeuTTSPhonemeVer,
 		"backbone_acceleration":     "cpu",
@@ -462,7 +467,8 @@ func assertAppManagedNeuTTSStartup(t *testing.T, settings config.VoiceSettings, 
 	if *hashCalls != 0 {
 		t.Fatalf("startup configuration hashed managed runtime files %d times", *hashCalls)
 	}
-	if got.TTS.Command != settings.TTSWorkerPath || got.TTS.Env["HF_HOME"] != hfHome {
+	if got.TTS.Command != settings.TTSWorkerPath || got.TTS.Env["HF_HOME"] != hfHome ||
+		got.TTS.Env["MAGICHANDY_NEUTTS_SEED"] != strconv.Itoa(managedNeuTTSSamplerSeed) {
 		t.Fatalf("app-managed NeuTTS config = %+v", got.TTS)
 	}
 	if len(got.TTS.Args) < 2 || got.TTS.Args[1] != runner {
@@ -510,6 +516,21 @@ func assertAppManagedNeuTTSManifestValidation(t *testing.T, settings config.Voic
 	}
 	if err := os.WriteFile(runner, []byte("runner"), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	var manifestFields map[string]any
+	if err := json.Unmarshal(manifest, &manifestFields); err != nil {
+		t.Fatal(err)
+	}
+	manifestFields["sampler_seed"] = managedNeuTTSSamplerSeed + 1
+	badSeed, err := json.Marshal(manifestFields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), badSeed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
+		t.Fatalf("app-managed NeuTTS must reject an unverified sampler seed: %+v", got.TTS)
 	}
 	badPhonemizer := []byte(strings.Replace(string(manifest), managedNeuTTSPhonemizer, "experimental-phonemizer", 1))
 	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), badPhonemizer, 0o600); err != nil {

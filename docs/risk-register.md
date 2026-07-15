@@ -497,7 +497,15 @@ word) and independent codec chunks. System eSpeak NG 1.52 plus Neuphonic's
 overlap-aware stream retained every substantive target word in four random
 Parakeet round trips, with two exact sentence transcriptions. Schema 4 forces
 older managed runtimes to rebuild; wider listening and speaker-similarity
-acceptance still remain open.
+acceptance still remain open. A consistency follow-up found per-request random
+sampling produced 4.60-9.10 second clips for identical text and could terminate
+a corpus sentence at 0.14 seconds. Schema 5 selects validated seed 3, records
+that choice, uses sample-identical incremental overlap-add, and adds a bounded
+memory-only exact-text cache. All four selected-seed corpus clips retained their
+target words; a repeated 4.70 second clip replayed byte-identically in 0 ms after
+a 1.91 second miss. This removes known same-input variability but does not close
+the representative-reference or subjective-listening risk. See
+`docs/neutts-quality-performance.md`.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

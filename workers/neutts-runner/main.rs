@@ -2,7 +2,7 @@
 // Copyright (C) 2026 MagicHandy contributors
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -24,6 +24,11 @@ const HOP_LENGTH: usize = 480;
 const STREAM_LOOKBACK: usize = 50;
 const STREAM_LOOKFORWARD: usize = 5;
 const STREAM_OVERLAP: usize = 1;
+const DEFAULT_SAMPLER_SEED: u32 = 3;
+const PCM_CACHE_MAX_BYTES: usize = 8 << 20;
+const PCM_CACHE_MAX_ENTRIES: usize = 8;
+const PCM_CACHE_MAX_ENTRY_BYTES: usize = 2 << 20;
+const PCM_REPLAY_FRAME_BYTES: usize = 32 << 10;
 
 struct Options {
     codes_path: PathBuf,
@@ -32,6 +37,7 @@ struct Options {
     gguf_file: Option<String>,
     chunk_size: usize,
     espeak_path: PathBuf,
+    sampler_seed: Option<u32>,
 }
 
 enum RunMode {
@@ -55,6 +61,132 @@ enum Work {
     Shutdown,
 }
 
+struct PcmCacheEntry {
+    text: String,
+    pcm: Vec<u8>,
+}
+
+#[derive(Default)]
+struct PcmCache {
+    entries: VecDeque<PcmCacheEntry>,
+    bytes: usize,
+}
+
+impl PcmCache {
+    fn get(&mut self, text: &str) -> Option<Vec<u8>> {
+        let index = self.entries.iter().position(|entry| entry.text == text)?;
+        let entry = self.entries.remove(index)?;
+        let pcm = entry.pcm.clone();
+        self.entries.push_front(entry);
+        Some(pcm)
+    }
+
+    fn insert(&mut self, text: String, pcm: Vec<u8>) {
+        if pcm.is_empty() || pcm.len() > PCM_CACHE_MAX_ENTRY_BYTES {
+            return;
+        }
+        if let Some(index) = self.entries.iter().position(|entry| entry.text == text) {
+            if let Some(previous) = self.entries.remove(index) {
+                self.bytes -= previous.pcm.len();
+            }
+        }
+        while self.entries.len() >= PCM_CACHE_MAX_ENTRIES
+            || self.bytes + pcm.len() > PCM_CACHE_MAX_BYTES
+        {
+            let Some(evicted) = self.entries.pop_back() else {
+                break;
+            };
+            self.bytes -= evicted.pcm.len();
+        }
+        self.bytes += pcm.len();
+        self.entries.push_front(PcmCacheEntry { text, pcm });
+    }
+}
+
+struct IncrementalOverlapAdd {
+    stride: usize,
+    next_offset: usize,
+    emitted: usize,
+    sums: Vec<f32>,
+    weights: Vec<f32>,
+}
+
+impl IncrementalOverlapAdd {
+    fn new(stride: usize) -> anyhow::Result<Self> {
+        anyhow::ensure!(stride > 0, "overlap-add stride must be positive");
+        Ok(Self {
+            stride,
+            next_offset: 0,
+            emitted: 0,
+            sums: Vec::new(),
+            weights: Vec::new(),
+        })
+    }
+
+    fn push(&mut self, frame: &[f32]) -> anyhow::Result<Vec<f32>> {
+        anyhow::ensure!(
+            frame.len() >= self.stride,
+            "streaming audio frame is shorter than its stride"
+        );
+        self.add(frame)?;
+        self.next_offset = self
+            .next_offset
+            .checked_add(self.stride)
+            .context("overlap-add offset overflow")?;
+        self.drain_to(self.next_offset)
+    }
+
+    fn add(&mut self, frame: &[f32]) -> anyhow::Result<()> {
+        anyhow::ensure!(!frame.is_empty(), "overlap-add requires an audio frame");
+        anyhow::ensure!(
+            self.next_offset >= self.emitted,
+            "overlap-add offset moved behind emitted audio"
+        );
+        let relative_offset = self.next_offset - self.emitted;
+        let required = relative_offset
+            .checked_add(frame.len())
+            .context("overlap-add frame size overflow")?;
+        self.sums.resize(required.max(self.sums.len()), 0.0);
+        self.weights.resize(required.max(self.weights.len()), 0.0);
+        let denominator = (frame.len() + 1) as f32;
+        for (sample_index, sample) in frame.iter().enumerate() {
+            let position = (sample_index + 1) as f32 / denominator;
+            let weight = 0.5 - (position - 0.5).abs();
+            let index = relative_offset + sample_index;
+            self.sums[index] += weight * sample;
+            self.weights[index] += weight;
+        }
+        Ok(())
+    }
+
+    fn finish(mut self) -> anyhow::Result<Vec<f32>> {
+        let end = self
+            .emitted
+            .checked_add(self.sums.len())
+            .context("overlap-add output size overflow")?;
+        self.drain_to(end)
+    }
+
+    fn drain_to(&mut self, absolute_end: usize) -> anyhow::Result<Vec<f32>> {
+        anyhow::ensure!(
+            absolute_end >= self.emitted,
+            "overlap-add drain moved backwards"
+        );
+        let count = (absolute_end - self.emitted).min(self.sums.len());
+        let tail_sums = self.sums.split_off(count);
+        let tail_weights = self.weights.split_off(count);
+        let sums = std::mem::replace(&mut self.sums, tail_sums);
+        let weights = std::mem::replace(&mut self.weights, tail_weights);
+        let mut output = Vec::with_capacity(count);
+        for (sum, weight) in sums.into_iter().zip(weights) {
+            anyhow::ensure!(weight > 0.0, "overlap-add produced an uncovered sample");
+            output.push(sum / weight);
+        }
+        self.emitted += count;
+        Ok(output)
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let Some(mode) = parse_args()? else {
         return Ok(());
@@ -69,11 +201,12 @@ fn main() -> anyhow::Result<()> {
 
     eprintln!("[magichandy-neutts] loading backbone and codec");
     let load_started = Instant::now();
-    let tts = neutts::download::load_from_hub_cb(
+    let mut tts = neutts::download::load_from_hub_cb(
         &options.backbone,
         options.gguf_file.as_deref(),
         |_| {},
     )?;
+    tts.backbone.seed = options.sampler_seed;
     let codec_backend = tts.codec.backend_name().to_string();
     let ref_codes = tts
         .load_ref_codes(&options.codes_path)
@@ -83,17 +216,26 @@ fn main() -> anyhow::Result<()> {
 
     let canceled = Arc::new(Mutex::new(HashSet::<String>::new()));
     let work = spawn_input_reader(Arc::clone(&canceled));
+    let mut pcm_cache = PcmCache::default();
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
     let ready = serde_json::json!({
         "protocol": RUNNER_PROTOCOL,
         "codec": codec_backend,
         "load_ms": load_started.elapsed().as_millis(),
+        "sampler_seed": options.sampler_seed,
+        "pcm_cache_max_bytes": if options.sampler_seed.is_some() { PCM_CACHE_MAX_BYTES } else { 0 },
     });
     write_frame(&mut out, FRAME_READY, &serde_json::to_vec(&ready)?)?;
     eprintln!(
-        "[magichandy-neutts] ready: codec={}, load={:.2}s",
+        "[magichandy-neutts] ready: codec={}, seed={}, cache={} MiB, load={:.2}s",
         tts.codec.backend_name(),
+        sampler_seed_label(options.sampler_seed),
+        if options.sampler_seed.is_some() {
+            PCM_CACHE_MAX_BYTES >> 20
+        } else {
+            0
+        },
         load_started.elapsed().as_secs_f32(),
     );
 
@@ -116,6 +258,32 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 }
 
+                if options.sampler_seed.is_some() {
+                    if let Some(pcm) = pcm_cache.get(&text) {
+                        let started = Instant::now();
+                        for chunk in pcm.chunks(PCM_REPLAY_FRAME_BYTES) {
+                            if is_canceled(&canceled, &id) {
+                                break;
+                            }
+                            write_frame(&mut out, FRAME_AUDIO, chunk)?;
+                        }
+                        let was_canceled = is_canceled(&canceled, &id);
+                        clear_canceled(&canceled, &id);
+                        if was_canceled {
+                            write_frame(&mut out, FRAME_CANCELED, &[])?;
+                        } else {
+                            write_frame(&mut out, FRAME_DONE, &[])?;
+                            eprintln!(
+                                "[magichandy-neutts] request {}: {:.3}s, {:.2}s audio, cache=hit",
+                                id,
+                                started.elapsed().as_secs_f32(),
+                                pcm.len() as f32 / 2.0 / neutts::SAMPLE_RATE as f32,
+                            );
+                        }
+                        continue;
+                    }
+                }
+
                 let input_phones = match phonemize(&options.espeak_path, &text) {
                     Ok(value) => value,
                     Err(error) => {
@@ -129,8 +297,8 @@ fn main() -> anyhow::Result<()> {
                 let codec = &tts.codec;
                 let mut token_cache = ref_codes.clone();
                 let mut decoded_tokens = ref_codes.len();
-                let mut audio_frames = Vec::<Vec<f32>>::new();
-                let mut emitted_samples = 0usize;
+                let mut overlap = IncrementalOverlapAdd::new(options.chunk_size * HOP_LENGTH)?;
+                let mut cached_pcm = options.sampler_seed.map(|_| Vec::<u8>::new());
                 let mut samples = 0usize;
 
                 let synthesis = backbone.generate_streaming(&prompt, 2048, |piece| {
@@ -151,14 +319,11 @@ fn main() -> anyhow::Result<()> {
                             decoded_tokens,
                             options.chunk_size,
                         )?;
-                        audio_frames.push(frame);
-                        let mixed =
-                            linear_overlap_add(&audio_frames, options.chunk_size * HOP_LENGTH)?;
-                        let next_end = audio_frames.len() * options.chunk_size * HOP_LENGTH;
-                        let next_end = next_end.min(mixed.len());
-                        write_audio_frame(&mut out, &mixed[emitted_samples..next_end])?;
-                        samples += next_end - emitted_samples;
-                        emitted_samples = next_end;
+                        let mixed = overlap.push(&frame)?;
+                        let pcm = encode_pcm(&mixed);
+                        write_frame(&mut out, FRAME_AUDIO, &pcm)?;
+                        append_cached_pcm(&mut cached_pcm, &pcm);
+                        samples += mixed.len();
                         decoded_tokens += options.chunk_size;
                     }
                     Ok(())
@@ -170,11 +335,12 @@ fn main() -> anyhow::Result<()> {
                     }
                     if token_cache.len() > decoded_tokens {
                         let frame = decode_stream_tail(codec, &token_cache, decoded_tokens)?;
-                        audio_frames.push(frame);
-                        let mixed =
-                            linear_overlap_add(&audio_frames, options.chunk_size * HOP_LENGTH)?;
-                        write_audio_frame(&mut out, &mixed[emitted_samples..])?;
-                        samples += mixed.len() - emitted_samples;
+                        overlap.add(&frame)?;
+                        let mixed = overlap.finish()?;
+                        let pcm = encode_pcm(&mixed);
+                        write_frame(&mut out, FRAME_AUDIO, &pcm)?;
+                        append_cached_pcm(&mut cached_pcm, &pcm);
+                        samples += mixed.len();
                     }
                     Ok(())
                 });
@@ -184,9 +350,12 @@ fn main() -> anyhow::Result<()> {
                 match synthesis {
                     _ if was_canceled => write_frame(&mut out, FRAME_CANCELED, &[])?,
                     Ok(()) if samples > 0 => {
+                        if let Some(pcm) = cached_pcm {
+                            pcm_cache.insert(text, pcm);
+                        }
                         write_frame(&mut out, FRAME_DONE, &[])?;
                         eprintln!(
-                            "[magichandy-neutts] request {}: {:.2}s, {:.2}s audio",
+                            "[magichandy-neutts] request {}: {:.2}s, {:.2}s audio, cache=miss",
                             id,
                             started.elapsed().as_secs_f32(),
                             samples as f32 / neutts::SAMPLE_RATE as f32,
@@ -324,34 +493,6 @@ fn decode_stream_tail(
     Ok(audio[sample_start..].to_vec())
 }
 
-fn linear_overlap_add(frames: &[Vec<f32>], stride: usize) -> anyhow::Result<Vec<f32>> {
-    anyhow::ensure!(!frames.is_empty(), "overlap-add requires an audio frame");
-    anyhow::ensure!(stride > 0, "overlap-add stride must be positive");
-    let total_size = frames
-        .iter()
-        .enumerate()
-        .map(|(index, frame)| index * stride + frame.len())
-        .max()
-        .unwrap_or(0);
-    let mut output = vec![0.0f32; total_size];
-    let mut weights = vec![0.0f32; total_size];
-    for (frame_index, frame) in frames.iter().enumerate() {
-        let offset = frame_index * stride;
-        let denominator = (frame.len() + 1) as f32;
-        for (sample_index, sample) in frame.iter().enumerate() {
-            let position = (sample_index + 1) as f32 / denominator;
-            let weight = 0.5 - (position - 0.5).abs();
-            output[offset + sample_index] += weight * sample;
-            weights[offset + sample_index] += weight;
-        }
-    }
-    for (sample, weight) in output.iter_mut().zip(weights) {
-        anyhow::ensure!(weight > 0.0, "overlap-add produced an uncovered sample");
-        *sample /= weight;
-    }
-    Ok(output)
-}
-
 fn spawn_input_reader(canceled: Arc<Mutex<HashSet<String>>>) -> mpsc::Receiver<Work> {
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
@@ -419,14 +560,25 @@ fn clear_canceled(canceled: &Mutex<HashSet<String>>, id: &str) {
         .remove(id);
 }
 
-fn write_audio_frame(out: &mut impl io::Write, samples: &[f32]) -> anyhow::Result<()> {
+fn encode_pcm(samples: &[f32]) -> Vec<u8> {
     let mut pcm = vec![0u8; samples.len() * 2];
     for (index, &sample) in samples.iter().enumerate() {
         let bytes = ((sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16).to_le_bytes();
         pcm[index * 2] = bytes[0];
         pcm[index * 2 + 1] = bytes[1];
     }
-    write_frame(out, FRAME_AUDIO, &pcm)
+    pcm
+}
+
+fn append_cached_pcm(cache: &mut Option<Vec<u8>>, pcm: &[u8]) {
+    let Some(cached) = cache else {
+        return;
+    };
+    if cached.len().saturating_add(pcm.len()) > PCM_CACHE_MAX_ENTRY_BYTES {
+        *cache = None;
+        return;
+    }
+    cached.extend_from_slice(pcm);
 }
 
 fn write_frame(out: &mut impl io::Write, kind: u8, payload: &[u8]) -> anyhow::Result<()> {
@@ -451,6 +603,11 @@ fn parse_args() -> anyhow::Result<Option<RunMode>> {
     let mut chunk_size = 25usize;
     let mut espeak_path = None;
     let mut phonemize_text = None;
+    let mut sampler_seed = match std::env::var("MAGICHANDY_NEUTTS_SEED") {
+        Ok(value) => parse_sampler_seed(&value)?,
+        Err(std::env::VarError::NotPresent) => Some(DEFAULT_SAMPLER_SEED),
+        Err(error) => return Err(error).context("MAGICHANDY_NEUTTS_SEED is not valid Unicode"),
+    };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -461,6 +618,13 @@ fn parse_args() -> anyhow::Result<Option<RunMode>> {
             "--gguf-file" | "-g" => gguf_file = args.next(),
             "--espeak" => espeak_path = args.next().map(PathBuf::from),
             "--phonemize" => phonemize_text = args.next(),
+            "--seed" => {
+                sampler_seed = parse_sampler_seed(
+                    &args
+                        .next()
+                        .context("--seed requires an unsigned integer or random")?,
+                )?
+            }
             "--chunk" | "-k" => {
                 chunk_size = args
                     .next()
@@ -491,7 +655,21 @@ fn parse_args() -> anyhow::Result<Option<RunMode>> {
         gguf_file,
         chunk_size,
         espeak_path,
+        sampler_seed,
     })))
+}
+
+fn parse_sampler_seed(value: &str) -> anyhow::Result<Option<u32>> {
+    if value.eq_ignore_ascii_case("random") {
+        return Ok(None);
+    }
+    Ok(Some(value.parse::<u32>().with_context(|| {
+        format!("invalid sampler seed {value:?}; use an unsigned integer or random")
+    })?))
+}
+
+fn sampler_seed_label(seed: Option<u32>) -> String {
+    seed.map_or_else(|| "random".to_string(), |value| value.to_string())
 }
 
 fn resolve_espeak_path(explicit: Option<PathBuf>) -> anyhow::Result<PathBuf> {
@@ -579,7 +757,78 @@ fn print_help() {
          \t--gguf-file FILE      Exact cached GGUF filename\n\
          \t--espeak PATH         eSpeak NG executable (auto-detected by default)\n\
          \t--chunk N             Tokens per PCM chunk (default: 25)\n\
+         \t--seed N|random       Sampler seed (default: 3; random disables PCM caching)\n\
          \t--phonemize TEXT      Print diagnostic IPA without loading models\n\
          \t--help                Show this help"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reference_overlap_add(frames: &[Vec<f32>], stride: usize) -> Vec<f32> {
+        let total_size = frames
+            .iter()
+            .enumerate()
+            .map(|(index, frame)| index * stride + frame.len())
+            .max()
+            .unwrap_or(0);
+        let mut output = vec![0.0f32; total_size];
+        let mut weights = vec![0.0f32; total_size];
+        for (frame_index, frame) in frames.iter().enumerate() {
+            let offset = frame_index * stride;
+            let denominator = (frame.len() + 1) as f32;
+            for (sample_index, sample) in frame.iter().enumerate() {
+                let position = (sample_index + 1) as f32 / denominator;
+                let weight = 0.5 - (position - 0.5).abs();
+                output[offset + sample_index] += weight * sample;
+                weights[offset + sample_index] += weight;
+            }
+        }
+        for (sample, weight) in output.iter_mut().zip(weights) {
+            *sample /= weight;
+        }
+        output
+    }
+
+    #[test]
+    fn incremental_overlap_matches_full_recomputation() {
+        let frames = vec![
+            vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            vec![0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
+            vec![-0.2, -0.1, 0.0, 0.1, 0.2],
+        ];
+        let mut overlap = IncrementalOverlapAdd::new(4).unwrap();
+        let mut actual = overlap.push(&frames[0]).unwrap();
+        actual.extend(overlap.push(&frames[1]).unwrap());
+        overlap.add(&frames[2]).unwrap();
+        actual.extend(overlap.finish().unwrap());
+        assert_eq!(actual, reference_overlap_add(&frames, 4));
+    }
+
+    #[test]
+    fn pcm_cache_is_bounded_and_lru() {
+        let mut cache = PcmCache::default();
+        for index in 0..=PCM_CACHE_MAX_ENTRIES {
+            cache.insert(index.to_string(), vec![index as u8; 2]);
+        }
+        assert!(cache.get("0").is_none());
+        assert_eq!(cache.get("1"), Some(vec![1; 2]));
+        assert!(cache.bytes <= PCM_CACHE_MAX_BYTES);
+        assert!(cache.entries.len() <= PCM_CACHE_MAX_ENTRIES);
+
+        cache.insert(
+            "oversized".to_string(),
+            vec![0; PCM_CACHE_MAX_ENTRY_BYTES + 1],
+        );
+        assert!(cache.get("oversized").is_none());
+    }
+
+    #[test]
+    fn sampler_seed_supports_fixed_and_explicit_random_modes() {
+        assert_eq!(parse_sampler_seed("3").unwrap(), Some(3));
+        assert_eq!(parse_sampler_seed("random").unwrap(), None);
+        assert!(parse_sampler_seed("-1").is_err());
+    }
 }

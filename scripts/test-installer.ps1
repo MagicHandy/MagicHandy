@@ -328,11 +328,15 @@ version = "0.1.0"
         $script:NeuTTSEncoderModelSHA256 = Get-MagicHandySHA256 -Path $encoderModel
         $script:NeuTTSEncoderWeightsSHA256 = Get-MagicHandySHA256 -Path $encoderWeights
         $manifest = [pscustomobject]@{
-            schema_version = 4
+            schema_version = 5
             source_commit = $script:NeuTTSSourceCommit
             rust_toolchain = $script:NeuTTSRustToolchain
             backend = 'cpu'
             runner_protocol = $script:NeuTTSRunnerProtocol
+            sampler_seed = $script:NeuTTSSamplerSeed
+            audio_assembly = $script:NeuTTSAudioAssembly
+            pcm_cache_max_bytes = $script:NeuTTSPCMCacheMaxBytes
+            pcm_cache_max_entries = $script:NeuTTSPCMCacheMaxEntries
             phonemizer = $script:NeuTTSPhonemizer
             phonemizer_version = $script:NeuTTSPhonemizerVersion
             backbone_acceleration = 'cpu'
@@ -357,7 +361,11 @@ version = "0.1.0"
             [System.IO.File]::AppendAllText($runner, 'tampered')
             $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
             [System.IO.File]::WriteAllText($runner, 'fixture')
-            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+4', '"schema_version":"invalid"'
+            $manifest.sampler_seed = $script:NeuTTSSamplerSeed + 1
+            [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json))
+            $wrongSeed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
+            $manifest.sampler_seed = $script:NeuTTSSamplerSeed
+            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+5', '"schema_version":"invalid"'
             [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), $malformedJSON)
             $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
 
@@ -380,6 +388,7 @@ version = "0.1.0"
                 Valid = $valid
                 WrongBackend = $wrongBackend
                 Tampered = $tampered
+                WrongSeed = $wrongSeed
                 Malformed = $malformed
                 ValidCUDA = $validCUDA
                 TamperedCUDA = $tamperedCUDA
@@ -393,6 +402,7 @@ version = "0.1.0"
     Assert-True -Condition ([bool]$neuttsRuntimeResult.Valid) -Message 'matching NeuTTS manifest and runtime files should be reusable'
     Assert-True -Condition (-not [bool]$neuttsRuntimeResult.WrongBackend) -Message 'changing the saved backend should rebuild NeuTTS with matching acceleration'
     Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Tampered) -Message 'changed NeuTTS runtime bytes should require repair'
+    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.WrongSeed) -Message 'a changed NeuTTS sampler seed should require repair'
     Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Malformed) -Message 'a malformed NeuTTS manifest should request repair rather than abort setup'
     Assert-True -Condition ([bool]$neuttsRuntimeResult.ValidCUDA) -Message 'a CUDA NeuTTS manifest should require and accept all pinned native dependencies'
     Assert-True -Condition (-not [bool]$neuttsRuntimeResult.TamperedCUDA) -Message 'a changed CUDA NeuTTS dependency should require repair'
