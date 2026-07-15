@@ -83,6 +83,10 @@ deliberately never autostarted, so the submit can never succeed.
 hint ("Start the speech-input worker in Settings → Voice"). Keep the
 never-autostart invariant.
 
+**Later update (Slice 13.10):** the original manual-start invariant was
+deliberately replaced. Saved enabled speech input now starts and loads ASR at
+app startup; the control remains gated while startup fails or is incomplete.
+
 ### M2. Speak-replies quick toggle ignores `voice.enabled`
 
 `VoiceQuickControls.tsx:8-9` checks only `tts_provider !== "none"`. With a
@@ -120,6 +124,10 @@ local model), making the extra click pure friction.
 automatically (this does not violate never-autostart — the user started the
 process), or auto-load on first speak. At minimum surface "model unloaded —
 replies won't be spoken" next to the speak-replies toggle.
+
+**Later update (Slice 13.10):** enabled **Speak chat replies** now starts and
+loads TTS at app startup, while the visible Start action remains for immediate
+use after settings changes.
 
 ### M5. No voice health signal outside Settings → Voice
 

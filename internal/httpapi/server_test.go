@@ -347,6 +347,17 @@ func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	return newTestServerWithStore(t, store, runtime)
+}
+
+func newTestServerWithStore(t *testing.T, store *config.Store, runtime Runtime) *Server {
+	t.Helper()
+	if runtime.Traces == nil {
+		runtime.Traces = diagnostics.NewTraceRing(8)
+	}
+	if runtime.Transport == nil {
+		runtime.Transport = transport.NewFake()
+	}
 	server, err := New(fstest.MapFS{
 		"index.html": {Data: []byte("<!doctype html><title>MagicHandy</title>")},
 		"app.css":    {Data: []byte("body { margin: 0; }")},

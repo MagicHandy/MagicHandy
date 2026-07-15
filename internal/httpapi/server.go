@@ -72,6 +72,9 @@ type Server struct {
 	voice                  *voice.Manager
 	voiceExecutable        string
 	voiceDataDir           string
+	voiceAutoloadMu        sync.Mutex
+	voiceAutoloadCancel    context.CancelFunc
+	voiceAutoloadWG        sync.WaitGroup
 	neuttsAdapterInstalled atomic.Bool
 	stopSequence           atomic.Uint64
 	chatCancelMu           sync.Mutex
@@ -179,6 +182,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	mux := http.NewServeMux()
 	server.routes(mux)
 	server.handler = logRequests(logger, mux)
+	server.startVoiceAutoload(settings.Voice)
 
 	return server, nil
 }

@@ -11,6 +11,7 @@ $script:NeuTTSSourceURL = 'https://github.com/eugenehp/neutts-rs.git'
 $script:NeuTTSSourceTag = 'v0.1.1'
 $script:NeuTTSSourceCommit = 'ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f'
 $script:NeuTTSRustToolchain = '1.94.0-x86_64-pc-windows-msvc'
+$script:NeuTTSRunnerProtocol = 'magichandy_neutts_stream_v1'
 $script:NeuTTSBackboneRevision = '008555972590ff2c599dd43736ba31c81df3f0bf'
 $script:NeuTTSBackboneURL = "https://huggingface.co/neuphonic/neutts-air-q4-gguf/resolve/$($script:NeuTTSBackboneRevision)/neutts-air-Q4_0.gguf?download=true"
 $script:NeuTTSBackboneSHA256 = 'bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff9a29062e4ac9119e'
@@ -396,9 +397,11 @@ function Get-MagicHandyProvisionPlan {
         }
         $plan.Add("Build and activate pinned managed llama.cpp ($($State.llama_backend))")
         $plan.Add('Ensure LLVM/libclang, Rustup, and the pinned Rust 1.94.0 Windows MSVC toolchain are installed')
-        $plan.Add('Build pinned neutts-rs stream_pcm with its llama.cpp binding')
+        $neuttsAcceleration = if ([string]$State.llama_backend -eq 'cuda') { 'CUDA backbone + WGPU codec' } else { 'CPU backbone + CPU codec' }
+        $neuttsInstalledSize = if ([string]$State.llama_backend -eq 'cuda') { 'about 2.0 GiB installed' } else { 'about 1.9 GiB installed' }
+        $plan.Add("Build MagicHandy's persistent NeuTTS runner from pinned neutts-rs ($neuttsAcceleration)")
         $plan.Add('Build the MagicHandy NeuCodec ONNX reference encoder worker')
-        $plan.Add('Install checksum-verified NeuTTS Air Q4, NeuCodec decoder, and reference encoder assets (about 1.9 GiB installed; about 1.3 GiB additional transient download)')
+        $plan.Add("Install checksum-verified NeuTTS Air Q4, NeuCodec decoder, and reference encoder assets ($neuttsInstalledSize; about 1.3 GiB additional transient download)")
     } else {
         $plan.Add('Skip NeuTTS runtime build and model assets because managed llama.cpp is not selected')
     }
@@ -1079,13 +1082,19 @@ function Install-MagicHandyParakeet {
 }
 
 function Test-MagicHandyNeuTTSInstall {
-    param([Parameter(Mandatory = $true)][string]$DataDir)
+    param(
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [Parameter(Mandatory = $true)][ValidateSet('cpu', 'cuda')][string]$Backend
+    )
 
-    return Test-MagicHandyNeuTTSInstallRoot -InstallRoot (Join-Path $DataDir 'voice\neutts\active')
+    return Test-MagicHandyNeuTTSInstallRoot -InstallRoot (Join-Path $DataDir 'voice\neutts\active') -Backend $Backend
 }
 
 function Test-MagicHandyNeuTTSInstallRoot {
-    param([Parameter(Mandatory = $true)][string]$InstallRoot)
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallRoot,
+        [Parameter(Mandatory = $true)][ValidateSet('cpu', 'cuda')][string]$Backend
+    )
 
     $runtime = Join-Path $InstallRoot 'runtime'
     $manifestPath = Join-Path $runtime 'runtime.json'
@@ -1112,20 +1121,43 @@ function Test-MagicHandyNeuTTSInstallRoot {
     try {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         $required = @(
-            'schema_version', 'source_commit', 'rust_toolchain', 'backbone_revision',
+            'schema_version', 'source_commit', 'rust_toolchain', 'backend',
+            'runner_protocol', 'backbone_acceleration', 'codec_acceleration', 'backbone_revision',
             'backbone_sha256', 'codec_revision', 'codec_checkpoint_sha256',
             'runner_sha256', 'decoder_sha256', 'encoder_revision', 'encoder_sha256',
-            'encoder_model_sha256', 'encoder_model_data_sha256', 'directml_sha256'
+            'encoder_model_sha256', 'encoder_model_data_sha256', 'directml_sha256',
+            'native_dependencies'
         )
         foreach ($name in $required) {
             if ($manifest.PSObject.Properties.Name -notcontains $name) {
                 return $false
             }
         }
-        return [int]$manifest.schema_version -eq 2 -and
+        $expectedBackboneAcceleration = if ($Backend -eq 'cuda') { 'cuda_all_layers' } else { 'cpu' }
+        $expectedCodecAcceleration = if ($Backend -eq 'cuda') { 'wgpu' } else { 'cpu' }
+        $expectedDependencies = @(if ($Backend -eq 'cuda') {
+            'ggml-base.dll', 'ggml-cpu.dll', 'ggml-cuda.dll', 'ggml.dll', 'llama.dll'
+        })
+        $manifestDependencies = @($manifest.native_dependencies.PSObject.Properties)
+        if ($manifestDependencies.Count -ne $expectedDependencies.Count) {
+            return $false
+        }
+        foreach ($name in $expectedDependencies) {
+            $dependency = Join-Path $runtime $name
+            if (-not (Test-Path -LiteralPath $dependency -PathType Leaf) -or
+                $manifest.native_dependencies.PSObject.Properties.Name -notcontains $name -or
+                [string]$manifest.native_dependencies.$name -ne (Get-MagicHandySHA256 -Path $dependency)) {
+                return $false
+            }
+        }
+        return [int]$manifest.schema_version -eq 3 -and
             (Get-Content -LiteralPath $backboneRef -Raw).Trim() -eq $script:NeuTTSBackboneRevision -and
             [string]$manifest.source_commit -eq $script:NeuTTSSourceCommit -and
             [string]$manifest.rust_toolchain -eq $script:NeuTTSRustToolchain -and
+            [string]$manifest.backend -eq $Backend -and
+            [string]$manifest.runner_protocol -eq $script:NeuTTSRunnerProtocol -and
+            [string]$manifest.backbone_acceleration -eq $expectedBackboneAcceleration -and
+            [string]$manifest.codec_acceleration -eq $expectedCodecAcceleration -and
             [string]$manifest.backbone_revision -eq $script:NeuTTSBackboneRevision -and
             [string]$manifest.backbone_sha256 -eq $script:NeuTTSBackboneSHA256 -and
             [string]$manifest.codec_revision -eq $script:NeuTTSCodecRevision -and
@@ -1181,6 +1213,29 @@ function Repair-MagicHandyNeuTTSCargoLock {
     Write-MagicHandyUTF8 -Path $lockPath -Content $patched
 }
 
+function Add-MagicHandyNeuTTSRunnerSource {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceRoot,
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$GitExecutable
+    )
+
+    $runnerSource = Join-Path $RepositoryRoot 'workers\neutts-runner\main.rs'
+    $cudaPatch = Join-Path $RepositoryRoot 'workers\neutts-runner\neutts-rs-v0.1.1-cuda.patch'
+    if (-not (Test-Path -LiteralPath $runnerSource -PathType Leaf) -or -not (Test-Path -LiteralPath $cudaPatch -PathType Leaf)) {
+        throw 'MagicHandy persistent NeuTTS runner source or its pinned CUDA patch is missing.'
+    }
+    & $GitExecutable -C $SourceRoot apply --check $cudaPatch | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The pinned neutts-rs CUDA offload patch no longer applies cleanly.'
+    }
+    & $GitExecutable -C $SourceRoot apply $cudaPatch | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Applying the pinned neutts-rs CUDA offload patch failed.'
+    }
+    Copy-Item -LiteralPath $runnerSource -Destination (Join-Path $SourceRoot 'examples\magichandy_neutts.rs') -Force
+}
+
 function Test-MagicHandyNativeProbe {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
@@ -1201,11 +1256,20 @@ function Test-MagicHandyNativeProbe {
 }
 
 function Confirm-MagicHandyNeuTTSInstall {
-    param([switch]$AssumeYes)
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('cpu', 'cuda')][string]$Backend,
+        [switch]$AssumeYes
+    )
 
     Write-Host 'NeuTTS runner: neutts-rs v0.1.1, Cargo metadata declares MIT; its espeak dependency includes GPL-3.0-or-later components.'
     Write-Host "Source commit: $($script:NeuTTSSourceCommit); Rust toolchain: $($script:NeuTTSRustToolchain)." -ForegroundColor DarkGray
-    Write-Host 'NeuTTS models: Air Q4, NeuCodec, and DistillNeuCodec ONNX, Apache-2.0; about 1.9 GiB installed plus temporary build and conversion assets.'
+    $installedSize = if ($Backend -eq 'cuda') { 'about 2.0 GiB' } else { 'about 1.9 GiB' }
+    Write-Host "NeuTTS models: Air Q4, NeuCodec, and DistillNeuCodec ONNX, Apache-2.0; $installedSize installed plus temporary build and conversion assets."
+    if ($Backend -eq 'cuda') {
+        Write-Host 'NeuTTS acceleration: CUDA runs the speech backbone on NVIDIA GPU layers and WGPU accelerates NeuCodec. This substantially reduces reply latency but reserves GPU memory while voice replies are enabled.' -ForegroundColor Cyan
+    } else {
+        Write-Host 'NeuTTS acceleration: CPU-only. This saves GPU memory and works without CUDA, but speech generation can be much slower than real time.' -ForegroundColor Yellow
+    }
     Write-Host "Air Q4 SHA-256: $($script:NeuTTSBackboneSHA256)" -ForegroundColor DarkGray
     Write-Host "NeuCodec SHA-256: $($script:NeuTTSCodecSHA256)" -ForegroundColor DarkGray
     Write-Host "Reference encoder model SHA-256: $($script:NeuTTSEncoderModelSHA256)" -ForegroundColor DarkGray
@@ -1220,14 +1284,19 @@ function Install-MagicHandyNeuTTS {
         [Parameter(Mandatory = $true)][string]$GitExecutable,
         [Parameter(Mandatory = $true)][string]$RustupExecutable,
         [Parameter(Mandatory = $true)][string]$LibClangPath,
-        [Parameter(Mandatory = $true)][string]$CMakeExecutable
+        [Parameter(Mandatory = $true)][string]$CMakeExecutable,
+        [Parameter(Mandatory = $true)][ValidateSet('cpu', 'cuda')][string]$Backend,
+        [string]$CUDAExecutable = ''
     )
 
     $root = Join-Path $DataDir 'voice\neutts'
     Assert-MagicHandyChildPath -Root $DataDir -Candidate $root
-    if (Test-MagicHandyNeuTTSInstall -DataDir $DataDir) {
+    if (Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend $Backend) {
         Write-Host "NeuTTS runtime is already verified at $(Join-Path $root 'active\runtime')." -ForegroundColor Green
         return
+    }
+    if ($Backend -eq 'cuda' -and [string]::IsNullOrWhiteSpace($CUDAExecutable)) {
+        throw 'A CUDA NeuTTS build requires the verified nvcc executable.'
     }
 
     $active = Join-Path $root 'active'
@@ -1272,6 +1341,9 @@ function Install-MagicHandyNeuTTS {
     $previousLibClang = $env:LIBCLANG_PATH
     $previousLocalAppData = $env:LOCALAPPDATA
     $previousCMake = $env:CMAKE
+    $previousCUDAPath = $env:CUDA_PATH
+    $previousCUDAToolkitDir = $env:CudaToolkitDir
+    $previousCUDACXX = $env:CUDACXX
     $previousPath = $env:Path
     try {
         foreach ($path in @($activeStage, $buildRoot)) {
@@ -1290,6 +1362,7 @@ function Install-MagicHandyNeuTTS {
             throw "neutts-rs source verification failed: expected $($script:NeuTTSSourceCommit), got '$actualCommit'."
         }
         Repair-MagicHandyNeuTTSCargoLock -SourceRoot $sourceRoot
+        Add-MagicHandyNeuTTSRunnerSource -SourceRoot $sourceRoot -RepositoryRoot $repositoryRoot -GitExecutable $GitExecutable
 
         Install-MagicHandyVerifiedDownload -Uri $script:NeuTTSBackboneURL -Destination $backbonePath -ExpectedSHA256 $script:NeuTTSBackboneSHA256 -PartialPath $backbonePartial
         New-Item -ItemType Directory -Force -Path (Join-Path $backboneRepo 'refs') | Out-Null
@@ -1308,18 +1381,26 @@ function Install-MagicHandyNeuTTS {
         $env:LOCALAPPDATA = $localBuildData
         $env:CMAKE = $CMakeExecutable
         $env:Path = (Split-Path -Parent $CMakeExecutable) + ';' + $previousPath
+        if ($Backend -eq 'cuda') {
+            $cudaRoot = Split-Path -Parent (Split-Path -Parent ([System.IO.Path]::GetFullPath($CUDAExecutable)))
+            $env:CUDA_PATH = $cudaRoot.TrimEnd('\')
+            $env:CudaToolkitDir = $cudaRoot.TrimEnd('\') + '\'
+            $env:CUDACXX = [System.IO.Path]::GetFullPath($CUDAExecutable)
+            $env:Path = (Split-Path -Parent $CUDAExecutable) + ';' + $env:Path
+        }
         Write-Host 'Converting the verified NeuCodec checkpoint without Python...'
         & $RustupExecutable run $script:NeuTTSRustToolchain cargo run --locked --release --no-default-features --manifest-path (Join-Path $sourceRoot 'Cargo.toml') --example convert_weights -- --out $decoderStage | Out-Host
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $decoderStage)) {
             throw "NeuCodec decoder conversion failed (exit $LASTEXITCODE)."
         }
 
-        Write-Host 'Building pinned NeuTTS stream_pcm with its CPU llama.cpp binding...'
-        & $RustupExecutable run $script:NeuTTSRustToolchain cargo build --locked --release --manifest-path (Join-Path $sourceRoot 'Cargo.toml') --example stream_pcm --features espeak | Out-Host
+        $runnerFeatures = if ($Backend -eq 'cuda') { 'espeak,cuda,wgpu' } else { 'espeak' }
+        Write-Host "Building MagicHandy's persistent NeuTTS runner ($Backend; features $runnerFeatures)..."
+        & $RustupExecutable run $script:NeuTTSRustToolchain cargo build --locked --release --manifest-path (Join-Path $sourceRoot 'Cargo.toml') --example magichandy_neutts --features $runnerFeatures | Out-Host
         if ($LASTEXITCODE -ne 0) {
-            throw "NeuTTS stream_pcm build failed (exit $LASTEXITCODE)."
+            throw "Persistent NeuTTS runner build failed (exit $LASTEXITCODE)."
         }
-        $runnerCandidate = Join-Path $targetRoot 'release\examples\stream_pcm.exe'
+        $runnerCandidate = Join-Path $targetRoot 'release\examples\magichandy_neutts.exe'
         if (-not (Test-Path -LiteralPath $runnerCandidate)) {
             throw "NeuTTS build did not produce '$runnerCandidate'."
         }
@@ -1327,6 +1408,18 @@ function Install-MagicHandyNeuTTS {
             throw 'The built NeuTTS stream_pcm runner did not pass its help probe.'
         }
         Copy-Item -LiteralPath $runnerCandidate -Destination (Join-Path $runtimeStage 'stream_pcm.exe') -Force
+        $nativeDependencyHashes = [ordered]@{}
+        if ($Backend -eq 'cuda') {
+            foreach ($name in @('ggml-base.dll', 'ggml-cpu.dll', 'ggml-cuda.dll', 'ggml.dll', 'llama.dll')) {
+                $candidate = Join-Path (Split-Path -Parent $runnerCandidate) $name
+                if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+                    throw "The CUDA NeuTTS build did not produce its required $name dependency."
+                }
+                $destination = Join-Path $runtimeStage $name
+                Copy-Item -LiteralPath $candidate -Destination $destination -Force
+                $nativeDependencyHashes[$name] = Get-MagicHandySHA256 -Path $destination
+            }
+        }
 
         Write-Host 'Building the pinned MagicHandy NeuCodec ONNX reference encoder...'
         & $RustupExecutable run $script:NeuTTSRustToolchain cargo build --locked --release --manifest-path $encoderManifest | Out-Host
@@ -1348,6 +1441,8 @@ function Install-MagicHandyNeuTTS {
         New-Item -ItemType Directory -Force -Path $metadataDir | Out-Null
         Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.toml') -Destination (Join-Path $metadataDir 'neutts-Cargo.toml')
         Copy-Item -LiteralPath (Join-Path $sourceRoot 'Cargo.lock') -Destination (Join-Path $metadataDir 'neutts-Cargo.lock')
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'workers\neutts-runner\main.rs') -Destination (Join-Path $metadataDir 'magichandy-neutts-runner.rs')
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'workers\neutts-runner\neutts-rs-v0.1.1-cuda.patch') -Destination (Join-Path $metadataDir 'neutts-rs-v0.1.1-cuda.patch')
         Copy-Item -LiteralPath $encoderManifest -Destination (Join-Path $metadataDir 'encoder-Cargo.toml')
         Copy-Item -LiteralPath $encoderLock -Destination (Join-Path $metadataDir 'encoder-Cargo.lock')
         $licenseDir = Join-Path $runtimeStage 'licenses'
@@ -1371,6 +1466,8 @@ Source: $($script:NeuTTSSourceURL)
 Cargo package metadata license: MIT
 The build includes llama.cpp through llama-cpp-4 and eSpeak NG components through espeak-ng.
 Cargo dependency license files available in the downloaded sources are retained under licenses\.
+MagicHandy's persistent NeuTTS runner and CUDA offload patch are GPL-3.0-only.
+Execution backend: $Backend. CUDA builds use all-layer llama.cpp offload and the Burn WGPU codec.
 
 NeuTTS Air Q4 and NeuCodec model repositories declare Apache-2.0.
 Backbone revision: $($script:NeuTTSBackboneRevision)
@@ -1393,12 +1490,17 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
         $encoderHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'magichandy-neucodec-encoder.exe')
         $directMLHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'DirectML.dll')
         $manifest = [pscustomobject][ordered]@{
-            schema_version = 2
+            schema_version = 3
             installed_at = [DateTimeOffset]::UtcNow.ToString('o')
             source_tag = $script:NeuTTSSourceTag
             source_commit = $script:NeuTTSSourceCommit
             rust_toolchain = $script:NeuTTSRustToolchain
             rust_version = $rustVersion
+            backend = $Backend
+            runner_protocol = $script:NeuTTSRunnerProtocol
+            backbone_acceleration = if ($Backend -eq 'cuda') { 'cuda_all_layers' } else { 'cpu' }
+            codec_acceleration = if ($Backend -eq 'cuda') { 'wgpu' } else { 'cpu' }
+            native_dependencies = $nativeDependencyHashes
             backbone_revision = $script:NeuTTSBackboneRevision
             backbone_sha256 = $script:NeuTTSBackboneSHA256
             codec_revision = $script:NeuTTSCodecRevision
@@ -1414,7 +1516,7 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
         Write-MagicHandyUTF8 -Path (Join-Path $runtimeStage 'runtime.json') -Content ($manifest | ConvertTo-Json -Depth 3)
         Remove-Item -LiteralPath $codecRepo -Recurse -Force
 
-        if (-not (Test-MagicHandyNeuTTSInstallRoot -InstallRoot $activeStage)) {
+        if (-not (Test-MagicHandyNeuTTSInstallRoot -InstallRoot $activeStage -Backend $Backend)) {
             throw 'The staged NeuTTS runtime did not pass checksum and manifest verification.'
         }
         if (Test-Path -LiteralPath $active) {
@@ -1422,7 +1524,7 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
         }
         try {
             Move-Item -LiteralPath $activeStage -Destination $active
-            if (-not (Test-MagicHandyNeuTTSInstall -DataDir $DataDir)) {
+            if (-not (Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend $Backend)) {
                 throw 'The activated NeuTTS runtime did not pass final verification.'
             }
         } catch {
@@ -1452,6 +1554,9 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
         $env:LIBCLANG_PATH = $previousLibClang
         $env:LOCALAPPDATA = $previousLocalAppData
         $env:CMAKE = $previousCMake
+        $env:CUDA_PATH = $previousCUDAPath
+        $env:CudaToolkitDir = $previousCUDAToolkitDir
+        $env:CUDACXX = $previousCUDACXX
         $env:Path = $previousPath
         foreach ($path in @($activeStage, $buildRoot)) {
             if (Test-Path -LiteralPath $path) {
@@ -1855,8 +1960,9 @@ function Invoke-MagicHandyProvision {
         $git = Ensure-MagicHandyGit -AssumeYes:$AssumeYes
         $cmake = Ensure-MagicHandyCMake -AssumeYes:$AssumeYes
         Ensure-MagicHandyVCToolchain -AssumeYes:$AssumeYes
+        $cuda = ''
         if ([string]$State.llama_backend -eq 'cuda') {
-            Ensure-MagicHandyCUDA -AssumeYes:$AssumeYes | Out-Null
+            $cuda = Ensure-MagicHandyCUDA -AssumeYes:$AssumeYes
         }
         $builder = Join-Path $RepositoryPath 'internal\llm\runtimeassets\build-managed-llama.ps1'
         & $builder -DataDir $State.data_dir -Backend $State.llama_backend
@@ -1866,13 +1972,13 @@ function Invoke-MagicHandyProvision {
 
         Write-InstallerHeading 'NeuTTS Air runtime (with managed llama.cpp)'
         Restore-MagicHandyNeuTTSBackup -DataDir $State.data_dir
-        if (Test-MagicHandyNeuTTSInstall -DataDir $State.data_dir) {
+        if (Test-MagicHandyNeuTTSInstall -DataDir $State.data_dir -Backend $State.llama_backend) {
             Write-Host "NeuTTS runtime is already checksum-verified at $(Join-Path $State.data_dir 'voice\neutts\active\runtime')." -ForegroundColor Green
         } else {
-            Confirm-MagicHandyNeuTTSInstall -AssumeYes:$AssumeYes
+            Confirm-MagicHandyNeuTTSInstall -Backend $State.llama_backend -AssumeYes:$AssumeYes
             $libClang = Ensure-MagicHandyLibClang -AssumeYes:$AssumeYes
             $rustup = Ensure-MagicHandyRustup -AssumeYes:$AssumeYes
-            Install-MagicHandyNeuTTS -DataDir $State.data_dir -GitExecutable $git -RustupExecutable $rustup -LibClangPath $libClang -CMakeExecutable $cmake
+            Install-MagicHandyNeuTTS -DataDir $State.data_dir -GitExecutable $git -RustupExecutable $rustup -LibClangPath $libClang -CMakeExecutable $cmake -Backend $State.llama_backend -CUDAExecutable $cuda
         }
     }
 

@@ -366,6 +366,7 @@ func (s *Server) Close() {
 	if s.modes != nil {
 		s.modes.Shutdown()
 	}
+	s.stopVoiceAutoload()
 	if s.voice != nil {
 		s.voice.Shutdown()
 	}

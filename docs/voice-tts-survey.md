@@ -36,7 +36,7 @@ Python question far more than the model does:
 
 | Model | Size / VRAM | Speed | Cloning | Expressiveness | Notes |
 |---|---|---|---|---|---|
-| **NeuTTS Air** | 748M (Qwen) / **CPU real-time** | real-time on mid CPU | 3-sec instant | Contextual (moderate) | On-device, 24 kHz, NeuCodec. **No GPU contention** with the LLM — strongest practical non-Python pick |
+| **NeuTTS Air** | 748M (Qwen); CPU or CUDA/WGPU | upstream claimed CPU real-time; MagicHandy measured 66.72x RTF on CPU and 1.39x RTF on CUDA/WGPU | 3-sec instant | Contextual (moderate) | On-device, 24 kHz, NeuCodec. CPU saves VRAM but was not interactive on the test host; persistent GPU first audio measured 0.47-1.01 s |
 | **Kani-TTS-2** | 400-450M / ~3 GB | near-instant (NanoCodec) | Yes | Contextual (moderate) | Edge-optimized, low latency, tiny |
 | **Orpheus-3B** | 3B (Llama-3.2) / Q8 ~6 GB, Q4 ~4 GB | TTFA ~180-300 ms | Yes, but **tone/timbre only** (loses prosody; repetition glitches) | **Explicit tags** `<laugh>`/`<sigh>` (8), near-human — but tags weaken during cloning | Apache-2.0, GGUF widely available. Expressive with *stock* voices |
 | **Llama-OuteTTS-1.0** | 1B / small | ~real-time | Yes | Contextual (moderate) | WavTokenizer codec; earlier version of this pattern |
@@ -104,9 +104,10 @@ Expressive-tags-with-a-cloned-voice together remains a **Python (Tier C)** or
 1. **Instant default (no clone):** Kokoro or Piper via sherpa-onnx (Go binding,
    also serves Whisper ASR) — voice works on day one, CPU, zero GPU contention.
 2. **Best non-Python cloning, low-footprint (prototype first):** **NeuTTS Air** —
-   Qwen backbone on llama.cpp, CPU real-time, 3-sec cloning, no GPU contention
-   with the LLM. **Kani-TTS-2** is the close alternative (3 GB GPU). These are the
-   most promising "fast + cloning + non-Python + fits the box" options.
+   Qwen backbone on llama.cpp, 3-sec cloning, and an effective persistent
+   CUDA/WGPU path. CPU avoids LLM GPU contention but is a compatibility fallback,
+   not an interactive default on the measured Windows host. **Kani-TTS-2** is the
+   close alternative (3 GB GPU).
 3. **Expressive tags, non-Python, local:** **Orpheus-3B** on llama.cpp — best for
    *stock* expressive voices; accept weaker cloning. Reuses the chat runner.
 4. **Faithful clone, non-Python, local:** **F5-TTS (ONNX)** — accept flat delivery.
@@ -123,9 +124,10 @@ worker as the "max local expressiveness" escape hatch. Re-evaluate Orpheus/Kani
 cloning as their codecs get native decoders.
 
 Two levers still dominate perceived latency regardless of model: **sentence
-streaming** (speak sentence 1 while sentence 2 renders) and **keeping TTS off the
-GPU the LLM is using** (CPU models like NeuTTS Air/Piper avoid contention). See
-ADR 0003, "Message And Audio Delivery Ordering".
+streaming** (speak sentence 1 while sentence 2 renders) and **persistent model
+preload**. GPU coexistence remains a capacity tradeoff: CPU can avoid contention,
+but only when its measured latency is acceptable. See ADR 0003, "Message And
+Audio Delivery Ordering".
 
 ## ASR (voice input)
 

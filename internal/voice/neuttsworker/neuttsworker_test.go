@@ -132,6 +132,133 @@ func TestWorkerStreamsCompletePCMAndRequestsOfflineMode(t *testing.T) {
 	}
 }
 
+func TestPersistentRunnerLoadsOnceAndServesMultipleRequests(t *testing.T) {
+	startLog := filepath.Join(t.TempDir(), "starts.log")
+	t.Setenv("MAGICHANDY_TEST_STARTS", startLog)
+	runner := buildPersistentPCMRunner(t)
+	codes := filepath.Join(t.TempDir(), "voice.npy")
+	if err := os.WriteFile(codes, []byte("codes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	worker := startPersistentTestWorker(t, Options{RunnerPath: runner, ReferenceCodes: codes, ReferenceText: "Reference transcript."})
+
+	worker.send(protocol.Request{Type: protocol.RequestLoad, ID: "load"})
+	if loaded := worker.next(t); loaded.ModelState != protocol.ModelStateReady {
+		t.Fatalf("load = %+v", loaded)
+	}
+	for _, id := range []string{"first", "second"} {
+		assertPersistentSpeech(t, worker, id, "Speak without reloading.")
+	}
+
+	worker.send(protocol.Request{Type: protocol.RequestSpeak, ID: "blocked", Text: "block"})
+	if response := worker.next(t); response.RequestID != "blocked" || response.Type != protocol.ResponseAudioChunk {
+		t.Fatalf("cancel fixture first response = %+v", response)
+	}
+	worker.send(protocol.Request{Type: protocol.RequestCancel, ID: "cancel", TargetID: "blocked"})
+	if response := worker.next(t); response.RequestID != "blocked" || response.Type != protocol.ResponseCanceled {
+		t.Fatalf("cancel fixture terminal response = %+v", response)
+	}
+	assertPersistentSpeech(t, worker, "recovery", "Speak after cancellation.")
+	// #nosec G304 -- startLog is a test-owned path under t.TempDir.
+	if starts, err := os.ReadFile(startLog); err != nil || string(starts) != "start\n" {
+		t.Fatalf("persistent starts = %q, %v; requests and cancellation recovery must reuse the model process", starts, err)
+	}
+
+	worker.send(protocol.Request{Type: protocol.RequestUnload, ID: "unload"})
+	if unloaded := worker.next(t); unloaded.ModelState != protocol.ModelStateUnloaded {
+		t.Fatalf("unload = %+v", unloaded)
+	}
+	worker.shutdown(t)
+}
+
+type persistentTestWorker struct {
+	inWriter  *io.PipeWriter
+	outWriter *io.PipeWriter
+	done      chan error
+	frames    chan protocol.Response
+}
+
+func startPersistentTestWorker(t *testing.T, options Options) *persistentTestWorker {
+	t.Helper()
+	inReader, inWriter := io.Pipe()
+	outReader, outWriter := io.Pipe()
+	worker := &persistentTestWorker{
+		inWriter: inWriter, outWriter: outWriter,
+		done: make(chan error, 1), frames: make(chan protocol.Response, 16),
+	}
+	go func() { worker.done <- Run(inReader, outWriter, options) }()
+	go func() {
+		scanner := bufio.NewScanner(outReader)
+		for scanner.Scan() {
+			var response protocol.Response
+			if json.Unmarshal(scanner.Bytes(), &response) == nil {
+				worker.frames <- response
+			}
+		}
+	}()
+	return worker
+}
+
+func (w *persistentTestWorker) send(request protocol.Request) {
+	data, _ := json.Marshal(request)
+	_, _ = w.inWriter.Write(append(data, '\n'))
+}
+
+func (w *persistentTestWorker) next(t *testing.T) protocol.Response {
+	t.Helper()
+	select {
+	case response := <-w.frames:
+		return response
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for persistent worker")
+		return protocol.Response{}
+	}
+}
+
+func (w *persistentTestWorker) shutdown(t *testing.T) {
+	t.Helper()
+	w.send(protocol.Request{Type: protocol.RequestShutdown, ID: "shutdown"})
+	_ = w.next(t)
+	_ = w.inWriter.Close()
+	_ = w.outWriter.Close()
+	select {
+	case err := <-w.done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not stop")
+	}
+}
+
+func assertPersistentSpeech(t *testing.T, worker *persistentTestWorker, id, text string) {
+	t.Helper()
+	worker.send(protocol.Request{Type: protocol.RequestSpeak, ID: id, Text: text})
+	var audio []byte
+	for {
+		response := worker.next(t)
+		if response.RequestID != id {
+			t.Fatalf("response request = %q, want %q", response.RequestID, id)
+		}
+		if response.Type == protocol.ResponseAudioChunk {
+			chunk, err := base64.StdEncoding.DecodeString(response.AudioB64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			audio = append(audio, chunk...)
+			continue
+		}
+		if response.Type != protocol.ResponseDone {
+			t.Fatalf("terminal = %+v", response)
+		}
+		break
+	}
+	if string(audio) != "12345678" {
+		t.Fatalf("audio = %q", audio)
+	}
+}
+
 func TestInstalledRunnerCompatibility(t *testing.T) {
 	runner := os.Getenv("MAGICHANDY_NEUTTS_RUNNER")
 	if runner == "" {
@@ -300,6 +427,85 @@ func main() {
 	command.Dir = dir
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build runner: %v: %s", err, output)
+	}
+	return path
+}
+
+func buildPersistentPCMRunner(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	hfHome := t.TempDir()
+	t.Setenv("HF_HOME", hfHome)
+	source := `package main
+import ("bufio"; "encoding/binary"; "encoding/json"; "fmt"; "os")
+type command struct { Type string ` + "`json:\"type\"`" + `; ID string ` + "`json:\"id\"`" + `; Text string ` + "`json:\"text\"`" + ` }
+func frame(kind byte, payload []byte) {
+  _, _ = os.Stdout.Write([]byte{'M','H','T','S',kind})
+  var size [4]byte; binary.LittleEndian.PutUint32(size[:], uint32(len(payload))); _, _ = os.Stdout.Write(size[:])
+  _, _ = os.Stdout.Write(payload)
+}
+func main() {
+  if len(os.Args) == 2 && os.Args[1] == "--help" { fmt.Println("MAGICHANDY_NEUTTS_STREAM_V1 --serve --codes FILE --ref-text TEXT"); return }
+  if os.Getenv("HF_HUB_OFFLINE") != "1" { os.Exit(2) }
+  starts := os.Getenv("MAGICHANDY_TEST_STARTS"); file, _ := os.OpenFile(starts, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600); _, _ = file.WriteString("start\n"); _ = file.Close()
+  fmt.Println("NeuCodec decoder: test fixture")
+  fmt.Println("NeuCodec: using Burn wgpu (GPU) backend")
+  fmt.Println("NeuCodec: burn/wgpu (GPU) backend ready in 0.01 s")
+  frame(1, []byte(` + "`{\"protocol\":1,\"codec\":\"test\"}`" + `))
+  commands := make(chan command)
+  go func() {
+    scanner := bufio.NewScanner(os.Stdin)
+    for scanner.Scan() { var request command; if json.Unmarshal(scanner.Bytes(), &request) == nil { commands <- request } }
+    close(commands)
+  }()
+  for request := range commands {
+    switch request.Type {
+    case "speak":
+      frame(2, []byte("12345678"))
+      if request.Text == "block" {
+        for next := range commands {
+          if next.Type == "cancel" && next.ID == request.ID { frame(5, nil); break }
+          if next.Type == "shutdown" { return }
+        }
+      } else { frame(3, nil) }
+    case "cancel": frame(5, nil)
+    case "shutdown": return
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	modelDir := filepath.Join(dir, "models")
+	if err := os.MkdirAll(modelDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modelDir, "neucodec_decoder.safetensors"), []byte("decoder"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backboneRoot := filepath.Join(hfHome, "hub", "models--neuphonic--neutts-air-q4-gguf")
+	if err := os.MkdirAll(filepath.Join(backboneRoot, "refs"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backboneRoot, "refs", "main"), []byte("test-revision"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := filepath.Join(backboneRoot, "snapshots", "test-revision")
+	if err := os.MkdirAll(snapshot, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(snapshot, defaultGGUFFile), []byte("gguf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	name := "persistent-pcm-runner"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	path := filepath.Join(dir, name)
+	command := exec.Command("go", "build", "-o", path, "main.go") // #nosec G204 -- test-owned paths.
+	command.Dir = dir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build persistent runner: %v: %s", err, output)
 	}
 	return path
 }

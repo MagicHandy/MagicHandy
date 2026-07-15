@@ -31,7 +31,7 @@ before consent. `-Yes` is explicit unattended consent to those prompts.
 | Managed llama.cpp | `Git.Git` | Fetch the checksum-pinned source revision |
 | Managed llama.cpp | `Kitware.CMake` | Configure/build `llama-server` |
 | Managed llama.cpp | `Microsoft.VisualStudio.BuildTools` | Desktop C++ workload and Windows SDK |
-| Managed llama.cpp + NeuTTS | `Rustlang.Rustup` | Build `stream_pcm` and its embedded CPU llama.cpp binding |
+| Managed llama.cpp + NeuTTS | `Rustlang.Rustup` | Build MagicHandy's persistent NeuTTS runner with the selected CPU/CUDA backend |
 | Managed llama.cpp + NeuTTS | `LLVM.LLVM` | Provide `libclang` for generated llama.cpp Rust bindings |
 | CUDA backend | `Nvidia.CUDA` | Provide `nvcc` and CUDA build/runtime files |
 | Ollama selected | `Ollama.Ollama` | External local-LLM daemon/runtime |
@@ -86,8 +86,8 @@ downloads with a compact inline progress bar, and installs them atomically under
 `<data-dir>/voice/parakeet`. Transient transport and server failures are retried
 with validated byte-range resume. It then prints the deliberate activation
 sequence: Settings > Voice, select Parakeet and the MagicHandy module, enable
-voice, save, then Start. Installing files never enables or autostarts a
-microphone worker.
+voice, save, then Start. Installing files never enables voice. Once enabled and
+configured, speech input autoloads its worker on later app starts.
 
 NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
 
@@ -101,33 +101,40 @@ NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
    and resumable partial files under `<data-dir>/voice/neutts/downloads`;
 5. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
    pure-Rust converter, without Python or PyTorch;
-6. builds `stream_pcm` with Cargo `--locked`, eSpeak, and its CPU
-   `llama-cpp-4` binding;
+6. applies MagicHandy's exact pinned all-layer CUDA offload patch, copies the
+   reviewed persistent runner source, and builds it with Cargo `--locked` plus
+   eSpeak; CPU installs use the CPU backbone/codec, while CUDA installs use the
+   CUDA llama.cpp backbone and WGPU codec;
 7. builds the first-party Rust/ONNX reference encoder with the same pinned
    toolchain and locked dependency graph; and
-8. stages both workers, DirectML, decoder, encoder model, and exact GGUF cache
-   together, verifies their hashes, then swaps them atomically under
-   `<data-dir>/voice/neutts/active`.
+8. stages both workers, DirectML, decoder, encoder model, exact GGUF cache, and
+   the five required llama/ggml DLLs for CUDA together; verifies their hashes;
+   then swaps them atomically under `<data-dir>/voice/neutts/active`.
 
-The active manifest records the built runner/decoder hashes, immutable model
-revisions, source checkpoint hashes, and exact Rust compiler identity. Updates
-reuse it without requiring Rustup only after the installer rehashes all active
-artifacts. An interrupted directory swap restores the newest preserved backup
-before retrying; rollback data is removed only after the replacement verifies.
+The schema-3 active manifest records the runner protocol, selected backend,
+backbone/codec acceleration, native dependency hashes, built runner/decoder
+hashes, immutable model revisions, source checkpoint hashes, and exact Rust
+compiler identity. Updates reuse it without requiring Rustup only after the
+installer rehashes all active artifacts. A schema-2 CPU runtime is stale and is
+rebuilt once. An interrupted directory swap restores the newest preserved
+backup before retrying; rollback data is removed only after the replacement
+verifies.
 When app-managed NeuTTS is selected, the app independently validates the pinned
 manifest, Air Q4 cache revision, and required paths before it configures the
 worker. The installer performs the full hashes before atomic publication and
 reuse; application startup and status polling do not rehash large runtime
 assets before serving HTTP.
 
-The NeuTTS build does not reuse `llama-server.exe`; the upstream Rust runner
-embeds its own llama.cpp binding. Coupling the choices shares the explicit
-source-toolchain/download decision. It intentionally remains CPU-only even when
-the chat runner uses CUDA, avoiding voice/LLM GPU contention. The runtime is
-about 1.9 GiB installed; decoder conversion temporarily downloads another
-approximately 1.1 GiB checkpoint and Cargo/build files can use several GB.
-Skipping managed llama.cpp, including with `-SkipLlamaBuild`, skips Rustup,
-`stream_pcm`, and all NeuTTS model work. Existing files are not deleted.
+The NeuTTS build does not reuse `llama-server.exe`; the runner embeds its own
+llama.cpp binding and persistent model context. Coupling the choices shares the
+explicit source-toolchain/download decision and backend selection. CUDA avoids
+the measured multi-minute CPU response but reserves additional VRAM while TTS
+is loaded; CPU avoids that VRAM cost. The CPU runtime is about 1.9 GiB installed
+and the CUDA runtime about 2.0 GiB. Decoder conversion temporarily downloads
+another approximately 1.1 GiB checkpoint and Cargo/build files can use several
+GB. Skipping managed llama.cpp, including with `-SkipLlamaBuild`, skips Rustup,
+the persistent runner, and all NeuTTS model work. Existing files are not
+deleted.
 
 ## Install Commands
 
@@ -222,8 +229,9 @@ voice asset. It only changes what subsequent runs ensure is present.
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion,
 interrupted HTTP byte-range resume and checksum promotion, managed CUDA/NeuTTS
-versus Ollama-only plans, app-managed NeuTTS schema-2 manifest discovery and
-encoder tamper detection, and end-to-end plan-only install/update behavior.
+versus Ollama-only plans, app-managed NeuTTS schema-3 CPU/CUDA manifest
+discovery, native-DLL and encoder tamper detection, and end-to-end plan-only
+install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response
 validation, exact physical-stop confirmation, unattended refusal, `main`, a
 live feature upstream, a single-branch

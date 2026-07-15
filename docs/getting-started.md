@@ -19,7 +19,7 @@ installs is named, licensed, and consented to before it happens:
 - Choosing the **managed llama.cpp build** additionally provisions Git, CMake,
   the Visual Studio Desktop C++ workload, and CUDA when selected. That choice
   also provisions LLVM/libclang and pinned Rust 1.94.0 through Rustup, builds
-  the pinned NeuTTS `stream_pcm` runner and its CPU llama.cpp binding, and
+  MagicHandy's persistent NeuTTS runner with the same CPU/CUDA backend, and
   installs a checksum-verified Air Q4 backbone, a decoder converted from a
   checksum-verified NeuCodec checkpoint, and a pinned ONNX reference encoder.
 - Choosing **Ollama** instead avoids the managed source builds and also skips
@@ -30,6 +30,9 @@ installs is named, licensed, and consented to before it happens:
 - For NeuTTS, users supply a reference WAV and its exact transcript; Settings
   generates the `.npy` reference codes locally without Python. Manual
   pre-encoded paths remain available under Advanced.
+- Enabled speech input and **Speak chat replies** load their configured workers
+  automatically on later app starts. Installing assets alone does not enable
+  either feature.
 - It can write a `Start-MagicHandy.ps1` launcher, and when setup is done the
   app opens at <http://127.0.0.1:49717>.
 

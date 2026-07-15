@@ -11,10 +11,11 @@
     The core app and all first-party Go voice adapters are built with CGO
     disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
     runner/model remain explicit choices. Selecting managed llama.cpp also builds
-    the pinned NeuTTS stream_pcm runner and installs its verified decoder, Air
-    Q4 backbone, and local WAV-to-reference encoder. Skipping managed llama.cpp
-    skips NeuTTS. Users supply a reference WAV and its exact transcript; the app
-    generates the codes without Python. No model is downloaded at app startup.
+    MagicHandy's persistent NeuTTS runner with the selected CPU or CUDA backend
+    and installs its verified decoder, Air Q4 backbone, and local
+    WAV-to-reference encoder. Skipping managed llama.cpp skips NeuTTS. Users
+    supply a reference WAV and its exact transcript; the app generates the codes
+    without Python. No model is downloaded at app startup.
 
     Non-secret installation choices are stored under LocalAppData so update.ps1
     can preserve or revise them. API keys and the Handy connection key are never

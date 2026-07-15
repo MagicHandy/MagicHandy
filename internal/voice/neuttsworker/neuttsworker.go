@@ -25,10 +25,10 @@ import (
 
 const (
 	providerName      = "neutts-air"
-	providerVersion   = "1.0.0"
+	providerVersion   = "1.1.0"
 	defaultBackbone   = "neuphonic/neutts-air-q4-gguf"
 	defaultGGUFFile   = "neutts-air-Q4_0.gguf"
-	modelProbeTimeout = 5 * time.Second
+	modelProbeTimeout = 30 * time.Second
 	queueCapacity     = 8
 	maxPCMBytes       = 32 << 20
 	audioChunkBytes   = 32 << 10
@@ -74,8 +74,9 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	err := s.readLoop(reader)
 	s.cancelLoad()
 	s.loadWG.Wait()
-	s.setLoaded(false)
 	s.cancelAll()
+	s.stopPersistentRunner()
+	s.setLoaded(false)
 	close(s.queue)
 	<-done
 	return err
@@ -96,6 +97,9 @@ type session struct {
 	cancels    map[string]context.CancelFunc
 	canceled   map[string]bool
 	queue      chan protocol.Request
+
+	runnerMu         sync.Mutex
+	persistentRunner *persistentRunner
 }
 
 func (s *session) readLoop(reader io.Reader) error {
@@ -120,16 +124,18 @@ func (s *session) readLoop(reader io.Reader) error {
 		case protocol.RequestUnload:
 			s.cancelLoad()
 			s.loadWG.Wait()
-			s.setLoaded(false)
 			s.cancelAll()
+			s.stopPersistentRunner()
+			s.setLoaded(false)
 			s.send(s.health(request.ID))
 		case protocol.RequestCancel:
 			s.markCanceled(request.TargetID)
 		case protocol.RequestShutdown:
 			s.cancelLoad()
 			s.loadWG.Wait()
-			s.setLoaded(false)
 			s.cancelAll()
+			s.stopPersistentRunner()
+			s.setLoaded(false)
 			s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
 			return nil
 		case protocol.RequestSpeak:
@@ -157,6 +163,8 @@ func (s *session) hello(request protocol.Request) {
 func (s *session) load(id string) {
 	s.cancelLoad()
 	s.loadWG.Wait()
+	s.cancelAll()
+	s.stopPersistentRunner()
 	ctx, cancel := context.WithTimeout(context.Background(), modelProbeTimeout)
 	s.mu.Lock()
 	s.loadSeq++
@@ -169,18 +177,32 @@ func (s *session) load(id string) {
 	go func() {
 		defer s.loadWG.Done()
 		defer cancel()
+		var runner *persistentRunner
 		err := validateOptions(s.options)
+		persistent := false
 		if err == nil {
-			err = probeRunner(ctx, s.options)
+			persistent, err = detectRunnerMode(ctx, s.options)
+		}
+		if err == nil && persistent {
+			runner, err = startPersistentRunner(ctx, s.options)
 		}
 		s.mu.Lock()
 		current := sequence == s.loadSeq && s.loading
+		if current && err == nil && runner != nil {
+			s.runnerMu.Lock()
+			s.persistentRunner = runner
+			s.runnerMu.Unlock()
+			runner = nil
+		}
 		if current {
 			s.loading = false
 			s.loadCancel = nil
 			s.loaded = err == nil
 		}
 		s.mu.Unlock()
+		if runner != nil {
+			runner.Stop()
+		}
 		if !current || errors.Is(ctx.Err(), context.Canceled) {
 			s.sendError(id, protocol.ErrorCodeCanceled, "NeuTTS model load was canceled", false)
 			return
@@ -276,6 +298,11 @@ func (s *session) speak(request protocol.Request) {
 		s.mu.Unlock()
 	}()
 
+	if runner := s.currentPersistentRunner(); runner != nil {
+		s.speakPersistent(ctx, runner, request)
+		return
+	}
+
 	args := runnerArgs(s.options, request.Text)
 	// #nosec G204 -- both executable and arguments are explicit local settings,
 	// invoked directly without shell expansion.
@@ -323,6 +350,43 @@ func (s *session) speak(request protocol.Request) {
 			message += ": " + readErr.Error()
 		}
 		s.sendError(request.ID, protocol.ErrorCodeInternal, message, true)
+		return
+	}
+	if total == 0 || total%2 != 0 {
+		s.sendError(request.ID, protocol.ErrorCodeInternal, "NeuTTS runner returned invalid or oversized PCM", false)
+		return
+	}
+	s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
+}
+
+func (s *session) speakPersistent(ctx context.Context, runner *persistentRunner, request protocol.Request) {
+	total := 0
+	seq := 0
+	err := runner.Speak(ctx, request.ID, request.Text, func(chunk []byte) error {
+		total += len(chunk)
+		if total > maxPCMBytes {
+			return errOversizedPCM
+		}
+		s.send(protocol.Response{
+			Type:        protocol.ResponseAudioChunk,
+			RequestID:   request.ID,
+			Seq:         seq,
+			AudioB64:    base64.StdEncoding.EncodeToString(chunk),
+			AudioFormat: "pcm_s16le_24000",
+		})
+		seq++
+		return nil
+	})
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
+		return
+	}
+	if err != nil {
+		if !runner.Alive() {
+			s.clearPersistentRunner(runner)
+			s.setLoaded(false)
+		}
+		s.sendError(request.ID, protocol.ErrorCodeInternal, "NeuTTS synthesis failed: "+err.Error(), true)
 		return
 	}
 	if total == 0 || total%2 != 0 {
@@ -393,27 +457,8 @@ func runnerArgs(options Options, text string) []string {
 }
 
 func probeRunner(ctx context.Context, options Options) error {
-	// #nosec G204 -- executable and arguments are explicit local settings,
-	// invoked directly without shell expansion.
-	command := exec.CommandContext(ctx, options.RunnerPath, "--help")
-	command.Dir = runnerWorkingDirectory(options.RunnerPath)
-	command.Env = offlineEnvironment()
-	output, err := command.CombinedOutput()
-	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return errors.New("NeuTTS runner compatibility check timed out")
-		}
-		message := "NeuTTS runner compatibility check failed"
-		if detail := strings.TrimSpace(string(output)); detail != "" {
-			message += ": " + detail
-		}
-		return errors.New(message)
-	}
-	help := strings.ToLower(string(output))
-	if !strings.Contains(help, "stream_pcm") || !strings.Contains(help, "--codes") || !strings.Contains(help, "--ref-text") {
-		return errors.New("NeuTTS runner is incompatible: stream_pcm --help did not advertise the required reference-code options")
-	}
-	return nil
+	_, err := detectRunnerMode(ctx, options)
+	return err
 }
 
 func runnerWorkingDirectory(runnerPath string) string {
@@ -538,6 +583,30 @@ func (s *session) health(id string) protocol.Response {
 func (s *session) setLoaded(loaded bool) { s.mu.Lock(); s.loaded = loaded; s.mu.Unlock() }
 func (s *session) isLoaded() bool        { s.mu.Lock(); defer s.mu.Unlock(); return s.loaded }
 
+func (s *session) currentPersistentRunner() *persistentRunner {
+	s.runnerMu.Lock()
+	defer s.runnerMu.Unlock()
+	return s.persistentRunner
+}
+
+func (s *session) clearPersistentRunner(runner *persistentRunner) {
+	s.runnerMu.Lock()
+	if s.persistentRunner == runner {
+		s.persistentRunner = nil
+	}
+	s.runnerMu.Unlock()
+}
+
+func (s *session) stopPersistentRunner() {
+	s.runnerMu.Lock()
+	runner := s.persistentRunner
+	s.persistentRunner = nil
+	s.runnerMu.Unlock()
+	if runner != nil {
+		runner.Stop()
+	}
+}
+
 func (s *session) cancelLoad() {
 	s.mu.Lock()
 	s.loadSeq++
@@ -590,20 +659,31 @@ func (s *session) sendError(id, code, message string, retryable bool) {
 	s.send(protocol.Response{Type: protocol.ResponseError, RequestID: id, Error: &protocol.WorkerError{Code: code, Message: message, Retryable: retryable}})
 }
 
-type tailBuffer struct{ bytes.Buffer }
+type tailBuffer struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	n := len(p)
 	if n >= 4096 {
-		b.Reset()
-		_, _ = b.Buffer.Write(p[n-4096:])
+		b.buffer.Reset()
+		_, _ = b.buffer.Write(p[n-4096:])
 		return n, nil
 	}
-	if b.Len()+n > 4096 {
-		data := append([]byte(nil), b.Bytes()[b.Len()+n-4096:]...)
-		b.Reset()
-		_, _ = b.Buffer.Write(data)
+	if b.buffer.Len()+n > 4096 {
+		data := append([]byte(nil), b.buffer.Bytes()[b.buffer.Len()+n-4096:]...)
+		b.buffer.Reset()
+		_, _ = b.buffer.Write(data)
 	}
-	_, _ = b.Buffer.Write(p)
+	_, _ = b.buffer.Write(p)
 	return n, nil
+}
+
+func (b *tailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.String()
 }

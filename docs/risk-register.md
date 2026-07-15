@@ -423,14 +423,14 @@ Level: Medium
 
 Description:
 ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
-adapter around the reviewed `neutts-rs stream_pcm` runner streams PCM without
-Python. The source installer now builds the pinned runner and installs verified
-decoder/backbone assets with managed llama.cpp. A first-party Rust worker now
-runs a pinned DistillNeuCodec ONNX encoder and generates validated reference
-codes from a local WAV without Python. The older bounded `.pt`/`.npy` normalizer
-remains an advanced fallback. The pinned upstream hub client still does not
-honor `HF_HUB_OFFLINE=1`, and MagicHandy starts a fresh model process for each
-synthesis. Enforced offline behavior, preload reuse, and subjective quality
+adapter owns a first-party persistent runner built against pinned `neutts-rs`
+and streams PCM without Python. The source installer builds either a CPU or
+CUDA/WGPU runtime and installs verified decoder/backbone assets with managed
+llama.cpp. A first-party Rust worker runs a pinned DistillNeuCodec ONNX encoder
+and generates validated reference codes from a local WAV without Python. The
+older bounded `.pt`/`.npy` normalizer remains an advanced fallback. The pinned
+upstream hub client still does not honor `HF_HUB_OFFLINE=1`. Enforced offline
+behavior, GPU-memory coexistence with the chat LLM, and subjective quality
 remain unproven.
 
 Mitigation:
@@ -445,6 +445,12 @@ Mitigation:
 - keep reference encoding in a short-lived worker, pin and checksum its ONNX
   graph/external weights, constrain WAV duration/rate/channels, and re-parse and
   range-check generated NPY in Go before publishing it
+- keep the model in one worker-owned process, frame every output with bounded
+  lengths, cancel by request ID, and terminate the process on unload, worker
+  shutdown, or Emergency Stop
+- record CPU/CUDA/WGPU acceleration and every required native DLL checksum in
+  the managed manifest; surface the selected backend and explain the CUDA
+  latency/VRAM versus CPU compatibility tradeoff before installation
 - keep ElevenLabs as the working non-Python premium path meanwhile
 - fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
   without blocking the rest of voice
@@ -467,8 +473,16 @@ DistillNeuCodec ONNX encoder then generated 373 valid codes directly from the
 NeuTTS runner accepted those generated codes and produced 106,560 PCM bytes
 (2.22 seconds of audio), proving format compatibility. Settings now exposes the
 actual WAV-plus-transcript generation flow and keeps pre-encoded paths under
-Advanced. Subjective listening, representative-source quality, per-request
-model startup, and network-sandbox evidence remain open risks.
+Advanced. Investigation of the installed CPU-only runner found a 127.27-second
+wall time, 90.86-second first audio, and 66.72x real-time factor. The pinned
+CUDA/WGPU build completed the same engineering path in 2.45 seconds after a
+1.90-second model load. The persistent Go-worker path then delivered first
+audio in 1.01 seconds and completed in 2.18 seconds on its first request; the
+warm request delivered first audio in 0.47 seconds and completed in 1.17
+seconds. Cancellation after the first chunk returned `canceled`, and the same
+process completed a recovery request with 96,960 PCM bytes before clean exit.
+Subjective listening, representative-source quality, CUDA/LLM VRAM coexistence,
+and network-sandbox evidence remain open risks.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

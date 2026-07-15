@@ -1,0 +1,13 @@
+diff --git a/src/backbone.rs b/src/backbone.rs
+index 465e97b..0108c75 100644
+--- a/src/backbone.rs
++++ b/src/backbone.rs
+@@ -58,6 +58,8 @@ impl BackboneModel {
+         #[cfg(not(feature = "verbose"))]
+         backend.void_logs();
+         let model_params = LlamaModelParams::default();
++        #[cfg(feature = "cuda")]
++        let model_params = model_params.with_n_gpu_layers(u32::MAX);
+         let model = LlamaModel::load_from_file(&backend, path, &model_params)
+             .with_context(|| format!("Cannot load GGUF model: {}", path.display()))?;
+         Ok(Self { _backend: backend, model, n_ctx, seed: None })

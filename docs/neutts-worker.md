@@ -1,8 +1,11 @@
 # NeuTTS Air Worker Setup
 
-MagicHandy's NeuTTS provider is a separate Go worker that adapts the
-non-Python `neutts-rs` `stream_pcm` runner. The core app remains pure Go and
-continues to work when NeuTTS is absent or fails.
+MagicHandy's NeuTTS provider is a separate Go worker around a first-party,
+persistent runner built against pinned `neutts-rs`. The model process loads
+once, serves multiple synthesis requests over a bounded framed protocol, and
+stays outside the pure-Go core. The app continues to work when NeuTTS is absent
+or fails. Legacy custom `neutts-rs stream_pcm` executables remain compatible,
+but they start a new model process for every request.
 
 ## Current capability boundary
 
@@ -35,11 +38,21 @@ pinned. The older `65771f3...` revision previously shown here had mismatched
 `llama-cpp-4` manifest and lockfile versions and is no longer supported.
 
 The installer installs LLVM/libclang plus pinned Rust 1.94.0 for x64 Windows
-MSVC, builds the eSpeak-enabled `stream_pcm` example, and stages:
+MSVC. It copies the reviewed runner in `workers/neutts-runner`, applies the
+exact pinned CUDA offload patch, and builds one of these variants:
+
+- managed CPU llama.cpp: eSpeak, CPU backbone, and CPU NeuCodec;
+- managed CUDA llama.cpp: eSpeak, all-layer CUDA backbone offload, and WGPU
+  NeuCodec.
+
+It stages the persistent executable under the stable `stream_pcm.exe` filename
+so existing settings and custom-runtime discovery remain compatible:
 
 ```text
 <data-dir>\voice\neutts\
   active\runtime\stream_pcm.exe
+  active\runtime\ggml-*.dll          # CUDA build only
+  active\runtime\llama.dll           # CUDA build only
   active\runtime\magichandy-neucodec-encoder.exe
   active\runtime\DirectML.dll
   active\runtime\models\neucodec_decoder.safetensors
@@ -50,11 +63,14 @@ MSVC, builds the eSpeak-enabled `stream_pcm` example, and stages:
   active\hf\hub\models--neuphonic--neutts-air-q4-gguf\...
 ```
 
-`stream_pcm` does not call MagicHandy's managed `llama-server.exe`. The Rust
-crate builds its own CPU llama.cpp binding through `llama-cpp-4`; tying NeuTTS
-to the managed llama.cpp installer selection gives users one explicit
-source-toolchain/download decision. NeuTTS remains CPU-only even when managed
-chat uses CUDA.
+The NeuTTS runner does not call MagicHandy's managed `llama-server.exe`; its
+`llama-cpp-4` binding owns a separate model context. The selected managed
+llama.cpp backend determines the NeuTTS build too. CUDA substantially reduces
+speech latency but keeps additional VRAM resident while chat speech is enabled;
+CPU avoids that VRAM cost but can be much slower than real time. The runtime
+manifest records the selected backend, runner protocol, backbone/codec
+acceleration, and checksums for every required native DLL. Schema-2 CPU runtimes
+are intentionally rebuilt by `update.ps1`.
 
 The Air Q4 GGUF is downloaded from immutable Hugging Face revision
 `008555972590ff2c599dd43736ba31c81df3f0bf` and verified as
@@ -67,8 +83,9 @@ the Apache-2.0 DistillNeuCodec ONNX export pinned at
 `2cd5cf022b7a1e689e561f0492787768cfe8395d`; both graph and external weights
 are checksum-verified before publication. The 1.1 GiB source checkpoint and
 temporary Cargo/build trees are removed after the atomic runtime stage
-succeeds. The resulting runtime/backbone/encoder uses about 1.9 GiB, with
-several additional GB potentially needed during the build.
+succeeds. The CPU runtime/backbone/encoder uses about 1.9 GiB. The CUDA runner
+and its five llama/ggml DLLs add about 147 MiB, for about 2.0 GiB installed;
+several additional GB may be needed during the build.
 
 No startup/status path downloads files. Rerun `update.ps1` with managed
 llama.cpp selected to repair or update the pinned runtime. `-SkipLlamaBuild` and
@@ -83,21 +100,26 @@ the app-managed Air model.
 
 ## Custom runner build
 
-Prerequisites on Windows are Rust (MSVC target), Visual Studio Build Tools,
-CMake, and Git. Build the reviewed `neutts-rs` revision and its Rust
-eSpeak-enabled streaming example:
+The supported route is the source installer because it pins, patches, builds,
+packages, and verifies the full native dependency set. For development, the
+same persistent build can be reproduced after cloning the reviewed upstream
+revision beside the MagicHandy checkout:
 
 ```powershell
 git clone --branch v0.1.1 --depth 1 https://github.com/eugenehp/neutts-rs.git
 cd neutts-rs
 git rev-parse HEAD # ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f
 # Change only the neutts root package entry in Cargo.lock from 0.1.0 to 0.1.1.
-cargo build --locked --release --example stream_pcm --features espeak
+git apply ..\MagicHandy\workers\neutts-runner\neutts-rs-v0.1.1-cuda.patch
+Copy-Item ..\MagicHandy\workers\neutts-runner\main.rs .\examples\magichandy_neutts.rs
+cargo build --locked --release --example magichandy_neutts --features espeak,cuda,wgpu
 ```
 
-Set **stream_pcm runner override** to the resulting
-`target\release\examples\stream_pcm.exe`. Build the MagicHandy protocol
-adapter with:
+Adjust the repository-relative paths when the checkouts are elsewhere. For a
+CPU build, use `--features espeak`; the CUDA patch is inactive when that feature
+is absent. Copy the executable and every generated llama/ggml DLL together,
+then set **stream_pcm runner override** to that executable. Build the MagicHandy
+protocol adapter with:
 
 ```powershell
 go build -o voice-neutts-worker.exe ./cmd/voice-neutts-worker
@@ -120,8 +142,9 @@ For a custom runtime, use the runner project's model conversion command and
 ensure `models\neucodec_decoder.safetensors` exists above the selected runner;
 MagicHandy walks upward to find it. The managed reference encoder remains
 available when its installer-owned files are present. Manual pre-encoded `.npy`
-paths and transcript entry remain under Advanced. Confirm a custom **Air Q4**
-setup works directly before selecting the provider:
+paths and transcript entry remain under Advanced. Legacy one-shot `stream_pcm`
+remains supported for advanced users. Confirm a custom **Air Q4** setup works
+directly before selecting the provider:
 
 ```powershell
 .\stream_pcm.exe --codes C:\voices\reference.npy `
@@ -148,21 +171,29 @@ described as fully app-managed/offline.
    the source WAV, and enter exactly the words heard. Generate the codes, preview
    the stored audio, correct the transcript if needed, and apply. Manual
    pre-encoded paths remain under **Advanced**.
-4. Save, then use the TTS status row to start and load the worker.
-5. Send a test request before enabling **Speak chat replies**.
+4. Save. **Start** still loads a newly changed configuration immediately. On
+   later app launches, enabled speech input autoloads ASR, and enabled **Speak
+   chat replies** autoloads TTS. A startup failure appears in worker status
+   without preventing the app from serving its UI.
+5. Send a test request before enabling **Speak chat replies** for regular use.
 
-Start validates the adapter, runner, decoder, codes, transcript, and exact
-backbone cache, then probes `stream_pcm --help` for the required CLI contract;
-it does not synthesize during readiness. **Send test** is the audible and
-model-load verification. First synthesis can take minutes on CPU, so NeuTTS
-requests have a five-minute worker timeout. The browser follows the backend
-request until that terminal timeout instead of abandoning valid cold inference
-after 15 or 30 seconds. Worker PCM streams while synthesis runs. The pinned
-runner currently emits one bounded `NeuCodec decoder:` line on stdout before
-PCM; the adapter strips only that known diagnostic. The core retains a bounded
-copy and wraps it as a 24 kHz mono WAV for controller-owned browser playback.
-Stop or request cancellation terminates the active runner process and
-invalidates browser playback.
+Load validates the adapter, runner, decoder, codes, transcript, and exact
+backbone cache, then starts the persistent managed runner. **Send test** remains
+the audible verification. On the RTX 5070 Ti test host, the previous CPU
+one-shot path took 127.27 seconds wall time, with first audio at 90.86 seconds
+and a 66.72x real-time factor. The CUDA/WGPU build loaded in 1.90 seconds and a
+one-shot synthesis completed in 2.45 seconds. Through the persistent Go worker,
+the first request produced audio at 1.01 seconds and completed in 2.18 seconds;
+a warm second request produced audio at 0.47 seconds and completed in 1.17
+seconds. These are single-host engineering measurements, not universal latency
+claims.
+
+CPU requests retain the five-minute timeout because fallback synthesis can be
+slow. PCM stays bounded and streams as 24 kHz mono samples. Cancellation sends a
+request-scoped cancel command instead of tearing down the loaded model; a live
+test canceled after the first chunk and the same process completed the next
+request with valid PCM. Unload, worker shutdown, and Emergency Stop terminate
+the persistent child and invalidate browser playback.
 
 ## Security and privacy
 
