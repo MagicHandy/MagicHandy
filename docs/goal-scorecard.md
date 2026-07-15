@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Persistent-NeuTTS/autoload build: 20,262,400 bytes plain and 14,211,072 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Persistent-NeuTTS/autoload plus browser-playback build: 20,262,912 bytes plain and 14,211,584 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -104,9 +104,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 542,975 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 105,548 gzip bytes, and the stripped
-   binary is 14,211,072 bytes. These
+   browser payload is 543,287 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 105,860 gzip bytes, and the stripped
+   binary is 14,211,584 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -122,12 +122,18 @@ Ranked by threat to the stated goals:
   127.27 s wall time and 90.86 s to first audio. The pinned CUDA/WGPU build
   loaded in 1.90 s; through the new persistent framed worker, first request
   TTFA/total were 1.01/2.18 s and warm request TTFA/total were 0.47/1.17 s.
-  Cancellation and same-process recovery passed. Schema-3 installation records
-  CPU/CUDA acceleration and hashes five CUDA DLLs; the CUDA runtime is about
-  2.0 GiB, roughly 147 MiB above CPU. Enabled ASR and enabled chat-speech roles
-  now load asynchronously at app startup. Plain/stripped core binaries are
-  20,262,400 / 14,211,072 bytes. The type-only frontend change leaves the
-  embedded UI bundle unchanged.
+  Cancellation and same-process recovery passed. A clean updater run migrated
+  the installed runtime to schema 3 CUDA/WGPU in 11 minutes 40 seconds; its
+  2,154,884,823-byte (2.007 GiB) voice tree records five CUDA DLL hashes. A
+  follow-up update reused it and rebuilt/relaunched in 11.2 seconds. Enabled ASR
+  and chat-speech roles autoloaded to `running` / model `ready`; production HTTP
+  requests completed in 2.018 and 0.874 seconds with same-process reuse. A
+  visible Edge request produced 59,520 bytes, cleared the shared queue, and
+  completed without browser warnings after the player moved to a gesture-
+  unlocked Web Audio context. Plain/stripped core binaries are 20,262,912 /
+  14,211,584 bytes. Embedded UI is 818,120 raw / 543,287 gzip bytes; HTML/CSS/JS
+  is 373,884 raw / 105,860 gzip bytes. Against the preceding build, the playback
+  fix adds 512 bytes to each binary and 548 raw / 312 gzip UI bytes.
 
 - **2026-07-15** - NeuTTS playback and native reference generation: a
   shell-owned browser player now follows backend TTS requests through the

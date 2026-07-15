@@ -179,7 +179,10 @@ described as fully app-managed/offline.
 
 Load validates the adapter, runner, decoder, codes, transcript, and exact
 backbone cache, then starts the persistent managed runner. **Send test** remains
-the audible verification. On the RTX 5070 Ti test host, the previous CPU
+the audible verification. The shell unlocks a persistent Web Audio context on
+the first real pointer or keyboard gesture, then uses that sink after the
+asynchronous request finishes; this avoids browser autoplay rejection without
+creating a second speech queue. On the RTX 5070 Ti test host, the previous CPU
 one-shot path took 127.27 seconds wall time, with first audio at 90.86 seconds
 and a 66.72x real-time factor. The CUDA/WGPU build loaded in 1.90 seconds and a
 one-shot synthesis completed in 2.45 seconds. Through the persistent Go worker,

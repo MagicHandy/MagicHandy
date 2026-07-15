@@ -480,9 +480,14 @@ CUDA/WGPU build completed the same engineering path in 2.45 seconds after a
 audio in 1.01 seconds and completed in 2.18 seconds on its first request; the
 warm request delivered first audio in 0.47 seconds and completed in 1.17
 seconds. Cancellation after the first chunk returned `canceled`, and the same
-process completed a recovery request with 96,960 PCM bytes before clean exit.
-Subjective listening, representative-source quality, CUDA/LLM VRAM coexistence,
-and network-sandbox evidence remain open risks.
+process completed a recovery request with 96,960 PCM bytes before clean exit. A
+clean full updater then migrated the installed runtime to schema 3 CUDA/WGPU,
+and the relaunched production app autoloaded both voice roles. Two HTTP TTS
+requests completed in 2.018 and 0.874 seconds with valid retained WAVs and
+same-process reuse; a visible Edge request completed without an autoplay error
+after the shell adopted a gesture-unlocked Web Audio sink. Subjective listening,
+representative-source quality, CUDA/LLM VRAM coexistence, and network-sandbox
+evidence remain open risks.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

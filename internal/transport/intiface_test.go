@@ -718,8 +718,9 @@ func TestIntifaceReverseIsSnapshottedAtAppend(t *testing.T) {
 	first := server.waitForKind(t, "LinearCmd", time.Second)
 	second := server.waitForKind(t, "LinearCmd", time.Second)
 	assertLinearVector(t, anchor, 0, 250, 0.1)
-	assertLinearVector(t, first, 0, 80, 0.2)
-	assertLinearVector(t, second, 0, 80, 0.7)
+	// Live pacing may compress a segment by up to one quarter before rejecting it.
+	assertLinearVectorDurationRange(t, first, 0, 60, 80, 0.2)
+	assertLinearVectorDurationRange(t, second, 0, 60, 80, 0.7)
 }
 
 func TestIntifaceRejectsSelectionChangeDuringPlayback(t *testing.T) {

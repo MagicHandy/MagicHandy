@@ -68,6 +68,22 @@ Still required for current-build evidence:
   s. Cancellation after the first chunk reached terminal `canceled`; the same
   process then completed a recovery request with 96,960 PCM bytes and exited
   cleanly. CPU fallback retains the five-minute request timeout.
+- A clean full-feature `update.ps1 -Yes` run migrated the installed schema-2
+  runtime to schema 3 CUDA/WGPU in 11 minutes 40 seconds; the pinned native
+  runner build accounted for 8 minutes 44 seconds. The active NeuTTS tree is
+  2,154,884,823 bytes (2.007 GiB) and its manifest records CUDA all-layer
+  backbone offload, WGPU codec acceleration, the persistent protocol, and five
+  checksum-verified CUDA llama/ggml DLLs. A second update reused the verified
+  runtime and rebuilt/relaunched the app in 11.2 seconds.
+- In the relaunched production app, configured Parakeet and NeuTTS roles both
+  autoloaded to `running` with models `ready`. Two TTS requests through the real
+  HTTP boundary reached `done` in 2.018 and 0.874 seconds, returned 164,160 and
+  112,320 PCM bytes as valid WAVs, and retained the same `stream_pcm` process.
+  A visible Edge test produced another 59,520-byte clip and returned the shared
+  voice queue to zero. The first rendered pass exposed an asynchronous
+  `HTMLAudioElement.play()` autoplay rejection; the shell now unlocks a
+  persistent Web Audio context on a real pointer or keyboard gesture. The
+  rebuilt pass completed with no playback toast and no browser warnings/errors.
 - The production embedded UI was exercised at 1280×720 and 390×844. The
   continuous voice menu, reference preparation dialog, audio preview,
   transcription guide, and fixed Stop control remained reachable without

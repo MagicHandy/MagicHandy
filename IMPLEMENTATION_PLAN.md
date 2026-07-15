@@ -74,7 +74,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | #79 |
-| 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Implemented; live updater verification pending** | current PR |
+| 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Complete** | #80 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
@@ -883,7 +883,7 @@ Status: **complete**.
 
 ### Slice 13.10: Persistent Accelerated NeuTTS And Startup Autoload
 
-Status: **implemented; live updater verification pending**.
+Status: **complete**.
 
 - A first-party GPL-3.0-only Rust runner built against exact pinned
   `neutts-rs` keeps the backbone, codec, reference codes, and transcript loaded
@@ -904,6 +904,18 @@ Status: **implemented; live updater verification pending**.
   logged and reflected in worker state without blocking the HTTP/UI startup.
   Runtime settings changes still require the visible Start action or an app
   restart, avoiding hidden process launches during a save.
+- A clean `update.ps1 -Yes` run migrated the installed schema-2 CPU runtime to
+  schema 3 CUDA/WGPU in 11 minutes 40 seconds, including an 8 minute 44 second
+  native runner build. The installed voice tree is 2.007 GiB and records five
+  checksum-verified CUDA llama/ggml DLLs. A follow-up update reused that runtime
+  and rebuilt/relaunched the full app in 11.2 seconds.
+- The production app autoloaded both configured roles to `running` / model
+  `ready`. Two HTTP-bound TTS requests completed in 2.018 and 0.874 seconds,
+  returned valid retained WAVs, and reused the same runner process. A visible
+  Edge test then completed a 59,520-byte clip, returned the shared queue to zero,
+  and logged no browser warnings or errors. The shell unlocks one persistent Web
+  Audio context during a real pointer or keyboard gesture so asynchronous speech
+  completion is not rejected by autoplay policy.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and
