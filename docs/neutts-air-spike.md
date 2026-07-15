@@ -7,16 +7,24 @@ fallback is F5-TTS (ONNX) or an optional Python worker, with ElevenLabs as
 the premium cloud path either way.
 
 Spike date: 2026-07-09. Verdict: **the non-Python decode path is proven
-viable; go ahead with the worker integration.** Details and evidence below.
+viable; go ahead with the worker integration.** The feasibility verdict still
+holds. The CPU latency inference did not survive implementation and is corrected
+below.
+
+> **Post-implementation correction (2026-07-15):** the Python measurement
+> harness below was not performance-equivalent to the pinned Rust runner. The
+> installed CPU runner measured 66.72x RTF and 90.86 seconds to first audio, not
+> 0.5-0.6x RTF. Do not use the spike's CPU timing as a product expectation. The
+> persistent CUDA/WGPU implementation measured 0.47-1.01 seconds to first audio
+> on the RTX 5070 Ti host; full evidence is in `docs/perf-baseline.md`.
 
 ## What NeuTTS Air is (as shipped today)
 
 - A 748M-parameter Qwen2-backbone speech LM ("NeuTTS-Air", Apache-2.0) plus
   the NeuCodec neural audio codec (FSQ + Vocos + ISTFT, 24 kHz output).
 - Official GGUF quantizations exist (`neuphonic/neutts-air-q4-gguf`,
-  `neutts-air-q8-gguf`), designed to run through llama.cpp in real time on
-  CPU — the same runner family MagicHandy already manages for chat (ADR
-  0005), and deliberately off the LLM's GPU.
+  `neutts-air-q8-gguf`) for llama.cpp. Upstream described CPU real-time use,
+  but MagicHandy's pinned Windows runner did not reproduce it.
 - Text is phonemized before the backbone; the official pipeline requires
   **espeak-ng** (a small native system package; `winget install -e --id
   eSpeak-NG.eSpeak-NG` on Windows).
@@ -45,11 +53,11 @@ decoder). The unproven-tech risk collapses to ordinary integration work.
 
 ## Measured quality/latency (this spike's run)
 
-Environment: Windows 11, CPU-only (the design goal: keep TTS off the LLM's
-GPU), official `neutts` package (v1.2.1) as the measurement harness — the
-same Q4 GGUF backbone + NeuCodec our worker will drive, so its output *is*
-the quality/latency our worker would produce. espeak-ng installed via
-winget; llama-cpp-python compiled locally by MSVC during pip install.
+Environment: Windows 11, CPU-only, official Python `neutts` package (v1.2.1)
+as the measurement harness. It used the same Q4 model family but a different
+runtime stack from the later pinned Rust runner; the timing did not transfer.
+espeak-ng was installed via WinGet and llama-cpp-python compiled locally by
+MSVC during pip install.
 
 Measured 2026-07-09 (`neutts-air-q4-gguf` backbone via llama.cpp CPU;
 NeuCodec decode on CPU; watermarking off):
@@ -62,21 +70,20 @@ NeuCodec decode on CPU; watermarking off):
 | Two sentences | 2.96 s | 5.70 s | **0.52** |
 | Paragraph (4 sentences) | 8.09 s | 16.02 s | **0.51** |
 
-Read: **comfortably faster than real time on CPU** (RTF ≈ 0.5–0.6), so
-sentence-level streaming gives a perceived first-audio latency of roughly
-the first sentence's synth time (~2 s) and playback never starves once
-started. Reference encoding is one-time per voice and belongs in `load`,
-not per request. The cold-load figure is dominated by the one-time model
-download (~0.7 GB) — an explicit user action in the worker design.
+Read as historical harness evidence only: this Python path was faster than real
+time (RTF approximately 0.5-0.6), but the pinned Rust CPU implementation was
+not. Reference encoding is one-time per voice and belongs in `load`, not per
+request. The cold-load figure was dominated by the one-time model download
+(~0.7 GB), an explicit user action in the worker design.
 All outputs were verified as real 24 kHz audio (non-silent RMS); WAVs for
 subjective cloning-quality listening are at
 `scratchpad/neutts-spike/spike-{short,medium,long}.wav` (kept out of the
 repo — audio artifacts are never committed).
 
-Harness caveat: the measurement ran NeuCodec decode through the default
-torch-CPU path, not the ONNX decoder; decode is a small share of the
-pipeline (the backbone dominates), so the RTF transfers, and the ONNX/
-pure-Rust decode paths above are the ones the worker will use.
+Harness caveat: the measurement ran through llama-cpp-python and the default
+Torch CPU codec, not the pinned `llama-cpp-4`/pure-Rust path. The original claim
+that its RTF would transfer was incorrect; Slice 13.10's direct runner and
+worker measurements supersede it.
 
 Reference cloning used the official `samples/dave.wav` (~13 s) and its
 transcript. NeuTTS 1.2.1 also offers optional Perth audio watermarking —
@@ -145,10 +152,10 @@ offline capability: a network-denied integration test and hard sandbox remain
 R17. A later upstream Rust encoder can be evaluated against the same managed
 WAV and NPY contract without changing the Go core or settings model.
 
-The current adapter starts one `stream_pcm` process per speech request, so the
-upstream example's preload-once performance does not carry across replies. A
-persistent runner protocol or equivalent model-host process remains follow-up
-work rather than a completed latency guarantee.
+The Slice 13.6 adapter originally started one `stream_pcm` process per speech
+request, so the upstream example's preload-once performance did not carry
+across replies. Slice 13.10 supersedes that lifecycle with the persistent runner
+described below; legacy custom executables retain the one-shot path.
 
 A 2026-07-15 run using the official Dave sample normalized 372 codes and
 produced 101,760 bytes of valid PCM. The process took 2m2.576s and emitted its
@@ -165,6 +172,31 @@ The installed `stream_pcm` runner accepted those generated codes and produced
 93.51 seconds and total synthesis took 128.37 seconds on this CPU. This proves
 encoder/runner format compatibility; it does not close subjective cloning
 quality or the repeated model-start latency risk.
+
+## Implementation update (Slice 13.10)
+
+The installer now builds a first-party persistent runner against the exact
+pinned source. CPU builds use eSpeak and the upstream CPU codec. CUDA builds add
+an exact patch that sets every llama.cpp backbone layer for GPU offload and use
+the Burn WGPU codec. The app-managed schema-3 manifest records that choice and
+checksums all five required CUDA llama/ggml DLLs.
+
+The worker starts this runner during model load and exchanges bounded framed
+commands and PCM over standard streams. Backbone, codec, reference codes, and
+reference transcript stay loaded across requests. Request cancellation does not
+discard the model; unload, shutdown, and Emergency Stop terminate the child.
+
+On the RTX 5070 Ti development host, a direct instrumented CPU run took 127.27
+seconds wall time, with first audio at 90.86 seconds and a 66.72x real-time
+factor. The CUDA/WGPU one-shot build took 5.28 seconds wall time, loaded in 1.90
+seconds, reached first audio in 2.06 seconds, and completed synthesis in 2.45
+seconds. Through the persistent Go worker, first request TTFA/total were
+1.01/2.18 seconds and warm request TTFA/total were 0.47/1.17 seconds. A live
+cancellation after the first audio chunk reached `canceled`; the same process
+then completed a recovery request with 96,960 PCM bytes and exited cleanly.
+These measurements close repeated startup and interactive-latency concerns on
+the tested GPU, while subjective quality, network denial, and shared-LLM VRAM
+acceptance remain open.
 
 ## Constraints hit during the spike
 

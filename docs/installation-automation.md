@@ -16,8 +16,8 @@ A structural advantage worth stating up front: MagicHandy's core is a single
 pure-Go binary with **no Python, no venv, no pip, and no torch/CUDA in the core**.
 The hardest, most failure-prone part of the old setup — building a Python ML
 environment with matching CUDA/torch wheels — simply does not exist here. CUDA
-matters only for the app-owned external `llama-server` process, never for the
-MagicHandy Go core itself.
+matters only for app-owned external model processes (`llama-server` and the
+optional managed NeuTTS runner), never for the MagicHandy Go core itself.
 
 ## What StrokeGPT-ReVibed automated (the parity target)
 
@@ -40,10 +40,11 @@ MagicHandy Go core itself.
   selected managed llama.cpp source build additionally provisions Git, CMake,
   the Visual Studio Desktop C++ workload/Windows SDK, CUDA when selected, and
   LLVM/libclang and pinned Rust 1.94.0 through Rustup for the coupled NeuTTS
-  build. It builds the pinned `stream_pcm` runner and first-party ONNX reference
-  encoder, converts a verified NeuCodec checkpoint, and installs the verified
-  Air Q4 and DistillNeuCodec assets. Choosing Ollama avoids both managed source
-  builds; the installer can provision Ollama too. It builds the core and all
+  build. It builds MagicHandy's persistent NeuTTS runner with the same CPU/CUDA
+  backend and a first-party ONNX reference encoder, converts a verified NeuCodec
+  checkpoint, and installs the verified Air Q4 and DistillNeuCodec assets.
+  Choosing Ollama avoids both managed source builds; the installer can provision
+  Ollama too. It builds the core and all
   three first-party Go voice adapters. Optional Parakeet assets remain consented,
   size/license-visible, and SHA-256 verified, and voice remains disabled. The
   installer can write a `Start-MagicHandy.ps1` launcher and open the app.
@@ -83,11 +84,11 @@ MagicHandy Go core itself.
    continuous hands-free and hold-to-talk browser capture, app-managed Parakeet
    and NeuTTS installer paths, and guarded local Windows path browsing exist.
    App-managed assets are discovered separately from custom overrides. NeuTTS
-   can normalize official sample-style `.pt` and compatible `.npy` codes but
-   still cannot encode an arbitrary reference WAV. A real managed-Parakeet
-   browser smoke test plus
-   any LAN/HTTPS story remain open (managed browser audio: R24; NeuTTS: R17;
-   LAN/HTTPS: R18).
+   generates reference codes from a supported WAV through the pinned native
+   ONNX worker, and the persistent CUDA/WGPU runtime now has measured
+   low-latency synthesis. A real managed-Parakeet browser microphone run,
+   subjective cloning acceptance, and any LAN/HTTPS story remain open (managed
+   browser audio: R24; NeuTTS: R17; LAN/HTTPS: R18).
 
 ## Roadmap to parity
 
@@ -118,8 +119,8 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    download. Startup and status checks never trigger a download (guardrail).
 6. **GPU/VRAM aware recommendations.** Use `nvidia-smi` (and VRAM) to recommend a
    runner build and a model size that fits, with an honest CPU fallback and a
-   note on driver/CUDA-toolkit expectations. Because CUDA lives only in the
-   external runner, this stays far simpler than the old torch/CUDA install.
+   note on driver/CUDA-toolkit expectations. Because CUDA lives only in
+   external runners, this stays far simpler than the old torch/CUDA install.
 7. **In-app first-run setup wizard.** The eventual best UX and the real parity
    milestone for non-technical users: connect the Handy (enter key, test),
    choose a provider, pick/download a model, and confirm — all in the browser UI,

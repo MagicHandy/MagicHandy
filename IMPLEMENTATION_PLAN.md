@@ -65,7 +65,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 11B | SQLite persistence foundation (ADR 0008) | **Implemented; corrupt-DB recovery open** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
-| 13.1 | NeuTTS Air spike — non-Python decode proven, RTF ~0.5 CPU (R17) | **Complete** | #43 |
+| 13.1 | NeuTTS Air spike — non-Python decode proven; Python-harness CPU timing later rejected (R17) | **Complete** | #43 |
 | 13.2 | ElevenLabs cloud TTS worker | **Complete** | #44 |
 | 13.3 | Parakeet ASR worker (OpenAI-compatible proxy) | **Complete** | #45 |
 | 13.4 | Managed Parakeet runner and interactive installer | **Complete** | #46 |
@@ -73,7 +73,8 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
-| 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | current PR |
+| 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | #79 |
+| 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Complete** | #80 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
@@ -131,11 +132,11 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   builds pinned llama.cpp `b9966` source into app-owned runtime storage through
   the installer or controller-gated Model UI; no runner/model path settings.
   Curated model downloads remain release work.
-- Optional voice workers remain off and never autostart. Source-installed
-  Parakeet assets are discovered as one app-managed module with visible
-  complete/incomplete state; custom local server/model paths are a separate
-  source selection. Saving enablement exposes Start, which succeeds only after
-  model readiness.
+- Optional voice remains disabled until the user enables it. Once configured,
+  enabled speech input and enabled chat speech autoload their respective workers
+  and models on app startup; failures stay isolated and visible. Source-installed
+  Parakeet and NeuTTS assets are discovered as app-managed modules with visible
+  complete/incomplete state, while custom paths remain separate selections.
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
@@ -193,8 +194,9 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    exit evidence. The source installer now builds and discovers a pinned NeuTTS
    runner/decoder/backbone and DistillNeuCodec ONNX reference encoder with
    managed llama.cpp. Settings generates validated reference codes directly
-   from WAV without Python; enforced offline operation, repeated model startup,
-   and subjective cloning quality remain R17.
+   from WAV without Python. The persistent CUDA/WGPU runner removes repeated
+   model startup and has measured sub-second warm first audio; enforced offline
+   operation, GPU/LLM coexistence, and subjective cloning quality remain R17.
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
@@ -639,7 +641,8 @@ Implemented:
   stdio, hello negotiation, health/status with model state and queue depth,
   cancellation by request ID, per-request timeouts, structured error codes,
   no-speech rejection (never an empty transcript into chat)
-- worker process lifecycle: settings-driven configure (never autostart),
+- worker process lifecycle: settings-driven configure (Phase 12 originally
+  never autostarted; Slice 13.10 adds explicit settings-driven startup load),
   start/stop/restart, handshake teardown on version mismatch, crash detection
   with stderr tail, deliberate-stop vs crash distinction, goleak-gated
   goroutine teardown; missing/disabled/unconfigured are visible states
@@ -668,7 +671,8 @@ go test -race ./...
 Manual checks (all verified live against the stub): app runs without workers;
 stub worker starts/stops; startup crash and mid-request crash are visible with
 stderr; cancellation interrupts an active request; model load/unload; settings
-save reconfigures without autostart.
+save reconfigures without an immediate process launch (startup autoload is
+evaluated on the next app launch).
 
 ## Done Criteria
 
@@ -786,8 +790,8 @@ Status: **complete**.
   entry before the worker starts. Worker load probes the pinned runner's CLI
   contract without loading the model or synthesizing audio. The Windows source
   installer now builds and checksum-verifies the runtime assets with managed
-  llama.cpp. A network-denied test, persistent model host, and prebuilt
-  packaging remain R17/Phase 16 rather than adapter claims.
+  llama.cpp. Slice 13.10 adds the persistent model host and accelerated build;
+  a network-denied test and prebuilt packaging remain R17/Phase 16.
 - The current `neutts-rs` 0.1.1 encoder export is a stub despite example text
   suggesting otherwise. Slice 13.9 adds a separate native ONNX encoder behind a
   controller-gated WAV-plus-transcript window. The original bounded Torch/NPY
@@ -844,7 +848,8 @@ neutral graphite.
 - Gate the Chat voice controls on usability, not just provider selection:
   mic hidden without a configured ASR provider and disabled-with-hint when
   the worker is not running; speak-replies quick toggle requires
-  `voice.enabled` too. Never autostart stays intact (M1, M2).
+  `voice.enabled` too. This slice retained manual startup; Slice 13.10 later
+  replaced that rule with settings-driven startup autoload (M1, M2).
 - Close the speak-replies loop: auto-send `load` after a user-initiated
   Start of a first-party provider (or on first speak), so replies do not
   fail silently with `model_not_loaded` (M4).
@@ -875,6 +880,42 @@ Status: **complete**.
 - Compatibility evidence: the encoder produced 373 valid codes from the 7.45 s
   Dave WAV in about 1.3 s, and the installed NeuTTS runner accepted those codes
   and emitted 106,560 PCM bytes.
+
+### Slice 13.10: Persistent Accelerated NeuTTS And Startup Autoload
+
+Status: **complete**.
+
+- A first-party GPL-3.0-only Rust runner built against exact pinned
+  `neutts-rs` keeps the backbone, codec, reference codes, and transcript loaded
+  across requests. A bounded binary protocol carries readiness, PCM, completion,
+  error, and cancellation frames; unload, shutdown, and Emergency Stop tear down
+  the child. Legacy custom `stream_pcm` overrides retain one-shot compatibility.
+- The source installer builds CPU/eSpeak or CUDA/eSpeak/WGPU according to the
+  selected managed llama.cpp backend. The pinned CUDA patch explicitly sets
+  all llama.cpp layers for offload. Schema-3 manifests record protocol and
+  acceleration plus checksums for the five CUDA llama/ggml DLLs, so the updater
+  rebuilds stale CPU-only schema-2 installs and refuses incomplete GPU packages.
+- Measured on the RTX 5070 Ti development host, the old CPU one-shot path took
+  127.27 s wall time and 90.86 s to first audio. The persistent GPU path loaded
+  in 1.87 s, reached first audio in 1.01 s on its first request and 0.47 s warm,
+  and preserved cancellation/recovery without model reload.
+- At backend startup, enabled ASR autoloads when an input provider is selected;
+  enabled TTS autoloads only when **Speak chat replies** is also on. Failures are
+  logged and reflected in worker state without blocking the HTTP/UI startup.
+  Runtime settings changes still require the visible Start action or an app
+  restart, avoiding hidden process launches during a save.
+- A clean `update.ps1 -Yes` run migrated the installed schema-2 CPU runtime to
+  schema 3 CUDA/WGPU in 11 minutes 40 seconds, including an 8 minute 44 second
+  native runner build. The installed voice tree is 2.007 GiB and records five
+  checksum-verified CUDA llama/ggml DLLs. A follow-up update reused that runtime
+  and rebuilt/relaunched the full app in 11.2 seconds.
+- The production app autoloaded both configured roles to `running` / model
+  `ready`. Two HTTP-bound TTS requests completed in 2.018 and 0.874 seconds,
+  returned valid retained WAVs, and reused the same runner process. A visible
+  Edge test then completed a 59,520-byte clip, returned the shared queue to zero,
+  and logged no browser warnings or errors. The shell unlocks one persistent Web
+  Audio context during a real pointer or keyboard gesture so asynchronous speech
+  completion is not rejected by autoplay policy.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

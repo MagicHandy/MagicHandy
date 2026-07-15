@@ -26,8 +26,8 @@ import (
 // a wedged worker cannot stall the settings page.
 const voiceHealthTimeout = 3 * time.Second
 
-// voiceModelLoadTimeout bounds the automatic load that follows a
-// user-initiated start; managed providers may boot a local server inside it.
+// voiceModelLoadTimeout bounds startup autoload and the automatic load that
+// follows a user-initiated start; managed providers may boot a local server.
 const voiceModelLoadTimeout = 30 * time.Second
 
 const (
@@ -36,6 +36,7 @@ const (
 	maxVoiceRequestBytes     = maxVoiceAudioBase64Bytes + 1024
 	managedNeuTTSSource      = "ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f"
 	managedNeuTTSRust        = "1.94.0-x86_64-pc-windows-msvc"
+	managedNeuTTSProtocol    = "magichandy_neutts_stream_v1"
 	managedNeuTTSBackbone    = "008555972590ff2c599dd43736ba31c81df3f0bf"
 	managedNeuTTSBackboneSHA = "bf66dc21b7588fe720cbdfeac1595e7b7c780515f8d8f1ff9a29062e4ac9119e"
 	managedNeuTTSCodec       = "30c1fdd19e68aee65d542cf043750d4c0165893e"
@@ -44,6 +45,14 @@ const (
 	managedNeuTTSEncoderSHA  = "04af54f6af51a7573a8bbcfd691b4f2c68b6dbd03aef72b983cbb4e5140c3a23"
 	managedNeuTTSWeightsSHA  = "935859ed7904671dc82da1c533b9bf2fd8bcf6d8fc702bdba5bc25c8f7329e4f"
 )
+
+var managedNeuTTSCUDADependencies = []string{
+	"ggml-base.dll",
+	"ggml-cpu.dll",
+	"ggml-cuda.dll",
+	"ggml.dll",
+	"llama.dll",
+}
 
 func newVoiceManager(settings config.VoiceSettings, executablePath, dataDir string) *voice.Manager {
 	manager := voice.NewManager()
@@ -185,20 +194,25 @@ func fileSHA256(path string) (string, bool) {
 var managedNeuTTSFileSHA256 = fileSHA256
 
 type managedNeuTTSManifest struct {
-	SchemaVersion     int    `json:"schema_version"`
-	SourceCommit      string `json:"source_commit"`
-	RustToolchain     string `json:"rust_toolchain"`
-	BackboneRevision  string `json:"backbone_revision"`
-	CodecRevision     string `json:"codec_revision"`
-	RunnerSHA256      string `json:"runner_sha256"`
-	DecoderSHA256     string `json:"decoder_sha256"`
-	BackboneSHA256    string `json:"backbone_sha256"`
-	CodecSourceSHA256 string `json:"codec_checkpoint_sha256"`
-	EncoderRevision   string `json:"encoder_revision"`
-	EncoderSHA256     string `json:"encoder_sha256"`
-	EncoderModelSHA   string `json:"encoder_model_sha256"`
-	EncoderWeightsSHA string `json:"encoder_model_data_sha256"`
-	DirectMLSHA256    string `json:"directml_sha256"`
+	SchemaVersion      int               `json:"schema_version"`
+	SourceCommit       string            `json:"source_commit"`
+	RustToolchain      string            `json:"rust_toolchain"`
+	Backend            string            `json:"backend"`
+	RunnerProtocol     string            `json:"runner_protocol"`
+	BackboneBackend    string            `json:"backbone_acceleration"`
+	CodecBackend       string            `json:"codec_acceleration"`
+	BackboneRevision   string            `json:"backbone_revision"`
+	CodecRevision      string            `json:"codec_revision"`
+	RunnerSHA256       string            `json:"runner_sha256"`
+	DecoderSHA256      string            `json:"decoder_sha256"`
+	BackboneSHA256     string            `json:"backbone_sha256"`
+	CodecSourceSHA256  string            `json:"codec_checkpoint_sha256"`
+	EncoderRevision    string            `json:"encoder_revision"`
+	EncoderSHA256      string            `json:"encoder_sha256"`
+	EncoderModelSHA    string            `json:"encoder_model_sha256"`
+	EncoderWeightsSHA  string            `json:"encoder_model_data_sha256"`
+	DirectMLSHA256     string            `json:"directml_sha256"`
+	NativeDependencies map[string]string `json:"native_dependencies"`
 }
 
 func readManagedNeuTTSManifest(dataDir string) (managedNeuTTSManifest, bool) {
@@ -215,19 +229,57 @@ func readManagedNeuTTSManifest(dataDir string) (managedNeuTTSManifest, bool) {
 	if json.Unmarshal(data, &manifest) != nil {
 		return manifest, false
 	}
-	valid := manifest.SchemaVersion == 2 &&
-		manifest.SourceCommit == managedNeuTTSSource &&
-		manifest.RustToolchain == managedNeuTTSRust &&
-		manifest.BackboneRevision == managedNeuTTSBackbone &&
-		manifest.CodecRevision == managedNeuTTSCodec &&
-		manifest.BackboneSHA256 == managedNeuTTSBackboneSHA &&
-		manifest.CodecSourceSHA256 == managedNeuTTSCodecSHA &&
-		manifest.EncoderRevision == managedNeuTTSEncoder &&
-		manifest.EncoderModelSHA == managedNeuTTSEncoderSHA &&
-		manifest.EncoderWeightsSHA == managedNeuTTSWeightsSHA &&
-		manifest.RunnerSHA256 != "" && manifest.DecoderSHA256 != "" &&
-		manifest.EncoderSHA256 != "" && manifest.DirectMLSHA256 != ""
-	return manifest, valid
+	return manifest, validManagedNeuTTSManifest(manifest)
+}
+
+func validManagedNeuTTSManifest(manifest managedNeuTTSManifest) bool {
+	checks := []bool{
+		manifest.SchemaVersion == 3,
+		manifest.SourceCommit == managedNeuTTSSource,
+		manifest.RustToolchain == managedNeuTTSRust,
+		manifest.RunnerProtocol == managedNeuTTSProtocol,
+		manifest.BackboneRevision == managedNeuTTSBackbone,
+		manifest.CodecRevision == managedNeuTTSCodec,
+		manifest.BackboneSHA256 == managedNeuTTSBackboneSHA,
+		manifest.CodecSourceSHA256 == managedNeuTTSCodecSHA,
+		manifest.EncoderRevision == managedNeuTTSEncoder,
+		manifest.EncoderModelSHA == managedNeuTTSEncoderSHA,
+		manifest.EncoderWeightsSHA == managedNeuTTSWeightsSHA,
+		manifest.RunnerSHA256 != "",
+		manifest.DecoderSHA256 != "",
+		manifest.EncoderSHA256 != "",
+		manifest.DirectMLSHA256 != "",
+		validManagedNeuTTSBackend(manifest),
+	}
+	for _, valid := range checks {
+		if !valid {
+			return false
+		}
+	}
+	return true
+}
+
+func validManagedNeuTTSBackend(manifest managedNeuTTSManifest) bool {
+	switch manifest.Backend {
+	case "cpu":
+		return manifest.BackboneBackend == "cpu" && manifest.CodecBackend == "cpu" && len(manifest.NativeDependencies) == 0
+	case "cuda":
+		return manifest.BackboneBackend == "cuda_all_layers" && manifest.CodecBackend == "wgpu" && validManagedNeuTTSCUDADependencies(manifest.NativeDependencies)
+	default:
+		return false
+	}
+}
+
+func validManagedNeuTTSCUDADependencies(dependencies map[string]string) bool {
+	if len(dependencies) != len(managedNeuTTSCUDADependencies) {
+		return false
+	}
+	for _, name := range managedNeuTTSCUDADependencies {
+		if dependencies[name] == "" {
+			return false
+		}
+	}
+	return true
 }
 
 type managedNeuTTSFiles struct {
@@ -238,9 +290,10 @@ type managedNeuTTSFiles struct {
 	directML       string
 	encoderModel   string
 	encoderWeights string
+	dependencies   map[string]string
 }
 
-func resolveManagedNeuTTSFiles(dataDir string) (managedNeuTTSFiles, bool) {
+func resolveManagedNeuTTSFiles(dataDir string, manifest managedNeuTTSManifest) (managedNeuTTSFiles, bool) {
 	active := filepath.Join(dataDir, "voice", "neutts", "active")
 	backboneRepo := filepath.Join(active, "hf", "hub", "models--neuphonic--neutts-air-q4-gguf")
 	// #nosec G304 -- the cache path is rooted in the server-owned app data directory.
@@ -258,11 +311,19 @@ func resolveManagedNeuTTSFiles(dataDir string) (managedNeuTTSFiles, bool) {
 		directML:       filepath.Join(runtime, "DirectML.dll"),
 		encoderModel:   filepath.Join(active, "encoder", "distill_neucodec_encoder.onnx"),
 		encoderWeights: filepath.Join(active, "encoder", "distill_neucodec_encoder.onnx.data"),
+		dependencies:   make(map[string]string, len(manifest.NativeDependencies)),
 	}
 	for _, path := range []string{files.runner, files.decoder, files.encoder, files.directML, files.encoderModel, files.encoderWeights} {
 		if !isRegularFile(path) {
 			return managedNeuTTSFiles{}, false
 		}
+	}
+	for name := range manifest.NativeDependencies {
+		path := filepath.Join(runtime, name)
+		if !isRegularFile(path) {
+			return managedNeuTTSFiles{}, false
+		}
+		files.dependencies[name] = path
 	}
 	return files, true
 }
@@ -286,6 +347,12 @@ func managedNeuTTSHashesMatch(manifest managedNeuTTSManifest, files managedNeuTT
 			return false
 		}
 	}
+	for name, path := range files.dependencies {
+		hash, ok := managedNeuTTSFileSHA256(path)
+		if !ok || hash != manifest.NativeDependencies[name] {
+			return false
+		}
+	}
 	return true
 }
 
@@ -294,7 +361,7 @@ func managedNeuTTSManifestReady(dataDir string, verifyRuntimeHashes bool) bool {
 	if !valid {
 		return false
 	}
-	files, ready := resolveManagedNeuTTSFiles(dataDir)
+	files, ready := resolveManagedNeuTTSFiles(dataDir, manifest)
 	if !ready {
 		return false
 	}
@@ -321,6 +388,7 @@ type voiceModuleStatus struct {
 	Installed                 bool   `json:"installed"`
 	WorkerInstalled           bool   `json:"worker_installed"`
 	RuntimeInstalled          bool   `json:"runtime_installed"`
+	RuntimeBackend            string `json:"runtime_backend,omitempty"`
 	ReferenceEncoderInstalled bool   `json:"reference_encoder_installed,omitempty"`
 	Message                   string `json:"message"`
 }
@@ -352,20 +420,31 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 func inspectNeuTTSModule(settings config.VoiceSettings, adapterInstalled, configured bool, dataDir string) voiceModuleStatus {
 	runner, hfHome := resolveNeuTTSRuntime(settings, dataDir)
 	runtimeInstalled := neuttsRuntimeInstalled(runner, hfHome, settings.NeuTTSBackbone)
+	runtimeBackend := ""
 	if strings.TrimSpace(settings.NeuTTSRunnerPath) == "" {
 		runtimeInstalled = runtimeInstalled && settings.NeuTTSBackbone == config.DefaultNeuTTSBackbone && managedNeuTTSManifestReady(dataDir, false)
+		if manifest, valid := readManagedNeuTTSManifest(dataDir); valid {
+			runtimeBackend = manifest.Backend
+		}
+	} else {
+		runtimeBackend = "custom"
 	}
 	status := voiceModuleStatus{
 		State:                     "missing",
 		WorkerInstalled:           adapterInstalled,
 		RuntimeInstalled:          runtimeInstalled,
+		RuntimeBackend:            runtimeBackend,
 		ReferenceEncoderInstalled: neuttsReferenceEncoderInstalled(dataDir),
 		Message:                   "NeuTTS is not installed. Rerun update.ps1 with managed llama.cpp enabled; skipping llama.cpp also skips NeuTTS.",
 	}
 	if adapterInstalled && runtimeInstalled && configured {
 		status.State = "ready"
 		status.Installed = true
-		status.Message = "The NeuTTS adapter, runtime, reference voice, and transcript are configured."
+		if runtimeBackend == "custom" {
+			status.Message = "The NeuTTS adapter, custom runtime, reference voice, and transcript are configured."
+		} else {
+			status.Message = fmt.Sprintf("The NeuTTS adapter, persistent %s runtime, reference voice, and transcript are configured.", strings.ToUpper(runtimeBackend))
+		}
 		return status
 	}
 	if !adapterInstalled && !runtimeInstalled {
@@ -659,16 +738,14 @@ func (s *Server) handleVoiceWorkerStart(w http.ResponseWriter, r *http.Request) 
 	s.writeStartedWorker(w, worker)
 }
 
-// writeStartedWorker follows every user-initiated start with a model load:
-// starting a role means making it ready to serve, so replies never fail
-// silently with model_not_loaded. Workers are still never started
-// implicitly. A load failure stops the just-started worker and fails the
-// action, so a successful Start always means the role is ready to serve.
+// writeStartedWorker follows every user-initiated start with a model load.
+// Startup autoload uses the same ready-state contract through
+// ensureVoiceWorkerReady.
 func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervisor) {
 	// Detached context: an impatient client disconnect must not abort the load.
 	ctx, cancel := context.WithTimeout(context.Background(), voiceModelLoadTimeout)
 	defer cancel()
-	if _, err := worker.SetModelLoaded(ctx, true); err != nil {
+	if err := ensureVoiceWorkerReady(ctx, worker); err != nil {
 		s.logger.Warn("voice model auto-load failed", "role", worker.Status().Role, "error", err)
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
 		_ = worker.Stop(stopCtx)
@@ -680,6 +757,82 @@ func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervi
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"worker": worker.Status()})
+}
+
+func ensureVoiceWorkerReady(ctx context.Context, worker *voice.Supervisor) error {
+	status := worker.Status()
+	if status.State == voice.StateRunning && status.ModelState == voice.ModelStateReady {
+		return nil
+	}
+	if err := worker.Start(ctx); err != nil {
+		return err
+	}
+	status = worker.Status()
+	if status.ModelState == voice.ModelStateReady {
+		return nil
+	}
+	_, err := worker.SetModelLoaded(ctx, true)
+	return err
+}
+
+func (s *Server) startVoiceAutoload(settings config.VoiceSettings) {
+	roles := voiceAutoloadRoles(settings)
+	if len(roles) == 0 || s.voice == nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.voiceAutoloadMu.Lock()
+	s.voiceAutoloadCancel = cancel
+	s.voiceAutoloadMu.Unlock()
+	for _, role := range roles {
+		worker := s.voice.Worker(role)
+		s.voiceAutoloadWG.Add(1)
+		go func() {
+			defer s.voiceAutoloadWG.Done()
+			status := worker.Status()
+			if !status.Configured {
+				s.logger.Warn("voice worker autoload skipped", "role", role, "reason", "worker is not configured")
+				return
+			}
+			loadCtx, loadCancel := context.WithTimeout(ctx, voiceModelLoadTimeout)
+			defer loadCancel()
+			if err := ensureVoiceWorkerReady(loadCtx, worker); err != nil {
+				if ctx.Err() == nil {
+					s.logger.Warn("voice worker autoload failed", "role", role, "error", err)
+				}
+				stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
+				_ = worker.Stop(stopCtx)
+				stopCancel()
+				return
+			}
+			s.logger.Info("voice worker autoloaded", "role", role, "model_state", worker.Status().ModelState)
+		}()
+	}
+}
+
+func voiceAutoloadRoles(settings config.VoiceSettings) []voice.Role {
+	if !settings.Enabled {
+		return nil
+	}
+	roles := make([]voice.Role, 0, 2)
+	if settings.SpeakReplies && settings.TTSProvider != config.VoiceProviderNone {
+		roles = append(roles, voice.RoleTTS)
+	}
+	if settings.ASRProvider != config.VoiceProviderNone {
+		roles = append(roles, voice.RoleASR)
+	}
+	return roles
+}
+
+func (s *Server) stopVoiceAutoload() {
+	s.voiceAutoloadMu.Lock()
+	cancel := s.voiceAutoloadCancel
+	s.voiceAutoloadCancel = nil
+	s.voiceAutoloadMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	s.voiceAutoloadWG.Wait()
 }
 
 func (s *Server) handleVoiceWorkerStop(w http.ResponseWriter, r *http.Request) {
@@ -889,8 +1042,8 @@ func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request
 }
 
 // applyVoiceSettingsTransition reconfigures workers after a settings save.
-// A changed command or a disable stops the affected worker; nothing starts
-// implicitly. Unchanged configs are a no-op inside SetConfig.
+// A changed command or a disable stops the affected worker. Startup autoload
+// is intentionally separate; unchanged configs are a no-op inside SetConfig.
 func (s *Server) applyVoiceSettingsTransition(next config.Settings) {
 	s.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(next.Voice.TTSWorkerPath, s.voiceExecutable, s.voiceDataDir, "voice-neutts-worker")))
 	s.voice.Configure(voiceManagerConfig(next.Voice, s.voiceExecutable, s.voiceDataDir))

@@ -48,13 +48,16 @@ The backend discovers the installer-owned `parakeet-server.exe`, GGUF model, and
 `voice-parakeet-worker.exe`; no custom paths are required. The module status
 distinguishes a complete installation from an adapter-only or otherwise
 incomplete setup and directs the user back to `update.ps1` when repair is
-needed. Save settings, then use **Start** in the Speech input row; Start also
-loads the model and succeeds only when ASR is ready. The default managed port is
-`127.0.0.1:8990` under Advanced.
+needed. Save settings, then use **Start** in the Speech input row for immediate
+use; Start also loads the model and succeeds only when ASR is ready. On later
+app launches, enabled speech input starts and loads its configured ASR worker
+automatically. The default managed port is `127.0.0.1:8990` under Advanced.
 
 Installation, enablement, and process start remain separate actions: the
-installer writes files only, voice remains opt-in, and workers never autostart.
-The installer prints the exact Settings > Voice sequence after provisioning.
+installer writes files only and voice remains opt-in. Startup autoload is driven
+only by saved enabled/provider settings; installing assets alone does not start
+a worker. The installer prints the exact Settings > Voice sequence after
+provisioning.
 
 The first installer path intentionally uses the portable CPU runner. Users can
 replace it with a compatible parakeet.cpp CUDA or Vulkan runner later without

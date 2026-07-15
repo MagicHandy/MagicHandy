@@ -53,13 +53,37 @@ Still required for current-build evidence:
 
 ## Voice Startup and NeuTTS Evidence
 
-- The installed app-managed `stream_pcm.exe` passed the bounded `--help` CLI
-  contract probe in about 10 ms. A synthesis using the official Dave sample's
-  372 codes and exact transcript took 122.576 s on this host, produced its first
-  audio at 87.98 s, and yielded 101,760 valid 24 kHz mono PCM bytes after the
-  adapter removed the runner's 93-byte `NeuCodec decoder:` diagnostic. This is
-  why readiness probes the CLI contract while audible model verification stays
-  behind **Send test** with a five-minute request timeout.
+- The installed schema-2 CPU-only `stream_pcm.exe` exposed the latency defect.
+  A direct instrumented run took 127.27 s wall time: 10.91 s model load, 90.86 s
+  to first audio, 116.10 s synthesis, and 66.72x real-time factor. Source review
+  found both llama.cpp `n_gpu_layers=0` and the CPU ndarray codec, followed by a
+  fresh process/model load for every request.
+- The exact pinned source built with all-layer CUDA backbone offload and WGPU
+  NeuCodec completed its one-shot probe in 5.28 s wall time: 1.90 s model load,
+  2.06 s to first audio, 2.45 s synthesis, and 1.39x real-time factor. The build
+  used Rust 1.94.0, CUDA 13.3, and an RTX 5070 Ti.
+- Through MagicHandy's persistent framed runner and real Go voice worker, model
+  load took 1.87 s. The first request produced audio at 1.01 s and completed in
+  2.18 s; a warm second request produced audio at 0.47 s and completed in 1.17
+  s. Cancellation after the first chunk reached terminal `canceled`; the same
+  process then completed a recovery request with 96,960 PCM bytes and exited
+  cleanly. CPU fallback retains the five-minute request timeout.
+- A clean full-feature `update.ps1 -Yes` run migrated the installed schema-2
+  runtime to schema 3 CUDA/WGPU in 11 minutes 40 seconds; the pinned native
+  runner build accounted for 8 minutes 44 seconds. The active NeuTTS tree is
+  2,154,884,823 bytes (2.007 GiB) and its manifest records CUDA all-layer
+  backbone offload, WGPU codec acceleration, the persistent protocol, and five
+  checksum-verified CUDA llama/ggml DLLs. A second update reused the verified
+  runtime and rebuilt/relaunched the app in 11.2 seconds.
+- In the relaunched production app, configured Parakeet and NeuTTS roles both
+  autoloaded to `running` with models `ready`. Two TTS requests through the real
+  HTTP boundary reached `done` in 2.018 and 0.874 seconds, returned 164,160 and
+  112,320 PCM bytes as valid WAVs, and retained the same `stream_pcm` process.
+  A visible Edge test produced another 59,520-byte clip and returned the shared
+  voice queue to zero. The first rendered pass exposed an asynchronous
+  `HTMLAudioElement.play()` autoplay rejection; the shell now unlocks a
+  persistent Web Audio context on a real pointer or keyboard gesture. The
+  rebuilt pass completed with no playback toast and no browser warnings/errors.
 - The production embedded UI was exercised at 1280×720 and 390×844. The
   continuous voice menu, reference preparation dialog, audio preview,
   transcription guide, and fixed Stop control remained reachable without

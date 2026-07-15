@@ -386,9 +386,14 @@ func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, s
 		t.Fatal("could not hash app-managed NeuTTS fixtures")
 	}
 	manifest, err := json.Marshal(map[string]any{
-		"schema_version":            2,
+		"schema_version":            3,
 		"source_commit":             managedNeuTTSSource,
 		"rust_toolchain":            managedNeuTTSRust,
+		"backend":                   "cpu",
+		"runner_protocol":           managedNeuTTSProtocol,
+		"backbone_acceleration":     "cpu",
+		"codec_acceleration":        "cpu",
+		"native_dependencies":       map[string]string{},
 		"backbone_revision":         managedNeuTTSBackbone,
 		"codec_revision":            managedNeuTTSCodec,
 		"runner_sha256":             runnerHash,
@@ -462,7 +467,7 @@ func assertAppManagedNeuTTSStartup(t *testing.T, settings config.VoiceSettings, 
 		t.Fatalf("app-managed NeuTTS runner args = %q, want %q", got.TTS.Args, runner)
 	}
 	status := inspectNeuTTSModule(settings, true, true, dataDir)
-	if status.State != "ready" || !status.RuntimeInstalled || !status.Installed {
+	if status.State != "ready" || !status.RuntimeInstalled || !status.Installed || status.RuntimeBackend != "cpu" {
 		t.Fatalf("app-managed NeuTTS status = %+v", status)
 	}
 	if !managedNeuTTSManifestReady(dataDir, true) {
@@ -707,6 +712,57 @@ func TestVoiceStateAppearsInAppState(t *testing.T) {
 	}
 	if _, ok := payload["voice"]; !ok {
 		t.Fatal("/api/state must include the voice block")
+	}
+}
+
+func TestVoiceWorkersAutoloadFromPersistedSettings(t *testing.T) {
+	tests := []struct {
+		name         string
+		enabled      bool
+		speakReplies bool
+		wantTTS      voice.WorkerState
+		wantASR      voice.WorkerState
+	}{
+		{name: "both roles", enabled: true, speakReplies: true, wantTTS: voice.StateRunning, wantASR: voice.StateRunning},
+		{name: "voice input only", enabled: true, speakReplies: false, wantTTS: voice.StateStopped, wantASR: voice.StateRunning},
+		{name: "voice disabled", enabled: false, speakReplies: true, wantTTS: voice.StateDisabled, wantASR: voice.StateDisabled},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store, err := config.OpenStore(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			settings, _ := store.Snapshot()
+			settings.Voice.Enabled = test.enabled
+			settings.Voice.SpeakReplies = test.speakReplies
+			settings.Voice.TTSProvider = config.VoiceProviderCustom
+			settings.Voice.TTSWorkerPath = chatStubBinary(t)
+			settings.Voice.TTSWorkerArgs = []string{"-role", "tts"}
+			settings.Voice.ASRProvider = config.VoiceProviderCustom
+			settings.Voice.ASRWorkerPath = chatStubBinary(t)
+			settings.Voice.ASRWorkerArgs = []string{"-role", "asr"}
+			if _, err := store.Save(settings); err != nil {
+				t.Fatal(err)
+			}
+			server := newTestServerWithStore(t, store, Runtime{})
+			defer server.Close()
+
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				tts := server.voice.Worker(voice.RoleTTS).Status()
+				asr := server.voice.Worker(voice.RoleASR).Status()
+				if tts.State == test.wantTTS && asr.State == test.wantASR &&
+					(tts.State != voice.StateRunning || tts.ModelState == voice.ModelStateReady) &&
+					(asr.State != voice.StateRunning || asr.ModelState == voice.ModelStateReady) {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("autoload states: tts=%+v asr=%+v", tts, asr)
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
 	}
 }
 

@@ -325,9 +325,14 @@ version = "0.1.0"
         $script:NeuTTSEncoderModelSHA256 = Get-MagicHandySHA256 -Path $encoderModel
         $script:NeuTTSEncoderWeightsSHA256 = Get-MagicHandySHA256 -Path $encoderWeights
         $manifest = [pscustomobject]@{
-            schema_version = 2
+            schema_version = 3
             source_commit = $script:NeuTTSSourceCommit
             rust_toolchain = $script:NeuTTSRustToolchain
+            backend = 'cpu'
+            runner_protocol = $script:NeuTTSRunnerProtocol
+            backbone_acceleration = 'cpu'
+            codec_acceleration = 'cpu'
+            native_dependencies = [ordered]@{}
             backbone_revision = $script:NeuTTSBackboneRevision
             backbone_sha256 = $fixtureBackboneHash
             codec_revision = $script:NeuTTSCodecRevision
@@ -342,14 +347,38 @@ version = "0.1.0"
         }
         [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json))
         try {
-            $valid = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
+            $valid = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
+            $wrongBackend = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cuda'
             [System.IO.File]::AppendAllText($runner, 'tampered')
-            $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
+            $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
             [System.IO.File]::WriteAllText($runner, 'fixture')
-            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+2', '"schema_version":"invalid"'
+            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+3', '"schema_version":"invalid"'
             [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), $malformedJSON)
-            $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir
-            [pscustomobject]@{ Valid = $valid; Tampered = $tampered; Malformed = $malformed }
+            $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
+
+            $nativeDependencies = [ordered]@{}
+            foreach ($name in @('ggml-base.dll', 'ggml-cpu.dll', 'ggml-cuda.dll', 'ggml.dll', 'llama.dll')) {
+                $path = Join-Path $runtime $name
+                [System.IO.File]::WriteAllText($path, "fixture-$name")
+                $nativeDependencies[$name] = Get-MagicHandySHA256 -Path $path
+            }
+            $manifest.backend = 'cuda'
+            $manifest.backbone_acceleration = 'cuda_all_layers'
+            $manifest.codec_acceleration = 'wgpu'
+            $manifest.native_dependencies = $nativeDependencies
+            [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json -Depth 3))
+            $validCUDA = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cuda'
+            [System.IO.File]::AppendAllText((Join-Path $runtime 'ggml-cuda.dll'), 'tampered')
+            $tamperedCUDA = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cuda'
+
+            [pscustomobject]@{
+                Valid = $valid
+                WrongBackend = $wrongBackend
+                Tampered = $tampered
+                Malformed = $malformed
+                ValidCUDA = $validCUDA
+                TamperedCUDA = $tamperedCUDA
+            }
         } finally {
             $script:NeuTTSBackboneSHA256 = $originalBackboneHash
             $script:NeuTTSEncoderModelSHA256 = $originalEncoderModelHash
@@ -357,8 +386,11 @@ version = "0.1.0"
         }
     } $neuttsData
     Assert-True -Condition ([bool]$neuttsRuntimeResult.Valid) -Message 'matching NeuTTS manifest and runtime files should be reusable'
+    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.WrongBackend) -Message 'changing the saved backend should rebuild NeuTTS with matching acceleration'
     Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Tampered) -Message 'changed NeuTTS runtime bytes should require repair'
     Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Malformed) -Message 'a malformed NeuTTS manifest should request repair rather than abort setup'
+    Assert-True -Condition ([bool]$neuttsRuntimeResult.ValidCUDA) -Message 'a CUDA NeuTTS manifest should require and accept all pinned native dependencies'
+    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.TamperedCUDA) -Message 'a changed CUDA NeuTTS dependency should require repair'
 
     Write-Host 'Checking interrupted NeuTTS swap recovery...'
     $recoveryData = Join-Path $tempRoot 'neutts-recovery-data'
@@ -712,9 +744,9 @@ version = "0.1.0"
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
     Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air.*protocol adapters'
     Assert-PlanContains -Plan $managedPlan -Pattern 'LLVM/libclang, Rustup.*Rust 1\.94\.0.*MSVC toolchain'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'Build pinned neutts-rs stream_pcm.*llama\.cpp binding'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'persistent NeuTTS runner from pinned neutts-rs.*CUDA backbone \+ WGPU codec'
     Assert-PlanContains -Plan $managedPlan -Pattern 'MagicHandy NeuCodec ONNX reference encoder worker'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder.*reference encoder assets'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder.*reference encoder assets.*about 2\.0 GiB installed'
 
     $ollamaState = New-MagicHandyInstallState `
         -RepositoryPath $Repo `
