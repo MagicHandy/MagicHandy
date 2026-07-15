@@ -1463,11 +1463,20 @@ function Install-MagicHandyNeuTTS {
             throw 'The built NeuTTS stream_pcm runner did not pass its help probe.'
         }
         $phonemes = (& $runnerCandidate --espeak $ESpeakExecutable --phonemize 'clearly naturally completely misspoken' 2>&1) -join ' '
-        if ($LASTEXITCODE -ne 0 -or
-            $phonemes -notmatch 'klˈɪɹli' -or
-            $phonemes -notmatch 'nˈætʃɚɹəli' -or
-            $phonemes -notmatch 'kəmplˈiːtli' -or
-            $phonemes -notmatch 'mɪsspˈoʊkən') {
+        $runnerExitCode = $LASTEXITCODE
+        # Keep this module ASCII-safe for Windows PowerShell 5.1, which decodes
+        # UTF-8 source without a BOM using the active ANSI code page.
+        $expectedPhonemes = @(
+            (@('k', 'l', [char]0x02C8, [char]0x026A, [char]0x0279, 'l', 'i') -join ''),
+            (@('n', [char]0x02C8, [char]0x00E6, 't', [char]0x0283, [char]0x025A, [char]0x0279, [char]0x0259, 'l', 'i') -join ''),
+            (@('k', [char]0x0259, 'm', 'p', 'l', [char]0x02C8, 'i', [char]0x02D0, 't', 'l', 'i') -join ''),
+            (@('m', [char]0x026A, 's', 's', 'p', [char]0x02C8, 'o', [char]0x028A, 'k', [char]0x0259, 'n') -join '')
+        )
+        $phonemeProbePassed = $runnerExitCode -eq 0
+        foreach ($expected in $expectedPhonemes) {
+            $phonemeProbePassed = $phonemeProbePassed -and $phonemes.Contains($expected)
+        }
+        if (-not $phonemeProbePassed) {
             throw "The built NeuTTS runner failed its eSpeak NG phonemizer quality probe: $phonemes"
         }
         Copy-Item -LiteralPath $runnerCandidate -Destination (Join-Path $runtimeStage 'stream_pcm.exe') -Force
