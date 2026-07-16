@@ -100,11 +100,19 @@ Mitigation:
 - default to browser-owned Bluetooth early
 - keep no-silent-fallback rule
 - document bridge status clearly
+- preserve percentage units at the BLE encoder boundary
+- invalidate stale command batches and deliver Stop directly from an already-connected browser when the backend is unavailable
 - defer native Go Bluetooth until justified by a prototype
 
 Exit evidence:
 
 - Bluetooth ownership decision remains current and a working bridge passes manual checks
+
+Status 2026-07-16: automated browser tests cover percentage encoding, malformed
+protobuf rejection, direct Stop during backend loss, command-poll cancellation,
+and Stop-before-disconnect teardown. The existing hardware run predates these
+changes, the reverse-direction correction, and endurance testing, so R5 remains
+open pending the documented capped real-device matrix.
 
 ## R6: Optional Python Worker Complexity
 

@@ -78,7 +78,32 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
   const messageID = useRef(0);
   const pendingResponses = useRef(new Map<number, PendingResponse>());
   const activeStreamID = useRef<number | null>(null);
-  const commandLoopActive = useRef(false);
+  const mounted = useRef(true);
+  const backendOnlineRef = useRef(backendOnline);
+  const commandGeneration = useRef(0);
+  const localStopPending = useRef(false);
+  const commandLoopAbort = useRef<AbortController | null>(null);
+  const commandRequestAbort = useRef<AbortController | null>(null);
+  const disconnectListener = useRef<EventListener | null>(null);
+  const notificationListener = useRef<EventListener | null>(null);
+  const disconnecting = useRef(false);
+  const writeTail = useRef<Promise<void>>(Promise.resolve());
+  const lastNotificationStatus = useRef(0);
+
+  backendOnlineRef.current = backendOnline;
+
+  useEffect(() => {
+    mounted.current = true;
+    const stop = () => void emergencyStopBluetooth(true);
+    window.addEventListener("magichandy:emergency-stop", stop);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener("magichandy:emergency-stop", stop);
+      commandLoopAbort.current?.abort();
+      commandRequestAbort.current?.abort();
+      void emergencyStopBluetooth(false).finally(() => clearBluetoothSession({ disconnect: true }));
+    };
+  }, []);
 
   useEffect(() => {
     if (initial) setBridge(initial);
@@ -96,21 +121,28 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
 
   useEffect(() => {
     if (!visible || !backendOnline) return;
-    void api.bluetoothStatus().then((res) => setBridge(res.bluetooth)).catch(() => undefined);
+    void api.bluetoothStatus().then((res) => {
+      if (mounted.current) setBridge(res.bluetooth);
+    }).catch(() => undefined);
   }, [backendOnline, visible]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !backendOnline) {
+      commandLoopAbort.current?.abort();
+      return;
+    }
+    ensureCommandLoop();
     const id = window.setInterval(() => {
-      if (!bluetoothConnected() && !visible) return;
       void postBluetoothStatus({
         status: bluetoothConnected() ? "connected" : "disconnected",
         message: bluetoothConnected() ? "Handy Bluetooth connected." : "Bluetooth disconnected.",
-      }).then((res) => setBridge(res.bluetooth)).catch(() => undefined);
+      }).then((res) => {
+        if (mounted.current) setBridge(res.bluetooth);
+      }).catch(() => undefined);
       ensureCommandLoop();
     }, 5000);
     return () => window.clearInterval(id);
-  });
+  }, [backendOnline, visible]);
 
   function bluetoothSupported() {
     return Boolean((navigator as Navigator & BluetoothNavigator).bluetooth?.requestDevice);
@@ -134,7 +166,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
   async function connectBluetooth() {
     if (!bluetoothSupported()) {
       const res = await postBluetoothStatus({ connected: false, supported: false, status: "unsupported", message: "Web Bluetooth is not available in this browser." });
-      setBridge(res.bluetooth);
+      if (mounted.current) setBridge(res.bluetooth);
       show("Web Bluetooth is not available in this browser.", "error");
       return;
     }
@@ -145,13 +177,17 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
       if (!nav) throw new Error("Web Bluetooth is not available in this browser.");
       const selected = await nav.requestDevice(handyBluetoothRequestOptions());
       device.current = selected;
-      selected.addEventListener("gattserverdisconnected", () => void handleBluetoothDisconnect());
+      const onDisconnect: EventListener = () => void handleBluetoothDisconnect();
+      disconnectListener.current = onDisconnect;
+      selected.addEventListener("gattserverdisconnected", onDisconnect);
       const server = await selected.gatt?.connect();
       if (!server) throw new Error("Bluetooth GATT server is unavailable.");
       const service = await server.getPrimaryService(HANDY_BLE_SERVICE_UUID);
       tx.current = await service.getCharacteristic(HANDY_BLE_TX_UUID);
       rx.current = await service.getCharacteristic(HANDY_BLE_RX_UUID);
-      rx.current.addEventListener("characteristicvaluechanged", handleBleMessage as EventListener);
+      const onNotification: EventListener = (event) => handleBleMessage(event);
+      notificationListener.current = onNotification;
+      rx.current.addEventListener("characteristicvaluechanged", onNotification);
       await rx.current.startNotifications?.();
       try {
         await syncBluetoothClock();
@@ -167,6 +203,10 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
         status: "connected",
         message: `Connected to ${selected.name || "Handy"} over local Bluetooth.`,
       });
+      if (!mounted.current) {
+        clearBluetoothSession({ disconnect: true });
+        return;
+      }
       setBridge(res.bluetooth);
       ensureCommandLoop();
       show("Bluetooth connected.");
@@ -174,22 +214,16 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
       clearBluetoothSession({ disconnect: true });
       const message = e instanceof Error ? e.message : "Bluetooth connection failed.";
       const res = await postBluetoothStatus({ connected: false, status: "error", error: message, message: "Bluetooth connection failed." }).catch(() => null);
-      if (res) setBridge(res.bluetooth);
-      show(message, "error");
+      if (res && mounted.current) setBridge(res.bluetooth);
+      if (mounted.current) show(message, "error");
     } finally {
-      setConnecting(false);
+      if (mounted.current) setConnecting(false);
     }
   }
 
   async function disconnectBluetooth() {
     try {
-      if (bluetoothConnected()) {
-        try {
-          await sendBleRequest("hsp/stop", {}, { waitForResponse: false });
-        } catch {
-          // Disconnect should proceed even if the device already disappeared.
-        }
-      }
+      await emergencyStopBluetooth(false);
       if (device.current?.gatt?.connected) {
         device.current.gatt.disconnect();
         return;
@@ -201,54 +235,95 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
   }
 
   async function handleBluetoothDisconnect() {
+    if (disconnecting.current) return;
+    disconnecting.current = true;
     const deviceName = device.current?.name ?? "";
     clearBluetoothSession();
-    const res = await api.bluetoothDisconnect(clientID.current, deviceName ? `${deviceName} Bluetooth disconnected.` : "Bluetooth disconnected.");
-    setBridge(res.bluetooth);
-  }
-
-  function clearBluetoothSession({ disconnect = false } = {}) {
-    rejectPendingBluetoothResponses("Bluetooth disconnected.");
-    if (disconnect && device.current?.gatt?.connected) device.current.gatt.disconnect();
-    tx.current = null;
-    rx.current = null;
-    activeStreamID.current = null;
-  }
-
-  function ensureCommandLoop() {
-    if (bluetoothConnected() && !commandLoopActive.current) void commandLoop();
-  }
-
-  async function commandLoop() {
-    if (commandLoopActive.current) return;
-    commandLoopActive.current = true;
     try {
-      while (bluetoothConnected()) {
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), COMMAND_FETCH_TIMEOUT_MS);
-        try {
-          const body = await api.bluetoothCommands(clientID.current, COMMAND_WAIT_SECONDS, controller.signal);
-          setBridge(body.bluetooth);
-          for (const command of body.commands ?? []) {
-            await executeBridgeCommand(command);
-            if (!bluetoothConnected()) break;
-          }
-        } catch {
-          await delay(1000);
-        } finally {
-          window.clearTimeout(timeout);
-        }
+      const res = await api.bluetoothDisconnect(clientID.current, deviceName ? `${deviceName} Bluetooth disconnected.` : "Bluetooth disconnected.");
+      if (mounted.current) setBridge(res.bluetooth);
+    } catch {
+      if (mounted.current) {
+        setBridge((current) => ({
+          ...current,
+          connected: false,
+          ready: false,
+          status: "disconnected",
+          message: "Bluetooth disconnected; the core could not be notified.",
+        }));
       }
     } finally {
-      commandLoopActive.current = false;
+      disconnecting.current = false;
     }
   }
 
-  async function executeBridgeCommand(command: BluetoothCommand) {
+  function clearBluetoothSession({ disconnect = false } = {}) {
+    commandGeneration.current += 1;
+    commandLoopAbort.current?.abort();
+    commandLoopAbort.current = null;
+    commandRequestAbort.current?.abort();
+    commandRequestAbort.current = null;
+    rejectPendingBluetoothResponses("Bluetooth disconnected.");
+    const currentDevice = device.current;
+    const currentRx = rx.current;
+    if (currentRx && notificationListener.current) {
+      currentRx.removeEventListener("characteristicvaluechanged", notificationListener.current);
+    }
+    if (currentDevice && disconnectListener.current) {
+      currentDevice.removeEventListener("gattserverdisconnected", disconnectListener.current);
+    }
+    notificationListener.current = null;
+    disconnectListener.current = null;
+    if (disconnect && currentDevice?.gatt?.connected) currentDevice.gatt.disconnect();
+    tx.current = null;
+    rx.current = null;
+    device.current = null;
+    activeStreamID.current = null;
+    localStopPending.current = false;
+  }
+
+  function ensureCommandLoop() {
+    if (!backendOnlineRef.current || !bluetoothConnected() || commandLoopAbort.current) return;
+    const controller = new AbortController();
+    commandLoopAbort.current = controller;
+    void commandLoop(controller);
+  }
+
+  async function commandLoop(sessionController: AbortController) {
+    try {
+      while (!sessionController.signal.aborted && bluetoothConnected() && backendOnlineRef.current) {
+        const generation = commandGeneration.current;
+        const requestController = new AbortController();
+        commandRequestAbort.current = requestController;
+        const abortRequest = () => requestController.abort();
+        sessionController.signal.addEventListener("abort", abortRequest, { once: true });
+        const timeout = window.setTimeout(abortRequest, COMMAND_FETCH_TIMEOUT_MS);
+        try {
+          const body = await api.bluetoothCommands(clientID.current, COMMAND_WAIT_SECONDS, requestController.signal);
+          if (mounted.current) setBridge(body.bluetooth);
+          for (const command of body.commands ?? []) {
+            await executeBridgeCommand(command, generation);
+            if (sessionController.signal.aborted || !bluetoothConnected()) break;
+          }
+        } catch (error) {
+          if (sessionController.signal.aborted) break;
+          if (!isAbortError(error)) await delay(1000, sessionController.signal).catch(() => undefined);
+        } finally {
+          window.clearTimeout(timeout);
+          sessionController.signal.removeEventListener("abort", abortRequest);
+          if (commandRequestAbort.current === requestController) commandRequestAbort.current = null;
+        }
+      }
+    } finally {
+      if (commandLoopAbort.current === sessionController) commandLoopAbort.current = null;
+    }
+  }
+
+  async function executeBridgeCommand(command: BluetoothCommand, generation: number) {
     const started = performance.now();
     try {
       if (!bluetoothConnected()) throw new Error("Handy Bluetooth is not connected.");
-      const response = await runBluetoothCommand(command);
+      const response = await runBluetoothCommand(command, generation);
       const ack = await api.bluetoothAck(clientID.current, {
         id: command.id,
         ok: true,
@@ -256,7 +331,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
         elapsed_ms: performance.now() - started,
         response: response.hsp_state ? { hsp_state: response.hsp_state } : {},
       });
-      setBridge(ack.bluetooth);
+      if (mounted.current) setBridge(ack.bluetooth);
     } catch (e) {
       const ack = await api.bluetoothAck(clientID.current, {
         id: command.id,
@@ -265,42 +340,71 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
         elapsed_ms: performance.now() - started,
         error: e instanceof Error ? e.message : String(e),
       }).catch(() => null);
-      if (ack) setBridge(ack.bluetooth);
+      if (ack && mounted.current) setBridge(ack.bluetooth);
     }
   }
 
-  async function runBluetoothCommand(command: BluetoothCommand): Promise<Record<string, unknown>> {
+  async function runBluetoothCommand(command: BluetoothCommand, generation: number): Promise<Record<string, unknown>> {
     const body = command.body ?? {};
-    if (command.path === "hsp/add") return executeHSPAdd(body);
-    if (command.path === "hsp/play") {
-      await ensureHSPStream(body.stream_id);
-      return sendBleRequest("hsp/play", { ...body, server_time: Date.now() }, { waitForResponse: false });
-    }
     if (command.path === "hsp/stop") {
       activeStreamID.current = null;
-      return sendBleRequest("hsp/stop", {}, { waitForResponse: false });
+      const response = await sendBleRequest("hsp/stop", {}, { waitForResponse: false });
+      localStopPending.current = false;
+      return response;
+    }
+    if (localStopPending.current) throw new Error("Bluetooth command was invalidated by Emergency Stop.");
+    assertCommandGeneration(generation);
+    if (command.path === "hsp/add") return executeHSPAdd(body, generation);
+    if (command.path === "hsp/play") {
+      await ensureHSPStream(body.stream_id, generation);
+      assertCommandGeneration(generation);
+      return sendBleRequest("hsp/play", { ...body, server_time: Date.now() }, { waitForResponse: false });
     }
     if (command.path === "hsp/state") return sendBleRequest("hsp/state");
     if (command.path === "slider/stroke") return sendBleRequest("slider/stroke", body, { waitForResponse: false });
     throw new Error(`Bluetooth command is not implemented: ${command.path}`);
   }
 
-  async function executeHSPAdd(body: Record<string, unknown>) {
-    await ensureHSPStream(body.stream_id);
+  async function executeHSPAdd(body: Record<string, unknown>, generation: number) {
+    await ensureHSPStream(body.stream_id, generation);
     const points = Array.isArray(body.points) ? body.points : [];
     for (let offset = 0; offset < points.length; offset += HSP_ADD_CHUNK_POINTS) {
+      assertCommandGeneration(generation);
       const chunk = points.slice(offset, offset + HSP_ADD_CHUNK_POINTS);
       await sendBleRequest("hsp/add", { points: chunk, flush: offset === 0 ? Boolean(body.flush) : false }, { waitForResponse: false });
     }
     return { ok: true };
   }
 
-  async function ensureHSPStream(streamID: unknown) {
-    const nextStreamID = Number.parseInt(String(streamID), 10);
-    if (!Number.isFinite(nextStreamID) || nextStreamID < 0) throw new Error("Bluetooth HSP stream ID must be a non-negative integer.");
+  async function ensureHSPStream(streamID: unknown, generation: number) {
+    const nextStreamID = Number(streamID);
+    if (!Number.isSafeInteger(nextStreamID) || nextStreamID < 0) throw new Error("Bluetooth HSP stream ID must be a non-negative integer.");
     if (activeStreamID.current === nextStreamID) return;
+    assertCommandGeneration(generation);
     await sendBleRequest("hsp/setup", { stream_id: nextStreamID }, { waitForResponse: false });
+    assertCommandGeneration(generation);
     activeStreamID.current = nextStreamID;
+  }
+
+  function assertCommandGeneration(generation: number) {
+    if (generation !== commandGeneration.current) {
+      throw new Error("Bluetooth command was invalidated by Emergency Stop.");
+    }
+  }
+
+  async function emergencyStopBluetooth(reportError: boolean) {
+    commandGeneration.current += 1;
+    localStopPending.current = true;
+    commandRequestAbort.current?.abort();
+    activeStreamID.current = null;
+    if (!bluetoothConnected()) return;
+    try {
+      await sendBleRequest("hsp/stop", {}, { waitForResponse: false });
+    } catch (error) {
+      if (reportError && mounted.current) {
+        show(error instanceof Error ? `Bluetooth Stop failed: ${error.message}` : "Bluetooth Stop failed.", "error");
+      }
+    }
   }
 
   async function sendBleRequest(path: string, body: Record<string, unknown> = {}, options: { waitForResponse?: boolean } = {}) {
@@ -333,36 +437,44 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
   }
 
   async function writeBluetoothValue(bytes: Uint8Array) {
-    const characteristic = tx.current;
-    if (!characteristic) throw new Error("Bluetooth TX characteristic is not ready.");
-    if (bytes.length > 512) throw new Error(`Bluetooth command is too large (${bytes.length} bytes).`);
-    if (characteristic.properties?.write && characteristic.writeValueWithResponse) {
-      await characteristic.writeValueWithResponse(bytes);
-      return "with-response";
+    const previous = writeTail.current.catch(() => undefined);
+    let release!: () => void;
+    writeTail.current = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      const characteristic = tx.current;
+      if (!characteristic) throw new Error("Bluetooth TX characteristic is not ready.");
+      if (bytes.length > 512) throw new Error(`Bluetooth command is too large (${bytes.length} bytes).`);
+      if (characteristic.properties?.write && characteristic.writeValueWithResponse) {
+        await characteristic.writeValueWithResponse(bytes);
+        return "with-response";
+      }
+      if (characteristic.properties?.write && characteristic.writeValue) {
+        await characteristic.writeValue(bytes);
+        return "with-response";
+      }
+      if (characteristic.properties?.writeWithoutResponse && characteristic.writeValueWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(bytes);
+        await delay(WRITE_WITHOUT_RESPONSE_SETTLE_MS);
+        return "without-response";
+      }
+      if (characteristic.writeValueWithResponse) {
+        await characteristic.writeValueWithResponse(bytes);
+        return "with-response";
+      }
+      if (characteristic.writeValue) {
+        await characteristic.writeValue(bytes);
+        return "with-response";
+      }
+      if (characteristic.writeValueWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(bytes);
+        await delay(WRITE_WITHOUT_RESPONSE_SETTLE_MS);
+        return "without-response";
+      }
+      throw new Error("Bluetooth TX characteristic does not support writes.");
+    } finally {
+      release();
     }
-    if (characteristic.properties?.write && characteristic.writeValue) {
-      await characteristic.writeValue(bytes);
-      return "with-response";
-    }
-    if (characteristic.properties?.writeWithoutResponse && characteristic.writeValueWithoutResponse) {
-      await characteristic.writeValueWithoutResponse(bytes);
-      await delay(WRITE_WITHOUT_RESPONSE_SETTLE_MS);
-      return "without-response";
-    }
-    if (characteristic.writeValueWithResponse) {
-      await characteristic.writeValueWithResponse(bytes);
-      return "with-response";
-    }
-    if (characteristic.writeValue) {
-      await characteristic.writeValue(bytes);
-      return "with-response";
-    }
-    if (characteristic.writeValueWithoutResponse) {
-      await characteristic.writeValueWithoutResponse(bytes);
-      await delay(WRITE_WITHOUT_RESPONSE_SETTLE_MS);
-      return "without-response";
-    }
-    throw new Error("Bluetooth TX characteristic does not support writes.");
   }
 
   function handleBleMessage(event: Event) {
@@ -380,11 +492,21 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
           pending.resolve(response);
         }
         const error = response?.error as { message?: string } | undefined;
-        if (error?.message) void postBluetoothStatus({ status: "error", error: error.message, message: error.message }).then((res) => setBridge(res.bluetooth));
+        if (error?.message) {
+          void postBluetoothStatus({ status: "error", error: error.message, message: error.message })
+            .then((res) => { if (mounted.current) setBridge(res.bluetooth); })
+            .catch(() => undefined);
+        }
         return;
       }
       if (parsed.type === "notification") {
-        void postBluetoothStatus({ status: "connected", message: "Handy Bluetooth event received." }).then((res) => setBridge(res.bluetooth));
+        const now = Date.now();
+        if (now - lastNotificationStatus.current >= 1000) {
+          lastNotificationStatus.current = now;
+          void postBluetoothStatus({ status: "connected", message: "Handy Bluetooth event received." })
+            .then((res) => { if (mounted.current) setBridge(res.bluetooth); })
+            .catch(() => undefined);
+        }
       }
     } catch (e) {
       console.warn("Could not decode Handy Bluetooth message", e);
@@ -473,12 +595,33 @@ function classifyBluetoothError(error: unknown) {
   const message = String(error instanceof Error ? error.message : error).toLowerCase();
   if (message.includes("not available")) return "browser_unsupported";
   if (message.includes("not connected") || message.includes("not ready")) return "browser_not_connected";
+  if (message.includes("invalidated by emergency stop")) return "browser_canceled";
   if (message.includes("not implemented") || message.includes("too large") || message.includes("encode")) return "browser_encode_error";
   return "device_error";
 }
 
-function delay(milliseconds: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : Boolean(error && typeof error === "object" && "name" in error && error.name === "AbortError");
+}
+
+function delay(milliseconds: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function transientClientID(prefix: string) {

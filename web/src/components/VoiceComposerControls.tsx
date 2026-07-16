@@ -83,6 +83,7 @@ export function VoiceComposerControls({
   const activeRequestID = useRef("");
   const activeRequestAbort = useRef<AbortController | null>(null);
   const captureSession = useRef(0);
+  const handsFreeStopSequence = useRef<number | undefined>(undefined);
   const recordingTimer = useRef<number | null>(null);
   const countdownTimer = useRef<number | null>(null);
   const warmTimer = useRef<number | null>(null);
@@ -91,6 +92,7 @@ export function VoiceComposerControls({
   const stopSequenceRef = useRef(stopSequence);
   const selectedDeviceRef = useRef(selectedDevice);
   const onTranscriptRef = useRef(onTranscript);
+  const deferredPreferences = useRef<VoiceInputPreferences | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   onTranscriptRef.current = onTranscript;
@@ -101,17 +103,33 @@ export function VoiceComposerControls({
   useEffect(() => onActivityChange(active), [active, onActivityChange]);
 
   useEffect(() => {
-    if (active) return;
-    setMode(normalizeMode(preferences.input_mode));
-    setSensitivity(preferences.input_sensitivity);
-    setSilenceMillis(preferences.input_silence_ms);
-    setNoiseSuppression(preferences.input_noise_suppression);
+    const next = { ...preferences };
+    if (active || wantsCapture.current) {
+      deferredPreferences.current = next;
+      return;
+    }
+    deferredPreferences.current = null;
+    applyPreferences(next);
   }, [
     preferences.input_mode,
     preferences.input_sensitivity,
     preferences.input_silence_ms,
     preferences.input_noise_suppression,
   ]);
+
+  useEffect(() => {
+    if (active || wantsCapture.current || !deferredPreferences.current) return;
+    const next = deferredPreferences.current;
+    deferredPreferences.current = null;
+    applyPreferences(next);
+  }, [active]);
+
+  function applyPreferences(next: VoiceInputPreferences) {
+    setMode(normalizeMode(next.input_mode));
+    setSensitivity(next.input_sensitivity);
+    setSilenceMillis(next.input_silence_ms);
+    setNoiseSuppression(next.input_noise_suppression);
+  }
 
   useEffect(() => {
     mounted.current = true;
@@ -219,9 +237,11 @@ export function VoiceComposerControls({
     clearWarmTimer();
     const session = ++captureSession.current;
     const captureStopSequence = stopSequenceRef.current;
+    handsFreeStopSequence.current = captureStopSequence;
     const stream = await acquireMicrophone(session);
     if (!stream || !mounted.current || session !== captureSession.current) {
       wantsCapture.current = false;
+      if (session === captureSession.current) handsFreeStopSequence.current = undefined;
       return;
     }
     const buffered: Float32Array[] = [];
@@ -248,6 +268,7 @@ export function VoiceComposerControls({
       for (const samples of buffered) handlePCMSamples(vad, samples, pcm.sampleRate, session, captureStopSequence);
     } catch (error) {
       wantsCapture.current = false;
+      if (session === captureSession.current) handsFreeStopSequence.current = undefined;
       releaseMicrophone();
       if (mounted.current) showError(error instanceof Error ? error.message : "Continuous microphone capture could not start.");
     }
@@ -269,6 +290,8 @@ export function VoiceComposerControls({
     wantsCapture.current = false;
     const activeVAD = segmenter.current;
     const sampleRate = pcmStream.current?.sampleRate;
+    const captureStopSequence = handsFreeStopSequence.current;
+    handsFreeStopSequence.current = undefined;
     pcmStream.current?.stop();
     pcmStream.current = null;
     segmenter.current = null;
@@ -282,7 +305,7 @@ export function VoiceComposerControls({
         samples: finalSegment,
         sampleRate,
         session: captureSession.current,
-        stopSequence: stopSequenceRef.current,
+        stopSequence: captureStopSequence,
       });
     }
   }
@@ -460,7 +483,7 @@ export function VoiceComposerControls({
     captureSession.current++;
     wantsCapture.current = false;
     segmentQueue.current = [];
-    setQueuedSegments(0);
+    handsFreeStopSequence.current = undefined;
     segmenter.current?.reset();
     segmenter.current = null;
     pcmStream.current?.stop();
@@ -473,6 +496,7 @@ export function VoiceComposerControls({
     stopHoldRecording(true);
     releaseMicrophone();
     if (mounted.current) {
+      setQueuedSegments(0);
       setArming(false);
       setListening(false);
       setSpeechDetected(false);

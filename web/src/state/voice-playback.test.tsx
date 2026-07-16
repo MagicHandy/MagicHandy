@@ -17,6 +17,7 @@ vi.mock("../util/audio", () => ({
   audioPlaybackToken: vi.fn(() => 0),
   installAudioPlaybackUnlock: vi.fn(() => () => undefined),
   playBlob: vi.fn(async () => undefined),
+  stopAllAudioPlayback: vi.fn(),
 }));
 
 vi.mock("./app-state", () => ({
@@ -30,6 +31,16 @@ const playAudio = vi.mocked(playBlob);
 function QueueButton({ id = "tts-1" }: { id?: string }) {
   const { queueSpeech } = useVoicePlayback();
   return <button type="button" onClick={() => queueSpeech(id)}>Queue</button>;
+}
+
+function QueuePair() {
+  const { queueSpeech } = useVoicePlayback();
+  return (
+    <>
+      <button type="button" onClick={() => queueSpeech("tts-1")}>Queue first</button>
+      <button type="button" onClick={() => queueSpeech("tts-2")}>Queue second</button>
+    </>
+  );
 }
 
 describe("VoicePlaybackProvider", () => {
@@ -96,6 +107,62 @@ describe("VoicePlaybackProvider", () => {
       "error",
     );
     expect(voiceRequestAudio).not.toHaveBeenCalled();
+  });
+
+  it("fetches later audio eagerly while preserving playback order", async () => {
+    voiceRequest.mockImplementation(async (id) => ({
+      request: {
+        id,
+        role: "tts",
+        type: "speak",
+        state: "done",
+        created_at: "2026-07-15T12:00:00Z",
+        audio_bytes: 100,
+      },
+    }));
+    const firstAudio = new Blob(["first"], { type: "audio/wav" });
+    const secondAudio = new Blob(["second"], { type: "audio/wav" });
+    voiceRequestAudio.mockImplementation(async (id) => id === "tts-1" ? firstAudio : secondAudio);
+    let releaseFirst!: () => void;
+    playAudio.mockImplementationOnce(() => new Promise<void>((resolve) => { releaseFirst = resolve; }));
+
+    render(<VoicePlaybackProvider><QueuePair /></VoicePlaybackProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Queue first" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue second" }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(voiceRequestAudio).toHaveBeenCalledTimes(2);
+    expect(voiceRequestAudio.mock.calls.map(([id]) => id)).toEqual(["tts-1", "tts-2"]);
+    expect(playAudio).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      releaseFirst();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(playAudio).toHaveBeenCalledTimes(2);
+    expect(playAudio.mock.calls.map(([blob]) => blob)).toEqual([firstAudio, secondAudio]);
+  });
+
+  it("aborts every queued synthesis poll on Emergency Stop", async () => {
+    const signals = new Map<string, AbortSignal>();
+    voiceRequest.mockImplementation((id, signal) => new Promise((_resolve, reject) => {
+      if (signal) signals.set(id, signal);
+      signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    }));
+
+    render(<VoicePlaybackProvider><QueuePair /></VoicePlaybackProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Queue first" }));
+    fireEvent.click(screen.getByRole("button", { name: "Queue second" }));
+    expect(signals.size).toBe(2);
+
+    await act(async () => window.dispatchEvent(new Event("magichandy:emergency-stop")));
+
+    expect([...signals.values()].every((signal) => signal.aborted)).toBe(true);
+    expect(show).not.toHaveBeenCalled();
   });
 
   it("abandons pending playback immediately on Emergency Stop", async () => {

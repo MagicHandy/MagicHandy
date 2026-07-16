@@ -77,6 +77,19 @@ instead of probing `hsp/state`; explicit state reads remain diagnostics. The
 `hsp/play` bridge path is also treated as write-ack on successful BLE write, so
 the motion engine does not wait for a response that the device may not emit.
 
+Semantic stroke-window values crossing the bridge remain percentages in the
+inclusive 0-100 range. The browser encoder clamps that range but does not infer
+or convert normalized 0-1 values; unit conversion by heuristic can turn an
+intended 1% boundary into 100% motion.
+
+Emergency Stop has a browser-local delivery path in addition to the normal Go
+command bridge. When an already-connected browser receives the global Stop
+event, it invalidates fetched command work, writes `hsp/stop` directly, and
+blocks later motion writes until the backend publishes its authoritative Stop
+command. This keeps Stop deliverable during backend loss without making the
+browser a second motion planner. Disconnect and component teardown also attempt
+a direct Stop before releasing the GATT session.
+
 ## UI Requirements
 
 - Bluetooth controls are hidden unless the Bluetooth dispatch owner is selected or enabled in settings.

@@ -150,6 +150,30 @@ describe("VoiceComposerControls", () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
+  it("keeps the capture-start Stop sequence when the final phrase is flushed", async () => {
+    const props = {
+      disabled: false,
+      ready: true,
+      unavailableTitle: "Unavailable",
+      preferences,
+      onActivityChange: () => undefined,
+      onTranscript: async () => undefined,
+      showError: () => undefined,
+    };
+    const result = render(<VoiceComposerControls {...props} stopSequence={4} />);
+    fireEvent.click(screen.getByRole("button", { name: /start hands-free listening/i }));
+    await screen.findByRole("button", { name: /stop hands-free listening/i });
+    act(() => {
+      for (let index = 0; index < 6; index += 1) emitPCM(new Float32Array(50).fill(0.2));
+    });
+
+    result.rerender(<VoiceComposerControls {...props} stopSequence={undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: /stop hands-free listening/i }));
+
+    await waitFor(() => expect(voiceTranscribe).toHaveBeenCalled());
+    expect(voiceTranscribe).toHaveBeenCalledWith(expect.any(Blob), "wav", 4, expect.any(AbortSignal));
+  });
+
   it("continues draining queued phrases after one transcription fails", async () => {
     let rejectFirst!: (reason: Error) => void;
     voiceTranscribe.mockImplementationOnce(() => new Promise((_, reject) => { rejectFirst = reject; }));

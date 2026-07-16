@@ -208,7 +208,7 @@ export const api = {
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
-  resetSettings: () => request("POST", "/api/settings/reset", {}),
+  resetSettings: () => request<{ settings: PublicSettings }>("POST", "/api/settings/reset", {}),
 
   // Non-motion connection check for the selected dispatch owner.
   connectionCheck: (owner: "cloud" | "bluetooth") =>
@@ -310,7 +310,14 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
     body: file,
   });
   const text = await res.text();
-  const parsed = text ? JSON.parse(text) as unknown : null;
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
   if (!res.ok) {
     const message = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : `Import failed (${res.status})`;
     throw new ApiError(message, res.status, parsed);
@@ -374,26 +381,54 @@ export async function streamChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sep: number;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      let event = "message";
-      const dataLines: string[] = [];
-      for (const line of frame.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
-      }
-      if (!dataLines.length) continue;
-      try {
-        onEvent({ event, data: JSON.parse(dataLines.join("\n")) } as ChatStreamEvent);
-      } catch {
-        /* ignore malformed frame */
+  let completed = false;
+  const dispatch = (frame: string) => {
+    const parsed = parseSSEFrame(frame, res.status);
+    if (!parsed) return;
+    onEvent(parsed);
+    if (parsed.event === "done") completed = true;
+  };
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      for (;;) {
+        const boundary = nextSSEBoundary(buffer);
+        if (!boundary) break;
+        dispatch(buffer.slice(0, boundary.index));
+        buffer = buffer.slice(boundary.index + boundary.length);
       }
     }
+    buffer += decoder.decode();
+    if (buffer.trim()) dispatch(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+  if (!completed) throw new ApiError("Chat stream ended before completion.", res.status, null);
+}
+
+function nextSSEBoundary(buffer: string): { index: number; length: number } | null {
+  const match = /\r\n\r\n|\n\n|\r\r/.exec(buffer);
+  return match ? { index: match.index, length: match[0].length } : null;
+}
+
+function parseSSEFrame(frame: string, status: number): ChatStreamEvent | null {
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const line of frame.split(/\r\n|\r|\n/)) {
+    if (!line || line.startsWith(":")) continue;
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? "" : line.slice(colon + 1);
+    if (value.startsWith(" ")) value = value.slice(1);
+    if (field === "event") event = value;
+    if (field === "data") dataLines.push(value);
+  }
+  if (!dataLines.length) return null;
+  try {
+    return { event, data: JSON.parse(dataLines.join("\n")) } as ChatStreamEvent;
+  } catch {
+    throw new ApiError("Chat stream contained malformed JSON.", status, null);
   }
 }

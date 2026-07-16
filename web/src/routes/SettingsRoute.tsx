@@ -1,7 +1,7 @@
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
 // routes: #/settings/device|model|prompts|diagnostics. Device/model/diagnostics
 // share one Save; prompt sets, memory, reset use their own immediate APIs.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, SettingsUpdate } from "../api/types";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
@@ -38,20 +38,30 @@ export function SettingsRoute() {
   const [clearKey, setClearKey] = useState(false);
   const [newElevenLabsKey, setNewElevenLabsKey] = useState("");
   const [clearElevenLabsKey, setClearElevenLabsKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const mounted = useRef(true);
+  const loadGeneration = useRef(0);
+  const savingRef = useRef(false);
   const locked = !backendOnline || readOnly;
 
   async function load() {
+    const generation = ++loadGeneration.current;
     try {
       const res = await api.getSettings();
+      if (!mounted.current || generation !== loadGeneration.current) return;
       setS(res.settings);
       setSaved(res.settings);
     } catch (e) {
-      show(msg(e), "error");
+      if (mounted.current && generation === loadGeneration.current) show(msg(e), "error");
     }
   }
   useEffect(() => {
+    mounted.current = true;
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      mounted.current = false;
+      loadGeneration.current += 1;
+    };
   }, []);
 
   function patchDevice(p: Partial<PublicSettings["device"]>) {
@@ -65,7 +75,11 @@ export function SettingsRoute() {
   }
 
   async function save() {
-    if (!s) return;
+    if (!s || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    const connectionKey = newKey.trim();
+    const elevenLabsKey = newElevenLabsKey.trim();
     const update: SettingsUpdate = {
       server: { port: s.server.port },
       device: {
@@ -74,7 +88,7 @@ export function SettingsRoute() {
         firmware_api_requirement: s.device.firmware_api_requirement,
         api_application_id_source: s.device.api_application_id_source,
         api_application_id_override: s.device.api_application_id_override ?? "",
-        ...(newKey.trim() ? { handy_connection_key: newKey } : {}),
+        ...(connectionKey ? { handy_connection_key: connectionKey } : {}),
       },
       motion: s.motion,
       llm: s.llm,
@@ -108,11 +122,11 @@ export function SettingsRoute() {
         neutts_backbone: s.voice?.neutts_backbone ?? "",
         neutts_sampling_mode: s.voice?.neutts_sampling_mode ?? "fixed",
         neutts_sampler_seed: s.voice?.neutts_sampler_seed ?? 3,
-        ...(newElevenLabsKey.trim() ? { elevenlabs_api_key: newElevenLabsKey } : {}),
-        clear_elevenlabs_key: clearElevenLabsKey,
+        ...(elevenLabsKey ? { elevenlabs_api_key: elevenLabsKey } : {}),
+        clear_elevenlabs_key: elevenLabsKey ? false : clearElevenLabsKey,
       },
       diagnostics: s.diagnostics,
-      clear_connection_key: clearKey,
+      clear_connection_key: connectionKey ? false : clearKey,
     };
     try {
       await api.saveSettings(update);
@@ -125,7 +139,20 @@ export function SettingsRoute() {
       await load();
     } catch (e) {
       show(msg(e), "error");
+    } finally {
+      savingRef.current = false;
+      if (mounted.current) setSaving(false);
     }
+  }
+
+  function applyReset(settings: PublicSettings) {
+    loadGeneration.current += 1;
+    setS(settings);
+    setSaved(settings);
+    setNewKey("");
+    setClearKey(false);
+    setNewElevenLabsKey("");
+    setClearElevenLabsKey(false);
   }
 
   if (!s) return (<><WorkspaceHead title="Settings" /><p className="form-status">Loading settings…</p></>);
@@ -175,8 +202,8 @@ export function SettingsRoute() {
               </div>
               <label className="field"><span className="label">API application ID source</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
               {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">Developer application ID</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
-              <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => setNewKey(e.target.value)} /></label>
-              <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(e) => setClearKey(e.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
+              <label className="field"><span className="label">Handy connection key {s.device.connection_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? "set (leave blank to keep)" : "Paste key"} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
+              <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>Clear connection key on save</span></label>
             </>}
             {owner === "intiface" && <>
               <label className="field"><span className="label">Intiface Central server</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
@@ -204,9 +231,9 @@ export function SettingsRoute() {
           dirty={JSON.stringify(s.voice) !== JSON.stringify(saved?.voice) || Boolean(newElevenLabsKey.trim()) || clearElevenLabsKey}
           patch={patchVoice}
           newKey={newElevenLabsKey}
-          setNewKey={setNewElevenLabsKey}
+          setNewKey={(value) => { setNewElevenLabsKey(value); if (value.trim()) setClearElevenLabsKey(false); }}
           clearKey={clearElevenLabsKey}
-          setClearKey={setClearElevenLabsKey}
+          setClearKey={(value) => { setClearElevenLabsKey(value); if (value) setNewElevenLabsKey(""); }}
         />}
 
         {section === "prompts" && (
@@ -225,12 +252,12 @@ export function SettingsRoute() {
             <h2 className="section-title">Diagnostics</h2>
             <label className="field"><span className="label">Diagnostics verbosity</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
             <div className="divider" />
-            <DiagnosticsPanel locked={locked} />
+            <DiagnosticsPanel locked={locked} onReset={applyReset} />
           </>
         )}
 
         <div className="row-actions settings-actions">
-          <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked}>Save settings</button>
+          <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? "Saving settings" : "Save settings"}</button>
           {locked && <span className="form-status">{backendOnline ? "Read-only client" : "Core offline"}</span>}
         </div>
       </section>

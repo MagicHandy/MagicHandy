@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | NeuTTS sampling controls build: 20,272,128 bytes plain and 14,220,288 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Frontend reliability build: 20,498,944 bytes plain and 14,386,176 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -94,8 +94,9 @@ Ranked by threat to the stated goals:
 
 1. **Emergency Stop delivery gaps.** Active, paused, repeated-idle, and
    no-engine paths attempt the selected owner and report failed delivery while
-   preserving local teardown. Backend loss still prevents Browser Bluetooth
-   delivery, and current Cloud/Browser retry hardware evidence remains open.
+   preserving local teardown. An already-connected Browser Bluetooth owner now
+   also invalidates fetched work and writes Stop directly during backend loss;
+   current Cloud/Browser retry and teardown hardware evidence remains open.
 2. **Cold start at the boundary.** Two warmed managed-NeuTTS-configured runs
    were below the target, but the 679 ms cold run was not. Client probe overhead
    and host caching are not separated; treat 500 ms as unconfirmed until Phase
@@ -104,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 543,288 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 105,861 gzip bytes, and the stripped
-   binary is 14,212,608 bytes. These
+   browser payload is 827,892 raw / 546,148 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 383,656 raw
+   / 108,721 gzip bytes, and the stripped binary is 14,386,176 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -116,6 +117,18 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-16** - Frontend reliability pass: Browser Bluetooth now preserves
+  semantic percentage units, invalidates stale command batches, and delivers a
+  direct Stop while an existing GATT session outlives the backend. TTS audio is
+  retrieved concurrently but played in order; capture Stop epochs, quick-setting
+  writes, settings reset/save, completion-driven polling, and chat SSE framing
+  have focused regression coverage. All 109 frontend tests, typecheck, build,
+  Go tests, vet, lint, and the pure-Go build pass. Desktop 1440x900 and mobile
+  390x844 checks found no horizontal overflow on chat, voice/model settings, or
+  the connection manager. HTML/CSS/JS grew 7,734 raw / 2,325 gzip bytes to
+  383,656 / 108,721; the complete embedded payload is 827,892 / 546,148. Plain
+  and stripped binaries are 20,498,944 / 14,386,176 bytes. The local race build
+  remains unavailable because this host has no C compiler; CI retains that gate.
 - **2026-07-15** - NeuTTS sampling controls: the validated fixed seed 3 remains
   the default, while one collapsed Advanced section offers another reproducible
   unsigned 32-bit seed, a New seed command, or explicit per-request Varied mode.

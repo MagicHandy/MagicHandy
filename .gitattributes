@@ -1,3 +1,9 @@
 *.go text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf
+web/**/*.html text eol=lf
+web/**/*.css text eol=lf
+web/**/*.js text eol=lf
+web/**/*.json text eol=lf
+web/**/*.ts text eol=lf
+web/**/*.tsx text eol=lf
