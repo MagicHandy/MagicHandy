@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-14. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-15. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -27,19 +27,24 @@ of Phase 16 and anchor its packaging story. The future Windows install binary
 remains a thin shell around the app's own first-run setup wizard (decision and
 design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
-decision.
+decision. The two remaining StrokeGPT-ReVibed parity milestones — the migration
+importer (Phase 15) and LLM-driven Autopilot — are not yet started.
 
-Recent maintenance in PRs #63-#67 has landed. It hardens connection and live-limit
-controls, bounds LLM output with honest provider-native reasoning control,
-separates app-managed Parakeet assets from custom paths, makes source updates
-survive merged/deleted feature upstreams, avoids reopening stale UI during
-updates, recovers malformed small-model structured responses, and replaces the
-Intiface queue-admission loop with deadline-driven asynchronous-ACK pacing.
-Source rebuilds Stop and terminate only their checkout-owned app tree before
-staged binary replacement, then verify the new server before opening the
-browser. Broader LLM quality/latency, the revised Intiface pacer on hardware,
-and real managed microphone acceptance are still measurements, not inferred
-completion claims.
+Recent work (PRs #63-#83) hardens connection and live-limit controls, bounds
+LLM output with honest provider-native reasoning control, makes source updates
+survive merged/deleted feature upstreams and avoid reopening stale UI, recovers
+malformed small-model structured responses, and replaces the Intiface
+queue-admission loop with deadline-driven asynchronous-ACK pacing. The largest
+recent thread is optional voice: slices 13.9 and 13.10 add a persistent
+CUDA/WGPU NeuTTS runner with settings-driven startup autoload and native
+(Python-free) WAV reference-code generation, and follow-ups (#81-#83) correct
+NeuTTS phonemization via eSpeak NG, stabilize output with a deterministic
+default seed plus an exact-text PCM cache, and add advanced seed controls.
+Voice stays optional and disabled by default, and its runtime is measured
+separately from the core (`docs/goal-scorecard.md`). Broader LLM quality/latency,
+the revised Intiface pacer on hardware, real managed microphone acceptance, and
+NeuTTS subjective cloning quality (R17) are still open measurements, not
+inferred completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider
