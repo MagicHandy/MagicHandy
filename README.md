@@ -96,7 +96,8 @@ Contributions are welcome, from people and AI coding tools alike.
 - [Getting Started guide](docs/getting-started.md)
 - [Goals and guardrails](docs/goals-and-guardrails.md) ·
   [Goal scorecard](docs/goal-scorecard.md)
-- [Installation automation plan](docs/installation-automation.md)
+- [Installation automation plan](docs/installation-automation.md) ·
+  [Setup wizard design](docs/setup-wizard-design.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md) ·
   [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Pattern library and import contracts](docs/pattern-library.md)

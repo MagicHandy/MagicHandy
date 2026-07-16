@@ -1346,7 +1346,10 @@ Implement, as slices:
   (Parakeet runner+model and source-built NeuTTS assets moved from `install.ps1` into
   checksummed, size/license-visible, progress-reporting API endpoints;
   ElevenLabs key entry) → finish. Every step skippable; every step is the
-  existing settings/API surface, never a second implementation
+  existing settings/API surface, never a second implementation. The user
+  decision tree, screen design, and branding slots are specified in
+  `docs/setup-wizard-design.md` (wireframe: `docs/setup-wizard-sketch.svg`);
+  the app icon and Inno banner slots there are inputs to slice 16.1
 - **16.3 — StrokeGPT-ReVibed porting step** *(undecided; gated on Phase 15)*:
   the wizard surfaces the Phase 15 importer — install-location detection,
   dry-run preview with the compatibility report, per-category opt-in,
