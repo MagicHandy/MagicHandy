@@ -1029,6 +1029,20 @@ func validateVoiceSettings(settings VoiceSettings) error {
 	if !oneOf(settings.ASRProvider, VoiceProviderNone, VoiceASRProviderParakeet, VoiceASRProviderOpenAICompat, VoiceProviderCustom) {
 		return fmt.Errorf("unknown ASR provider %q", settings.ASRProvider)
 	}
+	if settings.ASRProvider == VoiceASRProviderOpenAICompat {
+		if settings.ASRBaseURL == "" {
+			return errors.New("ASR base URL is required")
+		}
+		if err := validateLLMBaseURL("ASR", settings.ASRBaseURL); err != nil {
+			return err
+		}
+	}
+	if len(settings.ElevenLabsVoiceID) > 256 || len(settings.ElevenLabsModelID) > 256 || len(settings.ASRModel) > 256 {
+		return errors.New("voice and model identifiers must not exceed 256 bytes")
+	}
+	if len(settings.NeuTTSReferenceText) > 8<<10 {
+		return errors.New("NeuTTS reference transcript must not exceed 8 KiB")
+	}
 	if settings.ParakeetServerPort < 1 || settings.ParakeetServerPort > 65535 {
 		return errors.New("parakeet server port must be between 1 and 65535")
 	}

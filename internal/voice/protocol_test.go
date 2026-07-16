@@ -3,11 +3,69 @@ package voice
 import (
 	"encoding/binary"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/stubworker"
 )
+
+func TestConnBackpressuresWithoutDroppingAudioFrames(t *testing.T) {
+	c := &conn{
+		pending: make(map[string]*responseSink),
+		done:    make(chan struct{}),
+	}
+	responses, release, err := c.register("speech")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	const frameCount = 256
+	sent := make(chan struct{})
+	go func() {
+		defer close(sent)
+		for seq := range frameCount {
+			c.dispatch(Response{Type: ResponseAudioChunk, RequestID: "speech", Seq: seq})
+		}
+	}()
+
+	for seq := range frameCount {
+		select {
+		case response := <-responses:
+			if response.Seq != seq {
+				t.Fatalf("audio sequence = %d, want %d", response.Seq, seq)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out after %d frames; later audio was dropped", seq)
+		}
+	}
+	select {
+	case <-sent:
+	case <-time.After(5 * time.Second):
+		t.Fatal("audio dispatcher remained blocked after all frames were consumed")
+	}
+}
+
+func TestConnMalformedWorkerOutputFailsPendingRequest(t *testing.T) {
+	reader, writer := io.Pipe()
+	c := newConn(io.Discard, reader)
+	responses, release, err := c.register("speech")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	if _, err := io.WriteString(writer, "{not-json}\n"); err != nil {
+		t.Fatal(err)
+	}
+	response := <-responses
+	if response.Type != ResponseError || response.Error == nil ||
+		!strings.Contains(response.Error.Message, "decode voice worker response") {
+		t.Fatalf("malformed worker response = %+v", response)
+	}
+	_ = writer.Close()
+}
 
 func TestPCMPlaybackWrappingPreservesFinalSamples(t *testing.T) {
 	pcm := []byte("12345678")

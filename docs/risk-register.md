@@ -511,6 +511,19 @@ an explicit **Varied** mode with cache disabled. The UI states that cache loss;
 documentation records that randomization can reintroduce the measured quality
 variance. See `docs/neutts-quality-performance.md`.
 
+Status 2026-07-16: a cross-provider reliability audit closed several causes of
+silent or intermittent failure without changing the selected voice engines.
+The core no longer drops full audio buffers under worker bursts; it rejects
+malformed, out-of-order, mixed-format, empty, and oversized terminal output.
+Cancellation now stays attached to the exact worker session and a stale NeuTTS
+cancel cannot become the next request's response. Worker lifecycle changes are
+serialized and hard teardown owns the child process tree. Provider URL,
+response-size, staged-audio, reference-WAV, and encoder-output bounds are now
+enforced. Retained speech covers the accepted TTS workload and ASR history no
+longer evicts clips waiting for ordered playback. Subjective cloning quality,
+representative references, GPU/LLM coexistence, and network-denied runtime
+evidence remain open under this risk.
+
 ## R18: LAN And Mobile Secure-Context Requirements
 
 Level: Medium

@@ -15,6 +15,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ const (
 	managedProbeInterval = 100 * time.Millisecond
 	queueCapacity        = 8
 	maxAudioBytes        = 32 << 20 // refuse absurd uploads before they hit the server
+	maxTranscriptBytes   = 1 << 20
 )
 
 // Options configure one worker session. Exactly one server mode is used:
@@ -319,12 +321,13 @@ func (s *session) workLoop() {
 			s.transcribe(ctx, request)
 		}
 
+		s.mu.Lock()
 		if cancel != nil {
 			cancel()
-			s.mu.Lock()
 			delete(s.cancels, request.ID)
-			s.mu.Unlock()
 		}
+		delete(s.canceled, request.ID)
+		s.mu.Unlock()
 	}
 }
 
@@ -381,6 +384,10 @@ func (s *session) transcribe(ctx context.Context, request protocol.Request) {
 }
 
 func (s *session) loadAudio(request protocol.Request) ([]byte, error) {
+	format := strings.ToLower(strings.TrimSpace(request.AudioFormat))
+	if format != "" && format != "wav" && format != "webm" && format != "ogg" {
+		return nil, fmt.Errorf("audio format must be wav, webm, or ogg")
+	}
 	if request.AudioB64 != "" {
 		audio, err := base64.StdEncoding.DecodeString(request.AudioB64)
 		if err != nil {
@@ -392,16 +399,28 @@ func (s *session) loadAudio(request protocol.Request) ([]byte, error) {
 		return audio, nil
 	}
 	if request.AudioRef != "" {
-		info, err := os.Stat(request.AudioRef)
-		if err != nil || info.IsDir() {
+		// #nosec G304 -- audio_ref comes from the core over the private stdio
+		// protocol, same trust domain as the process itself.
+		file, err := os.Open(request.AudioRef)
+		if err != nil {
+			return nil, fmt.Errorf("audio_ref file is unavailable: %s", request.AudioRef)
+		}
+		defer func() { _ = file.Close() }()
+		info, err := file.Stat()
+		if err != nil || !info.Mode().IsRegular() {
 			return nil, fmt.Errorf("audio_ref file is unavailable: %s", request.AudioRef)
 		}
 		if info.Size() > maxAudioBytes {
 			return nil, fmt.Errorf("audio_ref file exceeds %d MiB", maxAudioBytes>>20)
 		}
-		// #nosec G304 -- audio_ref comes from the core over the private
-		// stdio protocol, same trust domain as the process itself.
-		return os.ReadFile(request.AudioRef)
+		audio, err := io.ReadAll(io.LimitReader(file, maxAudioBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("read audio_ref: %w", err)
+		}
+		if len(audio) > maxAudioBytes {
+			return nil, fmt.Errorf("audio_ref file exceeds %d MiB", maxAudioBytes>>20)
+		}
+		return audio, nil
 	}
 	return nil, nil
 }
@@ -443,15 +462,22 @@ func (s *session) callServer(ctx context.Context, audio []byte, format string) (
 		return "", fmt.Errorf("ASR server request failed: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode >= 400 {
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 		return "", fmt.Errorf("ASR server returned status %d: %s", response.StatusCode, detail)
 	}
 
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxTranscriptBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read transcription response: %w", err)
+	}
+	if len(data) > maxTranscriptBytes {
+		return "", fmt.Errorf("transcription response exceeds %d MiB", maxTranscriptBytes>>20)
+	}
 	var payload struct {
 		Text string `json:"text"`
 	}
-	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(data, &payload); err != nil {
 		return "", fmt.Errorf("decode transcription response: %w", err)
 	}
 	return payload.Text, nil
@@ -572,6 +598,16 @@ func validateOptions(options Options) error {
 	}
 	if strings.TrimSpace(options.BaseURL) == "" {
 		return fmt.Errorf("no ASR server configured; pass -base-url or -server-path with -server-model")
+	}
+	parsed, err := url.Parse(options.BaseURL)
+	if err != nil || parsed.Host == "" || !parsed.IsAbs() {
+		return fmt.Errorf("ASR base URL must be an absolute HTTP URL with a host")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("ASR base URL scheme must be http or https")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+		return fmt.Errorf("ASR base URL must not contain credentials, a query, or a fragment")
 	}
 	return nil
 }

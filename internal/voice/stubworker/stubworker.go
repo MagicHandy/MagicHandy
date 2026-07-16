@@ -1,13 +1,12 @@
 // Package stubworker implements the ADR 0003 worker protocol with no models
 // attached. It backs cmd/voice-stub-worker and the protocol tests: TTS
-// returns a few tiny silent WAV chunks, ASR returns a canned transcript, and
+// returns a few tiny silent PCM chunks, ASR returns a canned transcript, and
 // both honor load state, delays, cancellation, and crash injection.
 package stubworker
 
 import (
 	"bufio"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -216,11 +215,14 @@ func (s *session) workLoop() {
 		default:
 			s.transcribe(request)
 		}
+		s.mu.Lock()
+		delete(s.cancels, request.ID)
+		s.mu.Unlock()
 	}
 }
 
 func (s *session) speak(request protocol.Request) {
-	chunk := base64.StdEncoding.EncodeToString(silentWAV())
+	chunk := base64.StdEncoding.EncodeToString(silentPCM())
 	stepDelay := time.Duration(request.DelayMillis) * time.Millisecond / speakChunks
 	for seq := 0; seq < speakChunks; seq++ {
 		if s.waitOrCanceled(request.ID, stepDelay) {
@@ -232,7 +234,7 @@ func (s *session) speak(request protocol.Request) {
 			RequestID:   request.ID,
 			Seq:         seq,
 			AudioB64:    chunk,
-			AudioFormat: "wav",
+			AudioFormat: "pcm_s16le_24000",
 		})
 	}
 	s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: request.ID})
@@ -340,24 +342,9 @@ func (s *session) send(response protocol.Response) {
 	_, _ = s.writer.Write(data)
 }
 
-// silentWAV returns a minimal valid mono 16-bit 8 kHz WAV of silence, small
-// enough to inline in a protocol frame.
-func silentWAV() []byte {
+// silentPCM returns a small even-length mono 16-bit PCM segment. The core
+// concatenates chunks and adds one WAV header at the playback boundary.
+func silentPCM() []byte {
 	const samples = 16
-	data := make([]byte, 0, 44+samples*2)
-	data = append(data, "RIFF"...)
-	data = binary.LittleEndian.AppendUint32(data, 36+samples*2)
-	data = append(data, "WAVE"...)
-	data = append(data, "fmt "...)
-	data = binary.LittleEndian.AppendUint32(data, 16)
-	data = binary.LittleEndian.AppendUint16(data, 1) // PCM
-	data = binary.LittleEndian.AppendUint16(data, 1) // mono
-	data = binary.LittleEndian.AppendUint32(data, 8000)
-	data = binary.LittleEndian.AppendUint32(data, 8000*2)
-	data = binary.LittleEndian.AppendUint16(data, 2)
-	data = binary.LittleEndian.AppendUint16(data, 16)
-	data = append(data, "data"...)
-	data = binary.LittleEndian.AppendUint32(data, samples*2)
-	data = append(data, make([]byte, samples*2)...)
-	return data
+	return make([]byte, samples*2)
 }

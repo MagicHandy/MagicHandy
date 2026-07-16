@@ -242,6 +242,13 @@ func TestValidWAVRequiresRealChunks(t *testing.T) {
 	}
 }
 
+func TestValidWAVRejectsDataOutsideRIFFContainer(t *testing.T) {
+	data := append(fixtureWAV(), []byte("hidden trailing data")...)
+	if validWAV(data) {
+		t.Fatal("WAV accepted bytes outside its declared RIFF container")
+	}
+}
+
 func writeTorchFixture(t *testing.T, path string, values []int32) {
 	t.Helper()
 	pickle, err := hex.DecodeString(officialTensorPickleHex)

@@ -22,8 +22,10 @@ const (
 	persistentFrameDone     = byte(3)
 	persistentFrameError    = byte(4)
 	persistentFrameCanceled = byte(5)
-	persistentFrameMax      = maxPCMBytes
-	persistentStopGrace     = 500 * time.Millisecond
+	// A raw frame must stay small enough that its base64-wrapped NDJSON relay
+	// remains below the core protocol's 1 MiB line limit.
+	persistentFrameMax  = 512 << 10
+	persistentStopGrace = 500 * time.Millisecond
 )
 
 var persistentFrameMagic = [4]byte{'M', 'H', 'T', 'S'}
@@ -196,13 +198,7 @@ func (r *persistentRunner) Speak(ctx context.Context, id, text string, onAudio f
 
 	requestDone := make(chan struct{})
 	defer close(requestDone)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = r.send(persistentCommand{Type: "cancel", ID: id})
-		case <-requestDone:
-		}
-	}()
+	go r.forwardCancellation(ctx, requestDone, id)
 
 	var callbackErr error
 	for {
@@ -240,6 +236,24 @@ func (r *persistentRunner) Speak(ctx context.Context, id, text string, onAudio f
 		default:
 			return fmt.Errorf("persistent NeuTTS runner returned unknown frame %d", frame.kind)
 		}
+	}
+}
+
+// forwardCancellation translates caller cancellation into the runner's
+// protocol. requestDone wins even when both channels are already closed: the
+// session cancels its context during normal cleanup, and sending a late cancel
+// after a successful response would be consumed as the next request's reply.
+func (r *persistentRunner) forwardCancellation(ctx context.Context, requestDone <-chan struct{}, id string) {
+	select {
+	case <-requestDone:
+		return
+	case <-ctx.Done():
+		select {
+		case <-requestDone:
+			return
+		default:
+		}
+		_ = r.send(persistentCommand{Type: "cancel", ID: id})
 	}
 }
 

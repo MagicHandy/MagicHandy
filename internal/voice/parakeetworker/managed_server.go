@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // DefaultServerPort is the loopback port used by a managed parakeet-server
@@ -17,6 +18,7 @@ import (
 const DefaultServerPort = 8990
 
 const managedServerStderrBytes = 4096
+const managedServerStopTimeout = 2 * time.Second
 
 // managedServer owns only the parakeet-server process it starts. It never
 // reaches into an existing server, which keeps external and managed modes
@@ -56,10 +58,10 @@ func (s *managedServer) Start() error {
 	if s.runningLocked() {
 		return nil
 	}
-	if info, err := os.Stat(s.path); err != nil || info.IsDir() {
+	if info, err := os.Stat(s.path); err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("parakeet-server is unavailable: %s", s.path)
 	}
-	if info, err := os.Stat(s.model); err != nil || info.IsDir() {
+	if info, err := os.Stat(s.model); err != nil || !info.Mode().IsRegular() {
 		return fmt.Errorf("parakeet GGUF model is unavailable: %s", s.model)
 	}
 	if s.port < 1 || s.port > 65535 {
@@ -116,7 +118,11 @@ func (s *managedServer) Stop() error {
 		}
 	}
 	if done != nil {
-		<-done
+		select {
+		case <-done:
+		case <-time.After(managedServerStopTimeout):
+			return errors.New("parakeet-server did not exit after termination")
+		}
 	}
 	return nil
 }

@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -26,7 +27,7 @@ const (
 	maxPickleBytes     = 64 << 10
 	maxReferenceTokens = 100_000
 	maxReferenceWAV    = 32 << 20
-	maxTranscriptBytes = 32 << 10
+	maxTranscriptBytes = 8 << 10
 	referenceIDLength  = 24
 )
 
@@ -129,6 +130,13 @@ func Prepare(dataDir string, request Request) (Result, error) {
 // Generate encodes a local WAV with the installer-managed, non-Python worker,
 // then parses and canonicalizes its output before publishing a managed bundle.
 func Generate(ctx context.Context, dataDir string, request GenerateRequest, encoder Encoder) (Result, error) {
+	transcript := strings.TrimSpace(request.Transcript)
+	if transcript == "" {
+		return Result{}, errors.New("the exact reference transcript is required")
+	}
+	if len(transcript) > maxTranscriptBytes {
+		return Result{}, fmt.Errorf("reference transcript must not exceed %d KiB", maxTranscriptBytes>>10)
+	}
 	root, err := managedReferenceRoot(dataDir)
 	if err != nil {
 		return Result{}, err
@@ -144,14 +152,6 @@ func Generate(ctx context.Context, dataDir string, request GenerateRequest, enco
 	if !validWAV(wav) {
 		return Result{}, errors.New("reference audio must be a valid RIFF/WAVE file")
 	}
-	transcript := strings.TrimSpace(request.Transcript)
-	if transcript == "" {
-		return Result{}, errors.New("the exact reference transcript is required")
-	}
-	if len(transcript) > maxTranscriptBytes {
-		return Result{}, fmt.Errorf("reference transcript must not exceed %d KiB", maxTranscriptBytes>>10)
-	}
-
 	temporary, err := os.MkdirTemp(root, ".encode-")
 	if err != nil {
 		return Result{}, fmt.Errorf("create reference encoding workspace: %w", err)
@@ -209,7 +209,10 @@ func runEncoder(ctx context.Context, encoder Encoder, wavPath, outputPath string
 		"--output", outputPath,
 	)
 	command.Dir = filepath.Dir(executable)
-	output, runErr := command.CombinedOutput()
+	output := &outputTail{limit: 1024}
+	command.Stdout = output
+	command.Stderr = output
+	runErr := command.Run()
 	if runErr == nil {
 		return nil
 	}
@@ -217,11 +220,7 @@ func runEncoder(ctx context.Context, encoder Encoder, wavPath, outputPath string
 		return errors.New("NeuCodec reference encoding timed out")
 	}
 	message := "NeuCodec reference encoding failed"
-	if detail := strings.TrimSpace(string(output)); detail != "" {
-		const maxDetail = 1024
-		if len(detail) > maxDetail {
-			detail = detail[:maxDetail]
-		}
+	if detail := output.String(); detail != "" {
 		message += ": " + detail
 	}
 	return errors.New(message)
@@ -315,7 +314,7 @@ func AudioPath(dataDir, id string) (string, error) {
 		return "", errors.New("MagicHandy data directory is invalid")
 	}
 	path := filepath.Join(dataDir, "voice", "neutts", "references", id+".wav")
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", os.ErrNotExist
 	}
@@ -634,7 +633,7 @@ func validWAV(data []byte) bool {
 		return false
 	}
 	declaredSize := uint64(binary.LittleEndian.Uint32(data[4:8])) + 8
-	if declaredSize < 44 || declaredSize > uint64(len(data)) {
+	if declaredSize < 44 || declaredSize != uint64(len(data)) {
 		return false
 	}
 	var foundFormat, foundData bool
@@ -670,6 +669,11 @@ func adjacentTranscript(sourcePath string) string {
 }
 
 func writeManagedFile(path string, data []byte) (bool, error) {
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		return false, errors.New("managed reference path is not a regular file")
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
 	if existing, err := os.ReadFile(path); err == nil { // #nosec G304 -- path is a SHA-addressed child of the app-managed reference root.
 		if bytes.Equal(existing, data) {
 			return true, nil
@@ -704,4 +708,27 @@ func writeManagedFile(path string, data []byte) (bool, error) {
 		return false, err
 	}
 	return false, nil
+}
+
+type outputTail struct {
+	mu    sync.Mutex
+	limit int
+	data  []byte
+}
+
+func (b *outputTail) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	written := len(data)
+	b.data = append(b.data, data...)
+	if len(b.data) > b.limit {
+		b.data = b.data[len(b.data)-b.limit:]
+	}
+	return written, nil
+}
+
+func (b *outputTail) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return strings.TrimSpace(string(b.data))
 }

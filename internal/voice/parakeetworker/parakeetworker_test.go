@@ -27,6 +27,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestValidateOptionsRejectsUnsafeExternalURL(t *testing.T) {
+	for _, baseURL := range []string{"file:///tmp/asr", "http://user:password@127.0.0.1:8990"} {
+		if err := validateOptions(Options{BaseURL: baseURL}); err == nil {
+			t.Fatalf("unsafe ASR URL %q was accepted", baseURL)
+		}
+	}
+}
+
 // runManagedServerHelper accepts the same launcher arguments as
 // parakeet-server but implements only the endpoints needed to prove that the
 // worker owns start, readiness, and teardown. It runs in a child test process.

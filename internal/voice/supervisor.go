@@ -41,6 +41,18 @@ type WorkerConfig struct {
 	JobTimeout time.Duration
 }
 
+func (c WorkerConfig) clone() WorkerConfig {
+	c.Args = append([]string(nil), c.Args...)
+	if c.Env != nil {
+		environment := make(map[string]string, len(c.Env))
+		for key, value := range c.Env {
+			environment[key] = value
+		}
+		c.Env = environment
+	}
+	return c
+}
+
 func (c WorkerConfig) equal(other WorkerConfig) bool {
 	if c.Enabled != other.Enabled ||
 		c.Command != other.Command ||
@@ -91,7 +103,8 @@ const (
 // request queue, crash detection, and status. All methods are safe for
 // concurrent use.
 type Supervisor struct {
-	role Role
+	role        Role
+	lifecycleMu sync.Mutex
 
 	mu         sync.Mutex
 	config     WorkerConfig
@@ -121,6 +134,9 @@ func NewSupervisor(role Role) *Supervisor {
 // SetConfig applies settings. A config change stops a running worker so the
 // next start uses the new command; it never starts one implicitly.
 func (s *Supervisor) SetConfig(config WorkerConfig) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	config = config.clone()
 	config.Command = strings.TrimSpace(config.Command)
 
 	s.mu.Lock()
@@ -128,14 +144,19 @@ func (s *Supervisor) SetConfig(config WorkerConfig) {
 		s.mu.Unlock()
 		return
 	}
-	s.config = config
 	running := s.process != nil
 	s.mu.Unlock()
 
 	if running {
-		_ = s.Stop(context.Background())
+		if err := s.stop(context.Background()); err != nil {
+			s.mu.Lock()
+			s.lastError = "apply voice worker configuration: " + err.Error()
+			s.mu.Unlock()
+			return
+		}
 	}
 	s.mu.Lock()
+	s.config = config
 	if s.process == nil {
 		s.state = s.idleStateLocked()
 	}
@@ -159,6 +180,12 @@ func (s *Supervisor) idleStateLocked() WorkerState {
 // an error if voice is disabled or no command is configured; a failed
 // handshake tears the process back down.
 func (s *Supervisor) Start(ctx context.Context) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.start(ctx)
+}
+
+func (s *Supervisor) start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.process != nil {
 		s.mu.Unlock()
@@ -202,6 +229,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	s.mu.Unlock()
 
 	go s.waitForExit(command, workerConn, exited)
+	go s.monitorConnection(command, workerConn, exited)
 	go s.dispatchLoop(workerConn, queue)
 
 	hello, err := s.handshake(ctx, workerConn)
@@ -213,7 +241,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		select {
 		case <-exited:
 		case <-time.After(500 * time.Millisecond):
-			_ = s.Stop(context.Background())
+			_ = s.stop(context.Background())
 		}
 		s.mu.Lock()
 		if s.lastError == "" {
@@ -239,6 +267,7 @@ func (s *Supervisor) spawn(stderr *tailBuffer) (*exec.Cmd, *conn, error) {
 	// is passed to exec without shell expansion (same trust model as the
 	// managed llama.cpp runner path).
 	command := exec.Command(s.config.Command, s.config.Args...)
+	configureWorkerProcess(command)
 	command.Stderr = stderr
 	if len(s.config.Env) > 0 {
 		command.Env = os.Environ()
@@ -271,12 +300,18 @@ func (s *Supervisor) handshake(ctx context.Context, workerConn *conn) (Response,
 	if response.Type == ResponseError {
 		return Response{}, fmt.Errorf("%s worker handshake: %w", s.role, response.Error)
 	}
+	if response.Type != ResponseHello {
+		return Response{}, fmt.Errorf("%s worker returned %q to hello, want %q", s.role, response.Type, ResponseHello)
+	}
 	if response.ProtocolVersion != ProtocolVersion {
 		return Response{}, fmt.Errorf("%s worker speaks protocol %d, core requires %d",
 			s.role, response.ProtocolVersion, ProtocolVersion)
 	}
-	if response.Role != "" && response.Role != s.role {
+	if response.Role != s.role {
 		return Response{}, fmt.Errorf("worker reported role %q, expected %q", response.Role, s.role)
+	}
+	if strings.TrimSpace(response.Provider) == "" {
+		return Response{}, fmt.Errorf("%s worker hello omitted its provider name", s.role)
 	}
 	return response, nil
 }
@@ -284,6 +319,12 @@ func (s *Supervisor) handshake(ctx context.Context, workerConn *conn) (Response,
 // Stop shuts the worker down gracefully: shutdown frame, a short grace
 // window, then a hard kill. Stopping an idle supervisor is a no-op.
 func (s *Supervisor) Stop(ctx context.Context) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.stop(ctx)
+}
+
+func (s *Supervisor) stop(ctx context.Context) error {
 	s.mu.Lock()
 	process := s.process
 	workerConn := s.conn
@@ -301,29 +342,52 @@ func (s *Supervisor) Stop(ctx context.Context) error {
 	select {
 	case <-exited:
 	case <-time.After(shutdownGrace):
-		if process.Process != nil {
-			_ = process.Process.Kill()
-		}
-		select {
-		case <-exited:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		killErr := killWorkerProcess(process)
+		return errors.Join(killErr, waitForWorkerExit(exited))
 	case <-ctx.Done():
-		if process.Process != nil {
-			_ = process.Process.Kill()
-		}
-		<-exited
+		killErr := killWorkerProcess(process)
+		return errors.Join(ctx.Err(), killErr, waitForWorkerExit(exited))
 	}
 	return nil
 }
 
+func waitForWorkerExit(exited <-chan struct{}) error {
+	select {
+	case <-exited:
+		return nil
+	case <-time.After(shutdownGrace):
+		return errors.New("voice worker did not exit after termination")
+	}
+}
+
 // Restart is stop-then-start with the current configuration.
 func (s *Supervisor) Restart(ctx context.Context) error {
-	if err := s.Stop(ctx); err != nil {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if err := s.stop(ctx); err != nil {
 		return err
 	}
-	return s.Start(ctx)
+	return s.start(ctx)
+}
+
+func (s *Supervisor) monitorConnection(command *exec.Cmd, workerConn *conn, exited <-chan struct{}) {
+	select {
+	case <-exited:
+		return
+	case <-workerConn.closedChan():
+	}
+
+	s.mu.Lock()
+	shouldTerminate := s.conn == workerConn && !s.stopping
+	if shouldTerminate {
+		if err := workerConn.failure(); err != nil {
+			s.lastError = err.Error()
+		}
+	}
+	s.mu.Unlock()
+	if shouldTerminate {
+		_ = killWorkerProcess(command)
+	}
 }
 
 // waitForExit is the crash detector: it reaps the process, fails the
@@ -341,12 +405,15 @@ func (s *Supervisor) waitForExit(command *exec.Cmd, workerConn *conn, exited cha
 		s.queue = nil
 		s.activeID = ""
 		s.queued = 0
+		s.lastHealth = Response{}
 		if s.stopping {
 			s.state = s.idleStateLocked()
 		} else {
 			s.state = StateCrashed
 			reason := "voice worker exited unexpectedly"
-			if err != nil {
+			if connectionErr := workerConn.failure(); connectionErr != nil {
+				reason = connectionErr.Error()
+			} else if err != nil {
 				reason = fmt.Sprintf("voice worker exited unexpectedly: %v", err)
 			}
 			if tail := s.stderr.String(); tail != "" {
@@ -415,16 +482,21 @@ func (s *Supervisor) Health(ctx context.Context) (Response, error) {
 	}
 	response, err := s.roundTrip(ctx, workerConn, Request{Type: RequestHealth}, controlTimeout)
 	if err != nil {
+		s.recordControlFailure(err)
 		return Response{}, err
 	}
 	if response.Type == ResponseError {
+		s.recordControlFailure(response.Error)
 		return Response{}, response.Error
 	}
 	if response.Type != ResponseHealth {
-		return Response{}, fmt.Errorf("%s worker returned %q to health, want %q", s.role, response.Type, ResponseHealth)
+		err := fmt.Errorf("%s worker returned %q to health, want %q", s.role, response.Type, ResponseHealth)
+		s.recordControlFailure(err)
+		return Response{}, err
 	}
 	s.mu.Lock()
 	s.lastHealth = response
+	s.lastError = ""
 	s.mu.Unlock()
 	return response, nil
 }
@@ -449,9 +521,11 @@ func (s *Supervisor) SetModelLoaded(ctx context.Context, loaded bool) (Response,
 	}
 	response, err := s.roundTrip(ctx, workerConn, Request{Type: requestType}, timeout)
 	if err != nil {
+		s.recordControlFailure(err)
 		return Response{}, err
 	}
 	if response.Type == ResponseError {
+		s.recordControlFailure(response.Error)
 		return Response{}, response.Error
 	}
 	wantState := ModelStateUnloaded
@@ -459,12 +533,25 @@ func (s *Supervisor) SetModelLoaded(ctx context.Context, loaded bool) (Response,
 		wantState = ModelStateReady
 	}
 	if response.Type != ResponseHealth || response.ModelState != wantState {
-		return Response{}, fmt.Errorf("%s worker returned %q with model state %q, want health/%s", s.role, response.Type, response.ModelState, wantState)
+		err := fmt.Errorf("%s worker returned %q with model state %q, want health/%s", s.role, response.Type, response.ModelState, wantState)
+		s.recordControlFailure(err)
+		return Response{}, err
 	}
 	s.mu.Lock()
 	s.lastHealth = response
+	s.lastError = ""
 	s.mu.Unlock()
 	return response, nil
+}
+
+func (s *Supervisor) recordControlFailure(err error) {
+	if err == nil {
+		return
+	}
+	s.mu.Lock()
+	s.lastHealth = Response{}
+	s.lastError = err.Error()
+	s.mu.Unlock()
 }
 
 // Status reports the current lifecycle snapshot without touching the worker.
@@ -490,7 +577,7 @@ func (s *Supervisor) Status() WorkerStatus {
 		status.Provider = s.hello.Provider
 		status.ProviderVersion = s.hello.ProviderVersion
 		status.ProtocolVersion = s.hello.ProtocolVersion
-		status.Capabilities = s.hello.Capabilities
+		status.Capabilities = append([]string(nil), s.hello.Capabilities...)
 	}
 	if !s.startedAt.IsZero() && s.process != nil {
 		status.StartedAt = s.startedAt.Format(time.RFC3339)

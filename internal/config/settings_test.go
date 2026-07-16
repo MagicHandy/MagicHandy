@@ -587,6 +587,20 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	}
 }
 
+func TestVoiceSettingsRejectInvalidExternalASRURL(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Voice.ASRProvider = VoiceASRProviderOpenAICompat
+	settings.Voice.ASRBaseURL = "file:///tmp/asr"
+	if _, err := NormalizeSettings(settings); err == nil || !strings.Contains(err.Error(), "ASR base URL") {
+		t.Fatalf("invalid ASR URL error = %v", err)
+	}
+
+	settings.Voice.ASRBaseURL = "http://user:password@127.0.0.1:8990"
+	if _, err := NormalizeSettings(settings); err == nil || !strings.Contains(err.Error(), "userinfo") {
+		t.Fatalf("ASR URL with credentials error = %v", err)
+	}
+}
+
 func TestLLMSettingsRejectUnsafeBaseURLs(t *testing.T) {
 	for _, baseURL := range []string{
 		"file:///tmp/ollama",
