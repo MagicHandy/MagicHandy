@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { HostPathField } from "./HostPathField";
@@ -44,9 +44,9 @@ interface Props {
   dirty: boolean;
   patch: (next: Partial<PublicSettings["voice"]>) => void;
   newKey: string;
-  setNewKey: Dispatch<SetStateAction<string>>;
+  setNewKey: (value: string) => void;
   clearKey: boolean;
-  setClearKey: Dispatch<SetStateAction<boolean>>;
+  setClearKey: (value: boolean) => void;
 }
 
 export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, setNewKey, clearKey, setClearKey }: Props) {
@@ -110,7 +110,7 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       <label className="field"><span className="label">Provider</span>{providerSelect(voice.tts_provider, s.options.tts_providers, (tts_provider) => patch({ tts_provider }))}</label>
       {voice.tts_provider === "elevenlabs" && <>
         <label className="field"><span className="label">API key {voice.elevenlabs_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={voice.elevenlabs_key_set ? "set (leave blank to keep)" : "Paste API key"} value={newKey} disabled={locked} onChange={(event) => setNewKey(event.target.value)} /></label>
-        <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked} onChange={(event) => setClearKey(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear API key on save</span></label>
+        <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(event) => setClearKey(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear API key on save</span></label>
         <label className="field"><span className="label">Voice ID</span><input type="text" value={voice.elevenlabs_voice_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_voice_id: event.target.value })} /></label>
         <label className="field"><span className="label">Model ID</span><input type="text" value={voice.elevenlabs_model_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_model_id: event.target.value })} /></label>
       </>}
@@ -205,28 +205,44 @@ function useVoiceRuntimeStatus() {
   const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
   const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
   const [modules, setModules] = useState<Record<string, VoiceModuleStatus>>({});
-  const alive = useRef(false);
+  const mounted = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
+    if (inFlight.current) return inFlight.current;
+    const request = (async () => {
+      try {
+        const response = await api.voiceStatus();
+        if (!mounted.current) return;
+        setWorkers(response.voice.workers ?? {});
+        setModules(response.voice.modules ?? {});
+        setRequests(response.requests ?? []);
+      } catch {
+        // Core-offline state is rendered by the persistent shell. Keep the last
+        // coherent snapshot until the status endpoint recovers.
+      }
+    })();
+    inFlight.current = request;
     try {
-      const response = await api.voiceStatus();
-      if (!alive.current) return;
-      setWorkers(response.voice.workers ?? {});
-      setModules(response.voice.modules ?? {});
-      setRequests(response.requests ?? []);
-    } catch {
-      // Core-offline state is rendered by the persistent shell. Keep the last
-      // coherent snapshot until the status endpoint recovers.
+      await request;
+    } finally {
+      if (inFlight.current === request) inFlight.current = null;
     }
   }, []);
 
   useEffect(() => {
-    alive.current = true;
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 3000);
+    mounted.current = true;
+    let canceled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      await refresh();
+      if (!canceled) timer = window.setTimeout(() => void poll(), 3000);
+    };
+    void poll();
     return () => {
-      alive.current = false;
-      window.clearInterval(timer);
+      canceled = true;
+      mounted.current = false;
+      window.clearTimeout(timer);
     };
   }, [refresh]);
 

@@ -92,9 +92,7 @@ function lengthField(field: number, bytes: Uint8Array): Uint8Array {
 
 function strokePercentValue(value: unknown, fallback: number): number {
   const number = Number(value);
-  const safe = Number.isFinite(number) ? number : fallback;
-  const percent = safe >= 0 && safe <= 1 ? safe * 100 : safe;
-  return Math.max(0, Math.min(100, percent));
+  return Math.max(0, Math.min(100, Number.isFinite(number) ? number : fallback));
 }
 
 function bodyNumber(body: Record<string, unknown>, key: string, fallback: number): number {
@@ -159,6 +157,10 @@ function readVarint(bytes: Uint8Array, offset: number): { value: bigint; offset:
   let index = offset;
   while (index < bytes.length) {
     const byte = BigInt(bytes[index]);
+    const byteIndex = index - offset;
+    if (byteIndex >= 10 || (byteIndex === 9 && byte > 1n)) {
+      throw new Error("Protobuf varint exceeds 64 bits");
+    }
     value |= (byte & 0x7fn) << shift;
     index += 1;
     if ((byte & 0x80n) === 0n) return { value, offset: index };
@@ -191,6 +193,7 @@ function parseFields(bytes: Uint8Array): Field[] {
     offset = key.offset;
     const field = Number(key.value >> 3n);
     const wire = Number(key.value & 0x7n);
+    if (field === 0) throw new Error("Invalid protobuf field number 0");
     let value: Field["value"];
     if (wire === WIRE_VARINT) {
       const parsed = readVarint(bytes, offset);
@@ -200,9 +203,11 @@ function parseFields(bytes: Uint8Array): Field[] {
       const length = readVarint(bytes, offset);
       offset = length.offset;
       const size = toNumber(length.value);
+      if (size > bytes.length - offset) throw new Error("Truncated length-delimited protobuf field");
       value = bytes.slice(offset, offset + size);
       offset += size;
     } else if (wire === WIRE_FIXED32) {
+      if (bytes.length - offset < 4) throw new Error("Truncated fixed32 protobuf field");
       value = view.getFloat32(offset, true);
       offset += 4;
     } else {

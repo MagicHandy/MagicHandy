@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type {
   LLMModelImport,
@@ -52,6 +52,10 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   const [busy, setBusy] = useState("");
   const [confirmRemove, setConfirmRemove] = useState("");
   const [runtimeBackend, setRuntimeBackend] = useState<"auto" | "cpu" | "cuda">("auto");
+  const mounted = useRef(true);
+  const managerRefresh = useRef<Promise<void> | null>(null);
+  const statusGeneration = useRef(0);
+  const ollamaGeneration = useRef(0);
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
   const ollamaPath = settings.ollama_models_path ?? "";
@@ -66,18 +70,32 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).sort((a, b) => a - b);
 
   const refreshManager = useCallback(async () => {
+    if (managerRefresh.current) return managerRefresh.current;
+    const request = (async () => {
+      try {
+        const next = await api.llmModels();
+        if (!mounted.current) return;
+        setManager(next);
+        setManagerMessage("");
+      } catch (error) {
+        if (mounted.current) setManagerMessage(message(error));
+      }
+    })();
+    managerRefresh.current = request;
     try {
-      setManager(await api.llmModels());
-      setManagerMessage("");
-    } catch (error) {
-      setManagerMessage(message(error));
+      await request;
+    } finally {
+      if (managerRefresh.current === request) managerRefresh.current = null;
     }
-  }, [show]);
+  }, []);
 
   const refreshStatus = useCallback(async () => {
+    const generation = ++statusGeneration.current;
     try {
-      setStatus(await api.llmStatus());
+      const next = await api.llmStatus();
+      if (mounted.current && generation === statusGeneration.current) setStatus(next);
     } catch (error) {
+      if (!mounted.current || generation !== statusGeneration.current) return;
       setStatus({
         provider: statusProvider,
         base_url: "",
@@ -89,14 +107,26 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   }, [statusModel, statusProvider]);
 
   const refreshOllamaModels = useCallback(async () => {
+    const generation = ++ollamaGeneration.current;
     try {
       const response = await api.ollamaModels();
+      if (!mounted.current || generation !== ollamaGeneration.current) return;
       setOllamaModels(response.models);
       setOllamaMessage(response.message ?? "");
     } catch (error) {
+      if (!mounted.current || generation !== ollamaGeneration.current) return;
       setOllamaModels([]);
       setOllamaMessage(message(error));
     }
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      statusGeneration.current += 1;
+      ollamaGeneration.current += 1;
+    };
   }, []);
 
   useEffect(() => {
@@ -110,8 +140,17 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
 
   useEffect(() => {
     if (!activeImports && !runtimeBuildActive) return undefined;
-    const timer = window.setInterval(() => void refreshManager(), 500);
-    return () => window.clearInterval(timer);
+    let canceled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      await refreshManager();
+      if (!canceled) timer = window.setTimeout(() => void poll(), 500);
+    };
+    timer = window.setTimeout(() => void poll(), 500);
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
   }, [activeImports, refreshManager, runtimeBuildActive]);
 
   useEffect(() => {
@@ -179,7 +218,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   async function importOllama(candidate: OllamaModelCandidate) {
     setBusy(candidate.id);
     try {
-      const response = await api.importOllamaModel(scanPath, candidate.id);
+      const response = await api.importOllamaModel(scan?.path || scanPath, candidate.id);
       mergeImport(response.import);
       show(`Import started for ${candidate.name}.`);
     } catch (error) {
@@ -374,7 +413,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       {showOllamaImport && (
         <div className="ollama-import" aria-label="Import models from Ollama">
           <div className="model-import-path">
-            <HostPathField label="Ollama models path" kind="directory" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(ollama_models_path) => patch({ ollama_models_path })} />
+            <HostPathField label="Ollama models path" kind="directory" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(ollama_models_path) => { setScan(null); patch({ ollama_models_path }); }} />
             <button type="button" className="btn btn-primary" disabled={locked || scanning} onClick={() => void scanOllama()}>{scanning ? "Scanning..." : "Scan library"}</button>
           </div>
           {scan && <OllamaCandidates candidates={scan.candidates} managed={manager?.models ?? []} locked={locked} busy={busy} onImport={importOllama} />}

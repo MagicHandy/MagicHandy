@@ -104,6 +104,12 @@ Still required for current-build evidence:
   is 375,922 raw / 106,396 gzip bytes. Plain/stripped `CGO_ENABLED=0` binaries
   are 20,272,128 / 14,220,288 bytes. The runtime model and cache budgets are
   unchanged; random mode explicitly disables the existing PCM cache.
+- The frontend reliability pass adds 7,734 raw / 2,325 gzip browser bytes for
+  Bluetooth Stop invalidation, concurrent ordered TTS retrieval, serialized
+  quick settings, lifecycle guards, and robust SSE parsing. The complete
+  embedded UI is 827,892 raw / 546,148 gzip bytes; HTML/CSS/JS is 383,656 raw /
+  108,721 gzip. Plain/stripped `CGO_ENABLED=0` binaries are 20,498,944 /
+  14,386,176 bytes. No frontend or Go runtime dependency was added.
 - A clean full-feature Windows PowerShell 5.1 update migrated the installed
   schema-3 CUDA/WGPU runtime to schema 4 in 11 minutes; the pinned native runner
   build took 8 minutes 32 seconds. An initial quality-probe failure left the old

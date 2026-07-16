@@ -1234,13 +1234,61 @@ describe("chat stream API", () => {
   it("parses final message events", async () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode('event: message\ndata: {"reply":"Hi","motion":{"action":"none"}}\n\n'));
+        controller.enqueue(new TextEncoder().encode('event: message\ndata: {"reply":"Hi","motion":{"action":"none"}}\n\nevent: done\ndata: {"ok":true}\n\n'));
         controller.close();
       },
     });
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
     const events: Array<{ event: string }> = [];
     await streamChat("hello", [], (event) => events.push(event));
-    expect(events).toEqual([expect.objectContaining({ event: "message" })]);
+    expect(events).toEqual([
+      expect.objectContaining({ event: "message" }),
+      expect.objectContaining({ event: "done" }),
+    ]);
+  });
+
+  it("parses CRLF frames split across network chunks and flushes the final frame", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: delta\r\ndata: {"text":"Hel'));
+        controller.enqueue(encoder.encode('lo"}\r\n\r'));
+        controller.enqueue(encoder.encode('\nevent: done\r\ndata: {"ok":true}'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
+    const events: Array<{ event: string; data: unknown }> = [];
+
+    await streamChat("hello", [], (event) => events.push(event));
+
+    expect(events).toEqual([
+      { event: "delta", data: { text: "Hello" } },
+      { event: "done", data: { ok: true } },
+    ]);
+  });
+
+  it("surfaces malformed stream frames", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: delta\ndata: {not-json}\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
+
+    await expect(streamChat("hello", [], () => undefined)).rejects.toThrow("malformed JSON");
+  });
+
+  it("rejects a stream that closes before its terminal event", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: message\ndata: {"reply":"partial"}\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
+
+    await expect(streamChat("hello", [], () => undefined)).rejects.toThrow("before completion");
   });
 });

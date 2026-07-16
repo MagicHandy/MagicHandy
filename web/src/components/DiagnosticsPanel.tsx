@@ -3,6 +3,7 @@
 // (memories and prompt sets are deliberately untouched by reset).
 import { useState } from "react";
 import { api } from "../api/client";
+import type { PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
@@ -16,13 +17,27 @@ function download(name: string, content: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
+function resetSettingsFromError(error: unknown): PublicSettings | null {
+  if (!error || typeof error !== "object" || !("body" in error)) return null;
+  const body = error.body;
+  if (!body || typeof body !== "object" || !("settings" in body)) return null;
+  return body.settings as PublicSettings;
+}
+
+export function DiagnosticsPanel({
+  locked = false,
+  onReset,
+}: {
+  locked?: boolean;
+  onReset?: (settings: PublicSettings) => void | Promise<void>;
+}) {
   const { state, backendOnline, refresh } = useAppState();
   const { show } = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const engine = state?.motion?.engine;
   const intiface = state?.intiface_transport?.status;
   let engineState = "idle";
@@ -87,17 +102,27 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
     }
   }
   async function reset() {
+    if (resetting) return;
     if (!confirmReset) {
       setConfirmReset(true);
       return;
     }
     setConfirmReset(false);
+    setResetting(true);
     try {
-      await api.resetSettings();
+      const response = await api.resetSettings();
+      await onReset?.(response.settings);
       show("Settings reset to defaults.");
       refresh();
     } catch (e) {
+      const resetSettings = resetSettingsFromError(e);
+      if (resetSettings) {
+        await onReset?.(resetSettings);
+        refresh();
+      }
       show(msg(e), "error");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -122,8 +147,8 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
           Restores every setting to factory defaults, including the connection key. Saved memories and prompt
           sets are not touched.
         </p>
-        <button type="button" className="btn btn-danger-outline" disabled={locked} onClick={() => void reset()}>
-          {confirmReset ? "Confirm reset all settings" : "Reset all settings"}
+        <button type="button" className="btn btn-danger-outline" disabled={locked || resetting} onClick={() => void reset()}>
+          {resetting ? "Resetting settings" : confirmReset ? "Confirm reset all settings" : "Reset all settings"}
         </button>
       </div>
     </>

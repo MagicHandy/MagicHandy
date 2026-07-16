@@ -9,6 +9,7 @@ import { useAppState, useToast } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
 type QuickPatch = Parameters<typeof api.applyQuick>[0];
+type QuickKey = keyof QuickPatch;
 
 interface QuickSettingsProps {
   section?: "all" | "limits" | "behavior";
@@ -22,26 +23,82 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const [vals, setVals] = useState<MotionSettings | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const pending = useRef<QuickPatch>({});
+  const motionRef = useRef(motion);
+  const revision = useRef(0);
+  const dirtyRevisions = useRef(new Map<QuickKey, number>());
+  const desiredValues = useRef(new Map<QuickKey, MotionSettings[QuickKey]>());
+  const sending = useRef(false);
+  const mounted = useRef(true);
 
   useEffect(() => {
-    if (motion) setVals({ ...motion });
+    motionRef.current = motion;
+    if (motion) {
+      for (const key of dirtyRevisions.current.keys()) {
+        if (Object.is(motion[key], desiredValues.current.get(key))) {
+          dirtyRevisions.current.delete(key);
+          desiredValues.current.delete(key);
+        }
+      }
+      setVals((current) => reconcileMotion(current, motion, dirtyRevisions.current));
+    }
   }, [motion]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      window.clearTimeout(timer.current);
+    };
+  }, []);
 
   // Combine rapid edits without resending untouched bounds from a stale poll.
   function push(patch: QuickPatch) {
+    revision.current += 1;
+    for (const key of quickKeys(patch)) {
+      dirtyRevisions.current.set(key, revision.current);
+      desiredValues.current.set(key, patch[key] as MotionSettings[QuickKey]);
+    }
     pending.current = { ...pending.current, ...patch };
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(async () => {
-      const body = pending.current;
-      pending.current = {};
-      try {
-        await api.applyQuick(body);
-      } catch (e) {
-        show(e instanceof Error ? e.message : "Quick setting failed", "error");
-      } finally {
-        refresh();
+    timer.current = window.setTimeout(() => void flush(), 180);
+  }
+
+  async function flush() {
+    if (sending.current) return;
+    const body = pending.current;
+    const keys = quickKeys(body);
+    if (!keys.length) return;
+    pending.current = {};
+    const sentRevisions = new Map(keys.map((key) => [key, dirtyRevisions.current.get(key)]));
+    sending.current = true;
+    let succeeded = false;
+    try {
+      await api.applyQuick(body);
+      succeeded = true;
+    } catch (e) {
+      if (mounted.current) show(e instanceof Error ? e.message : "Quick setting failed", "error");
+    } finally {
+      if (!succeeded) {
+        for (const [key, sentRevision] of sentRevisions) {
+          if (dirtyRevisions.current.get(key) === sentRevision) {
+            dirtyRevisions.current.delete(key);
+            desiredValues.current.delete(key);
+          }
+        }
       }
-    }, 180);
+      sending.current = false;
+      if (mounted.current) {
+        const currentMotion = motionRef.current;
+        if (!succeeded && currentMotion) {
+          setVals((current) => reconcileMotion(current, currentMotion, dirtyRevisions.current));
+        }
+        refresh();
+        if (quickKeys(pending.current).length) {
+          window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => void flush(), 0);
+        }
+      }
+    }
   }
 
   if (!vals) return <p className="form-status">Loading…</p>;
@@ -118,4 +175,19 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
       )}
     </fieldset>
   );
+}
+
+function quickKeys(patch: QuickPatch): QuickKey[] {
+  return Object.keys(patch) as QuickKey[];
+}
+
+function reconcileMotion(
+  current: MotionSettings | null,
+  server: MotionSettings,
+  dirty: ReadonlyMap<QuickKey, number>,
+): MotionSettings {
+  if (!current || dirty.size === 0) return { ...server };
+  const next = { ...server };
+  for (const key of dirty.keys()) Object.assign(next, { [key]: current[key] });
+  return next;
 }
