@@ -8,7 +8,7 @@ interface VoicePlaybackValue {
 }
 
 const VoicePlaybackContext = createContext<VoicePlaybackValue | null>(null);
-const REQUEST_POLL_MS = 1000;
+const REQUEST_POLL_MS = 250;
 
 function isAbort(error: unknown): boolean {
   return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";

@@ -12,6 +12,10 @@ $script:NeuTTSSourceTag = 'v0.1.1'
 $script:NeuTTSSourceCommit = 'ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f'
 $script:NeuTTSRustToolchain = '1.94.0-x86_64-pc-windows-msvc'
 $script:NeuTTSRunnerProtocol = 'magichandy_neutts_stream_v1'
+$script:NeuTTSSamplerSeed = 3
+$script:NeuTTSAudioAssembly = 'incremental_overlap_add_v1'
+$script:NeuTTSPCMCacheMaxBytes = 8 * 1024 * 1024
+$script:NeuTTSPCMCacheMaxEntries = 8
 $script:NeuTTSPhonemizer = 'espeak-ng'
 $script:NeuTTSPhonemizerVersion = '1.52.0'
 $script:NeuTTSBackboneRevision = '008555972590ff2c599dd43736ba31c81df3f0bf'
@@ -1173,7 +1177,8 @@ function Test-MagicHandyNeuTTSInstallRoot {
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         $required = @(
             'schema_version', 'source_commit', 'rust_toolchain', 'backend',
-            'runner_protocol', 'backbone_acceleration', 'codec_acceleration', 'backbone_revision',
+            'runner_protocol', 'sampler_seed', 'audio_assembly', 'pcm_cache_max_bytes',
+            'pcm_cache_max_entries', 'backbone_acceleration', 'codec_acceleration', 'backbone_revision',
             'phonemizer', 'phonemizer_version',
             'backbone_sha256', 'codec_revision', 'codec_checkpoint_sha256',
             'runner_sha256', 'decoder_sha256', 'encoder_revision', 'encoder_sha256',
@@ -1202,12 +1207,16 @@ function Test-MagicHandyNeuTTSInstallRoot {
                 return $false
             }
         }
-        return [int]$manifest.schema_version -eq 4 -and
+        return [int]$manifest.schema_version -eq 5 -and
             (Get-Content -LiteralPath $backboneRef -Raw).Trim() -eq $script:NeuTTSBackboneRevision -and
             [string]$manifest.source_commit -eq $script:NeuTTSSourceCommit -and
             [string]$manifest.rust_toolchain -eq $script:NeuTTSRustToolchain -and
             [string]$manifest.backend -eq $Backend -and
             [string]$manifest.runner_protocol -eq $script:NeuTTSRunnerProtocol -and
+            [int]$manifest.sampler_seed -eq $script:NeuTTSSamplerSeed -and
+            [string]$manifest.audio_assembly -eq $script:NeuTTSAudioAssembly -and
+            [int]$manifest.pcm_cache_max_bytes -eq $script:NeuTTSPCMCacheMaxBytes -and
+            [int]$manifest.pcm_cache_max_entries -eq $script:NeuTTSPCMCacheMaxEntries -and
             [string]$manifest.phonemizer -eq $script:NeuTTSPhonemizer -and
             [string]$manifest.phonemizer_version -eq $script:NeuTTSPhonemizerVersion -and
             [string]$manifest.backbone_acceleration -eq $expectedBackboneAcceleration -and
@@ -1563,7 +1572,7 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
         $encoderHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'magichandy-neucodec-encoder.exe')
         $directMLHash = Get-MagicHandySHA256 -Path (Join-Path $runtimeStage 'DirectML.dll')
         $manifest = [pscustomobject][ordered]@{
-            schema_version = 4
+            schema_version = 5
             installed_at = [DateTimeOffset]::UtcNow.ToString('o')
             source_tag = $script:NeuTTSSourceTag
             source_commit = $script:NeuTTSSourceCommit
@@ -1571,6 +1580,10 @@ Encoder model revision: $($script:NeuTTSEncoderRevision)
             rust_version = $rustVersion
             backend = $Backend
             runner_protocol = $script:NeuTTSRunnerProtocol
+            sampler_seed = $script:NeuTTSSamplerSeed
+            audio_assembly = $script:NeuTTSAudioAssembly
+            pcm_cache_max_bytes = $script:NeuTTSPCMCacheMaxBytes
+            pcm_cache_max_entries = $script:NeuTTSPCMCacheMaxEntries
             phonemizer = $script:NeuTTSPhonemizer
             phonemizer_version = $script:NeuTTSPhonemizerVersion
             backbone_acceleration = if ($Backend -eq 'cuda') { 'cuda_all_layers' } else { 'cpu' }

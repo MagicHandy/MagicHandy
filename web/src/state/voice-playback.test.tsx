@@ -55,9 +55,9 @@ describe("VoicePlaybackProvider", () => {
         id,
         role: "tts",
         type: "speak",
-        state: Date.now() - started >= 35_000 ? "done" : "active",
+        state: Date.now() - started >= 35_100 ? "done" : "active",
         created_at: "2026-07-15T12:00:00Z",
-        audio_bytes: Date.now() - started >= 35_000 ? 48_000 : 0,
+        audio_bytes: Date.now() - started >= 35_100 ? 48_000 : 0,
       },
     }));
 
@@ -65,7 +65,7 @@ describe("VoicePlaybackProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Queue" }));
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(36_000);
+      await vi.advanceTimersByTimeAsync(35_500);
     });
 
     expect(voiceRequestAudio).toHaveBeenCalledWith("tts-1", expect.any(AbortSignal));

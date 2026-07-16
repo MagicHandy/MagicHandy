@@ -893,8 +893,9 @@ Status: **complete**.
 - The source installer builds CPU or CUDA/WGPU according to the selected
   managed llama.cpp backend. The pinned CUDA patch explicitly sets
   all llama.cpp layers for offload. It provisions eSpeak NG 1.52 for the IPA
-  NeuTTS expects; the inaccurate pure-Rust phonemizer is excluded. Schema-4
-  manifests record protocol, acceleration, and phonemizer identity plus
+  NeuTTS expects; the inaccurate pure-Rust phonemizer is excluded. Schema-5
+  manifests record protocol, acceleration, phonemizer identity, deterministic
+  sampler seed, incremental overlap assembly, bounded cache limits, and
   checksums for the five CUDA llama/ggml DLLs, so the updater rebuilds older
   installs and refuses incomplete GPU packages.
 - Measured on the RTX 5070 Ti development host, the old CPU one-shot path took
@@ -925,6 +926,18 @@ Status: **complete**.
   overlap-aware stream retained every substantive target word across four random
   controlled clips, with two exact sentence transcriptions. Subjective voice
   similarity still requires wider listener/reference acceptance under R17.
+- Consistency/performance hardening found that upstream sampling selected a new
+  random seed per request. A mixed corpus rejected seeds that truncated or
+  garbled output and selected seed 3, which retained all target words. The
+  runner now performs sample-identical incremental overlap-add and keeps an
+  8-entry/8 MiB process-local exact-text PCM cache. A repeated 4.70 second clip
+  fell from 1.91 seconds warm synthesis to a 0 ms byte-identical replay. Browser
+  completion polling fell from 1000 to 250 ms; true incremental playback remains
+  a separately tested contract change. A clean full-feature schema-4-to-5 update
+  preserved the saved install choices and rebuilt in 10 minutes 56 seconds. In
+  the relaunched production app, an uncached request reached `done` in 2.799
+  seconds and its exact repeat in 34 ms with byte-identical retained WAVs and an
+  empty terminal queue. See `docs/neutts-quality-performance.md`.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

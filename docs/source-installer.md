@@ -114,12 +114,13 @@ NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
    the five required llama/ggml DLLs for CUDA together; verifies their hashes;
    then swaps them atomically under `<data-dir>/voice/neutts/active`.
 
-The schema-4 active manifest records the runner protocol, selected backend,
-backbone/codec acceleration, eSpeak phonemizer/version, native dependency hashes,
-built runner/decoder hashes, immutable model revisions, source checkpoint
-hashes, and exact Rust compiler identity. Updates reuse it without requiring
-Rustup only after the installer rehashes all active artifacts. Schema-3 and older
-runtimes are stale and rebuilt once. An interrupted directory swap restores the newest preserved
+The schema-5 active manifest records the runner protocol, selected backend,
+backbone/codec acceleration, eSpeak phonemizer/version, deterministic sampler,
+incremental audio assembly, PCM cache limits, native dependency hashes, built
+runner/decoder hashes, immutable model revisions, source checkpoint hashes, and
+exact Rust compiler identity. Updates reuse it without requiring Rustup only
+after the installer rehashes all active artifacts. Schema-4 and older runtimes
+are stale and rebuilt once. An interrupted directory swap restores the newest preserved
 backup before retrying; rollback data is removed only after the replacement
 verifies.
 When app-managed NeuTTS is selected, the app independently validates the pinned
@@ -232,7 +233,7 @@ voice asset. It only changes what subsequent runs ensure is present.
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
 all script syntax, atomic state round trips and secret-field exclusion,
 interrupted HTTP byte-range resume and checksum promotion, managed CUDA/NeuTTS
-versus Ollama-only plans, app-managed NeuTTS schema-4 CPU/CUDA manifest
+versus Ollama-only plans, app-managed NeuTTS schema-5 CPU/CUDA manifest
 discovery, native-DLL and encoder tamper detection, and end-to-end plan-only
 install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response

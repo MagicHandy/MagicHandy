@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Persistent-NeuTTS/autoload plus browser-playback build: 20,262,912 bytes plain and 14,211,584 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | NeuTTS consistency/cache plus 250 ms browser-poll build: 20,263,936 bytes plain and 14,212,608 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -104,9 +104,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 543,287 gzip bytes because the isolated connection artwork
-   contributes about 437 KiB. HTML/CSS/JS is 105,860 gzip bytes, and the stripped
-   binary is 14,211,584 bytes. These
+   browser payload is 543,288 gzip bytes because the isolated connection artwork
+   contributes about 437 KiB. HTML/CSS/JS is 105,861 gzip bytes, and the stripped
+   binary is 14,212,608 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -115,6 +115,24 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-15** - NeuTTS consistency and repeat latency: pinned `neutts-rs`
+  selected a new random seed for every request; 12 identical warm requests
+  varied from 4.60-9.10 s of audio. A mixed corpus rejected one seed that
+  produced 0.14 s/silence and selected deterministic seed 3, which retained all
+  target words. Incremental overlap-add produced SHA-256-identical corpus WAVs
+  while removing repeated full-history mixing. An 8-entry/8 MiB memory-only PCM
+  LRU reduced a repeated 4.70 s clip from 1.91 s synthesis to a 0 ms identical
+  replay. Browser completion polling is 250 ms instead of 1000 ms. Schema-5
+  manifests force managed runtimes onto this behavior; representative listening
+  and live incremental browser PCM remain open R17 work. Plain/stripped core
+  binaries are 20,263,936 / 14,212,608 bytes. Embedded UI remains 818,120 raw
+  bytes and is 543,288 gzip bytes; HTML/CSS/JS is 373,884 raw / 105,861 gzip
+  bytes, a one-byte gzip increase. A clean full-feature schema-4-to-5 update
+  completed in 10 minutes 56 seconds and preserved all saved feature choices.
+  In the relaunched production app, one uncached request completed in 2.799
+  seconds and its exact repeat in 34 ms; both returned the same 277,484-byte WAV
+  and SHA-256, with the shared queue returning to zero.
 
 - **2026-07-15** - NeuTTS intelligibility correction: direct reconstruction of
   the official Dave codes transcribed correctly, isolating the defect from the

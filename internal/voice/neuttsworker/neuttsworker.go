@@ -25,7 +25,7 @@ import (
 
 const (
 	providerName      = "neutts-air"
-	providerVersion   = "1.1.0"
+	providerVersion   = "1.2.0"
 	defaultBackbone   = "neuphonic/neutts-air-q4-gguf"
 	defaultGGUFFile   = "neutts-air-Q4_0.gguf"
 	modelProbeTimeout = 30 * time.Second

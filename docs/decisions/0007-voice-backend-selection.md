@@ -129,7 +129,7 @@ Negative / risks:
 The NeuTTS Air spike, Slice 13.6 protocol adapter, persistent GPU runtime, and
 checksum-pinned Windows source installation are complete. A pinned
 DistillNeuCodec ONNX worker generates compatible reference codes from WAV
-without Python. The installer provisions eSpeak NG 1.52 and schema-4 manifests
+without Python. The installer provisions eSpeak NG 1.52 and schema-5 manifests
 reject the older inaccurate phonemizer path. Enabled ASR and chat-speech roles autoload their configured
 workers on app startup; failures remain isolated and visible. Setup, measured
 latency, and manual pre-encoded fallback are documented in

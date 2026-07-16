@@ -178,7 +178,7 @@ quality or the repeated model-start latency risk.
 The installer now builds a first-party persistent runner against the exact
 pinned source. CPU builds use system eSpeak NG and the upstream CPU codec. CUDA builds add
 an exact patch that sets every llama.cpp backbone layer for GPU offload and use
-the Burn WGPU codec. The app-managed schema-4 manifest records that choice, the
+the Burn WGPU codec. The app-managed schema-5 manifest records that choice, the
 verified phonemizer/version, and checksums all five required CUDA llama/ggml
 DLLs.
 
