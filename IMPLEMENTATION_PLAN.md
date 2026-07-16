@@ -84,7 +84,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | #79 |
 | 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Complete** | #80 |
-| 13.11 | Voice protocol, queue, provider, and process-lifecycle reliability audit | **In review** | current branch |
+| 13.11 | Voice protocol, queue, provider, and process-lifecycle reliability audit | **In review** | #89 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
