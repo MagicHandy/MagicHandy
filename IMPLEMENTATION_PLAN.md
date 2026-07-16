@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-14. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-15. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -27,19 +27,28 @@ of Phase 16 and anchor its packaging story. The future Windows install binary
 remains a thin shell around the app's own first-run setup wizard (decision and
 design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
-decision.
+decision. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
+Autopilot is planned-but-not-started, while the migration importer (Phase 15) is
+now **undecided — it may not be built at all** (rationale in
+`docs/parity-with-stgpt-rv.md`). The UI/behavior parity baseline is complete;
+the largest genuine remaining parity gap is LLM control depth (stroke regions,
+program selection, soft anchors), catalogued in `docs/llm-control-surface.md`.
 
-Recent maintenance in PRs #63-#67 has landed. It hardens connection and live-limit
-controls, bounds LLM output with honest provider-native reasoning control,
-separates app-managed Parakeet assets from custom paths, makes source updates
-survive merged/deleted feature upstreams, avoids reopening stale UI during
-updates, recovers malformed small-model structured responses, and replaces the
-Intiface queue-admission loop with deadline-driven asynchronous-ACK pacing.
-Source rebuilds Stop and terminate only their checkout-owned app tree before
-staged binary replacement, then verify the new server before opening the
-browser. Broader LLM quality/latency, the revised Intiface pacer on hardware,
-and real managed microphone acceptance are still measurements, not inferred
-completion claims.
+Recent work (PRs #63-#83) hardens connection and live-limit controls, bounds
+LLM output with honest provider-native reasoning control, makes source updates
+survive merged/deleted feature upstreams and avoid reopening stale UI, recovers
+malformed small-model structured responses, and replaces the Intiface
+queue-admission loop with deadline-driven asynchronous-ACK pacing. The largest
+recent thread is optional voice: slices 13.9 and 13.10 add a persistent
+CUDA/WGPU NeuTTS runner with settings-driven startup autoload and native
+(Python-free) WAV reference-code generation, and follow-ups (#81-#83) correct
+NeuTTS phonemization via eSpeak NG, stabilize output with a deterministic
+default seed plus an exact-text PCM cache, and add advanced seed controls.
+Voice stays optional and disabled by default, and its runtime is measured
+separately from the core (`docs/goal-scorecard.md`). Broader LLM quality/latency,
+the revised Intiface pacer on hardware, real managed microphone acceptance, and
+NeuTTS subjective cloning quality (R17) are still open measurements, not
+inferred completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider
@@ -80,7 +89,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
-| 15 | Migration importer and compatibility report | Not started | — |
+| 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -1229,6 +1238,19 @@ rendered QA refresh remains open.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 
+## Status: Undecided — may not be built
+
+Whether MagicHandy ships an STGPT-RV importer at all is an **open decision**, not
+just pending work. It is a one-time convenience (settings are few and
+patterns/programs already import through the normal library path), STGPT-RV is a
+live upstream with evolving formats, and the LSO merge may change what
+"migration" means. Rationale and the decision framing live in
+[docs/parity-with-stgpt-rv.md](docs/parity-with-stgpt-rv.md) ("Migration
+importer — Undecided"). The scope below is kept ready so that *if* the decision
+is "build it" the work is executable; if the decision is "won't build", close
+this phase and the parity row as Rejected with that reason. The dependent Phase
+16.3 in-wizard porting step inherits this undecided status.
+
 ## Suggested `/goal`
 
 `/goal Complete MagicHandy Phase 15: implement import tools for StrokeGPT-ReVibed settings, memories, prompt sets, motion patterns, and programs, with dry-run mode, a compatibility report, and tests.`
@@ -1325,10 +1347,11 @@ Implement, as slices:
   checksummed, size/license-visible, progress-reporting API endpoints;
   ElevenLabs key entry) → finish. Every step skippable; every step is the
   existing settings/API surface, never a second implementation
-- **16.3 — StrokeGPT-ReVibed porting step**: the wizard surfaces the Phase
-  15 importer — install-location detection, dry-run preview with the
-  compatibility report, per-category opt-in, non-destructive import
-  (depends on the Phase 15 importer API)
+- **16.3 — StrokeGPT-ReVibed porting step** *(undecided; gated on Phase 15)*:
+  the wizard surfaces the Phase 15 importer — install-location detection,
+  dry-run preview with the compatibility report, per-category opt-in,
+  non-destructive import. Exists only if the undecided Phase 15 importer is
+  built (see its status note above)
 - log-to-file by default with a mostly quiet console; print the local URL
   prominently (clickable in terminals that support it)
 - keep binding to localhost by default; document that the app is a
