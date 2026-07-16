@@ -22,6 +22,7 @@ type BrowserBluetoothTransport struct {
 	mu sync.Mutex
 
 	hspMu                   sync.Mutex
+	motionGate              motionCommandGate
 	activeStreamID          string
 	activeBluetoothStreamID int
 	nextBluetoothStreamID   uint32
@@ -50,6 +51,8 @@ func (t *BrowserBluetoothTransport) Stop(ctx context.Context, command StopComman
 		Kind: CommandKindStop,
 		Stop: &StopCommand{Reason: command.Reason},
 	}
+	t.motionGate.beginStop()
+	defer t.motionGate.endStop()
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 
@@ -63,8 +66,15 @@ func (t *BrowserBluetoothTransport) Stop(ctx context.Context, command StopComman
 
 // SetStrokeWindow sends a stroke envelope command through the browser bridge.
 func (t *BrowserBluetoothTransport) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand) (CommandResult, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		return t.recordBuildError(CommandKindStrokeWindow, err), err
+	}
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindStrokeWindow, err), err
+	}
 
 	if err := validateStrokeWindow(command); err != nil {
 		return t.recordBuildError(CommandKindStrokeWindow, err), err
@@ -86,8 +96,15 @@ func (t *BrowserBluetoothTransport) SetStrokeWindow(ctx context.Context, command
 
 // AppendPoints sends timed points through browser-owned Handy HSP.
 func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		return t.recordBuildError(CommandKindPointsAdd, err), err
+	}
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindPointsAdd, err), err
+	}
 
 	semanticStreamID, bluetoothStreamID, err := t.bluetoothStreamIDLocked(command.StreamID)
 	if err != nil {
@@ -132,8 +149,15 @@ func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command Ap
 
 // Play starts or resumes timed-point playback through browser-owned Handy HSP.
 func (t *BrowserBluetoothTransport) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		return t.recordBuildError(CommandKindPointsPlay, err), err
+	}
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindPointsPlay, err), err
+	}
 
 	semanticStreamID, bluetoothStreamID, err := t.bluetoothStreamIDLocked(command.StreamID)
 	if err != nil {

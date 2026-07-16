@@ -93,17 +93,46 @@ func TestConcurrentStopDuringStartupDoesNotPanic(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start never reached Play")
 	}
-
-	// This must not panic on a nil cancel.
-	stopped, err := engine.Stop(context.Background(), "concurrent_stop")
-	if err != nil {
-		t.Fatalf("Stop during startup: %v", err)
+	if state := engine.Snapshot(); !state.Running || !state.Starting {
+		t.Fatalf("startup state = %+v, want running setup distinguished from playback", state)
 	}
-	if stopped.Running {
-		t.Fatalf("state = %+v, want stopped", stopped)
+	if _, err := engine.ApplyTarget(context.Background(), testTarget(), "startup_retarget"); err == nil {
+		t.Fatal("retarget was admitted before startup Play completed")
+	}
+
+	// Stop cancels the run immediately but waits for the in-flight transport
+	// command to drain before it sends the final wire Stop.
+	type stopOutcome struct {
+		state ActiveMotionState
+		err   error
+	}
+	stopDone := make(chan stopOutcome, 1)
+	go func() {
+		state, err := engine.Stop(context.Background(), "concurrent_stop")
+		stopDone <- stopOutcome{state: state, err: err}
+	}()
+	waitForEngineState(t, engine, time.Second, func(state ActiveMotionState) bool { return !state.Running })
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err == nil {
+		t.Fatal("new Start was admitted while Stop was waiting for the wire barrier")
+	}
+	select {
+	case outcome := <-stopDone:
+		t.Fatalf("Stop returned before the blocked Play drained: %+v", outcome)
+	case <-time.After(30 * time.Millisecond):
 	}
 
 	close(blocking.release)
+	select {
+	case outcome := <-stopDone:
+		if outcome.err != nil {
+			t.Fatalf("Stop during startup: %v", outcome.err)
+		}
+		if outcome.state.Running {
+			t.Fatalf("state = %+v, want stopped", outcome.state)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop did not return after blocked Play drained")
+	}
 	select {
 	case <-startDone:
 	case <-time.After(2 * time.Second):

@@ -11,6 +11,7 @@ import (
 func (e *Engine) snapshotLocked() ActiveMotionState {
 	state := ActiveMotionState{
 		Running:                    e.running,
+		Starting:                   e.starting,
 		Completing:                 e.completing,
 		Paused:                     e.paused,
 		RunningMillis:              e.runningMillisLocked(),
@@ -113,15 +114,17 @@ func (e *Engine) traceRetargetLocked(
 func (e *Engine) recordTransportResult(
 	reason string,
 	sample *MotionSample,
+	command transport.Command,
 	result transport.CommandResult,
 	err error,
 ) {
-	e.recordTransportResultWithAnnotation(reason, sample, result, err, "")
+	e.recordTransportResultWithAnnotation(reason, sample, command, result, err, "")
 }
 
 func (e *Engine) recordTransportResultWithAnnotation(
 	reason string,
 	sample *MotionSample,
+	command transport.Command,
 	result transport.CommandResult,
 	err error,
 	annotation string,
@@ -130,7 +133,6 @@ func (e *Engine) recordTransportResultWithAnnotation(
 		return
 	}
 
-	diagnosticsSnapshot := e.transport.Diagnostics()
 	row := diagnostics.MotionTraceRow{
 		Source:          e.traceSource(),
 		Reason:          reason,
@@ -139,9 +141,10 @@ func (e *Engine) recordTransportResultWithAnnotation(
 		TransportResult: safeResultPointer(result),
 		Annotation:      annotation,
 	}
-	if diagnosticsSnapshot.LastCommand != nil {
-		command := transport.SafeCommand(*diagnosticsSnapshot.LastCommand)
-		row.TransportCommand = &command
+	if command.Kind != "" {
+		command.ID = result.CommandID
+		safeCommand := transport.SafeCommand(command)
+		row.TransportCommand = &safeCommand
 	}
 	if err != nil {
 		if row.Annotation == "" {

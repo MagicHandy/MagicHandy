@@ -49,6 +49,13 @@ The shared path must:
 - never weaken hardware safety clamping (speed, range, step size) for
   convenience or smoothness
 
+Mutating transport calls are serialized and tagged with the engine run epoch.
+Stop first invalidates the epoch and cancels the run context, then waits for an
+in-flight append/setup call to drain before issuing the final wire Stop. A
+request-originated retarget waiting behind that barrier cannot attach itself to
+a later run. If an append fails with an uncertain acceptance state, the engine
+stops the run explicitly instead of advancing past the missing chunk.
+
 A new motion source is added by producing a semantic target/plan for this path,
 never by building a parallel sampler or transport path.
 

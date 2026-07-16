@@ -66,6 +66,12 @@ type Curve struct {
 	loop     bool
 }
 
+var builtinPatternCatalog = []PatternDefinition{
+	generateStrokePattern(),
+	generatePulsePattern(),
+	generateTeasePattern(),
+}
+
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
 func NewCurve(points []CurvePoint, durationMillis int64, loop bool) (Curve, error) {
 	if len(points) < 2 {
@@ -111,16 +117,16 @@ func (c Curve) Preview(intervalMillis int64) []CurvePoint {
 
 // BuiltinPatternDefinitions returns the small parametrically generated catalog.
 func BuiltinPatternDefinitions() []PatternDefinition {
-	return []PatternDefinition{
-		generateStrokePattern(),
-		generatePulsePattern(),
-		generateTeasePattern(),
+	definitions := make([]PatternDefinition, len(builtinPatternCatalog))
+	for index, definition := range builtinPatternCatalog {
+		definitions[index] = clonePatternDefinition(definition)
 	}
+	return definitions
 }
 
 // BuiltinPatternDefinition resolves one generated built-in pattern.
 func BuiltinPatternDefinition(id PatternID) (PatternDefinition, bool) {
-	for _, definition := range BuiltinPatternDefinitions() {
+	for _, definition := range builtinPatternCatalog {
 		if definition.ID == id {
 			return clonePatternDefinition(definition), true
 		}

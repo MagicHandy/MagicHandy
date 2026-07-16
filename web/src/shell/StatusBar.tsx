@@ -24,14 +24,24 @@ export function StatusBar() {
       voiceSettings.tts_provider !== "none" &&
       !(voiceWorkers?.tts?.state === "running" && voiceWorkers?.tts?.model_state === "ready"),
   );
-  const phaseState = awaitingState ? "pending" : engine?.paused ? "paused" : engine?.running ? "running" : "idle";
-  const phaseLabel = awaitingState
-    ? "state pending"
-    : engine?.paused
-    ? "paused"
-    : engine?.running
-      ? engine.target?.label || "running"
-      : motion?.available === false ? "unavailable" : "idle";
+  let phaseState = "idle";
+  let phaseLabel = motion?.available === false ? "unavailable" : "idle";
+  if (awaitingState) {
+    phaseState = "pending";
+    phaseLabel = "state pending";
+  } else if (engine?.paused) {
+    phaseState = "paused";
+    phaseLabel = "paused";
+  } else if (engine?.completing) {
+    phaseState = "active";
+    phaseLabel = "motion stopping";
+  } else if (engine?.starting) {
+    phaseState = "active";
+    phaseLabel = "motion starting";
+  } else if (engine?.running) {
+    phaseState = "running";
+    phaseLabel = engine.target?.label || "running";
+  }
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
 

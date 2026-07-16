@@ -30,6 +30,20 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 	}
 }
 
+func TestBuiltinPatternCatalogReturnsDefensiveCopies(t *testing.T) {
+	definitions := BuiltinPatternDefinitions()
+	definitions[0].Points[0].PositionPercent = 99
+	definitions[0].Tags[0] = "changed"
+
+	again, ok := BuiltinPatternDefinition(definitions[0].ID)
+	if !ok {
+		t.Fatal("built-in pattern disappeared")
+	}
+	if again.Points[0].PositionPercent == 99 || again.Tags[0] == "changed" {
+		t.Fatalf("built-in catalog was mutated through returned copy: %+v", again)
+	}
+}
+
 func TestMonotoneCurveDoesNotOvershootAndStopsAtReversal(t *testing.T) {
 	points := []CurvePoint{
 		{TimeMillis: 0, PositionPercent: 10},
@@ -98,6 +112,31 @@ func TestPlanUsesResolvedPatternAndFiniteProgram(t *testing.T) {
 	}
 	if got := finite.SampleAt(5000).PositionPercent; got != 100 {
 		t.Fatalf("finite endpoint = %g, want held final position", got)
+	}
+}
+
+func TestInvalidResolvedProgramFallsBackWithoutRetainingProgram(t *testing.T) {
+	invalid := ProgramDefinition{ID: "invalid", Name: "Invalid"}
+	plan := NewMotionPlan("fallback", MotionTarget{
+		ProgramID: invalid.ID,
+		Program:   &invalid,
+	}, config.DefaultSettings().Motion, 0, 0, time.Unix(0, 0))
+	if plan.ProgramID != "" || plan.Target.Program != nil || plan.Target.ProgramID != "" {
+		t.Fatalf("fallback plan retained invalid program: %+v", plan)
+	}
+	if plan.PatternID != PatternStroke || plan.Target.Pattern == nil {
+		t.Fatalf("fallback plan = %+v, want resolved stroke pattern", plan)
+	}
+}
+
+func TestChooseNearestPhaseIncludesFiniteEndpoint(t *testing.T) {
+	program := ProgramDefinition{
+		ID: "endpoint", Name: "Endpoint", DurationMillis: 1000,
+		Points: []CurvePoint{{TimeMillis: 0}, {TimeMillis: 1000, PositionPercent: 100}},
+	}
+	phase := chooseNearestPhase(MotionTarget{Program: &program, ProgramID: program.ID}, config.DefaultSettings().Motion, 100, 1)
+	if phase != 1 {
+		t.Fatalf("finite endpoint phase = %g, want 1", phase)
 	}
 }
 

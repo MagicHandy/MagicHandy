@@ -2,6 +2,7 @@ package motion
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -66,6 +67,19 @@ func TestEngineHonorsTransportTimingFloor(t *testing.T) {
 	}
 }
 
+func TestEngineClampsSubMillisecondSampleInterval(t *testing.T) {
+	engine, err := NewEngine(EngineOptions{
+		Transport:      transport.NewFake(),
+		SampleInterval: time.Microsecond,
+	})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	if engine.sampleInterval != time.Millisecond {
+		t.Fatalf("sample interval = %v, want 1ms wire-time floor", engine.sampleInterval)
+	}
+}
+
 func TestEngineRepeatedIdleStopStillAttemptsTransport(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(16), time.Hour)
@@ -78,6 +92,20 @@ func TestEngineRepeatedIdleStopStillAttemptsTransport(t *testing.T) {
 	}
 	if count := countCommands(fake.Commands(), transport.CommandKindStop); count != 2 {
 		t.Fatalf("idle Stop count = %d, want one transport attempt per activation", count)
+	}
+}
+
+func TestEngineStopDetachesCallerCancellation(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(16), time.Hour)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := engine.Stop(ctx, "canceled_caller_stop"); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if count := countCommands(fake.Commands(), transport.CommandKindStop); count != 1 {
+		t.Fatalf("Stop count = %d, want detached transport attempt", count)
 	}
 }
 
@@ -494,6 +522,135 @@ func TestEngineRecoveryStopWaitsForInFlightDispatch(t *testing.T) {
 	}
 }
 
+func TestEngineStopIsFinalAfterRequestOriginatedAppend(t *testing.T) {
+	fake := newBlockingAddTransport("playing")
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), time.Hour)
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	fake.BlockFutureAdds()
+	applyDone := make(chan error, 1)
+	go func() {
+		_, err := engine.ApplyTarget(context.Background(), MotionTarget{
+			Label:        "blocked target",
+			Source:       "test",
+			PatternID:    PatternPulse,
+			SpeedPercent: 60,
+		}, "blocked_retarget")
+		applyDone <- err
+	}()
+	select {
+	case <-fake.addStarted:
+	case <-time.After(time.Second):
+		t.Fatal("request-originated append did not start")
+	}
+
+	stopDone := make(chan error, 1)
+	go func() {
+		_, err := engine.Stop(context.Background(), "final_order_stop")
+		stopDone <- err
+	}()
+	select {
+	case err := <-stopDone:
+		t.Fatalf("Stop returned before the in-flight append drained: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+	if count := countCommands(fake.Commands(), transport.CommandKindStop); count != 0 {
+		t.Fatalf("Stop reached the wire before append drained: %+v", fake.Commands())
+	}
+
+	close(fake.releaseAdd)
+	select {
+	case err := <-stopDone:
+		if err != nil {
+			t.Fatalf("Stop: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not finish after append drained")
+	}
+	select {
+	case err := <-applyDone:
+		if err == nil {
+			t.Fatal("retarget succeeded after its run was stopped")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("retarget did not return after Stop")
+	}
+
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want Stop as the final wire command", commands)
+	}
+}
+
+func TestEngineStopsAfterUncertainAppendFailure(t *testing.T) {
+	commandTransport := &acceptedErrorTransport{Fake: transport.NewFake()}
+	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(128), time.Hour)
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	commandTransport.failNextAdd = true
+
+	state, err := engine.ApplyTarget(context.Background(), MotionTarget{
+		Label:        "failing target",
+		Source:       "test",
+		PatternID:    PatternPulse,
+		SpeedPercent: 60,
+	}, "failing_retarget")
+	if err == nil {
+		t.Fatal("ApplyTarget succeeded after an uncertain append failure")
+	}
+	if state.Running {
+		t.Fatalf("state = %+v, want recovery stopped", state)
+	}
+	commands := commandTransport.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want explicit Stop after uncertain append", commands)
+	}
+}
+
+func TestEngineStopsAfterUncertainStartupPlayFailure(t *testing.T) {
+	commandTransport := &acceptedErrorTransport{Fake: transport.NewFake(), failPlay: true}
+	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(128), time.Hour)
+
+	state, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion)
+	if err == nil {
+		t.Fatal("Start succeeded after an uncertain Play failure")
+	}
+	if state.Running {
+		t.Fatalf("state = %+v, want startup aborted", state)
+	}
+	commands := commandTransport.Commands()
+	if countCommands(commands, transport.CommandKindPointsPlay) != 1 {
+		t.Fatalf("commands = %+v, want simulated accepted Play", commands)
+	}
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want explicit Stop after uncertain Play", commands)
+	}
+}
+
+func TestEngineTraceRecordsExactCommandDespiteConcurrentDiagnostics(t *testing.T) {
+	commandTransport := &misleadingDiagnosticsTransport{Fake: transport.NewFake()}
+	traces := diagnostics.NewTraceRing(64)
+	engine := newTestEngine(t, commandTransport, traces, time.Hour)
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	for _, row := range traces.Rows() {
+		if row.Reason != "start_points" {
+			continue
+		}
+		if row.TransportCommand == nil || row.TransportCommand.Kind != transport.CommandKindPointsAdd || row.TransportCommand.PointsAdd == nil {
+			t.Fatalf("start_points trace command = %+v, want exact append command", row.TransportCommand)
+		}
+		return
+	}
+	t.Fatalf("trace rows = %+v, want start_points row", traces.Rows())
+}
+
 func TestEngineConcurrentRefreshSnapshotAndStop(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), 2*time.Millisecond)
@@ -596,6 +753,40 @@ type blockingAddTransport struct {
 	addStarted chan struct{}
 	releaseAdd chan struct{}
 	startOnce  sync.Once
+}
+
+type acceptedErrorTransport struct {
+	*transport.Fake
+	failNextAdd bool
+	failPlay    bool
+}
+
+type misleadingDiagnosticsTransport struct {
+	*transport.Fake
+}
+
+func (t *misleadingDiagnosticsTransport) Diagnostics() transport.TransportDiagnostics {
+	diagnostics := t.Fake.Diagnostics()
+	diagnostics.LastCommand = &transport.Command{Kind: transport.CommandKindHSPState}
+	return diagnostics
+}
+
+func (t *acceptedErrorTransport) AppendPoints(ctx context.Context, command transport.AppendPointsCommand) (transport.CommandResult, error) {
+	result, err := t.Fake.AppendPoints(ctx, command)
+	if err != nil || !t.failNextAdd {
+		return result, err
+	}
+	t.failNextAdd = false
+	return result, errors.New("append response was lost after acceptance")
+}
+
+func (t *acceptedErrorTransport) Play(ctx context.Context, command transport.PlayCommand) (transport.CommandResult, error) {
+	result, err := t.Fake.Play(ctx, command)
+	if err != nil || !t.failPlay {
+		return result, err
+	}
+	t.failPlay = false
+	return result, errors.New("play response was lost after acceptance")
 }
 
 func newBlockingAddTransport(state string) *blockingAddTransport {

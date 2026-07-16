@@ -412,13 +412,19 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.applySettingsRuntimeTransition(r.Context(), current, next)
+	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), current, next)
 
 	_, status := s.store.Snapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"settings": saved.Public(),
 		"status":   status,
-	})
+	}
+	responseStatus := http.StatusOK
+	if runtimeErr != nil {
+		responseStatus = http.StatusBadGateway
+		payload["error"] = "settings were saved, but the active device runtime could not apply them"
+	}
+	writeJSON(w, responseStatus, payload)
 }
 
 func (s *Server) handlePutConnectionKey(w http.ResponseWriter, r *http.Request) {
@@ -446,13 +452,19 @@ func (s *Server) handlePutConnectionKey(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, errors.New("connection key could not be saved"))
 		return
 	}
-	s.applySettingsRuntimeTransition(r.Context(), current, next)
+	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), current, next)
 
 	settings, status := s.store.PublicSnapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"settings": settings,
 		"status":   status,
-	})
+	}
+	responseStatus := http.StatusOK
+	if runtimeErr != nil {
+		responseStatus = http.StatusBadGateway
+		payload["error"] = "connection key was saved, but the active device runtime could not be stopped"
+	}
+	writeJSON(w, responseStatus, payload)
 }
 
 func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Request) {

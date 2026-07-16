@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,6 +28,33 @@ type blockingModeStartTransport struct {
 	*transport.Fake
 	entered chan struct{}
 	once    sync.Once
+}
+
+type failingStrokeTransport struct {
+	*transport.Fake
+	mu         sync.Mutex
+	failStroke bool
+}
+
+func (t *failingStrokeTransport) SetStrokeWindow(ctx context.Context, command transport.StrokeWindowCommand) (transport.CommandResult, error) {
+	t.mu.Lock()
+	fail := t.failStroke
+	t.mu.Unlock()
+	if !fail {
+		return t.Fake.SetStrokeWindow(ctx, command)
+	}
+	err := errors.New("simulated stroke-window failure")
+	return transport.CommandResult{
+		Kind:      transport.CommandKindStrokeWindow,
+		Transport: "failing_stroke",
+		Status:    "failed",
+	}, err
+}
+
+func (t *failingStrokeTransport) FailStrokeWindow() {
+	t.mu.Lock()
+	t.failStroke = true
+	t.mu.Unlock()
 }
 
 func (b *blockingModeStartTransport) Play(ctx context.Context, _ transport.PlayCommand) (transport.CommandResult, error) {
@@ -87,7 +115,9 @@ func TestStopAndClearStopsIdleEngine(t *testing.T) {
 		t.Fatalf("motionEngineForStart: %v", err)
 	}
 
-	server.stopAndClearMotionEngine(t.Context(), "test_idle_clear")
+	if err := server.stopAndClearMotionEngine(t.Context(), "test_idle_clear"); err != nil {
+		t.Fatalf("stopAndClearMotionEngine: %v", err)
+	}
 	if engine := server.currentMotionEngine(); engine != nil {
 		t.Fatalf("motion engine survived clear: %+v", engine.Snapshot())
 	}
@@ -216,7 +246,9 @@ func TestMotionStopWithoutEngineStillAttemptsConfiguredTransport(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`)).WithContext(ctx)
 	server.Handler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("stop status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
@@ -436,7 +468,9 @@ func TestMotionRefreshAppliesToActiveLoopImmediately(t *testing.T) {
 	}
 
 	tighter := config.MotionSettings{SpeedMinPercent: 10, SpeedMaxPercent: 25, StrokeMinPercent: 0, StrokeMaxPercent: 100}
-	server.refreshActiveMotion(context.Background(), tighter)
+	if err := server.refreshActiveMotion(context.Background(), tighter); err != nil {
+		t.Fatalf("refreshActiveMotion: %v", err)
+	}
 
 	snapshot := server.motion.engine.Snapshot()
 	if !snapshot.Running {
@@ -447,6 +481,67 @@ func TestMotionRefreshAppliesToActiveLoopImmediately(t *testing.T) {
 	}
 	if snapshot.Target.SpeedPercent > 25 {
 		t.Fatalf("target speed %d should be reclamped to <= 25", snapshot.Target.SpeedPercent)
+	}
+}
+
+func TestMotionQuickReportsSavedButFailedRuntimeRefresh(t *testing.T) {
+	commandTransport := &failingStrokeTransport{Fake: transport.NewFake()}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       commandTransport,
+		MotionTransport: commandTransport,
+	})
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("motion did not start")
+	}
+	commandTransport.FailStrokeWindow()
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/motion/quick", strings.NewReader(`{"stroke_min_percent":10}`)))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusBadGateway, recorder.Body.String())
+	}
+	var response struct {
+		Error  string                   `json:"error"`
+		Engine motion.ActiveMotionState `json:"engine"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Error == "" || response.Engine.Running {
+		t.Fatalf("response = %+v, want saved-settings warning and stopped engine", response)
+	}
+	settings, _ := server.store.Snapshot()
+	if settings.Motion.StrokeMinPercent != 10 {
+		t.Fatalf("saved stroke minimum = %d, want 10", settings.Motion.StrokeMinPercent)
+	}
+	commands := commandTransport.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want recovery Stop", commands)
+	}
+}
+
+func TestCloudCredentialChangeStopsAndClearsExistingMotionEngine(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("motion did not start")
+	}
+	previous, _ := server.store.Snapshot()
+	next := previous
+	next.Device.HandyConnectionKey = "replacement-test-key"
+	if _, err := server.store.Save(next); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := server.applySettingsRuntimeTransition(context.Background(), previous, next); err != nil {
+		t.Fatalf("applySettingsRuntimeTransition: %v", err)
+	}
+	if engine := server.currentMotionEngine(); engine != nil {
+		t.Fatalf("motion engine retained old Cloud credential: %+v", engine.Snapshot())
+	}
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want Stop before Cloud transport rebuild", commands)
 	}
 }
 

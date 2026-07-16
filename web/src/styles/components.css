@@ -431,12 +431,15 @@ textarea:disabled {
 .visualizer[data-state="paused"] .viz-state-dot {
   background: var(--warn);
 }
+.visualizer[data-state="starting"] .viz-carriage,
 .visualizer[data-state="completing"] .viz-carriage {
   color: var(--accent);
 }
+.visualizer[data-state="starting"] .viz-device-led,
 .visualizer[data-state="completing"] .viz-device-led {
   fill: var(--accent);
 }
+.visualizer[data-state="starting"] .viz-state-dot,
 .visualizer[data-state="completing"] .viz-state-dot {
   background: var(--accent);
 }

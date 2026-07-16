@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -163,6 +164,27 @@ func TestCloudRESTTransportConnectionCheckHonorsOKFalse(t *testing.T) {
 	}
 }
 
+func TestCloudRESTTransportConnectionCheckRejectsUnrecognizedBodies(t *testing.T) {
+	for _, body := range []string{"", "not-json", `{}`, `{"unexpected":true}`} {
+		t.Run(fmt.Sprintf("body_%q", body), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+
+			cloud := newTestCloudTransport(t, server.URL)
+			check, err := cloud.CheckConnection(context.Background())
+			if err == nil {
+				t.Fatalf("CheckConnection accepted unrecognized body %q", body)
+			}
+			if check.OK || check.HSPAvailable {
+				t.Fatalf("check = %+v, want unavailable", check)
+			}
+		})
+	}
+}
+
 func TestCloudRESTTransportReadState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -215,6 +237,42 @@ func TestCloudRESTTransportSSEListener(t *testing.T) {
 	}
 }
 
+func TestCloudRESTTransportSSEErrorsDoNotLeakCredentialURL(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("dial failed for %s", request.URL.String())
+	})}
+	cloud, err := NewCloudRESTTransport(
+		validCloudPrerequisites(),
+		CloudBuildOptions{},
+		CloudEndpointConfig{BaseURL: "https://cloud.invalid/"},
+		client,
+	)
+	if err != nil {
+		t.Fatalf("NewCloudRESTTransport: %v", err)
+	}
+
+	err = cloud.ListenStateEvents(context.Background(), nil)
+	if err == nil {
+		t.Fatal("ListenStateEvents succeeded after transport failure")
+	}
+	for _, value := range []string{err.Error(), cloud.Diagnostics().LastError} {
+		if strings.Contains(value, cloudSecretFixture) || strings.Contains(value, "app-public-id") {
+			t.Fatalf("event-stream error leaked credential URL: %q", value)
+		}
+	}
+}
+
+func TestParseServerTimeRejectsNonFiniteAndNonPositiveValues(t *testing.T) {
+	for _, value := range []any{"NaN", "Infinity", "-Infinity", "-1", "0", -1.0, 0.0} {
+		if parsed, ok := parseServerTimeValue(value); ok {
+			t.Fatalf("parseServerTimeValue(%#v) = %d, true; want rejected", value, parsed)
+		}
+	}
+	if parsed, ok := parseServerTimeValue("1700000000123.4"); !ok || parsed != 1700000000123 {
+		t.Fatalf("valid server time = %d, %v", parsed, ok)
+	}
+}
+
 func newTestCloudTransport(t *testing.T, baseURL string) *CloudRESTTransport {
 	t.Helper()
 
@@ -236,4 +294,10 @@ type capturedRequest struct {
 	ApplicationID string
 	ConnectionKey string
 	Body          string
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
 }

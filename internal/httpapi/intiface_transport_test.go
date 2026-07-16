@@ -140,7 +140,9 @@ func TestIntifaceOwnerSwitchStopsActiveEngineBeforeClosingSession(t *testing.T) 
 	if _, err := server.store.Save(next); err != nil {
 		t.Fatal(err)
 	}
-	server.applySettingsRuntimeTransition(context.Background(), previous, next)
+	if err := server.applySettingsRuntimeTransition(context.Background(), previous, next); err != nil {
+		t.Fatalf("applySettingsRuntimeTransition: %v", err)
+	}
 	fake.waitForKind(t, "StopDeviceCmd")
 	if server.currentMotionEngine() != nil {
 		t.Fatal("motion engine remained installed after dispatch-owner switch")

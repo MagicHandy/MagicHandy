@@ -78,6 +78,12 @@ Test expectation:
 
 If firmware v4/API v3/HSP prerequisites fail, the app reports HSP unavailable with a clear, actionable error and does not move the device. There is no legacy fallback transport (see ADR 0006); the user fixes settings rather than being silently downgraded.
 
+A successful HTTP status alone is not an HSP connection check. The response
+must contain a recognized positive availability, success, or playback-state
+signal; empty, malformed, and unrelated JSON bodies are unavailable. Errors
+from the SSE endpoint are sanitized before diagnostics because its required
+query string contains the private connection key.
+
 The API v3 Application ID and the Handy connection key are distinct. The app may
 ship a public Application ID, but diagnostics still need to distinguish a missing,
 invalid, revoked, or overridden Application ID from a malformed user connection

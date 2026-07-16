@@ -141,7 +141,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	}
 	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err)
+		writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
 		return
 	}
 	settings, _ := s.store.Snapshot()
@@ -222,13 +222,18 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	s.refreshActiveMotion(r.Context(), saved.Motion)
+	refreshErr := s.refreshActiveMotion(r.Context(), saved.Motion)
 
 	payload := map[string]any{"motion": saved.Public().Motion}
 	if engine := s.currentMotionEngine(); engine != nil {
 		payload["engine"] = engine.Snapshot()
 	}
-	writeJSON(w, http.StatusOK, payload)
+	status := http.StatusOK
+	if refreshErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = "settings were saved, but active motion could not apply them"
+	}
+	writeJSON(w, status, payload)
 }
 
 func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
@@ -264,11 +269,13 @@ func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *ht
 		writeJSON(w, http.StatusOK, map[string]any{
 			"available": false,
 			"stopped":   true,
-			"error":     fmt.Sprintf("stop could not reach the configured transport: %v", err),
+			"error":     "stop could not reach the configured transport: " + s.safeMotionErrorMessage(err),
 		})
 		return
 	}
-	result, stopErr := commandTransport.Stop(r.Context(), transport.StopCommand{Reason: "ui_stop_no_engine"})
+	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	result, stopErr := commandTransport.Stop(stopCtx, transport.StopCommand{Reason: "ui_stop_no_engine"})
+	stopCancel()
 	payload := map[string]any{
 		"available":        true,
 		"transport_result": result,
@@ -276,7 +283,7 @@ func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *ht
 	status := http.StatusOK
 	if stopErr != nil {
 		status = http.StatusBadGateway
-		payload["error"] = stopErr.Error()
+		payload["error"] = s.safeMotionErrorMessage(stopErr)
 	}
 	writeJSON(w, status, payload)
 }
@@ -317,49 +324,76 @@ func (s *Server) writeMotionResult(w http.ResponseWriter, state motion.ActiveMot
 	payload := map[string]any{"available": true, "engine": state}
 	if err != nil {
 		status = http.StatusBadGateway
-		payload["error"] = err.Error()
+		payload["error"] = s.safeMotionErrorMessage(err)
 	}
 	writeJSON(w, status, payload)
 }
 
-// refreshActiveMotion applies saved settings to running motion immediately so
-// quick controls take effect without a stop/start (ADR 0002, Invariant 9).
-func (s *Server) refreshActiveMotion(ctx context.Context, settings config.MotionSettings) {
-	engine := s.currentMotionEngine()
-	if engine == nil {
-		return
+func (s *Server) safeMotionErrorMessage(err error) string {
+	if err == nil {
+		return ""
 	}
-	if !engine.Snapshot().Running {
-		return
+	if safeCloud := safeCloudErrorMessage(err); safeCloud != err.Error() {
+		return safeCloud
 	}
-	_, _ = engine.RefreshSettings(ctx, settings, "settings_saved")
+	settings, _ := s.store.Snapshot()
+	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerCloudREST:
+		return safeCloudErrorMessage(err)
+	case config.DispatchOwnerBrowserBluetooth:
+		return safeBluetoothErrorMessage(err)
+	default:
+		return err.Error()
+	}
 }
 
-func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) {
+// refreshActiveMotion applies saved settings to running motion immediately so
+// quick controls take effect without a stop/start (ADR 0002, Invariant 9).
+func (s *Server) refreshActiveMotion(ctx context.Context, settings config.MotionSettings) error {
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		return nil
+	}
+	if !engine.Snapshot().Running {
+		return nil
+	}
+	_, err := engine.RefreshSettings(ctx, settings, "settings_saved")
+	return err
+}
+
+func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
 	s.applyVoiceSettingsTransition(next)
 	ownerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
 	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
-	if ownerChanged || intifaceAddressChanged {
-		// Owner switches stop first — including any autonomous mode.
-		if s.modes != nil {
-			s.modes.Stop("dispatch_owner_changed")
+	cloudConfigChanged := previous.Device.FirmwareAPIRequirement != next.Device.FirmwareAPIRequirement ||
+		previous.Device.APIApplicationIDSource != next.Device.APIApplicationIDSource ||
+		previous.Device.APIApplicationIDOverride != next.Device.APIApplicationIDOverride ||
+		previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey
+	if ownerChanged || intifaceAddressChanged || cloudConfigChanged {
+		// Transport changes stop active motion, including any autonomous mode.
+		reason := "transport_config_changed"
+		if ownerChanged {
+			reason = "dispatch_owner_changed"
 		}
-		s.stopAndClearMotionEngine(ctx, "dispatch_owner_changed")
+		if s.modes != nil {
+			s.modes.Stop(reason)
+		}
+		stopErr := s.stopAndClearMotionEngine(ctx, reason)
 		if ownerChanged || next.Device.HSPDispatchOwner == config.DispatchOwnerIntiface {
 			s.closeIntiface()
 		}
-		return
+		return stopErr
 	}
-	s.refreshActiveMotion(ctx, next.Motion)
+	return s.refreshActiveMotion(ctx, next.Motion)
 }
 
-func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
+func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) error {
 	s.motion.lifecycleMu.Lock()
 	defer s.motion.lifecycleMu.Unlock()
-	s.stopAndClearMotionEngineLocked(ctx, reason)
+	return s.stopAndClearMotionEngineLocked(ctx, reason)
 }
 
-func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason string) {
+func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason string) error {
 	s.motion.mu.Lock()
 	engine := s.motion.engine
 	s.motion.engine = nil
@@ -367,9 +401,10 @@ func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason stri
 	s.motion.mu.Unlock()
 
 	if engine == nil {
-		return
+		return nil
 	}
-	_, _ = engine.Stop(ctx, reason)
+	_, err := engine.Stop(ctx, reason)
+	return err
 }
 
 // Quiesce rejects new controller work, drains autonomous planners, and stops
@@ -380,7 +415,7 @@ func (s *Server) Quiesce() {
 		s.cancelActiveChats()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		s.stopAndClearMotionEngine(ctx, "server_shutdown")
+		_ = s.stopAndClearMotionEngine(ctx, "server_shutdown")
 		if s.modes != nil {
 			s.modes.Shutdown()
 		}
@@ -428,7 +463,9 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 	owner := settings.Device.HSPDispatchOwner
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	if engine != nil && engineOwner != owner {
-		s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed")
+		if err := s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed"); err != nil {
+			return nil, 0, fmt.Errorf("previous motion owner could not be stopped: %w", err)
+		}
 		engine = nil
 	} else if engine != nil {
 		return engine, engine.AdmissionGeneration(), nil
