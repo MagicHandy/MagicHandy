@@ -100,6 +100,8 @@ Contributions are welcome, from people and AI coding tools alike.
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md) ·
   [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Pattern library and import contracts](docs/pattern-library.md)
+- [LLM control surface — current state and ideas](docs/llm-control-surface.md)
+- [Parity with StrokeGPT-ReVibed](docs/parity-with-stgpt-rv.md)
 - [UI design](docs/ui-design.md) ·
   [UI design guidelines](docs/ui-design-guidelines.md)
 - [MagicHandy + LSO integration plan](docs/lso-merge-integration.md)

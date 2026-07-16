@@ -27,8 +27,12 @@ of Phase 16 and anchor its packaging story. The future Windows install binary
 remains a thin shell around the app's own first-run setup wizard (decision and
 design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
-decision. The two remaining StrokeGPT-ReVibed parity milestones — the migration
-importer (Phase 15) and LLM-driven Autopilot — are not yet started.
+decision. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
+Autopilot is planned-but-not-started, while the migration importer (Phase 15) is
+now **undecided — it may not be built at all** (rationale in
+`docs/parity-with-stgpt-rv.md`). The UI/behavior parity baseline is complete;
+the largest genuine remaining parity gap is LLM control depth (stroke regions,
+program selection, soft anchors), catalogued in `docs/llm-control-surface.md`.
 
 Recent work (PRs #63-#83) hardens connection and live-limit controls, bounds
 LLM output with honest provider-native reasoning control, makes source updates
@@ -85,7 +89,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
-| 15 | Migration importer and compatibility report | Not started | — |
+| 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -1234,6 +1238,19 @@ rendered QA refresh remains open.
 
 # Phase 15: Migration From StrokeGPT-ReVibed
 
+## Status: Undecided — may not be built
+
+Whether MagicHandy ships an STGPT-RV importer at all is an **open decision**, not
+just pending work. It is a one-time convenience (settings are few and
+patterns/programs already import through the normal library path), STGPT-RV is a
+live upstream with evolving formats, and the LSO merge may change what
+"migration" means. Rationale and the decision framing live in
+[docs/parity-with-stgpt-rv.md](docs/parity-with-stgpt-rv.md) ("Migration
+importer — Undecided"). The scope below is kept ready so that *if* the decision
+is "build it" the work is executable; if the decision is "won't build", close
+this phase and the parity row as Rejected with that reason. The dependent Phase
+16.3 in-wizard porting step inherits this undecided status.
+
 ## Suggested `/goal`
 
 `/goal Complete MagicHandy Phase 15: implement import tools for StrokeGPT-ReVibed settings, memories, prompt sets, motion patterns, and programs, with dry-run mode, a compatibility report, and tests.`
@@ -1330,10 +1347,11 @@ Implement, as slices:
   checksummed, size/license-visible, progress-reporting API endpoints;
   ElevenLabs key entry) → finish. Every step skippable; every step is the
   existing settings/API surface, never a second implementation
-- **16.3 — StrokeGPT-ReVibed porting step**: the wizard surfaces the Phase
-  15 importer — install-location detection, dry-run preview with the
-  compatibility report, per-category opt-in, non-destructive import
-  (depends on the Phase 15 importer API)
+- **16.3 — StrokeGPT-ReVibed porting step** *(undecided; gated on Phase 15)*:
+  the wizard surfaces the Phase 15 importer — install-location detection,
+  dry-run preview with the compatibility report, per-category opt-in,
+  non-destructive import. Exists only if the undecided Phase 15 importer is
+  built (see its status note above)
 - log-to-file by default with a mostly quiet console; print the local URL
   prominently (clickable in terminals that support it)
 - keep binding to localhost by default; document that the app is a
