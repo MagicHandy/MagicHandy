@@ -277,6 +277,9 @@ func (s *session) workLoop() {
 		default:
 			s.speak(request)
 		}
+		s.mu.Lock()
+		delete(s.canceled, request.ID)
+		s.mu.Unlock()
 	}
 }
 
@@ -295,6 +298,7 @@ func (s *session) speak(request protocol.Request) {
 		cancel()
 		s.mu.Lock()
 		delete(s.cancels, request.ID)
+		delete(s.canceled, request.ID)
 		s.mu.Unlock()
 	}()
 
@@ -363,18 +367,26 @@ func (s *session) speakPersistent(ctx context.Context, runner *persistentRunner,
 	total := 0
 	seq := 0
 	err := runner.Speak(ctx, request.ID, request.Text, func(chunk []byte) error {
-		total += len(chunk)
-		if total > maxPCMBytes {
-			return errOversizedPCM
+		for len(chunk) > 0 {
+			length := len(chunk)
+			if length > audioChunkBytes {
+				length = audioChunkBytes
+			}
+			piece := chunk[:length]
+			total += len(piece)
+			if total > maxPCMBytes {
+				return errOversizedPCM
+			}
+			s.send(protocol.Response{
+				Type:        protocol.ResponseAudioChunk,
+				RequestID:   request.ID,
+				Seq:         seq,
+				AudioB64:    base64.StdEncoding.EncodeToString(piece),
+				AudioFormat: "pcm_s16le_24000",
+			})
+			seq++
+			chunk = chunk[length:]
 		}
-		s.send(protocol.Response{
-			Type:        protocol.ResponseAudioChunk,
-			RequestID:   request.ID,
-			Seq:         seq,
-			AudioB64:    base64.StdEncoding.EncodeToString(chunk),
-			AudioFormat: "pcm_s16le_24000",
-		})
-		seq++
 		return nil
 	})
 	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {

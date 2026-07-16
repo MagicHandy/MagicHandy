@@ -200,6 +200,16 @@ func TestLoadWithoutKeyIsAClearError(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUnsafeBaseURL(t *testing.T) {
+	d := startWorker(t, Options{APIKey: testKey, BaseURL: "file:///tmp/elevenlabs"})
+	d.send(t, protocol.Request{Type: protocol.RequestLoad, ID: "l"})
+	response := d.next(t, 5*time.Second)
+	if response.Type != protocol.ResponseError || response.Error == nil ||
+		!strings.Contains(response.Error.Message, "absolute HTTP URL") {
+		t.Fatalf("unsafe base URL response = %+v", response)
+	}
+}
+
 func TestLoadRejectsInvalidKey(t *testing.T) {
 	mock := &mockAPI{}
 	server := httptest.NewServer(mock.handler())

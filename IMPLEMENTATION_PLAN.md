@@ -84,6 +84,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
 | 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | #79 |
 | 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Complete** | #80 |
+| 13.11 | Voice protocol, queue, provider, and process-lifecycle reliability audit | **In review** | current branch |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; HW feel check open** | #52 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
@@ -960,6 +961,29 @@ Status: **complete**.
   a different repeatable value, and **Varied** explicitly restores per-request
   randomness with the repeat cache disabled. See
   `docs/neutts-quality-performance.md`.
+
+### Slice 13.11: Voice Reliability Audit
+
+Status: **in review**.
+
+- The core treats malformed worker output, missing/out-of-order audio frames,
+  changing formats, invalid transcripts, and oversized retained audio as
+  terminal protocol failures. Audio frames apply backpressure instead of being
+  silently dropped, which prevents corrupted or slurred playback under bursty
+  output.
+- Cancellation is bound to the worker session that actually received a
+  request. Queued cancellation no longer leaks unknown IDs into a worker, late
+  persistent-runner cancellation cannot poison the next NeuTTS request, and
+  every provider clears terminal cancellation state.
+- Worker reconfiguration and start/stop/restart are serialized; crashes clear
+  stale readiness and terminate the owned process tree. Provider URLs, response
+  sizes, staged audio, reference WAVs, and encoder diagnostics are bounded and
+  validated before crossing their trust boundaries.
+- Retained TTS audio covers the accepted core workload and is unaffected by ASR
+  history, while per-clip and recent-request limits keep memory bounded.
+- Automated coverage includes burst audio delivery, malformed protocol frames,
+  lifecycle races, URL validation, persistent-runner cancellation, strict WAV
+  framing, and provider response bounds. Real-device motion is unchanged.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

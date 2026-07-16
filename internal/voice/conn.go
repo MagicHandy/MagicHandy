@@ -25,17 +25,34 @@ type conn struct {
 	writer  io.Writer
 
 	mu      sync.Mutex
-	pending map[string]chan Response
+	pending map[string]*responseSink
 	closed  bool
 	readErr error
 
 	done chan struct{}
 }
 
+type responseSink struct {
+	responses chan Response
+	done      chan struct{}
+	stopOnce  sync.Once
+}
+
+func newResponseSink() *responseSink {
+	return &responseSink{
+		responses: make(chan Response, 64),
+		done:      make(chan struct{}),
+	}
+}
+
+func (s *responseSink) stop() {
+	s.stopOnce.Do(func() { close(s.done) })
+}
+
 func newConn(writer io.Writer, reader io.Reader) *conn {
 	c := &conn{
 		writer:  writer,
-		pending: make(map[string]chan Response),
+		pending: make(map[string]*responseSink),
 		done:    make(chan struct{}),
 	}
 	go c.readLoop(reader)
@@ -66,9 +83,9 @@ func (c *conn) send(request Request) error {
 // release function must be called exactly once when the caller stops
 // listening.
 func (c *conn) register(id string) (<-chan Response, func(), error) {
-	// Buffered so a slow consumer cannot stall the read loop; the supervisor
-	// serializes work requests, so this bound is generous.
-	ch := make(chan Response, 64)
+	// The buffer absorbs short bursts. dispatch applies backpressure after it
+	// fills: dropping an audio frame would silently corrupt speech playback.
+	sink := newResponseSink()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -78,14 +95,17 @@ func (c *conn) register(id string) (<-chan Response, func(), error) {
 	if _, exists := c.pending[id]; exists {
 		return nil, nil, fmt.Errorf("duplicate voice request id %q", id)
 	}
-	c.pending[id] = ch
+	c.pending[id] = sink
 
 	release := func() {
 		c.mu.Lock()
-		delete(c.pending, id)
+		if c.pending[id] == sink {
+			delete(c.pending, id)
+		}
 		c.mu.Unlock()
+		sink.stop()
 	}
-	return ch, release, nil
+	return sink.responses, release, nil
 }
 
 func (c *conn) readLoop(reader io.Reader) {
@@ -99,9 +119,8 @@ func (c *conn) readLoop(reader io.Reader) {
 		}
 		var response Response
 		if err := json.Unmarshal(line, &response); err != nil {
-			// A worker writing junk to stdout is a protocol failure worth
-			// surfacing, but one bad line must not kill the session.
-			continue
+			c.closeWithError(fmt.Errorf("decode voice worker response: %w", err))
+			return
 		}
 		c.dispatch(response)
 	}
@@ -115,16 +134,15 @@ func (c *conn) readLoop(reader io.Reader) {
 
 func (c *conn) dispatch(response Response) {
 	c.mu.Lock()
-	ch := c.pending[response.RequestID]
+	sink := c.pending[response.RequestID]
 	c.mu.Unlock()
-	if ch == nil {
+	if sink == nil {
 		return
 	}
 	select {
-	case ch <- response:
-	default:
-		// The buffer bound protects the read loop; dropping here means the
-		// consumer already abandoned the request.
+	case sink.responses <- response:
+	case <-sink.done:
+	case <-c.done:
 	}
 }
 
@@ -138,21 +156,21 @@ func (c *conn) closeWithError(err error) {
 	c.closed = true
 	c.readErr = err
 	pending := c.pending
-	c.pending = make(map[string]chan Response)
+	c.pending = make(map[string]*responseSink)
 	c.mu.Unlock()
+	close(c.done)
 
 	failure := Response{
 		Type:  ResponseError,
 		Error: &WorkerError{Code: ErrorCodeInternal, Message: err.Error()},
 	}
-	for id, ch := range pending {
+	for id, sink := range pending {
 		failure.RequestID = id
 		select {
-		case ch <- failure:
-		default:
+		case sink.responses <- failure:
+		case <-sink.done:
 		}
 	}
-	close(c.done)
 }
 
 func (c *conn) isClosed() bool {
@@ -164,4 +182,10 @@ func (c *conn) isClosed() bool {
 // closedChan lets the supervisor observe stream teardown.
 func (c *conn) closedChan() <-chan struct{} {
 	return c.done
+}
+
+func (c *conn) failure() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.readErr
 }

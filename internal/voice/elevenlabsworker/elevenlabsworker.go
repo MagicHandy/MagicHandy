@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,8 @@ const (
 	requestTimeout = 30 * time.Second
 	chunkBytes     = 32 * 1024
 	queueCapacity  = 8
+	maxSpeechBytes = 32 << 10
+	maxAudioBytes  = 32 << 20
 )
 
 // Options configure one worker session.
@@ -64,14 +67,20 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 		options.OutputFormat = DefaultOutputFormat
 	}
 	if options.HTTPClient == nil {
-		options.HTTPClient = &http.Client{Timeout: requestTimeout}
+		options.HTTPClient = &http.Client{
+			Timeout: requestTimeout,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
 	}
 
 	s := &session{
-		options: options,
-		writer:  writer,
-		queue:   make(chan protocol.Request, queueCapacity),
-		cancels: make(map[string]context.CancelFunc),
+		options:  options,
+		writer:   writer,
+		queue:    make(chan protocol.Request, queueCapacity),
+		cancels:  make(map[string]context.CancelFunc),
+		setupErr: validateOptions(options),
 	}
 
 	workDone := make(chan struct{})
@@ -81,6 +90,7 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	}()
 
 	readErr := s.readLoop(reader)
+	s.cancelAll()
 	close(s.queue)
 	<-workDone
 	return readErr
@@ -97,6 +107,7 @@ type session struct {
 	pending  int
 	canceled map[string]bool
 	cancels  map[string]context.CancelFunc
+	setupErr error
 
 	queue chan protocol.Request
 }
@@ -125,6 +136,7 @@ func (s *session) readLoop(reader io.Reader) error {
 			s.handleLoad(request)
 		case protocol.RequestUnload:
 			s.setLoaded(false)
+			s.cancelAll()
 			s.send(s.healthResponse(request.ID))
 		case protocol.RequestCancel:
 			s.markCanceled(request.TargetID)
@@ -162,6 +174,10 @@ func (s *session) handleHello(request protocol.Request) {
 // handleLoad validates the API key against the account endpoint so a bad or
 // missing key is a clear, immediate error instead of a failed first speak.
 func (s *session) handleLoad(request protocol.Request) {
+	if s.setupErr != nil {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, s.setupErr.Error(), false)
+		return
+	}
 	if s.options.APIKey == "" {
 		s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
 			"ELEVENLABS_API_KEY is not set; add the API key in Settings → Voice", false)
@@ -237,18 +253,24 @@ func (s *session) workLoop() {
 			s.speak(ctx, request)
 		}
 
+		s.mu.Lock()
 		if cancel != nil {
 			cancel()
-			s.mu.Lock()
 			delete(s.cancels, request.ID)
-			s.mu.Unlock()
 		}
+		delete(s.canceled, request.ID)
+		s.mu.Unlock()
 	}
 }
 
 // speak streams one sentence at a time so first audio arrives quickly and
 // cancellation lands between (or inside) sentence requests.
 func (s *session) speak(ctx context.Context, request protocol.Request) {
+	if len(request.Text) > maxSpeechBytes {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
+			fmt.Sprintf("speak text exceeds %d KiB", maxSpeechBytes>>10), false)
+		return
+	}
 	sentences := SplitSentences(request.Text)
 	if len(sentences) == 0 {
 		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "speak text is empty", false)
@@ -256,12 +278,13 @@ func (s *session) speak(ctx context.Context, request protocol.Request) {
 	}
 
 	seq := 0
+	total := 0
 	for _, sentence := range sentences {
 		if s.isCanceled(request.ID) || ctx.Err() != nil {
 			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
 			return
 		}
-		ok := s.streamSentence(ctx, request.ID, sentence, &seq)
+		ok := s.streamSentence(ctx, request.ID, sentence, &seq, &total)
 		if !ok {
 			return
 		}
@@ -272,7 +295,7 @@ func (s *session) speak(ctx context.Context, request protocol.Request) {
 // streamSentence performs one TTS HTTP call and relays its byte stream as
 // audio_chunk frames; false means the request already terminated (error or
 // cancel frame sent).
-func (s *session) streamSentence(ctx context.Context, requestID string, sentence string, seq *int) bool {
+func (s *session) streamSentence(ctx context.Context, requestID string, sentence string, seq, total *int) bool {
 	body, err := json.Marshal(map[string]any{
 		"text":     sentence,
 		"model_id": s.options.ModelID,
@@ -282,9 +305,9 @@ func (s *session) streamSentence(ctx context.Context, requestID string, sentence
 		return false
 	}
 
-	url := fmt.Sprintf("%s/v1/text-to-speech/%s/stream?output_format=%s",
-		s.options.BaseURL, s.options.VoiceID, s.options.OutputFormat)
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(body)))
+	endpoint := fmt.Sprintf("%s/v1/text-to-speech/%s/stream?output_format=%s",
+		s.options.BaseURL, url.PathEscape(s.options.VoiceID), url.QueryEscape(s.options.OutputFormat))
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
 	if err != nil {
 		s.sendError(requestID, protocol.ErrorCodeInternal, "build TTS request", false)
 		return false
@@ -304,7 +327,7 @@ func (s *session) streamSentence(ctx context.Context, requestID string, sentence
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	if response.StatusCode >= 400 {
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 		code := protocol.ErrorCodeInternal
 		if response.StatusCode == http.StatusUnauthorized {
@@ -324,6 +347,12 @@ func (s *session) streamSentence(ctx context.Context, requestID string, sentence
 		}
 		n, err := response.Body.Read(buffer)
 		if n > 0 {
+			*total += n
+			if *total > maxAudioBytes {
+				s.sendError(requestID, protocol.ErrorCodeInternal,
+					fmt.Sprintf("ElevenLabs audio exceeds %d MiB", maxAudioBytes>>20), false)
+				return false
+			}
 			s.send(protocol.Response{
 				Type:        protocol.ResponseAudioChunk,
 				RequestID:   requestID,
@@ -348,6 +377,27 @@ func (s *session) streamSentence(ctx context.Context, requestID string, sentence
 	}
 }
 
+func validateOptions(options Options) error {
+	parsed, err := url.Parse(options.BaseURL)
+	if err != nil || parsed.Host == "" || !parsed.IsAbs() {
+		return fmt.Errorf("ElevenLabs base URL must be an absolute HTTP URL with a host")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("ElevenLabs base URL scheme must be http or https")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+		return fmt.Errorf("ElevenLabs base URL must not contain credentials, a query, or a fragment")
+	}
+	for label, value := range map[string]string{
+		"voice ID": options.VoiceID, "model ID": options.ModelID, "output format": options.OutputFormat,
+	} {
+		if strings.TrimSpace(value) == "" || len(value) > 256 || strings.ContainsAny(value, "\r\n") {
+			return fmt.Errorf("ElevenLabs %s is invalid", label)
+		}
+	}
+	return nil
+}
+
 func (s *session) markCanceled(id string) {
 	if id == "" {
 		return
@@ -358,6 +408,18 @@ func (s *session) markCanceled(id string) {
 	}
 	s.canceled[id] = true
 	if cancel, ok := s.cancels[id]; ok {
+		cancel()
+	}
+	s.mu.Unlock()
+}
+
+func (s *session) cancelAll() {
+	s.mu.Lock()
+	for id, cancel := range s.cancels {
+		if s.canceled == nil {
+			s.canceled = make(map[string]bool)
+		}
+		s.canceled[id] = true
 		cancel()
 	}
 	s.mu.Unlock()

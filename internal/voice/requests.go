@@ -1,7 +1,6 @@
 package voice
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,7 +16,10 @@ import (
 // few requests so retained audio cannot grow without bound.
 const (
 	maxRetainedAudioBytes = 2 << 20 // per request
-	audioRetainCount      = 4       // most recent requests keeping audio
+	// One active TTS request plus every request accepted by the bounded queue
+	// may complete before ordered browser playback catches up.
+	audioRetainCount      = queueCapacity + 1
+	maxTranscriptionBytes = 32 << 20
 )
 
 // Request lifecycle states shown to the API and UI.
@@ -42,9 +44,11 @@ type PendingRequest struct {
 	state     string
 	createdAt time.Time
 
-	request  Request
-	canceled bool
-	cleanup  func()
+	request    Request
+	canceled   bool
+	cleanup    func()
+	wire       *conn
+	cancelSent bool
 
 	chunks         int
 	audio          []byte
@@ -74,6 +78,12 @@ type RequestSnapshot struct {
 func (p *PendingRequest) Snapshot() RequestSnapshot {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	transcript := append([]TranscriptCandidate(nil), p.transcript...)
+	var failure *WorkerError
+	if p.failure != nil {
+		failureCopy := *p.failure
+		failure = &failureCopy
+	}
 	return RequestSnapshot{
 		ID:             p.ID,
 		Role:           p.Role,
@@ -83,9 +93,9 @@ func (p *PendingRequest) Snapshot() RequestSnapshot {
 		AudioChunks:    p.chunks,
 		AudioBytes:     len(p.audio),
 		AudioTruncated: p.audioTruncated,
-		Transcript:     p.transcript,
+		Transcript:     transcript,
 		Rejected:       p.rejected,
-		Error:          p.failure,
+		Error:          failure,
 	}
 }
 
@@ -103,16 +113,18 @@ func (p *PendingRequest) Text() string {
 // is retained). Raw audio never appears in snapshots, traces, or logs.
 func (p *PendingRequest) Audio() ([]byte, string) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if len(p.audio) == 0 {
+		p.mu.Unlock()
 		return nil, ""
 	}
 	audio := make([]byte, len(p.audio))
 	copy(audio, p.audio)
-	if p.audioFormat == "pcm_s16le_24000" {
+	format := p.audioFormat
+	p.mu.Unlock()
+	if format == "pcm_s16le_24000" {
 		return pcmS16LEToWAV(audio, 24000), "wav"
 	}
-	return audio, p.audioFormat
+	return audio, format
 }
 
 func pcmS16LEToWAV(pcm []byte, sampleRate uint32) []byte {
@@ -160,21 +172,32 @@ func (p *PendingRequest) releaseInput() {
 	}
 }
 
-func (p *PendingRequest) setState(state string) {
+func (p *PendingRequest) markCanceled() bool {
 	p.mu.Lock()
-	if p.canceled && state != RequestStateCanceled {
-		p.mu.Unlock()
-		return
+	defer p.mu.Unlock()
+	if p.state != RequestStateQueued && p.state != RequestStateActive {
+		return false
 	}
-	p.state = state
-	p.mu.Unlock()
+	p.canceled = true
+	p.state = RequestStateCanceled
+	return true
 }
 
-func (p *PendingRequest) markCanceled() {
+func (p *PendingRequest) invalidate() {
 	p.mu.Lock()
 	p.canceled = true
 	p.state = RequestStateCanceled
 	p.mu.Unlock()
+}
+
+func (p *PendingRequest) claimCancelWire() *conn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.wire == nil || p.cancelSent {
+		return nil
+	}
+	p.cancelSent = true
+	return p.wire
 }
 
 func (p *PendingRequest) isCanceled() bool {
@@ -185,9 +208,64 @@ func (p *PendingRequest) isCanceled() bool {
 
 func (p *PendingRequest) fail(err *WorkerError) {
 	p.mu.Lock()
+	if p.canceled {
+		p.mu.Unlock()
+		return
+	}
 	p.state = RequestStateFailed
 	p.failure = err
 	p.mu.Unlock()
+}
+
+func (p *PendingRequest) failAndCancel(err *WorkerError) *conn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.canceled {
+		return nil
+	}
+	p.state = RequestStateFailed
+	p.failure = err
+	if p.wire != nil && !p.cancelSent {
+		p.cancelSent = true
+		return p.wire
+	}
+	return nil
+}
+
+// markSent binds cancellation to the exact worker session that received the
+// request. It returns that session when cancellation won the send race.
+func (p *PendingRequest) markSent(workerConn *conn) *conn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.wire = workerConn
+	if p.canceled {
+		if !p.cancelSent {
+			p.cancelSent = true
+			return workerConn
+		}
+		return nil
+	}
+	p.state = RequestStateActive
+	return nil
+}
+
+func (p *PendingRequest) clearWire() {
+	p.mu.Lock()
+	p.wire = nil
+	p.mu.Unlock()
+}
+
+func (p *PendingRequest) timeOut(err *WorkerError) *conn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.canceled = true
+	p.state = RequestStateFailed
+	p.failure = err
+	if p.wire != nil && !p.cancelSent {
+		p.cancelSent = true
+		return p.wire
+	}
+	return nil
 }
 
 // Submit queues one speak/transcribe request. The queue is bounded and
@@ -248,18 +326,24 @@ func (s *Supervisor) submit(request Request, cleanup func()) (*PendingRequest, e
 
 // Cancel cancels a queued or active request by ID and tells the worker.
 func (s *Supervisor) Cancel(pending *PendingRequest) {
-	pending.markCanceled()
-
-	s.mu.Lock()
-	workerConn := s.conn
-	s.mu.Unlock()
-	if workerConn != nil {
-		_ = workerConn.send(Request{
-			Type:     RequestCancel,
-			ID:       s.newRequestID(),
-			TargetID: pending.ID,
-		})
+	if !pending.markCanceled() {
+		return
 	}
+	s.cancelPending(pending)
+}
+
+func (s *Supervisor) cancelPending(pending *PendingRequest) {
+	if workerConn := pending.claimCancelWire(); workerConn != nil {
+		s.sendCancel(workerConn, pending.ID)
+	}
+}
+
+func (s *Supervisor) sendCancel(workerConn *conn, targetID string) {
+	_ = workerConn.send(Request{
+		Type:     RequestCancel,
+		ID:       s.newRequestID(),
+		TargetID: targetID,
+	})
 }
 
 // dispatchLoop serializes work requests to the worker. It exits when the
@@ -267,7 +351,9 @@ func (s *Supervisor) Cancel(pending *PendingRequest) {
 func (s *Supervisor) dispatchLoop(workerConn *conn, queue chan *PendingRequest) {
 	for pending := range queue {
 		s.mu.Lock()
-		s.queued--
+		if s.queued > 0 {
+			s.queued--
+		}
 		if !pending.isCanceled() {
 			s.activeID = pending.ID
 		}
@@ -290,6 +376,10 @@ func (s *Supervisor) dispatchLoop(workerConn *conn, queue chan *PendingRequest) 
 // history, TTS playback, or motion (ADR 0003).
 func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 	defer pending.releaseInput()
+	defer pending.clearWire()
+	if pending.isCanceled() {
+		return
+	}
 	responses, release, err := workerConn.register(pending.ID)
 	if err != nil {
 		pending.fail(&WorkerError{Code: ErrorCodeInternal, Message: err.Error()})
@@ -308,7 +398,9 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 		pending.fail(&WorkerError{Code: ErrorCodeInternal, Message: err.Error()})
 		return
 	}
-	pending.setState(RequestStateActive)
+	if cancelConn := pending.markSent(workerConn); cancelConn != nil {
+		s.sendCancel(cancelConn, pending.ID)
+	}
 
 	s.mu.Lock()
 	jobTimeout := s.config.JobTimeout
@@ -321,68 +413,23 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 	for {
 		select {
 		case response := <-responses:
-			if s.applyResponse(pending, response) {
+			terminal, cancelWorker := s.applyResponse(pending, response)
+			if cancelWorker {
+				s.sendCancel(workerConn, pending.ID)
+			}
+			if terminal {
 				return
 			}
 		case <-timer.C:
-			s.Cancel(pending)
-			pending.fail(&WorkerError{
+			workerConn := pending.timeOut(&WorkerError{
 				Code:    ErrorCodeTimeout,
 				Message: fmt.Sprintf("%s request timed out after %s", pending.Type, jobTimeout),
 			})
+			if workerConn != nil {
+				s.sendCancel(workerConn, pending.ID)
+			}
 			return
 		}
-	}
-}
-
-// applyResponse folds one frame into the request record; true means terminal.
-func (s *Supervisor) applyResponse(pending *PendingRequest, response Response) bool {
-	if pending.isCanceled() {
-		switch response.Type {
-		case ResponseTranscript, ResponseDone, ResponseCanceled, ResponseError:
-			return true
-		default:
-			return false
-		}
-	}
-	switch response.Type {
-	case ResponseAudioChunk:
-		pending.mu.Lock()
-		pending.chunks++
-		if data, err := base64.StdEncoding.DecodeString(response.AudioB64); err == nil && len(data) > 0 {
-			if pending.audioFormat == "" {
-				pending.audioFormat = response.AudioFormat
-			}
-			if len(pending.audio)+len(data) <= maxRetainedAudioBytes {
-				pending.audio = append(pending.audio, data...)
-			} else {
-				pending.audioTruncated = true
-			}
-		}
-		pending.mu.Unlock()
-		return false
-	case ResponseTranscript:
-		pending.mu.Lock()
-		pending.transcript = response.Candidates
-		pending.rejected = response.Rejected
-		pending.state = RequestStateDone
-		pending.mu.Unlock()
-		return true
-	case ResponseDone:
-		pending.setState(RequestStateDone)
-		return true
-	case ResponseCanceled:
-		pending.markCanceled()
-		return true
-	case ResponseError:
-		workerErr := response.Error
-		if workerErr == nil {
-			workerErr = &WorkerError{Code: ErrorCodeInternal, Message: "worker reported an error"}
-		}
-		pending.fail(workerErr)
-		return true
-	default:
-		return false
 	}
 }
 
@@ -460,6 +507,16 @@ func (m *Manager) prepareTranscriptionStagingLocked(dataDir string) error {
 // and sends only its reference over the worker protocol. This keeps real audio
 // below the protocol's NDJSON frame bound and avoids a second base64 copy.
 func (m *Manager) SubmitTranscription(audio []byte, format, dataDir string) (*PendingRequest, error) {
+	if len(audio) == 0 {
+		return nil, errors.New("recorded audio is required")
+	}
+	if len(audio) > maxTranscriptionBytes {
+		return nil, fmt.Errorf("recorded audio exceeds %d MiB", maxTranscriptionBytes>>20)
+	}
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format != "wav" && format != "webm" && format != "ogg" {
+		return nil, errors.New("recorded audio format must be wav, webm, or ogg")
+	}
 	m.mu.Lock()
 	if err := m.prepareTranscriptionStagingLocked(dataDir); err != nil {
 		m.mu.Unlock()
@@ -473,7 +530,6 @@ func (m *Manager) SubmitTranscription(audio []byte, format, dataDir string) (*Pe
 	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create voice input session: %w", err)
 	}
-	format = strings.TrimSpace(format)
 	file, err := os.CreateTemp(stagingDir, "capture-*."+format)
 	if err != nil {
 		return nil, fmt.Errorf("stage voice input: %w", err)
@@ -515,7 +571,15 @@ func (m *Manager) submitAndTrack(role Role, request Request, cleanup func()) (*P
 		}
 		return nil, errors.New("voice manager is shut down")
 	}
-	pending, err := m.workers[role].submit(request, cleanup)
+	worker, ok := m.workers[role]
+	if !ok || worker == nil {
+		m.mu.Unlock()
+		if cleanup != nil {
+			cleanup()
+		}
+		return nil, fmt.Errorf("unknown voice worker role %q", role)
+	}
+	pending, err := worker.submit(request, cleanup)
 	if err != nil {
 		m.mu.Unlock()
 		return nil, err
@@ -552,7 +616,8 @@ func (m *Manager) Status() map[Role]WorkerStatus {
 }
 
 // Track adds a request to the recent-request log, evicting the oldest and
-// dropping retained audio beyond the newest few (metadata stays visible).
+// dropping retained audio beyond the newest accepted TTS workload. ASR history
+// never evicts speech that may still be waiting for ordered playback.
 func (m *Manager) Track(pending *PendingRequest) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -573,10 +638,19 @@ func (m *Manager) trackLocked(pending *PendingRequest) {
 		if evict < 0 {
 			break
 		}
+		m.requests[evict].dropAudio()
 		m.requests = append(m.requests[:evict], m.requests[evict+1:]...)
 	}
-	for i := 0; i < len(m.requests)-audioRetainCount; i++ {
-		m.requests[i].dropAudio()
+	retainedTTS := 0
+	for i := len(m.requests) - 1; i >= 0; i-- {
+		request := m.requests[i]
+		if request.Role != RoleTTS && request.Type != RequestSpeak {
+			continue
+		}
+		retainedTTS++
+		if retainedTTS > audioRetainCount {
+			request.dropAudio()
+		}
 	}
 }
 
@@ -610,9 +684,8 @@ func (m *Manager) InvalidateAll(role Role) []*PendingRequest {
 			active = append(active, pending)
 		}
 		if snapshot.State != RequestStateFailed && snapshot.State != RequestStateCanceled {
-			pending.markCanceled()
+			pending.invalidate()
 			pending.dropAudio()
-			pending.releaseInput()
 		}
 	}
 	return active
@@ -623,7 +696,7 @@ func (m *Manager) InvalidateAll(role Role) []*PendingRequest {
 func (m *Manager) CancelInvalidated(role Role, requests []*PendingRequest) {
 	worker := m.workers[role]
 	for _, pending := range requests {
-		worker.Cancel(pending)
+		worker.cancelPending(pending)
 	}
 }
 

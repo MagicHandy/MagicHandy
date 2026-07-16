@@ -172,6 +172,35 @@ func TestPersistentRunnerLoadsOnceAndServesMultipleRequests(t *testing.T) {
 	worker.shutdown(t)
 }
 
+func TestPersistentRunnerDoesNotCancelCompletedRequest(t *testing.T) {
+	var commands bytes.Buffer
+	runner := &persistentRunner{stdin: nopWriteCloser{Writer: &commands}}
+	ctx, cancel := context.WithCancel(context.Background())
+	requestDone := make(chan struct{})
+	close(requestDone)
+	cancel()
+
+	// Both signals are deliberately ready. The old single select could choose
+	// ctx.Done and inject a stale cancel into the following request.
+	for range 1000 {
+		runner.forwardCancellation(ctx, requestDone, "finished")
+	}
+	if commands.Len() != 0 {
+		t.Fatalf("completed request emitted stale runner command: %q", commands.String())
+	}
+}
+
+func TestPersistentFrameFitsCoreProtocolRelay(t *testing.T) {
+	const coreFrameLimit = 1 << 20
+	if encoded := base64.StdEncoding.EncodedLen(persistentFrameMax) + 1024; encoded > coreFrameLimit {
+		t.Fatalf("persistent frame relay can exceed core protocol: %d > %d", encoded, coreFrameLimit)
+	}
+}
+
+type nopWriteCloser struct{ io.Writer }
+
+func (nopWriteCloser) Close() error { return nil }
+
 type persistentTestWorker struct {
 	inWriter  *io.PipeWriter
 	outWriter *io.PipeWriter
