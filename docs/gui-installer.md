@@ -103,6 +103,12 @@ Trigger: fresh data directory (no settings/database) or an explicit
 non-blocking — the app must remain fully usable with everything declined
 (voice optional, Ollama instead of managed builds, no migration).
 
+The steps below are the *contract* (what each step may do and through which
+API). The **experience design** — the full user decision tree with defaults,
+screen anatomy, visual treatment, and branding slots — lives in
+[setup-wizard-design.md](setup-wizard-design.md), with a wireframe in
+[setup-wizard-sketch.svg](setup-wizard-sketch.svg).
+
 1. **Welcome / consent** — what setup will and won't do: nothing downloads
    or builds without an explicit per-item click showing size and license;
    nothing here ever commands the device.
@@ -127,12 +133,16 @@ non-blocking — the app must remain fully usable with everything declined
     enablement is explicit and a separate Start action confirms model readiness.
     App-managed modules and custom local paths are separate choices.
     Speak-replies and push-to-talk explained.
-6. **Port from StrokeGPT-ReVibed** — detect likely install locations, offer
+6. **Port from StrokeGPT-ReVibed** *(conditional — exists only if the
+   undecided Phase 15 importer is built; see `docs/parity-with-stgpt-rv.md`)* —
+   detect likely install locations, offer
    a browse fallback, then run the Phase 15 importer in **dry-run** first:
    per-category preview (settings, memories, prompt sets/personas, motion
    patterns, programs/funscripts) with counts and the compatibility report,
    per-category opt-in, then the real non-destructive import. Secrets land
-   in the redacted store and are never echoed.
+   in the redacted store and are never echoed. If the importer decision lands
+   as "won't build", this step disappears from the wizard entirely rather than
+   shipping disabled.
 7. **Finish** — where things live (data dir, local URL, docs), what was
    skipped and where to do it later.
 
@@ -158,7 +168,7 @@ where the logic lives.
 | First-run detection, `#/setup` wizard route and steps, re-run from Settings | Slice 16.2 |
 | Voice provisioning endpoints (checksummed downloads with progress, mirroring `install.ps1`) | Slice 16.2 |
 | Curated LLM downloads + hardware-fit recommendations | Phase 16 scope (already listed) |
-| StrokeGPT-ReVibed importer API (dry-run, report, non-destructive) | Phase 15 (wizard consumes it in slice 16.3) |
+| StrokeGPT-ReVibed importer API (dry-run, report, non-destructive) | Phase 15 — undecided; slice 16.3 exists only if it is built |
 | Signing / auto-update / WebView2 shell decisions | Phase 16 decision docs (already listed) |
 
 `install.ps1` stays for source-first developers and unattended installs, with
