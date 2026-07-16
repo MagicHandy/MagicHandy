@@ -39,6 +39,82 @@ func TestHealthzReturnsOK(t *testing.T) {
 	}
 }
 
+func TestBrowserBoundaryRequiresLoopbackSameOrigin(t *testing.T) {
+	server := newTestServer(t)
+
+	for name, request := range map[string]*http.Request{
+		"cross-site": func() *http.Request {
+			request := httptest.NewRequest(http.MethodGet, "/api/state?client_id=attacker", nil)
+			request.Host = "127.0.0.1:49717"
+			request.Header.Set("Sec-Fetch-Site", "cross-site")
+			return request
+		}(),
+		"dns-rebinding": func() *http.Request {
+			request := httptest.NewRequest(http.MethodGet, "/api/state?client_id=attacker", nil)
+			request.Host = "attacker.example"
+			request.Header.Set("Origin", "http://attacker.example")
+			request.Header.Set("Sec-Fetch-Site", "same-origin")
+			return request
+		}(),
+		"scheme-mismatch": func() *http.Request {
+			request := httptest.NewRequest(http.MethodGet, "/api/state?client_id=attacker", nil)
+			request.Host = "127.0.0.1:49717"
+			request.Header.Set("Origin", "https://127.0.0.1:49717")
+			request.Header.Set("Sec-Fetch-Site", "same-origin")
+			return request
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusForbidden, recorder.Body.String())
+			}
+		})
+	}
+
+	request := withControllerID(httptest.NewRequest(http.MethodGet, "/api/state", nil), "local-client")
+	request.Host = "127.0.0.1:49717"
+	request.Header.Set("Origin", "http://127.0.0.1:49717")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("same-origin status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+}
+
+func TestWriteJSONFallsBackWithoutPanicking(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeJSON(recorder, http.StatusOK, map[string]any{"unsupported": make(chan int)})
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	if got := recorder.Body.String(); got != "{\"error\":\"response could not be encoded\"}\n" {
+		t.Fatalf("fallback body = %q", got)
+	}
+}
+
+func TestJSONDecodersRejectOversizedBodies(t *testing.T) {
+	body := `{"value":"` + strings.Repeat("x", maxJSONBodyBytes) + `"}`
+	for name, decode := range map[string]func(*http.Request, any) error{
+		"required": decodeJSON,
+		"optional": decodeOptionalJSON,
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			var target struct {
+				Value string `json:"value"`
+			}
+			err := decode(request, &target)
+			if err == nil || !strings.Contains(err.Error(), "body exceeds") {
+				t.Fatalf("oversized body error = %v", err)
+			}
+		})
+	}
+}
+
 func TestStatusAdvertisesPhaseOnePlaceholders(t *testing.T) {
 	server := newTestServer(t)
 
@@ -369,6 +445,7 @@ func newTestServerWithStore(t *testing.T, store *config.Store, runtime Runtime) 
 	if err != nil {
 		t.Fatalf("New server: %v", err)
 	}
+	t.Cleanup(server.Close)
 	return server
 }
 

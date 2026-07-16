@@ -33,7 +33,11 @@ func TestFreestyleDrivesRealEngineAcrossSegmentsWithoutStall(t *testing.T) {
 	// so the run crosses many boundaries in under a second.
 	manager, err := modes.NewManager(modes.Options{
 		Ensure: func(context.Context) (modes.Engine, error) {
-			return server.motionEngineForStart()
+			engine, admission, err := server.motionEngineForStart()
+			if err != nil {
+				return nil, err
+			}
+			return admittedMotionEngine{Engine: engine, admission: admission}, nil
 		},
 		Current: func() modes.Engine {
 			engine := server.currentMotionEngine()

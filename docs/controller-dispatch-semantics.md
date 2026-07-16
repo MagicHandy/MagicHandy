@@ -5,11 +5,12 @@ independent tabs racing hardware commands.
 
 ## Controller Lease
 
-- Browser clients identify themselves with `X-MagicHandy-Client-ID`. EventSource
-  clients use `client_id` in the query string because browser `EventSource`
-  cannot send custom headers.
+- Browser clients identify themselves with `X-MagicHandy-Client-ID` on
+  mutating requests. EventSource clients use `client_id` in the query string
+  because browser `EventSource` cannot send custom headers.
 - `GET /api/state`, `GET /api/controller`, and `GET /api/motion/events` claim or
-  refresh the lease for the first client that appears.
+  refresh the lease for the first client that appears. These read paths may use
+  the query-string client ID; mutating paths never do.
 - The active lease expires after 15 seconds without a refresh.
 - A second client receives `controller.read_only=true` in state responses. It may
   watch state and use Stop, but mutating device paths return HTTP 409.
@@ -36,6 +37,19 @@ Read-only diagnostic and state paths remain available. Browser Bluetooth
 connection check is a bridge-readiness diagnostic and does not queue a device
 command. Low-level Stop endpoints remain available.
 
+## Browser Boundary
+
+The embedded UI is a loopback application, not a cross-origin web API.
+Requests carrying browser `Origin` or `Sec-Fetch-*` metadata are accepted only
+when both the request Host and Origin are the same loopback HTTP(S) origin.
+This blocks cross-site requests and DNS-rebinding-style browser access while
+leaving non-browser localhost API clients compatible. MagicHandy does not emit
+CORS permission headers.
+
+A custom controller header is therefore required for every mutating path. A
+query parameter cannot authorize motion or settings changes. Emergency Stop
+remains deliberately outside this ownership check.
+
 ## Dispatch Owner Switching
 
 Changing `settings.device.hsp_dispatch_owner` through `PUT /api/settings` is a
@@ -52,6 +66,22 @@ runtime boundary:
 
 If motion settings change without changing dispatch owner, active motion is
 refreshed in place so quick controls continue to apply without a stop/start.
+
+Engine creation and dispatch-owner replacement are serialized. Each new start
+also carries the engine's Stop generation captured while the server still owns
+that engine. A concurrent Stop, owner change, or shutdown invalidates the
+admission instead of allowing delayed work to revive a cleared engine.
+
+## Shutdown Ordering
+
+Shutdown first quiesces controller work and cancels chat, then stops and clears
+the motion engine before draining autonomous planners. This order lets engine
+Stop cancel a mode start that is blocked inside transport setup. The Intiface
+session closes next. Only then does the HTTP server drain active handlers and
+release voice, LLM, model, chat, pattern, personalization, and SQLite resources.
+Stop remains callable while the server is quiescing. `Server.Close` is
+idempotent so startup failures and normal deferred cleanup share the same
+ordering.
 
 ## Motion State Stream
 

@@ -217,7 +217,7 @@ func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget,
 	if s.modes != nil {
 		s.modes.NotifyUserStop()
 	}
-	engine, err := s.motionEngineForStart()
+	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
 		return motion.ActiveMotionState{}, err
 	}
@@ -232,7 +232,6 @@ func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget,
 		return engine.ApplyTarget(r.Context(), target, "library_pattern")
 	}
 	settings, _ := s.store.Snapshot()
-	admission := engine.AdmissionGeneration()
 	if s.stopSequence.Load() != stopSequence {
 		return engine.Snapshot(), errors.New("pattern play was invalidated by Emergency Stop")
 	}
@@ -243,7 +242,7 @@ func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget,
 	if s.modes != nil {
 		s.modes.NotifyUserStop()
 	}
-	engine, err := s.motionEngineForStart()
+	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
 		return motion.ActiveMotionState{}, err
 	}
@@ -255,9 +254,12 @@ func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget,
 		if _, err := engine.Stop(r.Context(), "program_player_replace"); err != nil {
 			return engine.Snapshot(), err
 		}
+		admission, err = s.motionAdmissionFor(engine)
+		if err != nil {
+			return engine.Snapshot(), err
+		}
 	}
 	settings, _ := s.store.Snapshot()
-	admission := engine.AdmissionGeneration()
 	if s.stopSequence.Load() != stopSequence {
 		return engine.Snapshot(), errors.New("program play was invalidated by Emergency Stop")
 	}

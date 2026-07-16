@@ -84,8 +84,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		Commit:  commit,
 	})
 	if err != nil {
+		_ = store.Close()
 		return err
 	}
+	defer api.Close()
 
 	listenAddr := defaults.Server.Address
 	if settings.Server.Port != 0 {
@@ -95,11 +97,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		listenAddr = *addr
 	}
 
-	server := &http.Server{
-		Addr:              listenAddr,
-		Handler:           api.Handler(),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	server := newHTTPServer(listenAddr, api.Handler())
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
@@ -123,7 +121,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	api.Close()
+	api.Quiesce()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown server: %w", err)
@@ -131,6 +129,16 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	logger.Info("server stopped")
 
 	return nil
+}
+
+func newHTTPServer(address string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
 }
 
 func executablePath() string {

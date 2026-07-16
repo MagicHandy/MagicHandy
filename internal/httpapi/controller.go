@@ -47,10 +47,14 @@ func (s *Server) controllerState(r *http.Request) controllerSnapshot {
 }
 
 func (s *Server) requireController(w http.ResponseWriter, r *http.Request) bool {
-	return s.requireControllerID(w, clientIDFromRequest(r))
+	return s.requireControllerID(w, strings.TrimSpace(r.Header.Get(controllerHeaderName)))
 }
 
 func (s *Server) requireControllerID(w http.ResponseWriter, clientID string) bool {
+	if s.quiescing.Load() {
+		writeError(w, http.StatusServiceUnavailable, errServerQuiescing)
+		return false
+	}
 	snapshot := s.controller.Touch(clientID)
 	if snapshot.Active {
 		return true

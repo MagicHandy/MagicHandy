@@ -29,6 +29,7 @@ import (
 
 const serviceName = "magichandy"
 const stopSequenceHeader = "X-MagicHandy-Stop-Sequence"
+const maxJSONBodyBytes = 64 << 10
 
 // VersionInfo identifies the build served by the HTTP API.
 type VersionInfo struct {
@@ -77,6 +78,9 @@ type Server struct {
 	voiceAutoloadWG        sync.WaitGroup
 	neuttsAdapterInstalled atomic.Bool
 	stopSequence           atomic.Uint64
+	quiescing              atomic.Bool
+	quiesceOnce            sync.Once
+	closeOnce              sync.Once
 	chatCancelMu           sync.Mutex
 	chatCancels            map[uint64]context.CancelFunc
 	nextChatID             uint64
@@ -181,7 +185,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 
 	mux := http.NewServeMux()
 	server.routes(mux)
-	server.handler = logRequests(logger, mux)
+	server.handler = logRequests(logger, protectBrowserRequests(mux))
 	server.startVoiceAutoload(settings.Voice)
 
 	return server, nil
@@ -506,12 +510,16 @@ func setStaticHeaders(w http.ResponseWriter, name string) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		status = http.StatusInternalServerError
+		data = []byte(`{"error":"response could not be encoded"}`)
+	}
+	data = append(data, '\n')
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		panic(fmt.Errorf("encode JSON response: %w", err))
-	}
+	_, _ = w.Write(data)
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
@@ -521,11 +529,11 @@ func writeError(w http.ResponseWriter, status int, err error) {
 }
 
 func decodeJSON(r *http.Request, target any) error {
-	defer func() {
-		_ = r.Body.Close()
-	}()
-
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 64*1024))
+	data, err := readJSONBody(r)
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("decode JSON request: %w", err)
@@ -535,6 +543,21 @@ func decodeJSON(r *http.Request, target any) error {
 		return errors.New("decode JSON request: multiple JSON values are not allowed")
 	}
 	return nil
+}
+
+func readJSONBody(r *http.Request) ([]byte, error) {
+	defer func() {
+		_ = r.Body.Close()
+	}()
+
+	data, err := io.ReadAll(io.LimitReader(r.Body, maxJSONBodyBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("decode JSON request: %w", err)
+	}
+	if len(data) > maxJSONBodyBytes {
+		return nil, fmt.Errorf("decode JSON request: body exceeds %d bytes", maxJSONBodyBytes)
+	}
+	return data, nil
 }
 
 type statusRecorder struct {
@@ -584,4 +607,21 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 	})
+}
+
+func protectBrowserRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isBrowserRequest(r) && (!isLoopbackHost(r.Host) || !isSameOriginBrowserRequest(r)) {
+			writeError(w, http.StatusForbidden, errors.New("browser requests must use the local MagicHandy origin"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isBrowserRequest(r *http.Request) bool {
+	return r.Header.Get("Origin") != "" ||
+		r.Header.Get("Sec-Fetch-Site") != "" ||
+		r.Header.Get("Sec-Fetch-Mode") != "" ||
+		r.Header.Get("Sec-Fetch-Dest") != ""
 }

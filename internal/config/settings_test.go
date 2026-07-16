@@ -506,6 +506,37 @@ func TestSaveReplacesExistingSettingsFile(t *testing.T) {
 	}
 }
 
+func TestStoreSnapshotsOwnVoiceArgumentSlices(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	settings, _ := store.Snapshot()
+	settings.Voice.TTSWorkerArgs = []string{"--role", "tts"}
+	settings.Voice.ASRWorkerArgs = []string{"--role", "asr"}
+	saved, err := store.Save(settings)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	saved.Voice.TTSWorkerArgs[0] = "mutated-save-result"
+	snapshot, _ := store.Snapshot()
+	snapshot.Voice.TTSWorkerArgs[0] = "mutated-snapshot"
+	snapshot.Voice.ASRWorkerArgs[0] = "mutated-snapshot"
+	public, _ := store.PublicSnapshot()
+	public.Voice.TTSWorkerArgs[0] = "mutated-public-snapshot"
+
+	unchanged, _ := store.Snapshot()
+	if got := unchanged.Voice.TTSWorkerArgs[0]; got != "--role" {
+		t.Fatalf("stored TTS arguments were mutated through a snapshot: %q", got)
+	}
+	if got := unchanged.Voice.ASRWorkerArgs[0]; got != "--role" {
+		t.Fatalf("stored ASR arguments were mutated through a snapshot: %q", got)
+	}
+}
+
 func containsString(value string, fragment string) bool {
 	return strings.Contains(value, fragment)
 }

@@ -97,7 +97,7 @@ func (s *Store) Snapshot() (Settings, LoadStatus) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.settings, s.status
+	return cloneSettings(s.settings), s.status
 }
 
 // PublicSnapshot returns the current redacted settings and load status.
@@ -116,10 +116,11 @@ func (s *Store) Save(next Settings) (Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := s.writeSettings(context.Background(), next); err != nil {
+	durable := cloneSettings(next)
+	if err := s.writeSettings(context.Background(), durable); err != nil {
 		return Settings{}, err
 	}
-	s.settings = next
+	s.settings = durable
 	s.status = LoadStatus{
 		DataDir:            s.dataDir,
 		SettingsPath:       s.path,
@@ -128,7 +129,7 @@ func (s *Store) Save(next Settings) (Settings, error) {
 		Source:             loadSourceSQLite,
 		LoadedAt:           time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	return next, nil
+	return cloneSettings(durable), nil
 }
 
 // DataDir returns the resolved settings directory.

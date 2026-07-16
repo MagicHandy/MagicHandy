@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
@@ -19,6 +21,145 @@ type motionEnvelope struct {
 	Available bool                     `json:"available"`
 	Error     string                   `json:"error"`
 	Engine    motion.ActiveMotionState `json:"engine"`
+}
+
+type blockingModeStartTransport struct {
+	*transport.Fake
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingModeStartTransport) Play(ctx context.Context, _ transport.PlayCommand) (transport.CommandResult, error) {
+	b.once.Do(func() { close(b.entered) })
+	<-ctx.Done()
+	return transport.CommandResult{Kind: transport.CommandKindPointsPlay}, ctx.Err()
+}
+
+func TestMotionEngineCreationIsSingleOwner(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+
+	const callers = 16
+	start := make(chan struct{})
+	engines := make(chan *motion.Engine, callers)
+	errs := make(chan error, callers)
+	var workers sync.WaitGroup
+	for range callers {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			engine, _, err := server.motionEngineForStart()
+			if err != nil {
+				errs <- err
+				return
+			}
+			engines <- engine
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(engines)
+	close(errs)
+	for err := range errs {
+		t.Fatalf("motionEngineForStart: %v", err)
+	}
+
+	unique := make(map[*motion.Engine]struct{})
+	for engine := range engines {
+		unique[engine] = struct{}{}
+	}
+	if len(unique) != 1 {
+		t.Fatalf("created %d idle motion engines, want exactly one", len(unique))
+	}
+}
+
+func TestStopAndClearStopsIdleEngine(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	if _, _, err := server.motionEngineForStart(); err != nil {
+		t.Fatalf("motionEngineForStart: %v", err)
+	}
+
+	server.stopAndClearMotionEngine(t.Context(), "test_idle_clear")
+	if engine := server.currentMotionEngine(); engine != nil {
+		t.Fatalf("motion engine survived clear: %+v", engine.Snapshot())
+	}
+	commands := fake.Commands()
+	if len(commands) != 1 || commands[0].Kind != transport.CommandKindStop {
+		t.Fatalf("idle clear commands = %+v, want one explicit Stop", commands)
+	}
+}
+
+func TestQuiesceStopsMotionAndRejectsNewControllerWork(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`)
+	if !started.Engine.Running {
+		t.Fatal("motion did not start before quiesce")
+	}
+
+	server.Quiesce()
+	if engine := server.currentMotionEngine(); engine != nil {
+		t.Fatalf("motion engine survived quiesce: %+v", engine.Snapshot())
+	}
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("quiesce commands = %+v, want final Stop", commands)
+	}
+
+	startRecorder := httptest.NewRecorder()
+	startRequest := withController(httptest.NewRequest(http.MethodPost, "/api/motion/start", strings.NewReader(`{"speed_percent":30}`)))
+	server.Handler().ServeHTTP(startRecorder, startRequest)
+	if startRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("start during shutdown = %d, want %d: %s", startRecorder.Code, http.StatusServiceUnavailable, startRecorder.Body.String())
+	}
+
+	stopRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(stopRecorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", nil))
+	if stopRecorder.Code != http.StatusOK {
+		t.Fatalf("Stop during shutdown = %d, want %d: %s", stopRecorder.Code, http.StatusOK, stopRecorder.Body.String())
+	}
+}
+
+func TestQuiesceStopsBlockedModeStartBeforeDrainingPlanner(t *testing.T) {
+	commandTransport := &blockingModeStartTransport{
+		Fake:    transport.NewFake(),
+		entered: make(chan struct{}),
+	}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       commandTransport,
+		MotionTransport: commandTransport,
+	})
+	if _, err := server.modes.Start(t.Context(), modes.ModeFreestyle); err != nil {
+		t.Fatalf("start freestyle: %v", err)
+	}
+
+	select {
+	case <-commandTransport.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("mode did not reach blocked transport startup")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		server.Quiesce()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Quiesce waited on the planner before canceling transport startup")
+	}
 }
 
 func callMotion(t *testing.T, server *Server, method, path, body string) motionEnvelope {
