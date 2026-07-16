@@ -23,6 +23,7 @@ func newPersonalizationRuntime(dataDir string) (personalizationRuntime, error) {
 	}
 	prompts, err := chat.OpenPromptLibrary(dataDir)
 	if err != nil {
+		_ = memoryStore.Close()
 		return personalizationRuntime{}, err
 	}
 	return personalizationRuntime{memory: memoryStore, prompts: prompts}, nil
@@ -41,7 +42,15 @@ func (p personalizationRuntime) Close() {
 
 // memoryState is the compact aggregate-state view (counts, not contents).
 func (s *Server) memoryState() map[string]any {
-	snapshot := s.personalization.memory.Snapshot()
+	snapshot, err := s.personalization.memory.Snapshot()
+	if err != nil {
+		return map[string]any{
+			"available":     false,
+			"enabled":       false,
+			"count":         0,
+			"enabled_count": 0,
+		}
+	}
 	enabledCount := 0
 	for _, item := range snapshot.Memories {
 		if item.Enabled {
@@ -49,6 +58,7 @@ func (s *Server) memoryState() map[string]any {
 		}
 	}
 	return map[string]any{
+		"available":     true,
 		"enabled":       snapshot.Enabled,
 		"count":         len(snapshot.Memories),
 		"enabled_count": enabledCount,
@@ -56,7 +66,7 @@ func (s *Server) memoryState() map[string]any {
 }
 
 func (s *Server) handleMemoryGet(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.personalization.memory.Snapshot())
+	s.writeMemorySnapshot(w)
 }
 
 func (s *Server) handleMemoryAdd(w http.ResponseWriter, r *http.Request) {
@@ -71,10 +81,10 @@ func (s *Server) handleMemoryAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.personalization.memory.Add(body.Text); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		s.writeMemoryError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.personalization.memory.Snapshot())
+	s.writeMemorySnapshot(w)
 }
 
 func (s *Server) handleMemorySetEnabled(w http.ResponseWriter, r *http.Request) {
@@ -89,10 +99,10 @@ func (s *Server) handleMemorySetEnabled(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := s.personalization.memory.SetEnabled(body.Enabled); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeMemoryError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.personalization.memory.Snapshot())
+	s.writeMemorySnapshot(w)
 }
 
 func (s *Server) handleMemoryPatchItem(w http.ResponseWriter, r *http.Request) {
@@ -107,10 +117,10 @@ func (s *Server) handleMemoryPatchItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.personalization.memory.SetItemEnabled(r.PathValue("id"), body.Enabled); err != nil {
-		writeError(w, memoryErrorStatus(err), err)
+		s.writeMemoryError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.personalization.memory.Snapshot())
+	s.writeMemorySnapshot(w)
 }
 
 func (s *Server) handleMemoryRemove(w http.ResponseWriter, r *http.Request) {
@@ -118,10 +128,10 @@ func (s *Server) handleMemoryRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.personalization.memory.Remove(r.PathValue("id")); err != nil {
-		writeError(w, memoryErrorStatus(err), err)
+		s.writeMemoryError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.personalization.memory.Snapshot())
+	s.writeMemorySnapshot(w)
 }
 
 func (s *Server) handleMemoryClear(w http.ResponseWriter, r *http.Request) {
@@ -129,32 +139,60 @@ func (s *Server) handleMemoryClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.personalization.memory.Clear(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeMemoryError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.personalization.memory.Snapshot())
+	s.writeMemorySnapshot(w)
+}
+
+func (s *Server) writeMemorySnapshot(w http.ResponseWriter) {
+	snapshot, err := s.personalization.memory.Snapshot()
+	if err != nil {
+		s.writePersonalizationStorageError(w, "memory", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, snapshot)
+}
+
+func (s *Server) writeMemoryError(w http.ResponseWriter, err error) {
+	status := memoryErrorStatus(err)
+	if status == http.StatusInternalServerError {
+		s.writePersonalizationStorageError(w, "memory", err)
+		return
+	}
+	writeError(w, status, err)
 }
 
 func memoryErrorStatus(err error) int {
-	if errors.Is(err, memory.ErrMemoryNotFound) {
+	switch {
+	case errors.Is(err, memory.ErrMemoryNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, memory.ErrMemoryInvalid):
+		return http.StatusBadRequest
+	case errors.Is(err, memory.ErrMemoryLimit):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
 	}
-	return http.StatusBadRequest
 }
 
 // --- Prompt sets ----------------------------------------------------------------
 
-func (s *Server) promptSetsPayload() map[string]any {
+func (s *Server) promptSetsPayload() (map[string]any, error) {
 	settings, _ := s.store.Snapshot()
+	sets, err := s.personalization.prompts.List()
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"selected": settings.LLM.PromptSet,
 		"default":  chat.DefaultPromptSetID,
-		"sets":     s.personalization.prompts.List(),
-	}
+		"sets":     sets,
+	}, nil
 }
 
 func (s *Server) handlePromptSetsGet(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.promptSetsPayload())
+	s.writePromptSetsPayload(w, nil)
 }
 
 func (s *Server) handlePromptSetCreate(w http.ResponseWriter, r *http.Request) {
@@ -171,12 +209,10 @@ func (s *Server) handlePromptSetCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	set, err := s.personalization.prompts.Create(body.Name, body.System)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		s.writePromptSetError(w, err)
 		return
 	}
-	payload := s.promptSetsPayload()
-	payload["set"] = set
-	writeJSON(w, http.StatusOK, payload)
+	s.writePromptSetsPayload(w, &set)
 }
 
 func (s *Server) handlePromptSetUpdate(w http.ResponseWriter, r *http.Request) {
@@ -193,12 +229,10 @@ func (s *Server) handlePromptSetUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	set, err := s.personalization.prompts.Update(r.PathValue("id"), body.Name, body.System)
 	if err != nil {
-		writeError(w, promptSetErrorStatus(err), err)
+		s.writePromptSetError(w, err)
 		return
 	}
-	payload := s.promptSetsPayload()
-	payload["set"] = set
-	writeJSON(w, http.StatusOK, payload)
+	s.writePromptSetsPayload(w, &set)
 }
 
 func (s *Server) handlePromptSetDelete(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +241,7 @@ func (s *Server) handlePromptSetDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	if err := s.personalization.prompts.Delete(id); err != nil {
-		writeError(w, promptSetErrorStatus(err), err)
+		s.writePromptSetError(w, err)
 		return
 	}
 
@@ -221,7 +255,33 @@ func (s *Server) handlePromptSetDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, s.promptSetsPayload())
+	s.writePromptSetsPayload(w, nil)
+}
+
+func (s *Server) writePromptSetsPayload(w http.ResponseWriter, set *chat.PromptSet) {
+	payload, err := s.promptSetsPayload()
+	if err != nil {
+		s.writePersonalizationStorageError(w, "prompt set", err)
+		return
+	}
+	if set != nil {
+		payload["set"] = *set
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) writePromptSetError(w http.ResponseWriter, err error) {
+	status := promptSetErrorStatus(err)
+	if status == http.StatusInternalServerError {
+		s.writePersonalizationStorageError(w, "prompt set", err)
+		return
+	}
+	writeError(w, status, err)
+}
+
+func (s *Server) writePersonalizationStorageError(w http.ResponseWriter, domain string, err error) {
+	s.logger.Error("personalization storage operation failed", "domain", domain, "error", err)
+	writeError(w, http.StatusInternalServerError, errors.New(domain+" storage is unavailable"))
 }
 
 func promptSetErrorStatus(err error) int {
@@ -230,8 +290,12 @@ func promptSetErrorStatus(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, chat.ErrPromptSetProtected):
 		return http.StatusForbidden
-	default:
+	case errors.Is(err, chat.ErrPromptSetInvalid):
 		return http.StatusBadRequest
+	case errors.Is(err, chat.ErrPromptSetLimit):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
 	}
 }
 

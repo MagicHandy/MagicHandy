@@ -35,7 +35,10 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	snapshot := reopened.Snapshot()
+	snapshot, err := reopened.Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
 	if len(snapshot.Memories) != 2 {
 		t.Fatalf("persisted memories = %d, want 2", len(snapshot.Memories))
 	}
@@ -53,7 +56,11 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen after clear: %v", err)
 	}
-	if got := len(final.Snapshot().Memories); got != 0 {
+	finalSnapshot, err := final.Snapshot()
+	if err != nil {
+		t.Fatalf("final Snapshot: %v", err)
+	}
+	if got := len(finalSnapshot.Memories); got != 0 {
 		t.Fatalf("memories after clear = %d, want 0", got)
 	}
 }
@@ -75,7 +82,10 @@ func TestPromptTextsHonorsItemAndGlobalSwitches(t *testing.T) {
 		t.Fatalf("SetItemEnabled: %v", err)
 	}
 
-	texts := store.PromptTexts()
+	texts, err := store.PromptTexts()
+	if err != nil {
+		t.Fatalf("PromptTexts: %v", err)
+	}
 	if len(texts) != 1 || texts[0] != kept.Text {
 		t.Fatalf("PromptTexts = %v, want only the enabled memory", texts)
 	}
@@ -83,11 +93,15 @@ func TestPromptTextsHonorsItemAndGlobalSwitches(t *testing.T) {
 	if err := store.SetEnabled(false); err != nil {
 		t.Fatalf("SetEnabled: %v", err)
 	}
-	if texts := store.PromptTexts(); texts != nil {
+	if texts, err := store.PromptTexts(); err != nil || texts != nil {
 		t.Fatalf("PromptTexts with global switch off = %v, want nil", texts)
 	}
 	// The memories themselves survive the global switch.
-	if got := len(store.Snapshot().Memories); got != 2 {
+	snapshot, err := store.Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	if got := len(snapshot.Memories); got != 2 {
 		t.Fatalf("memories after disable = %d, want 2", got)
 	}
 }
@@ -114,14 +128,17 @@ func TestStoreImportsLegacyMemoryFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	snapshot := store.Snapshot()
+	snapshot, err := store.Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
 	if snapshot.Enabled {
 		t.Fatal("legacy global memory switch did not import as disabled")
 	}
 	if len(snapshot.Memories) != 2 {
 		t.Fatalf("imported memories = %+v, want 2", snapshot.Memories)
 	}
-	if texts := store.PromptTexts(); texts != nil {
+	if texts, err := store.PromptTexts(); err != nil || texts != nil {
 		t.Fatalf("PromptTexts with imported global switch off = %v, want nil", texts)
 	}
 	if err := store.Close(); err != nil {
@@ -141,7 +158,11 @@ func TestStoreImportsLegacyMemoryFile(t *testing.T) {
 	defer func() {
 		_ = reopened.Close()
 	}()
-	if got := reopened.Snapshot(); got.Enabled || len(got.Memories) != 2 {
+	got, err := reopened.Snapshot()
+	if err != nil {
+		t.Fatalf("reopened Snapshot: %v", err)
+	}
+	if got.Enabled || len(got.Memories) != 2 {
 		t.Fatalf("reopened imported snapshot = %+v, want disabled with 2 memories", got)
 	}
 }
@@ -156,6 +177,12 @@ func TestStoreValidatesInputAndUnknownIDs(t *testing.T) {
 	}
 	if _, err := store.Add(strings.Repeat("x", maxMemoryChars+1)); err == nil {
 		t.Fatal("Add accepted oversized text")
+	}
+	if _, err := store.Add(strings.Repeat("界", maxMemoryChars)); err != nil {
+		t.Fatalf("Add rejected %d non-ASCII characters: %v", maxMemoryChars, err)
+	}
+	if _, err := store.Add(strings.Repeat("界", maxMemoryChars+1)); err == nil {
+		t.Fatal("Add accepted too many non-ASCII characters")
 	}
 	if _, err := store.SetItemEnabled("mem-missing", true); err != ErrMemoryNotFound {
 		t.Fatalf("SetItemEnabled unknown id error = %v, want ErrMemoryNotFound", err)
@@ -177,7 +204,10 @@ func TestStoreRecoversFromCorruptFileWithoutFailingStartup(t *testing.T) {
 	if !store.Recovered() {
 		t.Fatal("corrupt file did not report recovery")
 	}
-	snapshot := store.Snapshot()
+	snapshot, err := store.Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
 	if !snapshot.Enabled || len(snapshot.Memories) != 0 {
 		t.Fatalf("recovered snapshot = %+v, want enabled and empty", snapshot)
 	}
@@ -216,7 +246,10 @@ func TestStoreNormalizesLoadedMemoryFile(t *testing.T) {
 	if !store.Recovered() {
 		t.Fatal("invalid loaded memory records should report recovery")
 	}
-	snapshot := store.Snapshot()
+	snapshot, err := store.Snapshot()
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
 	if !snapshot.Enabled {
 		t.Fatal("missing enabled switch should default to true")
 	}
@@ -225,5 +258,41 @@ func TestStoreNormalizesLoadedMemoryFile(t *testing.T) {
 	}
 	if snapshot.Memories[0].ID != "mem-1" || snapshot.Memories[0].Text != "Kept." {
 		t.Fatalf("memory = %+v, want trimmed valid record", snapshot.Memories[0])
+	}
+}
+
+func TestStoreReadFailuresAreNotReportedAsEmptyState(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Snapshot(); err == nil {
+		t.Fatal("Snapshot hid a closed database as empty state")
+	}
+	if _, err := store.PromptTexts(); err == nil {
+		t.Fatal("PromptTexts hid a closed database as disabled memory")
+	}
+}
+
+func TestStoreRejectsCorruptEnabledPreference(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if _, err := store.db.SQL().Exec(`
+		INSERT INTO app_kv(key, value, updated_at) VALUES(?, 'not-a-bool', 'now')
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, memoryEnabledKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Snapshot(); err == nil {
+		t.Fatal("Snapshot treated a corrupt enabled preference as disabled memory")
+	}
+	if _, err := store.PromptTexts(); err == nil {
+		t.Fatal("PromptTexts treated a corrupt enabled preference as disabled memory")
 	}
 }

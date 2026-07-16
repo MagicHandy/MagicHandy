@@ -587,6 +587,21 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	}
 }
 
+func TestLLMSettingsRejectUnsafeBaseURLs(t *testing.T) {
+	for _, baseURL := range []string{
+		"file:///tmp/ollama",
+		"http://user:secret@127.0.0.1:11434",
+		"http://127.0.0.1:11434?token=secret",
+		"http://127.0.0.1:11434/#fragment",
+	} {
+		settings := DefaultSettings()
+		settings.LLM.OllamaBaseURL = baseURL
+		if _, err := NormalizeSettings(settings); err == nil {
+			t.Fatalf("NormalizeSettings accepted Ollama URL %q", baseURL)
+		}
+	}
+}
+
 func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T) {
 	data := []byte(`{
 		"version":1,

@@ -45,6 +45,15 @@ var (
 	ErrBuiltinPattern = errors.New("built-in pattern content is read-only")
 	// ErrFeedbackOrder prevents undo from overwriting a newer preference edit.
 	ErrFeedbackOrder = errors.New("only the latest feedback for a pattern can be undone")
+	// ErrInvalidContent identifies user-authored or imported content that cannot
+	// be normalized safely.
+	ErrInvalidContent = errors.New("invalid pattern library content")
+	// ErrLibraryLimit reports a configured pattern or program capacity limit.
+	ErrLibraryLimit = errors.New("pattern library capacity reached")
+	// ErrFeedbackNotFound reports an unknown feedback identifier.
+	ErrFeedbackNotFound = errors.New("feedback entry not found")
+	// ErrFeedbackReverted reports a second undo attempt.
+	ErrFeedbackReverted = errors.New("feedback entry is already reverted")
 )
 
 // Pattern is one persisted library entry.
@@ -127,6 +136,7 @@ type Snapshot struct {
 
 // Summary is the compact polling state; large point arrays stay off /api/state.
 type Summary struct {
+	Available           bool `json:"available"`
 	PatternCount        int  `json:"pattern_count"`
 	EnabledPatternCount int  `json:"enabled_pattern_count"`
 	ProgramCount        int  `json:"program_count"`

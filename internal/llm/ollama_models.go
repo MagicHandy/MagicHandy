@@ -126,6 +126,13 @@ func (m *ModelManager) ScanOllama(ctx context.Context, root string) (OllamaScan,
 		candidate := scanOllamaManifest(resolved, path, relative)
 		if record, ok := imported[strings.TrimPrefix(candidate.Digest, "sha256:")]; ok {
 			candidate.ImportedModelID = record.ID
+			if record.State != modelStateReady {
+				candidate.Importable = false
+				candidate.Reason = fmt.Sprintf(
+					"existing managed copy is %s; remove it before importing again",
+					record.State,
+				)
+			}
 		}
 		candidates = append(candidates, candidate)
 		return nil
@@ -134,7 +141,11 @@ func (m *ModelManager) ScanOllama(ctx context.Context, root string) (OllamaScan,
 		return OllamaScan{}, fmt.Errorf("scan Ollama manifests: %w", err)
 	}
 	sort.Slice(candidates, func(i, j int) bool {
-		return strings.ToLower(candidates[i].Name) < strings.ToLower(candidates[j].Name)
+		left, right := strings.ToLower(candidates[i].Name), strings.ToLower(candidates[j].Name)
+		if left == right {
+			return candidates[i].ID < candidates[j].ID
+		}
+		return left < right
 	})
 	return OllamaScan{Path: resolved, Candidates: candidates}, nil
 }
@@ -166,6 +177,10 @@ func scanOllamaManifest(root, path, relative string) OllamaCandidate {
 	candidate.SizeBytes = modelLayer.Size
 	if candidate.Digest == "" || candidate.SizeBytes <= 0 {
 		candidate.Reason = "model layer digest or size is invalid"
+		return candidate
+	}
+	if candidate.SizeBytes > maxManagedModelBytes {
+		candidate.Reason = fmt.Sprintf("model layer exceeds the %d-byte import limit", maxManagedModelBytes)
 		return candidate
 	}
 	candidate.blobPath = ollamaBlobPath(root, candidate.Digest)

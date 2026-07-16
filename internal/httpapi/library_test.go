@@ -4,10 +4,60 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestLibraryStorageFailureIsNotReportedAsEmptyOrDisabled(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Must not run.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+	if err := server.patterns.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	list := httptest.NewRecorder()
+	server.Handler().ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/library", nil))
+	if list.Code != http.StatusInternalServerError ||
+		!strings.Contains(list.Body.String(), "pattern library storage is unavailable") {
+		t.Fatalf("library read = %d: %s", list.Code, list.Body.String())
+	}
+
+	state := httptest.NewRecorder()
+	server.Handler().ServeHTTP(state, httptest.NewRequest(http.MethodGet, "/api/state", nil))
+	if state.Code != http.StatusOK || !strings.Contains(state.Body.String(), `"library":{"available":false`) {
+		t.Fatalf("state with failed library = %d: %s", state.Code, state.Body.String())
+	}
+
+	play := httptest.NewRecorder()
+	playRequest := withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/library/patterns/stroke/play",
+		strings.NewReader(`{"intensity":20}`),
+	))
+	server.Handler().ServeHTTP(play, playRequest)
+	if play.Code != http.StatusInternalServerError {
+		t.Fatalf("play with failed library = %d: %s", play.Code, play.Body.String())
+	}
+
+	chatRecorder := httptest.NewRecorder()
+	chatRequest := withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/chat/stream",
+		strings.NewReader(`{"message":"hello"}`),
+	))
+	chatRequest.Header.Set("Content-Type", "application/json")
+	chatRequest.Header.Set(stopSequenceHeader, strconv.FormatUint(server.stopSequence.Load(), 10))
+	server.Handler().ServeHTTP(chatRecorder, chatRequest)
+	if chatRecorder.Code != http.StatusInternalServerError || provider.callCount() != 0 {
+		t.Fatalf("chat with failed library = %d, provider calls = %d: %s",
+			chatRecorder.Code, provider.callCount(), chatRecorder.Body.String())
+	}
+}
 
 func TestLibraryAPIEnablementAndPlaybackUseMotionEngine(t *testing.T) {
 	server := newTestServer(t)

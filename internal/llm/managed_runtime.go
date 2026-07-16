@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -420,15 +421,20 @@ func trimRuntimeBuildOutput(output string) string {
 	if len(output) <= managedRuntimeOutputLimit {
 		return output
 	}
-	return output[len(output)-managedRuntimeOutputLimit:]
+	start := len(output) - managedRuntimeOutputLimit
+	for start < len(output) && !utf8.RuneStart(output[start]) {
+		start++
+	}
+	return output[start:]
 }
 
 func lastNonBlankLine(output string) string {
 	lines := strings.Split(strings.ReplaceAll(output, "\r", ""), "\n")
 	for index := len(lines) - 1; index >= 0; index-- {
 		if line := strings.TrimSpace(lines[index]); line != "" {
-			if len(line) > 240 {
-				return line[:240]
+			runes := []rune(line)
+			if len(runes) > 240 {
+				return string(runes[:240])
 			}
 			return line
 		}

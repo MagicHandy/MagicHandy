@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
@@ -30,6 +31,8 @@ const (
 var (
 	ErrPromptSetNotFound  = errors.New("prompt set not found")
 	ErrPromptSetProtected = errors.New("built-in prompt sets are read-only; duplicate one to edit it")
+	ErrPromptSetInvalid   = errors.New("invalid prompt set")
+	ErrPromptSetLimit     = errors.New("prompt set limit reached")
 )
 
 type promptSetsFile struct {
@@ -83,25 +86,36 @@ func (l *PromptLibrary) Close() error {
 	return l.db.Close()
 }
 
-// Resolve returns a built-in or user prompt set by identifier.
-func (l *PromptLibrary) Resolve(id string) (PromptSet, bool) {
+// Resolve returns a built-in or user prompt set by identifier. A missing set is
+// reported as found=false; storage failures are returned separately.
+func (l *PromptLibrary) Resolve(id string) (set PromptSet, found bool, err error) {
 	if set, ok := BuiltinPromptSetByID(id); ok {
-		return set, true
+		return set, true, nil
 	}
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	set, err := l.resolveUserLocked(context.Background(), strings.TrimSpace(id))
-	return set, err == nil
+	set, err = l.resolveUserLocked(context.Background(), strings.TrimSpace(id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return PromptSet{}, false, nil
+	}
+	if err != nil {
+		return PromptSet{}, false, err
+	}
+	return set, true, nil
 }
 
 // List returns built-in sets first, then user sets sorted by name.
-func (l *PromptLibrary) List() []PromptSet {
+func (l *PromptLibrary) List() ([]PromptSet, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	sets := BuiltinPromptSets()
-	return append(sets, l.userSetsLocked(context.Background())...)
+	userSets, err := l.userSetsLocked(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return append(sets, userSets...), nil
 }
 
 // Create validates and persists a new user prompt set.
@@ -115,15 +129,19 @@ func (l *PromptLibrary) Create(name string, system string) (PromptSet, error) {
 	defer l.mu.Unlock()
 
 	ctx := context.Background()
-	if l.userSetCountLocked(ctx) >= maxUserPromptSets {
-		return PromptSet{}, fmt.Errorf("prompt set limit reached (%d)", maxUserPromptSets)
-	}
 	set := PromptSet{
 		ID:     userPromptSetPrefix + randomHex(6),
 		Name:   name,
 		System: system,
 	}
 	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var count int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM prompt_sets").Scan(&count); err != nil {
+			return err
+		}
+		if count >= maxUserPromptSets {
+			return fmt.Errorf("%w (%d)", ErrPromptSetLimit, maxUserPromptSets)
+		}
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO prompt_sets(id, name, system, created_at)
 			VALUES(?, ?, ?, ?)
@@ -324,14 +342,14 @@ func (l *PromptLibrary) resolveUserLocked(ctx context.Context, id string) (Promp
 	return set, nil
 }
 
-func (l *PromptLibrary) userSetsLocked(ctx context.Context) []PromptSet {
+func (l *PromptLibrary) userSetsLocked(ctx context.Context) ([]PromptSet, error) {
 	rows, err := l.db.SQL().QueryContext(ctx, `
 		SELECT id, name, system
 		FROM prompt_sets
 		ORDER BY name, id
 	`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer func() {
 		_ = rows.Close()
@@ -341,35 +359,30 @@ func (l *PromptLibrary) userSetsLocked(ctx context.Context) []PromptSet {
 	for rows.Next() {
 		var set PromptSet
 		if err := rows.Scan(&set.ID, &set.Name, &set.System); err != nil {
-			return nil
+			return nil, err
 		}
 		sets = append(sets, set)
 	}
-	return sets
-}
-
-func (l *PromptLibrary) userSetCountLocked(ctx context.Context) int {
-	var count int
-	if err := l.db.SQL().QueryRowContext(ctx, "SELECT COUNT(*) FROM prompt_sets").Scan(&count); err != nil {
-		return maxUserPromptSets
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	return count
+	return sets, nil
 }
 
 func validatePromptSetFields(name string, system string) (string, string, error) {
 	name = strings.TrimSpace(name)
 	system = strings.TrimSpace(system)
 	if name == "" {
-		return "", "", errors.New("prompt set name is required")
+		return "", "", fmt.Errorf("%w: name is required", ErrPromptSetInvalid)
 	}
-	if len(name) > maxPromptNameChars {
-		return "", "", fmt.Errorf("prompt set name must be at most %d characters", maxPromptNameChars)
+	if utf8.RuneCountInString(name) > maxPromptNameChars {
+		return "", "", fmt.Errorf("%w: name must be at most %d characters", ErrPromptSetInvalid, maxPromptNameChars)
 	}
 	if system == "" {
-		return "", "", errors.New("prompt set system text is required")
+		return "", "", fmt.Errorf("%w: system text is required", ErrPromptSetInvalid)
 	}
 	if len(system) > maxPromptSystemSize {
-		return "", "", fmt.Errorf("prompt set system text must be at most %d bytes", maxPromptSystemSize)
+		return "", "", fmt.Errorf("%w: system text must be at most %d bytes", ErrPromptSetInvalid, maxPromptSystemSize)
 	}
 	return name, system, nil
 }

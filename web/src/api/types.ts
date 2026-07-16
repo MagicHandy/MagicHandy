@@ -222,6 +222,7 @@ export interface PatternPreview {
 }
 
 export interface LibrarySummary {
+  available: boolean;
   pattern_count: number;
   enabled_pattern_count: number;
   program_count: number;
@@ -628,7 +629,7 @@ export interface AppState {
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
-  chat?: { latest_seq?: number };
+  chat?: { available?: boolean; latest_seq?: number };
   library?: LibrarySummary;
   transport?: Record<string, unknown>;
   cloud_transport?: TransportDiagnostics;

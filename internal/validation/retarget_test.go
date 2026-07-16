@@ -80,6 +80,19 @@ func TestRunRetargetValidationRejectsUnsafeSpeed(t *testing.T) {
 	}
 }
 
+func TestTraceExportAfterExcludesEarlierValidationRows(t *testing.T) {
+	export := diagnostics.TraceExport{Rows: []diagnostics.MotionTraceRow{
+		{Sequence: 8, Reason: "validation_area_change"},
+		{Sequence: 9, Reason: "validation_speed_change"},
+		{Sequence: 10, Reason: "validation_start"},
+		{Sequence: 11, Reason: "validation_area_change"},
+	}}
+	filtered := traceExportAfter(export, 9)
+	if len(filtered.Rows) != 2 || filtered.Rows[0].Sequence != 10 || filtered.Rows[1].Sequence != 11 {
+		t.Fatalf("filtered rows = %+v", filtered.Rows)
+	}
+}
+
 func assertNoValidationSpeedAboveCap(t *testing.T, export diagnostics.TraceExport) {
 	t.Helper()
 	for _, row := range export.Rows {

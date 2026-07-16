@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -207,6 +208,37 @@ func TestOllamaProviderDoesNotRequireManagedLlamaRuntime(t *testing.T) {
 	decodeResponse(t, recorder, &status)
 	if !status.Available || !status.ModelAvailable || status.Provider != config.LLMProviderOllama {
 		t.Fatalf("Ollama status = %+v, want available without managed llama.cpp", status)
+	}
+}
+
+func TestModelManagerStorageFailuresAreExplicitAndRedacted(t *testing.T) {
+	server := newTestServer(t)
+	ollamaRoot := writeHTTPAPIOllamaFixture(t)
+	if err := server.models.Close(); err != nil {
+		t.Fatalf("close model manager: %v", err)
+	}
+
+	requests := []*http.Request{
+		httptest.NewRequest(http.MethodGet, "/api/llm/models", nil),
+		withController(jsonAPIRequest(t, http.MethodPost, "/api/llm/ollama/scan", map[string]any{"path": ollamaRoot})),
+	}
+	for _, request := range requests {
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusInternalServerError {
+			t.Fatalf("%s %s status = %d: %s", request.Method, request.URL.Path, recorder.Code, recorder.Body.String())
+		}
+		if got := recorder.Body.String(); !strings.Contains(got, "model manager storage is unavailable") || strings.Contains(got, "closed") {
+			t.Fatalf("%s %s exposed unstable storage details: %s", request.Method, request.URL.Path, got)
+		}
+	}
+
+	state := server.llmState(context.Background()).(map[string]any)
+	if available, ok := state["model_manager_available"].(bool); !ok || available {
+		t.Fatalf("model_manager_available = %#v, want false", state["model_manager_available"])
+	}
+	if ready, ok := state["managed_ready"].(bool); !ok || ready {
+		t.Fatalf("managed_ready = %#v, want false", state["managed_ready"])
 	}
 }
 

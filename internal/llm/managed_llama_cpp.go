@@ -13,9 +13,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
-const managedLlamaLoadTimeout = 30 * time.Second
+const (
+	managedLlamaLoadTimeout   = 30 * time.Second
+	managedLlamaUnloadTimeout = 10 * time.Second
+)
 
 // ManagedLlamaCPPOptions configures a managed llama-server process.
 type ManagedLlamaCPPOptions struct {
@@ -32,11 +36,12 @@ type ManagedLlamaCPPProvider struct {
 	modelPath  string
 	client     *LlamaCPPProvider
 
-	mu      sync.Mutex
-	process *exec.Cmd
-	done    chan error
-	stderr  *tailBuffer
-	ready   bool
+	mu       sync.Mutex
+	process  *exec.Cmd
+	done     chan error
+	stderr   *tailBuffer
+	ready    bool
+	stopping bool
 }
 
 // NewManagedLlamaCPPProvider creates a managed llama.cpp provider.
@@ -69,7 +74,11 @@ func (p *ManagedLlamaCPPProvider) StreamChat(ctx context.Context, request ChatRe
 			return "", errors.New(status.Message)
 		}
 	}
-	return p.client.StreamChat(ctx, request, onDelta)
+	raw, err := p.client.StreamChat(ctx, request, onDelta)
+	if err != nil && !errors.Is(err, ErrOutputTruncated) && ctx.Err() == nil {
+		p.setReady(false)
+	}
+	return raw, err
 }
 
 // Status returns managed runner state without starting a process.
@@ -123,32 +132,59 @@ func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 			providerStatus.Message = err.Error()
 			return providerStatus
 		}
-		time.Sleep(250 * time.Millisecond)
+		timer := time.NewTimer(250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			providerStatus.Message = ctx.Err().Error()
+			return providerStatus
+		case <-timer.C:
+		}
 	}
 }
 
 // Unload stops the managed llama-server process.
-func (p *ManagedLlamaCPPProvider) Unload(context.Context) ProviderStatus {
+func (p *ManagedLlamaCPPProvider) Unload(ctx context.Context) ProviderStatus {
 	status := p.baseStatus()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, managedLlamaUnloadTimeout)
+	defer cancel()
+
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	process := p.process
-	p.process = nil
 	done := p.done
-	p.done = nil
 	p.ready = false
-	p.mu.Unlock()
 
 	if process == nil || process.Process == nil {
 		status.Message = "llama.cpp runner is not loaded"
+		status.Loaded = false
 		return status
 	}
-	if err := process.Process.Kill(); err != nil {
+	p.stopping = true
+	if err := process.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		p.stopping = false
 		status.Message = err.Error()
 		return status
 	}
 	if done != nil {
-		<-done
+		select {
+		case <-done:
+			p.process = nil
+			p.done = nil
+			p.stopping = false
+		case <-waitCtx.Done():
+			status.Loaded = false
+			status.Message = "llama.cpp runner termination timed out: " + waitCtx.Err().Error()
+			return status
+		}
+	} else {
+		p.process = nil
+		p.stopping = false
 	}
+	status.Loaded = false
 	status.Message = "unloaded"
 	return status
 }
@@ -194,6 +230,9 @@ func (p *ManagedLlamaCPPProvider) ensureStarted() error {
 	if p.runningLocked() {
 		return nil
 	}
+	if p.process != nil {
+		return errors.New("llama.cpp runner is still stopping")
+	}
 	return p.startLocked()
 }
 
@@ -229,6 +268,7 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 	p.process = command
 	p.done = done
 	p.ready = false
+	p.stopping = false
 	return nil
 }
 
@@ -259,12 +299,13 @@ func (p *ManagedLlamaCPPProvider) runningLocked() bool {
 		p.process = nil
 		p.done = nil
 		p.ready = false
-		if err != nil {
+		if err != nil && !p.stopping {
 			p.stderr.WriteString(err.Error())
 		}
+		p.stopping = false
 		return false
 	default:
-		return true
+		return !p.stopping
 	}
 }
 
@@ -285,6 +326,16 @@ func llamaHostPort(baseURL string) (string, int, error) {
 	if host == "" {
 		return "", 0, fmt.Errorf("llama.cpp base URL %q must include a host", baseURL)
 	}
+	if parsed.Scheme != "http" {
+		return "", 0, errors.New("managed llama.cpp requires an http base URL")
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", 0, errors.New("managed llama.cpp base URL must not include a path")
+	}
+	ip := net.ParseIP(host)
+	if !strings.EqualFold(host, "localhost") && (ip == nil || !ip.IsLoopback()) && (ip == nil || !ip.IsUnspecified()) {
+		return "", 0, errors.New("managed llama.cpp must bind to a loopback address")
+	}
 	if portText == "" {
 		switch parsed.Scheme {
 		case "http":
@@ -299,7 +350,7 @@ func llamaHostPort(baseURL string) (string, int, error) {
 	if err != nil || port < 1 || port > 65535 {
 		return "", 0, fmt.Errorf("llama.cpp base URL %q has invalid port", baseURL)
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+	if ip != nil && ip.IsUnspecified() {
 		host = "127.0.0.1"
 	}
 	return host, port, nil
@@ -320,7 +371,11 @@ func (b *tailBuffer) Write(data []byte) (int, error) {
 	defer b.mu.Unlock()
 	b.data = append(b.data, data...)
 	if len(b.data) > b.limit {
-		b.data = b.data[len(b.data)-b.limit:]
+		start := len(b.data) - b.limit
+		for start < len(b.data) && !utf8.RuneStart(b.data[start]) {
+			start++
+		}
+		b.data = b.data[start:]
 	}
 	return len(data), nil
 }

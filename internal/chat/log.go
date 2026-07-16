@@ -172,13 +172,20 @@ func (l *MessageLog) AdvanceCursor(clientID string, seq int64) (int64, error) {
 	ctx := context.Background()
 	var stored int64
 	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var latest sql.NullInt64
+		if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM messages`).Scan(&latest); err != nil {
+			return err
+		}
+		if seq > latest.Int64 {
+			seq = latest.Int64
+		}
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO client_cursors(client_id, last_seq, updated_at)
 			VALUES(?, ?, ?)
 			ON CONFLICT(client_id) DO UPDATE SET
-				last_seq = MAX(client_cursors.last_seq, excluded.last_seq),
+				last_seq = MIN(?, MAX(client_cursors.last_seq, excluded.last_seq)),
 				updated_at = excluded.updated_at
-		`, clientID, seq, time.Now().UTC().Format(time.RFC3339Nano))
+		`, clientID, seq, time.Now().UTC().Format(time.RFC3339Nano), latest.Int64)
 		if err != nil {
 			return err
 		}

@@ -34,13 +34,22 @@ func (s *Server) libraryRoutes(mux *http.ServeMux) {
 
 func (s *Server) libraryState() patterns.Summary {
 	if s.patterns == nil {
-		return patterns.Summary{}
+		return patterns.Summary{Available: false}
 	}
-	return s.patterns.Summary()
+	summary, err := s.patterns.Summary()
+	if err != nil {
+		return patterns.Summary{Available: false}
+	}
+	return summary
 }
 
 func (s *Server) handleLibraryGet(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"library": s.patterns.Snapshot()})
+	snapshot, err := s.patterns.Snapshot()
+	if err != nil {
+		s.writeLibraryStorageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"library": snapshot})
 }
 
 func (s *Server) handleLibraryPreview(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +80,7 @@ func (s *Server) handleLibraryPatternCreate(w http.ResponseWriter, r *http.Reque
 	}
 	pattern, err := s.patterns.CreatePattern(input)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		s.writeLibraryError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"pattern": pattern})
@@ -156,7 +165,7 @@ func (s *Server) handleLibraryImport(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.patterns.Import(filename, data, r.URL.Query().Get("as"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		s.writeLibraryError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"import": result})
@@ -176,7 +185,11 @@ func (s *Server) handleLibraryPatternPlay(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	definition, found := s.patterns.ResolveEnabled(r.PathValue("id"))
+	definition, found, err := s.patterns.ResolveEnabled(r.PathValue("id"))
+	if err != nil {
+		s.writeLibraryStorageError(w, err)
+		return
+	}
 	if !found {
 		writeError(w, http.StatusConflict, errors.New("pattern is disabled or unavailable"))
 		return
@@ -358,13 +371,22 @@ func decodeLimitedJSON(w http.ResponseWriter, r *http.Request, target any, limit
 
 func (s *Server) writeLibraryError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, patterns.ErrPatternNotFound), errors.Is(err, patterns.ErrProgramNotFound):
+	case errors.Is(err, patterns.ErrPatternNotFound), errors.Is(err, patterns.ErrProgramNotFound),
+		errors.Is(err, patterns.ErrFeedbackNotFound):
 		writeError(w, http.StatusNotFound, err)
-	case errors.Is(err, patterns.ErrBuiltinPattern), errors.Is(err, patterns.ErrFeedbackOrder):
+	case errors.Is(err, patterns.ErrBuiltinPattern), errors.Is(err, patterns.ErrFeedbackOrder),
+		errors.Is(err, patterns.ErrFeedbackReverted), errors.Is(err, patterns.ErrLibraryLimit):
 		writeError(w, http.StatusConflict, err)
-	default:
+	case errors.Is(err, patterns.ErrInvalidContent):
 		writeError(w, http.StatusBadRequest, err)
+	default:
+		s.writeLibraryStorageError(w, err)
 	}
+}
+
+func (s *Server) writeLibraryStorageError(w http.ResponseWriter, err error) {
+	s.logger.Error("pattern library storage operation failed", "error", err)
+	writeError(w, http.StatusInternalServerError, errors.New("pattern library storage is unavailable"))
 }
 
 func writeDownload(w http.ResponseWriter, filename string, data []byte) {

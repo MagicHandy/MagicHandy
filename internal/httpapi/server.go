@@ -422,7 +422,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	responseStatus := http.StatusOK
 	if runtimeErr != nil {
 		responseStatus = http.StatusBadGateway
-		payload["error"] = "settings were saved, but the active device runtime could not apply them"
+		payload["error"] = "settings were saved, but the active runtime could not apply them"
 	}
 	writeJSON(w, responseStatus, payload)
 }

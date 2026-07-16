@@ -57,6 +57,26 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	chatCtx, finishChat := s.beginChat(r.Context())
 	defer finishChat()
 
+	prompt, ok, err := s.personalization.prompts.Resolve(settings.LLM.PromptSet)
+	if err != nil {
+		s.writePersonalizationStorageError(w, "prompt set", err)
+		return
+	}
+	if !ok {
+		// A deleted or unknown selection falls back to the bundled default so
+		// chat keeps working; the status event reports what actually ran.
+		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
+	}
+	memories, err := s.personalization.memory.PromptTexts()
+	if err != nil {
+		s.writePersonalizationStorageError(w, "memory", err)
+		return
+	}
+	patternChoices, err := s.chatPatternChoices()
+	if err != nil {
+		s.writeLibraryStorageError(w, err)
+		return
+	}
 	provider, err := s.newLLMProvider(chatCtx, settings.LLM)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
@@ -64,12 +84,6 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setSSEHeaders(w)
-	prompt, ok := s.personalization.prompts.Resolve(settings.LLM.PromptSet)
-	if !ok {
-		// A deleted or unknown selection falls back to the bundled default so
-		// chat keeps working; the status event reports what actually ran.
-		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
-	}
 	service := chat.Service{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -77,8 +91,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		MaxTokens:             settings.LLM.MaxOutputTokens,
 		ReasoningMode:         settings.LLM.ReasoningMode,
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
-		Memories:              s.personalization.memory.PromptTexts(),
-		Patterns:              s.chatPatternChoices(),
+		Memories:              memories,
+		Patterns:              patternChoices,
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -243,7 +257,10 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 			return chatMotionDispatch{Action: command.Action}, err
 		}
 		current := engine.Snapshot()
-		target := s.chatMotionTarget(command, current)
+		target, err := s.chatMotionTarget(command, current)
+		if err != nil {
+			return chatMotionDispatch{Action: command.Action}, err
+		}
 		s.notifyChatTarget(target)
 		if current.Running {
 			state, err := engine.ApplyTarget(ctx, target, "chat_start_retarget")
@@ -258,7 +275,10 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running")
 		}
 		current := engine.Snapshot()
-		target := s.chatMotionTarget(command, current)
+		target, err := s.chatMotionTarget(command, current)
+		if err != nil {
+			return chatMotionDispatch{Action: command.Action}, err
+		}
 		s.notifyChatTarget(target)
 		state, err := engine.ApplyTarget(ctx, target, "chat_target")
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
@@ -410,13 +430,14 @@ func (s *Server) enqueueSpeech(reply string) *voice.PendingRequest {
 
 // chatState is the /api/state block other tabs poll for continuity.
 func (s *Server) chatState() map[string]any {
-	var latest int64
-	if s.chatLog != nil {
-		if seq, err := s.chatLog.LatestSeq(); err == nil {
-			latest = seq
-		}
+	if s.chatLog == nil {
+		return map[string]any{"available": false, "latest_seq": int64(0)}
 	}
-	return map[string]any{"latest_seq": latest}
+	latest, err := s.chatLog.LatestSeq()
+	if err != nil {
+		return map[string]any{"available": false, "latest_seq": int64(0)}
+	}
+	return map[string]any{"available": true, "latest_seq": latest}
 }
 
 // handleChatMessages reads the shared log non-destructively. Reads never
@@ -443,17 +464,17 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 
 	messages, err := s.chatLog.After(after, limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeChatStorageError(w, err)
 		return
 	}
 	latest, err := s.chatLog.LatestSeq()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeChatStorageError(w, err)
 		return
 	}
 	cursor, err := s.chatLog.Cursor(clientIDFromRequest(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeChatStorageError(w, err)
 		return
 	}
 	if messages == nil {
@@ -483,13 +504,18 @@ func (s *Server) handleChatCursor(w http.ResponseWriter, r *http.Request) {
 	}
 	cursor, err := s.chatLog.AdvanceCursor(clientID, body.Seq)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeChatStorageError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cursor": cursor})
 }
 
-func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
+func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
+	s.logger.Error("chat log storage operation failed", "error", err)
+	writeError(w, http.StatusInternalServerError, errors.New("chat history storage is unavailable"))
+}
+
+func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) (motion.MotionTarget, error) {
 	patternID := motion.PatternID(command.PatternID)
 	speedPercent := 0
 	if command.Intensity != nil {
@@ -501,7 +527,11 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 	var programDefinition *motion.ProgramDefinition
 	var programID string
 	if patternID != "" {
-		if resolved, ok := s.patterns.ResolveEnabled(string(patternID)); ok {
+		resolved, ok, err := s.patterns.ResolveEnabled(string(patternID))
+		if err != nil {
+			return motion.MotionTarget{}, fmt.Errorf("resolve chat pattern: %w", err)
+		}
+		if ok {
 			definition = &resolved
 		} else {
 			// The enabled set may change while the model is streaming. Never apply
@@ -538,11 +568,14 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 		SpeedPercent: speedPercent,
 		Pattern:      definition,
 		Program:      programDefinition,
-	}
+	}, nil
 }
 
-func (s *Server) chatPatternChoices() []chat.PatternChoice {
-	choices := s.patterns.EnabledChoices()
+func (s *Server) chatPatternChoices() ([]chat.PatternChoice, error) {
+	choices, err := s.patterns.EnabledChoices()
+	if err != nil {
+		return nil, err
+	}
 	result := make([]chat.PatternChoice, 0, len(choices))
 	for _, choice := range choices {
 		result = append(result, chat.PatternChoice{
@@ -550,7 +583,7 @@ func (s *Server) chatPatternChoices() []chat.PatternChoice {
 			Tags: choice.Tags, Weight: choice.Weight,
 		})
 	}
-	return result
+	return result, nil
 }
 
 func isChatStopMessage(message string) bool {

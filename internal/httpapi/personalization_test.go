@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -314,11 +315,69 @@ func TestSettingsResetRestoresDefaults(t *testing.T) {
 		t.Fatalf("prompt set selection after reset = %q, want default %q", after.LLM.PromptSet, defaults.LLM.PromptSet)
 	}
 
-	memorySnapshot := server.personalization.memory.Snapshot()
+	memorySnapshot, err := server.personalization.memory.Snapshot()
+	if err != nil {
+		t.Fatalf("read memory after settings reset: %v", err)
+	}
 	if len(memorySnapshot.Memories) != 1 || memorySnapshot.Memories[0].Text != "Survives settings reset." {
 		t.Fatalf("memory rows after settings reset = %+v, want pre-reset memory intact", memorySnapshot.Memories)
 	}
-	if set, ok := server.personalization.prompts.Resolve(promptPayload.Set.ID); !ok || set.Name != "Reset survivor" {
+	if set, ok, err := server.personalization.prompts.Resolve(promptPayload.Set.ID); err != nil || !ok || set.Name != "Reset survivor" {
 		t.Fatalf("prompt set after settings reset = %+v ok=%v, want pre-reset prompt set intact", set, ok)
 	}
+}
+
+func TestPersonalizationStorageFailuresAreNotReportedAsEmptyState(t *testing.T) {
+	t.Run("memory", func(t *testing.T) {
+		provider := &scriptedLLMProvider{responses: []string{
+			`{"reply":"Must not run.","motion":{"action":"none"}}`,
+		}}
+		server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+		t.Cleanup(server.Close)
+		if err := server.personalization.memory.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		read := personalizationRequest(t, server, http.MethodGet, "/api/memory", "")
+		if read.Code != http.StatusInternalServerError ||
+			!strings.Contains(read.Body.String(), "memory storage is unavailable") {
+			t.Fatalf("memory read = %d: %s", read.Code, read.Body.String())
+		}
+
+		state := personalizationRequest(t, server, http.MethodGet, "/api/state", "")
+		if state.Code != http.StatusOK || !strings.Contains(state.Body.String(), `"memory":{"available":false`) {
+			t.Fatalf("state with failed memory store = %d: %s", state.Code, state.Body.String())
+		}
+
+		request := withController(httptest.NewRequest(
+			http.MethodPost,
+			"/api/chat/stream",
+			strings.NewReader(`{"message":"hello"}`),
+		))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set(stopSequenceHeader, strconv.FormatUint(server.stopSequence.Load(), 10))
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusInternalServerError || provider.callCount() != 0 {
+			t.Fatalf("chat with failed memory store = %d, provider calls = %d: %s",
+				recorder.Code, provider.callCount(), recorder.Body.String())
+		}
+		if contentType := recorder.Header().Get("Content-Type"); strings.Contains(contentType, "text/event-stream") {
+			t.Fatalf("chat committed SSE headers before reading memory: %q", contentType)
+		}
+	})
+
+	t.Run("prompt sets", func(t *testing.T) {
+		server := newTestServer(t)
+		t.Cleanup(server.Close)
+		if err := server.personalization.prompts.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		read := personalizationRequest(t, server, http.MethodGet, "/api/prompt-sets", "")
+		if read.Code != http.StatusInternalServerError ||
+			!strings.Contains(read.Body.String(), "prompt set storage is unavailable") {
+			t.Fatalf("prompt set read = %d: %s", read.Code, read.Body.String())
+		}
+	})
 }

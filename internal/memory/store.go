@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
@@ -31,6 +32,13 @@ const (
 
 // ErrMemoryNotFound reports an unknown memory identifier.
 var ErrMemoryNotFound = errors.New("memory not found")
+
+var (
+	// ErrMemoryInvalid reports text that cannot be stored safely.
+	ErrMemoryInvalid = errors.New("invalid memory")
+	// ErrMemoryLimit reports that the durable memory capacity is full.
+	ErrMemoryLimit = errors.New("memory limit reached")
+)
 
 // Memory is one saved fact.
 type Memory struct {
@@ -98,25 +106,35 @@ func (s *Store) Close() error {
 }
 
 // Snapshot returns a copy of the switch and every memory.
-func (s *Store) Snapshot() Snapshot {
+func (s *Store) Snapshot() (Snapshot, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	ctx := context.Background()
-	enabled := s.memoryEnabledLocked(ctx)
-	memories := s.memoriesLocked(ctx, "")
-	return Snapshot{Enabled: enabled, Memories: memories}
+	enabled, err := s.memoryEnabledLocked(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	memories, err := s.memoriesLocked(ctx, "")
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return Snapshot{Enabled: enabled, Memories: memories}, nil
 }
 
 // PromptTexts returns the enabled memory texts for prompt injection, or nil
 // when the global switch is off — chat must work identically without them.
-func (s *Store) PromptTexts() []string {
+func (s *Store) PromptTexts() ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	ctx := context.Background()
-	if !s.memoryEnabledLocked(ctx) {
-		return nil
+	enabled, err := s.memoryEnabledLocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, nil
 	}
 	rows, err := s.db.SQL().QueryContext(ctx, `
 		SELECT text
@@ -125,7 +143,7 @@ func (s *Store) PromptTexts() []string {
 		ORDER BY created_at, id
 	`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer func() {
 		_ = rows.Close()
@@ -135,30 +153,30 @@ func (s *Store) PromptTexts() []string {
 	for rows.Next() {
 		var text string
 		if err := rows.Scan(&text); err != nil {
-			return nil
+			return nil, err
 		}
 		texts = append(texts, text)
 	}
-	return texts
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return texts, nil
 }
 
 // Add validates, stores, and persists one memory (enabled by default).
 func (s *Store) Add(text string) (Memory, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return Memory{}, errors.New("memory text is required")
+		return Memory{}, fmt.Errorf("%w: text is required", ErrMemoryInvalid)
 	}
-	if len(text) > maxMemoryChars {
-		return Memory{}, fmt.Errorf("memory text must be at most %d characters", maxMemoryChars)
+	if utf8.RuneCountInString(text) > maxMemoryChars {
+		return Memory{}, fmt.Errorf("%w: text must be at most %d characters", ErrMemoryInvalid, maxMemoryChars)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	ctx := context.Background()
-	if s.memoryCountLocked(ctx) >= maxMemories {
-		return Memory{}, fmt.Errorf("memory limit reached (%d)", maxMemories)
-	}
 	item := Memory{
 		ID:        "mem-" + randomHex(6),
 		Text:      text,
@@ -166,6 +184,13 @@ func (s *Store) Add(text string) (Memory, error) {
 		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var count int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM memories").Scan(&count); err != nil {
+			return err
+		}
+		if count >= maxMemories {
+			return fmt.Errorf("%w (%d)", ErrMemoryLimit, maxMemories)
+		}
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO memories(id, text, enabled, created_at)
 			VALUES(?, ?, ?, ?)
@@ -342,7 +367,7 @@ func (s *Store) normalizeLoadedFile(file memoriesFile) memoriesFile {
 	for _, item := range file.Memories {
 		item.ID = strings.TrimSpace(item.ID)
 		item.Text = strings.TrimSpace(item.Text)
-		if item.ID == "" || item.Text == "" || len(item.Text) > maxMemoryChars {
+		if item.ID == "" || item.Text == "" || utf8.RuneCountInString(item.Text) > maxMemoryChars {
 			s.recovered = true
 			continue
 		}
@@ -361,7 +386,7 @@ func (s *Store) normalizeLoadedFile(file memoriesFile) memoriesFile {
 	return file
 }
 
-func (s *Store) memoryEnabledLocked(ctx context.Context) bool {
+func (s *Store) memoryEnabledLocked(ctx context.Context) (bool, error) {
 	var value string
 	err := s.db.SQL().QueryRowContext(ctx, `
 		SELECT value
@@ -369,9 +394,19 @@ func (s *Store) memoryEnabledLocked(ctx context.Context) bool {
 		WHERE key = ?
 	`, memoryEnabledKey).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
-		return true
+		return true, nil
 	}
-	return err == nil && value == "true"
+	if err != nil {
+		return false, err
+	}
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid memory enabled preference %q", value)
+	}
 }
 
 func (s *Store) setMemoryEnabledLocked(ctx context.Context, enabled bool) error {
@@ -387,7 +422,7 @@ func (s *Store) setMemoryEnabledLocked(ctx context.Context, enabled bool) error 
 	})
 }
 
-func (s *Store) memoriesLocked(ctx context.Context, where string, args ...any) []Memory {
+func (s *Store) memoriesLocked(ctx context.Context, where string, args ...any) ([]Memory, error) {
 	query := `
 		SELECT id, text, enabled, created_at
 		FROM memories
@@ -396,7 +431,7 @@ func (s *Store) memoriesLocked(ctx context.Context, where string, args ...any) [
 	`
 	rows, err := s.db.SQL().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer func() {
 		_ = rows.Close()
@@ -406,19 +441,14 @@ func (s *Store) memoriesLocked(ctx context.Context, where string, args ...any) [
 	for rows.Next() {
 		var item Memory
 		if err := rows.Scan(&item.ID, &item.Text, scanBool(&item.Enabled), &item.CreatedAt); err != nil {
-			return nil
+			return nil, err
 		}
 		memories = append(memories, item)
 	}
-	return memories
-}
-
-func (s *Store) memoryCountLocked(ctx context.Context) int {
-	var count int
-	if err := s.db.SQL().QueryRowContext(ctx, "SELECT COUNT(*) FROM memories").Scan(&count); err != nil {
-		return maxMemories
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	return count
+	return memories, nil
 }
 
 func randomHex(bytes int) string {

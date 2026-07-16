@@ -73,7 +73,10 @@ func TestPromptLibraryCreateUpdateDeletePersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	resolved, ok := reopened.Resolve(created.ID)
+	resolved, ok, err := reopened.Resolve(created.ID)
+	if err != nil {
+		t.Fatalf("Resolve persisted set: %v", err)
+	}
 	if !ok || resolved.Name != "Gentler" {
 		t.Fatalf("persisted set = %+v ok=%v", resolved, ok)
 	}
@@ -81,7 +84,7 @@ func TestPromptLibraryCreateUpdateDeletePersists(t *testing.T) {
 	if err := reopened.Delete(created.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, ok := reopened.Resolve(created.ID); ok {
+	if _, ok, err := reopened.Resolve(created.ID); err != nil || ok {
 		t.Fatal("deleted set still resolves")
 	}
 }
@@ -100,10 +103,13 @@ func TestPromptLibraryProtectsBuiltins(t *testing.T) {
 	}
 
 	// Builtins always resolve and always list first.
-	if _, ok := library.Resolve(DefaultPromptSetID); !ok {
+	if _, ok, err := library.Resolve(DefaultPromptSetID); err != nil || !ok {
 		t.Fatal("builtin did not resolve")
 	}
-	sets := library.List()
+	sets, err := library.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
 	if len(sets) == 0 || !sets[0].Builtin {
 		t.Fatalf("List() = %+v, want builtin first", sets)
 	}
@@ -132,7 +138,10 @@ func TestPromptLibraryImportsLegacyUserSets(t *testing.T) {
 	defer func() {
 		_ = library.Close()
 	}()
-	set, ok := library.Resolve("user-legacy")
+	set, ok, err := library.Resolve("user-legacy")
+	if err != nil {
+		t.Fatalf("Resolve imported set: %v", err)
+	}
 	if !ok {
 		t.Fatal("imported prompt set did not resolve")
 	}
@@ -199,6 +208,12 @@ func TestPromptLibraryValidatesFieldsAndUnknownIDs(t *testing.T) {
 	if _, err := library.Create("Name", strings.Repeat("x", maxPromptSystemSize+1)); err == nil {
 		t.Fatal("Create accepted oversized system text")
 	}
+	if _, err := library.Create(strings.Repeat("界", maxPromptNameChars), "text"); err != nil {
+		t.Fatalf("Create rejected %d non-ASCII name characters: %v", maxPromptNameChars, err)
+	}
+	if _, err := library.Create(strings.Repeat("界", maxPromptNameChars+1), "text"); err == nil {
+		t.Fatal("Create accepted too many non-ASCII name characters")
+	}
 	if _, err := library.Update("user-missing", "Name", "text"); !errors.Is(err, ErrPromptSetNotFound) {
 		t.Fatalf("Update unknown id error = %v, want ErrPromptSetNotFound", err)
 	}
@@ -261,17 +276,41 @@ func TestPromptLibrarySkipsInvalidLoadedUserSets(t *testing.T) {
 	if storedBuiltins != 0 {
 		t.Fatal("loaded file created a user-owned duplicate of the built-in prompt set")
 	}
-	valid, ok := library.Resolve("user-valid")
+	valid, ok, err := library.Resolve("user-valid")
+	if err != nil {
+		t.Fatalf("Resolve valid loaded set: %v", err)
+	}
 	if !ok {
 		t.Fatal("valid loaded user set did not resolve")
 	}
 	if valid.Name != "Valid" || valid.System != "Kept." {
 		t.Fatalf("valid set = %+v, want trimmed fields", valid)
 	}
-	if _, ok := library.Resolve("user-blank-name"); ok {
+	if _, ok, err := library.Resolve("user-blank-name"); err != nil || ok {
 		t.Fatal("invalid blank-name set resolved")
 	}
-	if _, ok := library.Resolve("user-oversized"); ok {
+	if _, ok, err := library.Resolve("user-oversized"); err != nil || ok {
 		t.Fatal("oversized loaded set resolved")
+	}
+}
+
+func TestPromptLibraryReadFailuresAreNotReportedAsEmptyOrMissing(t *testing.T) {
+	library, err := OpenPromptLibrary(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := library.Create("Stored", "Persisted prompt.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := library.List(); err == nil {
+		t.Fatal("List hid a closed database as an empty user library")
+	}
+	if _, found, err := library.Resolve(set.ID); err == nil || found {
+		t.Fatal("Resolve hid a closed database as a missing prompt set")
 	}
 }

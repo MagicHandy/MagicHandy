@@ -2,6 +2,7 @@ package modes
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -18,16 +19,30 @@ func TestMain(m *testing.M) {
 
 // fakeEngine implements the narrow Engine surface for manager behavior tests.
 type fakeEngine struct {
-	mu       sync.Mutex
-	running  bool
-	paused   bool
-	starts   []motion.MotionTarget
-	targets  []motion.MotionTarget
-	reasons  []string
-	startErr error
+	mu           sync.Mutex
+	running      bool
+	paused       bool
+	starts       []motion.MotionTarget
+	targets      []motion.MotionTarget
+	reasons      []string
+	startErr     error
+	targetErr    error
+	startEntered chan struct{}
+	startRelease chan struct{}
+	startOnce    sync.Once
 }
 
-func (f *fakeEngine) Start(_ context.Context, target motion.MotionTarget, _ config.MotionSettings) (motion.ActiveMotionState, error) {
+func (f *fakeEngine) Start(ctx context.Context, target motion.MotionTarget, _ config.MotionSettings) (motion.ActiveMotionState, error) {
+	if f.startEntered != nil {
+		f.startOnce.Do(func() { close(f.startEntered) })
+	}
+	if f.startRelease != nil {
+		select {
+		case <-ctx.Done():
+			return motion.ActiveMotionState{}, ctx.Err()
+		case <-f.startRelease:
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.startErr != nil {
@@ -44,6 +59,9 @@ func (f *fakeEngine) ApplyTarget(_ context.Context, target motion.MotionTarget, 
 	defer f.mu.Unlock()
 	f.targets = append(f.targets, target)
 	f.reasons = append(f.reasons, reason)
+	if f.targetErr != nil {
+		return motion.ActiveMotionState{}, f.targetErr
+	}
 	return motion.ActiveMotionState{Running: f.running, Target: target}, nil
 }
 
@@ -115,12 +133,12 @@ func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 
 func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(0, 0)}
-	manager := &Manager{options: Options{Now: clock.Now}}
-	manager.armSegment(Segment{DurationMillis: 1000}, 9000)
+	manager := &Manager{options: Options{Now: clock.Now}, mode: ModeFreestyle, generation: 1}
+	manager.armSegment(Segment{DurationMillis: 1000}, 9000, 1)
 	if got := manager.deadline.Sub(clock.Now()); got != 9750*time.Millisecond {
 		t.Fatalf("latency dwell = %s, want 9.75s", got)
 	}
-	manager.armSegment(Segment{DurationMillis: 1000}, 30000)
+	manager.armSegment(Segment{DurationMillis: 1000}, 30000, 1)
 	if got := manager.deadline.Sub(clock.Now()); got != maximumLatencyDwell {
 		t.Fatalf("capped latency dwell = %s, want %s", got, maximumLatencyDwell)
 	}
@@ -225,6 +243,55 @@ func TestFreestyleStopsAfterUserStopInsteadOfRestarting(t *testing.T) {
 	}
 }
 
+func TestUserStopCancelsInFlightFreestyleStart(t *testing.T) {
+	engine := &fakeEngine{
+		startEntered: make(chan struct{}),
+		startRelease: make(chan struct{}),
+	}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-engine.startEntered:
+	case <-time.After(time.Second):
+		t.Fatal("freestyle start did not enter the engine")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		manager.NotifyUserStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("user stop did not cancel the in-flight mode start")
+	}
+	if starts, _ := engine.counts(); starts != 0 {
+		t.Fatalf("cancelled mode start reached motion: %d starts", starts)
+	}
+}
+
+func TestFreestyleRetargetFailureHonorsBackoff(t *testing.T) {
+	engine := &fakeEngine{targetErr: errors.New("temporary retarget failure")}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	clock.Advance(150 * time.Second)
+	waitFor(t, time.Second, func() bool { _, targets := engine.counts(); return targets == 1 })
+	time.Sleep(30 * time.Millisecond)
+	if _, targets := engine.counts(); targets != 1 {
+		t.Fatalf("retarget attempts during backoff = %d, want 1", targets)
+	}
+	clock.Advance(restartBackoff + time.Millisecond)
+	waitFor(t, time.Second, func() bool { _, targets := engine.counts(); return targets == 2 })
+}
+
 func TestChatKeepaliveRestartsOnlyAfterRecovery(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}
@@ -272,6 +339,61 @@ func TestChatKeepaliveRestartsOnlyAfterRecovery(t *testing.T) {
 	}
 	if !sawKeepalive {
 		t.Fatal("keepalive restart left no planner trace row")
+	}
+}
+
+func TestFreshChatModeDoesNotReuseStoppedSessionTarget(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeChat); err != nil {
+		t.Fatal(err)
+	}
+	manager.NotifyChatTarget(motion.MotionTarget{
+		Source: "chat", PatternID: motion.PatternPulse, SpeedPercent: 30,
+	})
+	engine.setState(true, false)
+	manager.Stop("mode_switch")
+	engine.setState(false, false)
+	if _, err := manager.Start(context.Background(), ModeChat); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if starts, _ := engine.counts(); starts != 0 {
+		t.Fatalf("fresh chat mode restarted a prior session target: %d starts", starts)
+	}
+	if status := manager.Status(); !status.WaitingForChat {
+		t.Fatalf("fresh chat mode status = %+v, want waiting for a new target", status)
+	}
+}
+
+func TestBeginUserStopSerializesNextModeStartUntilDrained(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatal(err)
+	}
+	finishStop := manager.BeginUserStop()
+	t.Cleanup(finishStop)
+	startDone := make(chan error, 1)
+	go func() {
+		_, err := manager.Start(context.Background(), ModeChat)
+		startDone <- err
+	}()
+	select {
+	case err := <-startDone:
+		t.Fatalf("next mode started before user Stop drained: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+	finishStop()
+	select {
+	case err := <-startDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("next mode remained blocked after user Stop drained")
 	}
 }
 

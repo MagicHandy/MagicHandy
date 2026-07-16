@@ -4,13 +4,22 @@ package llm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
 
 // ErrOutputTruncated reports that a provider exhausted its generation budget.
 var ErrOutputTruncated = errors.New("LLM output reached the maximum token limit")
+
+const maxStreamResponseBytes = 1 << 20
+
+var (
+	errIncompleteStream = errors.New("LLM stream ended before a completion marker")
+	errResponseTooLarge = errors.New("LLM response exceeded the stream size limit")
+)
 
 // Message is one chat turn sent to a local model provider.
 type Message struct {
@@ -70,6 +79,22 @@ func normalizeHTTPOptions(options HTTPProviderOptions) (HTTPProviderOptions, err
 	if options.BaseURL == "" {
 		return HTTPProviderOptions{}, errors.New("LLM provider base URL is required")
 	}
+	parsed, err := url.Parse(options.BaseURL)
+	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" {
+		return HTTPProviderOptions{}, fmt.Errorf("LLM provider base URL must be an absolute HTTP URL with a host")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return HTTPProviderOptions{}, errors.New("LLM provider base URL scheme must be http or https")
+	}
+	if parsed.User != nil {
+		return HTTPProviderOptions{}, errors.New("LLM provider base URL must not include userinfo")
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return HTTPProviderOptions{}, errors.New("LLM provider base URL must not include a query")
+	}
+	if parsed.Fragment != "" {
+		return HTTPProviderOptions{}, errors.New("LLM provider base URL must not include a fragment")
+	}
 	if options.Model == "" {
 		return HTTPProviderOptions{}, errors.New("LLM model is required")
 	}
@@ -80,6 +105,17 @@ func normalizeHTTPOptions(options HTTPProviderOptions) (HTTPProviderOptions, err
 		options.Client = &http.Client{Timeout: options.Timeout}
 	}
 	return options, nil
+}
+
+func appendStreamDelta(builder *strings.Builder, delta string, onDelta func(string) error) error {
+	if len(delta) > maxStreamResponseBytes-builder.Len() {
+		return errResponseTooLarge
+	}
+	builder.WriteString(delta)
+	if onDelta != nil {
+		return onDelta(delta)
+	}
+	return nil
 }
 
 func checkedRequestContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
