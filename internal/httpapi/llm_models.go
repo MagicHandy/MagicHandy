@@ -14,7 +14,7 @@ const maxModelManagerRequestBytes = 8 * 1024
 func (s *Server) handleLLMModels(w http.ResponseWriter, r *http.Request) {
 	snapshot, err := s.models.Snapshot(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeModelManagerStorageError(w, err)
 		return
 	}
 	settings, _ := s.store.Snapshot()
@@ -46,12 +46,16 @@ func (s *Server) handleBuildManagedLLMRuntime(w http.ResponseWriter, r *http.Req
 	if !decodeModelManagerRequest(w, r, &request) {
 		return
 	}
+	if err := s.closeLLM(); err != nil {
+		s.logger.Warn("stop active LLM runner before rebuild", "error", err)
+		writeError(w, http.StatusServiceUnavailable, errors.New("the active LLM runner could not be stopped before rebuilding"))
+		return
+	}
 	build, err := s.managedLLM.StartBuild(request.Backend)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	s.closeLLM()
 	writeJSON(w, http.StatusAccepted, map[string]any{"build": build})
 }
 
@@ -97,6 +101,10 @@ func (s *Server) handleOllamaScan(w http.ResponseWriter, r *http.Request) {
 	settings, _ := s.store.Snapshot()
 	scan, err := s.models.ScanOllama(r.Context(), firstNonBlank(request.Path, selectedOllamaModelsPath(settings.LLM)))
 	if err != nil {
+		if errors.Is(err, llm.ErrModelInventoryUnavailable) {
+			s.writeModelManagerStorageError(w, err)
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -121,6 +129,10 @@ func (s *Server) handleOllamaImport(w http.ResponseWriter, r *http.Request) {
 		request.CandidateID,
 	)
 	if err != nil {
+		if errors.Is(err, llm.ErrModelInventoryUnavailable) {
+			s.writeModelManagerStorageError(w, err)
+			return
+		}
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -153,7 +165,7 @@ func (s *Server) handleLLMImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeModelManagerStorageError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"import": job})
@@ -169,7 +181,7 @@ func (s *Server) handleCancelLLMImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeModelManagerStorageError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"import": job})
@@ -191,10 +203,15 @@ func (s *Server) handleDeleteLLMModel(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, llm.ErrModelSelected):
 		writeError(w, http.StatusConflict, err)
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, err)
+		s.writeModelManagerStorageError(w, err)
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (s *Server) writeModelManagerStorageError(w http.ResponseWriter, err error) {
+	s.logger.Error("model manager storage operation failed", "error", err)
+	writeError(w, http.StatusInternalServerError, errors.New("model manager storage is unavailable"))
 }
 
 func decodeModelManagerRequest(w http.ResponseWriter, r *http.Request, target any) bool {

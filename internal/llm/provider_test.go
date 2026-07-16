@@ -110,6 +110,56 @@ func TestOllamaStreamReportsTokenLimit(t *testing.T) {
 	}
 }
 
+func TestProviderStreamsRequireCompletionMarker(t *testing.T) {
+	ollama := `{"message":{"content":"partial"},"done":false}` + "\n"
+	if raw, err := readOllamaStream(strings.NewReader(ollama), nil); raw != "partial" || !errors.Is(err, errIncompleteStream) {
+		t.Fatalf("readOllamaStream incomplete = %q, %v", raw, err)
+	}
+
+	llama := "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"
+	if raw, err := readOpenAIEventStream(strings.NewReader(llama), nil); raw != "partial" || !errors.Is(err, errIncompleteStream) {
+		t.Fatalf("readOpenAIEventStream incomplete = %q, %v", raw, err)
+	}
+
+	terminalWithoutDone := "data: {\"choices\":[{\"finish_reason\":\"stop\"}]}\n\n"
+	if raw, err := readOpenAIEventStream(strings.NewReader(terminalWithoutDone), nil); raw != "" || err != nil {
+		t.Fatalf("terminal finish reason = %q, %v", raw, err)
+	}
+}
+
+func TestProviderStreamsBoundAggregateOutput(t *testing.T) {
+	delta := strings.Repeat("x", maxStreamResponseBytes/2+1)
+	chunk := "data: " + mustJSON(t, map[string]any{
+		"choices": []any{map[string]any{"delta": map[string]any{"content": delta}}},
+	}) + "\n\n"
+	stream := chunk + chunk
+	if _, err := readOpenAIEventStream(strings.NewReader(stream), nil); !errors.Is(err, errResponseTooLarge) {
+		t.Fatalf("oversized stream error = %v", err)
+	}
+}
+
+func TestProvidersRejectUnsafeBaseURLs(t *testing.T) {
+	for _, baseURL := range []string{
+		"file:///tmp/model",
+		"http://user:secret@127.0.0.1:11434",
+		"http://127.0.0.1:11434?token=secret",
+		"http://127.0.0.1:11434/#fragment",
+	} {
+		if _, err := NewOllamaProvider(HTTPProviderOptions{BaseURL: baseURL, Model: "model"}); err == nil {
+			t.Fatalf("NewOllamaProvider accepted %q", baseURL)
+		}
+	}
+}
+
+func mustJSON(t *testing.T, value any) string {
+	t.Helper()
+	payload, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(payload)
+}
+
 func TestMain(m *testing.M) {
 	if os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER") == "1" {
 		runManagedLlamaRunnerHelper()
@@ -219,6 +269,27 @@ func TestManagedLlamaCPPStatusRequiresManagedRuntimeAndModel(t *testing.T) {
 	}
 	if !strings.Contains(status.Message, "runtime is not installed") {
 		t.Fatalf("status message = %q, want managed runtime setup error", status.Message)
+	}
+}
+
+func TestManagedLlamaCPPRequiresLoopbackHTTPBaseURL(t *testing.T) {
+	for _, baseURL := range []string{
+		"https://127.0.0.1:8080",
+		"http://192.168.1.20:8080",
+		"http://127.0.0.1:8080/prefix",
+	} {
+		if _, _, err := llamaHostPort(baseURL); err == nil {
+			t.Fatalf("llamaHostPort accepted %q", baseURL)
+		}
+	}
+	for _, baseURL := range []string{
+		"http://127.0.0.1:8080",
+		"http://localhost:8080",
+		"http://0.0.0.0:8080",
+	} {
+		if _, _, err := llamaHostPort(baseURL); err != nil {
+			t.Fatalf("llamaHostPort rejected %q: %v", baseURL, err)
+		}
 	}
 }
 

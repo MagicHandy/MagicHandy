@@ -159,6 +159,256 @@ func TestModelManagerImportsStandaloneGGUFAndDeduplicates(t *testing.T) {
 	}
 }
 
+func TestModelManagerDoesNotDeduplicateAgainstMissingCopy(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenModelManager: %v", err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	source := filepath.Join(t.TempDir(), "local.gguf")
+	data := append([]byte("GGUF"), make([]byte, 4096)...)
+	if err := os.WriteFile(source, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := manager.StartGGUFImport(source, "Local model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first = waitForImport(t, manager, first.ID)
+	model, err := manager.Model(context.Background(), first.ModelID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(model.ModelPath); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := manager.StartGGUFImport(source, "Replacement")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second = waitForImport(t, manager, second.ID)
+	if second.Status != ImportStatusFailed || !strings.Contains(second.Error, "remove it before importing") {
+		t.Fatalf("second import = %+v, want a broken-copy failure", second)
+	}
+}
+
+func TestModelManagerDeleteRestoresFilesWhenDatabaseDeleteFails(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenModelManager: %v", err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	source := filepath.Join(t.TempDir(), "local.gguf")
+	if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 128)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job, err := manager.StartGGUFImport(source, "Delete rollback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job = waitForImport(t, manager, job.ID)
+	model, err := manager.Model(context.Background(), job.ModelID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.db.SQL().Exec(`
+		CREATE TRIGGER reject_model_delete
+		BEFORE DELETE ON llm_models
+		BEGIN
+			SELECT RAISE(ABORT, 'forced delete failure');
+		END
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.Delete(context.Background(), model.ID, ""); err == nil || !strings.Contains(err.Error(), "forced delete failure") {
+		t.Fatalf("Delete error = %v", err)
+	}
+	if _, err := os.Stat(model.ModelPath); err != nil {
+		t.Fatalf("model file was not restored: %v", err)
+	}
+	if restored, err := manager.Model(context.Background(), model.ID); err != nil || restored.State != modelStateReady {
+		t.Fatalf("restored model = %+v, err = %v", restored, err)
+	}
+}
+
+func TestModelManagerDeleteRejectsInventoryPathMismatch(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	source := filepath.Join(t.TempDir(), "local.gguf")
+	if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 128)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job, err := manager.StartGGUFImport(source, "Path guard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job = waitForImport(t, manager, job.ID)
+	record, err := manager.Model(context.Background(), job.ModelID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victimDir := filepath.Join(manager.modelsDir, "unrelated")
+	if err := os.Mkdir(victimDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	victimPath := filepath.Join(victimDir, "model.gguf")
+	if err := os.WriteFile(victimPath, []byte("GGUFx"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.db.SQL().Exec(`UPDATE llm_models SET model_path = ? WHERE id = ?`, victimPath, record.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.Delete(context.Background(), record.ID, ""); err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("Delete path mismatch error = %v", err)
+	}
+	for _, path := range []string{record.ModelPath, victimPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("Delete touched %q: %v", path, err)
+		}
+	}
+}
+
+func TestModelManagerReconcilesInterruptedDeletion(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		deleteRecord  bool
+		wantModel     bool
+		wantTombstone bool
+	}{
+		{name: "restore before database commit", wantModel: true},
+		{name: "remove after database commit", deleteRecord: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			manager, err := OpenModelManager(dataDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(t.TempDir(), "local.gguf")
+			if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 128)...), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			job, err := manager.StartGGUFImport(source, "Crash recovery")
+			if err != nil {
+				t.Fatal(err)
+			}
+			job = waitForImport(t, manager, job.ID)
+			record, err := manager.Model(context.Background(), job.ModelID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			modelDir := filepath.Dir(record.ModelPath)
+			tombstone := modelDir + ".deleting"
+			if err := os.Rename(modelDir, tombstone); err != nil {
+				t.Fatal(err)
+			}
+			if test.deleteRecord {
+				if _, err := manager.db.SQL().Exec(`DELETE FROM llm_models WHERE id = ?`, record.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := manager.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			reopened, err := OpenModelManager(dataDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = reopened.Close() })
+			_, modelErr := reopened.Model(context.Background(), record.ID)
+			if test.wantModel && modelErr != nil {
+				t.Fatalf("restored model error = %v", modelErr)
+			}
+			if !test.wantModel && !errors.Is(modelErr, ErrModelNotFound) {
+				t.Fatalf("removed model error = %v, want ErrModelNotFound", modelErr)
+			}
+			if _, err := os.Stat(tombstone); test.wantTombstone != (err == nil) {
+				t.Fatalf("tombstone stat = %v, want present=%v", err, test.wantTombstone)
+			}
+		})
+	}
+}
+
+func TestModelManagerPreservesUnrecognizedDeletionDirectory(t *testing.T) {
+	dataDir := t.TempDir()
+	tombstone := filepath.Join(dataDir, "models", "gguf", "unrelated.deleting")
+	if err := os.MkdirAll(tombstone, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenModelManager(dataDir); err == nil || !strings.Contains(err.Error(), "metadata") {
+		t.Fatalf("OpenModelManager unrecognized tombstone error = %v", err)
+	}
+	if _, err := os.Stat(tombstone); err != nil {
+		t.Fatalf("unrecognized tombstone was removed: %v", err)
+	}
+}
+
+func TestModelImportStopsAfterExpectedSize(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenModelManager: %v", err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	source := filepath.Join(t.TempDir(), "growing.gguf")
+	if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 4096)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job, err := manager.startImport(modelImportSpec{
+		DisplayName: "Bounded copy", Source: ModelSourceGGUF,
+		SourcePath: source, SizeBytes: 8, Format: "gguf",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job = waitForImport(t, manager, job.ID)
+	if job.Status != ImportStatusFailed || job.BytesCopied != 9 || !strings.Contains(job.Error, "size changed") {
+		t.Fatalf("bounded import = %+v", job)
+	}
+}
+
+func TestModelImportRevalidatesCopiedGGUF(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	source := filepath.Join(t.TempDir(), "changed.gguf")
+	data := []byte("NOPE-model-content")
+	if err := os.WriteFile(source, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job, err := manager.startImport(modelImportSpec{
+		DisplayName: "  Changed source  ", Source: ModelSourceGGUF,
+		SourcePath: source, SizeBytes: int64(len(data)), Format: "gguf",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job = waitForImport(t, manager, job.ID)
+	if job.Status != ImportStatusFailed || !strings.Contains(job.Error, "not a GGUF") {
+		t.Fatalf("revalidated import = %+v", job)
+	}
+	models, err := manager.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 0 {
+		t.Fatalf("invalid copied model entered inventory: %+v", models)
+	}
+}
+
 func TestModelManagerRejectsNonGGUFAndProtectsStoreRoot(t *testing.T) {
 	manager, err := OpenModelManager(t.TempDir())
 	if err != nil {
@@ -183,7 +433,7 @@ func TestModelManagerRejectsNonGGUFAndProtectsStoreRoot(t *testing.T) {
 	if err := manager.insertModel(context.Background(), record); err != nil {
 		t.Fatalf("insert unsafe fixture: %v", err)
 	}
-	if err := manager.Delete(context.Background(), record.ID, ""); err == nil || !strings.Contains(err.Error(), "outside") {
+	if err := manager.Delete(context.Background(), record.ID, ""); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("unsafe Delete = %v", err)
 	}
 	if _, err := os.Stat(manager.modelsDir); err != nil {

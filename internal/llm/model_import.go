@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 	maxManagedModelBytes = int64(1 << 40) // 1 TiB safety bound, not a recommendation.
 	maxTrackedImportJobs = 64
 	maxConcurrentImports = 2
+	maxModelNameChars    = 120
 )
 
 // ImportJob is a progress snapshot for one explicit model copy.
@@ -164,6 +166,7 @@ func (m *ModelManager) CancelImport(id string) (ImportJob, error) {
 }
 
 func (m *ModelManager) startImport(spec modelImportSpec) (ImportJob, error) {
+	spec = normalizeImportSpec(spec)
 	if err := validateImportSpec(spec); err != nil {
 		return ImportJob{}, err
 	}
@@ -212,14 +215,16 @@ func (m *ModelManager) runImport(ctx context.Context, jobID string, spec modelIm
 	temporary := filepath.Join(m.downloadsDir, "model-import-"+jobID+".partial")
 	digest, copied, err := m.copyModel(ctx, jobID, spec, temporary)
 	if err != nil {
-		_ = os.Remove(temporary)
-		m.finishImport(jobID, "", err)
+		m.finishImport(jobID, "", cleanupImportPartial(temporary, err))
+		return
+	}
+	if _, err := validateGGUFFile(temporary); err != nil {
+		m.finishImport(jobID, "", cleanupImportPartial(temporary, fmt.Errorf("validate copied model: %w", err)))
 		return
 	}
 	record, err := m.commitModel(ctx, spec, temporary, digest, copied)
 	if err != nil {
-		_ = os.Remove(temporary)
-		m.finishImport(jobID, "", err)
+		m.finishImport(jobID, "", cleanupImportPartial(temporary, err))
 		return
 	}
 	m.finishImport(jobID, record.ID, nil)
@@ -247,12 +252,13 @@ func (m *ModelManager) copyModel(
 	var copied int64
 	copyErr := error(nil)
 	m.updateImportProgress(jobID, ImportStatusCopying, 0)
+	limitedSource := io.LimitReader(source, spec.SizeBytes+1)
 	for {
 		if err := ctx.Err(); err != nil {
 			copyErr = err
 			break
 		}
-		count, readErr := source.Read(buffer)
+		count, readErr := limitedSource.Read(buffer)
 		if count > 0 {
 			if _, err := destination.Write(buffer[:count]); err != nil {
 				copyErr = err
@@ -270,8 +276,10 @@ func (m *ModelManager) copyModel(
 			break
 		}
 	}
-	if syncErr := destination.Sync(); copyErr == nil && syncErr != nil {
-		copyErr = syncErr
+	if copyErr == nil {
+		if syncErr := destination.Sync(); syncErr != nil {
+			copyErr = syncErr
+		}
 	}
 	if closeErr := destination.Close(); copyErr == nil && closeErr != nil {
 		copyErr = closeErr
@@ -295,10 +303,22 @@ func (m *ModelManager) commitModel(
 	temporary, digest string,
 	size int64,
 ) (ModelRecord, error) {
+	m.inventoryMu.Lock()
+	defer m.inventoryMu.Unlock()
+
 	if existing, ok, err := m.modelBySHA(ctx, digest); err != nil {
 		return ModelRecord{}, err
 	} else if ok {
-		_ = os.Remove(temporary)
+		if existing.State != modelStateReady {
+			return ModelRecord{}, fmt.Errorf(
+				"existing managed copy %q is %s; remove it before importing this model again",
+				existing.ID,
+				existing.State,
+			)
+		}
+		if err := os.Remove(temporary); err != nil && !os.IsNotExist(err) {
+			return ModelRecord{}, fmt.Errorf("remove duplicate model copy: %w", err)
+		}
 		return existing, nil
 	}
 
@@ -314,8 +334,7 @@ func (m *ModelManager) commitModel(
 	}
 	modelPath := filepath.Join(directory, "model.gguf")
 	if err := os.Rename(temporary, modelPath); err != nil {
-		_ = os.RemoveAll(directory)
-		return ModelRecord{}, fmt.Errorf("commit managed model file: %w", err)
+		return ModelRecord{}, cleanupImportDirectory(directory, fmt.Errorf("commit managed model file: %w", err))
 	}
 
 	now := nowText()
@@ -327,14 +346,26 @@ func (m *ModelManager) commitModel(
 		ImportedAt: now, UpdatedAt: now, State: modelStateReady,
 	}
 	if err := writeModelMetadata(filepath.Join(directory, "metadata.json"), record); err != nil {
-		_ = os.RemoveAll(directory)
-		return ModelRecord{}, err
+		return ModelRecord{}, cleanupImportDirectory(directory, err)
 	}
 	if err := m.insertModel(ctx, record); err != nil {
-		_ = os.RemoveAll(directory)
-		return ModelRecord{}, fmt.Errorf("record managed model: %w", err)
+		return ModelRecord{}, cleanupImportDirectory(directory, fmt.Errorf("record managed model: %w", err))
 	}
 	return record, nil
+}
+
+func cleanupImportDirectory(directory string, cause error) error {
+	if err := os.RemoveAll(directory); err != nil {
+		return errors.Join(cause, fmt.Errorf("clean up failed model import: %w", err))
+	}
+	return cause
+}
+
+func cleanupImportPartial(path string, cause error) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return errors.Join(cause, fmt.Errorf("clean up partial model import: %w", err))
+	}
+	return cause
 }
 
 func (m *ModelManager) updateImportProgress(id, status string, copied int64) {
@@ -411,8 +442,17 @@ func (m *ModelManager) pruneImportJobsLocked() {
 }
 
 func validateImportSpec(spec modelImportSpec) error {
-	if strings.TrimSpace(spec.DisplayName) == "" {
+	displayName := strings.TrimSpace(spec.DisplayName)
+	if displayName == "" {
 		return errors.New("model display name is required")
+	}
+	if utf8.RuneCountInString(displayName) > maxModelNameChars {
+		return fmt.Errorf("model display name must be at most %d characters", maxModelNameChars)
+	}
+	for _, char := range displayName {
+		if unicode.IsControl(char) {
+			return errors.New("model display name must not contain control characters")
+		}
 	}
 	if spec.Source != ModelSourceGGUF && spec.Source != ModelSourceOllama {
 		return fmt.Errorf("unsupported model source %q", spec.Source)
@@ -423,7 +463,29 @@ func validateImportSpec(spec modelImportSpec) error {
 	if spec.SizeBytes <= 4 || spec.SizeBytes > maxManagedModelBytes {
 		return fmt.Errorf("model size must be between 5 bytes and %d bytes", maxManagedModelBytes)
 	}
+	if spec.ExpectedSHA != "" {
+		digest := strings.TrimSpace(spec.ExpectedSHA)
+		if len(digest) != sha256.Size*2 {
+			return errors.New("expected model SHA-256 is invalid")
+		}
+		if _, err := hex.DecodeString(digest); err != nil {
+			return errors.New("expected model SHA-256 is invalid")
+		}
+	}
 	return nil
+}
+
+func normalizeImportSpec(spec modelImportSpec) modelImportSpec {
+	spec.DisplayName = strings.TrimSpace(spec.DisplayName)
+	spec.Source = strings.TrimSpace(spec.Source)
+	spec.SourceName = strings.TrimSpace(spec.SourceName)
+	spec.ExpectedSHA = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(spec.ExpectedSHA), "sha256:"))
+	spec.Format = strings.TrimSpace(spec.Format)
+	spec.Family = strings.TrimSpace(spec.Family)
+	spec.ParameterSize = strings.TrimSpace(spec.ParameterSize)
+	spec.Quantization = strings.TrimSpace(spec.Quantization)
+	spec.License = strings.TrimSpace(spec.License)
+	return spec
 }
 
 func validateGGUFFile(path string) (os.FileInfo, error) {

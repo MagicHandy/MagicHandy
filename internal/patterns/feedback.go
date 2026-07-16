@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -14,30 +15,27 @@ const feedbackWeightStep = 0.15
 // ApplyFeedback records one thumbs adjustment and returns the visible row.
 func (l *Library) ApplyFeedback(patternID string, rating int) (Feedback, Pattern, error) {
 	if rating != -1 && rating != 1 {
-		return Feedback{}, Pattern{}, errors.New("feedback rating must be -1 or 1")
+		return Feedback{}, Pattern{}, fmt.Errorf("%w: feedback rating must be -1 or 1", ErrInvalidContent)
 	}
 	ctx := context.Background()
 	var feedback Feedback
 	var pattern Pattern
 	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
-		var enabled int
-		err := tx.QueryRowContext(ctx, `
-			SELECT id, name, description, origin, kind, enabled, weight, cycle_ms,
-			       points_json, tags_json, created_at, updated_at
-			FROM patterns WHERE id = ?
-		`, patternID).Scan(&pattern.ID, &pattern.Name, &pattern.Description, &pattern.Origin,
-			&pattern.Kind, &enabled, &pattern.Weight, &pattern.CycleMillis,
-			new(string), new(string), &pattern.CreatedAt, &pattern.UpdatedAt)
+		var err error
+		pattern, err = queryPattern(ctx, tx, patternID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrPatternNotFound
 		}
 		if err != nil {
 			return err
 		}
-		pattern.Enabled = enabled != 0
 		beforeWeight, beforeEnabled := pattern.Weight, pattern.Enabled
 		pattern.Weight = mathClamp(pattern.Weight+float64(rating)*feedbackWeightStep, 0.1, 3)
-		if rating < 0 && l.autoDisableTx(ctx, tx) && pattern.Weight <= 0.25 {
+		autoDisable, err := l.autoDisableTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if rating < 0 && autoDisable && pattern.Weight <= 0.25 {
 			pattern.Enabled = false
 		}
 		pattern.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -66,9 +64,7 @@ func (l *Library) ApplyFeedback(patternID string, rating int) (Feedback, Pattern
 	if err != nil {
 		return Feedback{}, Pattern{}, err
 	}
-	// Return the complete row rather than the transaction's lightweight scan.
-	pattern, err = l.Pattern(pattern.ID)
-	return feedback, pattern, err
+	return feedback, pattern, nil
 }
 
 // UndoFeedback restores the exact prior weight/enablement when no newer
@@ -76,6 +72,7 @@ func (l *Library) ApplyFeedback(patternID string, rating int) (Feedback, Pattern
 func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
 	ctx := context.Background()
 	var feedback Feedback
+	var pattern Pattern
 	var patternID string
 	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var enabledBefore, enabledAfter, reverted int
@@ -87,7 +84,7 @@ func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
 			&feedback.WeightAfter, &enabledBefore, &enabledAfter, &reverted,
 			&feedback.CreatedAt, &feedback.RevertedAt)
 		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("feedback entry not found")
+			return ErrFeedbackNotFound
 		}
 		if err != nil {
 			return err
@@ -96,7 +93,7 @@ func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
 		feedback.EnabledBefore, feedback.EnabledAfter = enabledBefore != 0, enabledAfter != 0
 		feedback.Reverted = reverted != 0
 		if feedback.Reverted {
-			return errors.New("feedback entry is already reverted")
+			return ErrFeedbackReverted
 		}
 		var newer int
 		if err := tx.QueryRowContext(ctx, `
@@ -108,17 +105,21 @@ func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
 		if newer > 0 {
 			return ErrFeedbackOrder
 		}
-		var currentWeight float64
-		var currentEnabled int
-		if err := tx.QueryRowContext(ctx, `
-			SELECT weight, enabled FROM patterns WHERE id = ?
-		`, patternID).Scan(&currentWeight, &currentEnabled); err != nil {
+		current, err := queryPattern(ctx, tx, patternID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrPatternNotFound
+		}
+		if err != nil {
 			return err
 		}
-		if math.Abs(currentWeight-feedback.WeightAfter) > 0.0001 || (currentEnabled != 0) != feedback.EnabledAfter {
+		if math.Abs(current.Weight-feedback.WeightAfter) > 0.0001 || current.Enabled != feedback.EnabledAfter {
 			return ErrFeedbackOrder
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		pattern = current
+		pattern.Weight = feedback.WeightBefore
+		pattern.Enabled = feedback.EnabledBefore
+		pattern.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE patterns SET weight = ?, enabled = ?, updated_at = ? WHERE id = ?
 		`, feedback.WeightBefore, boolInt(feedback.EnabledBefore), now, patternID); err != nil {
@@ -135,12 +136,11 @@ func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
 	if err != nil {
 		return Feedback{}, Pattern{}, err
 	}
-	pattern, err := l.Pattern(patternID)
-	return feedback, pattern, err
+	return feedback, pattern, nil
 }
 
 // FeedbackHistory returns newest entries first.
-func (l *Library) FeedbackHistory(limit int) []Feedback {
+func (l *Library) FeedbackHistory(limit int) ([]Feedback, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
@@ -150,7 +150,7 @@ func (l *Library) FeedbackHistory(limit int) []Feedback {
 		FROM pattern_feedback ORDER BY id DESC LIMIT ?
 	`, limit)
 	if err != nil {
-		return []Feedback{}
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	feedback := make([]Feedback, 0)
@@ -160,22 +160,31 @@ func (l *Library) FeedbackHistory(limit int) []Feedback {
 		if err := rows.Scan(&item.ID, &item.PatternID, &item.Rating, &item.WeightBefore,
 			&item.WeightAfter, &enabledBefore, &enabledAfter, &reverted,
 			&item.CreatedAt, &item.RevertedAt); err != nil {
-			return []Feedback{}
+			return nil, err
 		}
 		item.EnabledBefore, item.EnabledAfter = enabledBefore != 0, enabledAfter != 0
 		item.Reverted = reverted != 0
 		feedback = append(feedback, item)
 	}
-	return feedback
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return feedback, nil
 }
 
 // AutoDisable reports the explicit opt-in setting.
-func (l *Library) AutoDisable() bool {
+func (l *Library) AutoDisable() (bool, error) {
 	var value string
 	err := l.db.SQL().QueryRowContext(context.Background(), `
 		SELECT value FROM app_kv WHERE key = ?
 	`, autoDisableKey).Scan(&value)
-	return err == nil && value == "true"
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return parseAutoDisable(value)
 }
 
 // SetAutoDisable updates the opt-in without changing any pattern immediately.
@@ -190,8 +199,25 @@ func (l *Library) SetAutoDisable(enabled bool) error {
 	})
 }
 
-func (l *Library) autoDisableTx(ctx context.Context, tx *sql.Tx) bool {
+func (l *Library) autoDisableTx(ctx context.Context, tx *sql.Tx) (bool, error) {
 	var value string
 	err := tx.QueryRowContext(ctx, `SELECT value FROM app_kv WHERE key = ?`, autoDisableKey).Scan(&value)
-	return err == nil && value == "true"
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return parseAutoDisable(value)
+}
+
+func parseAutoDisable(value string) (bool, error) {
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid auto-disable preference %q", value)
+	}
 }

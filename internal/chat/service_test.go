@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
@@ -247,6 +248,38 @@ func TestServiceAcceptsValidRepairAtTokenLimit(t *testing.T) {
 	}
 	if !result.Repaired || result.Malformed || result.Response.Reply != "Complete." {
 		t.Fatalf("valid repair at token limit was rejected: %+v", result)
+	}
+}
+
+func TestServicePropagatesRepairProviderFailure(t *testing.T) {
+	provider := &scriptedProvider{
+		responses:      []string{"not json", ""},
+		responseErrors: []error{nil, errors.New("runtime disconnected")},
+	}
+	result, err := (Service{Provider: provider, MaxTokens: 128}).Complete(
+		t.Context(),
+		Request{Message: "hello"},
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "runtime disconnected") {
+		t.Fatalf("repair provider error = %v, want propagated runtime failure", err)
+	}
+	if !result.InitialMalformed || !result.Malformed {
+		t.Fatalf("partial result = %+v, want initial malformed state", result)
+	}
+}
+
+func TestSanitizeHistoryPreservesUTF8AtByteLimit(t *testing.T) {
+	content := strings.Repeat("a", maxUserMessageBytes-1) + "é"
+	messages := sanitizeHistory([]llm.Message{{Role: "user", Content: content}})
+	if len(messages) != 1 {
+		t.Fatalf("messages = %+v, want one history item", messages)
+	}
+	if len(messages[0].Content) > maxUserMessageBytes || !utf8.ValidString(messages[0].Content) {
+		t.Fatalf("truncated content is not valid bounded UTF-8: %q", messages[0].Content)
+	}
+	if messages[0].Content != strings.Repeat("a", maxUserMessageBytes-1) {
+		t.Fatalf("truncated content ended at the wrong rune boundary: %q", messages[0].Content)
 	}
 }
 

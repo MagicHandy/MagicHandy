@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
@@ -128,7 +129,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	repairTruncated := errors.Is(repairErr, llm.ErrOutputTruncated)
 	if repairErr != nil && !repairTruncated {
 		result.MalformedError = repairErr.Error()
-		return result, nil
+		return result, fmt.Errorf("repair assistant response: %w", repairErr)
 	}
 
 	repaired, repairParseErr := ParseAssistantResponseWithPatterns(repairRaw, s.Patterns)
@@ -168,7 +169,7 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 			continue
 		}
 		if len(content) > maxUserMessageBytes {
-			content = content[:maxUserMessageBytes]
+			content = truncateUTF8Bytes(content, maxUserMessageBytes)
 		}
 		if role == "assistant" {
 			content = assistantHistoryContent(content)
@@ -176,6 +177,20 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 		messages = append(messages, llm.Message{Role: role, Content: content})
 	}
 	return messages
+}
+
+func truncateUTF8Bytes(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(value) <= limit {
+		return value
+	}
+	end := limit
+	for end > 0 && end < len(value) && !utf8.RuneStart(value[end]) {
+		end--
+	}
+	return value[:end]
 }
 
 func assistantHistoryContent(content string) string {

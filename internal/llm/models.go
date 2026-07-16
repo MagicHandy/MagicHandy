@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,8 @@ var (
 	ErrModelSelected = errors.New("selected model cannot be removed")
 	// ErrImportNotFound reports an unknown in-memory import job.
 	ErrImportNotFound = errors.New("model import not found")
+	// ErrModelInventoryUnavailable classifies internal inventory failures for API callers.
+	ErrModelInventoryUnavailable = errors.New("managed model inventory is unavailable")
 )
 
 // ModelRecord is one managed llama.cpp-compatible model copy.
@@ -74,6 +77,8 @@ type ModelManager struct {
 	jobs   map[string]*modelImportJob
 	closed bool
 	wg     sync.WaitGroup
+
+	inventoryMu sync.Mutex
 }
 
 // OpenModelManager opens the inventory and prepares private model directories.
@@ -95,6 +100,10 @@ func OpenModelManager(dataDir string) (*ModelManager, error) {
 		}
 	}
 	if err := manager.removeStalePartials(); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	if err := manager.reconcileModelDeletions(); err != nil {
 		_ = database.Close()
 		return nil, err
 	}
@@ -142,7 +151,7 @@ func (m *ModelManager) List(ctx context.Context) ([]ModelRecord, error) {
 		ORDER BY display_name, id
 	`)
 	if err != nil {
-		return nil, fmt.Errorf("list managed models: %w", err)
+		return nil, modelInventoryError("list managed models", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -150,12 +159,12 @@ func (m *ModelManager) List(ctx context.Context) ([]ModelRecord, error) {
 	for rows.Next() {
 		record, scanErr := scanModelRecord(rows)
 		if scanErr != nil {
-			return nil, fmt.Errorf("scan managed model: %w", scanErr)
+			return nil, modelInventoryError("scan managed model", scanErr)
 		}
-		models = append(models, modelFileState(record))
+		models = append(models, m.modelFileState(record))
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read managed models: %w", err)
+		return nil, modelInventoryError("read managed models", err)
 	}
 	return models, nil
 }
@@ -172,14 +181,21 @@ func (m *ModelManager) Model(ctx context.Context, id string) (ModelRecord, error
 		return ModelRecord{}, ErrModelNotFound
 	}
 	if err != nil {
-		return ModelRecord{}, err
+		return ModelRecord{}, modelInventoryError("read managed model", err)
 	}
-	return modelFileState(record), nil
+	return m.modelFileState(record), nil
+}
+
+func modelInventoryError(operation string, err error) error {
+	return fmt.Errorf("%w: %s: %v", ErrModelInventoryUnavailable, operation, err)
 }
 
 // Delete removes only a MagicHandy-owned model copy. The selected model is
 // protected so a running/configured provider never loses its backing file.
 func (m *ModelManager) Delete(ctx context.Context, id, selectedID string) error {
+	m.inventoryMu.Lock()
+	defer m.inventoryMu.Unlock()
+
 	record, err := m.Model(ctx, id)
 	if err != nil {
 		return err
@@ -187,23 +203,53 @@ func (m *ModelManager) Delete(ctx context.Context, id, selectedID string) error 
 	if selectedID != "" && record.ID == selectedID {
 		return ErrModelSelected
 	}
-	modelDir := filepath.Dir(record.ModelPath)
-	if !pathWithin(m.modelsDir, modelDir) {
-		return errors.New("managed model path is outside the model store")
+	modelDir, err := m.modelDirectory(record)
+	if err != nil {
+		return err
 	}
-	if err := os.RemoveAll(modelDir); err != nil {
-		return fmt.Errorf("remove managed model files: %w", err)
+	tombstone := modelDir + ".deleting"
+	filesMoved := false
+	if _, statErr := os.Lstat(modelDir); statErr == nil {
+		if _, tombstoneErr := os.Lstat(tombstone); tombstoneErr == nil {
+			return errors.New("managed model already has pending deletion files")
+		} else if !os.IsNotExist(tombstoneErr) {
+			return fmt.Errorf("inspect managed model deletion: %w", tombstoneErr)
+		}
+		if renameErr := os.Rename(modelDir, tombstone); renameErr != nil {
+			return fmt.Errorf("quarantine managed model files: %w", renameErr)
+		}
+		filesMoved = true
+	} else if !os.IsNotExist(statErr) {
+		return fmt.Errorf("inspect managed model files: %w", statErr)
 	}
-	return m.db.WithTx(ctx, func(tx *sql.Tx) error {
+	deleteErr := m.db.WithTx(ctx, func(tx *sql.Tx) error {
 		result, deleteErr := tx.ExecContext(ctx, `DELETE FROM llm_models WHERE id = ?`, record.ID)
 		if deleteErr != nil {
 			return deleteErr
 		}
-		if affected, _ := result.RowsAffected(); affected == 0 {
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
 			return ErrModelNotFound
 		}
 		return nil
 	})
+	if deleteErr != nil {
+		if filesMoved {
+			if restoreErr := os.Rename(tombstone, modelDir); restoreErr != nil {
+				return errors.Join(deleteErr, fmt.Errorf("restore managed model files: %w", restoreErr))
+			}
+		}
+		return deleteErr
+	}
+	if filesMoved {
+		if err := os.RemoveAll(tombstone); err != nil {
+			return fmt.Errorf("model record deleted, but quarantined files could not be removed: %w", err)
+		}
+	}
+	return nil
 }
 
 func (m *ModelManager) modelBySHA(ctx context.Context, digest string) (ModelRecord, bool, error) {
@@ -219,7 +265,7 @@ func (m *ModelManager) modelBySHA(ctx context.Context, digest string) (ModelReco
 	if err != nil {
 		return ModelRecord{}, false, err
 	}
-	return modelFileState(record), true, nil
+	return m.modelFileState(record), true, nil
 }
 
 func (m *ModelManager) insertModel(ctx context.Context, record ModelRecord) error {
@@ -261,6 +307,54 @@ func (m *ModelManager) removeStalePartials() error {
 	return nil
 }
 
+func (m *ModelManager) reconcileModelDeletions() error {
+	entries, err := os.ReadDir(m.modelsDir)
+	if err != nil {
+		return fmt.Errorf("read managed model directory: %w", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), ".deleting") {
+			continue
+		}
+		tombstone := filepath.Join(m.modelsDir, entry.Name())
+		record, err := readModelMetadata(filepath.Join(tombstone, "metadata.json"))
+		if err != nil {
+			return fmt.Errorf("validate managed model deletion %q: %w", entry.Name(), err)
+		}
+		expectedID := strings.TrimSuffix(entry.Name(), ".deleting")
+		if record.ID != expectedID {
+			return fmt.Errorf("managed model deletion %q has metadata for %q", entry.Name(), record.ID)
+		}
+		original, err := m.modelDirectory(record)
+		if err != nil {
+			return fmt.Errorf("validate managed model deletion %q: %w", entry.Name(), err)
+		}
+		var storedPath string
+		err = m.db.SQL().QueryRow(`SELECT model_path FROM llm_models WHERE id = ?`, record.ID).Scan(&storedPath)
+		if err == nil {
+			if !samePath(storedPath, record.ModelPath) {
+				return fmt.Errorf("managed model deletion %q disagrees with its inventory path", entry.Name())
+			}
+			if _, err := os.Lstat(original); err == nil {
+				return fmt.Errorf("managed model deletion has both active and quarantined files: %s", original)
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("inspect managed model restore target: %w", err)
+			}
+			if err := os.Rename(tombstone, original); err != nil {
+				return fmt.Errorf("restore interrupted managed model deletion: %w", err)
+			}
+			continue
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("reconcile managed model deletion: %w", err)
+		}
+		if err := os.RemoveAll(tombstone); err != nil {
+			return fmt.Errorf("remove committed managed model deletion: %w", err)
+		}
+	}
+	return nil
+}
+
 type modelScanner interface {
 	Scan(dest ...any) error
 }
@@ -276,8 +370,13 @@ func scanModelRecord(scanner modelScanner) (ModelRecord, error) {
 	return record, err
 }
 
-func modelFileState(record ModelRecord) ModelRecord {
-	info, err := os.Stat(record.ModelPath)
+func (m *ModelManager) modelFileState(record ModelRecord) ModelRecord {
+	if _, err := m.modelDirectory(record); err != nil {
+		record.State = modelStateMissing
+		record.Message = "model inventory path is invalid"
+		return record
+	}
+	info, err := os.Lstat(record.ModelPath)
 	switch {
 	case err != nil:
 		record.State = modelStateMissing
@@ -292,6 +391,27 @@ func modelFileState(record ModelRecord) ModelRecord {
 		record.State = modelStateReady
 	}
 	return record
+}
+
+func (m *ModelManager) modelDirectory(record ModelRecord) (string, error) {
+	id := strings.TrimSpace(record.ID)
+	if id == "" || id != record.ID || filepath.Base(id) != id || id == "." || id == ".." {
+		return "", errors.New("managed model ID is invalid")
+	}
+	directory := filepath.Join(m.modelsDir, id)
+	if !pathWithin(m.modelsDir, directory) {
+		return "", errors.New("managed model directory is outside the model store")
+	}
+	expectedPath := filepath.Join(directory, "model.gguf")
+	if !samePath(record.ModelPath, expectedPath) {
+		return "", errors.New("managed model path does not match its inventory ID")
+	}
+	return directory, nil
+}
+
+func samePath(left, right string) bool {
+	relative, err := filepath.Rel(filepath.Clean(left), filepath.Clean(right))
+	return err == nil && relative == "."
 }
 
 func writeModelMetadata(path string, record ModelRecord) error {
@@ -310,6 +430,31 @@ func writeModelMetadata(path string, record ModelRecord) error {
 		return fmt.Errorf("commit model metadata: %w", err)
 	}
 	return nil
+}
+
+func readModelMetadata(path string) (ModelRecord, error) {
+	file, err := os.Open(path) // #nosec G304 -- path is an app-owned tombstone metadata file.
+	if err != nil {
+		return ModelRecord{}, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return ModelRecord{}, err
+	}
+	if info.Size() > 64<<10 {
+		return ModelRecord{}, errors.New("model metadata exceeds 64 KiB")
+	}
+	decoder := json.NewDecoder(io.LimitReader(file, 64<<10))
+	var record ModelRecord
+	if err := decoder.Decode(&record); err != nil {
+		return ModelRecord{}, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return ModelRecord{}, errors.New("model metadata contains trailing content")
+	}
+	return record, nil
 }
 
 func pathWithin(root, candidate string) bool {

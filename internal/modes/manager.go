@@ -68,7 +68,8 @@ type Status struct {
 
 // Manager owns at most one active mode loop.
 type Manager struct {
-	mu sync.Mutex
+	lifecycleMu sync.Mutex
+	mu          sync.Mutex
 
 	options Options
 
@@ -87,6 +88,12 @@ type Manager struct {
 	lastEvent   string
 	lastEventAt time.Time
 	segmentIdx  int
+	generation  uint64
+	chatVersion uint64
+
+	operationID     uint64
+	operationMode   string
+	operationCancel context.CancelFunc
 }
 
 // NewManager creates an idle mode manager.
@@ -106,26 +113,33 @@ func NewManager(options Options) (*Manager, error) {
 // Status returns the UI-facing mode state.
 func (m *Manager) Status() Status {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	mode := m.mode
+	lastEvent := m.lastEvent
+	lastEventAt := m.lastEventAt
+	segmentIdx := m.segmentIdx
+	deadline := m.deadline
+	waitingForChat := m.chatTarget == nil
+	m.mu.Unlock()
+
 	status := Status{
-		Active:    m.mode != "",
-		Mode:      m.mode,
-		LastEvent: m.lastEvent,
+		Active:    mode != "",
+		Mode:      mode,
+		LastEvent: lastEvent,
 	}
-	if m.mode != "" {
+	if mode != "" {
 		status.Style = m.options.Settings().Style
 	}
-	if !m.lastEventAt.IsZero() {
-		status.LastEventAt = m.lastEventAt.UTC().Format(time.RFC3339Nano)
+	if !lastEventAt.IsZero() {
+		status.LastEventAt = lastEventAt.UTC().Format(time.RFC3339Nano)
 	}
-	if m.mode == ModeFreestyle {
-		status.SegmentIndex = m.segmentIdx
-		if remaining := m.deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
+	if mode == ModeFreestyle {
+		status.SegmentIndex = segmentIdx
+		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
 			status.SegmentEndsMs = remaining
 		}
 	}
-	if m.mode == ModeChat {
-		status.WaitingForChat = m.chatTarget == nil
+	if mode == ModeChat {
+		status.WaitingForChat = waitingForChat
 	}
 	return status
 }
@@ -135,11 +149,16 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	if mode != ModeFreestyle && mode != ModeChat {
 		return m.Status(), fmt.Errorf("unknown mode %q", mode)
 	}
-	m.Stop("mode_switch")
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
+	m.stopLoop("mode_switch")
 
 	m.mu.Lock()
+	m.generation++
+	m.chatVersion++
 	m.mode = mode
 	m.userStopped = false
+	m.chatTarget = nil
 	m.driftDone = true
 	m.deadline = time.Time{}
 	m.nextRetry = time.Time{}
@@ -164,6 +183,12 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 // Stop deactivates the mode loop. It never stops the engine itself — callers
 // own that decision (user Stop already stops the engine through its own path).
 func (m *Manager) Stop(reason string) {
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
+	m.stopLoop(reason)
+}
+
+func (m *Manager) stopLoop(reason string) {
 	m.mu.Lock()
 	if m.mode == "" {
 		m.mu.Unlock()
@@ -172,6 +197,8 @@ func (m *Manager) Stop(reason string) {
 	mode := m.mode
 	cancel := m.cancel
 	done := m.done
+	m.generation++
+	m.cancelOperationLocked()
 	m.mode = ""
 	m.cancel = nil
 	m.done = nil
@@ -197,11 +224,16 @@ func (m *Manager) NotifyUserStop() {
 // without waiting. The caller can stop the motion engine first, then invoke the
 // returned function to drain and trace the mode goroutine.
 func (m *Manager) BeginUserStop() func() {
+	m.lifecycleMu.Lock()
 	m.mu.Lock()
 	m.userStopped = true
 	m.chatTarget = nil
+	m.chatVersion++
+	m.generation++
+	m.cancelOperationLocked()
 	if m.mode == "" {
 		m.mu.Unlock()
+		m.lifecycleMu.Unlock()
 		return func() {}
 	}
 	mode := m.mode
@@ -214,11 +246,15 @@ func (m *Manager) BeginUserStop() func() {
 	if cancel != nil {
 		cancel()
 	}
+	var once sync.Once
 	return func() {
-		if done != nil {
-			<-done
-		}
-		m.trace(mode, "mode_stopped", nil, "user_stop")
+		once.Do(func() {
+			defer m.lifecycleMu.Unlock()
+			if done != nil {
+				<-done
+			}
+			m.trace(mode, "mode_stopped", nil, "user_stop")
+		})
 	}
 }
 
@@ -227,7 +263,11 @@ func (m *Manager) NotifyChatTarget(target motion.MotionTarget) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.userStopped = false
-	copied := target
+	m.chatVersion++
+	if m.operationMode == ModeChat {
+		m.cancelOperationLocked()
+	}
+	copied := cloneTarget(target)
 	m.chatTarget = &copied
 }
 
@@ -237,6 +277,10 @@ func (m *Manager) NotifyChatStop() {
 	defer m.mu.Unlock()
 	m.chatTarget = nil
 	m.userStopped = true
+	m.chatVersion++
+	if m.operationMode == ModeChat {
+		m.cancelOperationLocked()
+	}
 }
 
 // Shutdown stops the loop at process exit.
@@ -262,6 +306,9 @@ func (m *Manager) run(ctx context.Context, mode string) {
 }
 
 func (m *Manager) tickFreestyle(ctx context.Context) {
+	if ctx.Err() != nil || !m.modeActive(ModeFreestyle) {
+		return
+	}
 	engine := m.options.Current()
 	var snapshot motion.ActiveMotionState
 	if engine != nil {
@@ -280,6 +327,7 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 		m.mu.Lock()
 		stopped := m.userStopped
 		retryAt := m.nextRetry
+		generation := m.generation
 		m.mu.Unlock()
 		if stopped {
 			// The user stopped motion; freestyle ends rather than fighting it.
@@ -289,7 +337,7 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 		if m.options.Now().Before(retryAt) {
 			return
 		}
-		m.startNextSegment(ctx, "freestyle_start")
+		m.startNextSegment(ctx, "freestyle_start", generation)
 		return
 	}
 
@@ -299,27 +347,36 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 	driftAt := m.driftAt
 	driftDone := m.driftDone
 	segment := m.segment
+	retryAt := m.nextRetry
+	generation := m.generation
 	m.mu.Unlock()
 
 	if !driftDone && now.After(driftAt) {
 		if target, ok := segment.DriftTarget("Freestyle", "freestyle"); ok {
 			if _, err := engine.ApplyTarget(ctx, target, "freestyle_drift"); err == nil {
-				m.trace(ModeFreestyle, "segment_drift", &diagnostics.MotionTracePlanner{
-					Mode:              ModeFreestyle,
-					Event:             "segment_drift",
-					PatternIdentifier: string(segment.PatternID),
-					DriftToPercent:    segment.DriftToSpeedPercent,
-				}, "")
+				if m.modeGenerationActive(ModeFreestyle, generation) {
+					m.trace(ModeFreestyle, "segment_drift", &diagnostics.MotionTracePlanner{
+						Mode:              ModeFreestyle,
+						Event:             "segment_drift",
+						PatternIdentifier: string(segment.PatternID),
+						DriftToPercent:    segment.DriftToSpeedPercent,
+					}, "")
+				}
 			}
 		}
 		m.mu.Lock()
-		m.driftDone = true
+		if m.mode == ModeFreestyle && m.generation == generation {
+			m.driftDone = true
+		}
 		m.mu.Unlock()
 		return
 	}
 
 	if now.After(deadline) {
-		m.applyNextSegment(ctx, engine, "freestyle_segment")
+		if now.Before(retryAt) {
+			return
+		}
+		m.applyNextSegment(ctx, engine, "freestyle_segment", generation)
 	}
 }
 
@@ -327,35 +384,48 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 // or recovery restart). The engine loop must outlive the mode loop — stopping
 // a mode is a planning decision, and the explicit engine stop is a separate,
 // deliberate call — so engine starts never inherit the mode's cancellation.
-func (m *Manager) startNextSegment(ctx context.Context, reason string) {
-	engineCtx := context.WithoutCancel(ctx)
-	engine, err := m.options.Ensure(engineCtx)
+func (m *Manager) startNextSegment(ctx context.Context, reason string, generation uint64) {
+	operationCtx, finish, ok := m.beginStartOperation(ctx, ModeFreestyle, generation, 0)
+	if !ok {
+		return
+	}
+	defer finish()
+
+	engine, err := m.options.Ensure(operationCtx)
 	if err != nil {
-		m.backoff(ModeFreestyle, "start_unavailable", err)
+		if operationCtx.Err() != nil {
+			return
+		}
+		m.backoff(ModeFreestyle, generation, "start_unavailable", err)
 		return
 	}
 	segment, scores := m.nextPlannedSegment()
-	state, err := engine.Start(engineCtx, segment.Target("Freestyle", "freestyle"), m.options.Settings())
+	state, err := engine.Start(operationCtx, segment.Target("Freestyle", "freestyle"), m.options.Settings())
 	if err != nil {
-		m.backoff(ModeFreestyle, "start_failed", err)
+		if operationCtx.Err() != nil {
+			return
+		}
+		m.backoff(ModeFreestyle, generation, "start_failed", err)
 		return
 	}
-	m.armSegment(segment, state.RecentCommandLatencyMillis)
-	m.tracePlanned(reason, segment, scores)
+	if m.armSegment(segment, state.RecentCommandLatencyMillis, generation) {
+		m.tracePlanned(reason, segment, scores)
+	}
 }
 
 // applyNextSegment retargets the running stream to the next planned segment.
 // Transitions ride the engine's phase-preserving / low-jump handoff — modes
 // never replace streams or touch transport.
-func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, reason string) {
+func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, reason string, generation uint64) {
 	segment, scores := m.nextPlannedSegment()
 	state, err := engine.ApplyTarget(ctx, segment.Target("Freestyle", "freestyle"), reason)
 	if err != nil {
-		m.backoff(ModeFreestyle, "segment_failed", err)
+		m.backoff(ModeFreestyle, generation, "segment_failed", err)
 		return
 	}
-	m.armSegment(segment, state.RecentCommandLatencyMillis)
-	m.tracePlanned(reason, segment, scores)
+	if m.armSegment(segment, state.RecentCommandLatencyMillis, generation) {
+		m.tracePlanned(reason, segment, scores)
+	}
 }
 
 func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
@@ -371,7 +441,7 @@ func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
 	return planner.NextSegment(m.options.Settings())
 }
 
-func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64) {
+func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64, generation uint64) bool {
 	duration := time.Duration(segment.DurationMillis) * time.Millisecond
 	latencyFloor := time.Duration(max(int64(0), recentLatencyMillis))*time.Millisecond + modeDwellPadding
 	if latencyFloor > maximumLatencyDwell {
@@ -385,6 +455,10 @@ func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64) {
 	}
 	now := m.options.Now()
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.mode != ModeFreestyle || m.generation != generation || m.userStopped {
+		return false
+	}
 	m.segment = segment
 	m.segmentIdx++
 	m.deadline = now.Add(duration)
@@ -395,10 +469,13 @@ func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64) {
 		m.driftDone = true
 	}
 	m.nextRetry = time.Time{}
-	m.mu.Unlock()
+	return true
 }
 
 func (m *Manager) tickChat(ctx context.Context) {
+	if ctx.Err() != nil || !m.modeActive(ModeChat) {
+		return
+	}
 	engine := m.options.Current()
 	var snapshot motion.ActiveMotionState
 	if engine != nil {
@@ -410,9 +487,15 @@ func (m *Manager) tickChat(ctx context.Context) {
 	}
 
 	m.mu.Lock()
-	target := m.chatTarget
+	var target *motion.MotionTarget
+	if m.chatTarget != nil {
+		copied := cloneTarget(*m.chatTarget)
+		target = &copied
+	}
 	stopped := m.userStopped
 	retryAt := m.nextRetry
+	generation := m.generation
+	chatVersion := m.chatVersion
 	m.mu.Unlock()
 	if target == nil || stopped {
 		return
@@ -424,14 +507,28 @@ func (m *Manager) tickChat(ctx context.Context) {
 	// Motion is idle with a live chat target and no user stop: this is a
 	// transport recovery stop, so keep the session moving. As above, the
 	// engine loop never inherits the mode loop's cancellation.
-	engineCtx := context.WithoutCancel(ctx)
-	engineForStart, err := m.options.Ensure(engineCtx)
-	if err != nil {
-		m.backoff(ModeChat, "keepalive_unavailable", err)
+	operationCtx, finish, ok := m.beginStartOperation(ctx, ModeChat, generation, chatVersion)
+	if !ok {
 		return
 	}
-	if _, err := engineForStart.Start(engineCtx, *target, m.options.Settings()); err != nil {
-		m.backoff(ModeChat, "keepalive_failed", err)
+	defer finish()
+
+	engineForStart, err := m.options.Ensure(operationCtx)
+	if err != nil {
+		if operationCtx.Err() != nil {
+			return
+		}
+		m.backoff(ModeChat, generation, "keepalive_unavailable", err)
+		return
+	}
+	if _, err := engineForStart.Start(operationCtx, *target, m.options.Settings()); err != nil {
+		if operationCtx.Err() != nil {
+			return
+		}
+		m.backoff(ModeChat, generation, "keepalive_failed", err)
+		return
+	}
+	if !m.chatOperationActive(generation, chatVersion) {
 		return
 	}
 	m.trace(ModeChat, "chat_keepalive_restart", &diagnostics.MotionTracePlanner{
@@ -440,6 +537,25 @@ func (m *Manager) tickChat(ctx context.Context) {
 		PatternIdentifier: string(target.PatternID),
 		SpeedPercent:      target.SpeedPercent,
 	}, "")
+}
+
+func (m *Manager) modeActive(mode string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mode == mode && !m.userStopped
+}
+
+func (m *Manager) modeGenerationActive(mode string, generation uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mode == mode && m.generation == generation && !m.userStopped
+}
+
+func (m *Manager) chatOperationActive(generation, chatVersion uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mode == ModeChat && m.generation == generation && m.chatVersion == chatVersion &&
+		m.chatTarget != nil && !m.userStopped
 }
 
 func (m *Manager) freezeDeadline() {
@@ -459,11 +575,74 @@ func (m *Manager) thawDeadline() {
 	m.wasPaused = false
 }
 
-func (m *Manager) backoff(mode string, event string, err error) {
+func (m *Manager) backoff(mode string, generation uint64, event string, err error) {
 	m.mu.Lock()
+	if m.mode != mode || m.generation != generation || m.userStopped {
+		m.mu.Unlock()
+		return
+	}
 	m.nextRetry = m.options.Now().Add(restartBackoff)
 	m.mu.Unlock()
 	m.trace(mode, event, nil, err.Error())
+}
+
+func (m *Manager) beginStartOperation(
+	parent context.Context,
+	mode string,
+	generation uint64,
+	chatVersion uint64,
+) (context.Context, func(), bool) {
+	m.mu.Lock()
+	if m.mode != mode || m.generation != generation || m.userStopped ||
+		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil)) {
+		m.mu.Unlock()
+		return nil, nil, false
+	}
+	operationCtx, cancel := context.WithCancel(parent)
+	m.operationID++
+	id := m.operationID
+	m.operationMode = mode
+	m.operationCancel = cancel
+	m.mu.Unlock()
+
+	return operationCtx, func() {
+		cancel()
+		m.mu.Lock()
+		if m.operationID == id {
+			m.operationMode = ""
+			m.operationCancel = nil
+		}
+		m.mu.Unlock()
+	}, true
+}
+
+func (m *Manager) cancelOperationLocked() {
+	if m.operationCancel != nil {
+		m.operationCancel()
+	}
+}
+
+func cloneTarget(target motion.MotionTarget) motion.MotionTarget {
+	if target.AreaFocus != nil {
+		focus := *target.AreaFocus
+		target.AreaFocus = &focus
+	}
+	if target.SoftAnchor != nil {
+		anchor := *target.SoftAnchor
+		target.SoftAnchor = &anchor
+	}
+	if target.Pattern != nil {
+		pattern := *target.Pattern
+		pattern.Points = append([]motion.CurvePoint(nil), pattern.Points...)
+		pattern.Tags = append([]string(nil), pattern.Tags...)
+		target.Pattern = &pattern
+	}
+	if target.Program != nil {
+		program := *target.Program
+		program.Points = append([]motion.CurvePoint(nil), program.Points...)
+		target.Program = &program
+	}
+	return target
 }
 
 func (m *Manager) tracePlanned(reason string, segment Segment, scores []diagnostics.PlannerScore) {

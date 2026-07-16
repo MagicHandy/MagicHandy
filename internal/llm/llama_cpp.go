@@ -115,8 +115,7 @@ func (p *LlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 	models, err := p.listModels(ctx)
 	if err != nil {
 		status.Available = true
-		status.ModelAvailable = true
-		status.Message = fmt.Sprintf("ready; model list unavailable: %s", err)
+		status.Message = fmt.Sprintf("ready; selected model could not be verified because the model list is unavailable: %s", err)
 		return status
 	}
 	status.Models = models
@@ -240,11 +239,8 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 			if delta == "" {
 				continue
 			}
-			builder.WriteString(delta)
-			if onDelta != nil {
-				if err := onDelta(delta); err != nil {
-					return builder.String(), err
-				}
+			if err := appendStreamDelta(&builder, delta, onDelta); err != nil {
+				return builder.String(), err
 			}
 		}
 	}
@@ -254,7 +250,10 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 	if finishReason == "length" {
 		return builder.String(), ErrOutputTruncated
 	}
-	return builder.String(), nil
+	if finishReason != "" {
+		return builder.String(), nil
+	}
+	return builder.String(), errIncompleteStream
 }
 
 func firstNonEmpty(values ...string) string {

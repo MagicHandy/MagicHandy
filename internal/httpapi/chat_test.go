@@ -251,7 +251,7 @@ func TestChatSpeedOnlyTargetPreservesActiveProgram(t *testing.T) {
 		Points: []motion.CurvePoint{{TimeMillis: 0}, {TimeMillis: 1000, PositionPercent: 100}},
 	}
 	speed := 25
-	target := (&Server{}).chatMotionTarget(&chat.MotionCommand{
+	target, err := (&Server{}).chatMotionTarget(&chat.MotionCommand{
 		Action: chat.MotionActionTarget, SpeedPercent: &speed,
 	}, motion.ActiveMotionState{
 		Running: true,
@@ -259,6 +259,9 @@ func TestChatSpeedOnlyTargetPreservesActiveProgram(t *testing.T) {
 			ProgramID: program.ID, Program: &program, SpeedPercent: 30,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if target.ProgramID != program.ID || target.Program == nil || target.PatternID != "" {
 		t.Fatalf("speed-only target replaced active program: %+v", target)
 	}

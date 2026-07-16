@@ -189,11 +189,8 @@ func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error
 			return builder.String(), errors.New(chunk.Error)
 		}
 		if chunk.Message.Content != "" {
-			builder.WriteString(chunk.Message.Content)
-			if onDelta != nil {
-				if err := onDelta(chunk.Message.Content); err != nil {
-					return builder.String(), err
-				}
+			if err := appendStreamDelta(&builder, chunk.Message.Content, onDelta); err != nil {
+				return builder.String(), err
 			}
 		}
 		if chunk.Done {
@@ -206,7 +203,7 @@ func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error
 	if err := scanner.Err(); err != nil {
 		return builder.String(), fmt.Errorf("read Ollama stream: %w", err)
 	}
-	return builder.String(), nil
+	return builder.String(), errIncompleteStream
 }
 
 func decodeOllamaModelInfo(body io.Reader) ([]OllamaModelInfo, error) {

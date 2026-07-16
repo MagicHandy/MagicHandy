@@ -35,17 +35,17 @@ type funscriptAction struct {
 // Import parses a MagicHandy share file or standard funscript.
 func (l *Library) Import(filename string, data []byte, asKind string) (ImportResult, error) {
 	if len(data) == 0 {
-		return ImportResult{}, errors.New("import file is empty")
+		return ImportResult{}, invalidContentError(errors.New("import file is empty"))
 	}
 	if len(data) > MaxImportBytes {
-		return ImportResult{}, fmt.Errorf("import file exceeds %d MiB", MaxImportBytes>>20)
+		return ImportResult{}, invalidContentError(fmt.Errorf("import file exceeds %d MiB", MaxImportBytes>>20))
 	}
 	var header struct {
 		Schema  string            `json:"schema"`
 		Actions []json.RawMessage `json:"actions"`
 	}
 	if err := json.Unmarshal(data, &header); err != nil {
-		return ImportResult{}, fmt.Errorf("import file is not valid JSON: %w", err)
+		return ImportResult{}, invalidContentError(fmt.Errorf("import file is not valid JSON: %w", err))
 	}
 	switch header.Schema {
 	case PatternFileSchema:
@@ -56,7 +56,7 @@ func (l *Library) Import(filename string, data []byte, asKind string) (ImportRes
 		if header.Actions != nil {
 			return l.importFunscript(filename, data, asKind)
 		}
-		return ImportResult{}, errors.New("unknown motion content schema")
+		return ImportResult{}, invalidContentError(errors.New("unknown motion content schema"))
 	}
 }
 
@@ -94,7 +94,7 @@ func (l *Library) importPatternFile(data []byte) (ImportResult, error) {
 	decoder.DisallowUnknownFields()
 	var file patternFile
 	if err := decoder.Decode(&file); err != nil {
-		return ImportResult{}, fmt.Errorf("decode pattern file: %w", err)
+		return ImportResult{}, invalidContentError(fmt.Errorf("decode pattern file: %w", err))
 	}
 	pattern, err := l.CreatePattern(PatternInput{
 		Name: file.Name, Description: file.Description, Kind: file.Kind,
@@ -111,7 +111,7 @@ func (l *Library) importProgramFile(data []byte) (ImportResult, error) {
 	decoder.DisallowUnknownFields()
 	var file programFile
 	if err := decoder.Decode(&file); err != nil {
-		return ImportResult{}, fmt.Errorf("decode program file: %w", err)
+		return ImportResult{}, invalidContentError(fmt.Errorf("decode program file: %w", err))
 	}
 	program, err := l.CreateProgram(file.Name, OriginImported, file.Points, file.DurationMillis)
 	if err != nil {
@@ -126,17 +126,17 @@ func (l *Library) importFunscript(filename string, data []byte, asKind string) (
 		asKind = importAsProgram
 	}
 	if asKind != importAsPattern && asKind != importAsProgram {
-		return ImportResult{}, errors.New("funscript import target must be pattern or program")
+		return ImportResult{}, invalidContentError(errors.New("funscript import target must be pattern or program"))
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	var file funscriptFile
 	if err := decoder.Decode(&file); err != nil {
-		return ImportResult{}, fmt.Errorf("decode funscript: %w", err)
+		return ImportResult{}, invalidContentError(fmt.Errorf("decode funscript: %w", err))
 	}
 	points, err := funscriptPoints(file)
 	if err != nil {
-		return ImportResult{}, err
+		return ImportResult{}, invalidContentError(err)
 	}
 	name := strings.TrimSpace(strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)))
 	if name == "" {
@@ -146,7 +146,7 @@ func (l *Library) importFunscript(filename string, data []byte, asKind string) (
 		points, gaps := stripInactiveGaps(points)
 		points, err = normalizeRelativeSpan(points)
 		if err != nil {
-			return ImportResult{}, err
+			return ImportResult{}, invalidContentError(err)
 		}
 		pattern, err := l.CreatePattern(PatternInput{
 			Name: name, Description: "Imported funscript example.",
@@ -163,6 +163,13 @@ func (l *Library) importFunscript(filename string, data []byte, asKind string) (
 		return ImportResult{}, err
 	}
 	return ImportResult{Kind: importAsProgram, Program: &program}, nil
+}
+
+func invalidContentError(err error) error {
+	if errors.Is(err, ErrInvalidContent) {
+		return err
+	}
+	return fmt.Errorf("%w: %v", ErrInvalidContent, err)
 }
 
 func funscriptPoints(file funscriptFile) ([]motion.CurvePoint, error) {

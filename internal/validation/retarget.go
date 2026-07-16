@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -78,47 +79,57 @@ func RunRetargetValidation(
 		ExportDir: options.ExportDir,
 		StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
+	startSequence := latestTraceSequence(traces.Rows())
+	currentExport := func() diagnostics.TraceExport {
+		return traceExportAfter(traces.Export(), startSequence)
+	}
 	settings := validationSettings(options.MaxSpeedPercent)
 	stopped := false
 	defer func() {
 		if !stopped {
 			_, _ = engine.Stop(context.Background(), "validation_cleanup_stop")
-			_, _ = exportTraceFile(options.ExportDir, "cleanup", "validation_cleanup_stop", traces.Export())
+			_, _ = exportTraceFile(options.ExportDir, "cleanup", "validation_cleanup_stop", currentExport())
 		}
 	}()
 
 	if _, err := engine.Start(ctx, validationTarget("baseline", motion.PatternStroke, boundedSpeed(30, options.MaxSpeedPercent)), settings); err != nil {
-		return result, exportFailure(options.ExportDir, &result, "00-start-failed", "validation_start", traces.Export(), err)
+		return result, exportFailure(options.ExportDir, &result, "00-start-failed", "validation_start", currentExport(), err)
 	}
-	if err := recordTrace(options.ExportDir, &result, "00-start", "validation_start", traces.Export()); err != nil {
+	if err := recordTrace(options.ExportDir, &result, "00-start", "validation_start", currentExport()); err != nil {
 		return result, err
 	}
 	if err := options.Sleep(ctx, options.SettlingDelay); err != nil {
-		return result, exportFailure(options.ExportDir, &result, "00-start-interrupted", "validation_start", traces.Export(), err)
+		return result, exportFailure(options.ExportDir, &result, "00-start-interrupted", "validation_start", currentExport(), err)
 	}
 
 	for index, step := range retargetSteps() {
 		if err := step.run(ctx, engine, &settings, options.MaxSpeedPercent); err != nil {
-			_, _ = engine.Stop(ctx, "validation_error_stop")
-			stopped = true
-			return result, exportFailure(options.ExportDir, &result, fmt.Sprintf("%02d-%s-failed", index+1, step.name), step.reason, traces.Export(), err)
+			_, stopErr := engine.Stop(ctx, "validation_error_stop")
+			stopped = stopErr == nil
+			if stopErr != nil {
+				err = errors.Join(err, fmt.Errorf("validation recovery Stop failed: %w", stopErr))
+			}
+			return result, exportFailure(options.ExportDir, &result, fmt.Sprintf("%02d-%s-failed", index+1, step.name), step.reason, currentExport(), err)
 		}
 		if step.reason == "validation_emergency_stop" {
 			stopped = true
 		}
-		if err := recordTrace(options.ExportDir, &result, fmt.Sprintf("%02d-%s", index+1, step.name), step.reason, traces.Export()); err != nil {
+		if err := recordTrace(options.ExportDir, &result, fmt.Sprintf("%02d-%s", index+1, step.name), step.reason, currentExport()); err != nil {
 			return result, err
 		}
 		if !stopped {
 			if err := options.Sleep(ctx, options.SettlingDelay); err != nil {
-				_, _ = engine.Stop(ctx, "validation_interrupted_stop")
-				stopped = true
-				return result, exportFailure(options.ExportDir, &result, fmt.Sprintf("%02d-%s-interrupted", index+1, step.name), step.reason, traces.Export(), err)
+				_, stopErr := engine.Stop(ctx, "validation_interrupted_stop")
+				stopped = stopErr == nil
+				if stopErr != nil {
+					err = errors.Join(err, fmt.Errorf("validation interruption Stop failed: %w", stopErr))
+				}
+				return result, exportFailure(options.ExportDir, &result, fmt.Sprintf("%02d-%s-interrupted", index+1, step.name), step.reason, currentExport(), err)
 			}
 		}
 	}
 
-	export := traces.Export()
+	export := currentExport()
 	if err := validateRequiredRetargetReasons(export); err != nil {
 		return result, exportFailure(options.ExportDir, &result, "required-retargets-missing", "validation_trace_audit", export, err)
 	}
@@ -277,7 +288,9 @@ func recordTrace(exportDir string, result *RetargetResult, name string, reason s
 }
 
 func exportFailure(exportDir string, result *RetargetResult, name string, reason string, export diagnostics.TraceExport, cause error) error {
-	_ = recordTrace(exportDir, result, name, reason, export)
+	if err := recordTrace(exportDir, result, name, reason, export); err != nil {
+		return errors.Join(cause, err)
+	}
 	return cause
 }
 
@@ -322,8 +335,30 @@ func validateRequiredRetargetReasons(export diagnostics.TraceExport) error {
 			missing = append(missing, reason)
 		}
 	}
+	sort.Strings(missing)
 	if len(missing) > 0 {
 		return fmt.Errorf("validation trace missing retarget rows for %v", missing)
 	}
 	return nil
+}
+
+func latestTraceSequence(rows []diagnostics.MotionTraceRow) uint64 {
+	var latest uint64
+	for _, row := range rows {
+		if row.Sequence > latest {
+			latest = row.Sequence
+		}
+	}
+	return latest
+}
+
+func traceExportAfter(export diagnostics.TraceExport, sequence uint64) diagnostics.TraceExport {
+	rows := make([]diagnostics.MotionTraceRow, 0, len(export.Rows))
+	for _, row := range export.Rows {
+		if row.Sequence > sequence {
+			rows = append(rows, row)
+		}
+	}
+	export.Rows = rows
+	return export
 }

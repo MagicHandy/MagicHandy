@@ -63,7 +63,9 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 		return provider, nil
 	}
 	if s.llm.cached != nil {
-		closeLLMProvider(s.llm.cached)
+		if err := closeLLMProvider(s.llm.cached); err != nil {
+			return nil, fmt.Errorf("close previous LLM provider: %w", err)
+		}
 	}
 	s.llm.cached = nil
 	s.llm.cacheKey = ""
@@ -123,24 +125,28 @@ func selectedLLMBaseURL(settings config.LLMSettings) string {
 
 func (s *Server) llmState(ctx context.Context) any {
 	settings, _ := s.store.Snapshot()
+	managed := settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged
 	state := map[string]any{
-		"provider":           settings.LLM.Provider,
-		"llama_cpp_mode":     settings.LLM.LlamaCPPMode,
-		"base_url":           selectedLLMBaseURL(settings.LLM),
-		"model":              settings.LLM.Model,
-		"prompt_set":         settings.LLM.PromptSet,
-		"request_timeout_ms": settings.LLM.RequestTimeoutMillis,
-		"max_output_tokens":  settings.LLM.MaxOutputTokens,
-		"reasoning_mode":     settings.LLM.ReasoningMode,
+		"provider":                settings.LLM.Provider,
+		"llama_cpp_mode":          settings.LLM.LlamaCPPMode,
+		"base_url":                selectedLLMBaseURL(settings.LLM),
+		"model":                   settings.LLM.Model,
+		"prompt_set":              settings.LLM.PromptSet,
+		"request_timeout_ms":      settings.LLM.RequestTimeoutMillis,
+		"max_output_tokens":       settings.LLM.MaxOutputTokens,
+		"reasoning_mode":          settings.LLM.ReasoningMode,
+		"model_manager_available": false,
 	}
-	if settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged {
+	var managedRuntimeInstalled bool
+	if managed {
 		runtimeStatus := s.managedLLM.Snapshot().Runtime
 		state["managed_runtime"] = runtimeStatus.State
-		model, err := s.models.Model(ctx, settings.LLM.Model)
-		state["managed_ready"] = runtimeStatus.Installed && err == nil && model.State == "ready"
+		state["managed_ready"] = false
+		managedRuntimeInstalled = runtimeStatus.Installed
 	}
 	if s.models != nil {
 		if snapshot, err := s.models.Snapshot(ctx); err == nil {
+			state["model_manager_available"] = true
 			activeImports := 0
 			for _, job := range snapshot.Imports {
 				if job.Status == llm.ImportStatusQueued || job.Status == llm.ImportStatusCopying {
@@ -149,6 +155,14 @@ func (s *Server) llmState(ctx context.Context) any {
 			}
 			state["managed_model_count"] = len(snapshot.Models)
 			state["active_import_count"] = activeImports
+			if managed && managedRuntimeInstalled {
+				for _, model := range snapshot.Models {
+					if model.ID == settings.LLM.Model {
+						state["managed_ready"] = model.State == "ready"
+						break
+					}
+				}
+			}
 		}
 	}
 	return state
@@ -208,29 +222,45 @@ func (s *Server) handleLLMUnload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, loadable.Unload(r.Context()))
 }
 
-func (s *Server) closeLLM() {
+func (s *Server) closeLLM() error {
 	s.llm.mu.Lock()
+	defer s.llm.mu.Unlock()
 	provider := s.llm.cached
+	if err := closeLLMProvider(provider); err != nil {
+		return err
+	}
 	s.llm.cached = nil
 	s.llm.cacheKey = ""
-	s.llm.mu.Unlock()
-	closeLLMProvider(provider)
+	return nil
 }
 
-func closeLLMProvider(provider llm.Provider) {
+func closeLLMProvider(provider llm.Provider) error {
 	if closer, ok := provider.(interface{ Close() error }); ok {
-		_ = closer.Close()
+		return closer.Close()
 	}
+	return nil
 }
 
 func llmCacheKey(settings config.LLMSettings, managedKey string) string {
-	return strings.Join([]string{
+	parts := []string{
 		settings.Provider,
-		settings.LlamaCPPMode,
-		settings.LlamaCPPBaseURL,
-		settings.OllamaBaseURL,
 		settings.Model,
 		fmt.Sprint(settings.RequestTimeoutMillis),
-		managedKey,
-	}, "\x00")
+	}
+	switch settings.Provider {
+	case config.LLMProviderLlamaCPP:
+		parts = append(parts, settings.LlamaCPPMode, selectedLLMBaseURL(settings))
+		if settings.LlamaCPPMode == config.LlamaCPPModeManaged {
+			parts = append(parts, managedKey)
+		}
+	case config.LLMProviderOllama:
+		parts = append(parts, settings.OllamaBaseURL)
+	default:
+		parts = append(parts, settings.LlamaCPPMode, settings.LlamaCPPBaseURL, settings.OllamaBaseURL, managedKey)
+	}
+	return strings.Join(parts, "\x00")
+}
+
+func llmRuntimeSettingsChanged(previous, next config.LLMSettings) bool {
+	return llmCacheKey(previous, "") != llmCacheKey(next, "")
 }

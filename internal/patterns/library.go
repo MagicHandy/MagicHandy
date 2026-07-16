@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"unicode"
@@ -20,6 +21,12 @@ import (
 type Library struct {
 	db *dbstore.DB
 }
+
+const patternByIDQuery = `
+	SELECT id, name, description, origin, kind, enabled, weight, cycle_ms,
+	       points_json, tags_json, created_at, updated_at
+	FROM patterns WHERE id = ?
+`
 
 // Open opens the library and seeds code-generated built-ins without replacing
 // user enablement or feedback-derived weights.
@@ -42,28 +49,53 @@ func (l *Library) Close() error {
 }
 
 // Snapshot returns all content plus recent reversible feedback.
-func (l *Library) Snapshot() Snapshot {
-	return Snapshot{
-		Patterns:    l.ListPatterns(),
-		Programs:    l.ListPrograms(),
-		Feedback:    l.FeedbackHistory(30),
-		AutoDisable: l.AutoDisable(),
+func (l *Library) Snapshot() (Snapshot, error) {
+	patterns, err := l.ListPatterns()
+	if err != nil {
+		return Snapshot{}, err
 	}
+	programs, err := l.ListPrograms()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	feedback, err := l.FeedbackHistory(30)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	autoDisable, err := l.AutoDisable()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return Snapshot{
+		Patterns:    patterns,
+		Programs:    programs,
+		Feedback:    feedback,
+		AutoDisable: autoDisable,
+	}, nil
 }
 
 // Summary returns indexed counts for the regular app-state poll.
-func (l *Library) Summary() Summary {
-	var summary Summary
-	_ = l.db.SQL().QueryRowContext(context.Background(), `
+func (l *Library) Summary() (Summary, error) {
+	ctx := context.Background()
+	summary := Summary{Available: true}
+	if err := l.db.SQL().QueryRowContext(ctx, `
 		SELECT COUNT(*), COALESCE(SUM(enabled), 0) FROM patterns
-	`).Scan(&summary.PatternCount, &summary.EnabledPatternCount)
-	_ = l.db.SQL().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM programs`).Scan(&summary.ProgramCount)
-	summary.AutoDisable = l.AutoDisable()
-	return summary
+	`).Scan(&summary.PatternCount, &summary.EnabledPatternCount); err != nil {
+		return Summary{}, err
+	}
+	if err := l.db.SQL().QueryRowContext(ctx, `SELECT COUNT(*) FROM programs`).Scan(&summary.ProgramCount); err != nil {
+		return Summary{}, err
+	}
+	autoDisable, err := l.AutoDisable()
+	if err != nil {
+		return Summary{}, err
+	}
+	summary.AutoDisable = autoDisable
+	return summary, nil
 }
 
 // ListPatterns returns built-ins first, then user content by name.
-func (l *Library) ListPatterns() []Pattern {
+func (l *Library) ListPatterns() ([]Pattern, error) {
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
 		SELECT id, name, description, origin, kind, enabled, weight, cycle_ms,
 		       points_json, tags_json, created_at, updated_at
@@ -71,28 +103,26 @@ func (l *Library) ListPatterns() []Pattern {
 		ORDER BY CASE origin WHEN 'builtin' THEN 0 ELSE 1 END, name, id
 	`)
 	if err != nil {
-		return []Pattern{}
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	patterns := make([]Pattern, 0)
 	for rows.Next() {
 		pattern, scanErr := scanPattern(rows)
 		if scanErr != nil {
-			return []Pattern{}
+			return nil, scanErr
 		}
 		patterns = append(patterns, pattern)
 	}
-	return patterns
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return patterns, nil
 }
 
 // Pattern returns one row by ID.
 func (l *Library) Pattern(id string) (Pattern, error) {
-	row := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT id, name, description, origin, kind, enabled, weight, cycle_ms,
-		       points_json, tags_json, created_at, updated_at
-		FROM patterns WHERE id = ?
-	`, strings.TrimSpace(id))
-	pattern, err := scanPattern(row)
+	pattern, err := queryPattern(context.Background(), l.db.SQL(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Pattern{}, ErrPatternNotFound
 	}
@@ -100,24 +130,30 @@ func (l *Library) Pattern(id string) (Pattern, error) {
 }
 
 // ResolveEnabled returns engine content only when the entry remains enabled.
-func (l *Library) ResolveEnabled(id string) (motion.PatternDefinition, bool) {
+func (l *Library) ResolveEnabled(id string) (motion.PatternDefinition, bool, error) {
 	pattern, err := l.Pattern(id)
-	if err != nil || !pattern.Enabled {
-		return motion.PatternDefinition{}, false
+	if errors.Is(err, ErrPatternNotFound) || (err == nil && !pattern.Enabled) {
+		return motion.PatternDefinition{}, false, nil
+	}
+	if err != nil {
+		return motion.PatternDefinition{}, false, err
 	}
 	definition, err := motion.NormalizePatternDefinition(pattern.Definition())
-	return definition, err == nil
+	if err != nil {
+		return motion.PatternDefinition{}, false, err
+	}
+	return definition, true, nil
 }
 
 // EnabledChoices returns prompt-safe metadata, weighted preference first.
-func (l *Library) EnabledChoices() []CurationChoice {
+func (l *Library) EnabledChoices() ([]CurationChoice, error) {
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
 		SELECT id, name, description, tags_json, weight
 		FROM patterns WHERE enabled = 1
 		ORDER BY weight DESC, name, id
 	`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	choices := make([]CurationChoice, 0)
@@ -125,12 +161,17 @@ func (l *Library) EnabledChoices() []CurationChoice {
 		var choice CurationChoice
 		var tagsJSON string
 		if err := rows.Scan(&choice.ID, &choice.Name, &choice.Description, &tagsJSON, &choice.Weight); err != nil {
-			return nil
+			return nil, err
 		}
-		_ = json.Unmarshal([]byte(tagsJSON), &choice.Tags)
+		if err := json.Unmarshal([]byte(tagsJSON), &choice.Tags); err != nil {
+			return nil, err
+		}
 		choices = append(choices, choice)
 	}
-	return choices
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return choices, nil
 }
 
 // CreatePattern validates, simplifies, and stores one shareable user pattern.
@@ -144,7 +185,7 @@ func (l *Library) CreatePattern(input PatternInput) (Pattern, error) {
 	}
 	preview, err := PreviewPattern(input)
 	if err != nil {
-		return Pattern{}, err
+		return Pattern{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	pattern := Pattern{
@@ -153,32 +194,44 @@ func (l *Library) CreatePattern(input PatternInput) (Pattern, error) {
 		CycleMillis: preview.CycleMillis, Points: preview.Points, Tags: normalizeStringTags(input.Tags),
 		CreatedAt: now, UpdatedAt: now,
 	}
+	pattern, err = withPatternPreview(pattern)
+	if err != nil {
+		return Pattern{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
+	}
 	if err := l.insertPattern(pattern); err != nil {
 		return Pattern{}, err
 	}
-	return l.Pattern(pattern.ID)
+	return pattern, nil
 }
 
 // UpdatePattern applies visible row controls and editable user content.
 func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) {
-	current, err := l.Pattern(id)
-	if err != nil {
-		return Pattern{}, err
-	}
-	if current.Origin == OriginBuiltin && patchChangesContent(patch) {
-		return Pattern{}, ErrBuiltinPattern
-	}
-	next, err := applyPatternPatch(current, patch)
-	if err != nil {
-		return Pattern{}, err
-	}
-	next.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	pointsJSON, tagsJSON, err := encodePatternData(next)
-	if err != nil {
-		return Pattern{}, err
-	}
 	ctx := context.Background()
+	var next Pattern
 	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		current, err := queryPattern(ctx, tx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrPatternNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if current.Origin == OriginBuiltin && patchChangesContent(patch) {
+			return ErrBuiltinPattern
+		}
+		next, err = applyPatternPatch(current, patch)
+		if err != nil {
+			return err
+		}
+		next, err = withPatternPreview(next)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidContent, err)
+		}
+		next.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		pointsJSON, tagsJSON, err := encodePatternData(next)
+		if err != nil {
+			return err
+		}
 		result, updateErr := tx.ExecContext(ctx, `
 			UPDATE patterns SET name = ?, description = ?, kind = ?, enabled = ?,
 				weight = ?, cycle_ms = ?, points_json = ?, tags_json = ?, updated_at = ?
@@ -188,7 +241,10 @@ func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) 
 		if updateErr != nil {
 			return updateErr
 		}
-		affected, _ := result.RowsAffected()
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
 		if affected == 0 {
 			return ErrPatternNotFound
 		}
@@ -196,7 +252,7 @@ func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) 
 	}); err != nil {
 		return Pattern{}, err
 	}
-	return l.Pattern(next.ID)
+	return next, nil
 }
 
 // DeletePattern removes user/generated content; built-ins remain available.
@@ -214,7 +270,11 @@ func (l *Library) DeletePattern(id string) error {
 		if deleteErr != nil {
 			return deleteErr
 		}
-		if affected, _ := result.RowsAffected(); affected == 0 {
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
 			return ErrPatternNotFound
 		}
 		return nil
@@ -222,24 +282,27 @@ func (l *Library) DeletePattern(id string) error {
 }
 
 // ListPrograms returns finite content by name.
-func (l *Library) ListPrograms() []Program {
+func (l *Library) ListPrograms() ([]Program, error) {
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
 		SELECT id, name, origin, duration_ms, points_json, created_at, updated_at
 		FROM programs ORDER BY name, id
 	`)
 	if err != nil {
-		return []Program{}
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	programs := make([]Program, 0)
 	for rows.Next() {
 		program, scanErr := scanProgram(rows)
 		if scanErr != nil {
-			return []Program{}
+			return nil, scanErr
 		}
 		programs = append(programs, program)
 	}
-	return programs
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return programs, nil
 }
 
 // Program returns one finite entry by ID.
@@ -269,17 +332,17 @@ func (l *Library) CreateProgram(name, origin string, points []motion.CurvePoint,
 	}
 	prepared, err := prepareRawPoints(points, duration)
 	if err != nil {
-		return Program{}, err
+		return Program{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
 	}
 	prepared, err = simplifyToLimit(prepared, 0.5, maxProgramPoints)
 	if err != nil {
-		return Program{}, err
+		return Program{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
 	}
 	definition, err := motion.NormalizeProgramDefinition(motion.ProgramDefinition{
 		ID: userContentID("program", name), Name: name, DurationMillis: duration, Points: prepared,
 	})
 	if err != nil {
-		return Program{}, err
+		return Program{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
 	}
 	if origin != OriginImported {
 		origin = OriginUser
@@ -290,9 +353,19 @@ func (l *Library) CreateProgram(name, origin string, points []motion.CurvePoint,
 		DurationMillis: definition.DurationMillis, Points: definition.Points,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	data, _ := json.Marshal(program.Points)
+	program, err = withProgramPreview(program)
+	if err != nil {
+		return Program{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
+	}
+	data, err := json.Marshal(program.Points)
+	if err != nil {
+		return Program{}, err
+	}
 	ctx := context.Background()
 	err = l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if err := ensureCapacityTx(ctx, tx, "programs", maxPrograms, "program"); err != nil {
+			return err
+		}
 		_, insertErr := tx.ExecContext(ctx, `
 			INSERT INTO programs(id, name, origin, duration_ms, points_json, created_at, updated_at)
 			VALUES(?, ?, ?, ?, ?, ?, ?)
@@ -302,7 +375,7 @@ func (l *Library) CreateProgram(name, origin string, points []motion.CurvePoint,
 	if err != nil {
 		return Program{}, err
 	}
-	return l.Program(program.ID)
+	return program, nil
 }
 
 // DeleteProgram removes one finite entry.
@@ -313,7 +386,11 @@ func (l *Library) DeleteProgram(id string) error {
 		if err != nil {
 			return err
 		}
-		if affected, _ := result.RowsAffected(); affected == 0 {
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
 			return ErrProgramNotFound
 		}
 		return nil
@@ -352,6 +429,9 @@ func (l *Library) insertPattern(pattern Pattern) error {
 	}
 	ctx := context.Background()
 	return l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if err := ensureCapacityTx(ctx, tx, "patterns", maxPatterns, "pattern"); err != nil {
+			return err
+		}
 		_, insertErr := tx.ExecContext(ctx, `
 			INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
 				cycle_ms, points_json, tags_json, created_at, updated_at)
@@ -378,6 +458,9 @@ func applyPatternPatch(current Pattern, patch PatternPatch) (Pattern, error) {
 		next.Enabled = *patch.Enabled
 	}
 	if patch.Weight != nil {
+		if math.IsNaN(*patch.Weight) || math.IsInf(*patch.Weight, 0) {
+			return Pattern{}, fmt.Errorf("%w: pattern weight must be finite", ErrInvalidContent)
+		}
 		next.Weight = mathClamp(*patch.Weight, 0.1, 3)
 	}
 	if patch.CycleMillis != nil {
@@ -396,7 +479,7 @@ func applyPatternPatch(current Pattern, patch PatternPatch) (Pattern, error) {
 	next.Name, next.Description = name, description
 	definition, err := motion.NormalizePatternDefinition(next.Definition())
 	if err != nil {
-		return Pattern{}, err
+		return Pattern{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
 	}
 	next.Kind, next.CycleMillis, next.Points, next.Tags = definition.Kind, definition.CycleMillis, definition.Points, definition.Tags
 	return next, nil
@@ -416,7 +499,13 @@ func scanPattern(scanner interface{ Scan(...any) error }) (Pattern, error) {
 	if err := json.Unmarshal([]byte(pointsJSON), &pattern.Points); err != nil {
 		return Pattern{}, err
 	}
-	_ = json.Unmarshal([]byte(tagsJSON), &pattern.Tags)
+	if err := json.Unmarshal([]byte(tagsJSON), &pattern.Tags); err != nil {
+		return Pattern{}, err
+	}
+	return withPatternPreview(pattern)
+}
+
+func withPatternPreview(pattern Pattern) (Pattern, error) {
 	definition, err := motion.NormalizePatternDefinition(pattern.Definition())
 	if err != nil {
 		return Pattern{}, err
@@ -440,6 +529,10 @@ func scanProgram(scanner interface{ Scan(...any) error }) (Program, error) {
 	if err := json.Unmarshal([]byte(pointsJSON), &program.Points); err != nil {
 		return Program{}, err
 	}
+	return withProgramPreview(program)
+}
+
+func withProgramPreview(program Program) (Program, error) {
 	definition, err := motion.NormalizeProgramDefinition(program.Definition())
 	if err != nil {
 		return Program{}, err
@@ -464,13 +557,13 @@ func encodePatternData(pattern Pattern) (string, string, error) {
 func validateMetadata(name, description string) (string, string, error) {
 	name, description = strings.TrimSpace(name), strings.TrimSpace(description)
 	if name == "" {
-		return "", "", errors.New("content name is required")
+		return "", "", fmt.Errorf("%w: content name is required", ErrInvalidContent)
 	}
 	if len([]rune(name)) > maxContentNameChars {
-		return "", "", fmt.Errorf("content name must be at most %d characters", maxContentNameChars)
+		return "", "", fmt.Errorf("%w: content name must be at most %d characters", ErrInvalidContent, maxContentNameChars)
 	}
 	if len([]rune(description)) > maxDescriptionChars {
-		return "", "", fmt.Errorf("description must be at most %d characters", maxDescriptionChars)
+		return "", "", fmt.Errorf("%w: description must be at most %d characters", ErrInvalidContent, maxDescriptionChars)
 	}
 	return name, description, nil
 }
@@ -481,7 +574,7 @@ func (l *Library) ensurePatternCapacity() error {
 		return err
 	}
 	if count >= maxPatterns {
-		return fmt.Errorf("pattern limit reached (%d)", maxPatterns)
+		return fmt.Errorf("%w: pattern limit reached (%d)", ErrLibraryLimit, maxPatterns)
 	}
 	return nil
 }
@@ -492,7 +585,35 @@ func (l *Library) ensureProgramCapacity() error {
 		return err
 	}
 	if count >= maxPrograms {
-		return fmt.Errorf("program limit reached (%d)", maxPrograms)
+		return fmt.Errorf("%w: program limit reached (%d)", ErrLibraryLimit, maxPrograms)
+	}
+	return nil
+}
+
+type patternQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func queryPattern(ctx context.Context, queryer patternQueryer, id string) (Pattern, error) {
+	return scanPattern(queryer.QueryRowContext(ctx, patternByIDQuery, strings.TrimSpace(id)))
+}
+
+func ensureCapacityTx(ctx context.Context, tx *sql.Tx, table string, limit int, label string) error {
+	var query string
+	switch table {
+	case "patterns":
+		query = "SELECT COUNT(*) FROM patterns"
+	case "programs":
+		query = "SELECT COUNT(*) FROM programs"
+	default:
+		return fmt.Errorf("unsupported capacity table %q", table)
+	}
+	var count int
+	if err := tx.QueryRowContext(ctx, query).Scan(&count); err != nil {
+		return err
+	}
+	if count >= limit {
+		return fmt.Errorf("%w: %s limit reached (%d)", ErrLibraryLimit, label, limit)
 	}
 	return nil
 }

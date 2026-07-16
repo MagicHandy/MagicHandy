@@ -363,6 +363,12 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
 	s.applyVoiceSettingsTransition(next)
+	var runtimeErr error
+	if llmRuntimeSettingsChanged(previous.LLM, next.LLM) {
+		if err := s.closeLLM(); err != nil {
+			runtimeErr = fmt.Errorf("apply LLM settings: %w", err)
+		}
+	}
 	ownerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
 	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
 	cloudConfigChanged := previous.Device.FirmwareAPIRequirement != next.Device.FirmwareAPIRequirement ||
@@ -382,9 +388,9 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		if ownerChanged || next.Device.HSPDispatchOwner == config.DispatchOwnerIntiface {
 			s.closeIntiface()
 		}
-		return stopErr
+		return errors.Join(runtimeErr, stopErr)
 	}
-	return s.refreshActiveMotion(ctx, next.Motion)
+	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.Motion))
 }
 
 func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) error {
@@ -428,7 +434,9 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
-		s.closeLLM()
+		if err := s.closeLLM(); err != nil {
+			s.logger.Warn("LLM provider did not close cleanly during shutdown", "error", err)
+		}
 		if s.managedLLM != nil {
 			s.managedLLM.Close()
 		}

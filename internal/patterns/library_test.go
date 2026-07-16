@@ -19,7 +19,10 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	patterns := library.ListPatterns()
+	patterns, err := library.ListPatterns()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(patterns) != len(motion.BuiltinPatternDefinitions()) {
 		t.Fatalf("seeded patterns = %d, want %d", len(patterns), len(motion.BuiltinPatternDefinitions()))
 	}
@@ -44,7 +47,11 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	if err != nil || persisted.Enabled {
 		t.Fatalf("persisted built-in enablement = %+v err=%v", persisted, err)
 	}
-	for _, choice := range reopened.EnabledChoices() {
+	choices, err := reopened.EnabledChoices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, choice := range choices {
 		if choice.ID == updated.ID {
 			t.Fatalf("disabled pattern %q leaked into curation choices", updated.ID)
 		}
@@ -91,7 +98,11 @@ func TestFeedbackUndoDoesNotOverwriteDirectWeightEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = library.Close() })
-	pattern := library.ListPatterns()[0]
+	patterns, err := library.ListPatterns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pattern := patterns[0]
 	feedback, _, err := library.ApplyFeedback(pattern.ID, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +122,11 @@ func TestFeedbackIsVisibleReversibleAndAutoDisableIsOptIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = library.Close() })
-	pattern := library.ListPatterns()[0]
+	patterns, err := library.ListPatterns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pattern := patterns[0]
 	weight := 0.3
 	pattern, err = library.UpdatePattern(pattern.ID, PatternPatch{Weight: &weight})
 	if err != nil {
@@ -135,7 +150,11 @@ func TestFeedbackIsVisibleReversibleAndAutoDisableIsOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Enabled || !library.AutoDisable() {
+	autoDisable, err := library.AutoDisable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Enabled || !autoDisable {
 		t.Fatalf("opt-in auto-disable did not become visible: %+v", after)
 	}
 	_, restored, err := library.UndoFeedback(feedback.ID)
@@ -251,5 +270,111 @@ func TestAuthoringRejectsUnboundedTimes(t *testing.T) {
 	input.CycleMillis = maxContentDuration + 1
 	if _, err := PreviewPattern(input); err == nil {
 		t.Fatal("preview accepted content longer than 24 hours")
+	}
+}
+
+func TestPatternRejectsCorruptStoredTags(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+	created, err := library.CreatePattern(PatternInput{
+		Name: "Corrupt tags fixture", Kind: motion.PatternKindBurst, CycleMillis: 1000,
+		Points: []motion.CurvePoint{
+			{TimeMillis: 0},
+			{TimeMillis: 500, PositionPercent: 100},
+			{TimeMillis: 1000},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`UPDATE patterns SET tags_json = '{' WHERE id = ?`, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.Pattern(created.ID); err == nil {
+		t.Fatal("Pattern accepted corrupt stored tags")
+	}
+	if _, err := library.ListPatterns(); err == nil {
+		t.Fatal("ListPatterns hid corrupt stored tags as an empty library")
+	}
+}
+
+func TestPatternUpdateRejectsNonFiniteWeight(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+	weight := math.NaN()
+	if _, err := library.UpdatePattern(string(motion.PatternStroke), PatternPatch{Weight: &weight}); err == nil {
+		t.Fatal("UpdatePattern accepted a non-finite weight")
+	}
+}
+
+func TestLibraryReadFailuresAreNotReportedAsEmptyState(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := []struct {
+		name string
+		run  func() error
+	}{
+		{name: "snapshot", run: func() error { _, err := library.Snapshot(); return err }},
+		{name: "summary", run: func() error { _, err := library.Summary(); return err }},
+		{name: "patterns", run: func() error { _, err := library.ListPatterns(); return err }},
+		{name: "programs", run: func() error { _, err := library.ListPrograms(); return err }},
+		{name: "choices", run: func() error { _, err := library.EnabledChoices(); return err }},
+		{name: "feedback", run: func() error { _, err := library.FeedbackHistory(30); return err }},
+		{name: "auto-disable", run: func() error { _, err := library.AutoDisable(); return err }},
+		{name: "resolve", run: func() error {
+			_, _, err := library.ResolveEnabled(string(motion.PatternStroke))
+			return err
+		}},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			if err := check.run(); err == nil {
+				t.Fatalf("%s hid a closed database as empty or missing state", check.name)
+			}
+		})
+	}
+}
+
+func TestFeedbackRollsBackWhenAutoDisablePreferenceCannotBeRead(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+	before, err := library.Pattern(string(motion.PatternStroke))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec("DROP TABLE app_kv"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := library.ApplyFeedback(before.ID, -1); err == nil {
+		t.Fatal("ApplyFeedback ignored a failed auto-disable preference read")
+	}
+	after, err := library.Pattern(before.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Weight != before.Weight || after.Enabled != before.Enabled {
+		t.Fatalf("failed feedback was not rolled back: before=%+v after=%+v", before, after)
+	}
+	var feedbackCount int
+	if err := library.db.SQL().QueryRow("SELECT COUNT(*) FROM pattern_feedback").Scan(&feedbackCount); err != nil {
+		t.Fatal(err)
+	}
+	if feedbackCount != 0 {
+		t.Fatalf("failed feedback persisted %d history rows", feedbackCount)
 	}
 }

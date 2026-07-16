@@ -127,6 +127,11 @@ func TestCursorsAreIsolatedPerClient(t *testing.T) {
 
 func TestCursorNeverMovesBackward(t *testing.T) {
 	log := openTestLog(t)
+	for i := 0; i < 7; i++ {
+		if _, err := log.Append(MessageRoleUser, fmt.Sprintf("message %d", i), "c"); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
 
 	if _, err := log.AdvanceCursor("c", 7); err != nil {
 		t.Fatalf("advance to 7: %v", err)
@@ -137,5 +142,31 @@ func TestCursorNeverMovesBackward(t *testing.T) {
 	}
 	if stored != 7 {
 		t.Fatalf("cursor moved backward to %d; must stay at 7", stored)
+	}
+}
+
+func TestCursorCannotAdvancePastCurrentLogHead(t *testing.T) {
+	log := openTestLog(t)
+	first, err := log.Append(MessageRoleUser, "first", "c")
+	if err != nil {
+		t.Fatalf("append first: %v", err)
+	}
+	stored, err := log.AdvanceCursor("c", first+1000)
+	if err != nil {
+		t.Fatalf("advance beyond head: %v", err)
+	}
+	if stored != first {
+		t.Fatalf("cursor = %d, want current head %d", stored, first)
+	}
+	second, err := log.Append(MessageRoleAssistant, "second", "")
+	if err != nil {
+		t.Fatalf("append second: %v", err)
+	}
+	unseen, err := log.After(stored, 0)
+	if err != nil {
+		t.Fatalf("read after clamped cursor: %v", err)
+	}
+	if len(unseen) != 1 || unseen[0].Seq != second {
+		t.Fatalf("future message was skipped after cursor clamp: %+v", unseen)
 	}
 }

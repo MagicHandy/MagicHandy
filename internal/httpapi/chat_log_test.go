@@ -115,6 +115,11 @@ func TestDeterministicStopReplyIsLogged(t *testing.T) {
 func TestChatCursorsAreIsolatedAndMonotonicOverHTTP(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
+	for index := 0; index < 5; index++ {
+		if _, err := server.chatLog.Append(chat.MessageRoleUser, fmt.Sprintf("message %d", index), "seed"); err != nil {
+			t.Fatalf("seed chat log: %v", err)
+		}
+	}
 
 	advance := func(clientID string, seq int64) int64 {
 		t.Helper()
@@ -291,5 +296,25 @@ func TestSpeakRepliesOffMeansNoTTSEnqueue(t *testing.T) {
 	messages, _, _ := getChatMessages(t, server, "")
 	if len(messages) != 2 {
 		t.Fatalf("reply must still be displayed/logged: %+v", messages)
+	}
+}
+
+func TestChatLogStorageFailureIsExplicitAndRedacted(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.chatLog.Close(); err != nil {
+		t.Fatalf("close chat log: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/chat/messages", nil))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Body.String(); !strings.Contains(got, "chat history storage is unavailable") || strings.Contains(got, "closed") {
+		t.Fatalf("chat history response exposed storage details: %s", got)
+	}
+	state := server.chatState()
+	if available, ok := state["available"].(bool); !ok || available {
+		t.Fatalf("chat state availability = %#v, want false", state["available"])
 	}
 }

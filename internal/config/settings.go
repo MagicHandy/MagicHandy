@@ -951,6 +951,12 @@ func validateLLMSettings(settings LLMSettings) error {
 	if settings.OllamaBaseURL == "" {
 		return errors.New("ollama base URL is required")
 	}
+	if err := validateLLMBaseURL("llama.cpp", settings.LlamaCPPBaseURL); err != nil {
+		return err
+	}
+	if err := validateLLMBaseURL("Ollama", settings.OllamaBaseURL); err != nil {
+		return err
+	}
 	if settings.Model == "" {
 		return errors.New("LLM model is required")
 	}
@@ -968,6 +974,26 @@ func validateLLMSettings(settings LLMSettings) error {
 	}
 	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
 		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
+	}
+	return nil
+}
+
+func validateLLMBaseURL(label, value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" {
+		return fmt.Errorf("%s base URL must be an absolute HTTP URL with a host", label)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("%s base URL scheme must be http or https", label)
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("%s base URL must not include userinfo", label)
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return fmt.Errorf("%s base URL must not include a query", label)
+	}
+	if parsed.Fragment != "" {
+		return fmt.Errorf("%s base URL must not include a fragment", label)
 	}
 	return nil
 }
