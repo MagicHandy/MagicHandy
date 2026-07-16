@@ -937,7 +937,12 @@ Status: **complete**.
   preserved the saved install choices and rebuilt in 10 minutes 56 seconds. In
   the relaunched production app, an uncached request reached `done` in 2.799
   seconds and its exact repeat in 34 ms with byte-identical retained WAVs and an
-  empty terminal queue. See `docs/neutts-quality-performance.md`.
+  empty terminal queue. A follow-up promotes the now user-proven sampling need
+  to one collapsed Advanced control: fixed seed 3 remains the default, any
+  unsigned 32-bit seed can be retained for a reference voice, **New seed** picks
+  a different repeatable value, and **Varied** explicitly restores per-request
+  randomness with the repeat cache disabled. See
+  `docs/neutts-quality-performance.md`.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and

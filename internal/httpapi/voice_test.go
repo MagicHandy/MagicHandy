@@ -468,7 +468,7 @@ func assertAppManagedNeuTTSStartup(t *testing.T, settings config.VoiceSettings, 
 		t.Fatalf("startup configuration hashed managed runtime files %d times", *hashCalls)
 	}
 	if got.TTS.Command != settings.TTSWorkerPath || got.TTS.Env["HF_HOME"] != hfHome ||
-		got.TTS.Env["MAGICHANDY_NEUTTS_SEED"] != strconv.Itoa(managedNeuTTSSamplerSeed) {
+		got.TTS.Env["MAGICHANDY_NEUTTS_SEED"] != strconv.FormatUint(uint64(config.DefaultNeuTTSSamplerSeed), 10) {
 		t.Fatalf("app-managed NeuTTS config = %+v", got.TTS)
 	}
 	if len(got.TTS.Args) < 2 || got.TTS.Args[1] != runner {
@@ -480,6 +480,34 @@ func assertAppManagedNeuTTSStartup(t *testing.T, settings config.VoiceSettings, 
 	}
 	if !managedNeuTTSManifestReady(dataDir, true) {
 		t.Fatal("explicit managed runtime integrity verification failed")
+	}
+}
+
+func TestNeuTTSSamplingSettingsComposeRunnerEnvironment(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderNeuTTSAir
+	settings.NeuTTSSamplerSeed = 27
+
+	fixed := voiceManagerConfig(settings, "", t.TempDir())
+	if got := fixed.TTS.Env["MAGICHANDY_NEUTTS_SEED"]; got != "27" {
+		t.Fatalf("fixed NeuTTS seed = %q, want 27", got)
+	}
+
+	settings.NeuTTSSamplingMode = config.NeuTTSSamplingRandom
+	random := voiceManagerConfig(settings, "", t.TempDir())
+	if got := random.TTS.Env["MAGICHANDY_NEUTTS_SEED"]; got != "random" {
+		t.Fatalf("random NeuTTS seed = %q, want random", got)
+	}
+
+	settings.NeuTTSSamplingMode = config.NeuTTSSamplingFixed
+	settings.NeuTTSRunnerPath = `C:\custom\stream_pcm.exe`
+	override := voiceManagerConfig(settings, "", t.TempDir())
+	if got := override.TTS.Env["MAGICHANDY_NEUTTS_SEED"]; got != "27" {
+		t.Fatalf("custom runner fixed seed = %q, want 27", got)
+	}
+	if _, ok := override.TTS.Env["HF_HOME"]; ok {
+		t.Fatalf("custom runner inherited app-managed HF_HOME: %+v", override.TTS.Env)
 	}
 }
 
@@ -1125,7 +1153,7 @@ func TestVoiceSettingsRoundTripThroughAPI(t *testing.T) {
 		},
 		"motion": {"speed_min_percent": 20, "speed_max_percent": 80, "stroke_min_percent": 0, "stroke_max_percent": 100, "reverse_direction": false, "style": "balanced"},
 		"llm": {"provider": "llama_cpp", "llama_cpp_mode": "managed", "llama_cpp_base_url": "http://127.0.0.1:8080", "ollama_base_url": "http://127.0.0.1:11434", "model": "local-model", "prompt_set": "magichandy_motion_v1", "request_timeout_ms": 120000},
-		"voice": {"enabled": true, "tts_worker_path": "C:\\workers\\stub.exe", "tts_worker_args": ["-role", "tts"]},
+		"voice": {"enabled": true, "tts_worker_path": "C:\\workers\\stub.exe", "tts_worker_args": ["-role", "tts"], "neutts_sampling_mode": "random", "neutts_sampler_seed": 42},
 		"diagnostics": {"verbosity": "normal"},
 		"clear_connection_key": false
 	}`
@@ -1147,6 +1175,9 @@ func TestVoiceSettingsRoundTripThroughAPI(t *testing.T) {
 	}
 	if len(settings.Voice.TTSWorkerArgs) != 2 {
 		t.Fatalf("tts worker args = %v", settings.Voice.TTSWorkerArgs)
+	}
+	if settings.Voice.NeuTTSSamplingMode != config.NeuTTSSamplingRandom || settings.Voice.NeuTTSSamplerSeed != 42 {
+		t.Fatalf("NeuTTS sampling settings did not persist: %+v", settings.Voice)
 	}
 
 	// The saved-but-unstarted worker must show as stopped, never autostart.

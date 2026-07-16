@@ -20,7 +20,7 @@ const baseState = {
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
-    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, elevenlabs_key_set: false },
+    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, neutts_sampling_mode: "fixed", neutts_sampler_seed: 3, elevenlabs_key_set: false },
     diagnostics: { verbosity: "normal" },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth", "intiface"],
@@ -34,6 +34,7 @@ const baseState = {
       tts_providers: ["none", "elevenlabs", "neutts_air", "custom"],
       asr_providers: ["none", "parakeet_managed", "openai_compatible", "custom"],
       parakeet_sources: ["app_managed", "custom_local"],
+      neutts_sampling_modes: ["fixed", "random"],
     },
   },
   controller: { active: true, read_only: false },
@@ -843,6 +844,40 @@ describe("app shell safety invariants", () => {
     expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
   });
 
+  it("keeps NeuTTS deterministic by default and makes variation an advanced opt-in", async () => {
+    const state = {
+      ...baseState,
+      settings: {
+        ...baseState.settings,
+        voice: { ...baseState.settings.voice, tts_provider: "neutts_air" },
+      },
+    };
+    const fetch = installFetch({ state });
+    renderApp();
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/voice");
+
+    fireEvent.click(await screen.findByText("Advanced"));
+    const variation = screen.getByRole("group", { name: /neutts speech variation/i });
+    expect(within(variation).getByRole("button", { name: "Consistent" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("spinbutton", { name: /fixed seed/i })).toHaveValue(3);
+
+    fireEvent.click(screen.getByRole("button", { name: /new seed/i }));
+    expect(screen.getByRole("spinbutton", { name: /fixed seed/i })).not.toHaveValue(3);
+    fireEvent.change(screen.getByRole("spinbutton", { name: /fixed seed/i }), { target: { value: "19" } });
+    fireEvent.click(within(variation).getByRole("button", { name: "Varied" }));
+    expect(within(variation).getByRole("button", { name: "Varied" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("spinbutton", { name: /fixed seed/i })).toBeNull();
+    expect(screen.getByText(/repeat cache off/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
+    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
+    const payload = JSON.parse(String((request as RequestInit).body));
+    expect(payload.voice.neutts_sampling_mode).toBe("random");
+    expect(payload.voice.neutts_sampler_seed).toBe(19);
+  });
+
   it("uses the host path picker for the NeuTTS runner", async () => {
     const fetch = installFetch({ pickedPath: "C:\\NeuTTS\\stream_pcm.exe" });
     renderApp();
@@ -851,6 +886,7 @@ describe("app shell safety invariants", () => {
     const providers = await screen.findAllByRole("combobox", { name: /provider/i });
     fireEvent.change(providers[1], { target: { value: "neutts_air" } });
 
+    fireEvent.click(screen.getByText("Advanced"));
     fireEvent.click(screen.getByRole("button", { name: /browse for stream_pcm runner override/i }));
     await waitFor(() => expect(screen.getByRole("textbox", { name: /stream_pcm runner override/i })).toHaveValue("C:\\NeuTTS\\stream_pcm.exe"));
     const pickerCall = fetch.mock.calls.find(([url]) => String(url).includes("/api/host/path-picker"));

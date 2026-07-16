@@ -111,6 +111,12 @@ const (
 	DefaultElevenLabsModelID = "eleven_multilingual_v2"
 	// DefaultNeuTTSBackbone is the reviewed Q4 local runner model.
 	DefaultNeuTTSBackbone = "neuphonic/neutts-air-q4-gguf"
+	// NeuTTSSamplingFixed reuses one seed for repeatable speech and PCM caching.
+	NeuTTSSamplingFixed = "fixed"
+	// NeuTTSSamplingRandom asks the runner to choose a new seed per request.
+	NeuTTSSamplingRandom = "random"
+	// DefaultNeuTTSSamplerSeed passed the mixed-sentence intelligibility corpus.
+	DefaultNeuTTSSamplerSeed uint32 = 3
 	// VoiceInputModeHandsFree keeps listening and segments phrases at silence.
 	VoiceInputModeHandsFree = "hands_free"
 	// VoiceInputModeHold records only while the microphone control is held.
@@ -217,6 +223,8 @@ type VoiceSettings struct {
 	NeuTTSReferenceCodes string `json:"neutts_reference_codes,omitempty"`
 	NeuTTSReferenceText  string `json:"neutts_reference_text,omitempty"`
 	NeuTTSBackbone       string `json:"neutts_backbone,omitempty"`
+	NeuTTSSamplingMode   string `json:"neutts_sampling_mode"`
+	NeuTTSSamplerSeed    uint32 `json:"neutts_sampler_seed"`
 	// SpeakReplies enqueues each displayed chat reply to the running TTS
 	// worker in lockstep (ADR 0003: a spoken reply is always also shown).
 	SpeakReplies bool `json:"speak_replies"`
@@ -254,6 +262,8 @@ type PublicVoiceSettings struct {
 	NeuTTSReferenceCodes string   `json:"neutts_reference_codes,omitempty"`
 	NeuTTSReferenceText  string   `json:"neutts_reference_text,omitempty"`
 	NeuTTSBackbone       string   `json:"neutts_backbone,omitempty"`
+	NeuTTSSamplingMode   string   `json:"neutts_sampling_mode"`
+	NeuTTSSamplerSeed    uint32   `json:"neutts_sampler_seed"`
 	ElevenLabsKeySet     bool     `json:"elevenlabs_key_set"`
 }
 
@@ -285,6 +295,8 @@ type VoiceUpdate struct {
 	NeuTTSReferenceCodes string   `json:"neutts_reference_codes"`
 	NeuTTSReferenceText  string   `json:"neutts_reference_text"`
 	NeuTTSBackbone       string   `json:"neutts_backbone"`
+	NeuTTSSamplingMode   *string  `json:"neutts_sampling_mode,omitempty"`
+	NeuTTSSamplerSeed    *uint32  `json:"neutts_sampler_seed,omitempty"`
 	ElevenLabsAPIKey     *string  `json:"elevenlabs_api_key,omitempty"`
 	ClearElevenLabsKey   bool     `json:"clear_elevenlabs_key"`
 }
@@ -330,6 +342,7 @@ type PublicSettingsOptionHints struct {
 	TTSProviders            []string `json:"tts_providers"`
 	ASRProviders            []string `json:"asr_providers"`
 	ParakeetSources         []string `json:"parakeet_sources"`
+	NeuTTSSamplingModes     []string `json:"neutts_sampling_modes"`
 }
 
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
@@ -427,6 +440,8 @@ func DefaultSettings() Settings {
 			InputSilenceMillis: DefaultVoiceInputSilenceMillis,
 			InputNoiseSuppress: true,
 			NeuTTSBackbone:     DefaultNeuTTSBackbone,
+			NeuTTSSamplingMode: NeuTTSSamplingFixed,
+			NeuTTSSamplerSeed:  DefaultNeuTTSSamplerSeed,
 		},
 		Diagnostics: DiagnosticsSettings{
 			Verbosity: DiagnosticsVerbosityNormal,
@@ -447,36 +462,9 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
-		Motion: s.Motion,
-		LLM:    s.LLM,
-		Voice: PublicVoiceSettings{
-			Enabled:              s.Voice.Enabled,
-			TTSProvider:          s.Voice.TTSProvider,
-			ASRProvider:          s.Voice.ASRProvider,
-			TTSWorkerPath:        s.Voice.TTSWorkerPath,
-			TTSWorkerArgs:        s.Voice.TTSWorkerArgs,
-			ASRWorkerPath:        s.Voice.ASRWorkerPath,
-			ASRWorkerArgs:        s.Voice.ASRWorkerArgs,
-			SpeakReplies:         s.Voice.SpeakReplies,
-			ElevenLabsVoiceID:    s.Voice.ElevenLabsVoiceID,
-			ElevenLabsModelID:    s.Voice.ElevenLabsModelID,
-			ParakeetServerPath:   s.Voice.ParakeetServerPath,
-			ParakeetModelPath:    s.Voice.ParakeetModelPath,
-			ParakeetServerPort:   s.Voice.ParakeetServerPort,
-			ParakeetSource:       s.Voice.ParakeetSource,
-			ASRBaseURL:           s.Voice.ASRBaseURL,
-			ASRModel:             s.Voice.ASRModel,
-			InputMode:            s.Voice.InputMode,
-			InputSensitivity:     s.Voice.InputSensitivity,
-			InputSilenceMillis:   s.Voice.InputSilenceMillis,
-			InputNoiseSuppress:   s.Voice.InputNoiseSuppress,
-			NeuTTSRunnerPath:     s.Voice.NeuTTSRunnerPath,
-			NeuTTSReferenceWAV:   s.Voice.NeuTTSReferenceWAV,
-			NeuTTSReferenceCodes: s.Voice.NeuTTSReferenceCodes,
-			NeuTTSReferenceText:  s.Voice.NeuTTSReferenceText,
-			NeuTTSBackbone:       s.Voice.NeuTTSBackbone,
-			ElevenLabsKeySet:     s.Voice.ElevenLabsAPIKey != "",
-		},
+		Motion:      s.Motion,
+		LLM:         s.LLM,
+		Voice:       publicVoiceSettings(s.Voice),
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -534,7 +522,44 @@ func (s Settings) Public() PublicSettings {
 				ParakeetSourceApp,
 				ParakeetSourceCustom,
 			},
+			NeuTTSSamplingModes: []string{
+				NeuTTSSamplingFixed,
+				NeuTTSSamplingRandom,
+			},
 		},
+	}
+}
+
+func publicVoiceSettings(settings VoiceSettings) PublicVoiceSettings {
+	return PublicVoiceSettings{
+		Enabled:              settings.Enabled,
+		TTSProvider:          settings.TTSProvider,
+		ASRProvider:          settings.ASRProvider,
+		TTSWorkerPath:        settings.TTSWorkerPath,
+		TTSWorkerArgs:        settings.TTSWorkerArgs,
+		ASRWorkerPath:        settings.ASRWorkerPath,
+		ASRWorkerArgs:        settings.ASRWorkerArgs,
+		SpeakReplies:         settings.SpeakReplies,
+		ElevenLabsVoiceID:    settings.ElevenLabsVoiceID,
+		ElevenLabsModelID:    settings.ElevenLabsModelID,
+		ParakeetServerPath:   settings.ParakeetServerPath,
+		ParakeetModelPath:    settings.ParakeetModelPath,
+		ParakeetServerPort:   settings.ParakeetServerPort,
+		ParakeetSource:       settings.ParakeetSource,
+		ASRBaseURL:           settings.ASRBaseURL,
+		ASRModel:             settings.ASRModel,
+		InputMode:            settings.InputMode,
+		InputSensitivity:     settings.InputSensitivity,
+		InputSilenceMillis:   settings.InputSilenceMillis,
+		InputNoiseSuppress:   settings.InputNoiseSuppress,
+		NeuTTSRunnerPath:     settings.NeuTTSRunnerPath,
+		NeuTTSReferenceWAV:   settings.NeuTTSReferenceWAV,
+		NeuTTSReferenceCodes: settings.NeuTTSReferenceCodes,
+		NeuTTSReferenceText:  settings.NeuTTSReferenceText,
+		NeuTTSBackbone:       settings.NeuTTSBackbone,
+		NeuTTSSamplingMode:   settings.NeuTTSSamplingMode,
+		NeuTTSSamplerSeed:    settings.NeuTTSSamplerSeed,
+		ElevenLabsKeySet:     settings.ElevenLabsAPIKey != "",
 	}
 }
 
@@ -569,55 +594,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		MaxOutputTokens:      maxOutputTokens,
 		ReasoningMode:        reasoningMode,
 	})
-	parakeetSource := s.Voice.ParakeetSource
-	if update.Voice.ParakeetSource != nil {
-		parakeetSource = *update.Voice.ParakeetSource
-	}
-	inputMode := s.Voice.InputMode
-	if update.Voice.InputMode != nil {
-		inputMode = *update.Voice.InputMode
-	}
-	inputSensitivity := s.Voice.InputSensitivity
-	if update.Voice.InputSensitivity != nil {
-		inputSensitivity = *update.Voice.InputSensitivity
-	}
-	inputSilenceMillis := s.Voice.InputSilenceMillis
-	if update.Voice.InputSilenceMillis != nil {
-		inputSilenceMillis = *update.Voice.InputSilenceMillis
-	}
-	inputNoiseSuppress := s.Voice.InputNoiseSuppress
-	if update.Voice.InputNoiseSuppress != nil {
-		inputNoiseSuppress = *update.Voice.InputNoiseSuppress
-	}
-	next.Voice = normalizeVoiceStrings(VoiceSettings{
-		Enabled:              update.Voice.Enabled,
-		TTSProvider:          update.Voice.TTSProvider,
-		ASRProvider:          update.Voice.ASRProvider,
-		TTSWorkerPath:        update.Voice.TTSWorkerPath,
-		TTSWorkerArgs:        update.Voice.TTSWorkerArgs,
-		ASRWorkerPath:        update.Voice.ASRWorkerPath,
-		ASRWorkerArgs:        update.Voice.ASRWorkerArgs,
-		SpeakReplies:         update.Voice.SpeakReplies,
-		ElevenLabsVoiceID:    update.Voice.ElevenLabsVoiceID,
-		ElevenLabsModelID:    update.Voice.ElevenLabsModelID,
-		ParakeetServerPath:   update.Voice.ParakeetServerPath,
-		ParakeetModelPath:    update.Voice.ParakeetModelPath,
-		ParakeetServerPort:   update.Voice.ParakeetServerPort,
-		ParakeetSource:       parakeetSource,
-		ASRBaseURL:           update.Voice.ASRBaseURL,
-		ASRModel:             update.Voice.ASRModel,
-		InputMode:            inputMode,
-		InputSensitivity:     inputSensitivity,
-		InputSilenceMillis:   inputSilenceMillis,
-		InputNoiseSuppress:   inputNoiseSuppress,
-		NeuTTSRunnerPath:     update.Voice.NeuTTSRunnerPath,
-		NeuTTSReferenceWAV:   update.Voice.NeuTTSReferenceWAV,
-		NeuTTSReferenceCodes: update.Voice.NeuTTSReferenceCodes,
-		NeuTTSReferenceText:  update.Voice.NeuTTSReferenceText,
-		NeuTTSBackbone:       update.Voice.NeuTTSBackbone,
-		// The stored key survives unless explicitly replaced or cleared.
-		ElevenLabsAPIKey: s.Voice.ElevenLabsAPIKey,
-	})
+	next.Voice = applyVoiceUpdate(s.Voice, update.Voice)
 	next.Diagnostics = update.Diagnostics
 
 	if update.Voice.ClearElevenLabsKey {
@@ -637,6 +614,68 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	}
 
 	return NormalizeSettings(next)
+}
+
+func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
+	parakeetSource := current.ParakeetSource
+	if update.ParakeetSource != nil {
+		parakeetSource = *update.ParakeetSource
+	}
+	inputMode := current.InputMode
+	if update.InputMode != nil {
+		inputMode = *update.InputMode
+	}
+	inputSensitivity := current.InputSensitivity
+	if update.InputSensitivity != nil {
+		inputSensitivity = *update.InputSensitivity
+	}
+	inputSilenceMillis := current.InputSilenceMillis
+	if update.InputSilenceMillis != nil {
+		inputSilenceMillis = *update.InputSilenceMillis
+	}
+	inputNoiseSuppress := current.InputNoiseSuppress
+	if update.InputNoiseSuppress != nil {
+		inputNoiseSuppress = *update.InputNoiseSuppress
+	}
+	neuTTSSamplingMode := current.NeuTTSSamplingMode
+	if update.NeuTTSSamplingMode != nil {
+		neuTTSSamplingMode = *update.NeuTTSSamplingMode
+	}
+	neuTTSSamplerSeed := current.NeuTTSSamplerSeed
+	if update.NeuTTSSamplerSeed != nil {
+		neuTTSSamplerSeed = *update.NeuTTSSamplerSeed
+	}
+	return normalizeVoiceStrings(VoiceSettings{
+		Enabled:              update.Enabled,
+		TTSProvider:          update.TTSProvider,
+		ASRProvider:          update.ASRProvider,
+		TTSWorkerPath:        update.TTSWorkerPath,
+		TTSWorkerArgs:        update.TTSWorkerArgs,
+		ASRWorkerPath:        update.ASRWorkerPath,
+		ASRWorkerArgs:        update.ASRWorkerArgs,
+		SpeakReplies:         update.SpeakReplies,
+		ElevenLabsVoiceID:    update.ElevenLabsVoiceID,
+		ElevenLabsModelID:    update.ElevenLabsModelID,
+		ParakeetServerPath:   update.ParakeetServerPath,
+		ParakeetModelPath:    update.ParakeetModelPath,
+		ParakeetServerPort:   update.ParakeetServerPort,
+		ParakeetSource:       parakeetSource,
+		ASRBaseURL:           update.ASRBaseURL,
+		ASRModel:             update.ASRModel,
+		InputMode:            inputMode,
+		InputSensitivity:     inputSensitivity,
+		InputSilenceMillis:   inputSilenceMillis,
+		InputNoiseSuppress:   inputNoiseSuppress,
+		NeuTTSRunnerPath:     update.NeuTTSRunnerPath,
+		NeuTTSReferenceWAV:   update.NeuTTSReferenceWAV,
+		NeuTTSReferenceCodes: update.NeuTTSReferenceCodes,
+		NeuTTSReferenceText:  update.NeuTTSReferenceText,
+		NeuTTSBackbone:       update.NeuTTSBackbone,
+		NeuTTSSamplingMode:   neuTTSSamplingMode,
+		NeuTTSSamplerSeed:    neuTTSSamplerSeed,
+		// The stored key survives unless explicitly replaced or cleared.
+		ElevenLabsAPIKey: current.ElevenLabsAPIKey,
+	})
 }
 
 // NormalizeSettings validates settings and fills any invalid version metadata.
@@ -841,6 +880,10 @@ func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	if settings.NeuTTSBackbone == "" {
 		settings.NeuTTSBackbone = defaults.NeuTTSBackbone
 	}
+	if settings.NeuTTSSamplingMode == "" {
+		settings.NeuTTSSamplingMode = defaults.NeuTTSSamplingMode
+		settings.NeuTTSSamplerSeed = defaults.NeuTTSSamplerSeed
+	}
 	if settings.InputMode == "" {
 		settings.InputMode = defaults.InputMode
 	}
@@ -949,6 +992,7 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.NeuTTSReferenceCodes = strings.TrimSpace(settings.NeuTTSReferenceCodes)
 	settings.NeuTTSReferenceText = strings.TrimSpace(settings.NeuTTSReferenceText)
 	settings.NeuTTSBackbone = strings.TrimSpace(settings.NeuTTSBackbone)
+	settings.NeuTTSSamplingMode = strings.TrimSpace(settings.NeuTTSSamplingMode)
 	return settings
 }
 
@@ -973,6 +1017,9 @@ func validateVoiceSettings(settings VoiceSettings) error {
 	}
 	if settings.InputSilenceMillis < 300 || settings.InputSilenceMillis > 3000 {
 		return errors.New("voice input silence delay must be between 300 and 3000 milliseconds")
+	}
+	if !oneOf(settings.NeuTTSSamplingMode, NeuTTSSamplingFixed, NeuTTSSamplingRandom) {
+		return fmt.Errorf("unknown NeuTTS sampling mode %q", settings.NeuTTSSamplingMode)
 	}
 	return nil
 }

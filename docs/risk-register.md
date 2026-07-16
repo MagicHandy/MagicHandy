@@ -504,8 +504,12 @@ that choice, uses sample-identical incremental overlap-add, and adds a bounded
 memory-only exact-text cache. All four selected-seed corpus clips retained their
 target words; a repeated 4.70 second clip replayed byte-identically in 0 ms after
 a 1.91 second miss. This removes known same-input variability but does not close
-the representative-reference or subjective-listening risk. See
-`docs/neutts-quality-performance.md`.
+the representative-reference or subjective-listening risk. Advanced Voice
+settings retain fixed seed 3 by default, allow another reproducible 32-bit seed
+for reference-specific auditioning, and expose per-request randomness only as
+an explicit **Varied** mode with cache disabled. The UI states that cache loss;
+documentation records that randomization can reintroduce the measured quality
+variance. See `docs/neutts-quality-performance.md`.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

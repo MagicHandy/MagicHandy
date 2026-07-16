@@ -156,13 +156,15 @@
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.host-path-row {
+.host-path-row,
+.field-action-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   gap: 8px;
 }
-.host-path-row .btn {
+.host-path-row .btn,
+.field-action-row .btn {
   min-height: 40px;
   padding-inline: 14px;
 }
@@ -323,6 +325,12 @@ textarea:disabled {
 .segmented button[aria-pressed="true"] {
   background: var(--surface-3);
   color: var(--text);
+}
+.neutts-sampling-control {
+  width: min(100%, 240px);
+}
+.neutts-sampling-control button {
+  flex: 1 1 0;
 }
 
 /* ---- Motion visualizer ---- */
@@ -1194,10 +1202,12 @@ textarea:disabled {
 }
 
 @media (max-width: 560px) {
-  .host-path-row {
+  .host-path-row,
+  .field-action-row {
     grid-template-columns: 1fr;
   }
-  .host-path-row .btn {
+  .host-path-row .btn,
+  .field-action-row .btn {
     justify-self: start;
   }
   .voice-request-row {

@@ -37,7 +37,7 @@ const (
 	managedNeuTTSSource      = "ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f"
 	managedNeuTTSRust        = "1.94.0-x86_64-pc-windows-msvc"
 	managedNeuTTSProtocol    = "magichandy_neutts_stream_v1"
-	managedNeuTTSSamplerSeed = 3
+	managedNeuTTSSamplerSeed = int(config.DefaultNeuTTSSamplerSeed)
 	managedNeuTTSAudioMix    = "incremental_overlap_add_v1"
 	managedNeuTTSCacheBytes  = 8 << 20
 	managedNeuTTSCacheItems  = 8
@@ -171,16 +171,24 @@ func resolveNeuTTSRuntime(settings config.VoiceSettings, dataDir string) (string
 }
 
 func managedNeuTTSEnvironment(settings config.VoiceSettings, hfHome string) map[string]string {
-	if strings.TrimSpace(settings.NeuTTSRunnerPath) != "" {
-		return nil
-	}
 	environment := map[string]string{
-		"MAGICHANDY_NEUTTS_SEED": strconv.Itoa(managedNeuTTSSamplerSeed),
+		"MAGICHANDY_NEUTTS_SEED": neuTTSSamplerEnvironmentValue(settings),
 	}
-	if hfHome != "" {
+	if strings.TrimSpace(settings.NeuTTSRunnerPath) == "" && hfHome != "" {
 		environment["HF_HOME"] = hfHome
 	}
 	return environment
+}
+
+func neuTTSSamplerEnvironmentValue(settings config.VoiceSettings) string {
+	if settings.NeuTTSSamplingMode == config.NeuTTSSamplingRandom {
+		return config.NeuTTSSamplingRandom
+	}
+	seed := settings.NeuTTSSamplerSeed
+	if settings.NeuTTSSamplingMode == "" {
+		seed = config.DefaultNeuTTSSamplerSeed
+	}
+	return strconv.FormatUint(uint64(seed), 10)
 }
 
 func neuttsRuntimeInstalled(runner, hfHome, backbone string) bool {

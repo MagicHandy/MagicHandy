@@ -106,6 +106,8 @@ export function SettingsRoute() {
         neutts_reference_codes: s.voice?.neutts_reference_codes ?? "",
         neutts_reference_text: s.voice?.neutts_reference_text ?? "",
         neutts_backbone: s.voice?.neutts_backbone ?? "",
+        neutts_sampling_mode: s.voice?.neutts_sampling_mode ?? "fixed",
+        neutts_sampler_seed: s.voice?.neutts_sampler_seed ?? 3,
         ...(newElevenLabsKey.trim() ? { elevenlabs_api_key: newElevenLabsKey } : {}),
         clear_elevenlabs_key: clearElevenLabsKey,
       },
@@ -141,6 +143,7 @@ export function SettingsRoute() {
     tts_providers: [],
     asr_providers: [],
     parakeet_sources: [],
+    neutts_sampling_modes: [],
   };
   const sel = (value: string, onChange: (v: string) => void, options: string[] = []) => (
     <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>

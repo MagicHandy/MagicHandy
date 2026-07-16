@@ -253,6 +253,8 @@ export interface VoiceSettings {
   neutts_reference_codes?: string;
   neutts_reference_text?: string;
   neutts_backbone?: string;
+  neutts_sampling_mode?: "fixed" | "random" | string;
+  neutts_sampler_seed?: number;
   // Read side only: the stored ElevenLabs key is never returned, just a flag.
   elevenlabs_key_set?: boolean;
 }
@@ -286,6 +288,8 @@ export interface VoiceSettingsUpdate {
   neutts_reference_codes: string;
   neutts_reference_text: string;
   neutts_backbone: string;
+  neutts_sampling_mode: "fixed" | "random" | string;
+  neutts_sampler_seed: number;
   elevenlabs_api_key?: string;
   clear_elevenlabs_key: boolean;
 }
@@ -371,6 +375,7 @@ export interface OptionHints {
   tts_providers?: string[];
   asr_providers?: string[];
   parakeet_sources?: string[];
+  neutts_sampling_modes?: string[];
 }
 
 export interface PublicSettings {

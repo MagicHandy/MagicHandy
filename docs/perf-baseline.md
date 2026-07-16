@@ -99,6 +99,11 @@ Still required for current-build evidence:
   34 ms. Both returned the same 277,484-byte WAV with SHA-256
   `f8ef77eee28a70ba649c5e0ee2811a4beccf15af3d7755c5399a04235f4b6eec`;
   the shared queue returned to zero and the runner process remained resident.
+- The optional NeuTTS sampling settings add 2,038 raw / 535 gzip browser bytes:
+  the complete embedded UI is 820,158 raw / 543,823 gzip bytes, and HTML/CSS/JS
+  is 375,922 raw / 106,396 gzip bytes. Plain/stripped `CGO_ENABLED=0` binaries
+  are 20,272,128 / 14,220,288 bytes. The runtime model and cache budgets are
+  unchanged; random mode explicitly disables the existing PCM cache.
 - A clean full-feature Windows PowerShell 5.1 update migrated the installed
   schema-3 CUDA/WGPU runtime to schema 4 in 11 minutes; the pinned native runner
   build took 8 minutes 32 seconds. An initial quality-probe failure left the old
