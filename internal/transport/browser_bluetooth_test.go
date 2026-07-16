@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -81,6 +82,55 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 	}
 	if diagnostics.CommandCount != 1 {
 		t.Fatalf("command count = %d, want 1", diagnostics.CommandCount)
+	}
+}
+
+func TestBrowserBluetoothBridgeIgnoresUnknownAndLateAcks(t *testing.T) {
+	bridge := NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(BrowserBluetoothClientStatus{
+		ClientID:  "client-1",
+		Connected: &connected,
+	})
+
+	for index := range 100 {
+		bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{
+			ID: fmt.Sprintf("unknown-%d", index),
+			OK: true,
+		})
+	}
+	if count := len(bridge.acks); count != 0 {
+		t.Fatalf("unknown acknowledgements retained = %d, want 0", count)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan BrowserBluetoothBridgeAck, 1)
+	go func() {
+		done <- bridge.SendCommand(ctx, CommandKindPointsAdd, "hsp/add", nil)
+	}()
+	commands, err := bridge.NextCommands(context.Background(), "client-1", time.Second)
+	if err != nil || len(commands) != 1 {
+		t.Fatalf("NextCommands = %+v, %v; want one command", commands, err)
+	}
+	cancel()
+	select {
+	case ack := <-done:
+		if ack.OK || ack.Status != "bridge_canceled" {
+			t.Fatalf("canceled command ack = %+v", ack)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled SendCommand did not return")
+	}
+
+	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{ID: commands[0].ID, OK: true})
+	if count := len(bridge.acks); count != 0 {
+		t.Fatalf("late acknowledgement retained = %d, want 0", count)
+	}
+}
+
+func TestSafeShortStringDoesNotSplitUTF8(t *testing.T) {
+	if got := safeShortString("  élan  ", 1); got != "é" {
+		t.Fatalf("safeShortString = %q, want one complete rune", got)
 	}
 }
 

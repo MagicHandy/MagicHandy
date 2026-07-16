@@ -23,9 +23,12 @@ const (
 	leadSafetyPaddingMillis = int64(250)
 	minLeadMillis           = int64(500)
 	maxLeadMillis           = int64(2000)
+	defaultStopTimeout      = 15 * time.Second
 )
 
 type loopRecoveryContextKey struct{}
+
+var errRunInvalidated = errors.New("motion run was invalidated")
 
 // EngineOptions configures a motion engine instance.
 type EngineOptions struct {
@@ -40,7 +43,8 @@ type EngineOptions struct {
 
 // Engine owns one active semantic motion loop.
 type Engine struct {
-	mu sync.Mutex
+	mu        sync.Mutex
+	commandMu sync.Mutex
 
 	transport        transport.Transport
 	traces           *diagnostics.TraceRing
@@ -51,6 +55,7 @@ type Engine struct {
 	streamIDPrefix   string
 
 	running          bool
+	starting         bool
 	completing       bool
 	paused           bool
 	pausedPhase      float64
@@ -58,7 +63,9 @@ type Engine struct {
 	pausedTarget     MotionTarget
 	runMillisAccum   int64
 	generation       uint64
+	runEpoch         uint64
 	stopGeneration   uint64
+	stopBarriers     uint64
 	streamID         string
 	plan             MotionPlan
 	settings         config.MotionSettings
@@ -69,6 +76,7 @@ type Engine struct {
 	lastError        string
 	latencyMillis    []int64
 	bridgeSample     *MotionSample
+	runCtx           context.Context
 	cancel           context.CancelFunc
 	done             chan struct{}
 }
@@ -76,6 +84,7 @@ type Engine struct {
 // ActiveMotionState is a safe snapshot of the current motion loop.
 type ActiveMotionState struct {
 	Running                    bool                     `json:"running"`
+	Starting                   bool                     `json:"starting"`
 	Completing                 bool                     `json:"completing"`
 	Paused                     bool                     `json:"paused"`
 	RunningMillis              int64                    `json:"running_ms"`
@@ -140,25 +149,28 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 	// starting motion the user just stopped. The loop must outlive the request,
 	// so loopCtx drops the request's cancellation while keeping its values.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	if err := e.begin(ctx, target, settings, cancel, admission); err != nil {
+	runEpoch, err := e.begin(ctx, loopCtx, target, settings, cancel, admission)
+	if err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.setStrokeWindow(loopCtx, "start_stroke_window"); err != nil {
-		e.forceStopped(err)
+	if err := e.setStrokeWindow(loopCtx, runEpoch, "start_stroke_window", false); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "start_stroke_window_failed", err)
 		return e.Snapshot(), err
 	}
-	if err := e.dispatchNextChunk(loopCtx, "start_points"); err != nil {
-		e.forceStopped(err)
+	if err := e.dispatchNextChunk(loopCtx, runEpoch, "start_points"); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "start_points_failed", err)
 		return e.Snapshot(), err
 	}
-	if err := e.play(loopCtx); err != nil {
-		e.forceStopped(err)
+	if err := e.play(loopCtx, runEpoch); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "start_play_failed", err)
 		return e.Snapshot(), err
 	}
-	e.alignPlaybackStart()
+	e.alignPlaybackStart(runEpoch)
 
-	e.startLoop(loopCtx)
+	if !e.startLoop(loopCtx, runEpoch) {
+		return e.Snapshot(), errRunInvalidated
+	}
 	return e.Snapshot(), nil
 }
 
@@ -167,13 +179,17 @@ func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason st
 	if reason == "" {
 		reason = "target_applied"
 	}
-	if err := e.ensureLeadBuffer(ctx, "retarget_lead_points"); err != nil {
+	runEpoch, err := e.activeRunEpoch()
+	if err != nil {
 		return e.Snapshot(), err
 	}
-	if err := e.retarget(target, reason); err != nil {
+	if err := e.ensureLeadBuffer(ctx, runEpoch, "retarget_lead_points"); err != nil {
 		return e.Snapshot(), err
 	}
-	err := e.dispatchNextChunk(ctx, "retarget_points")
+	if err := e.retarget(runEpoch, target, reason); err != nil {
+		return e.Snapshot(), err
+	}
+	err = e.dispatchNextChunk(ctx, runEpoch, "retarget_points")
 	return e.Snapshot(), err
 }
 
@@ -182,20 +198,31 @@ func (e *Engine) RefreshSettings(ctx context.Context, settings config.MotionSett
 	if reason == "" {
 		reason = "settings_refresh"
 	}
-	if err := e.ensureLeadBuffer(ctx, "settings_lead_points"); err != nil {
+	runEpoch, active := e.runEpochIfActive()
+	if !active {
+		e.mu.Lock()
+		if !e.running {
+			e.settings = normalizeMotionSettings(settings)
+			e.mu.Unlock()
+			return e.Snapshot(), nil
+		}
+		e.mu.Unlock()
+		return e.Snapshot(), errRunInvalidated
+	}
+	if err := e.ensureLeadBuffer(ctx, runEpoch, "settings_lead_points"); err != nil {
 		return e.Snapshot(), err
 	}
-	active, err := e.refreshSettings(settings, reason)
+	stillActive, err := e.refreshSettings(runEpoch, settings, reason)
 	if err != nil {
 		return e.Snapshot(), err
 	}
-	if !active {
+	if !stillActive {
 		return e.Snapshot(), nil
 	}
-	if err := e.setStrokeWindow(ctx, "settings_stroke_window"); err != nil {
+	if err := e.setStrokeWindow(ctx, runEpoch, "settings_stroke_window", true); err != nil {
 		return e.Snapshot(), err
 	}
-	err = e.dispatchNextChunk(ctx, "settings_points")
+	err = e.dispatchNextChunk(ctx, runEpoch, "settings_points")
 	return e.Snapshot(), err
 }
 
@@ -220,24 +247,32 @@ func (e *Engine) Pause(ctx context.Context, reason string) (ActiveMotionState, e
 	e.frozenPhase = e.pausedPhase
 	e.pausedTarget = e.plan.Target
 	e.runMillisAccum += played
+	pauseAdmission := e.stopGeneration
+	e.stopBarriers++
+	cancel, done, _ := e.stopLoopLocked()
 	e.mu.Unlock()
 
-	cancel, done, active := e.stopLoop()
-	if active {
-		cancel()
-		waitForLoop(done)
-	}
+	cancel()
+	waitForLoop(done)
 
-	result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
-	e.recordTransportResult(reason, nil, result, err)
+	e.commandMu.Lock()
+	stopCtx, stopCancel := detachedStopContext(ctx)
+	stopCommand := transport.StopCommand{Reason: reason}
+	result, err := e.transport.Stop(stopCtx, stopCommand)
+	stopCancel()
+	e.recordTransportResult(reason, nil, transport.Command{Kind: transport.CommandKindStop, Stop: &stopCommand}, result, err)
 	e.finishStopped(result, err)
 
 	// The loop is dead either way, so the engine is paused even if the
 	// transport stop errored; the error stays visible in the snapshot.
 	e.mu.Lock()
-	e.paused = true
-	e.traceStateLocked("paused", phaseAnnotation(true))
+	if e.stopGeneration == pauseAdmission {
+		e.paused = true
+		e.traceStateLocked("paused", phaseAnnotation(true))
+	}
+	e.endStopBarrierLocked()
 	e.mu.Unlock()
+	e.commandMu.Unlock()
 	return e.Snapshot(), err
 }
 
@@ -250,41 +285,46 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	// Startup commands run on loopCtx so a concurrent Stop cancels in-flight
 	// resume setup, same as Start.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	if err := e.beginResume(reason, cancel); err != nil {
+	runEpoch, resumeAdmission, err := e.beginResume(loopCtx, reason, cancel)
+	if err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.setStrokeWindow(loopCtx, "resume_stroke_window"); err != nil {
-		e.forceStopped(err)
-		e.restorePaused()
+	if err := e.setStrokeWindow(loopCtx, runEpoch, "resume_stroke_window", false); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "resume_stroke_window_failed", err)
+		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	if err := e.dispatchNextChunk(loopCtx, "resume_points"); err != nil {
-		e.forceStopped(err)
-		e.restorePaused()
+	if err := e.dispatchNextChunk(loopCtx, runEpoch, "resume_points"); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "resume_points_failed", err)
+		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	if err := e.play(loopCtx); err != nil {
-		e.forceStopped(err)
-		e.restorePaused()
+	if err := e.play(loopCtx, runEpoch); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "resume_play_failed", err)
+		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	e.alignPlaybackStart()
+	e.alignPlaybackStart(runEpoch)
 
-	e.startLoop(loopCtx)
+	if !e.startLoop(loopCtx, runEpoch) {
+		return e.Snapshot(), errRunInvalidated
+	}
 	return e.Snapshot(), nil
 }
 
-func (e *Engine) beginResume(reason string, cancel context.CancelFunc) error {
+func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel context.CancelFunc) (uint64, uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.running || e.completing {
-		return errors.New("motion is already running")
+	if e.running || e.completing || e.stopBarriers > 0 {
+		return 0, 0, errors.New("motion is running or stopping")
 	}
 	if !e.paused {
-		return errors.New("motion is not paused")
+		return 0, 0, errors.New("motion is not paused")
 	}
 
+	e.runEpoch++
+	e.runCtx = loopCtx
 	e.cancel = cancel
 	e.done = nil
 	e.generation++
@@ -300,17 +340,20 @@ func (e *Engine) beginResume(reason string, cancel context.CancelFunc) error {
 	plan.PhasePreserved = true
 	e.plan = plan
 	e.paused = false
+	e.starting = true
 	e.running = true
 	e.traceStateLocked(reason, phaseAnnotation(true))
-	return nil
+	return e.runEpoch, e.stopGeneration, nil
 }
 
 // restorePaused re-marks the engine paused after a failed resume so the
 // frozen phase and target survive for a retry.
-func (e *Engine) restorePaused() {
+func (e *Engine) restorePaused(runEpoch uint64, stopAdmission uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.paused = true
+	if e.runEpoch == runEpoch && e.stopGeneration == stopAdmission && !e.running && e.stopBarriers == 0 {
+		e.paused = true
+	}
 }
 
 // Stop cancels active motion and sends an explicit transport stop. It also
@@ -322,30 +365,34 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 	}
 	e.mu.Lock()
 	e.stopGeneration++
-	e.mu.Unlock()
-	cancel, done, active := e.stopLoop()
+	e.stopBarriers++
+	cancel, done, active := e.stopLoopLocked()
 	if !active {
-		e.mu.Lock()
 		e.paused = false
 		e.runMillisAccum = 0
-		e.mu.Unlock()
-		// Every Stop activation reaches the transport, including repeated
-		// idle and paused stops. Device state can outlive engine state.
-		result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
-		e.recordTransportResult(reason, nil, result, err)
-		e.finishStopped(result, err)
-		return e.Snapshot(), err
 	}
-	cancel()
-	waitForLoop(done)
+	e.mu.Unlock()
+	if active {
+		cancel()
+		waitForLoop(done)
+	}
 
-	result, err := e.transport.Stop(ctx, transport.StopCommand{Reason: reason})
-	e.recordTransportResult(reason, nil, result, err)
+	// Every Stop activation reaches the transport, including repeated idle
+	// and paused stops. commandMu makes this the final mutating wire command
+	// for the invalidated run.
+	e.commandMu.Lock()
+	stopCtx, stopCancel := detachedStopContext(ctx)
+	stopCommand := transport.StopCommand{Reason: reason}
+	result, err := e.transport.Stop(stopCtx, stopCommand)
+	stopCancel()
+	e.recordTransportResult(reason, nil, transport.Command{Kind: transport.CommandKindStop, Stop: &stopCommand}, result, err)
 	e.finishStopped(result, err)
 	e.mu.Lock()
 	e.paused = false
 	e.runMillisAccum = 0
+	e.endStopBarrierLocked()
 	e.mu.Unlock()
+	e.commandMu.Unlock()
 	return e.Snapshot(), err
 }
 
@@ -356,20 +403,21 @@ func (e *Engine) Snapshot() ActiveMotionState {
 	return e.snapshotLocked()
 }
 
-func (e *Engine) begin(ctx context.Context, target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc, admission uint64) error {
+func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc, admission uint64) (uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := ctx.Err(); err != nil {
-		return err
+		return 0, err
 	}
 	if e.stopGeneration != admission {
-		return errors.New("motion start was invalidated by Stop")
+		return 0, errors.New("motion start was invalidated by Stop")
 	}
-	if e.running || e.completing {
-		return errors.New("motion is already running")
+	if e.running || e.completing || e.stopBarriers > 0 {
+		return 0, errors.New("motion is running or stopping")
 	}
 
 	settings = normalizeMotionSettings(settings)
+	e.runEpoch++
 	e.generation++
 	e.streamID = fmt.Sprintf("%s-%06d", e.streamIDPrefix, e.generation)
 	e.settings = settings
@@ -382,6 +430,7 @@ func (e *Engine) begin(ctx context.Context, target MotionTarget, settings config
 	e.bridgeSample = nil
 	e.paused = false
 	e.completing = false
+	e.starting = true
 	e.frozenPhase = 0
 	e.runMillisAccum = 0
 	// The loop cancel is live before running is published, so any concurrent
@@ -389,18 +438,19 @@ func (e *Engine) begin(ctx context.Context, target MotionTarget, settings config
 	// loop goroutine actually launches (startLoop); until then it is nil, and
 	// waitForLoop tolerates nil.
 	e.cancel = cancel
+	e.runCtx = loopCtx
 	e.done = nil
 	e.plan = NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")
-	return nil
+	return e.runEpoch, nil
 }
 
-func (e *Engine) retarget(target MotionTarget, reason string) error {
+func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if !e.running {
-		return errors.New("motion is not running")
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		return err
 	}
 
 	now := e.now()
@@ -431,12 +481,11 @@ func (e *Engine) retarget(target MotionTarget, reason string) error {
 	return nil
 }
 
-func (e *Engine) refreshSettings(settings config.MotionSettings, reason string) (bool, error) {
+func (e *Engine) refreshSettings(runEpoch uint64, settings config.MotionSettings, reason string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if !e.running {
-		e.settings = normalizeMotionSettings(settings)
-		return false, nil
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		return false, err
 	}
 
 	settings = normalizeMotionSettings(settings)
@@ -475,23 +524,25 @@ func (e *Engine) refreshSettings(settings config.MotionSettings, reason string) 
 // installed by begin/beginResume. If a concurrent Stop/Pause flipped running
 // false during setup, that stop already cancelled loopCtx and cleared the
 // handles, so there is nothing to launch.
-func (e *Engine) startLoop(loopCtx context.Context) {
+func (e *Engine) startLoop(loopCtx context.Context, runEpoch uint64) bool {
 	done := make(chan struct{})
 	e.mu.Lock()
-	if !e.running {
+	if e.validateRunLocked(runEpoch) != nil {
 		e.mu.Unlock()
-		return
+		return false
 	}
+	e.starting = false
 	e.done = done
 	e.mu.Unlock()
 
 	go func() {
 		defer close(done)
-		e.runLoop(loopCtx)
+		e.runLoop(loopCtx, runEpoch)
 	}()
+	return true
 }
 
-func (e *Engine) runLoop(ctx context.Context) {
+func (e *Engine) runLoop(ctx context.Context, runEpoch uint64) {
 	ctx = context.WithValue(ctx, loopRecoveryContextKey{}, true)
 	ticker := time.NewTicker(e.dispatchInterval)
 	defer ticker.Stop()
@@ -500,10 +551,10 @@ func (e *Engine) runLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if e.completeProgramIfNeeded(ctx) {
+			if e.completeProgramIfNeeded(ctx, runEpoch) {
 				return
 			}
-			if err := e.dispatchIfLeadNeeded(ctx, "append_points"); err != nil {
+			if err := e.dispatchIfLeadNeeded(ctx, runEpoch, "append_points"); err != nil {
 				e.rememberError(err)
 			}
 		}
@@ -512,33 +563,46 @@ func (e *Engine) runLoop(ctx context.Context) {
 
 // completeProgramIfNeeded ends finite content through the engine-owned stop
 // path. Repeating patterns never enter this branch.
-func (e *Engine) completeProgramIfNeeded(ctx context.Context) bool {
+func (e *Engine) completeProgramIfNeeded(ctx context.Context, runEpoch uint64) bool {
 	e.mu.Lock()
-	if !e.running || e.plan.Loop || !e.plan.CompleteAt(e.estimatedPlaybackMillisLocked(e.now())) {
+	if e.validateRunLocked(runEpoch) != nil || e.plan.Loop || !e.plan.CompleteAt(e.estimatedPlaybackMillisLocked(e.now())) {
 		e.mu.Unlock()
 		return false
 	}
 	e.running = false
+	e.starting = false
 	e.completing = true
+	e.stopBarriers++
+	cancel := e.cancel
+	e.cancel = nil
+	e.runCtx = nil
 	e.frozenPhase = 1
 	e.runMillisAccum = 0
 	e.traceStateLocked("program_completed", "finite_content=true")
 	e.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 
-	result, err := e.transport.Stop(context.WithoutCancel(ctx), transport.StopCommand{Reason: "program_completed"})
-	e.recordTransportResult("program_completed", nil, result, err)
+	e.commandMu.Lock()
+	stopCommand := transport.StopCommand{Reason: "program_completed"}
+	stopCtx, stopCancel := detachedStopContext(ctx)
+	result, err := e.transport.Stop(stopCtx, stopCommand)
+	stopCancel()
+	e.recordTransportResult("program_completed", nil, transport.Command{Kind: transport.CommandKindStop, Stop: &stopCommand}, result, err)
 	e.finishStopped(result, err)
 	e.mu.Lock()
 	e.completing = false
 	e.cancel = nil
+	e.runCtx = nil
 	e.done = nil
+	e.endStopBarrierLocked()
 	e.mu.Unlock()
+	e.commandMu.Unlock()
 	return true
 }
 
-func (e *Engine) stopLoop() (context.CancelFunc, <-chan struct{}, bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+func (e *Engine) stopLoopLocked() (context.CancelFunc, <-chan struct{}, bool) {
 	if e.completing {
 		return func() {}, e.done, true
 	}
@@ -547,42 +611,59 @@ func (e *Engine) stopLoop() (context.CancelFunc, <-chan struct{}, bool) {
 	}
 	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
 	e.running = false
+	e.starting = false
 	cancel := e.cancel
 	done := e.done
 	e.cancel = nil
+	e.runCtx = nil
 	e.done = nil
+	if cancel == nil {
+		cancel = func() {}
+	}
 	return cancel, done, true
 }
 
-func (e *Engine) ensureLeadBuffer(ctx context.Context, reason string) error {
+func (e *Engine) endStopBarrierLocked() {
+	if e.stopBarriers > 0 {
+		e.stopBarriers--
+	}
+}
+
+func (e *Engine) ensureLeadBuffer(ctx context.Context, runEpoch uint64, reason string) error {
 	for range 64 {
-		if err := e.ensurePlaybackHealthy(ctx, reason); err != nil {
+		if err := e.ensurePlaybackHealthy(ctx, runEpoch, reason); err != nil {
 			return err
 		}
 		needsLead := false
 		e.mu.Lock()
-		if e.running {
+		if e.validateRunLocked(runEpoch) == nil {
 			requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
 			needsLead = e.nextSampleMillis < requiredTail
+		} else {
+			e.mu.Unlock()
+			return errRunInvalidated
 		}
 		e.mu.Unlock()
 		if !needsLead {
 			return nil
 		}
-		if err := e.dispatchNextChunk(ctx, reason); err != nil {
+		if err := e.dispatchNextChunk(ctx, runEpoch, reason); err != nil {
 			return err
 		}
 	}
 	return errors.New("motion retarget could not build enough lead buffer")
 }
 
-func (e *Engine) ensurePlaybackHealthy(ctx context.Context, reason string) error {
+func (e *Engine) ensurePlaybackHealthy(ctx context.Context, runEpoch uint64, reason string) error {
+	if err := e.validateRun(runEpoch); err != nil {
+		return err
+	}
 	diagnostics := e.transport.Diagnostics()
 	if !playbackStateNeedsRecovery(diagnostics.PlaybackState) {
 		return nil
 	}
 	message := fmt.Sprintf("motion recovery stopped active stream after playback state %q during %s", diagnostics.PlaybackState, reason)
-	return e.stopForRecovery(ctx, "recovery_"+reason, message)
+	return e.stopForRecovery(ctx, runEpoch, "recovery_"+reason, message)
 }
 
 // stopForRecovery halts the active stream when playback goes unhealthy. It is
@@ -590,35 +671,65 @@ func (e *Engine) ensurePlaybackHealthy(ctx context.Context, reason string) error
 // dispatchIfLeadNeeded -> ensurePlaybackHealthy), so loop-originated recovery
 // must not wait on the loop's own done channel. Request-originated recovery can
 // wait to drain an in-flight append before sending the safety stop.
-func (e *Engine) stopForRecovery(ctx context.Context, reason string, message string) error {
-	e.mu.Lock()
-	if !e.running {
-		e.mu.Unlock()
-		return errors.New(message)
+func (e *Engine) stopForRecovery(ctx context.Context, runEpoch uint64, reason string, message string) error {
+	recovery, err := e.prepareRecovery(runEpoch, message)
+	if err != nil {
+		return err
 	}
-	cancel := e.cancel
-	done := e.done
+	return e.finishRecovery(ctx, reason, message, recovery)
+}
+
+type recoveryState struct {
+	cancel context.CancelFunc
+	done   <-chan struct{}
+}
+
+func (e *Engine) prepareRecovery(runEpoch uint64, message string) (recoveryState, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.validateRunLocked(runEpoch) != nil {
+		return recoveryState{}, errRunInvalidated
+	}
+	e.stopBarriers++
+	recovery := recoveryState{cancel: e.cancel, done: e.done}
 	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
 	e.running = false
+	e.starting = false
 	e.cancel = nil
+	e.runCtx = nil
 	e.done = nil
 	e.lastError = message
-	e.mu.Unlock()
+	return recovery, nil
+}
 
-	if cancel != nil {
-		cancel()
+func (e *Engine) finishRecovery(ctx context.Context, reason string, message string, recovery recoveryState) error {
+	if recovery.cancel != nil {
+		recovery.cancel()
 		if !recoveryFromLoop(ctx) {
-			waitForLoop(done)
+			waitForLoop(recovery.done)
 		}
 	}
 	// Cancelling the loop above also cancels ctx when recovery is reached from
 	// the dispatch loop. The safety stop must still go out, so send it on a
 	// context detached from that cancellation (a cancelled ctx would abort the
 	// stop on the real Cloud/Bluetooth transports).
-	stopCtx := context.WithoutCancel(ctx)
-	result, err := e.transport.Stop(stopCtx, transport.StopCommand{Reason: reason})
-	e.recordTransportResultWithAnnotation(reason, nil, result, err, "recovery="+message)
+	stopCtx, stopCancel := detachedStopContext(ctx)
+	e.commandMu.Lock()
+	stopCommand := transport.StopCommand{Reason: reason}
+	result, err := e.transport.Stop(stopCtx, stopCommand)
+	stopCancel()
+	e.recordTransportResultWithAnnotation(reason, nil, transport.Command{
+		Kind: transport.CommandKindStop,
+		Stop: &stopCommand,
+	}, result, err, "recovery="+message)
 	e.finishStopped(result, err)
+	e.mu.Lock()
+	if err == nil {
+		e.lastError = message
+	}
+	e.endStopBarrierLocked()
+	e.mu.Unlock()
+	e.commandMu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -628,6 +739,17 @@ func (e *Engine) stopForRecovery(ctx context.Context, reason string, message str
 func recoveryFromLoop(ctx context.Context) bool {
 	fromLoop, _ := ctx.Value(loopRecoveryContextKey{}).(bool)
 	return fromLoop
+}
+
+func detachedStopContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		return context.WithTimeout(context.Background(), defaultStopTimeout)
+	}
+	base := context.WithoutCancel(ctx)
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) > 0 {
+		return context.WithDeadline(base, deadline)
+	}
+	return context.WithTimeout(base, defaultStopTimeout)
 }
 
 func (e *Engine) estimatedPlaybackMillisLocked(now time.Time) int64 {
@@ -641,7 +763,7 @@ func (e *Engine) estimatedPlaybackMillisLocked(now time.Time) int64 {
 	return elapsed
 }
 
-func (e *Engine) alignPlaybackStart() {
+func (e *Engine) alignPlaybackStart(runEpoch uint64) {
 	provider, ok := e.transport.(transport.PlaybackStartTimeProvider)
 	if !ok {
 		return
@@ -651,7 +773,7 @@ func (e *Engine) alignPlaybackStart() {
 		return
 	}
 	e.mu.Lock()
-	if e.running {
+	if e.validateRunLocked(runEpoch) == nil {
 		e.startedAt = startedAt
 	}
 	e.mu.Unlock()
@@ -715,6 +837,8 @@ func (e *Engine) applyDefaults() {
 	}
 	if e.sampleInterval <= 0 {
 		e.sampleInterval = defaultSampleInterval
+	} else if e.sampleInterval < time.Millisecond {
+		e.sampleInterval = time.Millisecond
 	}
 	if e.streamIDPrefix == "" {
 		e.streamIDPrefix = defaultStreamPrefix

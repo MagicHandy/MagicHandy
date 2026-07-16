@@ -84,6 +84,20 @@ Stop is global and explicit. It must:
   and no-engine states
 - mark the engine stopped even if the transport stop fails
 - surface stop failure in diagnostics
+- advance the run/transport Stop epoch before waiting on in-flight work, reject
+  commands admitted against an older epoch, and serialize the final transport
+  Stop after every earlier mutating command has drained
+- cancel both loop-originated and request-originated transport calls through
+  the engine run context; a caller waiting behind Stop must recheck its run
+  epoch before it can reach the transport
+
+An append, stroke-window, or startup command can fail after the remote side has
+accepted it. The engine therefore treats an unexplained mutating-command error
+as an uncertain device state: it marks that run inactive and attempts an
+explicit recovery Stop. It must not skip the failed chunk and continue the
+timeline. Cloud REST and Browser Bluetooth also keep their own Stop admission
+gate so direct transport users receive the same stale-command rejection as the
+Intiface generation barrier.
 
 This is a safety gate, not a convenience. It must be covered by goroutine-leak
 and stop-teardown tests: after stop during an active retarget, zero motion
@@ -99,3 +113,6 @@ This contract prevents common regressions where:
 - active retargets restart at phase zero
 - transport failures look like planner pauses
 - modes bypass the shared motion path
+- a queued append reaches the wire after Stop
+- persisted settings report live success when their active transport refresh
+  actually failed

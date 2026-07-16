@@ -216,6 +216,14 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    Phase 16
    must provide checksummed prebuilt runtimes before the GUI setup path can avoid
    installing Git/CMake/Visual Studio rather than merely automating them.
+9. **Motion/transport concurrency audit (2026-07-16)**: engine commands are
+   serialized per run, request-originated calls inherit run cancellation, and
+   Stop is a final wire barrier that blocks new starts until every overlapping
+   Stop completes. Uncertain append/setup failures force recovery Stop instead
+   of skipping timeline data. Cloud REST and Browser Bluetooth now reject stale
+   transport admissions, malformed Cloud state cannot pass connection checks,
+   SSE errors cannot echo credential-bearing URLs, and saved settings report a
+   failed live refresh rather than returning false success.
 
 ### UI Shell Redesign (Sidebar Navigation)
 

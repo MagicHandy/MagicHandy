@@ -439,6 +439,11 @@ func (b *BrowserBluetoothBridge) Acknowledge(clientID string, ack BrowserBluetoo
 	if ack.ID == "" {
 		return b.snapshotLocked()
 	}
+	if _, ok := b.inflight[ack.ID]; !ok {
+		// ACK IDs are capabilities issued only through NextCommands. Unknown
+		// IDs and late ACKs have no waiter and must not accumulate in b.acks.
+		return b.snapshotLocked()
+	}
 	delete(b.inflight, ack.ID)
 	ack.Transport = BrowserBluetoothName
 	if ack.Status == "" {
@@ -588,10 +593,14 @@ func (b *BrowserBluetoothBridge) broadcastLocked() {
 
 func safeShortString(value string, limit int) string {
 	value = strings.TrimSpace(value)
-	if limit <= 0 || len(value) <= limit {
+	if limit <= 0 {
 		return value
 	}
-	return value[:limit]
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
 }
 
 func minDuration(a time.Duration, b time.Duration) time.Duration {

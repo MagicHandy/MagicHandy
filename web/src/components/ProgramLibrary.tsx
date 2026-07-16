@@ -25,7 +25,16 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyId, maxI
   const [intensity, setIntensity] = useState(Math.min(30, maxIntensity));
   const activeProgram = engine?.target?.program_id;
   const progress = activeProgram ? Math.round((engine?.phase ?? 0) * 100) : 0;
-  const playbackState = engine?.completing ? "Stopping" : engine?.paused ? "Paused" : engine?.running ? "Playing" : progress >= 100 ? "Complete" : "Stopped";
+  let playbackState = progress >= 100 ? "Complete" : "Stopped";
+  if (engine?.completing) {
+    playbackState = "Stopping";
+  } else if (engine?.paused) {
+    playbackState = "Paused";
+  } else if (engine?.starting) {
+    playbackState = "Starting";
+  } else if (engine?.running) {
+    playbackState = "Playing";
+  }
   useEffect(() => setIntensity((value) => Math.min(value, maxIntensity)), [maxIntensity]);
 
   return (

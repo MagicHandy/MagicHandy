@@ -2,71 +2,140 @@ package motion
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-func (e *Engine) dispatchNextChunk(ctx context.Context, reason string) error {
-	if err := e.ensurePlaybackHealthy(ctx, reason); err != nil {
+func (e *Engine) dispatchNextChunk(ctx context.Context, runEpoch uint64, reason string) error {
+	if err := e.ensurePlaybackHealthy(ctx, runEpoch, reason); err != nil {
 		return err
 	}
-	streamID, points, lastSample := e.nextChunk()
-	if len(points) == 0 {
-		return nil
+
+	e.commandMu.Lock()
+	streamID, points, lastSample, err := e.nextChunk(runEpoch)
+	if err != nil {
+		e.commandMu.Unlock()
+		return err
+	}
+	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
+	if err != nil {
+		e.commandMu.Unlock()
+		return err
 	}
 
-	result, err := e.transport.AppendPoints(ctx, transport.AppendPointsCommand{
+	appendCommand := transport.AppendPointsCommand{
 		StreamID: streamID,
 		Points:   points,
-	})
-	e.recordTransportResult(reason, lastSample, result, err)
+	}
+	result, err := e.transport.AppendPoints(commandCtx, appendCommand)
+	cleanup()
+	e.recordTransportResult(reason, lastSample, transport.Command{
+		Kind:      transport.CommandKindPointsAdd,
+		PointsAdd: &appendCommand,
+	}, result, err)
 	e.rememberResult(result, err)
-	return err
+	if err == nil || ctx.Err() != nil || errors.Is(err, errRunInvalidated) || e.validateRun(runEpoch) != nil {
+		e.commandMu.Unlock()
+		return err
+	}
+
+	message := fmt.Sprintf("motion recovery stopped active stream after point dispatch failed during %s", reason)
+	recovery, prepareErr := e.prepareRecovery(runEpoch, message)
+	e.commandMu.Unlock()
+	if prepareErr != nil {
+		return prepareErr
+	}
+	return e.finishRecovery(ctx, "recovery_"+reason, message, recovery)
 }
 
-func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, reason string) error {
-	if err := e.ensurePlaybackHealthy(ctx, reason); err != nil {
+func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reason string) error {
+	if err := e.ensurePlaybackHealthy(ctx, runEpoch, reason); err != nil {
 		return err
 	}
 	needsLead := false
 	e.mu.Lock()
-	if e.running {
+	if e.validateRunLocked(runEpoch) == nil {
 		requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
 		needsLead = e.nextSampleMillis < requiredTail
+	} else {
+		e.mu.Unlock()
+		return errRunInvalidated
 	}
 	e.mu.Unlock()
 	if !needsLead {
 		return nil
 	}
-	return e.dispatchNextChunk(ctx, reason)
+	return e.dispatchNextChunk(ctx, runEpoch, reason)
 }
 
-func (e *Engine) setStrokeWindow(ctx context.Context, reason string) error {
-	settings := e.motionSettings()
-	result, err := e.transport.SetStrokeWindow(ctx, transport.StrokeWindowCommand{
+func (e *Engine) setStrokeWindow(ctx context.Context, runEpoch uint64, reason string, recoverFailure bool) error {
+	e.commandMu.Lock()
+	settings, err := e.motionSettings(runEpoch)
+	if err != nil {
+		e.commandMu.Unlock()
+		return err
+	}
+	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
+	if err != nil {
+		e.commandMu.Unlock()
+		return err
+	}
+	strokeCommand := transport.StrokeWindowCommand{
 		MinPercent:       settings.StrokeMinPercent,
 		MaxPercent:       settings.StrokeMaxPercent,
 		ReverseDirection: settings.ReverseDirection,
-	})
-	e.recordTransportResult(reason, nil, result, err)
+	}
+	result, err := e.transport.SetStrokeWindow(commandCtx, strokeCommand)
+	cleanup()
+	e.recordTransportResult(reason, nil, transport.Command{
+		Kind:         transport.CommandKindStrokeWindow,
+		StrokeWindow: &strokeCommand,
+	}, result, err)
+	e.rememberResult(result, err)
+	if err == nil || !recoverFailure || ctx.Err() != nil || e.validateRun(runEpoch) != nil {
+		e.commandMu.Unlock()
+		return err
+	}
+
+	message := fmt.Sprintf("motion recovery stopped active stream after stroke-window update failed during %s", reason)
+	recovery, prepareErr := e.prepareRecovery(runEpoch, message)
+	e.commandMu.Unlock()
+	if prepareErr != nil {
+		return prepareErr
+	}
+	return e.finishRecovery(ctx, "recovery_"+reason, message, recovery)
+}
+
+func (e *Engine) play(ctx context.Context, runEpoch uint64) error {
+	e.commandMu.Lock()
+	defer e.commandMu.Unlock()
+	streamID, err := e.currentStreamID(runEpoch)
+	if err != nil {
+		return err
+	}
+	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	playCommand := transport.PlayCommand{StreamID: streamID}
+	result, err := e.transport.Play(commandCtx, playCommand)
+	e.recordTransportResult("play", nil, transport.Command{
+		Kind:       transport.CommandKindPointsPlay,
+		PointsPlay: &playCommand,
+	}, result, err)
 	e.rememberResult(result, err)
 	return err
 }
 
-func (e *Engine) play(ctx context.Context) error {
-	streamID := e.currentStreamID()
-	result, err := e.transport.Play(ctx, transport.PlayCommand{StreamID: streamID})
-	e.recordTransportResult("play", nil, result, err)
-	e.rememberResult(result, err)
-	return err
-}
-
-func (e *Engine) nextChunk() (string, []transport.TimedPoint, *MotionSample) {
+func (e *Engine) nextChunk(runEpoch uint64) (string, []transport.TimedPoint, *MotionSample, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if !e.running {
-		return "", nil, nil
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		return "", nil, nil, err
 	}
 
 	points := make([]transport.TimedPoint, e.chunkSize)
@@ -91,19 +160,25 @@ func (e *Engine) nextChunk() (string, []transport.TimedPoint, *MotionSample) {
 	}
 	e.nextSampleMillis += int64(e.chunkSize) * e.sampleInterval.Milliseconds()
 	e.lastSample = &lastSample
-	return e.streamID, points, &lastSample
+	return e.streamID, points, &lastSample, nil
 }
 
-func (e *Engine) currentStreamID() string {
+func (e *Engine) currentStreamID(runEpoch uint64) (string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.streamID
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		return "", err
+	}
+	return e.streamID, nil
 }
 
-func (e *Engine) motionSettings() config.MotionSettings {
+func (e *Engine) motionSettings(runEpoch uint64) (config.MotionSettings, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.settings
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		return config.MotionSettings{}, err
+	}
+	return e.settings, nil
 }
 
 func (e *Engine) rememberResult(result transport.CommandResult, err error) {
@@ -137,13 +212,20 @@ func (e *Engine) rememberError(err error) {
 // releases the loop context installed by begin/beginResume so a startup
 // failure never leaks a live cancel func, and a concurrent Stop that already
 // cleared e.cancel is a no-op here.
-func (e *Engine) forceStopped(err error) {
+func (e *Engine) forceStopped(runEpoch uint64, err error) bool {
 	e.mu.Lock()
+	if e.runEpoch != runEpoch || !e.running {
+		e.mu.Unlock()
+		return false
+	}
 	cancel := e.cancel
+	e.stopBarriers++
 	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
 	e.running = false
+	e.starting = false
 	e.completing = false
 	e.cancel = nil
+	e.runCtx = nil
 	e.done = nil
 	if err != nil {
 		e.lastError = err.Error()
@@ -153,6 +235,87 @@ func (e *Engine) forceStopped(err error) {
 	if cancel != nil {
 		cancel()
 	}
+	return true
+}
+
+func (e *Engine) abortStartup(ctx context.Context, runEpoch uint64, reason string, cause error) {
+	if cause == nil || errors.Is(cause, errRunInvalidated) || !e.forceStopped(runEpoch, cause) {
+		return
+	}
+
+	e.commandMu.Lock()
+	stopCtx, stopCancel := detachedStopContext(ctx)
+	stopCommand := transport.StopCommand{Reason: reason}
+	result, stopErr := e.transport.Stop(stopCtx, stopCommand)
+	stopCancel()
+	e.recordTransportResultWithAnnotation(reason, nil, transport.Command{
+		Kind: transport.CommandKindStop,
+		Stop: &stopCommand,
+	}, result, stopErr, "startup_failure=true")
+	e.finishStopped(result, stopErr)
+	e.mu.Lock()
+	if stopErr != nil {
+		e.lastError = fmt.Sprintf("%v; safety Stop failed: %v", cause, stopErr)
+	} else {
+		e.lastError = cause.Error()
+	}
+	e.endStopBarrierLocked()
+	e.mu.Unlock()
+	e.commandMu.Unlock()
+}
+
+func (e *Engine) activeRunEpoch() (uint64, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.running {
+		return 0, errors.New("motion is not running")
+	}
+	if e.starting {
+		return 0, errors.New("motion is still starting")
+	}
+	return e.runEpoch, nil
+}
+
+func (e *Engine) runEpochIfActive() (uint64, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.runEpoch, e.running && !e.starting
+}
+
+func (e *Engine) validateRun(runEpoch uint64) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.validateRunLocked(runEpoch)
+}
+
+func (e *Engine) validateRunLocked(runEpoch uint64) error {
+	if !e.running || e.runEpoch != runEpoch {
+		return errRunInvalidated
+	}
+	return nil
+}
+
+func (e *Engine) contextForRun(ctx context.Context, runEpoch uint64) (context.Context, func(), error) {
+	e.mu.Lock()
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		e.mu.Unlock()
+		return nil, nil, err
+	}
+	runCtx := e.runCtx
+	e.mu.Unlock()
+	if runCtx == nil {
+		return nil, nil, errRunInvalidated
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	commandCtx, cancel := context.WithCancel(ctx)
+	stopRunCancel := context.AfterFunc(runCtx, cancel)
+	cleanup := func() {
+		stopRunCancel()
+		cancel()
+	}
+	return commandCtx, cleanup, nil
 }
 
 func (e *Engine) finishStopped(result transport.CommandResult, err error) {

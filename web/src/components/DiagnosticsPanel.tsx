@@ -25,12 +25,22 @@ export function DiagnosticsPanel({ locked = false }: { locked?: boolean }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const engine = state?.motion?.engine;
   const intiface = state?.intiface_transport?.status;
+  let engineState = "idle";
+  if (engine?.starting) {
+    engineState = "starting";
+  } else if (engine?.completing) {
+    engineState = "stopping";
+  } else if (engine?.running) {
+    engineState = "running";
+  } else if (engine?.paused) {
+    engineState = "paused";
+  }
 
   const rows: Array<[string, string]> = [
     ["Version", String(state?.version ?? "dev")],
     ["Commit", String(state?.commit ?? "unknown")],
     ["Uptime", `${state?.uptime_seconds ?? 0}s`],
-    ["Engine", engine?.running ? "running" : engine?.paused ? "paused" : "idle"],
+    ["Engine", engineState],
     ["Estimated position", engine?.last_sample ? `${Math.round(engine.last_sample.position_percent)}%` : "—"],
     ["Data dir", String(state?.data_dir ?? "—")],
     ["Datastore", String(state?.datastore_path ?? "—")],

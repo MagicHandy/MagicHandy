@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -55,10 +56,11 @@ type CloudRESTTransport struct {
 	baseURL *url.URL
 	client  *http.Client
 
-	mu        sync.Mutex
-	hspMu     sync.Mutex
-	nextID    int
-	diagnosis TransportDiagnostics
+	mu         sync.Mutex
+	hspMu      sync.Mutex
+	motionGate motionCommandGate
+	nextID     int
+	diagnosis  TransportDiagnostics
 
 	activeStreamID         string
 	nextHSPStreamID        uint32
@@ -109,6 +111,8 @@ func NewCloudRESTTransport(prerequisites CloudPrerequisites, options CloudBuildO
 
 // Stop sends a Cloud REST stop command.
 func (t *CloudRESTTransport) Stop(ctx context.Context, _ StopCommand) (CommandResult, error) {
+	t.motionGate.beginStop()
+	defer t.motionGate.endStop()
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 
@@ -122,8 +126,15 @@ func (t *CloudRESTTransport) Stop(ctx context.Context, _ StopCommand) (CommandRe
 
 // SetStrokeWindow sends a Cloud REST stroke-window command.
 func (t *CloudRESTTransport) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand) (CommandResult, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		return t.recordBuildError(CommandKindStrokeWindow, err), err
+	}
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindStrokeWindow, err), err
+	}
 
 	request, err := t.builder.BuildStrokeWindow(command)
 	if err != nil {
@@ -138,8 +149,15 @@ func (t *CloudRESTTransport) SetStrokeWindow(ctx context.Context, command Stroke
 
 // AppendPoints sends timed points through Cloud REST HSP.
 func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		return t.recordBuildError(CommandKindPointsAdd, err), err
+	}
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindPointsAdd, err), err
+	}
 
 	streamID, err := cleanStreamID(command.StreamID)
 	if err != nil {
@@ -172,8 +190,15 @@ func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPoi
 
 // Play starts or resumes timed-point playback through Cloud REST HSP.
 func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		return t.recordBuildError(CommandKindPointsPlay, err), err
+	}
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindPointsPlay, err), err
+	}
 
 	command.ServerTimeMillis = t.estimatedServerTimeMillisLocked(ctx)
 	request, err := t.builder.BuildHSPPlay(command)
@@ -220,24 +245,25 @@ func (t *CloudRESTTransport) ListenStateEvents(ctx context.Context, onEvent func
 	request := t.builder.BuildHSPEvents()
 	httpRequest, err := t.newStateEventsRequest(ctx, request)
 	if err != nil {
-		t.recordError(CommandKindHSPEvents, err)
-		return err
+		safeErr := safeCloudEventStreamError(err)
+		t.recordError(CommandKindHSPEvents, safeErr)
+		return safeErr
 	}
 	httpRequest.Header.Set("Accept", "text/event-stream")
 
 	start := time.Now()
 	response, err := t.client.Do(httpRequest)
 	if err != nil {
-		t.recordError(CommandKindHSPEvents, err)
-		return err
+		safeErr := safeCloudEventStreamError(err)
+		t.recordError(CommandKindHSPEvents, safeErr)
+		return safeErr
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 1024))
-		err := fmt.Errorf("cloud REST HSP events returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		err := fmt.Errorf("cloud REST HSP events returned HTTP %d", response.StatusCode)
 		t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
 		return err
 	}
@@ -263,8 +289,9 @@ func (t *CloudRESTTransport) ListenStateEvents(ctx context.Context, onEvent func
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		t.recordError(CommandKindHSPEvents, err)
-		return err
+		safeErr := safeCloudEventStreamError(err)
+		t.recordError(CommandKindHSPEvents, safeErr)
+		return safeErr
 	}
 	emitStateEvent(eventName, dataLines, onEvent)
 	return nil
@@ -534,37 +561,50 @@ func commandFromCloudRequest(request CloudRequest) Command {
 
 func stateSnapshotFromBody(body []byte) HSPStateSnapshot {
 	snapshot := HSPStateSnapshot{
-		Available: true,
-		Raw:       cloneRaw(body),
+		Raw: cloneRaw(body),
 	}
 	var payload any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return snapshot
 	}
+	availableSignal := false
+	unavailableSignal := false
 	for _, candidate := range statePayloadCandidates(payload) {
-		if ok, present := candidate["ok"].(bool); present && !ok {
-			snapshot.Available = false
-		}
-		if available, ok := candidate["hsp_available"].(bool); ok {
-			snapshot.Available = snapshot.Available && available
-		}
-		if available, ok := candidate["available"].(bool); ok {
-			snapshot.Available = snapshot.Available && available
-		}
-		if state, ok := candidate["playback_state"].(string); ok && snapshot.PlaybackState == "" {
-			snapshot.PlaybackState = state
-		}
-		if state, ok := candidate["state"].(string); ok && snapshot.PlaybackState == "" {
-			snapshot.PlaybackState = state
-		}
-		if state, ok := candidate["play_state"].(string); ok && snapshot.PlaybackState == "" {
-			snapshot.PlaybackState = state
-		}
-		if state, ok := candidate["playState"].(string); ok && snapshot.PlaybackState == "" {
-			snapshot.PlaybackState = state
+		available, unavailable := stateAvailabilitySignals(candidate)
+		availableSignal = availableSignal || available
+		unavailableSignal = unavailableSignal || unavailable
+		if snapshot.PlaybackState == "" {
+			snapshot.PlaybackState = statePlaybackValue(candidate)
+			availableSignal = availableSignal || snapshot.PlaybackState != ""
 		}
 	}
+	snapshot.Available = availableSignal && !unavailableSignal
 	return snapshot
+}
+
+func stateAvailabilitySignals(candidate map[string]any) (bool, bool) {
+	availableSignal := false
+	unavailableSignal := false
+	for _, key := range []string{"ok", "hsp_available", "available"} {
+		available, ok := candidate[key].(bool)
+		if !ok {
+			continue
+		}
+		availableSignal = availableSignal || available
+		unavailableSignal = unavailableSignal || !available
+	}
+	return availableSignal, unavailableSignal
+}
+
+func statePlaybackValue(candidate map[string]any) string {
+	for _, key := range []string{"playback_state", "state", "play_state", "playState"} {
+		if state, ok := candidate[key].(string); ok {
+			if state = strings.TrimSpace(state); state != "" {
+				return state
+			}
+		}
+	}
+	return ""
 }
 
 func statePayloadCandidates(payload any) []map[string]any {
@@ -636,24 +676,41 @@ func findServerTimeMillis(value any) (int64, bool) {
 }
 
 func parseServerTimeValue(value any) (int64, bool) {
+	var parsed float64
 	switch typed := value.(type) {
 	case json.Number:
-		parsed, err := typed.Float64()
+		value, err := typed.Float64()
 		if err != nil {
 			return 0, false
 		}
-		return int64(parsed + 0.5), true
+		parsed = value
 	case float64:
-		return int64(typed + 0.5), true
+		parsed = typed
 	case string:
-		parsed := json.Number(strings.TrimSpace(typed))
-		floatValue, err := parsed.Float64()
+		value, err := json.Number(strings.TrimSpace(typed)).Float64()
 		if err != nil {
 			return 0, false
 		}
-		return int64(floatValue + 0.5), true
+		parsed = value
 	default:
 		return 0, false
+	}
+	if math.IsNaN(parsed) || math.IsInf(parsed, 0) || parsed <= 0 || parsed >= float64(math.MaxInt64) {
+		return 0, false
+	}
+	return int64(math.Floor(parsed + 0.5)), true
+}
+
+func safeCloudEventStreamError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, context.Canceled):
+		return context.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return context.DeadlineExceeded
+	default:
+		return errors.New("cloud REST HSP event stream failed")
 	}
 }
 

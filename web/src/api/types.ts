@@ -21,6 +21,7 @@ export interface MotionSample {
 
 export interface EngineSnapshot {
   running: boolean;
+  starting?: boolean;
   completing?: boolean;
   paused: boolean;
   running_ms?: number;

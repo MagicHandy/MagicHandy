@@ -148,6 +148,8 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 			target.PatternID = ""
 			return target, curve, false, definition.DurationMillis
 		}
+		target.Program = nil
+		target.ProgramID = ""
 	}
 	if target.Pattern != nil {
 		if definition, err := NormalizePatternDefinition(*target.Pattern); err == nil {
@@ -215,7 +217,11 @@ func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, cur
 	candidatePlan := NewMotionPlan("candidate", target, settings, 0, 0, time.Unix(0, 0))
 	bestPhase := 0.0
 	bestDistance := math.MaxFloat64
-	for index := range 64 {
+	lastIndex := 63
+	if !candidatePlan.Loop {
+		lastIndex = 64
+	}
+	for index := range lastIndex + 1 {
 		phase := float64(index) / 64
 		position := candidatePlan.SampleAt(int64(float64(candidatePlan.PeriodMillis) * phase)).PositionPercent
 		distance := math.Abs(position - current)

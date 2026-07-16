@@ -249,11 +249,17 @@ func (s *Server) handleSettingsReset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, errors.New("settings could not be reset"))
 		return
 	}
-	s.applySettingsRuntimeTransition(r.Context(), current, saved)
+	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), current, saved)
 
 	_, status := s.store.Snapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"settings": saved.Public(),
 		"status":   status,
-	})
+	}
+	responseStatus := http.StatusOK
+	if runtimeErr != nil {
+		responseStatus = http.StatusBadGateway
+		payload["error"] = "settings were reset, but the active device runtime could not be stopped"
+	}
+	writeJSON(w, responseStatus, payload)
 }

@@ -7,6 +7,7 @@ import { clampPercent } from "../util/format";
 export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo | null; mini?: boolean }) {
   const engine = motion?.engine;
   const running = engine?.running === true;
+  const starting = engine?.starting === true;
   const paused = engine?.paused === true;
   const pos = clampPercent(engine?.last_sample?.position_percent, 50);
   const firstBound = clampPercent(engine?.settings?.stroke_min_percent, 0);
@@ -14,13 +15,27 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const min = Math.min(firstBound, secondBound);
   const max = Math.max(firstBound, secondBound);
   const hasError = Boolean(engine?.last_error || motion?.error);
-  const state = motion?.available === false
-    ? "unavailable"
-    : hasError ? "error" : paused ? "paused" : engine?.completing ? "completing" : running ? "running" : "idle";
+  let state = "idle";
+  if (motion?.available === false) {
+    state = "unavailable";
+  } else if (hasError) {
+    state = "error";
+  } else if (paused) {
+    state = "paused";
+  } else if (engine?.completing) {
+    state = "completing";
+  } else if (starting) {
+    state = "starting";
+  } else if (running) {
+    state = "running";
+  }
   const stateLabel = state === "completing" ? "Completing" : state.charAt(0).toUpperCase() + state.slice(1);
   const roundedPosition = Math.round(pos);
   const speed = typeof engine?.target?.speed_percent === "number" ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%` : "--";
-  const target = engine?.target?.label?.trim() || (running ? "Engine motion" : "No active motion");
+  let target = engine?.target?.label?.trim();
+  if (!target) {
+    target = starting ? "Starting motion" : running ? "Engine motion" : "No active motion";
+  }
   // The stroking sleeve rides a vertical channel on the body's right edge, the
   // way The Handy 2's sleeve carriage travels. 100% is the top of the channel.
   const travelTop = 30;

@@ -146,6 +146,33 @@ func TestCloudManualTransportFailureRedactsSecrets(t *testing.T) {
 	}
 }
 
+func TestCloudMotionFailureRedactsSecrets(t *testing.T) {
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "rejected "+cloudTestConnectionKey, http.StatusUnauthorized)
+	}))
+	defer cloudServer.Close()
+
+	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
+	saveCloudSettings(t, server)
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/motion/start", strings.NewReader(`{"speed_percent":20}`)))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusBadGateway, recorder.Body.String())
+	}
+	if contains(recorder.Body.String(), cloudTestConnectionKey) {
+		t.Fatalf("motion error response leaked connection key: %s", recorder.Body.String())
+	}
+	traceJSON, err := json.Marshal(server.traces.Export())
+	if err != nil {
+		t.Fatalf("marshal trace: %v", err)
+	}
+	if strings.Contains(string(traceJSON), cloudTestConnectionKey) {
+		t.Fatalf("motion trace leaked connection key: %s", traceJSON)
+	}
+}
+
 func TestCloudEventsEndpointProxiesSSE(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/sse" {

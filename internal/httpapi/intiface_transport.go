@@ -108,9 +108,9 @@ func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	s.stopAndClearMotionEngine(r.Context(), "intiface_disconnected")
+	stopErr := s.stopAndClearMotionEngine(r.Context(), "intiface_disconnected")
 	s.closeIntifaceSession()
-	writeJSON(w, http.StatusOK, s.intifaceSnapshot())
+	s.writeIntifaceResult(w, stopErr)
 }
 
 func (s *Server) handleIntifaceStartScan(w http.ResponseWriter, r *http.Request) {
@@ -153,8 +153,11 @@ func (s *Server) handleIntifaceSelect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	s.stopAndClearMotionEngine(r.Context(), "intiface_selection_changed")
-	owner, err := s.currentIntiface()
+	err := s.stopAndClearMotionEngine(r.Context(), "intiface_selection_changed")
+	owner, ownerErr := s.currentIntiface()
+	if err == nil {
+		err = ownerErr
+	}
 	if err == nil {
 		err = owner.SelectDevice(body.DeviceIndex, body.ActuatorIndex)
 	}
