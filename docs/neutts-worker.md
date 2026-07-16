@@ -217,8 +217,12 @@ repeated 4.70 second clip fell from 1.91 seconds warm synthesis to a 0 ms cache
 replay. See `docs/neutts-quality-performance.md` for the corpus, alternatives,
 limits, and remaining incremental-playback work. Advanced diagnostics can use
 `--seed random` or `MAGICHANDY_NEUTTS_SEED=random` when running a custom/direct
-runner; app-managed workers explicitly pin the schema-5 seed. Random mode
-disables caching.
+runner. The Voice settings **Advanced** section defaults to the validated fixed
+seed 3, accepts any unsigned 32-bit fixed seed, and offers **New seed** for a
+different repeatable variation. **Varied** passes `random` explicitly and
+disables caching; it is intended for experimentation because measured quality
+and pacing can regress. Schema 5 continues to record seed 3 as the verified
+runtime default rather than treating a user preference as installation identity.
 
 CPU requests retain the five-minute timeout because fallback synthesis can be
 slow. PCM stays bounded and streams as 24 kHz mono samples. Cancellation sends a

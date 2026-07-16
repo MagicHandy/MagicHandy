@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | NeuTTS consistency/cache plus 250 ms browser-poll build: 20,263,936 bytes plain and 14,212,608 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | NeuTTS sampling controls build: 20,272,128 bytes plain and 14,220,288 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -115,6 +115,16 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-15** - NeuTTS sampling controls: the validated fixed seed 3 remains
+  the default, while one collapsed Advanced section offers another reproducible
+  unsigned 32-bit seed, a New seed command, or explicit per-request Varied mode.
+  Varied is labeled as repeat-cache-off and documented as capable of restoring
+  the measured quality variance; it is not presented as an enhancement. Missing
+  settings default additively without a schema bump, and old API clients preserve
+  saved values. Plain/stripped core binaries are 20,272,128 / 14,220,288 bytes.
+  Embedded UI is 820,158 raw / 543,823 gzip bytes; HTML/CSS/JS is 375,922 raw /
+  106,396 gzip bytes, a 2,038 raw / 535 gzip increase.
 
 - **2026-07-15** - NeuTTS consistency and repeat latency: pinned `neutts-rs`
   selected a new random seed for every request; 12 identical warm requests

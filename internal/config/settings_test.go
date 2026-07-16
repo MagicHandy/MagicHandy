@@ -524,6 +524,9 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if defaults.Voice.ParakeetSource != ParakeetSourceApp {
 		t.Fatalf("Parakeet source = %q, want %q", defaults.Voice.ParakeetSource, ParakeetSourceApp)
 	}
+	if defaults.Voice.NeuTTSSamplingMode != NeuTTSSamplingFixed || defaults.Voice.NeuTTSSamplerSeed != DefaultNeuTTSSamplerSeed {
+		t.Fatalf("NeuTTS sampling defaults = %q/%d", defaults.Voice.NeuTTSSamplingMode, defaults.Voice.NeuTTSSamplerSeed)
+	}
 	if defaults.Voice.InputMode != VoiceInputModeHandsFree || defaults.Voice.InputSensitivity != DefaultVoiceInputSensitivity ||
 		defaults.Voice.InputSilenceMillis != DefaultVoiceInputSilenceMillis || !defaults.Voice.InputNoiseSuppress {
 		t.Fatalf("voice input defaults = %+v", defaults.Voice)
@@ -545,6 +548,12 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if len(normalized.Voice.TTSWorkerArgs) != 2 {
 		t.Fatalf("tts worker args = %v, want blank entries dropped", normalized.Voice.TTSWorkerArgs)
 	}
+
+	invalid := defaults
+	invalid.Voice.NeuTTSSamplingMode = "roulette"
+	if _, err := NormalizeSettings(invalid); err == nil || !strings.Contains(err.Error(), "NeuTTS sampling mode") {
+		t.Fatalf("invalid NeuTTS sampling mode error = %v", err)
+	}
 }
 
 func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T) {
@@ -565,6 +574,9 @@ func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T
 	if settings.Voice.TTSWorkerPath != `C:\legacy\tts.exe` || strings.Join(settings.Voice.ASRWorkerArgs, "|") != "-role|asr" {
 		t.Fatalf("legacy command changed during migration: %+v", settings.Voice)
 	}
+	if settings.Voice.NeuTTSSamplingMode != NeuTTSSamplingFixed || settings.Voice.NeuTTSSamplerSeed != DefaultNeuTTSSamplerSeed {
+		t.Fatalf("legacy NeuTTS sampling defaults = %+v", settings.Voice)
+	}
 }
 
 func TestExistingParakeetPathsMigrateToCustomSource(t *testing.T) {
@@ -584,6 +596,8 @@ func TestExistingParakeetPathsMigrateToCustomSource(t *testing.T) {
 func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 	current := DefaultSettings()
 	parakeetSource := ParakeetSourceCustom
+	neuTTSSamplingMode := NeuTTSSamplingRandom
+	neuTTSSamplerSeed := uint32(27)
 	update := SettingsUpdate{
 		Server: current.Server,
 		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
@@ -598,6 +612,7 @@ func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 			ASRBaseURL:     "http://127.0.0.1:7777/", ASRModel: "parakeet",
 			NeuTTSRunnerPath: `C:\neutts\stream_pcm.exe`, NeuTTSReferenceWAV: `C:\voices\reference.wav`,
 			NeuTTSReferenceCodes: `C:\voices\reference.npy`, NeuTTSReferenceText: "Reference transcript.", NeuTTSBackbone: "local/backbone",
+			NeuTTSSamplingMode: &neuTTSSamplingMode, NeuTTSSamplerSeed: &neuTTSSamplerSeed,
 		},
 	}
 	next, err := current.ApplyUpdate(update)
@@ -616,6 +631,9 @@ func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 	if next.Voice.ASRBaseURL != "http://127.0.0.1:7777" || len(next.Voice.TTSWorkerArgs) != 1 {
 		t.Fatalf("hidden provider fields were not normalized losslessly: %+v", next.Voice)
 	}
+	if next.Voice.NeuTTSSamplingMode != NeuTTSSamplingRandom || next.Voice.NeuTTSSamplerSeed != neuTTSSamplerSeed {
+		t.Fatalf("hidden NeuTTS sampling fields were discarded: %+v", next.Voice)
+	}
 }
 
 func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
@@ -630,6 +648,8 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	inputSensitivity := 72
 	inputSilence := 1250
 	noiseSuppression := false
+	neuTTSSamplingMode := NeuTTSSamplingRandom
+	neuTTSSamplerSeed := uint32(42)
 	update := SettingsUpdate{
 		Server: current.Server,
 		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
@@ -639,6 +659,7 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 			Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"},
 			InputMode: &inputMode, InputSensitivity: &inputSensitivity, InputSilenceMillis: &inputSilence,
 			InputNoiseSuppress: &noiseSuppression,
+			NeuTTSSamplingMode: &neuTTSSamplingMode, NeuTTSSamplerSeed: &neuTTSSamplerSeed,
 		},
 		Diagnostics: current.Diagnostics,
 	}
@@ -661,6 +682,9 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	if got.Voice.InputMode != inputMode || got.Voice.InputSensitivity != inputSensitivity ||
 		got.Voice.InputSilenceMillis != inputSilence || got.Voice.InputNoiseSuppress {
 		t.Fatalf("voice input preferences did not survive reload: %+v", got.Voice)
+	}
+	if got.Voice.NeuTTSSamplingMode != neuTTSSamplingMode || got.Voice.NeuTTSSamplerSeed != neuTTSSamplerSeed {
+		t.Fatalf("NeuTTS sampling preferences did not survive reload: %+v", got.Voice)
 	}
 }
 

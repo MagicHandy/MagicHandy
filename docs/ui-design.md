@@ -503,6 +503,11 @@ audio, and correct the transcript before applying managed paths. The UI must
 show generation as a bounded in-progress action and retain manual pre-encoded
 paths under Advanced. Active ASR and TTS work shares one labeled, boxed voice
 queue; provider sections show worker state but do not repeat request rows.
+NeuTTS sampling stays in that same collapsed Advanced section: a segmented
+**Consistent / Varied** choice, fixed-seed number field, and **New seed** command.
+Consistent seed 3 is the default. The control reports repeat-cache availability;
+Varied is never presented as a quality improvement because it can reintroduce
+measured pacing and intelligibility variance.
 
 ### Not yet built — planned, not regressions
 

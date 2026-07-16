@@ -25,12 +25,30 @@ stopped at 0.14 seconds with an empty Parakeet transcript. Seed 10 garbled the
 time/name phrase. Seed 3 completed all cases and Parakeet retained all target
 words. The managed runner now uses seed 3 by default. `--seed random` or
 `MAGICHANDY_NEUTTS_SEED=random` restores upstream randomness for custom/direct
-runner diagnostics; the app-managed worker explicitly pins the manifest seed.
-Random mode disables PCM caching because repeated output is expected to vary.
+runner diagnostics. The app explicitly passes the saved sampling choice to its
+NeuTTS worker instead of inheriting an ambient environment value. Random mode
+disables PCM caching because repeated output is expected to vary.
 
 This removes intermittent variation for identical inputs. It does not prove
 that seed 3 is optimal for every reference voice or sentence, so representative
 listening remains part of R17 exit evidence.
+
+### User control decision
+
+Seed 3 remains the default because it passed the mixed-sentence corpus, but one
+seed cannot be assumed best for every reference voice. Voice settings therefore
+put two choices under NeuTTS **Advanced**:
+
+- **Consistent** uses the saved 32-bit seed and permits exact-text PCM caching.
+  A numeric field supports reproducible diagnostics; **New seed** chooses a
+  different fixed value for auditioning without enabling per-request drift.
+- **Varied** requests a new upstream seed for every utterance. The UI marks the
+  repeat cache unavailable, and the runner disables it.
+
+Varied is an experimentation preference, not a quality mode. It can reproduce
+the pacing, slurring, or truncation variance measured above. Changing a fixed
+seed is also not an automatic quality improvement; retain a replacement only
+after representative listening with the active reference voice.
 
 ### Reference conditioning
 
@@ -103,6 +121,8 @@ and privacy obligations, and provide little value for mostly unique chat text.
 - All four optimized-runner WAVs exactly matched their pre-optimization seed-3
   SHA-256 hashes.
 - Exact-text cache miss/hit: 1.91 seconds then 0 ms; equal WAV SHA-256.
+- Settings migration, API composition, and UI tests cover fixed seed 0 through
+  4,294,967,295, per-request random mode, New seed, and exact save payloads.
 - A clean full-feature updater run rebuilt schema 4 to schema 5 in 10 minutes
   56 seconds while preserving the saved llama.cpp, Ollama, Parakeet, and NeuTTS
   choices. Through the relaunched production HTTP path, an uncached request

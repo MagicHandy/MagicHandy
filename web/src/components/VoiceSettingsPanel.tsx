@@ -23,6 +23,19 @@ const PARAKEET_SOURCE_LABELS: Record<string, string> = {
   custom_local: "Custom local server",
 };
 
+const NEUTTS_SAMPLING_LABELS: Record<string, string> = {
+  fixed: "Consistent",
+  random: "Varied",
+};
+const DEFAULT_NEUTTS_SEED = 3;
+const MAX_NEUTTS_SEED = 0xffffffff;
+
+function newNeuTTSSeed(current: number) {
+  const values = new Uint32Array(1);
+  window.crypto.getRandomValues(values);
+  return values[0] === current ? (current + 1) >>> 0 : values[0];
+}
+
 interface Props {
   settings: PublicSettings;
   locked: boolean;
@@ -41,6 +54,9 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
   const voiceRuntime = useVoiceRuntimeStatus();
   const referenceEncoderInstalled = voiceRuntime.modules.neutts?.reference_encoder_installed ?? false;
   const parakeetSource = voice.parakeet_source || "app_managed";
+  const neuTTSSamplingMode = voice.neutts_sampling_mode || "fixed";
+  const neuTTSSamplerSeed = voice.neutts_sampler_seed ?? DEFAULT_NEUTTS_SEED;
+  const neuTTSSamplingModes = s.options.neutts_sampling_modes?.length ? s.options.neutts_sampling_modes : ["fixed", "random"];
   const [referenceOpen, setReferenceOpen] = useState(false);
   const referenceTrigger = useRef<HTMLButtonElement>(null);
   const closeReference = useCallback(() => {
@@ -99,7 +115,6 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         <label className="field"><span className="label">Model ID</span><input type="text" value={voice.elevenlabs_model_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_model_id: event.target.value })} /></label>
       </>}
       {voice.tts_provider === "neutts_air" && <>
-        <HostPathField label="stream_pcm runner override" kind="executable" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(neutts_runner_path) => patch({ neutts_runner_path })} />
         <div className="reference-voice-control">
           <div>
             <strong>Reference voice</strong>
@@ -114,18 +129,52 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
             onClick={() => setReferenceOpen(true)}
           >Generate reference voice</button>
         </div>
-        <details className="advanced-fields"><summary>Manual reference paths</summary>
+        <details className="advanced-fields"><summary>Advanced</summary>
+          <div className="field">
+            <span className="label">Speech variation <span className="hint-inline">{neuTTSSamplingMode === "random" ? "repeat cache off" : "repeat cache available"}</span></span>
+            <div className="segmented neutts-sampling-control" role="group" aria-label="NeuTTS speech variation">
+              {neuTTSSamplingModes.map((mode) => <button
+                key={mode}
+                type="button"
+                aria-pressed={neuTTSSamplingMode === mode}
+                disabled={locked}
+                title={mode === "random" ? "Uses a new seed per request; quality and pacing may vary." : "Uses one seed for repeatable output and exact-text caching."}
+                onClick={() => patch({ neutts_sampling_mode: mode })}
+              >{NEUTTS_SAMPLING_LABELS[mode] ?? mode}</button>)}
+            </div>
+          </div>
+          {neuTTSSamplingMode === "fixed" && <div className="field">
+            <span className="label">Fixed seed <span className="hint-inline">recommended: {DEFAULT_NEUTTS_SEED}</span></span>
+            <div className="field-action-row">
+              <input
+                aria-label="Fixed seed"
+                type="number"
+                min={0}
+                max={MAX_NEUTTS_SEED}
+                step={1}
+                value={neuTTSSamplerSeed}
+                disabled={locked}
+                onChange={(event) => {
+                  const seed = Number(event.target.value);
+                  if (Number.isInteger(seed) && seed >= 0 && seed <= MAX_NEUTTS_SEED) patch({ neutts_sampler_seed: seed });
+                }}
+              />
+              <button type="button" className="btn btn-secondary" disabled={locked} title="Choose a different fixed seed." onClick={() => patch({ neutts_sampler_seed: newNeuTTSSeed(neuTTSSamplerSeed) })}>New seed</button>
+            </div>
+          </div>}
+          <HostPathField label="stream_pcm runner override" kind="executable" value={voice.neutts_runner_path ?? ""} disabled={locked} onChange={(neutts_runner_path) => patch({ neutts_runner_path })} />
           <HostPathField label="Reference WAV" kind="wav" value={voice.neutts_reference_wav ?? ""} disabled={locked} onChange={(neutts_reference_wav) => patch({ neutts_reference_wav })} />
           <HostPathField label="Pre-encoded reference codes (.npy)" kind="npy" value={voice.neutts_reference_codes ?? ""} disabled={locked} onChange={(neutts_reference_codes) => patch({ neutts_reference_codes })} />
           <label className="field"><span className="label">Reference transcript</span><textarea rows={3} value={voice.neutts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ neutts_reference_text: event.target.value })} /></label>
+          <HostPathField label="TTS worker binary override" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />
         </details>
-        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. The managed module includes local WAV-to-reference encoding without Python. Pre-encoded <code>.npy</code> files remain available under Manual reference paths.</p>
+        <p className="form-status">Leave the runner override blank to use the runtime installed with managed llama.cpp. The managed module includes local WAV-to-reference encoding without Python. Pre-encoded <code>.npy</code> files remain available under Advanced.</p>
       </>}
       {voice.tts_provider === "custom" && <>
         <HostPathField label="TTS worker path" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />
         <label className="field"><span className="label">Worker arguments</span><textarea rows={4} value={joinArgs(voice.tts_worker_args)} disabled={locked} onChange={(event) => patch({ tts_worker_args: splitArgs(event.target.value) })} /></label>
       </>}
-      {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>Advanced</summary><HostPathField label="TTS worker binary override" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} /></details>}
+      {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && voice.tts_provider !== "neutts_air" && <details className="advanced-fields"><summary>Advanced</summary><HostPathField label="TTS worker binary override" kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} /></details>}
       {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Speak chat replies</span></label>}
       <VoiceWorkers
         locked={locked}
