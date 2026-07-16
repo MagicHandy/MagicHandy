@@ -536,9 +536,9 @@ func publicVoiceSettings(settings VoiceSettings) PublicVoiceSettings {
 		TTSProvider:          settings.TTSProvider,
 		ASRProvider:          settings.ASRProvider,
 		TTSWorkerPath:        settings.TTSWorkerPath,
-		TTSWorkerArgs:        settings.TTSWorkerArgs,
+		TTSWorkerArgs:        cloneStrings(settings.TTSWorkerArgs),
 		ASRWorkerPath:        settings.ASRWorkerPath,
-		ASRWorkerArgs:        settings.ASRWorkerArgs,
+		ASRWorkerArgs:        cloneStrings(settings.ASRWorkerArgs),
 		SpeakReplies:         settings.SpeakReplies,
 		ElevenLabsVoiceID:    settings.ElevenLabsVoiceID,
 		ElevenLabsModelID:    settings.ElevenLabsModelID,
@@ -1036,6 +1036,16 @@ func trimArgs(args []string) []string {
 		return nil
 	}
 	return trimmed
+}
+
+func cloneSettings(settings Settings) Settings {
+	settings.Voice.TTSWorkerArgs = cloneStrings(settings.Voice.TTSWorkerArgs)
+	settings.Voice.ASRWorkerArgs = cloneStrings(settings.Voice.ASRWorkerArgs)
+	return settings
+}
+
+func cloneStrings(values []string) []string {
+	return append([]string(nil), values...)
 }
 
 func normalizeLLMStrings(settings LLMSettings) LLMSettings {

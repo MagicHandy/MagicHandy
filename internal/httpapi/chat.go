@@ -238,7 +238,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 
 	switch command.Action {
 	case chat.MotionActionStart:
-		engine, err := s.motionEngineForStart()
+		engine, admission, err := s.motionEngineForStart()
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
 		}
@@ -250,7 +250,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 		}
 		settings, _ := s.store.Snapshot()
-		state, err := engine.Start(ctx, target, settings.Motion)
+		state, err := engine.StartAtGeneration(ctx, target, settings.Motion, admission)
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 	case chat.MotionActionTarget:
 		engine := s.currentMotionEngine()

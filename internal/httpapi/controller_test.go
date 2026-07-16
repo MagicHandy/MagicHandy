@@ -35,6 +35,25 @@ func TestControllerLeaseMakesExtraClientsReadOnly(t *testing.T) {
 	}
 }
 
+func TestMutatingPathsDoNotAcceptQueryControllerIDs(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	_ = controllerFromState(t, server, "client-a")
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/start?client_id=client-a", strings.NewReader(`{"speed_percent":30}`))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("query-authorized start status = %d, want %d: %s", recorder.Code, http.StatusConflict, recorder.Body.String())
+	}
+	if len(fake.Commands()) != 0 {
+		t.Fatalf("query-authorized request reached the transport: %+v", fake.Commands())
+	}
+}
+
 func TestReadOnlyClientCanStillStopMotion(t *testing.T) {
 	fake := transport.NewFake()
 	server := newTestServerWithRuntime(t, Runtime{

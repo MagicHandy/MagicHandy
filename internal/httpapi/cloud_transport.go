@@ -380,13 +380,9 @@ func cloudSetupDiagnostics(err error) transport.TransportDiagnostics {
 }
 
 func decodeOptionalJSON(r *http.Request, target any) error {
-	defer func() {
-		_ = r.Body.Close()
-	}()
-
-	data, err := io.ReadAll(io.LimitReader(r.Body, 64*1024))
+	data, err := readJSONBody(r)
 	if err != nil {
-		return fmt.Errorf("decode JSON request: %w", err)
+		return err
 	}
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {

@@ -119,7 +119,14 @@ func isSameOriginBrowserRequest(r *http.Request) bool {
 		return true
 	}
 	parsed, err := url.Parse(origin)
-	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && strings.EqualFold(parsed.Host, r.Host)
+	if err != nil {
+		return false
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return parsed.Scheme == scheme && strings.EqualFold(parsed.Host, r.Host)
 }
 
 func isLoopbackRemote(remoteAddr string) bool {

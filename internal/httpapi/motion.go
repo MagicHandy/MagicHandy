@@ -15,16 +15,30 @@ import (
 )
 
 var errMotionUnavailable = errors.New("motion engine is unavailable for the configured transport")
+var errServerQuiescing = errors.New("MagicHandy is shutting down")
 
 // motionRuntime owns the live motion engine used by the manual UI controls.
 // It is nil-safe: when the configured transport is not a full command
 // transport, the engine is absent and motion endpoints report unavailable
 // rather than panicking.
 type motionRuntime struct {
-	mu        sync.Mutex
-	engine    *motion.Engine
-	owner     string
-	transport transport.Transport
+	lifecycleMu sync.Mutex
+	mu          sync.Mutex
+	engine      *motion.Engine
+	owner       string
+	transport   transport.Transport
+}
+
+// admittedMotionEngine carries the Stop epoch captured while the server still
+// owned the engine. Modes can use their narrow Engine interface without
+// reopening the admission race before Start.
+type admittedMotionEngine struct {
+	*motion.Engine
+	admission uint64
+}
+
+func (engine admittedMotionEngine) Start(ctx context.Context, target motion.MotionTarget, settings config.MotionSettings) (motion.ActiveMotionState, error) {
+	return engine.StartAtGeneration(ctx, target, settings, engine.admission)
 }
 
 func newMotionRuntime(runtime Runtime) motionRuntime {
@@ -51,7 +65,7 @@ func (r motionRequest) target() motion.MotionTarget {
 func (s *Server) motionState() any {
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
-		if snapshot.Running || snapshot.Paused {
+		if snapshot.Running || snapshot.Paused || snapshot.Completing {
 			return map[string]any{
 				"available": true,
 				"engine":    snapshot,
@@ -125,13 +139,12 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	engine, err := s.motionEngineForStart()
+	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	admission := engine.AdmissionGeneration()
 	if s.stopSequence.Load() != stopSequence {
 		writeError(w, http.StatusConflict, errors.New("motion start was invalidated by Emergency Stop"))
 		return
@@ -341,6 +354,12 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 }
 
 func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
+	s.stopAndClearMotionEngineLocked(ctx, reason)
+}
+
+func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason string) {
 	s.motion.mu.Lock()
 	engine := s.motion.engine
 	s.motion.engine = nil
@@ -350,65 +369,96 @@ func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) {
 	if engine == nil {
 		return
 	}
-	snapshot := engine.Snapshot()
-	if snapshot.Running || snapshot.Paused {
-		_, _ = engine.Stop(ctx, reason)
-	}
+	_, _ = engine.Stop(ctx, reason)
 }
 
-// Close stops any active motion loop so no goroutine keeps commanding the
-// device after shutdown (goroutine-lifecycle safety gate).
+// Quiesce rejects new controller work, drains autonomous planners, and stops
+// device motion before HTTP shutdown waits for active handlers.
+func (s *Server) Quiesce() {
+	s.quiescing.Store(true)
+	s.quiesceOnce.Do(func() {
+		s.cancelActiveChats()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		s.stopAndClearMotionEngine(ctx, "server_shutdown")
+		if s.modes != nil {
+			s.modes.Shutdown()
+		}
+		s.closeIntiface()
+	})
+}
+
+// Close releases runtime and datastore resources after quiescing device work.
+// It is idempotent so startup failures and deferred shutdown can share it.
 func (s *Server) Close() {
-	s.closeLLM()
-	if s.managedLLM != nil {
-		s.managedLLM.Close()
-	}
-	if s.modes != nil {
-		s.modes.Shutdown()
-	}
-	s.stopVoiceAutoload()
-	if s.voice != nil {
-		s.voice.Shutdown()
-	}
-	if s.chatLog != nil {
-		_ = s.chatLog.Close()
-	}
-	if s.patterns != nil {
-		_ = s.patterns.Close()
-	}
-	if s.models != nil {
-		_ = s.models.Close()
-	}
-	s.stopAndClearMotionEngine(context.Background(), "server_shutdown")
-	s.closeIntiface()
-	s.personalization.Close()
-	if s.store != nil {
-		_ = s.store.Close()
-	}
+	s.closeOnce.Do(func() {
+		s.Quiesce()
+		s.closeLLM()
+		if s.managedLLM != nil {
+			s.managedLLM.Close()
+		}
+		s.stopVoiceAutoload()
+		if s.voice != nil {
+			s.voice.Shutdown()
+		}
+		if s.chatLog != nil {
+			_ = s.chatLog.Close()
+		}
+		if s.patterns != nil {
+			_ = s.patterns.Close()
+		}
+		if s.models != nil {
+			_ = s.models.Close()
+		}
+		s.personalization.Close()
+		if s.store != nil {
+			_ = s.store.Close()
+		}
+	})
 }
 
-func (s *Server) motionEngineForStart() (*motion.Engine, error) {
+func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
+	if s.quiescing.Load() {
+		return nil, 0, errServerQuiescing
+	}
+
 	settings, _ := s.store.Snapshot()
 	owner := settings.Device.HSPDispatchOwner
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	if engine != nil && engineOwner != owner {
-		s.stopAndClearMotionEngine(context.Background(), "dispatch_owner_changed")
-	} else if engine != nil && engine.Snapshot().Running {
-		return engine, nil
+		s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed")
+		engine = nil
+	} else if engine != nil {
+		return engine, engine.AdmissionGeneration(), nil
 	}
 	commandTransport, err := s.newSelectedMotionTransport()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	engine, err = motion.NewEngine(motion.EngineOptions{
 		Transport: commandTransport,
 		Traces:    s.traces,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	s.setMotionEngine(engine, owner)
-	return engine, nil
+	return engine, engine.AdmissionGeneration(), nil
+}
+
+func (s *Server) motionAdmissionFor(engine *motion.Engine) (uint64, error) {
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
+	if s.quiescing.Load() {
+		return 0, errServerQuiescing
+	}
+	current, _ := s.currentMotionEngineWithOwner()
+	if current != engine {
+		return 0, errMotionUnavailable
+	}
+	return engine.AdmissionGeneration(), nil
 }
 
 func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {

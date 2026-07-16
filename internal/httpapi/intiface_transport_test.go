@@ -121,16 +121,16 @@ func TestIntifaceOwnerSwitchStopsActiveEngineBeforeClosingSession(t *testing.T) 
 	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/connect", `{}`)
 	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/select", `{"device_index":7,"actuator_index":0}`)
 
-	engine, err := server.motionEngineForStart()
+	engine, admission, err := server.motionEngineForStart()
 	if err != nil {
 		t.Fatal(err)
 	}
 	previous, _ := server.store.Snapshot()
-	if _, err := engine.Start(context.Background(), motion.MotionTarget{
+	if _, err := engine.StartAtGeneration(context.Background(), motion.MotionTarget{
 		Source:       "owner_switch_test",
 		PatternID:    motion.PatternID("stroke"),
 		SpeedPercent: 20,
-	}, previous.Motion); err != nil {
+	}, previous.Motion, admission); err != nil {
 		t.Fatal(err)
 	}
 	fake.waitForKind(t, "LinearCmd")
@@ -166,16 +166,16 @@ func TestIntifaceEnginePauseResumeQuickSettingsAndTrace(t *testing.T) {
 	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/connect", `{}`)
 	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/select", `{"device_index":7,"actuator_index":0}`)
 
-	engine, err := server.motionEngineForStart()
+	engine, admission, err := server.motionEngineForStart()
 	if err != nil {
 		t.Fatal(err)
 	}
 	settings, _ := server.store.Snapshot()
-	if _, err := engine.Start(context.Background(), motion.MotionTarget{
+	if _, err := engine.StartAtGeneration(context.Background(), motion.MotionTarget{
 		Source:       "intiface_workflow_test",
 		PatternID:    motion.PatternID("stroke"),
 		SpeedPercent: 20,
-	}, settings.Motion); err != nil {
+	}, settings.Motion, admission); err != nil {
 		t.Fatal(err)
 	}
 	fake.waitForKind(t, "LinearCmd")

@@ -48,19 +48,22 @@ func TestTraceRowSerialization(t *testing.T) {
 
 func TestTraceRingCapacity(t *testing.T) {
 	ring := NewTraceRing(2)
-	ring.Add(MotionTraceRow{Timestamp: "2026-06-30T12:00:00Z", Source: "test", Reason: "first"})
-	ring.Add(MotionTraceRow{Timestamp: "2026-06-30T12:00:01Z", Source: "test", Reason: "second"})
-	ring.Add(MotionTraceRow{Timestamp: "2026-06-30T12:00:02Z", Source: "test", Reason: "third"})
+	for index, reason := range []string{"first", "second", "third", "fourth", "fifth"} {
+		ring.Add(MotionTraceRow{Timestamp: "2026-06-30T12:00:00Z", Source: "test", Reason: reason})
+		if summary := ring.Summary(); summary.RowCount > summary.Capacity {
+			t.Fatalf("row count exceeded capacity after add %d: %+v", index, summary)
+		}
+	}
 
 	export := ring.Export()
 	if len(export.Rows) != 2 {
 		t.Fatalf("row count = %d, want 2", len(export.Rows))
 	}
-	if export.Rows[0].Reason != "second" || export.Rows[1].Reason != "third" {
-		t.Fatalf("rows = %+v, want second and third", export.Rows)
+	if export.Rows[0].Reason != "fourth" || export.Rows[1].Reason != "fifth" {
+		t.Fatalf("rows = %+v, want fourth and fifth", export.Rows)
 	}
-	if export.DroppedRows != 1 {
-		t.Fatalf("dropped rows = %d, want 1", export.DroppedRows)
+	if export.DroppedRows != 3 {
+		t.Fatalf("dropped rows = %d, want 3", export.DroppedRows)
 	}
 }
 
@@ -122,7 +125,7 @@ func TestTraceRingOwnsAddedRows(t *testing.T) {
 		},
 	}
 
-	ring.Add(MotionTraceRow{
+	added := ring.Add(MotionTraceRow{
 		Timestamp:        "2026-06-30T12:00:00Z",
 		Source:           "test",
 		Reason:           "clone",
@@ -132,6 +135,10 @@ func TestTraceRingOwnsAddedRows(t *testing.T) {
 		TransportCommand: &command,
 	})
 
+	added.Target.Label = "mutated-return"
+	added.Planner.Scores[0].Score = 100
+	added.Retarget.PreviousTarget.Label = "mutated-return-previous"
+	added.TransportCommand.PointsAdd.Points[0].PositionPercent = 100
 	target.Label = "mutated"
 	planner.Scores[0].Score = 99
 	retarget.PreviousTarget.Label = "mutated-previous"

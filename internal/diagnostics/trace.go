@@ -112,6 +112,7 @@ type TraceRing struct {
 	capacity int
 	next     uint64
 	dropped  uint64
+	start    int
 	rows     []MotionTraceRow
 }
 
@@ -136,17 +137,17 @@ func (r *TraceRing) Add(row MotionTraceRow) MotionTraceRow {
 	if row.Timestamp == "" {
 		row.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	row = cloneTraceRow(row)
+	stored := cloneTraceRow(row)
 
 	if len(r.rows) == r.capacity {
-		copy(r.rows, r.rows[1:])
-		r.rows[len(r.rows)-1] = row
+		r.rows[r.start] = stored
+		r.start = (r.start + 1) % r.capacity
 		r.dropped++
-		return row
+		return cloneTraceRow(stored)
 	}
 
-	r.rows = append(r.rows, row)
-	return row
+	r.rows = append(r.rows, stored)
+	return cloneTraceRow(stored)
 }
 
 // Rows returns the trace rows in oldest-first order.
@@ -154,7 +155,7 @@ func (r *TraceRing) Rows() []MotionTraceRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return cloneTraceRows(r.rows)
+	return r.cloneRowsLocked()
 }
 
 // Export returns the stable trace export envelope.
@@ -164,7 +165,7 @@ func (r *TraceRing) Export() TraceExport {
 
 	return TraceExport{
 		SchemaVersion: traceSchemaVersion,
-		Rows:          cloneTraceRows(r.rows),
+		Rows:          r.cloneRowsLocked(),
 		DroppedRows:   r.dropped,
 	}
 }
@@ -182,10 +183,11 @@ func (r *TraceRing) Summary() TraceSummary {
 	}
 }
 
-func cloneTraceRows(rows []MotionTraceRow) []MotionTraceRow {
-	clones := make([]MotionTraceRow, len(rows))
-	for index, row := range rows {
-		clones[index] = cloneTraceRow(row)
+func (r *TraceRing) cloneRowsLocked() []MotionTraceRow {
+	clones := make([]MotionTraceRow, len(r.rows))
+	for index := range r.rows {
+		source := (r.start + index) % len(r.rows)
+		clones[index] = cloneTraceRow(r.rows[source])
 	}
 	return clones
 }

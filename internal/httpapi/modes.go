@@ -15,11 +15,11 @@ import (
 func (s *Server) newModeManager() (*modes.Manager, error) {
 	return modes.NewManager(modes.Options{
 		Ensure: func(context.Context) (modes.Engine, error) {
-			engine, err := s.motionEngineForStart()
+			engine, admission, err := s.motionEngineForStart()
 			if err != nil {
 				return nil, err
 			}
-			return engine, nil
+			return admittedMotionEngine{Engine: engine, admission: admission}, nil
 		},
 		Current: func() modes.Engine {
 			engine := s.currentMotionEngine()
