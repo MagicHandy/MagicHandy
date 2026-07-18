@@ -66,6 +66,7 @@ type Store struct {
 	path       string
 	legacyPath string
 	db         *dbstore.DB
+	ownsDB     bool
 	recovered  bool
 }
 
@@ -80,14 +81,30 @@ func Open(dataDir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	store, err := openWithDatabase(database, true)
+	if err != nil {
+		_ = database.Close()
+	}
+	return store, err
+}
+
+// OpenWithDatabase borrows the process-owned datastore for the memory domain.
+func OpenWithDatabase(database *dbstore.DB) (*Store, error) {
+	if database == nil {
+		return nil, errors.New("memory datastore is required")
+	}
+	return openWithDatabase(database, false)
+}
+
+func openWithDatabase(database *dbstore.DB, ownsDB bool) (*Store, error) {
 	store := &Store{
 		path:       database.Path(),
 		legacyPath: filepath.Join(database.DataDir(), memoriesFileName),
 		db:         database,
+		ownsDB:     ownsDB,
 	}
 
 	if err := store.importLegacyMemories(context.Background()); err != nil {
-		_ = database.Close()
 		return nil, err
 	}
 	return store, nil
@@ -102,6 +119,9 @@ func (s *Store) Recovered() bool {
 
 // Close releases the memory store database handle.
 func (s *Store) Close() error {
+	if !s.ownsDB {
+		return nil
+	}
 	return s.db.Close()
 }
 

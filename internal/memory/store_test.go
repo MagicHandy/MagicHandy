@@ -14,6 +14,7 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	first, err := store.Add("Likes slow starts.")
 	if err != nil {
@@ -35,6 +36,7 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
+	t.Cleanup(func() { _ = reopened.Close() })
 	snapshot, err := reopened.Snapshot()
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
@@ -56,6 +58,7 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen after clear: %v", err)
 	}
+	t.Cleanup(func() { _ = final.Close() })
 	finalSnapshot, err := final.Snapshot()
 	if err != nil {
 		t.Fatalf("final Snapshot: %v", err)
@@ -70,6 +73,7 @@ func TestPromptTextsHonorsItemAndGlobalSwitches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	kept, err := store.Add("Kept memory.")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -172,6 +176,7 @@ func TestStoreValidatesInputAndUnknownIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	if _, err := store.Add("   "); err == nil {
 		t.Fatal("Add accepted blank text")
 	}
@@ -201,6 +206,7 @@ func TestStoreRecoversFromCorruptFileWithoutFailingStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open corrupt: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	if !store.Recovered() {
 		t.Fatal("corrupt file did not report recovery")
 	}
@@ -243,6 +249,7 @@ func TestStoreNormalizesLoadedMemoryFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	if !store.Recovered() {
 		t.Fatal("invalid loaded memory records should report recovery")
 	}

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -172,6 +174,60 @@ func TestStateReturnsSettingsSnapshotWithoutSecrets(t *testing.T) {
 	}
 	if !body.Settings.Device.ConnectionKeySet {
 		t.Fatal("state did not report that a connection key is configured")
+	}
+}
+
+func TestStateReportsDatastoreRecoveryWithoutLeakingPreservedBytes(t *testing.T) {
+	dir := t.TempDir()
+	marker := "preserved-private-datastore-marker"
+	if err := os.WriteFile(filepath.Join(dir, "magichandy.db"), []byte(marker), 0o600); err != nil {
+		t.Fatalf("write corrupt datastore: %v", err)
+	}
+	settingsStore, err := config.OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	server := newTestServerWithStore(t, settingsStore, Runtime{})
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/state", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"recovered":true`) || !strings.Contains(body, `"datastore_recovered_path":`) {
+		t.Fatalf("state did not report datastore recovery: %s", body)
+	}
+	if strings.Contains(body, marker) {
+		t.Fatalf("state leaked preserved datastore contents: %s", body)
+	}
+}
+
+func TestBorrowedLogicalStoresDoNotCloseProcessDatastore(t *testing.T) {
+	server := newTestServer(t)
+	database := server.store.Datastore().SQL()
+	borrowers := []struct {
+		name  string
+		close func() error
+	}{
+		{name: "memory", close: server.personalization.memory.Close},
+		{name: "prompt sets", close: server.personalization.prompts.Close},
+		{name: "chat log", close: server.chatLog.Close},
+		{name: "patterns", close: server.patterns.Close},
+		{name: "model inventory", close: server.models.Close},
+	}
+	for _, borrower := range borrowers {
+		if err := borrower.close(); err != nil {
+			t.Fatalf("close borrowed %s store: %v", borrower.name, err)
+		}
+		if err := database.Ping(); err != nil {
+			t.Fatalf("borrowed %s store closed process datastore: %v", borrower.name, err)
+		}
+	}
+
+	server.Close()
+	if err := database.Ping(); err == nil {
+		t.Fatal("server owner close left process datastore open")
 	}
 }
 

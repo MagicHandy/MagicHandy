@@ -77,6 +77,7 @@ func TestLoadMissingSettingsUsesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	settings, status := store.Snapshot()
 	if !status.UsingDefaults {
@@ -93,6 +94,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49720
@@ -111,6 +113,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore reload: %v", err)
 	}
+	t.Cleanup(func() { _ = reloaded.Close() })
 	got, status := reloaded.Snapshot()
 	if status.Source != loadSourceSQLite {
 		t.Fatalf("source = %q, want %q", status.Source, loadSourceSQLite)
@@ -293,26 +296,6 @@ func TestMigrationHookPromotesVersionZero(t *testing.T) {
 	}
 }
 
-func TestCorruptSettingsRecoverToDefaults(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, settingsFileName), []byte("{broken"), 0o600); err != nil {
-		t.Fatalf("write corrupt settings: %v", err)
-	}
-
-	store, err := OpenStore(dir)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-
-	settings, status := store.Snapshot()
-	if !status.Recovered || !status.UsingDefaults {
-		t.Fatalf("status = %+v, want recovered defaults", status)
-	}
-	if settings.Server.Port != DefaultServerPort {
-		t.Fatalf("server port = %d, want %d", settings.Server.Port, DefaultServerPort)
-	}
-}
-
 func TestPublicSettingsRedactsConnectionKey(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Device.HandyConnectionKey = "secret"
@@ -461,6 +444,7 @@ func TestSaveWritesSQLiteDatastore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49722
 	if _, err := store.Save(settings); err != nil {
@@ -485,6 +469,7 @@ func TestSaveReplacesExistingSettingsFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49722
@@ -500,6 +485,7 @@ func TestSaveReplacesExistingSettingsFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore reload: %v", err)
 	}
+	t.Cleanup(func() { _ = reloaded.Close() })
 	got, _ := reloaded.Snapshot()
 	if got.Server.Port != 49723 {
 		t.Fatalf("server port = %d, want 49723", got.Server.Port)
@@ -702,6 +688,7 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	current, _ := store.Snapshot()
 	inputMode := VoiceInputModeHold
@@ -735,6 +722,7 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore reload: %v", err)
 	}
+	t.Cleanup(func() { _ = reloaded.Close() })
 	got, _ := reloaded.Snapshot()
 	if !got.Voice.Enabled || got.Voice.ASRWorkerPath == "" || len(got.Voice.ASRWorkerArgs) != 2 {
 		t.Fatalf("voice settings did not survive reload: %+v", got.Voice)

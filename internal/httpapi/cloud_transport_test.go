@@ -228,6 +228,7 @@ func newCloudTestServer(t *testing.T, runtime Runtime) *Server {
 	if err != nil {
 		t.Fatalf("New server: %v", err)
 	}
+	t.Cleanup(server.Close)
 	return server
 }
 

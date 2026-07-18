@@ -214,8 +214,8 @@ func TestOllamaProviderDoesNotRequireManagedLlamaRuntime(t *testing.T) {
 func TestModelManagerStorageFailuresAreExplicitAndRedacted(t *testing.T) {
 	server := newTestServer(t)
 	ollamaRoot := writeHTTPAPIOllamaFixture(t)
-	if err := server.models.Close(); err != nil {
-		t.Fatalf("close model manager: %v", err)
+	if _, err := server.store.Datastore().SQL().Exec(`DROP TABLE llm_models`); err != nil {
+		t.Fatalf("remove model inventory table: %v", err)
 	}
 
 	requests := []*http.Request{

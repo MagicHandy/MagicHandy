@@ -301,8 +301,8 @@ func TestSpeakRepliesOffMeansNoTTSEnqueue(t *testing.T) {
 
 func TestChatLogStorageFailureIsExplicitAndRedacted(t *testing.T) {
 	server := newTestServer(t)
-	if err := server.chatLog.Close(); err != nil {
-		t.Fatalf("close chat log: %v", err)
+	if _, err := server.store.Datastore().SQL().Exec(`DROP TABLE messages`); err != nil {
+		t.Fatalf("remove chat log table: %v", err)
 	}
 
 	recorder := httptest.NewRecorder()

@@ -68,7 +68,12 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	settings, loadStatus := store.Snapshot()
 	if loadStatus.Recovered {
-		logger.Warn("settings recovered with defaults", "source", loadStatus.Source, "message", loadStatus.Message)
+		logger.Warn(
+			"settings or datastore recovered",
+			"source", loadStatus.Source,
+			"message", loadStatus.Message,
+			"datastore_backup", loadStatus.DatastoreRecoveredPath,
+		)
 	} else if loadStatus.UsingDefaults {
 		logger.Info("settings using defaults", "data_dir", loadStatus.DataDir)
 	}

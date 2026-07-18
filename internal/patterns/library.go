@@ -19,7 +19,8 @@ import (
 
 // Library owns durable pattern/program rows in the app datastore.
 type Library struct {
-	db *dbstore.DB
+	db     *dbstore.DB
+	ownsDB bool
 }
 
 const patternByIDQuery = `
@@ -35,9 +36,24 @@ func Open(dataDir string) (*Library, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open pattern library: %w", err)
 	}
-	library := &Library{db: database}
-	if err := library.seedBuiltins(context.Background()); err != nil {
+	library, err := openWithDatabase(database, true)
+	if err != nil {
 		_ = database.Close()
+	}
+	return library, err
+}
+
+// OpenWithDatabase borrows the process-owned datastore for pattern content.
+func OpenWithDatabase(database *dbstore.DB) (*Library, error) {
+	if database == nil {
+		return nil, errors.New("pattern datastore is required")
+	}
+	return openWithDatabase(database, false)
+}
+
+func openWithDatabase(database *dbstore.DB, ownsDB bool) (*Library, error) {
+	library := &Library{db: database, ownsDB: ownsDB}
+	if err := library.seedBuiltins(context.Background()); err != nil {
 		return nil, err
 	}
 	return library, nil
@@ -45,6 +61,9 @@ func Open(dataDir string) (*Library, error) {
 
 // Close releases the library database handle.
 func (l *Library) Close() error {
+	if !l.ownsDB {
+		return nil
+	}
 	return l.db.Close()
 }
 

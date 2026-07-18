@@ -70,6 +70,7 @@ type ModelSnapshot struct {
 // ModelManager owns durable model metadata and managed file imports.
 type ModelManager struct {
 	db           *dbstore.DB
+	ownsDB       bool
 	modelsDir    string
 	downloadsDir string
 
@@ -87,24 +88,38 @@ func OpenModelManager(dataDir string) (*ModelManager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open model inventory: %w", err)
 	}
+	manager, err := openModelManagerWithDatabase(database, true)
+	if err != nil {
+		_ = database.Close()
+	}
+	return manager, err
+}
+
+// OpenModelManagerWithDatabase borrows the process-owned datastore.
+func OpenModelManagerWithDatabase(database *dbstore.DB) (*ModelManager, error) {
+	if database == nil {
+		return nil, errors.New("model inventory datastore is required")
+	}
+	return openModelManagerWithDatabase(database, false)
+}
+
+func openModelManagerWithDatabase(database *dbstore.DB, ownsDB bool) (*ModelManager, error) {
 	manager := &ModelManager{
 		db:           database,
+		ownsDB:       ownsDB,
 		modelsDir:    filepath.Join(database.DataDir(), "models", "gguf"),
 		downloadsDir: filepath.Join(database.DataDir(), "downloads"),
 		jobs:         make(map[string]*modelImportJob),
 	}
 	for _, directory := range []string{manager.modelsDir, manager.downloadsDir} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
-			_ = database.Close()
 			return nil, fmt.Errorf("create model directory: %w", err)
 		}
 	}
 	if err := manager.removeStalePartials(); err != nil {
-		_ = database.Close()
 		return nil, err
 	}
 	if err := manager.reconcileModelDeletions(); err != nil {
-		_ = database.Close()
 		return nil, err
 	}
 	return manager, nil
@@ -125,6 +140,9 @@ func (m *ModelManager) Close() error {
 	}
 	m.mu.Unlock()
 	m.wg.Wait()
+	if !m.ownsDB {
+		return nil
+	}
 	return m.db.Close()
 }
 

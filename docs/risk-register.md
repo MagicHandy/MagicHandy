@@ -588,23 +588,30 @@ Mitigation:
   SQLite transaction and archives only after commit, with settings import
   reported in load status
 - forward-only migrations keyed on `PRAGMA user_version`, run transactionally at
-  open; a schema newer than the binary is a clear error, never a silent
-  downgrade
+  open; negative and newer-than-binary versions are clear errors, never an
+  index panic or silent downgrade; current schemas are checked for required
+  tables, columns, indexes, foreign-key enforcement, and referential integrity
 - schema v8 reserves the divergent Rockfire v4-v7 lineage and reconciles its
   core settings/prompt shapes idempotently while preserving uninterpreted LSO
   tables for the explicit migration phase
-- WAL plus `busy_timeout` plus a serialized single writer so the app's own
-  concurrency cannot deadlock the store
+- one process-owned connection pool shared by all logical domains, with WAL,
+  per-connection pragmas, a bounded four-connection pool, one warm idle
+  connection, `busy_timeout`, and one serialized writer
 - re-measure binary size and idle/active RSS when Phase 11B lands and record in
   `docs/goal-scorecard.md`; the Phase 11B RSS miss is recorded as a waiver, not
   silently relaxed
 - preserve the redaction contract: the connection key is never returned by
   reads, diagnostics, or exports; the `.db` file carries the same at-rest
   sensitivity as `settings.json` did
-- corrupt-store startup: a corrupt legacy JSON file still recovers to defaults,
-  but a corrupt `magichandy.db` currently fails at open rather than recovering
-  (the JSON stores never failed startup). Restoring never-fail startup — back up
-  the bad DB, start fresh, and report it in load status — is a tracked follow-up
+- corrupt-store startup: `quick_check(1)` identifies physical corruption,
+  quarantines the exact DB/WAL/SHM files in a private recovery directory, starts
+  a fresh current schema, and reports only the backup path; logical schema
+  damage still fails clearly rather than discarding data
+- schema v10 archives invalid or oversized active settings documents before
+  defaults become active, caps recovery history at 20, and never exposes the
+  preserved document through public state or diagnostics
+- restrict the data directory to `0700` and database sidecars to `0600` on
+  POSIX; Windows uses the current user's profile ACL
 
 Exit evidence:
 
@@ -615,6 +622,12 @@ Exit evidence:
 - Phase 14: patterns, programs, and reversible feedback round-trip through
   SQLite; synthetic main-v2 and Rockfire-v7 fixtures migrate to v8 without data
   loss; pure-Go build and size budget remain green
+- 2026-07-18 persistence audit: physical-corruption quarantine, settings
+  recovery history, negative/newer-version handling, current-schema and
+  foreign-key validation, transaction-panic rollback, private POSIX modes, and
+  one shared production pool have focused regression coverage; the stripped
+  binary remains below 30 MB and current idle RSS remains within the SQLite
+  waiver
 
 Relates to R8 (user migration) and R11 (goals unmeasured).
 
