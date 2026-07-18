@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 832,628 raw / 547,344 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 388,392 raw
-   / 109,947 gzip bytes, and the stripped binary is 14,466,560 bytes. These
+   browser payload is 839,568 raw / 549,067 gzip bytes because the isolated
+   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 395,332 raw
+   / 111,650 gzip bytes, and the stripped binary is 14,466,560 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -116,6 +116,24 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-18** - Frontend route, state, and accessibility audit: settings
+  drafts survive subsection navigation; quick controls flush pending teardown
+  writes; chat history failures are retryable and cross-tab tail reads retry on
+  the next backend poll; settings, memory, prompt, model, and voice failures no
+  longer masquerade as valid empty/disabled state; and rapid persistence/mode
+  mutations are serialized before rerender. Mobile navigation, manual Speed,
+  and ASR/TTS provider controls have distinct accessible names; route titles
+  and library heading levels are explicit. All top-level routes, five settings
+  subsections, and four library views passed 1440x900 and 390x844 rendered DOM
+  checks with zero horizontal overflow, duplicate IDs, unnamed controls, or
+  nested interactive elements. Typecheck/build and all 141 frontend tests pass.
+  Relative to checked-in `main`, HTML/CSS/JS grew 6,940 raw / 1,462 gzip bytes
+  to 395,332 / 111,650; the complete embedded payload is 839,568 / 549,067
+  using per-file gzip level 9 with a zero timestamp. Hardware behavior is
+  unchanged. Go tests, vet, lint, and the pure-Go build pass; the local race
+  build remains unavailable because this host has no `gcc`, while CI retains
+  the race gate.
 
 - **2026-07-18** - SQLite persistence reliability audit: production now owns one
   bounded database pool instead of six independently churned pools, and every

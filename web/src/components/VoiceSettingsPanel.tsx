@@ -29,6 +29,7 @@ const NEUTTS_SAMPLING_LABELS: Record<string, string> = {
 };
 const DEFAULT_NEUTTS_SEED = 3;
 const MAX_NEUTTS_SEED = 0xffffffff;
+const message = (error: unknown) => error instanceof Error ? error.message : "Voice runtime request failed.";
 
 function newNeuTTSSeed(current: number) {
   const values = new Uint32Array(1);
@@ -63,8 +64,8 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
     setReferenceOpen(false);
     window.requestAnimationFrame(() => referenceTrigger.current?.focus());
   }, []);
-  const providerSelect = (value: string, options: string[] | undefined, onChange: (value: string) => void) => (
-    <select value={value} disabled={locked} onChange={(event) => onChange(event.target.value)}>
+  const providerSelect = (accessibleLabel: string, value: string, options: string[] | undefined, onChange: (value: string) => void) => (
+    <select aria-label={accessibleLabel} value={value} disabled={locked} onChange={(event) => onChange(event.target.value)}>
       {(options?.length ? options : [value]).map((option) => <option key={option} value={option}>{PROVIDER_LABELS[option] ?? option}</option>)}
     </select>
   );
@@ -72,11 +73,13 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
   return (
     <>
       <h2 className="section-title">Voice</h2>
+      {voiceRuntime.error && <p className="form-status form-status-error" role="alert">Voice runtime unavailable: {voiceRuntime.error}</p>}
+      {voiceRuntime.loading && !voiceRuntime.error && <p className="form-status" role="status">Checking voice runtime...</p>}
       <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.enabled} disabled={locked} onChange={(event) => patch({ enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>Enable voice workers</span></label>
 
       <div className="divider" />
       <h3 className="group-title">Speech input (ASR)</h3>
-      <label className="field"><span className="label">Provider</span>{providerSelect(voice.asr_provider, s.options.asr_providers, (asr_provider) => patch({ asr_provider }))}</label>
+      <label className="field"><span className="label">Provider</span>{providerSelect("Speech input provider", voice.asr_provider, s.options.asr_providers, (asr_provider) => patch({ asr_provider }))}</label>
       {voice.asr_provider === "parakeet_managed" && <>
         <label className="field"><span className="label">Runtime source</span><select value={parakeetSource} disabled={locked} onChange={(event) => patch({ parakeet_source: event.target.value })}>{(s.options.parakeet_sources?.length ? s.options.parakeet_sources : [parakeetSource]).map((source) => <option key={source} value={source}>{PARAKEET_SOURCE_LABELS[source] ?? source}</option>)}</select></label>
         {parakeetSource === "app_managed" && <p className="form-status">Uses the worker, runner, and model installed by MagicHandy. No custom paths are required.</p>}
@@ -107,7 +110,7 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
 
       <div className="divider" />
       <h3 className="group-title">Speech output (TTS)</h3>
-      <label className="field"><span className="label">Provider</span>{providerSelect(voice.tts_provider, s.options.tts_providers, (tts_provider) => patch({ tts_provider }))}</label>
+      <label className="field"><span className="label">Provider</span>{providerSelect("Speech output provider", voice.tts_provider, s.options.tts_providers, (tts_provider) => patch({ tts_provider }))}</label>
       {voice.tts_provider === "elevenlabs" && <>
         <label className="field"><span className="label">API key {voice.elevenlabs_key_set && <span className="badge">set</span>}</span><input type="password" autoComplete="off" placeholder={voice.elevenlabs_key_set ? "set (leave blank to keep)" : "Paste API key"} value={newKey} disabled={locked} onChange={(event) => setNewKey(event.target.value)} /></label>
         <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(event) => setClearKey(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Clear API key on save</span></label>
@@ -205,11 +208,14 @@ function useVoiceRuntimeStatus() {
   const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
   const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
   const [modules, setModules] = useState<Record<string, VoiceModuleStatus>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const mounted = useRef(false);
   const inFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return inFlight.current;
+    if (mounted.current) setLoading(true);
     const request = (async () => {
       try {
         const response = await api.voiceStatus();
@@ -217,9 +223,11 @@ function useVoiceRuntimeStatus() {
         setWorkers(response.voice.workers ?? {});
         setModules(response.voice.modules ?? {});
         setRequests(response.requests ?? []);
-      } catch {
-        // Core-offline state is rendered by the persistent shell. Keep the last
-        // coherent snapshot until the status endpoint recovers.
+        setError("");
+      } catch (requestError) {
+        if (mounted.current) setError(message(requestError));
+      } finally {
+        if (mounted.current) setLoading(false);
       }
     })();
     inFlight.current = request;
@@ -246,5 +254,5 @@ function useVoiceRuntimeStatus() {
     };
   }, [refresh]);
 
-  return { workers, requests, modules, refresh };
+  return { workers, requests, modules, loading, error, refresh };
 }

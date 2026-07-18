@@ -43,6 +43,7 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
 
   return (
     <section className="library-view" aria-label="Programs and funscripts">
+      {programs.length > 0 && <h2 className="visually-hidden">Programs</h2>}
       <div className="program-toolbar">
         <div className="segmented compact-segmented" role="group" aria-label="Import as">
           <button type="button" aria-pressed={importAs === "program"} data-active={importAs === "program" || undefined} onClick={() => setImportAs("program")}>Program</button>

@@ -1,6 +1,6 @@
 // Manual motion, explicitly badged "testing": it drives the device directly to
 // check the connection. Normal motion comes from chat and modes.
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api } from "../api/client";
 import { useAppState, useToast } from "../state/app-state";
 
@@ -11,6 +11,7 @@ export function ManualMotionTest() {
   const running = motion?.engine?.running === true;
   const [pattern, setPattern] = useState("stroke");
   const [speed, setSpeed] = useState(50);
+  const speedID = useId();
 
   async function start() {
     try {
@@ -54,9 +55,9 @@ export function ManualMotionTest() {
           <option value="tease">Tease</option>
         </select>
       </label>
-      <label className="field">
-        <span className="label">Speed <output>{speed}%</output></span>
-        <input type="range" min={1} max={100} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} disabled={locked} />
+      <label className="field" htmlFor={speedID}>
+        <span className="label">Speed <output htmlFor={speedID}>{speed}%</output></span>
+        <input id={speedID} aria-label="Speed" type="range" min={1} max={100} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} disabled={locked} />
       </label>
     </div>
   );

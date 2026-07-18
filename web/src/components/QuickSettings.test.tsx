@@ -94,13 +94,35 @@ describe("QuickSettings", () => {
     expect(app.show).toHaveBeenCalledWith("backend rejected the range", "error");
   });
 
-  it("clears its debounce timer on unmount", async () => {
+  it("flushes a pending edit on unmount", async () => {
+    applyQuick.mockResolvedValue(undefined);
     const result = render(<QuickSettings section="limits" />);
     fireEvent.change(screen.getByRole("slider", { name: "Speed minimum" }), { target: { value: "20" } });
 
     result.unmount();
-    await act(async () => vi.advanceTimersByTimeAsync(500));
+    await act(async () => Promise.resolve());
 
-    expect(applyQuick).not.toHaveBeenCalled();
+    expect(applyQuick).toHaveBeenCalledWith({ speed_min_percent: 20 });
+  });
+
+  it("flushes an edit queued behind an in-flight request after unmount", async () => {
+    let resolveFirst!: () => void;
+    applyQuick
+      .mockImplementationOnce(() => new Promise<void>((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValueOnce(undefined);
+    const result = render(<QuickSettings section="limits" />);
+
+    fireEvent.change(screen.getByRole("slider", { name: "Speed minimum" }), { target: { value: "20" } });
+    await act(async () => vi.advanceTimersByTimeAsync(180));
+    fireEvent.change(screen.getByRole("slider", { name: "Speed maximum" }), { target: { value: "35" } });
+    result.unmount();
+
+    await act(async () => {
+      resolveFirst();
+      await Promise.resolve();
+    });
+
+    expect(applyQuick).toHaveBeenCalledTimes(2);
+    expect(applyQuick).toHaveBeenLastCalledWith({ speed_max_percent: 35 });
   });
 });

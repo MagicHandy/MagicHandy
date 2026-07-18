@@ -12,7 +12,8 @@ const LINKS = [
 ] as const;
 
 export function routeBase(hash: string): string {
-  return hash.replace(/^#\/?/, "").split("/")[0] || "chat";
+  const candidate = hash.replace(/^#\/?/, "").split("/")[0] || "chat";
+  return LINKS.some((link) => link.base === candidate) ? candidate : "chat";
 }
 
 export function NavRail() {
@@ -33,7 +34,7 @@ export function NavRail() {
       <div className="nav-divider" aria-hidden="true" />
       <div className="nav-links">
         {LINKS.map((l) => (
-          <a key={l.base} className="nav-link" href={l.href} aria-current={active === l.base ? "page" : undefined}>
+          <a key={l.base} className="nav-link" href={l.href} aria-label={l.label} aria-current={active === l.base ? "page" : undefined}>
             <span className="icon"><l.Icon /></span>
             <span className="label">{l.label}</span>
           </a>

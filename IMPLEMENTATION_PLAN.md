@@ -87,7 +87,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.11 | Voice protocol, queue, provider, and process-lifecycle reliability audit | **Complete** | #89 |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; UI reliability audit complete; HW feel check open** | #52, #91 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
-| 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
+| 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
@@ -235,6 +235,16 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    malformed snapshots defensively. Focused tests cover failures, concurrency,
    preview ordering, focus retention, and out-of-range values. Hardware motion
    behavior is unchanged.
+11. **Frontend route/state/accessibility audit (2026-07-18)**: Settings keeps
+   unsaved drafts across its subsection routes; pending quick-control writes
+   flush on teardown; chat history and cross-tab synchronization failures are
+   explicit and retryable; and settings, memory, prompt, model, and voice reads
+   distinguish unavailable data from valid empty state. Ref-level guards
+   serialize persistence and mode mutations before disabled controls rerender.
+   Mobile navigation, manual Speed, and speech provider names are explicit;
+   document titles and library heading progression follow the active route.
+   Every top-level route, settings subsection, and library view passed desktop
+   and mobile DOM/overflow inspection. Hardware behavior is unchanged.
 
 ### UI Shell Redesign (Sidebar Navigation)
 

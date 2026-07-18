@@ -38,6 +38,7 @@ describe("pattern library components", () => {
       />,
     );
     const weight = screen.getByRole("spinbutton", { name: "Weight" });
+    expect(screen.getByRole("heading", { level: 2, name: "Patterns" })).toBeInTheDocument();
 
     fireEvent.change(weight, { target: { value: "2" } });
     fireEvent.blur(weight);
@@ -80,6 +81,35 @@ describe("pattern library components", () => {
     result.rerender(<ProgramLibrary {...props} engine={engineWithPhase(-0.4)} />);
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
     expect(screen.getByRole("progressbar").firstElementChild).toHaveStyle({ width: "0%" });
+  });
+
+  it("provides a level-two heading before program card headings", () => {
+    render(<ProgramLibrary
+      programs={[{
+        id: "program",
+        name: "Program",
+        origin: "imported",
+        duration_ms: 1000,
+        points: [{ time_ms: 0, position_percent: 0 }, { time_ms: 1000, position_percent: 100 }],
+        preview_samples: [{ time_ms: 0, position_percent: 0 }, { time_ms: 1000, position_percent: 100 }],
+        created_at: "now",
+        updated_at: "now",
+      }]}
+      locked={false}
+      offline={false}
+      busyKeys={new Set()}
+      maxIntensity={40}
+      onImport={async () => {}}
+      onPlay={async () => {}}
+      onPause={async () => {}}
+      onResume={async () => {}}
+      onStop={async () => {}}
+      onExport={async () => {}}
+      onDelete={async () => {}}
+    />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "Programs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Program" })).toBeInTheDocument();
   });
 
   it("does not emit invalid SVG coordinates for malformed samples", () => {

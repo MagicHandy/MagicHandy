@@ -5,7 +5,7 @@
 // malformed-response state. Chat can start, adjust, and stop motion through
 // the backend contract; the frontend sends only text. When speak-replies is
 // on, the controller tab (the audio-lease owner) plays completed TTS clips.
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, streamChat } from "../api/client";
 import type { ChatHistoryMessage, ChatLogMessage } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
@@ -22,6 +22,7 @@ interface Msg {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const MAX_HISTORY = 12;
+const message = (error: unknown) => error instanceof Error ? error.message : "Conversation history request failed.";
 
 // The LLM context convention wraps assistant turns as the JSON contract body.
 function toLlmHistory(message: ChatLogMessage): ChatHistoryMessage {
@@ -43,55 +44,90 @@ export function ChatPanel() {
   const history = useRef<ChatHistoryMessage[]>([]);
   const lastSeq = useRef(0);
   const seeded = useRef(false);
+  const mounted = useRef(false);
+  const historyLoad = useRef<Promise<void> | null>(null);
+  const tailLoad = useRef<Promise<void> | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [tailError, setTailError] = useState("");
   const [voiceActive, setVoiceActive] = useState(false);
 
-  // Seed the panel from the canonical server log once.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
+  const loadHistory = useCallback(async () => {
+    if (historyLoad.current) return historyLoad.current;
+    setHistoryLoading(true);
+    setHistoryError("");
+    const request = (async () => {
       try {
         const res = await api.getChatMessages();
-        if (cancelled || seeded.current) return;
+        if (!mounted.current) return;
         seeded.current = true;
-        if (res.messages.length > 0) {
-          setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content })));
-        }
+        setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content })));
         history.current = res.messages.slice(-MAX_HISTORY).map(toLlmHistory);
         lastSeq.current = res.latest_seq;
+        setHistoryError("");
         if (res.latest_seq > res.cursor) void api.advanceChatCursor(res.latest_seq).catch(() => undefined);
-      } catch {
-        // Core offline: the shell banner reports it; the panel stays empty.
+      } catch (error) {
+        if (!mounted.current) return;
+        seeded.current = false;
+        setHistoryError(message(error));
+      } finally {
+        if (mounted.current) setHistoryLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    historyLoad.current = request;
+    try {
+      await request;
+    } finally {
+      if (historyLoad.current === request) historyLoad.current = null;
+    }
   }, []);
 
-  // Continuity with other tabs: when the shared log advances beyond what
-  // this tab has displayed (and it is not mid-exchange), pull the tail.
-  const latestSeq = state?.chat?.latest_seq ?? 0;
-  useEffect(() => {
-    if (busy || !seeded.current || latestSeq <= lastSeq.current) return;
-    let cancelled = false;
-    void (async () => {
+  const loadTail = useCallback(async () => {
+    if (tailLoad.current || !seeded.current || busyRef.current) return tailLoad.current;
+    const after = lastSeq.current;
+    const request = (async () => {
       try {
-        const res = await api.getChatMessages(lastSeq.current);
-        if (cancelled || busy) return;
+        const res = await api.getChatMessages(after);
+        if (!mounted.current || busyRef.current) return;
         const fresh = res.messages.filter((m) => m.seq > lastSeq.current);
-        if (!fresh.length) return;
+        if (!fresh.length) {
+          setTailError(res.latest_seq > lastSeq.current ? "Conversation updates could not be synchronized; retrying." : "");
+          return;
+        }
         setMessages((m) => [...m, ...fresh.map((x) => ({ id: `log-${x.seq}`, role: x.role, text: x.content }))]);
         history.current = [...history.current, ...fresh.map(toLlmHistory)].slice(-MAX_HISTORY);
-        lastSeq.current = res.latest_seq;
+        lastSeq.current = Math.max(lastSeq.current, res.latest_seq);
+        setTailError("");
         void api.advanceChatCursor(res.latest_seq).catch(() => undefined);
-      } catch {
-        // Retried on the next state poll.
+      } catch (error) {
+        if (mounted.current) setTailError(`Conversation updates delayed: ${message(error)} Retrying.`);
       }
     })();
+    tailLoad.current = request;
+    try {
+      await request;
+    } finally {
+      if (tailLoad.current === request) tailLoad.current = null;
+    }
+  }, []);
+
+  // Seed from the canonical log, then keep one tail request in flight. The
+  // uptime dependency retries transient failures on the next backend poll even
+  // when the latest sequence itself has not changed.
+  useEffect(() => {
+    mounted.current = true;
+    void loadHistory();
     return () => {
-      cancelled = true;
+      mounted.current = false;
     };
-  }, [latestSeq, busy]);
+  }, [loadHistory]);
+
+  const latestSeq = state?.chat?.latest_seq ?? 0;
+  const pollEpoch = state?.uptime_seconds ?? 0;
+  useEffect(() => {
+    if (busy || !seeded.current || latestSeq <= lastSeq.current) return;
+    void loadTail();
+  }, [busy, latestSeq, loadTail, pollEpoch]);
 
   useEffect(() => {
     if (stick.current) {
@@ -114,7 +150,8 @@ export function ChatPanel() {
     setShowJump(false);
   }
 
-  const locked = !backendOnline || !state || readOnly;
+  const historyUnavailable = historyLoading || Boolean(historyError);
+  const locked = !backendOnline || !state || readOnly || historyUnavailable;
 
   // Speech input shows only when it can work: voice on and an ASR provider
   // selected. A configured-but-stopped worker leaves the button disabled with
@@ -200,7 +237,16 @@ export function ChatPanel() {
   return (
     <div className="chat">
       <div className="chat-log-shell">
-        <div className="chat-log" ref={logRef} onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions">
+        <div className="chat-log" ref={logRef} onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions" aria-busy={historyLoading || undefined}>
+          {historyLoading && <div className="chat-history-state" role="status">Loading conversation…</div>}
+          {historyError && (
+            <div className="chat-history-state" role="alert">
+              <strong>Conversation unavailable</strong>
+              <span>{historyError}</span>
+              <button type="button" className="btn btn-secondary" onClick={() => void loadHistory()}>Retry</button>
+            </div>
+          )}
+          {!historyLoading && !historyError && messages.length === 0 && <div className="chat-history-state chat-history-empty">No messages yet</div>}
           {messages.map((m) => (
             <div key={m.id} className="chat-message" data-role={m.role} data-streaming={m.streaming || undefined} data-state={m.warning ? "warning" : undefined}>
               <span className="chat-avatar" aria-hidden="true">{m.role === "user" ? "Y" : "M"}</span>
@@ -210,6 +256,7 @@ export function ChatPanel() {
               </div>
             </div>
           ))}
+          {tailError && <p className="form-status chat-sync-status" role="status">{tailError}</p>}
         </div>
         {showJump && (
           <button type="button" className="btn btn-secondary chat-jump" onClick={jump}>Jump to latest</button>
@@ -247,7 +294,7 @@ export function ChatPanel() {
             maxLength={1000}
             value={draft}
             disabled={locked || voiceActive}
-            placeholder={readOnly ? "Read-only — this tab can't drive motion." : "Message MagicHandy…"}
+            placeholder={historyError ? "Conversation history unavailable." : historyLoading ? "Loading conversation…" : readOnly ? "Read-only — this tab can't drive motion." : "Message MagicHandy…"}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -258,7 +305,7 @@ export function ChatPanel() {
           />
           <button type="submit" className="btn btn-primary chat-send" disabled={locked || busy || voiceActive || !draft.trim()}>Send</button>
         </div>
-        <span className="visually-hidden" role="status">{busy ? "Streaming" : voiceActive ? "Voice input active" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
+        <span className="visually-hidden" role="status">{busy ? "Streaming" : voiceActive ? "Voice input active" : historyError ? "Conversation history unavailable" : historyLoading ? "Loading conversation history" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
       </form>
     </div>
   );

@@ -29,7 +29,7 @@ export function App() {
             <button type="button" className="btn btn-secondary" onClick={refresh}>Retry core connection</button>
           )}
         </section>
-      ) : <ErrorBoundary key={route}>
+      ) : <ErrorBoundary key={base}>
         {base === "modes" ? (
           <PresetModesRoute />
         ) : base === "library" ? (

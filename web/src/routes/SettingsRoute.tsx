@@ -38,21 +38,28 @@ export function SettingsRoute() {
   const [clearKey, setClearKey] = useState(false);
   const [newElevenLabsKey, setNewElevenLabsKey] = useState("");
   const [clearElevenLabsKey, setClearElevenLabsKey] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
   const savingRef = useRef(false);
-  const locked = !backendOnline || readOnly;
+  const locked = !backendOnline || readOnly || loading;
 
   async function load() {
+    if (!mounted.current) return;
     const generation = ++loadGeneration.current;
+    setLoading(true);
+    setLoadError("");
     try {
       const res = await api.getSettings();
       if (!mounted.current || generation !== loadGeneration.current) return;
       setS(res.settings);
       setSaved(res.settings);
     } catch (e) {
-      if (mounted.current && generation === loadGeneration.current) show(msg(e), "error");
+      if (mounted.current && generation === loadGeneration.current) setLoadError(msg(e));
+    } finally {
+      if (mounted.current && generation === loadGeneration.current) setLoading(false);
     }
   }
   useEffect(() => {
@@ -130,13 +137,15 @@ export function SettingsRoute() {
     };
     try {
       await api.saveSettings(update);
-      setNewKey("");
-      setClearKey(false);
-      setNewElevenLabsKey("");
-      setClearElevenLabsKey(false);
       show("Settings saved.");
       refresh();
-      await load();
+      if (mounted.current) {
+        setNewKey("");
+        setClearKey(false);
+        setNewElevenLabsKey("");
+        setClearElevenLabsKey(false);
+        await load();
+      }
     } catch (e) {
       show(msg(e), "error");
     } finally {
@@ -155,7 +164,20 @@ export function SettingsRoute() {
     setClearElevenLabsKey(false);
   }
 
-  if (!s) return (<><WorkspaceHead title="Settings" /><p className="form-status">Loading settings…</p></>);
+  if (!s) return (
+    <>
+      <WorkspaceHead title="Settings" />
+      {loadError ? (
+        <div className="empty-state compact-empty" role="alert">
+          <h2>Settings unavailable</h2>
+          <p>{loadError}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => void load()}>Retry</button>
+        </div>
+      ) : (
+        <p className="form-status" role="status">{loading ? "Loading settings…" : "Settings unavailable."}</p>
+      )}
+    </>
+  );
 
   const opt = s.options ?? {
     hsp_dispatch_owners: [],
@@ -189,6 +211,15 @@ export function SettingsRoute() {
           <a key={sec.id} href={`#/settings/${sec.id}`} aria-current={section === sec.id ? "page" : undefined}>{sec.label}</a>
         ))}
       </nav>
+
+      {loadError && (
+        <div className="empty-state compact-empty" role="alert">
+          <h2>Settings refresh failed</h2>
+          <p>{loadError}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => void load()}>Retry</button>
+        </div>
+      )}
+      {loading && <p className="form-status" role="status">Refreshing settings…</p>}
 
       <section className="panel">
         {section === "device" && (
@@ -258,7 +289,7 @@ export function SettingsRoute() {
 
         <div className="row-actions settings-actions">
           <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? "Saving settings" : "Save settings"}</button>
-          {locked && <span className="form-status">{backendOnline ? "Read-only client" : "Core offline"}</span>}
+          {locked && <span className="form-status">{loading ? "Refreshing settings" : backendOnline ? "Read-only client" : "Core offline"}</span>}
         </div>
       </section>
     </>

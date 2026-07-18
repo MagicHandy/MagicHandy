@@ -27,6 +27,7 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
 
   return (
     <section className="library-view" aria-label="Pattern catalog">
+      {patterns.length > 0 && <h2 className="visually-hidden">Patterns</h2>}
       <div className="library-toolbar">
         <div className="curation-readout" data-fallback={enabled === 0 || undefined}>
           <strong>{enabled === 0 ? "Deterministic fallback active" : `${enabled} ${enabled === 1 ? "pattern" : "patterns"} available to chat`}</strong>

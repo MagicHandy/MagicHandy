@@ -190,10 +190,12 @@ Exit evidence:
 
 - desktop/mobile visual checks and UI tests pass for settings, quick controls, stop, and diagnostics
 
-Status 2026-07-11: Phase 14's Browse, Programs, Author, and Training tabs passed
-rendered checks at 1280 px and 390 px. The pass found and fixed a flex-shrink
-bug that made mobile training preferences unreachable. Backend preview samples,
-not frontend interpolation, render every library curve.
+Status 2026-07-18: every top-level route, settings subsection, and Phase 14
+Browse/Programs/Author/Training view passes rendered checks at 1440x900 and
+390x844 with no horizontal overflow, unnamed controls, duplicate IDs, or nested
+interactive elements. Route titles, heading progression, mobile navigation,
+manual Speed, and speech-provider names have focused coverage. Backend preview
+samples, not frontend interpolation, render every library curve.
 
 ## R10: Scope Creep Toward Legacy Parity
 
@@ -240,21 +242,31 @@ Exit evidence:
 Level: Medium
 
 Description:
-The Go core owns only the backend. The current frontend is ~13k lines of vanilla
-JS with a shared state/element god-registry. Porting it wholesale carries the
-maintainability debt across and defeats the goal for half the codebase.
+The Go core owns only the backend. The canonical frontend is now React, but its
+route lifecycle, asynchronous backend snapshots, optional worker surfaces, and
+large integration harness can still recreate a shared-state god-module or hide
+failed reads behind plausible empty UI. The unshipped legacy JavaScript is a
+reference only and must not become a second implementation.
 
 Mitigation:
 
 - follow `docs/decisions/0004-frontend-strategy.md`: rebuild fresh, minimal-first,
   backend-state-driven; old JS is reference, not base
 - apply the size/no-god-module norms to `web/`
-- defer the heavy authoring UI rather than porting it early
+- keep route/component state scoped, distinguish loading/error/data explicitly,
+  and give independent mutation domains their own admission guards
+- keep focused component tests beside the existing app integration harness
 
 Exit evidence:
 
-- minimal UI built without a ported god-registry; `web/` respects size norms;
+- canonical React UI built without a ported god-registry; `web/` respects size
+  norms; full-route desktop/mobile checks and focused lifecycle tests pass;
   parity review documents remaining UI gaps
+
+Status 2026-07-18: route lifetime, teardown writes, failed-read honesty,
+cross-tab chat retry, mutation admission, mobile names, titles, and heading
+progression have dedicated tests. All 141 frontend tests and the full rendered
+route matrix pass; changed production files remain below the 800-line guideline.
 
 ## R13: llama.cpp Runner And Model Management Risk
 

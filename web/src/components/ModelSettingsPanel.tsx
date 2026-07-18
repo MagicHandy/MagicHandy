@@ -43,6 +43,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   const [status, setStatus] = useState<LLMProviderStatus | null>(null);
   const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
   const [ollamaMessage, setOllamaMessage] = useState("");
+  const [ollamaError, setOllamaError] = useState("");
   const [scan, setScan] = useState<OllamaModelScan | null>(null);
   const [showOllamaImport, setShowOllamaImport] = useState(false);
   const [showGGUFImport, setShowGGUFImport] = useState(false);
@@ -71,6 +72,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
 
   const refreshManager = useCallback(async () => {
     if (managerRefresh.current) return managerRefresh.current;
+    if (mounted.current) setManagerMessage("");
     const request = (async () => {
       try {
         const next = await api.llmModels();
@@ -113,10 +115,10 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       if (!mounted.current || generation !== ollamaGeneration.current) return;
       setOllamaModels(response.models);
       setOllamaMessage(response.message ?? "");
+      setOllamaError("");
     } catch (error) {
       if (!mounted.current || generation !== ollamaGeneration.current) return;
-      setOllamaModels([]);
-      setOllamaMessage(message(error));
+      setOllamaError(message(error));
     }
   }, []);
 
@@ -303,6 +305,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
           <span>{statusMessage}</span>
         </div>
       </div>
+      {managerMessage && <p className="form-status form-status-error" role="alert">Model list unavailable: {managerMessage}</p>}
 
       <div className="model-runtime-grid">
         <label className="field">
@@ -324,17 +327,19 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       </div>
 
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
-        <ManagedRuntime
-          runtime={manager?.runtime}
-          build={manager?.runtime_build}
-          selectedModel={selectedManagedModel}
-          backend={runtimeBackend}
-          locked={locked}
-          busy={busy}
-          setBackend={setRuntimeBackend}
-          onBuild={buildRuntime}
-          onCancel={cancelRuntimeBuild}
-        />
+        manager ? (
+          <ManagedRuntime
+            runtime={manager.runtime}
+            build={manager.runtime_build}
+            selectedModel={selectedManagedModel}
+            backend={runtimeBackend}
+            locked={locked}
+            busy={busy}
+            setBackend={setRuntimeBackend}
+            onBuild={buildRuntime}
+            onCancel={cancelRuntimeBuild}
+          />
+        ) : !managerMessage ? <p className="form-status" role="status">Checking managed runtime...</p> : null
       )}
 
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "external" && (
@@ -353,7 +358,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
             <label className="field"><span className="label">Ollama URL</span><input type="text" value={settings.ollama_base_url} disabled={locked} onChange={(event) => patch({ ollama_base_url: event.target.value })} /></label>
             <label className="field"><span className="label">Model</span><input type="text" list="ollama-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="ollama-model-options">{ollamaModels.map((model) => <option key={model.name} value={model.name} />)}</datalist></label>
           </div>
-          <OllamaDaemonModels models={ollamaModels} selected={settings.model} message={ollamaMessage} locked={locked} onUse={useOllamaModel} />
+          {ollamaError && <p className="form-status form-status-error" role="alert">Ollama model list unavailable: {ollamaError}</p>}
+          {(!ollamaError || ollamaModels.length > 0) && <OllamaDaemonModels models={ollamaModels} selected={settings.model} message={ollamaMessage} locked={locked} onUse={useOllamaModel} />}
         </>
       )}
 
@@ -391,16 +397,14 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       <div className="model-section-head">
         <div>
           <h3 className="model-subtitle">Managed models</h3>
-          <p className="model-store-path">{manager?.store_path || "Loading model store"}</p>
+          <p className="model-store-path">{manager?.store_path || (managerMessage ? "Model store unavailable" : "Loading model store")}</p>
         </div>
         <div className="row-actions model-import-actions">
           <button type="button" className="icon-btn model-refresh" aria-label="Refresh model list" title="Refresh model list" disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
-          <button type="button" className="btn btn-secondary" aria-expanded={showGGUFImport} disabled={locked} onClick={() => setShowGGUFImport((value) => !value)}><UploadIcon size={16} />Import GGUF</button>
-          <button type="button" className="btn btn-secondary" aria-expanded={showOllamaImport} disabled={locked} onClick={() => setShowOllamaImport((value) => !value)}><UploadIcon size={16} />Import from Ollama</button>
+          <button type="button" className="btn btn-secondary" aria-expanded={showGGUFImport} disabled={locked || !manager} onClick={() => setShowGGUFImport((value) => !value)}><UploadIcon size={16} />Import GGUF</button>
+          <button type="button" className="btn btn-secondary" aria-expanded={showOllamaImport} disabled={locked || !manager} onClick={() => setShowOllamaImport((value) => !value)}><UploadIcon size={16} />Import from Ollama</button>
         </div>
       </div>
-
-      {managerMessage && <p className="form-status">{managerMessage}</p>}
 
       {showGGUFImport && (
         <div className="model-import-form" aria-label="Import GGUF model">
@@ -420,18 +424,22 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
         </div>
       )}
 
-      <ImportProgress jobs={manager?.imports ?? []} locked={locked} busy={busy} onCancel={cancelImport} />
-      <ManagedModels
-        models={manager?.models ?? []}
-        selectedID={settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" ? settings.model : ""}
-        protectedID={protectedManagedModelID}
-        locked={locked}
-        busy={busy}
-        confirmRemove={confirmRemove}
-        setConfirmRemove={setConfirmRemove}
-        onUse={useManagedModel}
-        onRemove={removeModel}
-      />
+      {manager ? (
+        <>
+          <ImportProgress jobs={manager.imports ?? []} locked={locked} busy={busy} onCancel={cancelImport} />
+          <ManagedModels
+            models={manager.models ?? []}
+            selectedID={settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" ? settings.model : ""}
+            protectedID={protectedManagedModelID}
+            locked={locked}
+            busy={busy}
+            confirmRemove={confirmRemove}
+            setConfirmRemove={setConfirmRemove}
+            onUse={useManagedModel}
+            onRemove={removeModel}
+          />
+        </>
+      ) : !managerMessage && <p className="form-status" role="status">Loading model list...</p>}
     </>
   );
 }

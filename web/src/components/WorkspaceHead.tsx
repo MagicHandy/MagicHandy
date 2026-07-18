@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 export function WorkspaceHead({ title, lede, wide }: { title: string; lede?: string; wide?: boolean }) {
   const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
+    document.title = `${title} | MagicHandy`;
     ref.current?.focus();
   }, [title]);
   return (
