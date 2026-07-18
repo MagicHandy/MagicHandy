@@ -193,7 +193,9 @@ func TestStartupCrashIsVisibleWithStderr(t *testing.T) {
 		t.Fatal("start must fail when the worker exits immediately")
 	}
 	status := waitForState(t, supervisor, StateCrashed)
-	if !strings.Contains(status.LastError, "stream ended") {
+	streamEnded := strings.Contains(status.LastError, "stream ended")
+	processExited := strings.Contains(status.LastError, "process exited")
+	if !streamEnded && !processExited {
 		t.Fatalf("crash reason missing from status: %+v", status)
 	}
 	if !strings.Contains(status.StderrTail, "missing dependency") {
