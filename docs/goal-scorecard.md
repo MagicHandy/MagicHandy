@@ -33,7 +33,7 @@ Scoring key:
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 1,013 lines, `internal/httpapi/voice.go` 1,268, `internal/httpapi/voice_test.go` 1,134, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
 | Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,210 lines, `web/src/styles/components.css` 1,346, and retired reference-only `web/legacy/app.css` 846. Continuous capture stays isolated from ChatPanel; `web/dist` remains the single shipped build. |
-| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,188 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
+| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,479 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 14C and the ahead-of-phase model/runtime/installer work are merged by PR with code, tests, migrations, risk updates, and budget measurements. Post-#63 rendered UI evidence still needs a refresh and is tracked explicitly. |
@@ -116,6 +116,19 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-18** - Installer/update reliability audit: persisted choices now
+  use a closed, strongly typed schema with cross-field checks; updater-relative
+  state paths resolve once before script delegation; dependency PATH refresh
+  preserves session tools; all Go executables stage and promote as one
+  rollback-capable Windows/pure-Go set; pinned Parakeet runner contents are
+  verified before activation; and generated launchers have a guarded removal
+  path. Windows PowerShell 5.1 tests cover malformed state, hostile caller
+  directory and Go environment, failed later-worker builds, tampered pinned
+  files, launcher ownership, and relative-path delegation. A clean-machine
+  dependency bootstrap and Phase 16 release artifacts remain acceptance work;
+  the 2,479-line support module remains an explicit maintainability risk to
+  split in the next installer slice.
 
 - **2026-07-18** - Pattern-library frontend reliability pass: failed catalog
   reads now show Retry instead of a false empty state; conflicting mutations are

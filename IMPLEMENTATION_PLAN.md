@@ -85,7 +85,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | #79 |
 | 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Complete** | #80 |
 | 13.11 | Voice protocol, queue, provider, and process-lifecycle reliability audit | **Complete** | #89 |
-| 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; UI reliability audit in review; HW feel check open** | #52 |
+| 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; UI reliability audit complete; HW feel check open** | #52, #91 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; post-#63 rendered QA refresh open** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
@@ -974,7 +974,7 @@ Status: **complete**.
 
 ### Slice 13.11: Voice Reliability Audit
 
-Status: **in review**.
+Status: **complete** (#89).
 
 - The core treats malformed worker output, missing/out-of-order audio frames,
   changing formats, invalid transcripts, and oversized retained audio as
@@ -1352,9 +1352,13 @@ lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build
 status, cancellation, manifest validation, and installer opt-out for existing
 Ollama users. The source installer can bootstrap WinGet/Go/Git/CMake/MSVC/CUDA,
 build all first-party workers, persist non-secret choices, and reuse them from a
-fast-forward-only updater. Phase 16 still owns curated checksum-pinned model
-downloads, hardware-fit recommendations, and release packaging that avoids
-installing a source toolchain for non-developers.
+fast-forward-only updater. The installer/update reliability pass additionally
+enforces typed closed-schema choices, coherent rollback-capable binary builds,
+inner-hash verification for the pinned Parakeet runner, stable delegated state
+paths, and generated-launcher ownership. Phase 16 still owns clean-machine
+acceptance, curated checksum-pinned model downloads, hardware-fit
+recommendations, and release packaging that avoids installing a source
+toolchain for non-developers.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive
