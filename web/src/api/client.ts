@@ -20,6 +20,7 @@ import type {
   PatternInput,
   PatternLibrary,
   PatternPreview,
+  MotionImportResult,
   LibraryPattern,
   LLMModelImport,
   LLMModelManagerSnapshot,
@@ -144,8 +145,8 @@ export const api = {
 
   // Pattern library. Point arrays and previews are loaded only in this route;
   // the regular state poll carries counts, not content documents.
-  getLibrary: () => request<{ library: PatternLibrary }>("GET", "/api/library"),
-  previewPattern: (body: PatternInput) => request<{ preview: PatternPreview }>("POST", "/api/library/preview", body),
+  getLibrary: (signal?: AbortSignal) => request<{ library: PatternLibrary }>("GET", "/api/library", undefined, signal),
+  previewPattern: (body: PatternInput, signal?: AbortSignal) => request<{ preview: PatternPreview }>("POST", "/api/library/preview", body, signal),
   createPattern: (body: PatternInput) => request<{ pattern: LibraryPattern }>("POST", "/api/library/patterns", body),
   patchPattern: (id: string, patch: Partial<LibraryPattern>) =>
     request<{ pattern: LibraryPattern }>("PATCH", `/api/library/patterns/${encodeURIComponent(id)}`, patch),
@@ -302,7 +303,7 @@ export const api = {
   exportTrace: () => request("GET", "/api/traces"),
 };
 
-async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<unknown> {
+async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<{ import: MotionImportResult }> {
   const path = `/api/library/import?filename=${encodeURIComponent(file.name)}&as=${asKind}`;
   const res = await fetch(path, {
     method: "POST",
@@ -322,7 +323,7 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
     const message = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : `Import failed (${res.status})`;
     throw new ApiError(message, res.status, parsed);
   }
-  return parsed;
+  return parsed as { import: MotionImportResult };
 }
 
 async function download(path: string): Promise<{ blob: Blob; filename: string }> {

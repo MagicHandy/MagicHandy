@@ -232,6 +232,10 @@ input[type="search"] {
   position: relative;
   overflow: hidden;
 }
+.file-button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .file-button input {
   position: absolute;
   inset: 0;

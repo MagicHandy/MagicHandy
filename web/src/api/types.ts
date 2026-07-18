@@ -221,6 +221,13 @@ export interface PatternPreview {
   simplified_count: number;
 }
 
+export interface MotionImportResult {
+  kind: "pattern" | "program" | string;
+  pattern?: LibraryPattern;
+  program?: LibraryProgram;
+  gaps_stripped: number;
+}
+
 export interface LibrarySummary {
   available: boolean;
   pattern_count: number;

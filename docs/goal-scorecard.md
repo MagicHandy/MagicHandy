@@ -117,6 +117,17 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-18** - Pattern-library frontend reliability pass: failed catalog
+  reads now show Retry instead of a false empty state; conflicting mutations are
+  deduplicated by semantic key while independent work remains visible; unsaved
+  authoring survives tab changes; stale previews cannot overwrite newer edits;
+  imports avoid a redundant catalog fetch; and canvas drawing commits React
+  state once per gesture. Roving tab focus, failed-weight rollback, stable knot
+  focus, and defensive progress/curve clamping have focused coverage. The
+  frontend suite is 121 tests and typecheck/build pass. Relative to the
+  checked-in `main` bundle, HTML/CSS/JS grew 4,736 raw / 1,328 gzip bytes to
+  388,392 / 109,947; the complete embedded payload is 832,628 / 547,344 using
+  per-file gzip level 9. Hardware motion behavior is unchanged.
 - **2026-07-16** - Frontend reliability pass: Browser Bluetooth now preserves
   semantic percentage units, invalidates stale command batches, and delivers a
   direct Stop while an existing GATT session outlives the backend. TTS audio is

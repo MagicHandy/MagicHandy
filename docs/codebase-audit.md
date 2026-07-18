@@ -14,7 +14,7 @@ Baseline: `origin/main` at `db8ca56d` (2026-07-16).
 | Motion engine and transports | Reviewed in first pass | PR #87 serializes ownership and command admission, hardens transport teardown, and expands race and lifecycle coverage. Real-device behavior remains subject to the documented hardware validation matrix. |
 | Chat, LLM, memory, modes, patterns, library, validation | Reviewed in first pass | Storage failures are explicit, mutations are transactional, mode lifecycle and stale-operation races are covered, provider/runtime limits are bounded, managed-model inventory is crash-safe, and validation exports only the active run. |
 | Voice, workers, queues, and audio | Reviewed in first pass | Worker framing and deadlines, bounded request queues, cancellation, process-tree teardown, provider response limits, deterministic sampling, and reference-code validation have focused coverage. Representative listening, simultaneous GPU LLM/TTS load, and lower-VRAM acceptance remain open. |
-| Frontend state, accessibility, and UI performance | Review in progress | Browser-owned Bluetooth Stop delivery and percent encoding, ordered eager TTS retrieval, voice-capture Stop epochs, serialized quick settings, reset/save races, status polling, and chat SSE framing have focused coverage. Changed chat, voice/model settings, and connection surfaces pass 1440x900 and 390x844 rendered checks; bundle growth is measured. Library/authoring mutation UX, remaining route accessibility, and a full-route desktop/mobile pass still require dedicated review. |
+| Frontend state, accessibility, and UI performance | Review in progress | Browser-owned Bluetooth Stop delivery and percent encoding, ordered eager TTS retrieval, voice-capture Stop epochs, serialized quick settings, reset/save races, status polling, chat SSE framing, and library/authoring lifecycle failures have focused coverage. Changed chat, voice/model settings, and connection surfaces pass 1440x900 and 390x844 rendered checks; bundle growth is measured. Remaining route accessibility and a full-route desktop/mobile pass still require dedicated review. |
 | Install, update, packaging, and release paths | Not started | Requires clean-machine dependency and choice-retention review. |
 
 ## First-Pass Findings Closed
@@ -48,5 +48,15 @@ Baseline: `origin/main` at `db8ca56d` (2026-07-16).
   provider cache transitions, and managed-model recovery are now explicit.
 - Validation could mix trace rows from earlier runs and swallow stop or export
   failures. Runs now have a single trace boundary and combine teardown errors.
+- Pattern-library reads could fail into a catalog that looked valid but empty,
+  one route-wide busy ID could unlock or hide overlapping work, and immediate
+  object-URL revocation could cancel exports. Reads now expose retryable errors,
+  semantic action keys serialize only conflicting work, import responses update
+  the catalog directly, and export cleanup is deferred until navigation starts.
+- Authoring tabs discarded unsaved drafts, overlapping backend previews could
+  apply out of order, changing a knot time remounted its input, and freehand
+  drawing re-rendered React on every point. Panels now remain mounted, preview
+  generations invalidate stale responses, knot rows retain identity, and the
+  canvas renders pointer drafts directly before one committed state update.
 
 This document intentionally does not declare the repository audit complete.
