@@ -6,6 +6,7 @@ import { PatternAuthoring } from "./PatternAuthoring";
 describe("PatternAuthoring", () => {
   it("keeps knot input focus when its time changes", () => {
     render(<PatternAuthoring locked={false} saving={false} onPreview={vi.fn()} onSave={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Pattern authoring" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("Edit sparse knots"));
     const firstTime = screen.getAllByLabelText("Time")[0];
     firstTime.focus();

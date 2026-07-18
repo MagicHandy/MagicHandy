@@ -220,11 +220,13 @@ describe("app shell safety invariants", () => {
     installFetch();
     renderApp();
     const stop = await screen.findByRole("button", { name: /emergency stop/i });
+    await screen.findByText("No messages yet");
     const status = screen.getByRole("region", { name: /status/i });
     expect(status).not.toContainElement(stop);
     for (const hash of ["#/modes", "#/library", "#/settings", "#/chat"]) {
       go(hash);
       expect(screen.getByRole("button", { name: /emergency stop/i })).toBeInTheDocument();
+      if (hash === "#/chat") await screen.findByText("No messages yet");
     }
   });
 

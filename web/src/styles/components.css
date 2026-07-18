@@ -524,11 +524,27 @@ textarea:disabled {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
-.chat-log:empty::before {
-  content: "No messages yet";
+.chat-history-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   margin: auto;
+  max-width: 42rem;
+  padding: 24px;
   color: var(--muted);
-  font-size: 0.9rem;
+  text-align: center;
+}
+.chat-history-state strong {
+  color: var(--text);
+}
+.chat-history-empty {
+  min-height: 100%;
+  justify-content: center;
+}
+.chat-sync-status {
+  margin: 0;
+  padding: 8px 14px 0;
 }
 .chat-log-shell {
   position: relative;

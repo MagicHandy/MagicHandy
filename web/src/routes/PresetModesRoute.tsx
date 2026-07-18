@@ -2,7 +2,7 @@
 // is live; Autopilot is staged coming-soon until the backend planner exists
 // (docs/react-ui-implementation-handoff.md, step 4). All modes are engine
 // clients — no separate motion pathway.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast } from "../state/app-state";
@@ -20,8 +20,13 @@ export function PresetModesRoute() {
     modes?.running === true || modes?.mode === "freestyle" || modes?.active_mode === "freestyle";
   const style = state?.settings?.motion?.style ?? "balanced";
   const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
+  const [stylePending, setStylePending] = useState(false);
+  const stylePendingRef = useRef(false);
 
   async function startFreestyle() {
+    if (pendingRef.current || locked) return;
+    pendingRef.current = true;
     setPending(true);
     try {
       await api.startMode("freestyle");
@@ -29,11 +34,14 @@ export function PresetModesRoute() {
     } catch (e) {
       show(msg(e), "error");
     } finally {
+      pendingRef.current = false;
       setPending(false);
       refresh();
     }
   }
   async function stopModes() {
+    if (pendingRef.current || locked) return;
+    pendingRef.current = true;
     setPending(true);
     try {
       await api.stopMode();
@@ -41,16 +49,22 @@ export function PresetModesRoute() {
     } catch (e) {
       show(msg(e), "error");
     } finally {
+      pendingRef.current = false;
       setPending(false);
       refresh();
     }
   }
   async function setStyle(s: string) {
+    if (stylePendingRef.current || locked) return;
+    stylePendingRef.current = true;
+    setStylePending(true);
     try {
       await api.applyQuick({ style: s });
     } catch (e) {
       show(msg(e), "error");
     } finally {
+      stylePendingRef.current = false;
+      setStylePending(false);
       refresh();
     }
   }
@@ -78,7 +92,7 @@ export function PresetModesRoute() {
           </label>
         </div>
         <p className="coming-soon">
-          Coming soon — needs the autopilot planner (a Phase 11 mode). Off by default and fail-safe when it lands.
+          Autopilot is not available in this build.
         </p>
       </section>
 
@@ -89,7 +103,7 @@ export function PresetModesRoute() {
         </p>
         <div className="row-actions hint-block">
           {freestyleActive ? (
-            <button type="button" className="btn btn-secondary" onClick={() => void stopModes()} disabled={!backendOnline || pending}>
+            <button type="button" className="btn btn-secondary" onClick={() => void stopModes()} disabled={locked || pending}>
               Stop Freestyle
             </button>
           ) : (
@@ -103,7 +117,7 @@ export function PresetModesRoute() {
           <span className="label">Style <span className="hint-inline">biases pacing</span></span>
           <div className="segmented" role="group" aria-label="Motion style">
             {STYLES.map((s) => (
-              <button key={s} type="button" aria-pressed={style === s} disabled={locked} onClick={() => void setStyle(s)}>
+              <button key={s} type="button" aria-pressed={style === s} disabled={locked || stylePending} onClick={() => void setStyle(s)}>
                 {cap(s)}
               </button>
             ))}
@@ -115,7 +129,7 @@ export function PresetModesRoute() {
       <section className="panel">
         <h2 className="section-title">Preset arrangements</h2>
         <p className="coming-soon">
-          Named bounded segment sets — arriving with the Pattern Library (Phase 14).
+          Saved arrangements are not available yet.
         </p>
         <div className="chip-row" aria-hidden="true">
           {["Slow build", "Waves", "Edge", "Steady", "Cooldown"].map((c) => (

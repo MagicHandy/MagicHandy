@@ -115,6 +115,7 @@ export function PatternAuthoring({ locked, saving, onPreview, onPreviewError, on
 
   return (
     <section className="authoring-layout" aria-label="Pattern authoring">
+      <h2 className="visually-hidden">Pattern authoring</h2>
       <div className="authoring-controls">
         <label className="field"><span className="label">Name</span><input value={name} maxLength={80} disabled={locked} onChange={(event) => setName(event.target.value)} /></label>
         <label className="field"><span className="label">Description</span><input value={description} maxLength={400} disabled={locked} onChange={(event) => setDescription(event.target.value)} /></label>

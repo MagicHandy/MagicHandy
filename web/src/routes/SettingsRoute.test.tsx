@@ -132,6 +132,21 @@ describe("SettingsRoute", () => {
     expect(saveSettings.mock.calls[0][0].diagnostics).toEqual({ verbosity: "normal" });
   });
 
+  it("renders a persistent first-load error and recovers through Retry", async () => {
+    getSettings
+      .mockRejectedValueOnce(new Error("settings database unavailable"))
+      .mockResolvedValueOnce({ settings: settings("normal") });
+
+    render(<SettingsRoute />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("settings database unavailable");
+    expect(screen.queryByText("Loading settings…")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("normal"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("deduplicates Save while the first settings request is pending", async () => {
     getSettings.mockResolvedValue({ settings: settings("normal") });
     let release!: (value: { settings: PublicSettings }) => void;

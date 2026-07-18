@@ -48,6 +48,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
     return () => {
       mounted.current = false;
       window.clearTimeout(timer.current);
+      if (quickKeys(pending.current).length) void flush();
     };
   }, []);
 
@@ -93,10 +94,11 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           setVals((current) => reconcileMotion(current, currentMotion, dirtyRevisions.current));
         }
         refresh();
-        if (quickKeys(pending.current).length) {
-          window.clearTimeout(timer.current);
-          timer.current = window.setTimeout(() => void flush(), 0);
-        }
+      }
+      if (quickKeys(pending.current).length) {
+        window.clearTimeout(timer.current);
+        if (mounted.current) timer.current = window.setTimeout(() => void flush(), 0);
+        else void flush();
       }
     }
   }

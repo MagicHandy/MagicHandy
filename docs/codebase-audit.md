@@ -4,7 +4,7 @@ This ledger tracks the systematic reliability, maintainability, and efficiency
 review. A subsystem is complete only after its code paths, ownership and
 lifecycle boundaries, tests, and relevant documentation have been reviewed.
 
-Baseline: `origin/main` at `4d5bcc46` (2026-07-18).
+Baseline: `origin/main` at `72868a84` (2026-07-18).
 
 | Subsystem | Status | Current evidence |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Baseline: `origin/main` at `4d5bcc46` (2026-07-18).
 | Motion engine and transports | Reviewed in first pass | PR #87 serializes ownership and command admission, hardens transport teardown, and expands race and lifecycle coverage. Real-device behavior remains subject to the documented hardware validation matrix. |
 | Chat, LLM, memory, modes, patterns, library, validation | Reviewed in first pass | Storage failures are explicit, mutations are transactional, mode lifecycle and stale-operation races are covered, provider/runtime limits are bounded, managed-model inventory is crash-safe, and validation exports only the active run. |
 | Voice, workers, queues, and audio | Reviewed in first pass | Worker framing and deadlines, bounded request queues, cancellation, process-tree teardown, provider response limits, deterministic sampling, and reference-code validation have focused coverage. Representative listening, simultaneous GPU LLM/TTS load, and lower-VRAM acceptance remain open. |
-| Frontend state, accessibility, and UI performance | Review in progress | Browser-owned Bluetooth Stop delivery and percent encoding, ordered eager TTS retrieval, voice-capture Stop epochs, serialized quick settings, reset/save races, status polling, chat SSE framing, and library/authoring lifecycle failures have focused coverage. Changed chat, voice/model settings, and connection surfaces pass 1440x900 and 390x844 rendered checks; bundle growth is measured. Remaining route accessibility and a full-route desktop/mobile pass still require dedicated review. |
+| Frontend state, accessibility, and UI performance | Reviewed in dedicated pass | Route lifetime now preserves settings drafts between subsections; failed settings/chat/memory/prompt/model/voice reads remain distinct from valid empty state; quick writes flush across unmount; chat tail reads retry on the next backend poll; and persistence/mode mutations are serialized before React rerenders. Every top-level route, settings subsection, and library view passes 1440x900 and 390x844 DOM/overflow checks with named controls, one H1, and valid heading progression. The suite has 141 tests and the measured bundle remains within budget. |
 | Install, update, packaging, and release paths | Installer/update reviewed in first pass | Installer state is closed and strongly typed, delegated relative paths remain stable, binary sets and pinned Parakeet assets replace atomically with rollback, session PATH entries survive dependency refresh, and generated launchers have an owned removal path. A real clean-machine bootstrap and Phase 16 packaging/release artifacts still require dedicated acceptance. |
 
 ## First-Pass Findings Closed
@@ -90,5 +90,27 @@ Baseline: `origin/main` at `4d5bcc46` (2026-07-18).
   drawing re-rendered React on every point. Panels now remain mounted, preview
   generations invalidate stale responses, knot rows retain identity, and the
   canvas renders pointer drafts directly before one committed state update.
+- Keying the route error boundary by the full hash unmounted Settings between
+  subsections and silently discarded unsaved fields. The boundary now follows
+  the top-level workspace, with a focused route-lifetime regression test.
+- Settings, chat history, memory, prompt sets, managed models, and voice runtime
+  failures could render as endless loading, valid empty data, disabled workers,
+  or an empty conversation. Each surface now has an explicit loading/error/data
+  distinction; retry keeps the last coherent snapshot where one exists.
+- Quick-setting edits inside the debounce window were discarded on navigation,
+  including edits queued behind an in-flight write. Teardown now flushes both
+  cases while mounted-only reconciliation and notifications remain isolated.
+- Cross-tab chat tail failures did not retry unless the sequence changed again.
+  One in-flight tail reader now retries against the next backend poll and
+  reports delayed synchronization without blocking an already coherent log.
+- Mobile navigation labels disappeared with their visual text, the manual speed
+  slider had no programmatic name, voice provider fields were ambiguous, route
+  titles stayed static, and populated library views skipped heading level two.
+  Explicit names, document titles, and route-local headings now have focused
+  tests plus rendered desktop/mobile evidence.
+- Memory, prompt-set, Freestyle, and style commands could overlap before a
+  state-driven disabled control rendered. Ref-level admission guards serialize
+  each mutation domain; mode-specific Stop now respects read-only ownership
+  while global Emergency Stop remains unconditional.
 
 This document intentionally does not declare the repository audit complete.
