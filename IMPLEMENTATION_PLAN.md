@@ -1342,9 +1342,13 @@ lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build
 status, cancellation, manifest validation, and installer opt-out for existing
 Ollama users. The source installer can bootstrap WinGet/Go/Git/CMake/MSVC/CUDA,
 build all first-party workers, persist non-secret choices, and reuse them from a
-fast-forward-only updater. Phase 16 still owns curated checksum-pinned model
-downloads, hardware-fit recommendations, and release packaging that avoids
-installing a source toolchain for non-developers.
+fast-forward-only updater. The installer/update reliability pass additionally
+enforces typed closed-schema choices, coherent rollback-capable binary builds,
+inner-hash verification for the pinned Parakeet runner, stable delegated state
+paths, and generated-launcher ownership. Phase 16 still owns clean-machine
+acceptance, curated checksum-pinned model downloads, hardware-fit
+recommendations, and release packaging that avoids installing a source
+toolchain for non-developers.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive

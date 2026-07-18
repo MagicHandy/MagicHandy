@@ -71,6 +71,7 @@ Import-Module $support -Force -DisableNameChecking
 if (-not $StatePath) {
     $StatePath = Get-MagicHandyInstallStatePath
 }
+$StatePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StatePath)
 
 Write-MagicHandyBanner -Operation Update
 Write-Host '  Existing provider and storage choices are preserved by default.' -ForegroundColor DarkGray
