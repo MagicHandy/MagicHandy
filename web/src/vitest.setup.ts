@@ -6,10 +6,11 @@ class TestResizeObserver {
 }
 
 Object.defineProperty(globalThis, "ResizeObserver", { value: TestResizeObserver, configurable: true });
+Object.defineProperty(globalThis, "PointerEvent", { value: MouseEvent, configurable: true });
 Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
   configurable: true,
   value: () => ({
-    scale() {}, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {},
+    setTransform() {}, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {},
     fillStyle: "", strokeStyle: "", lineWidth: 1,
   }),
 });
