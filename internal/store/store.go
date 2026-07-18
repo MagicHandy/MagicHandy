@@ -13,8 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	_ "modernc.org/sqlite" // register the pure-Go SQLite database/sql driver
 )
 
 const (
@@ -22,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 9
+	CurrentSchemaVersion = 10
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -37,11 +35,22 @@ const (
 // ErrNewerSchema reports a DB created by a newer MagicHandy binary.
 var ErrNewerSchema = errors.New("sqlite schema is newer than this binary")
 
-var writeMu sync.Mutex
+// ErrInvalidSchema reports a logically invalid schema that must not be
+// replaced automatically because its rows may still be recoverable.
+var ErrInvalidSchema = errors.New("sqlite schema is invalid")
 
-// DB wraps the shared SQLite file and schema helpers.
+const (
+	maxOpenConnections = 4
+	maxIdleConnections = 1
+)
+
+// DB wraps the process-owned SQLite connection and schema helpers.
 type DB struct {
-	sql     *sql.DB
+	sql *sql.DB
+
+	writeMu  sync.Mutex
+	recovery RecoveryStatus
+
 	dataDir string
 	path    string
 }
@@ -65,25 +74,12 @@ func Open(dataDir string) (*DB, error) {
 	if err := os.MkdirAll(absDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
+	if err := secureDataDirectory(absDir); err != nil {
+		return nil, err
+	}
 
 	path := filepath.Join(absDir, DatabaseFileName)
-	handle, err := sql.Open("sqlite", sqliteDSN(path))
-	if err != nil {
-		return nil, fmt.Errorf("open SQLite datastore: %w", err)
-	}
-	handle.SetMaxOpenConns(1)
-	handle.SetMaxIdleConns(0)
-
-	db := &DB{sql: handle, dataDir: absDir, path: path}
-	if err := db.configure(context.Background()); err != nil {
-		_ = handle.Close()
-		return nil, err
-	}
-	if err := db.migrate(context.Background()); err != nil {
-		_ = handle.Close()
-		return nil, err
-	}
-	return db, nil
+	return openDatastore(absDir, path)
 }
 
 func sqliteDSN(path string) string {
@@ -92,11 +88,11 @@ func sqliteDSN(path string) string {
 	values.Add("_pragma", "foreign_keys(ON)")
 	values.Add("_pragma", "synchronous(NORMAL)")
 	values.Add("_pragma", "cache_size(-2000)")
-	values.Add("_pragma", "journal_mode(WAL)")
 	return path + "?" + values.Encode()
 }
 
-// SQL exposes the underlying database/sql handle for package-owned queries.
+// SQL exposes the underlying handle for package-owned reads. Production writes
+// must use WithTx so every logical domain shares the serialized writer.
 func (db *DB) SQL() *sql.DB {
 	return db.sql
 }
@@ -116,17 +112,26 @@ func (db *DB) Close() error {
 	return db.sql.Close()
 }
 
+// Recovery reports whether Open quarantined a physically corrupt datastore
+// and created a new one for this process.
+func (db *DB) Recovery() RecoveryStatus {
+	return db.recovery
+}
+
 // WithTx runs fn in one SQL transaction.
 func (db *DB) WithTx(ctx context.Context, fn func(*sql.Tx) error) error {
-	writeMu.Lock()
-	defer writeMu.Unlock()
+	if fn == nil {
+		return errors.New("SQLite transaction callback is required")
+	}
+	db.writeMu.Lock()
+	defer db.writeMu.Unlock()
 
 	tx, err := db.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = tx.Rollback() }()
 	if err := fn(tx); err != nil {
-		_ = tx.Rollback()
 		return err
 	}
 	return tx.Commit()
@@ -218,8 +223,12 @@ func (db *DB) configure(ctx context.Context) error {
 			return fmt.Errorf("configure SQLite %q: %w", pragma, err)
 		}
 	}
-	if _, err := db.sql.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+	var journalMode string
+	if err := db.sql.QueryRowContext(ctx, "PRAGMA journal_mode = WAL").Scan(&journalMode); err != nil {
 		return fmt.Errorf("configure SQLite WAL: %w", err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		return fmt.Errorf("configure SQLite WAL: journal mode is %q", journalMode)
 	}
 	return nil
 }
@@ -436,15 +445,41 @@ var migrations = [][]string{
 		`CREATE UNIQUE INDEX IF NOT EXISTS llm_models_sha256 ON llm_models(sha256)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS llm_models_path ON llm_models(model_path)`,
 	},
+	// v9 -> v10: preserve malformed or oversized settings documents before
+	// the app activates defaults. These rows can contain credentials and stay
+	// inside the same private datastore rather than a diagnostics export.
+	{
+		`CREATE TABLE IF NOT EXISTS settings_recoveries (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			document TEXT NOT NULL,
+			reason TEXT NOT NULL,
+			recovered_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS settings_recoveries_recovered_at
+			ON settings_recoveries(recovered_at DESC, id DESC)`,
+	},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
+	if len(migrations) != CurrentSchemaVersion {
+		return fmt.Errorf("%w: binary defines %d migrations for schema v%d", ErrInvalidSchema, len(migrations), CurrentSchemaVersion)
+	}
 	version, err := db.schemaVersion(ctx)
 	if err != nil {
 		return err
 	}
+	if version < 0 {
+		return fmt.Errorf("%w: database version %d is negative", ErrInvalidSchema, version)
+	}
 	if version > CurrentSchemaVersion {
 		return fmt.Errorf("%w: database version %d, binary version %d", ErrNewerSchema, version, CurrentSchemaVersion)
+	}
+	if version >= 8 {
+		if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+			return reconcileRockfireSchema(ctx, tx)
+		}); err != nil {
+			return fmt.Errorf("%w: reconcile schema v%d: %w", ErrInvalidSchema, version, err)
+		}
 	}
 	if version == CurrentSchemaVersion {
 		return nil
@@ -458,7 +493,7 @@ func (db *DB) migrate(ctx context.Context) error {
 					return fmt.Errorf("apply SQLite migration to v%d: %w", next+1, err)
 				}
 			}
-			if next+1 == CurrentSchemaVersion {
+			if next+1 == 8 {
 				if err := reconcileRockfireSchema(ctx, tx); err != nil {
 					return fmt.Errorf("reconcile SQLite schema at v%d: %w", next+1, err)
 				}

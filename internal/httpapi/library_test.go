@@ -16,8 +16,8 @@ func TestLibraryStorageFailureIsNotReportedAsEmptyOrDisabled(t *testing.T) {
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
-	if err := server.patterns.Close(); err != nil {
-		t.Fatal(err)
+	if _, err := server.store.Datastore().SQL().Exec(`DROP TABLE patterns`); err != nil {
+		t.Fatalf("remove pattern table: %v", err)
 	}
 
 	list := httptest.NewRecorder()

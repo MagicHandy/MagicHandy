@@ -107,6 +107,10 @@ go run ./cmd/magichandy
 - Your data lives under your OS config directory
   (`MagicHandy/magichandy.db`); pass `-data-dir .\.local-data` to keep it
   somewhere else.
+- If SQLite detects physical corruption at startup, MagicHandy preserves the
+  exact database and sidecars under the data directory's `recovery` folder,
+  starts a fresh schema, and reports that backup path in app status and logs.
+  Keep that recovery folder when collecting support evidence.
 - The browser UI ships prebuilt, so you don't need Node just to run the app.
   To work on the UI itself (Vite + React + TypeScript, built at build time and
   embedded in the binary), see [`web/`](../web/) and

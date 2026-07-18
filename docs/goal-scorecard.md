@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-15, persistent accelerated voice
+## Snapshot — 2026-07-18, SQLite persistence reliability audit
 
 ### Goal 1: Maintainability
 
@@ -46,7 +46,7 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | Final Phase 14C stripped build idles at 53.47 MiB (56,066,048 bytes) after `/healthz`, near the Phase 14B 53.20 MiB sample and below Phase 11B's 54.13 MB, but still over the original target. The fixed pure-Go SQLite waiver remains; re-evaluate if idle climbs past ~60 MiB. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | A conservative persistence-audit sample held 53.89 MiB after `/healthz` and 54.36 MiB after all six DB-backed reads. Three repeated exact-final launches later held only 13.16-13.24 MiB idle, but private bytes remained 47.27-47.58 MiB; Windows residency is therefore not stable enough to close the existing SQLite waiver. Re-evaluate with controlled CI telemetry if the conservative sample climbs past ~60 MiB. |
 | Go core active RSS | < 80 MB | **Unmeasured** | Model-manager reads settle at 53.40 MiB, but that is not the required active-motion + transport + SSE + chat scenario. Earlier real-device samples (16.75-16.76 MB Cloud REST; 17.52-17.53 MB Browser Bluetooth) predate SQLite and remain historical baselines only. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Unmeasured** | The 2026-07-02 run measured 18.41-20.16 MB over 56 warmed samples (+9.53%), but it predates SQLite. Re-run the full scenario on the current build. |
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Frontend reliability build: 20,498,944 bytes plain and 14,386,176 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Final merged persistence/installer/library audit tree: 20,602,368 bytes plain and 14,466,560 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 827,892 raw / 546,148 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 383,656 raw
-   / 108,721 gzip bytes, and the stripped binary is 14,386,176 bytes. These
+   browser payload is 832,628 raw / 547,344 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 388,392 raw
+   / 109,947 gzip bytes, and the stripped binary is 14,466,560 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -116,6 +116,22 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-18** - SQLite persistence reliability audit: production now owns one
+  bounded database pool instead of six independently churned pools, and every
+  logical store shares one transaction lock. Schema v10 preserves malformed or
+  oversized settings in bounded history; physical corruption quarantines exact
+  DB/WAL/SHM files before a fresh schema is created, while logical schema damage
+  fails non-destructively. Settings migrations are durably rewritten and legacy
+  reads/app writes share a 256 KiB bound. Version bounds, current-schema/
+  foreign-key checks, panic rollback, POSIX modes, redacted recovery status,
+  and shared lifecycle ownership have focused tests. Plain/stripped binaries
+  are 20,602,368 / 14,466,560 bytes after the installer and library merges. A
+  conservative RSS sample was 53.89 MiB
+  idle and 54.36 MiB after all six DB-backed reads; three repeated final-binary
+  launches held 13.16-13.24 MiB idle but 47.27-47.58 MiB private bytes, so the
+  existing SQLite waiver remains. The local race build is
+  unavailable because this host has no C compiler; CI retains that gate.
 
 - **2026-07-18** - Installer/update reliability audit: persisted choices now
   use a closed, strongly typed schema with cross-field checks; updater-relative
@@ -141,6 +157,7 @@ Ranked by threat to the stated goals:
   checked-in `main` bundle, HTML/CSS/JS grew 4,736 raw / 1,328 gzip bytes to
   388,392 / 109,947; the complete embedded payload is 832,628 / 547,344 using
   per-file gzip level 9. Hardware motion behavior is unchanged.
+
 - **2026-07-16** - Frontend reliability pass: Browser Bluetooth now preserves
   semantic percentage units, invalidates stale command batches, and delivers a
   direct Stop while an existing GATT session outlives the backend. TTS audio is

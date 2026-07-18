@@ -4,11 +4,11 @@ This ledger tracks the systematic reliability, maintainability, and efficiency
 review. A subsystem is complete only after its code paths, ownership and
 lifecycle boundaries, tests, and relevant documentation have been reviewed.
 
-Baseline: `origin/main` at `db8ca56d` (2026-07-16).
+Baseline: `origin/main` at `4d5bcc46` (2026-07-18).
 
 | Subsystem | Status | Current evidence |
 | --- | --- | --- |
-| Configuration and persistence boundaries | Reviewed in first pass | Settings snapshots and save results now own their slice data; aliasing regression test added. SQLite schema, locking, recovery, and filesystem permissions still require a dedicated pass. |
+| Configuration and persistence boundaries | Reviewed in dedicated pass | One process-owned SQLite pool serves six logical domains; writes share one transaction lock, schema v10 preserves invalid settings, physical corruption is quarantined, logical damage fails clearly, and schema/version/permission/lifecycle behavior has focused coverage. |
 | Diagnostics and structured logging | Reviewed in first pass | Trace storage now overwrites in O(1) and returns independent snapshots. Logging volume and redaction need review with each provider/transport. |
 | HTTP and process lifecycle | Reviewed in first pass | Oversized JSON is rejected, response encoding cannot panic after committing headers, browser requests are loopback same-origin, mutating leases require headers, and shutdown quiesces device work before closing stores. |
 | Motion engine and transports | Reviewed in first pass | PR #87 serializes ownership and command admission, hardens transport teardown, and expands race and lifecycle coverage. Real-device behavior remains subject to the documented hardware validation matrix. |
@@ -48,6 +48,24 @@ Baseline: `origin/main` at `db8ca56d` (2026-07-16).
   provider cache transitions, and managed-model recovery are now explicit.
 - Validation could mix trace rows from earlier runs and swallow stop or export
   failures. Runs now have a single trace boundary and combine teardown errors.
+- Production opened six independent SQLite pools and discarded every idle
+  connection. `config.Store` now owns one bounded pool that every logical store
+  borrows, with one warm idle connection and an explicit close boundary.
+- A negative `user_version` could index the migration slice with `-1`, and
+  known Rockfire shapes were reconciled only when v8 happened to be the last
+  migration. Version bounds and the actual compatibility boundary are now
+  explicit and covered at the current schema.
+- Physical database corruption had no recovery path, malformed settings could
+  be overwritten without durable evidence, and logical current-schema damage
+  was not validated. Schema v10 adds bounded settings recovery; physical files
+  are quarantined exactly while logical damage fails non-destructively.
+- Settings-document migrations were reported but not written back, and legacy
+  reads plus app writes had no common document-size bound. Migrations are now
+  durable and both directions enforce 256 KiB without altering an oversized
+  legacy file.
+- Transaction callback panics relied on connection cleanup for rollback, and a
+  chat-log delete bypassed the serialized writer. Deferred rollback and one
+  `WithTx` mutation path now make both lifecycle guarantees explicit.
 - Installer state accepted string booleans, unknown fields (including secret-like
   fields), and inconsistent runtime choices. Reads and writes now enforce one
   closed schema and its cross-field invariants.

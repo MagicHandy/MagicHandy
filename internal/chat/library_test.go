@@ -52,6 +52,7 @@ func TestPromptLibraryCreateUpdateDeletePersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
 	}
+	t.Cleanup(func() { _ = library.Close() })
 
 	created, err := library.Create("Gentle", "Be gentle and slow.")
 	if err != nil {
@@ -73,6 +74,7 @@ func TestPromptLibraryCreateUpdateDeletePersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
+	t.Cleanup(func() { _ = reopened.Close() })
 	resolved, ok, err := reopened.Resolve(created.ID)
 	if err != nil {
 		t.Fatalf("Resolve persisted set: %v", err)
@@ -94,6 +96,7 @@ func TestPromptLibraryProtectsBuiltins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
 	}
+	t.Cleanup(func() { _ = library.Close() })
 
 	if _, err := library.Update(DefaultPromptSetID, "Hacked", "Rewritten."); !errors.Is(err, ErrPromptSetProtected) {
 		t.Fatalf("Update builtin error = %v, want ErrPromptSetProtected", err)
@@ -199,6 +202,7 @@ func TestPromptLibraryValidatesFieldsAndUnknownIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
 	}
+	t.Cleanup(func() { _ = library.Close() })
 	if _, err := library.Create("", "text"); err == nil {
 		t.Fatal("Create accepted blank name")
 	}
@@ -231,6 +235,7 @@ func TestPromptLibraryRecoversFromCorruptFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary corrupt: %v", err)
 	}
+	t.Cleanup(func() { _ = library.Close() })
 	if !library.Recovered() {
 		t.Fatal("corrupt file did not report recovery")
 	}
@@ -263,6 +268,7 @@ func TestPromptLibrarySkipsInvalidLoadedUserSets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPromptLibrary: %v", err)
 	}
+	t.Cleanup(func() { _ = library.Close() })
 	if !library.Recovered() {
 		t.Fatal("invalid loaded prompt records should report recovery")
 	}

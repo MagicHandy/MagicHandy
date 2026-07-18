@@ -334,8 +334,8 @@ func TestPersonalizationStorageFailuresAreNotReportedAsEmptyState(t *testing.T) 
 		}}
 		server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 		t.Cleanup(server.Close)
-		if err := server.personalization.memory.Close(); err != nil {
-			t.Fatal(err)
+		if _, err := server.store.Datastore().SQL().Exec(`DROP TABLE app_kv`); err != nil {
+			t.Fatalf("remove memory preference table: %v", err)
 		}
 
 		read := personalizationRequest(t, server, http.MethodGet, "/api/memory", "")
@@ -370,8 +370,8 @@ func TestPersonalizationStorageFailuresAreNotReportedAsEmptyState(t *testing.T) 
 	t.Run("prompt sets", func(t *testing.T) {
 		server := newTestServer(t)
 		t.Cleanup(server.Close)
-		if err := server.personalization.prompts.Close(); err != nil {
-			t.Fatal(err)
+		if _, err := server.store.Datastore().SQL().Exec(`DROP TABLE prompt_sets`); err != nil {
+			t.Fatalf("remove prompt-set table: %v", err)
 		}
 
 		read := personalizationRequest(t, server, http.MethodGet, "/api/prompt-sets", "")

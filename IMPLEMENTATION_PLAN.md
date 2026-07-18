@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-15. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-18. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -71,7 +71,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 9B | App-path device validation, controller ownership | Implemented; reverse HW recheck open | #15, #16, #17, #22 |
 | 10 | Memory, editable prompt sets, settings reset | **Complete** | #24 |
 | 11 | Modes as motion clients (Freestyle, chat keepalive) | **Implemented; HW acceptance open** | #26 |
-| 11B | SQLite persistence foundation (ADR 0008) | **Implemented; corrupt-DB recovery open** | #32, #33 |
+| 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
 | 13.1 | NeuTTS Air spike — non-Python decode proven; Python-harness CPU timing later rejected (R17) | **Complete** | #43 |
@@ -628,6 +628,20 @@ still pass; budgets are re-measured.
   54.36 MB after `/api/state`, `/api/settings`, `/api/memory`, and
   `/api/prompt-sets`; this exceeds the original <40 MB idle budget and is
   recorded in `docs/goal-scorecard.md`.
+- The 2026-07-18 persistence audit establishes one process-owned database pool
+  shared by every logical domain, connection-local pragmas, one serialized
+  writer, panic-safe transaction rollback, and current-schema/foreign-key
+  validation. It rejects invalid schema versions without modifying the file.
+- Schema v10 preserves invalid or oversized settings documents in a bounded
+  recovery history. Physical SQLite corruption quarantines the exact DB/WAL/SHM
+  files before creating a fresh schema and reports the backup path without its
+  contents; logical schema damage remains a clear startup error.
+- Current audit measurements are 20,597,248 bytes plain / 14,461,440 bytes
+  stripped. The shared-pool build idles at 53.89 MiB (56,512,512 bytes) and
+  settles at 54.36 MiB (56,999,936 bytes) after all six DB-backed read surfaces,
+  retaining the existing SQLite RSS waiver. Three repeated exact-final launches
+  later held 13.16-13.24 MiB idle working set but 47.27-47.58 MiB private bytes;
+  the Windows residency variance is not treated as a budget improvement.
 
 ## Done Criteria
 

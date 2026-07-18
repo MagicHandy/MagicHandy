@@ -110,7 +110,10 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		runtime.Transport = transport.NewFake()
 	}
 
-	personalization, err := newPersonalizationRuntime(store.DataDir())
+	// Settings owns the one process database handle. Every sibling persistence
+	// domain borrows it so pooling, writer serialization, and shutdown have one
+	// lifecycle boundary.
+	personalization, err := newPersonalizationRuntime(store.Datastore())
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +123,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	if personalization.prompts.Recovered() {
 		logger.Warn("prompt set store recovered with defaults", "data_dir", store.DataDir())
 	}
-	modelManager, err := llm.OpenModelManager(store.DataDir())
+	modelManager, err := llm.OpenModelManagerWithDatabase(store.Datastore())
 	if err != nil {
 		personalization.Close()
 		return nil, err
@@ -164,7 +167,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
 
-	chatLog, err := chat.OpenMessageLog(store.DataDir())
+	chatLog, err := chat.OpenMessageLogWithDatabase(store.Datastore())
 	if err != nil {
 		managedLLM.Close()
 		_ = modelManager.Close()
@@ -173,7 +176,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	}
 	server.chatLog = chatLog
 
-	patternLibrary, err := patterns.Open(store.DataDir())
+	patternLibrary, err := patterns.OpenWithDatabase(store.Datastore())
 	if err != nil {
 		_ = chatLog.Close()
 		managedLLM.Close()
@@ -346,15 +349,16 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"datastore_path": status.DatastorePath,
 		"settings":       settings,
 		"settings_status": map[string]any{
-			"source":               status.Source,
-			"using_defaults":       status.UsingDefaults,
-			"recovered":            status.Recovered,
-			"migrated":             status.Migrated,
-			"imported":             status.Imported,
-			"message":              status.Message,
-			"loaded_at":            status.LoadedAt,
-			"legacy_settings_path": status.LegacySettingsPath,
-			"legacy_archived_path": status.LegacyArchivedPath,
+			"source":                   status.Source,
+			"using_defaults":           status.UsingDefaults,
+			"recovered":                status.Recovered,
+			"migrated":                 status.Migrated,
+			"imported":                 status.Imported,
+			"message":                  status.Message,
+			"loaded_at":                status.LoadedAt,
+			"datastore_recovered_path": status.DatastoreRecoveredPath,
+			"legacy_settings_path":     status.LegacySettingsPath,
+			"legacy_archived_path":     status.LegacyArchivedPath,
 		},
 		"features": map[string]string{
 			"chat":      "local_llm_streaming",

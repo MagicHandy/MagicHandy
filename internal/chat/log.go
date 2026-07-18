@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,7 +37,8 @@ type LogMessage struct {
 // Reads are non-destructive: one client reading never consumes another
 // client's view of the log.
 type MessageLog struct {
-	db *dbstore.DB
+	db     *dbstore.DB
+	ownsDB bool
 }
 
 // OpenMessageLog opens the shared chat log in the app datastore.
@@ -45,11 +47,22 @@ func OpenMessageLog(dataDir string) (*MessageLog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open chat message log: %w", err)
 	}
+	return &MessageLog{db: database, ownsDB: true}, nil
+}
+
+// OpenMessageLogWithDatabase borrows the process-owned datastore.
+func OpenMessageLogWithDatabase(database *dbstore.DB) (*MessageLog, error) {
+	if database == nil {
+		return nil, errors.New("chat message datastore is required")
+	}
 	return &MessageLog{db: database}, nil
 }
 
 // Close releases the log's database handle.
 func (l *MessageLog) Close() error {
+	if !l.ownsDB {
+		return nil
+	}
 	return l.db.Close()
 }
 
@@ -96,7 +109,11 @@ func (l *MessageLog) Delete(seq int64) error {
 	if seq <= 0 {
 		return nil
 	}
-	if _, err := l.db.SQL().ExecContext(context.Background(), `DELETE FROM messages WHERE seq = ?`, seq); err != nil {
+	ctx := context.Background()
+	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE seq = ?`, seq)
+		return err
+	}); err != nil {
 		return fmt.Errorf("delete chat message: %w", err)
 	}
 	return nil

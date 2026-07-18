@@ -7,6 +7,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/memory"
+	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
 // personalizationRuntime owns the user-managed memory store and prompt-set
@@ -16,12 +17,12 @@ type personalizationRuntime struct {
 	prompts *chat.PromptLibrary
 }
 
-func newPersonalizationRuntime(dataDir string) (personalizationRuntime, error) {
-	memoryStore, err := memory.Open(dataDir)
+func newPersonalizationRuntime(database *dbstore.DB) (personalizationRuntime, error) {
+	memoryStore, err := memory.OpenWithDatabase(database)
 	if err != nil {
 		return personalizationRuntime{}, err
 	}
-	prompts, err := chat.OpenPromptLibrary(dataDir)
+	prompts, err := chat.OpenPromptLibraryWithDatabase(database)
 	if err != nil {
 		_ = memoryStore.Close()
 		return personalizationRuntime{}, err

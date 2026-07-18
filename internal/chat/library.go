@@ -47,6 +47,7 @@ type PromptLibrary struct {
 	path       string
 	legacyPath string
 	db         *dbstore.DB
+	ownsDB     bool
 	recovered  bool
 }
 
@@ -61,14 +62,30 @@ func OpenPromptLibrary(dataDir string) (*PromptLibrary, error) {
 	if err != nil {
 		return nil, err
 	}
+	library, err := openPromptLibraryWithDatabase(database, true)
+	if err != nil {
+		_ = database.Close()
+	}
+	return library, err
+}
+
+// OpenPromptLibraryWithDatabase borrows the process-owned datastore.
+func OpenPromptLibraryWithDatabase(database *dbstore.DB) (*PromptLibrary, error) {
+	if database == nil {
+		return nil, errors.New("prompt-set datastore is required")
+	}
+	return openPromptLibraryWithDatabase(database, false)
+}
+
+func openPromptLibraryWithDatabase(database *dbstore.DB, ownsDB bool) (*PromptLibrary, error) {
 	library := &PromptLibrary{
 		path:       database.Path(),
 		legacyPath: filepath.Join(database.DataDir(), promptSetsFileName),
 		db:         database,
+		ownsDB:     ownsDB,
 	}
 
 	if err := library.importLegacyPromptSets(context.Background()); err != nil {
-		_ = database.Close()
 		return nil, err
 	}
 	return library, nil
@@ -83,6 +100,9 @@ func (l *PromptLibrary) Recovered() bool {
 
 // Close releases the prompt library database handle.
 func (l *PromptLibrary) Close() error {
+	if !l.ownsDB {
+		return nil
+	}
 	return l.db.Close()
 }
 

@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for the rewrite plan. Implemented in Phase 11B; extended through
-schema v9 by the LLM model-manager foundation.
+schema v10 by the persistence reliability audit.
 
 ## Context
 
@@ -86,18 +86,44 @@ only their durability substrate moves from JSON files to DB tables.
   activated atomically with that filesystem install; durable model inventory
   and selected model ID remain in SQLite-backed model/settings records.
 
+The 2026-07-18 persistence-boundary audit classifies the remaining state so a
+new feature does not accidentally create a second datastore:
+
+- SQLite is authoritative for app settings and settings recovery history,
+  memories, user prompt sets, shared chat messages/cursors,
+  patterns/programs/feedback, and managed-model inventory/import lineage.
+- Files are intentional for large or atomically activated artifacts: model and
+  runner bytes, activation manifests, voice reference WAV/code artifacts, and
+  validation exports. A model metadata sidecar exists only to recover an
+  interrupted filesystem install; it does not supersede SQLite inventory.
+- Installer choices remain a private file because the installer and updater
+  need them before the app or its database can exist. Logs are append-only
+  operational evidence, not application state.
+- Motion/controller state, diagnostics rings, active jobs, worker queues, and
+  audio leases remain process memory. Browser client identity remains local to
+  that browser profile. Persisting any of these would change lifecycle or
+  privacy semantics and requires an explicit design decision.
+
 ### Connection and durability settings
 
 These encode the well-known SQLite-under-`database/sql` pitfalls so the
 implementation does not rediscover them:
 
-- `PRAGMA journal_mode=WAL` so a read never blocks the single writer.
-- `PRAGMA foreign_keys=ON`, `PRAGMA synchronous=NORMAL` (WAL-safe), a bounded
-  `PRAGMA cache_size` to keep RSS predictable, and a `busy_timeout`.
-- Single-writer discipline: SQLite allows one writer at a time. The store
-  serializes writes (a dedicated writer connection / tuned `SetMaxOpenConns`
-  plus `busy_timeout`) so `database is locked` cannot surface under the app's
-  own concurrency. The app is a single local operator, so this is sufficient.
+- `config.Store` owns the one process-lifetime `store.DB`. Memory, prompt-set,
+  chat-log, pattern, and model-inventory stores borrow that database; they do
+  not open independent pools or close the shared owner.
+- `PRAGMA journal_mode=WAL` is selected once and verified so a read never
+  blocks the single writer. The DSN applies `foreign_keys=ON`,
+  `synchronous=NORMAL`, bounded `cache_size`, and `busy_timeout` to every
+  pooled connection rather than assuming connection-local pragmas carry over.
+- The pool allows at most four open connections and retains one idle
+  connection. This permits bounded concurrent reads without reconnecting for
+  every operation.
+- Single-writer discipline: SQLite allows one writer at a time. One mutex is
+  associated with the shared database and every logical store writes through
+  `WithTx`; `busy_timeout` also protects standalone tools that open the same
+  file. This prevents the app's own concurrency from surfacing `database is
+  locked`.
 - Each logical mutation is one transaction. A settings reset that must leave
   memories and prompt sets untouched is a scoped transaction on the settings
   table only — the current "reset does not touch memory or prompt sets"
@@ -124,6 +150,37 @@ Schema v9 appends the `llm_models` inventory and unique SHA-256/path indexes.
 It does not reinterpret any Rockfire-only table and does not move model bytes
 through SQLite.
 
+Schema v10 appends `settings_recoveries`, a bounded history of invalid settings
+documents. Invalid or oversized active settings are copied there in the same
+transaction that removes the active row, then safe defaults are activated.
+Only the latest 20 records are retained. This preserves exact evidence for
+support without exposing it through public settings or diagnostics.
+Successful settings-document migrations are rewritten immediately so a restart
+does not repeat an in-memory-only migration. App and legacy-file reads are
+bounded to the same 256 KiB document limit enforced before writes.
+
+Opening a current schema validates the expected tables, columns, indexes,
+foreign-key enforcement, and `foreign_key_check`. Negative and newer-than-
+binary `user_version` values fail clearly without indexing the migration list
+or changing the file. The schema-v8 Rockfire reconciliation is keyed to its
+actual compatibility boundary and also repairs known current-version shapes;
+it is not coupled to whichever migration happens to be last.
+
+### Corruption recovery and ownership
+
+On open, `PRAGMA quick_check(1)` distinguishes physical SQLite corruption from
+logical schema damage. A physically corrupt database is closed and its exact
+database, WAL, and SHM files are moved into a timestamped private directory
+under `recovery/`. MagicHandy then creates a fresh current schema and reports
+the backup path in structured startup logging and public load status. The
+preserved contents are never returned.
+
+Logical damage, such as a missing required table at the current schema version,
+fails startup with `ErrInvalidSchema`; it is not replaced automatically. This
+keeps a migration or application bug from being misclassified as disposable
+user data. If any quarantine move fails, already-moved files are restored and
+startup fails rather than creating a partial replacement.
+
 ### One-time import from the JSON stores
 
 On first open where `settings.json`, `memories.json`, or `prompt_sets.json`
@@ -137,11 +194,13 @@ same relational target the Phase 15 StrokeGPT-ReVibed importer will write into.
 ### Redaction and at-rest sensitivity
 
 The connection key stays a private credential. It is stored in the settings
-document exactly as sensitively as `settings.json` stores it today — plaintext
-at rest under the app data directory with `0700` perms; the trust model is a
-single local operator, not encryption-at-rest. It is never returned by settings
-reads, diagnostics, trace exports, or the redacted `Public()` view. The `.db`
-file inherits the same file sensitivity `settings.json` had.
+document exactly as sensitively as `settings.json` stores it today: plaintext
+at rest under the app data directory; the trust model is a single local
+operator, not encryption-at-rest. The directory is restricted to `0700` and
+the database, WAL, and SHM files to `0600` on POSIX. Windows relies on the
+user-profile ACL because `os.Chmod` cannot express the equivalent ACL. The key
+is never returned by settings reads, diagnostics, trace exports, recovery
+status, or the redacted `Public()` view.
 
 ## Consequences
 
@@ -152,7 +211,7 @@ Positive:
   client's unread messages, enabled patterns) become indexed lookups instead of
   load-everything-then-filter.
 - One transactional store: atomic multi-row operations, one durability
-  mechanism, one migration runner, one file to back up — replacing three
+  mechanism, one migration runner, one datastore to back up — replacing three
   bespoke atomic-write + version + recovery implementations.
 - The chat log and Phase 14 library use the same transaction and migration
   substrate instead of inventing persistence per feature.
@@ -180,15 +239,12 @@ Negative / deliberate trade-offs:
 - Pure-Go SQLite is slower than the C build. For this workload (small
   settings/memory/prompt data and a local chat log) it is far more than
   adequate; the app is a single local operator, not a high-QPS service.
-- Startup on a *corrupted store* changes behavior. The JSON stores recovered a
-  corrupt or unreadable file to safe defaults and never failed startup (a
-  hard-won StrokeGPT lesson). A corrupt/unreadable `magichandy.db` currently
-  fails at open instead, because `store.Open` propagates the error. WAL plus
-  `synchronous=NORMAL` make corruption unlikely, and failing clearly beats
-  silently discarding a user's data — but restoring "never fail startup" (back up
-  the bad DB, start fresh, report it in load status) is a tracked follow-up, not
-  yet implemented. Recovery of a corrupt *legacy JSON* file during the one-time
-  import is preserved (it is recorded as `recovered` and defaults stay active).
+- Physical corruption now starts with a fresh database only after preserving
+  the exact database and sidecars in a private recovery directory. Logical
+  schema damage still fails clearly. Invalid settings documents are archived
+  in bounded schema-v10 history before defaults become active. Recovery of a
+  corrupt *legacy JSON* file during the one-time import is also preserved (it
+  is recorded as `recovered` and defaults stay active).
 
 ## Alternatives considered
 
