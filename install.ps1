@@ -118,6 +118,7 @@ if ($Reconfigure -and $Yes) {
 if (-not $StatePath) {
     $StatePath = Get-MagicHandyInstallStatePath
 }
+$StatePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StatePath)
 Set-Location $Repo
 
 function Get-ProfileDataDir {

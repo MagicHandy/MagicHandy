@@ -30,6 +30,17 @@ function Assert-PlanExcludes([string[]]$Plan, [string]$Pattern) {
     Assert-True -Condition (-not [bool]($Plan | Where-Object { $_ -match $Pattern })) -Message "plan should exclude /$Pattern/"
 }
 
+function Assert-Throws([scriptblock]$Action, [string]$Pattern, [string]$Message) {
+    $caught = ''
+    try {
+        & $Action
+    } catch {
+        $caught = $_.Exception.Message
+    }
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($caught)) -Message "$Message should throw"
+    Assert-True -Condition ($caught -match $Pattern) -Message "$Message should match /$Pattern/, got '$caught'"
+}
+
 function Get-AvailableLoopbackPort {
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
     try {
@@ -132,6 +143,36 @@ try {
     $json = Get-Content -LiteralPath $statePath -Raw
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
+
+    $invalidBooleanPath = Join-Path $tempRoot 'invalid-boolean-state.json'
+    $invalidBoolean = $json | ConvertFrom-Json
+    $invalidBoolean.build_managed_llama = 'false'
+    [System.IO.File]::WriteAllText($invalidBooleanPath, ($invalidBoolean | ConvertTo-Json -Depth 5))
+    Assert-Throws -Action { Read-MagicHandyInstallState -Path $invalidBooleanPath } -Pattern 'build_managed_llama.+boolean' -Message 'string-encoded installer boolean'
+
+    $secretFieldPath = Join-Path $tempRoot 'secret-field-state.json'
+    $secretField = $json | ConvertFrom-Json
+    $secretField | Add-Member -NotePropertyName 'api_key' -NotePropertyValue 'must-not-be-retained'
+    [System.IO.File]::WriteAllText($secretFieldPath, ($secretField | ConvertTo-Json -Depth 5))
+    Assert-Throws -Action { Read-MagicHandyInstallState -Path $secretFieldPath } -Pattern "unsupported field 'api_key'" -Message 'unknown installer-state field'
+
+    $inconsistentStatePath = Join-Path $tempRoot 'inconsistent-state.json'
+    $inconsistentState = $json | ConvertFrom-Json
+    $inconsistentState.setup_llm = $false
+    [System.IO.File]::WriteAllText($inconsistentStatePath, ($inconsistentState | ConvertTo-Json -Depth 5))
+    Assert-Throws -Action { Read-MagicHandyInstallState -Path $inconsistentStatePath } -Pattern 'cannot configure LLM runtimes' -Message 'inconsistent installer choices'
+
+    Write-Host 'Checking PATH refresh preserves session-only tools...'
+    $originalPath = $env:Path
+    $sessionToolPath = Join-Path $tempRoot 'session-only-tools'
+    try {
+        $env:Path = "$sessionToolPath;$($sessionToolPath.ToUpperInvariant())"
+        & $supportModule { Refresh-MagicHandyPath }
+        $sessionMatches = @($env:Path -split ';' | Where-Object { $_ -ieq $sessionToolPath })
+        Assert-Equal -Expected 1 -Actual $sessionMatches.Count -Message 'PATH refresh should preserve and deduplicate session-only entries'
+    } finally {
+        $env:Path = $originalPath
+    }
 
     Write-Host 'Checking interrupted download resume and verification...'
     $downloadPort = Get-AvailableLoopbackPort
@@ -246,6 +287,16 @@ try {
         [Console]::SetOut($originalConsoleOutput)
     }
     Assert-True -Condition ($progressOutput.ToString() -match '25[\.,]0%') -Message 'inline download progress should preserve fractional percentages'
+
+    Write-Host 'Checking pinned-file verification...'
+    $pinnedFixture = Join-Path $tempRoot 'pinned-fixture.bin'
+    [System.IO.File]::WriteAllText($pinnedFixture, 'verified bytes')
+    $pinnedHash = (Get-FileHash -LiteralPath $pinnedFixture -Algorithm SHA256).Hash.ToLowerInvariant()
+    $pinnedValid = & $supportModule { param($Path, $Hash) Test-MagicHandyPinnedFile -Path $Path -ExpectedSHA256 $Hash } $pinnedFixture $pinnedHash
+    Assert-True -Condition $pinnedValid -Message 'pinned-file verifier should accept exact bytes'
+    [System.IO.File]::AppendAllText($pinnedFixture, 'tampered')
+    $pinnedTampered = & $supportModule { param($Path, $Hash) Test-MagicHandyPinnedFile -Path $Path -ExpectedSHA256 $Hash } $pinnedFixture $pinnedHash
+    Assert-True -Condition (-not $pinnedTampered) -Message 'pinned-file verifier should reject changed bytes'
 
     Write-Host 'Checking pinned NeuTTS Cargo lock correction...'
     $lockSource = Join-Path $tempRoot 'neutts-lock-source'
@@ -433,19 +484,34 @@ version = "0.1.0"
     Assert-True -Condition ($launcherText -match 'Start-MagicHandyApp') -Message 'launcher should reuse the verified app startup path'
     Assert-True -Condition ($launcherText -match 'InstallerSupport\.psm1') -Message 'launcher should import shared installer support'
     Assert-True -Condition ($launcherText -match "root''s copy") -Message 'launcher should escape apostrophes in paths'
+    & $supportModule { param($RepositoryPath) Remove-MagicHandyGeneratedLauncher -RepositoryPath $RepositoryPath } $launcherRoot
+    Assert-True -Condition (-not (Test-Path -LiteralPath $launcherPath)) -Message 'disabling the installer launcher should remove the generated file'
+    [System.IO.File]::WriteAllText($launcherPath, '# User-authored launcher')
+    & $supportModule { param($RepositoryPath) Remove-MagicHandyGeneratedLauncher -RepositoryPath $RepositoryPath } $launcherRoot
+    Assert-True -Condition (Test-Path -LiteralPath $launcherPath) -Message 'disabling the installer launcher should preserve a user-authored file'
 
     Write-Host 'Checking running app Stop and process-tree teardown before rebuild...'
     $runtimeRepo = Join-Path $tempRoot 'running-app-repo'
     $runtimeData = Join-Path $tempRoot 'running app data with spaces'
     $runtimePort = Get-AvailableLoopbackPort
     New-Item -ItemType Directory -Force -Path $runtimeRepo | Out-Null
+    foreach ($file in @('go.mod', 'go.sum')) {
+        Copy-Item -LiteralPath (Join-Path $Repo $file) -Destination $runtimeRepo
+    }
+    foreach ($directory in @('cmd', 'internal')) {
+        Copy-Item -LiteralPath (Join-Path $Repo $directory) -Destination $runtimeRepo -Recurse
+    }
+    $runtimeWeb = Join-Path $runtimeRepo 'web'
+    New-Item -ItemType Directory -Force -Path $runtimeWeb | Out-Null
+    Copy-Item -LiteralPath (Join-Path $Repo 'web\assets.go') -Destination $runtimeWeb
+    Copy-Item -LiteralPath (Join-Path $Repo 'web\dist') -Destination $runtimeWeb -Recurse
     $runtimeExe = Join-Path $runtimeRepo 'magichandy.exe'
     $go = Resolve-MagicHandyExecutable -Name 'go'
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($go)) -Message 'Go is required by the Windows CI image'
     $previousCGO = $env:CGO_ENABLED
     try {
         $env:CGO_ENABLED = '0'
-        & $go -C $Repo build -o $runtimeExe ./cmd/magichandy
+        & $go -C $runtimeRepo build -o $runtimeExe ./cmd/magichandy
         Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'test app build should succeed'
     } finally {
         $env:CGO_ENABLED = $previousCGO
@@ -501,16 +567,62 @@ version = "0.1.0"
         }
     }
 
-    Write-Host 'Checking staged binary replacement and verified relaunch...'
-    [System.IO.File]::WriteAllText($runtimeExe, 'stale executable sentinel')
-    $staleHash = (Get-FileHash -LiteralPath $runtimeExe -Algorithm SHA256).Hash
-    & $supportModule {
-        param($RepositoryPath, $GoExecutable)
-        Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $GoExecutable
-    } $runtimeRepo $go
+    Write-Host 'Checking coherent staged binary replacement and verified relaunch...'
+    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-neutts-worker.exe', 'voice-elevenlabs-worker.exe')
+    $staleHashes = @{}
+    foreach ($name in $binaryNames) {
+        $path = Join-Path $runtimeRepo $name
+        [System.IO.File]::WriteAllText($path, "stale executable sentinel: $name")
+        $staleHashes[$name] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    }
+    $brokenSource = Join-Path $runtimeRepo 'cmd\voice-parakeet-worker\main.go'
+    $originalBrokenSource = [System.IO.File]::ReadAllText($brokenSource)
+    $originalLocation = Get-Location
+    $originalBuildCGO = $env:CGO_ENABLED
+    $originalBuildGOOS = $env:GOOS
+    $originalBuildGOARCH = $env:GOARCH
+    try {
+        [System.IO.File]::WriteAllText($brokenSource, $originalBrokenSource + "`r`nthis is not valid Go`r`n")
+        Set-Location $tempRoot
+        $env:CGO_ENABLED = '1'
+        $env:GOOS = 'linux'
+        $env:GOARCH = 'arm64'
+        Assert-Throws -Action {
+            & $supportModule {
+                param($RepositoryPath, $GoExecutable)
+                Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $GoExecutable
+            } $runtimeRepo $go
+        } -Pattern 'Building voice-parakeet-worker\.exe failed' -Message 'later worker build failure'
+        foreach ($name in $binaryNames) {
+            $path = Join-Path $runtimeRepo $name
+            Assert-Equal -Expected $staleHashes[$name] -Actual ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) -Message "failed binary set should preserve $name"
+        }
+        Assert-Equal -Expected '1' -Actual $env:CGO_ENABLED -Message 'failed build should restore caller CGO setting'
+        Assert-Equal -Expected 'linux' -Actual $env:GOOS -Message 'failed build should restore caller GOOS setting'
+        Assert-Equal -Expected 'arm64' -Actual $env:GOARCH -Message 'failed build should restore caller GOARCH setting'
+
+        [System.IO.File]::WriteAllText($brokenSource, $originalBrokenSource)
+        & $supportModule {
+            param($RepositoryPath, $GoExecutable)
+            Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $GoExecutable
+        } $runtimeRepo $go
+        Assert-Equal -Expected '1' -Actual $env:CGO_ENABLED -Message 'successful build should restore caller CGO setting'
+        Assert-Equal -Expected 'linux' -Actual $env:GOOS -Message 'successful build should restore caller GOOS setting'
+        Assert-Equal -Expected 'arm64' -Actual $env:GOARCH -Message 'successful build should restore caller GOARCH setting'
+    } finally {
+        [System.IO.File]::WriteAllText($brokenSource, $originalBrokenSource)
+        Set-Location $originalLocation
+        $env:CGO_ENABLED = $originalBuildCGO
+        $env:GOOS = $originalBuildGOOS
+        $env:GOARCH = $originalBuildGOARCH
+    }
+    $staleHash = $staleHashes['magichandy.exe']
     $rebuiltHash = (Get-FileHash -LiteralPath $runtimeExe -Algorithm SHA256).Hash
     Assert-True -Condition ($rebuiltHash -ne $staleHash) -Message 'staged build should replace the stale executable only after a successful compile'
-    Assert-True -Condition (-not [bool](Get-ChildItem -LiteralPath $runtimeRepo -Filter '*.partial-*' -File)) -Message 'successful staged build should leave no partial executable'
+    foreach ($name in $binaryNames) {
+        Assert-True -Condition ((Get-Item -LiteralPath (Join-Path $runtimeRepo $name)).Length -gt 1024) -Message "successful build should replace $name"
+    }
+    Assert-True -Condition (-not [bool](Get-ChildItem -LiteralPath $runtimeRepo -Filter '.installer-build-*' -Directory)) -Message 'staged builds should leave no temporary binary set'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$runtimeExe~")) -Message 'staged replacement should not create a Go executable backup'
     $relaunchPort = Get-AvailableLoopbackPort
     $relaunchData = Join-Path $tempRoot 'verified relaunch data with spaces'
@@ -777,6 +889,7 @@ version = "0.1.0"
     $ollamaPlan = @(Get-MagicHandyProvisionPlan -State $ollamaState)
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Ensure Ollama'
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Skip NeuTTS runtime build.*managed llama\.cpp is not selected'
+    Assert-PlanContains -Plan $ollamaPlan -Pattern 'Remove an existing generated Start-MagicHandy\.ps1.*preserve any user-authored file'
     Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|LLVM/libclang|Rustup|eSpeak NG|Build pinned neutts-rs|checksum-verified NeuTTS|Parakeet CPU runner'
 
     Write-Host 'Checking updater fast-forward and dirty-worktree refusal...'
@@ -892,6 +1005,25 @@ version = "0.1.0"
         -StatePath $statePath | Out-Host
     $afterHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $statePath).Hash
     Assert-Equal -Expected $beforeHash -Actual $afterHash -Message 'update plan must not rewrite saved choices'
+
+    Write-Host 'Checking updater relative state-path stability across delegated scripts...'
+    $relativeStateRoot = Join-Path $tempRoot 'relative-state-caller'
+    $relativeStatePath = Join-Path $relativeStateRoot 'relative-state.json'
+    New-Item -ItemType Directory -Force -Path $relativeStateRoot | Out-Null
+    Copy-Item -LiteralPath $statePath -Destination $relativeStatePath
+    $relativeBeforeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $relativeStatePath).Hash
+    Push-Location $relativeStateRoot
+    try {
+        & (Join-Path $Repo 'update.ps1') `
+            -Yes `
+            -NoPull `
+            -NoLaunch `
+            -PlanOnly `
+            -StatePath '.\relative-state.json' | Out-Host
+    } finally {
+        Pop-Location
+    }
+    Assert-Equal -Expected $relativeBeforeHash -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $relativeStatePath).Hash) -Message 'relative state path should resolve once in the updater caller context'
 
     Write-Host 'Checking updater runtime reconfiguration prompt...'
     $global:MagicHandyInstallerResponses = New-Object System.Collections.Generic.Queue[string]

@@ -33,7 +33,7 @@ Scoring key:
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 1,013 lines, `internal/httpapi/voice.go` 1,268, `internal/httpapi/voice_test.go` 1,134, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
 | Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,210 lines, `web/src/styles/components.css` 1,346, and retired reference-only `web/legacy/app.css` 846. Continuous capture stays isolated from ChatPanel; `web/dist` remains the single shipped build. |
-| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,188 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
+| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,479 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 14C and the ahead-of-phase model/runtime/installer work are merged by PR with code, tests, migrations, risk updates, and budget measurements. Post-#63 rendered UI evidence still needs a refresh and is tracked explicitly. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Persistence-audit build: 20,597,248 bytes plain and 14,461,440 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Final merged persistence/installer/library audit tree: 20,602,368 bytes plain and 14,466,560 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 827,892 raw / 546,148 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 383,656 raw
-   / 108,721 gzip bytes, and the stripped binary is 14,461,440 bytes. These
+   browser payload is 832,628 raw / 547,344 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 388,392 raw
+   / 109,947 gzip bytes, and the stripped binary is 14,466,560 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -126,11 +126,37 @@ Ranked by threat to the stated goals:
   reads/app writes share a 256 KiB bound. Version bounds, current-schema/
   foreign-key checks, panic rollback, POSIX modes, redacted recovery status,
   and shared lifecycle ownership have focused tests. Plain/stripped binaries
-  are 20,597,248 / 14,461,440 bytes. A conservative RSS sample was 53.89 MiB
+  are 20,602,368 / 14,466,560 bytes after the installer and library merges. A
+  conservative RSS sample was 53.89 MiB
   idle and 54.36 MiB after all six DB-backed reads; three repeated final-binary
   launches held 13.16-13.24 MiB idle but 47.27-47.58 MiB private bytes, so the
   existing SQLite waiver remains. The local race build is
   unavailable because this host has no C compiler; CI retains that gate.
+
+- **2026-07-18** - Installer/update reliability audit: persisted choices now
+  use a closed, strongly typed schema with cross-field checks; updater-relative
+  state paths resolve once before script delegation; dependency PATH refresh
+  preserves session tools; all Go executables stage and promote as one
+  rollback-capable Windows/pure-Go set; pinned Parakeet runner contents are
+  verified before activation; and generated launchers have a guarded removal
+  path. Windows PowerShell 5.1 tests cover malformed state, hostile caller
+  directory and Go environment, failed later-worker builds, tampered pinned
+  files, launcher ownership, and relative-path delegation. A clean-machine
+  dependency bootstrap and Phase 16 release artifacts remain acceptance work;
+  the 2,479-line support module remains an explicit maintainability risk to
+  split in the next installer slice.
+
+- **2026-07-18** - Pattern-library frontend reliability pass: failed catalog
+  reads now show Retry instead of a false empty state; conflicting mutations are
+  deduplicated by semantic key while independent work remains visible; unsaved
+  authoring survives tab changes; stale previews cannot overwrite newer edits;
+  imports avoid a redundant catalog fetch; and canvas drawing commits React
+  state once per gesture. Roving tab focus, failed-weight rollback, stable knot
+  focus, and defensive progress/curve clamping have focused coverage. The
+  frontend suite is 121 tests and typecheck/build pass. Relative to the
+  checked-in `main` bundle, HTML/CSS/JS grew 4,736 raw / 1,328 gzip bytes to
+  388,392 / 109,947; the complete embedded payload is 832,628 / 547,344 using
+  per-file gzip level 9. Hardware motion behavior is unchanged.
 
 - **2026-07-16** - Frontend reliability pass: Browser Bluetooth now preserves
   semantic percentage units, invalidates stale command batches, and delivers a

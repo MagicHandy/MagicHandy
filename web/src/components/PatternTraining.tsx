@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LibraryPattern, PatternFeedback } from "../api/types";
 import { PlayIcon, ThumbDownIcon, ThumbUpIcon, UndoIcon } from "../shell/icons";
+import { libraryActionKey, type LibraryBusyKeys } from "./library-actions";
 import { PatternCurve } from "./PatternCurve";
 
 interface Props {
@@ -8,7 +9,7 @@ interface Props {
   feedback: PatternFeedback[];
   autoDisable: boolean;
   locked: boolean;
-  busyId: string;
+  busyKeys: LibraryBusyKeys;
   maxIntensity: number;
   onPlay: (id: string, intensity: number, feel: string) => Promise<void>;
   onFeedback: (id: string, rating: -1 | 1) => Promise<void>;
@@ -16,15 +17,18 @@ interface Props {
   onAutoDisable: (enabled: boolean) => Promise<void>;
 }
 
-export function PatternTraining({ patterns, feedback, autoDisable, locked, busyId, maxIntensity, onPlay, onFeedback, onUndo, onAutoDisable }: Props) {
+export function PatternTraining({ patterns, feedback, autoDisable, locked, busyKeys, maxIntensity, onPlay, onFeedback, onUndo, onAutoDisable }: Props) {
   const enabled = useMemo(() => patterns.filter((pattern) => pattern.enabled), [patterns]);
+  const patternNames = useMemo(() => new Map(patterns.map((pattern) => [pattern.id, pattern.name])), [patterns]);
+  const intensityCap = Math.max(1, Math.min(100, Number.isFinite(maxIntensity) ? Math.round(maxIntensity) : 100));
   const [index, setIndex] = useState(0);
-  const [intensity, setIntensity] = useState(Math.min(30, maxIntensity));
+  const [intensity, setIntensity] = useState(Math.min(30, intensityCap));
   const [feel, setFeel] = useState("original");
   useEffect(() => { if (index >= enabled.length) setIndex(0); }, [enabled.length, index]);
-  useEffect(() => setIntensity((value) => Math.min(value, maxIntensity)), [maxIntensity]);
+  useEffect(() => setIntensity((value) => Math.min(value, intensityCap)), [intensityCap]);
   const pattern = enabled[index];
   const latest = pattern ? feedback.find((item) => item.pattern_id === pattern.id && !item.reverted) : undefined;
+  const patternBusy = pattern ? busyKeys.has(libraryActionKey.pattern(pattern.id)) : false;
 
   if (!pattern) {
     return <section className="library-view"><div className="empty-state"><h2>No enabled patterns</h2><p>Deterministic motion remains active for chat.</p></div></section>;
@@ -40,24 +44,23 @@ export function PatternTraining({ patterns, feedback, autoDisable, locked, busyI
         <PatternCurve points={pattern.preview_samples} label={`${pattern.name} backend-sampled training curve`} className="training-curve" />
         <div className="training-stats"><span>Weight <strong>{pattern.weight.toFixed(2)}</strong></span><span>{(pattern.cycle_ms / 1000).toFixed(1)} s cycle</span><span>{pattern.kind}</span></div>
         <div className="training-controls">
-          <label className="inline-slider"><span>Intensity <strong>{intensity}%</strong></span><input type="range" min={1} max={maxIntensity} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} /></label>
+          <label className="inline-slider"><span>Intensity <strong>{intensity}%</strong></span><input type="range" min={1} max={intensityCap} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} /></label>
           <div className="segmented compact-segmented" role="group" aria-label="Audition feel"><button type="button" aria-pressed={feel === "original"} data-active={feel === "original" || undefined} onClick={() => setFeel("original")}>Original</button><button type="button" aria-pressed={feel === "smooth"} data-active={feel === "smooth" || undefined} onClick={() => setFeel("smooth")}>Smooth</button><button type="button" aria-pressed={feel === "crisp"} data-active={feel === "crisp" || undefined} onClick={() => setFeel("crisp")}>Crisp</button></div>
-          <button type="button" className="btn btn-primary" disabled={locked || busyId === pattern.id} onClick={() => void onPlay(pattern.id, intensity, feel)}><PlayIcon /> Audition</button>
+          <button type="button" className="btn btn-primary" disabled={locked || patternBusy || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(pattern.id, intensity, feel)}><PlayIcon /> Audition</button>
         </div>
         <div className="rating-controls" role="group" aria-label={`Rate ${pattern.name}`}>
-          <button type="button" className="btn btn-secondary" disabled={locked || busyId === pattern.id} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon /> More like this</button>
-          <button type="button" className="btn btn-secondary" disabled={locked || busyId === pattern.id} onClick={() => void onFeedback(pattern.id, -1)}><ThumbDownIcon /> Less like this</button>
-          {latest && <button type="button" className="btn btn-secondary" disabled={locked || busyId === pattern.id || busyId === `feedback-${latest.id}`} onClick={() => void onUndo(latest.id)}><UndoIcon /> Undo rating</button>}
+          <button type="button" className="btn btn-secondary" disabled={locked || patternBusy} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon /> More like this</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || patternBusy} onClick={() => void onFeedback(pattern.id, -1)}><ThumbDownIcon /> Less like this</button>
+          {latest && <button type="button" className="btn btn-secondary" disabled={locked || patternBusy} onClick={() => void onUndo(latest.id)}><UndoIcon /> Undo rating</button>}
         </div>
       </div>
       <aside className="training-preferences">
         <h2 className="section-title">Preference controls</h2>
-        <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={autoDisable} disabled={locked || busyId === "auto-disable"} onChange={(event) => void onAutoDisable(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Auto-disable at low weight</span></label>
+        <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={autoDisable} disabled={locked || busyKeys.has(libraryActionKey.autoDisable)} onChange={(event) => void onAutoDisable(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>Auto-disable at low weight</span></label>
         <div className="feedback-ledger">
           <h3>Recent ratings</h3>
           {feedback.slice(0, 8).map((item) => {
-            const itemPattern = patterns.find((candidate) => candidate.id === item.pattern_id);
-            return <div className="feedback-row" key={item.id} data-reverted={item.reverted || undefined}><span>{itemPattern?.name ?? item.pattern_id}</span><strong>{item.rating > 0 ? "+" : "-"}{Math.abs(item.weight_after - item.weight_before).toFixed(2)}</strong><span>{item.reverted ? "Undone" : item.enabled_after ? item.weight_after.toFixed(2) : "Disabled"}</span></div>;
+            return <div className="feedback-row" key={item.id} data-reverted={item.reverted || undefined}><span>{patternNames.get(item.pattern_id) ?? item.pattern_id}</span><strong>{item.rating > 0 ? "+" : "-"}{Math.abs(item.weight_after - item.weight_before).toFixed(2)}</strong><span>{item.reverted ? "Undone" : item.enabled_after ? item.weight_after.toFixed(2) : "Disabled"}</span></div>;
           })}
           {feedback.length === 0 && <p className="form-status">No ratings yet.</p>}
         </div>
