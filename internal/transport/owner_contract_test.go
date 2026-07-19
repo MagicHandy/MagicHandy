@@ -15,7 +15,8 @@ import (
 // TestTransportOwnersPreserveNeutralFrameContract runs one semantic fixture
 // through every dispatch owner. Handy owners retain neutral point timing and
 // let the device apply its stroke window; Intiface projects that same window
-// host-side and converts consecutive points directly to LinearCmd segments.
+// host-side and preserves segment endpoints while applying live duration
+// compression for dispatch lateness.
 //
 //nolint:funlen // Keeping all three owner subtests together makes contract drift visible in one fixture.
 func TestTransportOwnersPreserveNeutralFrameContract(t *testing.T) {
@@ -117,8 +118,8 @@ func TestTransportOwnersPreserveNeutralFrameContract(t *testing.T) {
 		}
 		first := server.waitForKind(t, "LinearCmd", time.Second)
 		second := server.waitForKind(t, "LinearCmd", time.Second)
-		assertLinearVector(t, first, 0, 40, 0.497)
-		assertLinearVector(t, second, 0, 60, 0.2615)
+		assertLinearVectorDurationRange(t, first, 0, 30, 40, 0.497)
+		assertLinearVectorDurationRange(t, second, 0, 45, 60, 0.2615)
 		assertSemanticFixtureUnchanged(t, fixture)
 		_, _ = owner.Stop(context.Background(), StopCommand{Reason: "contract_complete"})
 	})
