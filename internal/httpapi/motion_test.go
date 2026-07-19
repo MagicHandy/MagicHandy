@@ -228,6 +228,13 @@ func TestMotionStartStateStop(t *testing.T) {
 	if started.Engine.Target.SpeedPercent != 60 {
 		t.Fatalf("target speed = %d, want 60", started.Engine.Target.SpeedPercent)
 	}
+	if started.Engine.Target.Source != "manual_ui" {
+		t.Fatalf("target source = %q, want manual_ui", started.Engine.Target.Source)
+	}
+	restarted := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
+	if !restarted.Engine.Running || restarted.Engine.Target.PatternID != motion.PatternPulse {
+		t.Fatalf("manual motion did not restart with the replacement target: %+v", restarted.Engine)
+	}
 
 	state := callMotion(t, server, http.MethodGet, "/api/motion/state", "")
 	if !state.Engine.Running {
@@ -237,6 +244,40 @@ func TestMotionStartStateStop(t *testing.T) {
 	stopped := callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
 	if stopped.Engine.Running {
 		t.Fatalf("motion should be stopped, got %+v", stopped)
+	}
+}
+
+func TestManualMotionStartEndsActiveMode(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	t.Cleanup(server.Close)
+
+	if _, err := server.modes.Start(t.Context(), modes.ModeFreestyle); err != nil {
+		t.Fatalf("start freestyle: %v", err)
+	}
+	if status := server.modes.Status(); !status.Active {
+		t.Fatalf("freestyle status = %+v, want active", status)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if engine := server.currentMotionEngine(); engine == nil || !engine.Snapshot().Running {
+		t.Fatal("freestyle did not start motion before manual takeover")
+	}
+
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
+	if status := server.modes.Status(); status.Active {
+		t.Fatalf("mode survived manual motion start: %+v", status)
+	}
+	if !started.Engine.Running || started.Engine.Target.Source != "manual_ui" {
+		t.Fatalf("manual motion did not own the engine: %+v", started.Engine)
 	}
 }
 

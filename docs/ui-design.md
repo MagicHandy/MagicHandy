@@ -45,8 +45,9 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > readouts, stopwatch, mini visualizer, and the connection disclosure), and
 > workspaces as routed pages under a hash router. The shell-owned connection
 > manager stays available on every route and owns live provider actions plus
-> speed/stroke limits. Chat keeps
-> motion behavior, manual test, and the visualizer; Settings is a routed page with sibling sections
+> speed/stroke limits. Chat keeps Autopilot, live motion behavior, and the
+> visualizer; the manual device test lives under Settings > Diagnostics.
+> Settings is a routed page with sibling sections
 > (`#/settings/device|model|voice|prompts|diagnostics` — provider-scoped
 > compaction implemented in Slice 13.5; see
 > [settings-compaction.md](settings-compaction.md)). Token and component
@@ -54,9 +55,9 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 >
 > The subsections below marked **Historical** describe the pre-React shell
 > (status bar + single control sidebar + settings window). They are kept
-> because their rationale shaped the current shell — the control column,
-> immediate-apply grouping, and testing-badged manual motion moved into the
-> Chat page largely unchanged — but they no longer describe the build.
+> because their rationale shaped the current shell — especially the compact
+> control column and immediate-apply grouping — but they no longer describe
+> the build. The testing-badged manual motion group now lives in Diagnostics.
 
 ### Historical: persistent control bar (pre-React shell)
 
@@ -112,12 +113,16 @@ with Save reachable.
 
 ### Implemented structure (as built, React shell)
 
-`#/chat` is the primary workspace: the main column holds a compact Autopilot
-session strip directly above the canonical conversation, while the control
-column holds voice shortcuts, reverse/style motion behavior, the
-testing-badged Manual motion group, and the motion visualizer. Autopilot
-Pause/Resume stays in that strip and its generated lines appear in the same
-conversation instead of a duplicate status card. The shell-level connection manager owns the
+`#/chat` is the primary workspace: the main column holds the canonical
+conversation, while the control column holds the compact Autopilot session
+control, voice shortcuts, reverse/style motion behavior, and the motion
+visualizer. Autopilot Pause/Resume stays in that control sidebar and its
+generated lines appear in the conversation instead of a duplicate status card.
+The testing-badged Manual motion group lives in `#/settings/diagnostics`; it
+identifies an active test from the backend motion target's `manual_ui` source,
+never from the generic engine-running flag. Starting a manual test stops any
+active run and drains its autonomous owner before the diagnostic claims the
+shared engine. The shell-level connection manager owns the
 saved dispatch owner's connect/check/discover actions and immediate speed/stroke
 limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the

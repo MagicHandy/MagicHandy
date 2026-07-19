@@ -84,7 +84,7 @@ into four groups, none of which is a simple port:
    parity gap and the highest-leverage because the motion capability already
    exists.
 2. **Autonomous behavior.** Chat Autopilot's initial enabled-pattern curation
-   loop is in review in #101. Configurable cadence/autonomy levels and richer
+   loop landed in #101. Configurable cadence/autonomy levels and richer
    arrangement, region, and program control remain ideas E/F in the
    control-surface doc.
 3. **Deliberately-not-ported modes.** Auto/Edge/Milk are dropped as scripted

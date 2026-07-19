@@ -92,7 +92,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
-| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation in review; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
+| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
@@ -129,7 +129,10 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   owner** (Cloud REST, Browser Bluetooth, or Intiface) from settings; a fake
   transport is used only for tests and the diagnostics placeholder.
 - Cloud REST and Browser Bluetooth transports with diagnostics parity, SSE
-  event endpoints, no-fallback behavior, and manual test endpoints.
+  event endpoints, no-fallback behavior, and diagnostics-owned manual test
+  endpoints. A manual start stops the active run and drains its mode owner
+  before claiming the shared engine, then reports `manual_ui` as its target
+  source.
 - Motion-first UI: persistent navigation rail, status-only top bar, floating
   connection/limit manager, routed controls, single engine-state visualizer,
   always-visible Stop (plus Escape), diagnostics panel, and trace export.
@@ -268,10 +271,10 @@ It ships in steps that never drop a safety control mid-migration:
    the pinned footer, current controls move into the Chat page, settings window
    becomes the Settings page.
 3. **Preset Modes + Chat Autopilot**: relocate deterministic Freestyle to
-   Preset Modes; place the explicit **Autopilot** session control beside the
-   conversation on Chat. Its execution loop remains in `internal/modes` so it
-   shares Freestyle's lifecycle and emits only semantic targets through the
-   engine. Decisions use bounded recent conversation plus enabled library
+   Preset Modes; place the explicit **Autopilot** session control in the Chat
+   control sidebar beside the conversation. Its execution loop remains in
+   `internal/modes` so it shares Freestyle's lifecycle and emits only semantic
+   targets through the engine. Decisions use bounded recent conversation plus enabled library
    content, stay traced and Stop/Pause-interruptible, and remain clamped by the
    quick-settings envelope.
 4. **Pattern Library**: the browse/import/player/authoring/curation workspace —
@@ -283,7 +286,7 @@ implementing the permanent nav rail, compact status-led top bar, pinned Stop, an
 Chat / Preset Modes / Pattern Library / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes owns deterministic Freestyle; the initial Chat-native
-Autopilot control and curation loop are in review in #101 (step 3), with richer
+Autopilot control and curation loop landed in #101 (step 3), with richer
 arrangements and user-configurable autonomous speech cadence still planned.
 Pattern Library is merged to `main` (step 4). The legacy vanilla UI remains under `web/legacy/`
 as unshipped reference only; `web/dist` is the single embedded frontend.

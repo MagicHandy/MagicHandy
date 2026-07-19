@@ -8,7 +8,7 @@ migration (ADR 0009, PRs #37/#38; mobile-footer refinement in #46). Updated
 mode. This is now the as-built shell specification: the nav rail with pinned
 Stop, status-only bar, and four routed workspaces all exist. Pattern Library's
 Phase 14 workspace is implemented; Chat Autopilot's initial curation loop is in
-review, with the remaining autonomy work called out below. This
+place, with the remaining autonomy work called out below. This
 document specifies the **shell and information architecture**; it does not
 restate the safety, accessibility, and parity rules in
 [ui-design.md](ui-design.md), which stay in force unchanged. Provider-scoped
@@ -167,20 +167,16 @@ current page. It is a popover from measured geometry, not a `100vw` panel.
 The default page. Two columns on desktop, mirroring the reference `Controle`
 layout — the conversation beside a compact control column:
 
-- **Conversation** (left, fills remaining width): a compact **Autopilot**
-  session strip, the chat log (grows with the viewport, keeps near-bottom
-  scrollback stickiness and the jump-to-latest affordance), and the composer.
-  Autopilot's state and Pause/Resume live with the conversation; autonomous
-  replies render in this same log rather than in a mode card.
-- **Control column** (right, ~300px): the live **quick settings** (speed,
-  stroke, reverse, style — immediate-apply), the **manual test motion** group
-  (still explicitly badged **"testing"**, still labeled as driving the device
-  directly to check the connection), and the **detailed visualizer** with
-  commanded-estimate labeling. These are the controls that currently live in
-  the single sidebar panel; they move here because the sidebar becomes a nav
-  rail.
-Autopilot Pause/Resume is in its session strip. Nothing in this page is a
-stacked modal.
+- **Conversation** (left, fills remaining width): the chat log (grows with the
+  viewport, keeps near-bottom scrollback stickiness and the jump-to-latest
+  affordance) and the composer. Autonomous replies render in this same log
+  rather than in a mode card.
+- **Control column** (right, ~300px): the compact **Autopilot** session control
+  with Pause/Resume and decision provenance, voice shortcuts, live **quick
+  settings** (speed, stroke, reverse, style — immediate-apply), and the
+  **detailed visualizer** with commanded-estimate labeling.
+Manual device testing is intentionally absent from Chat and lives under
+Settings > Diagnostics. Nothing in this page is a stacked modal.
 
 Rationale for keeping quick settings here rather than in Settings: mid-session
 speed/stroke/style/reverse changes must not force the user out of chat — that
@@ -305,11 +301,17 @@ focused component coverage for trim, zoom, validation, and payload invariants.
 ## Workspace: Settings
 
 The former settings **window** becomes the Settings **page**, reached from the
-profile lockup or any `#/settings/*` route. Its internals are unchanged: the
-Device / Model / Prompts & Memory / Diagnostics sections, immediate-apply live
-device settings, explicit and confirmed destructive actions (reset, clear
-memory), the protected built-in prompt sets, and the redacted connection key
-that is never echoed back.
+profile lockup or any `#/settings/*` route. It contains Device / Model / Voice /
+Prompts & Memory / Diagnostics sections, immediate-apply live device settings,
+explicit and confirmed destructive actions (reset, clear memory), the protected
+built-in prompt sets, and the redacted connection key that is never echoed back.
+
+Diagnostics owns the explicitly badged **Manual motion / testing** group. Its
+Start action stops the active run and drains any Freestyle, Chat keepalive, or
+Autopilot owner before claiming the shared motion engine. The UI calls a test
+active only when the backend target source is `manual_ui`; another producer
+merely running the engine must not activate the test controls. The
+route-independent Emergency Stop remains available for every motion source.
 
 What changes is only that it is a page, not an overlay. The safety substance
 that the overlay guaranteed is preserved elsewhere:
@@ -388,14 +390,13 @@ asset/UI tests, and re-checks the Functional Parity Baseline rows it touches.
   frontend build/test CI.
 - **Step 1 — Shell refactor (no new backend).** Introduce the permanent nav
   sidebar and top-level router; move Stop to the pinned sidebar bottom; move the
-  current control panel (quick settings, manual test, visualizer detail,
-  pause/resume, keepalive) into the **Chat** workspace; convert the settings
-  window into the **Settings** workspace; keep the status bar status-only. This
-  is a pure front-end reorganization of surfaces that already exist.
+  current live control panel into the **Chat** workspace; convert the settings
+  window into the **Settings** workspace; keep the status bar status-only. The
+  later ownership review moved manual testing from Chat to Diagnostics.
 - **Step 2 — Preset Modes + Chat Autopilot.** Add the **Preset Modes** workspace
   and relocate deterministic Freestyle/style there. Add the **Autopilot**
-  session strip to Chat, backed by the shared autonomous lifecycle in
-  `internal/modes` and semantic targets through the engine. Bounded
+  session control to Chat's control sidebar, backed by the shared autonomous
+  lifecycle in `internal/modes` and semantic targets through the engine. Bounded
   conversation context, trace rows, browser-playable chat/TTS ordering, and
   Stop/Pause interruption are part of the definition of done.
 - **Step 3 — Pattern Library.** Build the **Pattern Library** workspace with

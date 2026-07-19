@@ -8,7 +8,10 @@ export function ManualMotionTest() {
   const { backendOnline, readOnly, motion, refresh } = useAppState();
   const { show } = useToast();
   const locked = !backendOnline || readOnly;
-  const running = motion?.engine?.running === true;
+  const engine = motion?.engine;
+  const manualActive = engine?.target?.source === "manual_ui" && Boolean(
+    engine.running || engine.starting || engine.paused || engine.completing,
+  );
   const [pattern, setPattern] = useState("stroke");
   const [speed, setSpeed] = useState(50);
   const speedID = useId();
@@ -41,9 +44,9 @@ export function ManualMotionTest() {
       </p>
       <div className="row-actions hint-block">
         <button type="button" className="btn btn-start" onClick={() => void start()} disabled={locked}>
-          {running ? "Restart test" : "Start test"}
+          {manualActive ? "Restart test" : "Start test"}
         </button>
-        <button type="button" className="btn btn-secondary" onClick={() => void stop()} disabled={!backendOnline}>
+        <button type="button" className="btn btn-secondary" onClick={() => void stop()} disabled={!backendOnline || !manualActive}>
           Stop test
         </button>
       </div>

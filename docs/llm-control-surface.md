@@ -2,8 +2,8 @@
 
 This document catalogs how the local LLM can drive the device today, what the
 motion engine can already do that the model cannot yet reach, and a ranked set
-of ideas for widening LLM control. The initial Chat Autopilot slice is in review
-in PR #101; the remaining ideas are design inputs, not implied commitments.
+of ideas for widening LLM control. The initial Chat Autopilot slice landed in
+PR #101; the remaining ideas are design inputs, not implied commitments.
 
 It is grounded in two things: MagicHandy's current code
 (`internal/chat/contract.go`, `internal/motion/target.go`) and the reference

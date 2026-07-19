@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, SettingsUpdate } from "../api/types";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
+import { ManualMotionTest } from "../components/ManualMotionTest";
 import { MemoryManager } from "../components/MemoryManager";
 import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
 import { PromptSetEditor } from "../components/PromptSetEditor";
@@ -282,6 +283,8 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">Diagnostics</h2>
             <label className="field"><span className="label">Diagnostics verbosity</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
+            <div className="divider" />
+            <ManualMotionTest />
             <div className="divider" />
             <DiagnosticsPanel locked={locked} onReset={applyReset} />
           </>
