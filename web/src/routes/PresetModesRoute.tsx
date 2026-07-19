@@ -1,7 +1,7 @@
-// Preset Modes: the autonomous-motion workspace (renamed Hands-free). Freestyle
-// is live; Autopilot is staged coming-soon until the backend planner exists
-// (docs/react-ui-implementation-handoff.md, step 4). All modes are engine
-// clients — no separate motion pathway.
+// Preset Modes: the autonomous-motion workspace (renamed Hands-free). Both
+// autonomous modes are engine clients — no separate motion pathway. Autopilot
+// is Freestyle's loop with the segment choice curated by the local model;
+// every decision failure falls back to the deterministic planner and says so.
 import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { WorkspaceHead } from "../components/WorkspaceHead";
@@ -11,26 +11,32 @@ const STYLES = ["gentle", "balanced", "intense"] as const;
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 
+const decisionSourceCopy: Record<string, string> = {
+  model: "Model-curated",
+  fallback: "Deterministic fallback (model unavailable)",
+  hold: "Holding the current segment",
+};
+
 export function PresetModesRoute() {
   const { state, backendOnline, readOnly, motion, refresh } = useAppState();
   const { show } = useToast();
   const locked = !backendOnline || readOnly;
   const modes = state?.modes;
-  const freestyleActive =
-    modes?.running === true || modes?.mode === "freestyle" || modes?.active_mode === "freestyle";
+  const freestyleActive = modes?.mode === "freestyle" || modes?.active_mode === "freestyle";
+  const autopilotActive = modes?.mode === "autopilot" || modes?.active_mode === "autopilot";
   const style = state?.settings?.motion?.style ?? "balanced";
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
   const [stylePending, setStylePending] = useState(false);
   const stylePendingRef = useRef(false);
 
-  async function startFreestyle() {
+  async function startMode(mode: "freestyle" | "autopilot") {
     if (pendingRef.current || locked) return;
     pendingRef.current = true;
     setPending(true);
     try {
-      await api.startMode("freestyle");
-      show("Freestyle started.");
+      await api.startMode(mode);
+      show(`${cap(mode)} started.`);
     } catch (e) {
       show(msg(e), "error");
     } finally {
@@ -79,21 +85,34 @@ export function PresetModesRoute() {
           <div>
             <h2 className="section-title">Autopilot</h2>
             <p className="hint-block narrow">
-              Hands the wheel to the assistant: it changes direction, pattern, and intensity from the
-              conversation — bounded by your quick-settings limits, fully traced, and interruptible by Stop
-              and Pause.
+              Hands the wheel to the assistant: at every segment boundary it curates an enabled pattern
+              and intensity from your library — bounded by your limits, fully traced, and interruptible
+              by Stop and Pause. If the model is unavailable, the deterministic planner takes the segment
+              and the status says so.
             </p>
           </div>
-          <label className="toggle-line" title="Coming soon">
-            <span className="toggle">
-              <input type="checkbox" role="switch" disabled aria-label="Autopilot (coming soon)" />
-              <span className="track" aria-hidden="true" />
-            </span>
-          </label>
         </div>
-        <p className="coming-soon">
-          Autopilot is not available in this build.
-        </p>
+        <div className="row-actions hint-block">
+          {autopilotActive ? (
+            <button type="button" className="btn btn-secondary" onClick={() => void stopModes()} disabled={locked || pending}>
+              Stop Autopilot
+            </button>
+          ) : (
+            <button type="button" className="btn btn-start" onClick={() => void startMode("autopilot")} disabled={locked || pending}>
+              Start Autopilot
+            </button>
+          )}
+          {autopilotActive && motion?.engine?.paused && <span className="form-status">Paused</span>}
+        </div>
+        {autopilotActive && (
+          <div className="autopilot-status" role="status">
+            <p className="form-status">
+              Segment {modes?.segment_index ?? 0}
+              {modes?.decision_source ? ` — ${decisionSourceCopy[modes.decision_source] ?? modes.decision_source}` : ""}
+            </p>
+            {modes?.last_say && <p className="hint-block narrow autopilot-say">“{modes.last_say}”</p>}
+          </div>
+        )}
       </section>
 
       <section className="panel">
@@ -107,11 +126,11 @@ export function PresetModesRoute() {
               Stop Freestyle
             </button>
           ) : (
-            <button type="button" className="btn btn-start" onClick={() => void startFreestyle()} disabled={locked || pending}>
+            <button type="button" className="btn btn-start" onClick={() => void startMode("freestyle")} disabled={locked || pending}>
               Start Freestyle
             </button>
           )}
-          {motion?.engine?.paused && <span className="form-status">Paused</span>}
+          {freestyleActive && motion?.engine?.paused && <span className="form-status">Paused</span>}
         </div>
         <div className="field">
           <span className="label">Style <span className="hint-inline">biases pacing</span></span>

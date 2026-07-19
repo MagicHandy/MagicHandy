@@ -55,7 +55,7 @@ Same vocabulary as the sweeps, plus one:
 | **LLM stroke-region control (tip/shaft/base)** | **Partial** | Engine `AreaFocus` exists; **not exposed in the chat contract** — see [llm-control-surface.md](llm-control-surface.md) idea A |
 | **LLM program/script selection** | **Partial** | Engine `ProgramID` exists; chat contract exposes only `pattern_id` — idea B |
 | **Soft-anchor loops (tip/upper/mid/lower/base)** | **Partial** | Engine `SoftAnchor` exists; no authoring UI or model access — idea G |
-| **LLM-driven autonomous mode (Autopilot)** | **Not started** | Plan slice; likely shape is [llm-control-surface.md](llm-control-surface.md) ideas E/F |
+| **LLM-driven autonomous mode (Autopilot)** | **Implemented (2026-07-19)** | LLM-curated segments over the Freestyle loop with deterministic planner fallback and chat-log/TTS say-lines; live-model acceptance open. Shape follows [llm-control-surface.md](llm-control-surface.md) ideas E/F |
 | Voice output (cloud + local cloning) | **Covered / differs** | ElevenLabs + NeuTTS Air (STGPT-RV used Chatterbox); ADR 0007 |
 | Voice input (ASR) | **Covered / differs** | Managed Parakeet (STGPT-RV also had faster-whisper); ADR 0007 |
 | Persona prompt + memory | **Covered** | Phase 10 prompt sets + inspectable memory |

@@ -32,7 +32,9 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.Motion
 		},
-		Traces: s.traces,
+		Traces:   s.traces,
+		Decide:   s.autopilotDecide,
+		Announce: s.autopilotAnnounce,
 	})
 }
 

@@ -148,6 +148,10 @@ export interface ModesStatus {
   running?: boolean;
   mode?: string;
   active_mode?: string;
+  segment_index?: number;
+  segment_ends_in_ms?: number;
+  decision_source?: string;
+  last_say?: string;
   [k: string]: unknown;
 }
 

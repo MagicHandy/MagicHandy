@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 const (
 	// ModeFreestyle is the autonomous arrangement planner.
 	ModeFreestyle = "freestyle"
+	// ModeAutopilot is Freestyle's loop with the segment choice delegated to
+	// an injected LLM curation step; every failure falls back to the
+	// deterministic planner (see autopilot.go).
+	ModeAutopilot = "autopilot"
 	// ModeChat keeps chat-driven motion alive between turns: it re-applies the
 	// last chat target only after transport recovery, never after a user stop
 	// or pause.
@@ -52,6 +57,12 @@ type Options struct {
 	// MaxSegmentDuration caps armed segment deadlines. It exists for tests
 	// that need many segment boundaries quickly; production leaves it zero.
 	MaxSegmentDuration time.Duration
+	// Decide is Autopilot's injected LLM curation step. Autopilot cannot
+	// start without it; Freestyle and chat keepalive never use it.
+	Decide DecideFunc
+	// Announce publishes an Autopilot spoken line to the chat surface after
+	// its segment is armed. Optional; failures never affect motion.
+	Announce func(say string)
 }
 
 // Status is the UI-facing mode state.
@@ -64,6 +75,12 @@ type Status struct {
 	LastEvent      string `json:"last_event,omitempty"`
 	LastEventAt    string `json:"last_event_at,omitempty"`
 	WaitingForChat bool   `json:"waiting_for_chat,omitempty"`
+	// DecisionSource reports where Autopilot's current segment came from:
+	// "model", "fallback" (planner after a failed decision), or "hold".
+	DecisionSource string `json:"decision_source,omitempty"`
+	// LastSay is the most recent Autopilot spoken line (already in the chat
+	// log; surfaced here for the mode card).
+	LastSay string `json:"last_say,omitempty"`
 }
 
 // Manager owns at most one active mode loop.
@@ -90,6 +107,10 @@ type Manager struct {
 	segmentIdx  int
 	generation  uint64
 	chatVersion uint64
+
+	recentPatternIDs []string
+	decisionSource   string
+	lastSay          string
 
 	operationID     uint64
 	operationMode   string
@@ -119,6 +140,8 @@ func (m *Manager) Status() Status {
 	segmentIdx := m.segmentIdx
 	deadline := m.deadline
 	waitingForChat := m.chatTarget == nil
+	decisionSource := m.decisionSource
+	lastSay := m.lastSay
 	m.mu.Unlock()
 
 	status := Status{
@@ -132,11 +155,15 @@ func (m *Manager) Status() Status {
 	if !lastEventAt.IsZero() {
 		status.LastEventAt = lastEventAt.UTC().Format(time.RFC3339Nano)
 	}
-	if mode == ModeFreestyle {
+	if mode == ModeFreestyle || mode == ModeAutopilot {
 		status.SegmentIndex = segmentIdx
 		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
 			status.SegmentEndsMs = remaining
 		}
+	}
+	if mode == ModeAutopilot {
+		status.DecisionSource = decisionSource
+		status.LastSay = lastSay
 	}
 	if mode == ModeChat {
 		status.WaitingForChat = waitingForChat
@@ -146,8 +173,11 @@ func (m *Manager) Status() Status {
 
 // Start activates a mode, replacing any active one.
 func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
-	if mode != ModeFreestyle && mode != ModeChat {
+	if mode != ModeFreestyle && mode != ModeAutopilot && mode != ModeChat {
 		return m.Status(), fmt.Errorf("unknown mode %q", mode)
+	}
+	if mode == ModeAutopilot && m.options.Decide == nil {
+		return m.Status(), errors.New("autopilot requires a configured decision step")
 	}
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
@@ -162,9 +192,13 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.driftDone = true
 	m.deadline = time.Time{}
 	m.nextRetry = time.Time{}
-	if mode == ModeFreestyle {
+	if mode == ModeFreestyle || mode == ModeAutopilot {
 		m.planner = NewPlanner(m.options.Seed)
 		m.segmentIdx = 0
+		m.segment = Segment{}
+		m.recentPatternIDs = nil
+		m.decisionSource = ""
+		m.lastSay = ""
 	}
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	m.cancel = cancel
@@ -296,8 +330,8 @@ func (m *Manager) run(ctx context.Context, mode string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if mode == ModeFreestyle {
-				m.tickFreestyle(ctx)
+			if mode == ModeFreestyle || mode == ModeAutopilot {
+				m.tickAutonomous(ctx, mode)
 			} else {
 				m.tickChat(ctx)
 			}
@@ -305,8 +339,11 @@ func (m *Manager) run(ctx context.Context, mode string) {
 	}
 }
 
-func (m *Manager) tickFreestyle(ctx context.Context) {
-	if ctx.Err() != nil || !m.modeActive(ModeFreestyle) {
+// tickAutonomous advances Freestyle and Autopilot: both run the same bounded
+// segment loop; only the segment source differs (deterministic planner vs
+// injected LLM curation with planner fallback — see nextSegmentChoice).
+func (m *Manager) tickAutonomous(ctx context.Context, mode string) {
+	if ctx.Err() != nil || !m.modeActive(mode) {
 		return
 	}
 	engine := m.options.Current()
@@ -330,14 +367,15 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 		generation := m.generation
 		m.mu.Unlock()
 		if stopped {
-			// The user stopped motion; freestyle ends rather than fighting it.
+			// The user stopped motion; the autonomous mode ends rather than
+			// fighting it.
 			go m.Stop("user_stop_observed")
 			return
 		}
 		if m.options.Now().Before(retryAt) {
 			return
 		}
-		m.startNextSegment(ctx, "freestyle_start", generation)
+		m.startNextSegment(ctx, mode, mode+"_start", generation)
 		return
 	}
 
@@ -352,11 +390,11 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 	m.mu.Unlock()
 
 	if !driftDone && now.After(driftAt) {
-		if target, ok := segment.DriftTarget("Freestyle", "freestyle"); ok {
-			if _, err := engine.ApplyTarget(ctx, target, "freestyle_drift"); err == nil {
-				if m.modeGenerationActive(ModeFreestyle, generation) {
-					m.trace(ModeFreestyle, "segment_drift", &diagnostics.MotionTracePlanner{
-						Mode:              ModeFreestyle,
+		if target, ok := segment.DriftTarget(modeLabel(mode), mode); ok {
+			if _, err := engine.ApplyTarget(ctx, target, mode+"_drift"); err == nil {
+				if m.modeGenerationActive(mode, generation) {
+					m.trace(mode, "segment_drift", &diagnostics.MotionTracePlanner{
+						Mode:              mode,
 						Event:             "segment_drift",
 						PatternIdentifier: string(segment.PatternID),
 						DriftToPercent:    segment.DriftToSpeedPercent,
@@ -365,7 +403,7 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 			}
 		}
 		m.mu.Lock()
-		if m.mode == ModeFreestyle && m.generation == generation {
+		if m.mode == mode && m.generation == generation {
 			m.driftDone = true
 		}
 		m.mu.Unlock()
@@ -376,16 +414,16 @@ func (m *Manager) tickFreestyle(ctx context.Context) {
 		if now.Before(retryAt) {
 			return
 		}
-		m.applyNextSegment(ctx, engine, "freestyle_segment", generation)
+		m.applyNextSegment(ctx, engine, mode, mode+"_segment", generation)
 	}
 }
 
-// startNextSegment starts the engine on a fresh planner segment (first start
-// or recovery restart). The engine loop must outlive the mode loop — stopping
+// startNextSegment starts the engine on a fresh segment (first start or
+// recovery restart). The engine loop must outlive the mode loop — stopping
 // a mode is a planning decision, and the explicit engine stop is a separate,
 // deliberate call — so engine starts never inherit the mode's cancellation.
-func (m *Manager) startNextSegment(ctx context.Context, reason string, generation uint64) {
-	operationCtx, finish, ok := m.beginStartOperation(ctx, ModeFreestyle, generation, 0)
+func (m *Manager) startNextSegment(ctx context.Context, mode string, reason string, generation uint64) {
+	operationCtx, finish, ok := m.beginStartOperation(ctx, mode, generation, 0)
 	if !ok {
 		return
 	}
@@ -396,35 +434,61 @@ func (m *Manager) startNextSegment(ctx context.Context, reason string, generatio
 		if operationCtx.Err() != nil {
 			return
 		}
-		m.backoff(ModeFreestyle, generation, "start_unavailable", err)
+		m.backoff(mode, generation, "start_unavailable", err)
 		return
 	}
-	segment, scores := m.nextPlannedSegment()
-	state, err := engine.Start(operationCtx, segment.Target("Freestyle", "freestyle"), m.options.Settings())
+	choice := m.nextSegmentChoice(operationCtx, mode)
+	if operationCtx.Err() != nil {
+		return
+	}
+	state, err := engine.Start(operationCtx, m.choiceTarget(mode, choice), m.options.Settings())
 	if err != nil {
 		if operationCtx.Err() != nil {
 			return
 		}
-		m.backoff(ModeFreestyle, generation, "start_failed", err)
+		m.backoff(mode, generation, "start_failed", err)
 		return
 	}
-	if m.armSegment(segment, state.RecentCommandLatencyMillis, generation) {
-		m.tracePlanned(reason, segment, scores)
-	}
+	m.finishSegmentChoice(mode, reason, choice, state.RecentCommandLatencyMillis, generation)
 }
 
-// applyNextSegment retargets the running stream to the next planned segment.
+// applyNextSegment retargets the running stream to the next segment.
 // Transitions ride the engine's phase-preserving / low-jump handoff — modes
 // never replace streams or touch transport.
-func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, reason string, generation uint64) {
-	segment, scores := m.nextPlannedSegment()
-	state, err := engine.ApplyTarget(ctx, segment.Target("Freestyle", "freestyle"), reason)
-	if err != nil {
-		m.backoff(ModeFreestyle, generation, "segment_failed", err)
+func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, mode string, reason string, generation uint64) {
+	choice := m.nextSegmentChoice(ctx, mode)
+	if ctx.Err() != nil || !m.modeGenerationActive(mode, generation) {
 		return
 	}
-	if m.armSegment(segment, state.RecentCommandLatencyMillis, generation) {
-		m.tracePlanned(reason, segment, scores)
+	state, err := engine.ApplyTarget(ctx, m.choiceTarget(mode, choice), reason)
+	if err != nil {
+		m.backoff(mode, generation, "segment_failed", err)
+		return
+	}
+	m.finishSegmentChoice(mode, reason, choice, state.RecentCommandLatencyMillis, generation)
+}
+
+// choiceTarget builds the engine target for one segment choice, attaching any
+// resolved library pattern definition from an Autopilot curation decision.
+func (m *Manager) choiceTarget(mode string, choice segmentChoice) motion.MotionTarget {
+	target := choice.segment.Target(modeLabel(mode), mode)
+	if choice.pattern != nil {
+		target.Pattern = choice.pattern
+	}
+	return target
+}
+
+// finishSegmentChoice arms the segment, records provenance, traces the
+// decision, and publishes any Autopilot spoken line — strictly after the
+// segment is armed, so a raced stop or mode switch never speaks.
+func (m *Manager) finishSegmentChoice(mode string, reason string, choice segmentChoice, recentLatencyMillis int64, generation uint64) {
+	if !m.armSegment(mode, choice.segment, recentLatencyMillis, generation) {
+		return
+	}
+	m.rememberChoice(mode, choice)
+	m.tracePlanned(mode, reason, choice)
+	if mode == ModeAutopilot && choice.say != "" && m.options.Announce != nil {
+		m.options.Announce(choice.say)
 	}
 }
 
@@ -441,7 +505,7 @@ func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
 	return planner.NextSegment(m.options.Settings())
 }
 
-func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64, generation uint64) bool {
+func (m *Manager) armSegment(mode string, segment Segment, recentLatencyMillis int64, generation uint64) bool {
 	duration := time.Duration(segment.DurationMillis) * time.Millisecond
 	latencyFloor := time.Duration(max(int64(0), recentLatencyMillis))*time.Millisecond + modeDwellPadding
 	if latencyFloor > maximumLatencyDwell {
@@ -456,7 +520,7 @@ func (m *Manager) armSegment(segment Segment, recentLatencyMillis int64, generat
 	now := m.options.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != ModeFreestyle || m.generation != generation || m.userStopped {
+	if m.mode != mode || m.generation != generation || m.userStopped {
 		return false
 	}
 	m.segment = segment
@@ -645,23 +709,32 @@ func cloneTarget(target motion.MotionTarget) motion.MotionTarget {
 	return target
 }
 
-func (m *Manager) tracePlanned(reason string, segment Segment, scores []diagnostics.PlannerScore) {
+func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice) {
 	planner := m.plannerSnapshot()
 	row := &diagnostics.MotionTracePlanner{
-		Mode:              ModeFreestyle,
+		Mode:              mode,
 		Event:             reason,
 		Style:             m.options.Settings().Style,
-		PatternIdentifier: string(segment.PatternID),
-		SpeedPercent:      segment.SpeedPercent,
-		DriftToPercent:    segment.DriftToSpeedPercent,
-		DurationMillis:    segment.DurationMillis,
-		Scores:            scores,
+		PatternIdentifier: string(choice.segment.PatternID),
+		SpeedPercent:      choice.segment.SpeedPercent,
+		DriftToPercent:    choice.segment.DriftToSpeedPercent,
+		DurationMillis:    choice.segment.DurationMillis,
+		Scores:            choice.scores,
 	}
 	if planner != nil {
 		row.Seed = planner.Seed()
 		row.SegmentIndex = planner.SegmentIndex()
 	}
-	m.trace(ModeFreestyle, reason, row, "")
+	note := choice.note
+	if mode == ModeAutopilot {
+		// The decision source and say-presence stay visible in the trace so
+		// "why did it do that?" always has an answer.
+		note = strings.TrimSpace(choice.source + " " + note)
+		if choice.say != "" {
+			note += " say"
+		}
+	}
+	m.trace(mode, reason, row, note)
 }
 
 func (m *Manager) plannerSnapshot() *Planner {

@@ -6,7 +6,7 @@ import { PresetModesRoute } from "./PresetModesRoute";
 const app = vi.hoisted(() => ({
   readOnly: false,
   state: {
-    modes: {} as { running?: boolean },
+    modes: {} as { mode?: string; segment_index?: number; decision_source?: string; last_say?: string },
     settings: { motion: { style: "balanced" } },
   },
   refresh: vi.fn(),
@@ -80,9 +80,32 @@ describe("PresetModesRoute", () => {
 
   it("keeps mode-specific Stop unavailable to read-only clients", () => {
     app.readOnly = true;
-    app.state = { modes: { running: true }, settings: { motion: { style: "balanced" } } };
+    app.state = { modes: { mode: "freestyle" }, settings: { motion: { style: "balanced" } } };
     render(<PresetModesRoute />);
 
     expect(screen.getByRole("button", { name: "Stop Freestyle" })).toBeDisabled();
+  });
+
+  it("starts Autopilot through the modes endpoint", async () => {
+    startMode.mockResolvedValue({});
+    render(<PresetModesRoute />);
+
+    await act(async () => screen.getByRole("button", { name: "Start Autopilot" }).click());
+
+    expect(startMode).toHaveBeenCalledWith("autopilot");
+  });
+
+  it("shows Autopilot decision provenance and the last spoken line", () => {
+    app.state = {
+      modes: { mode: "autopilot", segment_index: 4, decision_source: "fallback", last_say: "Keeping it steady." },
+      settings: { motion: { style: "balanced" } },
+    };
+    render(<PresetModesRoute />);
+
+    expect(screen.getByRole("button", { name: "Stop Autopilot" })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Segment 4 — Deterministic fallback (model unavailable)");
+    expect(screen.getByText("“Keeping it steady.”")).toBeInTheDocument();
+    // Freestyle stays startable copy-wise but the autopilot card owns the stop.
+    expect(screen.getByRole("button", { name: "Start Freestyle" })).toBeInTheDocument();
   });
 });

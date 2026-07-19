@@ -28,7 +28,9 @@ remains a thin shell around the app's own first-run setup wizard (decision and
 design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
 decision. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
-Autopilot is planned-but-not-started, while the migration importer (Phase 15) is
+Autopilot is now implemented (an LLM-curated autonomous mode over the Freestyle
+loop with a deterministic planner fallback; live-model acceptance remains
+open), while the migration importer (Phase 15) is
 now **undecided — it may not be built at all** (rationale in
 `docs/parity-with-stgpt-rv.md`). The UI/behavior parity baseline is complete;
 the largest genuine remaining parity gap is LLM control depth (stroke regions,
@@ -89,6 +91,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
+| Autopilot | LLM-curated autonomous mode over the Freestyle loop: per-segment pattern/intensity curation through the strict chat contract, say-lines via the chat log/TTS lockstep, deterministic planner fallback on any decision failure | **Implemented; live-model acceptance open** | — |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |

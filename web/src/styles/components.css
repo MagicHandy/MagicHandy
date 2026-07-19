@@ -899,6 +899,20 @@ textarea:disabled {
   gap: 16px;
   flex-wrap: wrap;
 }
+.autopilot-status {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.autopilot-status .form-status {
+  margin: 0;
+}
+.autopilot-say {
+  margin: 6px 0 0;
+  font-style: italic;
+}
 .meta-grid {
   margin: 0;
   display: grid;
