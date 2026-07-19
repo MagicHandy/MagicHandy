@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-19, funscript import and timeline repair
+## Snapshot — 2026-07-19, Chat Autopilot review and Chat integration
 
 ### Goal 1: Maintainability
 
@@ -31,8 +31,8 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Advisory findings: `internal/config/settings.go` 1,013 lines, `internal/httpapi/voice.go` 1,268, `internal/httpapi/voice_test.go` 1,134, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,372. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Advisory findings: `web/src/App.test.tsx` 1,210 lines, `web/src/styles/components.css` 1,346, and retired reference-only `web/legacy/app.css` 846. Continuous capture stays isolated from ChatPanel; `web/dist` remains the single shipped build. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings: `internal/config/settings.go` 1,110 lines, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 846, `internal/motion/engine_test.go` 866, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,373. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings: `web/src/App.test.tsx` 1,296 lines, `web/src/styles/components.css` 1,419, and retired reference-only `web/legacy/app.css` 846. The new Autopilot component is isolated from ChatPanel; `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,479 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current long-loop-preview tree: 20,634,112 bytes plain and 14,497,792 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current Chat Autopilot tree: 20,682,240 bytes plain and 14,535,168 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 862,336 raw / 555,442 gzip bytes because the isolated
-   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 418,100 raw
-   / 118,025 gzip bytes, and the stripped binary is 14,497,792 bytes. These
+   browser payload is 864,672 raw / 556,014 gzip bytes because the isolated
+   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 420,436 raw
+   / 118,597 gzip bytes, and the stripped binary is 14,535,168 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -116,6 +116,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-19** - Chat Autopilot review and Chat integration: the assistant
+  session now lives directly above the canonical conversation instead of
+  competing with deterministic Freestyle in Preset Modes. The model receives a
+  bounded canonical history tail; custom library definitions survive hold and
+  drift; Stop/mode cancellation invalidates raced announcements; and successful
+  autonomous lines enter the shared log before optional browser-playable TTS.
+  Busy TTS remains text-only rather than deepening the speech queue. The Chat
+  strip exposes Start/Stop, Pause/Resume, and honest model/hold/planner-fallback
+  provenance without duplicating assistant text. All 166 frontend tests,
+  typecheck/build, `go test ./...`, `go vet ./...`, `golangci-lint`, and plain
+  plus stripped `CGO_ENABLED=0` builds pass. Relative to the merged funscript
+  baseline, HTML/CSS/JS grew 2,336 raw / 572 gzip bytes to 420,436 / 118,597;
+  the complete embedded payload is 864,672 / 556,014 using per-file gzip level
+  9 with a zero timestamp and unchanged artwork. Plain/stripped binaries are
+  20,682,240 / 14,535,168 bytes. Live-model, long-session, and real-device
+  Autopilot acceptance remain open; no transport implementation changed.
 
 - **2026-07-19** - Funscript import hardening and timeline repair: the Import
   tab now has compact keyboard-operable zoom/pan/fit controls, viewport-aware

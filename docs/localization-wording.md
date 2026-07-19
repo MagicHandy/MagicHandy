@@ -93,6 +93,32 @@ Motion pattern names (mild, kept short):
 | Core connection lost | Se perdió la conexión con el núcleo | Conexão com o núcleo perdida | 与核心的连接已断开 | コアとの接続が切断されました |
 | Backend-required controls are locked until the core responds. | Los controles que requieren el servicio están bloqueados hasta que el núcleo responda. | Os controles que exigem o serviço ficam bloqueados até o núcleo responder. | 需要后端的控件将被锁定，直到核心恢复响应。 | コアが応答するまで、バックエンドを必要とする操作はロックされます。 |
 
+## Chat — Autopilot
+
+| en | es | pt-BR | zh-Hans | ja |
+| --- | --- | --- | --- | --- |
+| Autopilot | Autopilot | Autopilot | 自动驾驶 | Autopilot |
+| Start Autopilot | Iniciar Autopilot | Iniciar Autopilot | 启动自动驾驶 | Autopilotを開始 |
+| Stop Autopilot | Detener Autopilot | Parar Autopilot | 停止自动驾驶 | Autopilotを停止 |
+| Pause Autopilot | Pausar Autopilot | Pausar Autopilot | 暂停自动驾驶 | Autopilotを一時停止 |
+| Resume Autopilot | Reanudar Autopilot | Retomar Autopilot | 继续自动驾驶 | Autopilotを再開 |
+| Off | Desactivado | Desativado | 关闭 | オフ |
+| Active | Activo | Ativo | 运行中 | 実行中 |
+| Starting | Iniciando | Iniciando | 正在启动 | 開始中 |
+| Stopping | Deteniendo | Parando | 正在停止 | 停止中 |
+| Pausing | Pausando | Pausando | 正在暂停 | 一時停止中 |
+| Resuming | Reanudando | Retomando | 正在继续 | 再開中 |
+| Paused | En pausa | Em pausa | 已暂停 | 一時停止 |
+| Choosing first segment | Eligiendo el primer segmento | Escolhendo o primeiro segmento | 正在选择第一个片段 | 最初のセグメントを選択中 |
+| Assistant selected | Seleccionado por el asistente | Selecionado pelo assistente | 助手已选择 | アシスタントが選択 |
+| Planner fallback | Alternativa del planificador | Alternativa do planejador | 规划器回退 | プランナーのフォールバック |
+| Continuing current pattern | Manteniendo el patrón actual | Mantendo o padrão atual | 继续当前模式 | 現在のパターンを継続 |
+| Motion has not started | El movimiento aún no ha comenzado | O movimento ainda não começou | 运动尚未开始 | モーションはまだ開始されていません |
+| Autopilot started. | Autopilot iniciado. | Autopilot iniciado. | 自动驾驶已启动。 | Autopilotを開始しました。 |
+| Autopilot stopped. | Autopilot detenido. | Autopilot parado. | 自动驾驶已停止。 | Autopilotを停止しました。 |
+| Motion paused. | Movimiento pausado. | Movimento pausado. | 运动已暂停。 | モーションを一時停止しました。 |
+| Motion resumed. | Movimiento reanudado. | Movimento retomado. | 运动已继续。 | モーションを再開しました。 |
+
 ## Sidebar — Controls
 
 | en | es | pt-BR | zh-Hans | ja |
@@ -121,7 +147,7 @@ Motion pattern names (mild, kept short):
 | Stroke max | Recorrido máx. | Curso máx. | 最大行程 | 最大ストローク |
 | Reverse direction | Invertir dirección | Inverter direção | 反转方向 | 方向を反転 |
 | Style | Estilo | Estilo | 风格 | スタイル |
-| biases Freestyle pacing | ajusta el ritmo del modo libre | ajusta o ritmo do modo livre | 影响自由模式的节奏 | フリースタイルのペースに影響 |
+| biases autonomous pacing | ajusta el ritmo autónomo | ajusta o ritmo autônomo | 影响自主节奏 | 自律動作のペースに影響 |
 | Gentle | Suave | Suave | 轻柔 | ソフト |
 | Balanced | Equilibrado | Equilibrado | 均衡 | バランス |
 | Intense | Intenso | Intenso | 强烈 | ハード |

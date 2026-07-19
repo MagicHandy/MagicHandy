@@ -3,11 +3,12 @@
 ## Status
 
 Proposed 2026-07-06; **implemented 2026-07-08 through Phase 14** with the React
-migration (ADR 0009, PRs #37/#38; mobile-footer refinement in #46). This is now the
-as-built shell specification: the nav rail with pinned Stop, the status-only
-bar, and the four routed workspaces all exist as described, with two labeled
-exceptions — Autopilot renders as coming-soon until its planner ships (shell
-step 2), while Pattern Library's Phase 14 workspace is implemented. This
+migration (ADR 0009, PRs #37/#38; mobile-footer refinement in #46). Updated
+2026-07-19 for PR #101: Autopilot is an assistant session on Chat, not a preset
+mode. This is now the as-built shell specification: the nav rail with pinned
+Stop, status-only bar, and four routed workspaces all exist. Pattern Library's
+Phase 14 workspace is implemented; Chat Autopilot's initial curation loop is in
+review, with the remaining autonomy work called out below. This
 document specifies the **shell and information architecture**; it does not
 restate the safety, accessibility, and parity rules in
 [ui-design.md](ui-design.md), which stay in force unchanged. Provider-scoped
@@ -22,8 +23,8 @@ correct while Settings was the only second surface (product decision
 2026-07-03). It stops being correct now that the app is growing into several
 distinct workspaces:
 
-- **Chat** — the conversation plus live control.
-- **Preset Modes** — autonomous motion (the renamed "Hands-free").
+- **Chat** — the conversation, assistant Autopilot, and live control.
+- **Preset Modes** — deterministic autonomous motion (the renamed "Hands-free").
 - **Pattern Library** — browse, import, enable, and author motion content.
 - **Settings** — device, model, prompts/memory, diagnostics.
 
@@ -164,21 +165,22 @@ current page. It is a popover from measured geometry, not a `100vw` panel.
 ## Workspace: Chat (home)
 
 The default page. Two columns on desktop, mirroring the reference `Controle`
-layout — a control column beside the conversation:
+layout — the conversation beside a compact control column:
 
-- **Control column** (left, ~300px): the live **quick settings** (speed,
+- **Conversation** (left, fills remaining width): a compact **Autopilot**
+  session strip, the chat log (grows with the viewport, keeps near-bottom
+  scrollback stickiness and the jump-to-latest affordance), and the composer.
+  Autopilot's state and Pause/Resume live with the conversation; autonomous
+  replies render in this same log rather than in a mode card.
+- **Control column** (right, ~300px): the live **quick settings** (speed,
   stroke, reverse, style — immediate-apply), the **manual test motion** group
   (still explicitly badged **"testing"**, still labeled as driving the device
   directly to check the connection), and the **detailed visualizer** with
   commanded-estimate labeling. These are the controls that currently live in
   the single sidebar panel; they move here because the sidebar becomes a nav
   rail.
-- **Conversation** (right, fills remaining width): the chat log (grows with the
-  viewport, keeps near-bottom scrollback stickiness and the jump-to-latest
-  affordance) and the composer.
-
-Pause/Resume and the chat-keepalive toggle live in the control column too,
-adjacent to the run readout. Nothing in this page is a stacked modal.
+Autopilot Pause/Resume is in its session strip. Nothing in this page is a
+stacked modal.
 
 Rationale for keeping quick settings here rather than in Settings: mid-session
 speed/stroke/style/reverse changes must not force the user out of chat — that
@@ -188,22 +190,21 @@ moves to the Settings page.
 
 ## Workspace: Preset Modes (formerly Hands-free)
 
-The autonomous-motion workspace. Renames "Hands-free" to "Preset Modes" because
-the page is about *choosing a motion behavior*, of which hands-free autopilot
-is one. All behaviors here are **clients of the one motion engine** (ADR 0002,
-Phase 11); none is a second motion pathway.
+The deterministic autonomous-motion workspace. Renames "Hands-free" to
+"Preset Modes" because the page is about choosing a repeatable motion behavior.
+Assistant autonomy stays on Chat, where its conversation and generated lines
+are visible. All behaviors remain **clients of the one motion engine** (ADR
+0002, Phase 11); none is a second motion pathway.
 
 Contents, top to bottom:
 
-1. **Autopilot** — the headline control (full contract in the next section).
-   A single prominent on/off control that hands motion direction to the LLM.
-2. **Freestyle** — the deterministic autonomous mode: start/stop plus the style
+1. **Freestyle** — the deterministic autonomous mode: start/stop plus the style
    selector (gentle / balanced / intense) that biases the seeded scoring. This
    is today's Freestyle, relocated here from the sidebar.
-3. **Preset arrangements** — named, bounded segment sets (the Phase 11
+2. **Preset arrangements** — named, bounded segment sets (the Phase 11
    arrangement contract: ≤8 segments, 4–120s each) the user can start with one
    click. Built-in presets ship read-only; user presets are editable later.
-4. **Session shaping** — mood/intensity and an optional timed session length,
+3. **Session shaping** — mood/intensity and an optional timed session length,
    and the **"I'm close"** affordance (a chat/UI signal that biases the planner
    down or toward finish, a proven StrokeGPT behavior).
 
@@ -212,53 +213,66 @@ style selector apply live during a running behavior. Every planner decision is
 a trace row, so a still device is always diagnosable as planner-wait vs
 transport failure.
 
-## Autopilot — Behavior And Safety Contract
+## Chat Autopilot — Behavior And Safety Contract
 
-Autopilot lets the LLM "take over and change direction as it sees fit based on
-context." Because it puts the model in the motion driver's seat, it needs a
-tighter contract than any other control. Autopilot is **off by default** and
+Autopilot lets the LLM curate motion continuously from conversation context
+without requiring a command every turn. Because it puts the model in the
+motion driver's seat, it needs a tighter contract than any other control.
+Autopilot is **off by default** and
 always visibly indicated when on (status-bar phase = "autopilot" plus an active
 state on the button).
 
-**What it does.** While on, the model continuously proposes motion — pattern,
-intensity, focus region, direction, and how long to hold each — from the
-conversation and session context, and may change its mind as context evolves.
-The user does not have to issue per-turn commands.
+**What the initial slice does.** While on, the model receives a bounded tail of
+the canonical conversation plus style, speed limits, recent pattern ids, and
+its last autonomous line. At each segment boundary it may select an **enabled**
+pattern and intensity or keep the current segment. Deterministic code chooses
+the bounded dwell time. Focus regions, programs, freeform arrangements,
+session arcs, and user-configurable speech cadence remain planned; the initial
+slice must not be described as already controlling them.
 
 **How it routes (no separate pathway).** Autopilot emits the same bounded
-**arrangement segments** as Freestyle (Phase 11 contract), or — once the
-library exists — picks `{pattern_id, intensity}` from **enabled** library
-entries (the Phase 14 curation contract). Deterministic code compiles those
+**arrangement segment loop** as Freestyle (Phase 11 contract) and picks
+`{pattern_id, intensity}` from **enabled** library entries (the Phase 14
+curation contract). Deterministic code compiles those
 into engine `ApplyTarget` retargets. The model **never** triggers low-level
 stream replacement per turn and **never** imports `transport`; the existing
 depguard import boundary keeps `internal/modes` off transport. If nothing
-matches, the deterministic semantic-target path is the fallback so the model is
-never silenced.
+matches or a model call fails, a deterministic planner segment is the visible
+fallback so motion does not stall.
 
 **Bounded by the user's envelope.** Autopilot cannot exceed the live quick
-settings: speed and stroke limits clamp its segments, style biases its scoring,
-reverse is applied at the transport boundary. Segment bounds hold (4–120s, ≤8
-segments); variation comes from changing targets over time within the envelope,
-never from rapid oscillation around one target.
+settings: speed and stroke limits clamp its segments, style bounds deterministic
+dwell timing, and reverse is applied at the transport boundary. Segment bounds
+hold (4–120s); variation comes from changing targets over time within the
+envelope, never from rapid oscillation around one target.
 
 **Interruptible and pause-aware.** Stop and Pause take effect immediately.
 Pause preserves phase; resume continues the plan. Autopilot's keepalive never
 restarts motion the user paused or stopped — the same rule as chat keepalive.
 Stop is always the safety path and is never replaced by turning Autopilot off.
 
-**Traceable.** Every autopilot decision records a planner trace row (seed,
-inputs, chosen segment/pattern, score table, cadence) exactly like Freestyle,
-so autonomy is auditable and a stall is diagnosable.
+**Traceable.** Every Autopilot decision records its source, segment index,
+chosen pattern, speed, duration, and fallback error when present. Planner
+fallback rows retain the deterministic score table and seed, so autonomy is
+auditable and a stall is diagnosable.
 
-**Fails safe.** A malformed or errored model response never drives motion:
-autopilot holds its last safe segment and surfaces the malformed-response
-indicator, and if the model stays unavailable it winds down rather than acting
-on garbage. Model errors never enter motion, history, or (later) TTS.
+**Fails safe.** A malformed or errored model response never drives motion. The
+deterministic planner supplies that segment and the Chat strip reports
+`Planner fallback`; diagnostics retain the reason. A model-requested Stop is
+treated as hold because only the user owns Stop. Model errors never enter the
+chat log or TTS.
 
-**Consent and clarity.** Turning Autopilot on is an explicit, single action
-with a clear on-state; turning it off returns motion control to the user (chat
-or manual). It requires a connected controller and is disabled read-only with a
-visible reason.
+**Chat and speech delivery.** Successful autonomous lines enter the canonical
+chat log before optional TTS. The controller browser discovers new speech ids
+from that same log and plays them in order; initial history is never replayed.
+If TTS is already active or queued, a new autonomous line remains visible but
+does not deepen the speech backlog. Stop cancels the mode context and pending
+voice work.
+
+**Consent and clarity.** Turning Autopilot on is an explicit action in Chat
+with a clear on-state; turning it off stops the session's motion. The control is
+disabled for read-only and backend-offline clients. Temporary device/model
+failure is reported through status and trace rather than hidden.
 
 ## Workspace: Pattern Library
 
@@ -358,7 +372,7 @@ Every ui-design.md safety property maps to a home in the new shell:
 | One feedback channel, never occluded | Toast + backend banner above all pages |
 | Single active controller | Unchanged; extra clients read-only with Stop |
 | Backend-loss lock | Banner at workspace top below status bar; required controls lock |
-| Motion through engine only | Preset Modes / Autopilot / Library are engine clients |
+| Motion through engine only | Chat Autopilot / Preset Modes / Library are engine clients |
 | Viewport-safe sizing | The shell may own `100vh`; no overflow-prone page-wide `100vw`; popovers stay bounded |
 | Flat navigation, no stacked modals | Router mounts one workspace; no overlay windows |
 
@@ -378,11 +392,12 @@ asset/UI tests, and re-checks the Functional Parity Baseline rows it touches.
   pause/resume, keepalive) into the **Chat** workspace; convert the settings
   window into the **Settings** workspace; keep the status bar status-only. This
   is a pure front-end reorganization of surfaces that already exist.
-- **Step 2 — Preset Modes + Autopilot.** Add the **Preset Modes** workspace;
-  relocate Freestyle/style there; add the **Autopilot** control wired to a new
-  autopilot mode in `internal/modes` (LLM-driven arrangement segments through
-  the engine, per the contract above). Trace rows and Stop/Pause interruption
-  are part of the definition of done.
+- **Step 2 — Preset Modes + Chat Autopilot.** Add the **Preset Modes** workspace
+  and relocate deterministic Freestyle/style there. Add the **Autopilot**
+  session strip to Chat, backed by the shared autonomous lifecycle in
+  `internal/modes` and semantic targets through the engine. Bounded
+  conversation context, trace rows, browser-playable chat/TTS ordering, and
+  Stop/Pause interruption are part of the definition of done.
 - **Step 3 — Pattern Library.** Build the **Pattern Library** workspace with
   Phase 14 (browse/enable, import, player, authoring, curation, feedback).
   **Implemented on the Phase 14 review branch.**

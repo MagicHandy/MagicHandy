@@ -2,8 +2,8 @@
 
 This document catalogs how the local LLM can drive the device today, what the
 motion engine can already do that the model cannot yet reach, and a ranked set
-of ideas for widening LLM control. It is a design sketch for discussion, not a
-committed plan; nothing here is scheduled until it becomes a scoped slice.
+of ideas for widening LLM control. The initial Chat Autopilot slice is in review
+in PR #101; the remaining ideas are design inputs, not implied commitments.
 
 It is grounded in two things: MagicHandy's current code
 (`internal/chat/contract.go`, `internal/motion/target.go`) and the reference
@@ -50,6 +50,13 @@ exclusive, and `none`/`stop` carry no target fields. Disabled or unknown
 pattern ids are rejected, and an all-disabled library keeps the deterministic
 fallback. This is real curation — the model selects from author-owned content —
 but it is a narrow slice of what the engine can do.
+
+Chat Autopilot reuses this same contract at bounded segment boundaries. Its
+request includes the latest 12 canonical conversation messages, current style
+and speed band, recent pattern ids, and the last autonomous line. It may curate
+an enabled pattern/intensity or hold; deterministic code owns duration and all
+clamps. This is broader orchestration of the existing contract, not a second
+motion schema.
 
 ## What the engine already supports that the model cannot reach
 
@@ -143,20 +150,21 @@ has the compiler (Freestyle uses it); the new part is a safe *request* schema.
   to establish feel (multiple cycles), and surface the active arrangement in
   diagnostics so users can see what the model changed.
 
-### F. Mode selection + session freestyle/curation toggle (net-new; moderate)
+### F. Chat Autopilot session controls (partially implemented; moderate)
 
-Let the model enter a mode (Freestyle / a future Autopilot) and honor a
-**session-level toggle** between "curate authored content only" (`{pattern_id or
-program_id, intensity}`) and "freeform arrangement" — the reference app's item
-#16 reframe of anchor-loop output as a session Freestyle switch. When curation
-is on, the model may only select authored content; when freeform is on, it may
-request arrangements.
+The initial explicit session control now lives on Chat, not Preset Modes. While
+enabled, the model curates authored pattern content at segment boundaries from
+bounded conversation context; the shared mode manager remains only the backend
+execution/lifecycle owner. This placement keeps assistant autonomy with the
+conversation and leaves Freestyle as the clearly separate deterministic preset
+behavior.
 
-- Dependency: the mode manager exists; needs a visible toggle and a
-  guarded `mode_action` field (the reference app gates this behind explicit
-  settings, especially for voice transcripts — ROADMAP #3).
-- Disposition: this is the concrete shape of the plan's unstarted **Autopilot**
-  slice. Keep model-triggered mode changes behind an explicit user opt-in.
+Remaining work is a visible **session-level autonomy choice** between curated
+authored content (`{pattern_id or program_id, intensity}`) and future freeform
+arrangements, plus bounded user-configurable autonomous speech cadence. A
+guarded `mode_action` field is still needed before the model itself may enter or
+leave a session, especially from voice transcripts. Model-triggered mode
+changes remain off until that explicit opt-in exists.
 
 ### G. Soft-anchor waypoints (parity; moderate)
 
@@ -206,7 +214,7 @@ same skepticism.
   any new intent compiles through.
 - [pattern-library.md](pattern-library.md) — patterns vs programs, enabled-only
   curation, and the LLM catalog rule.
-- [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) — the unstarted Autopilot
-  slice (ideas E/F are its likely shape) and the bounded arrangement contract.
+- [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) — the initial Chat
+  Autopilot slice and the still-open arrangement/session controls (ideas E/F).
 - Reference: `StrokeGPT-ReVibed/docs/motion_control_modes.md` (route policy and
   "Future LLM Control Modes") and `ROADMAP.md` items #3, #4, #7, #12, #15, #16.

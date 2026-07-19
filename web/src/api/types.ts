@@ -136,6 +136,7 @@ export interface ChatLogMessage {
   content: string;
   client_id?: string;
   created_at: string;
+  speech_request_id?: string;
 }
 
 export interface ChatMessagesResponse {
@@ -148,6 +149,10 @@ export interface ModesStatus {
   running?: boolean;
   mode?: string;
   active_mode?: string;
+  segment_index?: number;
+  segment_ends_in_ms?: number;
+  decision_source?: string;
+  last_say?: string;
   [k: string]: unknown;
 }
 

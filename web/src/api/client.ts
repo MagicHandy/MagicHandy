@@ -137,7 +137,8 @@ export const api = {
     style: MotionStyle | string;
   }>) => request("POST", "/api/motion/quick", patch),
 
-  // Modes (Freestyle / future Autopilot).
+  // Shared-engine modes. Freestyle is surfaced in Preset Modes; Autopilot is
+  // surfaced with its conversation in Chat.
   getModes: () => request("GET", "/api/modes"),
   startMode: (mode: string, options?: Record<string, unknown>) =>
     request("POST", "/api/modes/start", { mode, ...(options ?? {}) }),

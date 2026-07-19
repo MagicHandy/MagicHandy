@@ -95,6 +95,11 @@ export function ChatPanel() {
           return;
         }
         setMessages((m) => [...m, ...fresh.map((x) => ({ id: `log-${x.seq}`, role: x.role, text: x.content }))]);
+        if (!readOnly) {
+          for (const message of fresh) {
+            if (message.speech_request_id) queueSpeech(message.speech_request_id);
+          }
+        }
         history.current = [...history.current, ...fresh.map(toLlmHistory)].slice(-MAX_HISTORY);
         lastSeq.current = Math.max(lastSeq.current, res.latest_seq);
         setTailError("");
@@ -109,7 +114,7 @@ export function ChatPanel() {
     } finally {
       if (tailLoad.current === request) tailLoad.current = null;
     }
-  }, []);
+  }, [queueSpeech, readOnly]);
 
   // Seed from the canonical log, then keep one tail request in flight. The
   // uptime dependency retries transient failures on the next backend poll even

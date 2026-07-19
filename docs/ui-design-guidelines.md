@@ -6,7 +6,7 @@ The concrete, implementable reference for the sidebar-navigation shell. It is
 the companion to two docs and does not repeat them:
 
 - [ui-navigation-redesign.md](ui-navigation-redesign.md) — the information
-  architecture (nav rail, workspaces, Autopilot, migration).
+  architecture (nav rail, workspaces, Chat Autopilot, migration).
 - [ui-design.md](ui-design.md) — the enduring safety, accessibility, and parity
   rules.
 
@@ -18,8 +18,9 @@ retired under `web/legacy/` (reference only, not embedded). The current React
 styles are authoritative where legacy values differ. The
 do/don't rules keep the result from reading as generic AI output. A visual
 sketch of the shell as designed is
-[ui-shell-sketch.svg](ui-shell-sketch.svg) (historical artifact; the build
-is authoritative where they differ).
+[ui-shell-sketch.svg](ui-shell-sketch.svg) (historical artifact; its Autopilot
+card in Preset Modes is superseded by the Chat placement, and the build is
+authoritative wherever they differ).
 
 ## Design Tokens
 

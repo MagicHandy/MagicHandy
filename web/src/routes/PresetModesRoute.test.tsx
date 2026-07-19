@@ -6,7 +6,7 @@ import { PresetModesRoute } from "./PresetModesRoute";
 const app = vi.hoisted(() => ({
   readOnly: false,
   state: {
-    modes: {} as { running?: boolean },
+    modes: {} as { running?: boolean; mode?: string },
     settings: { motion: { style: "balanced" } },
   },
   refresh: vi.fn(),
@@ -80,9 +80,16 @@ describe("PresetModesRoute", () => {
 
   it("keeps mode-specific Stop unavailable to read-only clients", () => {
     app.readOnly = true;
-    app.state = { modes: { running: true }, settings: { motion: { style: "balanced" } } };
+    app.state = { modes: { mode: "freestyle" }, settings: { motion: { style: "balanced" } } };
     render(<PresetModesRoute />);
 
     expect(screen.getByRole("button", { name: "Stop Freestyle" })).toBeDisabled();
+  });
+
+  it("does not duplicate Chat Autopilot in Preset Modes", () => {
+    render(<PresetModesRoute />);
+
+    expect(screen.queryByText("Autopilot")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Freestyle" })).toBeEnabled();
   });
 });

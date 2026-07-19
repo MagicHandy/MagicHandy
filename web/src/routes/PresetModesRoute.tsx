@@ -1,7 +1,6 @@
-// Preset Modes: the autonomous-motion workspace (renamed Hands-free). Freestyle
-// is live; Autopilot is staged coming-soon until the backend planner exists
-// (docs/react-ui-implementation-handoff.md, step 4). All modes are engine
-// clients — no separate motion pathway.
+// Preset Modes owns deterministic autonomous motion. Assistant-driven
+// Autopilot lives with its conversation on the Chat route; both remain clients
+// of the same motion engine.
 import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { WorkspaceHead } from "../components/WorkspaceHead";
@@ -16,8 +15,7 @@ export function PresetModesRoute() {
   const { show } = useToast();
   const locked = !backendOnline || readOnly;
   const modes = state?.modes;
-  const freestyleActive =
-    modes?.running === true || modes?.mode === "freestyle" || modes?.active_mode === "freestyle";
+  const freestyleActive = modes?.mode === "freestyle" || modes?.active_mode === "freestyle";
   const style = state?.settings?.motion?.style ?? "balanced";
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
@@ -71,30 +69,7 @@ export function PresetModesRoute() {
 
   return (
     <>
-      <WorkspaceHead title="Preset modes" lede="Autonomous motion — every mode is a client of the one motion engine." />
-
-      <section className="panel autopilot">
-        <p className="eyebrow">Autonomous motion</p>
-        <div className="headline">
-          <div>
-            <h2 className="section-title">Autopilot</h2>
-            <p className="hint-block narrow">
-              Hands the wheel to the assistant: it changes direction, pattern, and intensity from the
-              conversation — bounded by your quick-settings limits, fully traced, and interruptible by Stop
-              and Pause.
-            </p>
-          </div>
-          <label className="toggle-line" title="Coming soon">
-            <span className="toggle">
-              <input type="checkbox" role="switch" disabled aria-label="Autopilot (coming soon)" />
-              <span className="track" aria-hidden="true" />
-            </span>
-          </label>
-        </div>
-        <p className="coming-soon">
-          Autopilot is not available in this build.
-        </p>
-      </section>
+      <WorkspaceHead title="Preset modes" lede="Deterministic autonomous motion through the shared engine." />
 
       <section className="panel">
         <h2 className="section-title">Freestyle</h2>
@@ -111,7 +86,7 @@ export function PresetModesRoute() {
               Start Freestyle
             </button>
           )}
-          {motion?.engine?.paused && <span className="form-status">Paused</span>}
+          {freestyleActive && motion?.engine?.paused && <span className="form-status">Paused</span>}
         </div>
         <div className="field">
           <span className="label">Style <span className="hint-inline">biases pacing</span></span>

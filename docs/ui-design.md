@@ -112,13 +112,15 @@ with Save reachable.
 
 ### Implemented structure (as built, React shell)
 
-`#/chat` is the primary workspace: the chat log fills the main column and
-the control column holds Controls (Freestyle, Pause/Resume + run readout,
-keepalive), reverse/style motion behavior, the testing-badged Manual motion
-group, and the motion visualizer. The shell-level connection manager owns the
+`#/chat` is the primary workspace: the main column holds a compact Autopilot
+session strip directly above the canonical conversation, while the control
+column holds voice shortcuts, reverse/style motion behavior, the
+testing-badged Manual motion group, and the motion visualizer. Autopilot
+Pause/Resume stays in that strip and its generated lines appear in the same
+conversation instead of a duplicate status card. The shell-level connection manager owns the
 saved dispatch owner's connect/check/discover actions and immediate speed/stroke
-limits on every route. `#/modes` hosts Preset Modes
-(Freestyle now, Autopilot when its planner lands), `#/library` hosts the
+limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
+future saved arrangements), `#/library` hosts the
 Phase 14 Browse / Programs / Import / Author / Training workspace, and
 `#/settings/device|model|voice|prompts|diagnostics` are sibling sections of
 the routed Settings page — deep-linkable, no window, no stacked overlays.
@@ -527,8 +529,9 @@ measured pacing and intelligibility variance.
 
 ### Not yet built — planned, not regressions
 
-Still planned rather than regressed: the Autopilot planner and its richer mode
-events (including "I'm close"), the Phase 15 importer and Phase 16 setup
+Still planned rather than regressed: richer Chat Autopilot controls (bounded
+speech cadence, arrangement/program/region requests, session shaping, and
+"I'm close"), live-model and long-session acceptance, the Phase 15 importer and Phase 16 setup
 wizard,
 curated model downloads/hardware-fit recommendations (`docs/model-management.md`),
 the bounded speed-test button, raw-model diagnostics, and live device-position layer
