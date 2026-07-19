@@ -121,4 +121,7 @@ that reason.
 - [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) — phases and the Known Gaps list
 - [goal-scorecard.md](goal-scorecard.md) — goal/budget evidence
 - [llm-control-surface.md](llm-control-surface.md) — the LLM-control gap and ideas
+- [feature-ideas.md](feature-ideas.md) — the 2026-07-19 deep review: STGPT-RV
+  features itemized at the settings/UI level (candidate rows for this matrix's
+  next refresh), ideas mined from the Codex history, and net-new ideas
 - [decisions/0006-drop-legacy-motion.md](decisions/0006-drop-legacy-motion.md) — why Auto/Edge/Milk are not ported

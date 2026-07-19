@@ -102,7 +102,8 @@ Contributions are welcome, from people and AI coding tools alike.
   [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Pattern library and import contracts](docs/pattern-library.md)
 - [LLM control surface — current state and ideas](docs/llm-control-surface.md)
-- [Parity with StrokeGPT-ReVibed](docs/parity-with-stgpt-rv.md)
+- [Parity with StrokeGPT-ReVibed](docs/parity-with-stgpt-rv.md) ·
+  [Feature ideas catalog](docs/feature-ideas.md)
 - [UI design](docs/ui-design.md) ·
   [UI design guidelines](docs/ui-design-guidelines.md)
 - [MagicHandy + LSO integration plan](docs/lso-merge-integration.md)
