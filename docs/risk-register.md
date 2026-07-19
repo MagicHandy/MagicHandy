@@ -195,7 +195,9 @@ Browse/Programs/Author/Training view passes rendered checks at 1440x900 and
 390x844 with no horizontal overflow, unnamed controls, duplicate IDs, or nested
 interactive elements. Route titles, heading progression, mobile navigation,
 manual Speed, and speech-provider names have focused coverage. Backend preview
-samples, not frontend interpolation, render every library curve.
+samples, not frontend interpolation, render every playback-preview curve. The
+Import tab's client-rendered raw action timeline is inspection-only and cannot
+start motion or construct transport payloads.
 
 ## R10: Scope Creep Toward Legacy Parity
 
@@ -698,14 +700,20 @@ inactive gaps or normalize an unusable span into misleading motion.
 
 Mitigation:
 
-- cap request bodies at 8 MiB, action counts, durations at 24 hours, and stored
-  pattern/program capacities; reject non-finite/out-of-range positions
+- cap source files and request bodies at 8 MiB, browser-inspected sources at
+  20,480 actions, selected/backend payloads at 4096 actions, durations at 24
+  hours, and stored pattern/program capacities; reject unknown declared schemas,
+  malformed metadata, missing positions, and non-finite/out-of-range values in
+  both the browser inspection path and backend parser
 - distinguish finite programs from repeatable patterns at schema, API, and
   engine levels; only explicit pattern import strips long stationary gaps and
   normalizes relative amplitude
 - validate/simplify authoring input server-side and preview with the exact
   backend sampler; never execute raw file payloads or construct transport
   commands from imported data
+- snap trims to source actions and display their exact duration; keep timeline
+  zoom/pan independent from selected and submitted content, and preserve every
+  selected knot when importing a finite program
 - route all playback through the shared engine and user speed/stroke envelope;
   controller ownership, Pause, and global Stop remain unchanged
 

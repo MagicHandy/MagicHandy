@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-18, SQLite persistence reliability audit
+## Snapshot — 2026-07-19, funscript import hardening
 
 ### Goal 1: Maintainability
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 839,568 raw / 549,067 gzip bytes because the isolated
-   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 395,332 raw
-   / 111,650 gzip bytes, and the stripped binary is 14,466,560 bytes. These
+   browser payload is 853,006 raw / 552,734 gzip bytes because the isolated
+   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 408,770 raw
+   / 115,317 gzip bytes, and the stripped binary is 14,488,576 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -116,6 +116,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-19** - Funscript import hardening and timeline inspection: the
+  Import tab now has keyboard-operable zoom/pan/fit controls, viewport-aware
+  downsampling, action-snapped trim bounds, precise subsecond/hour readouts, and
+  a persistent selection-length value. Zoom state cannot alter trim state or
+  submitted actions. Browser and backend validation now reject unknown schemas,
+  malformed metadata, missing/out-of-range actions, oversized files, and
+  mismatched names instead of silently repairing them; sources up to 20,480
+  actions remain inspectable when trimmed to the 4,096-action backend limit.
+  Finite program imports preserve all selected knots. All 152 frontend tests,
+  typecheck/build, and `go test ./...` pass. Relative to the merged Import-tab
+  baseline, HTML/CSS/JS grew 5,636 raw / 1,588 gzip bytes to 408,770 / 115,317;
+  the complete embedded payload is 853,006 / 552,734 using the established
+  per-file level-9 method and unchanged artwork. Plain/stripped pure-Go binaries
+  are 20,624,896 / 14,488,576 bytes. No transport path changed; real-device feel
+  for preserved imported knots remains R21 exit evidence. The local race build
+  remains unavailable because this host has no `gcc`; CI retains the race gate.
 
 - **2026-07-18** - Frontend route, state, and accessibility audit: settings
   drafts survive subsection navigation; quick controls flush pending teardown

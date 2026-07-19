@@ -1138,7 +1138,10 @@ ownership, disabled-pattern rejection, curation fallback, feedback undo, and
 backend previews. The rendered React workspace was exercised at 1280 px and
 390 px across Browse, Programs, Author, and Training with no horizontal
 overflow; a mobile flex-shrink defect found during that pass was fixed. The
-remaining manual evidence is the routine-cycle feel check on the real device,
+later Import tab has focused UI coverage for strict file validation,
+action-snapped trimming, selection-length accuracy, zoom/pan independence, and
+submitted payloads; a refreshed five-tab rendered viewport pass remains useful.
+The remaining manual evidence is the routine-cycle feel check on the real device,
 capped below 40% intensity; synthetic tests cannot establish physical feel.
 
 ## Done Criteria

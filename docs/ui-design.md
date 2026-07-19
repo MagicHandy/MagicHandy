@@ -119,7 +119,7 @@ group, and the motion visualizer. The shell-level connection manager owns the
 saved dispatch owner's connect/check/discover actions and immediate speed/stroke
 limits on every route. `#/modes` hosts Preset Modes
 (Freestyle now, Autopilot when its planner lands), `#/library` hosts the
-Phase 14 Browse / Programs / Author / Training workspace, and
+Phase 14 Browse / Programs / Import / Author / Training workspace, and
 `#/settings/device|model|voice|prompts|diagnostics` are sibling sections of
 the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the
@@ -444,13 +444,17 @@ The library closes the planned pattern/training/player surface without copying
 the reference app's visual density or creating a second motion model. Browse
 exposes enabled state and visible weights; Programs keeps finite funscripts
 separate from loops; Import owns file intake — funscripts render a client-side
-trim timeline (dual-thumb selection, mm:ss readouts) with a program/loop-pattern
-choice before the trimmed selection is submitted through the normal validated
-import endpoint, while MagicHandy share files import as-is; Author reduces
+raw-source trim timeline with explicit zoom/pan/fit controls, action-snapped
+dual-thumb selection, precise time readouts, and a persistent selected-length
+readout. The zoom viewport never changes the trim or payload. A program/loop-
+pattern choice is made before the trimmed selection is submitted through the
+normal validated import endpoint, while MagicHandy share files import as-is;
+Author reduces
 freehand input to editable knots; Training
 auditions the same enabled catalog with original/smooth/crisp feel choices and
-reversible ratings. Every rendered curve comes from backend preview samples
-produced by the playback interpolator. Playback controls remain controller-
+reversible ratings. Every playback preview comes from backend samples produced
+by the playback interpolator; the Import plot is explicitly a raw source-action
+inspection view, not a playback preview. Playback controls remain controller-
 gated, Stop remains outside the route, and program intensity is capped by the
 backend settings envelope.
 

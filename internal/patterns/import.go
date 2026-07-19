@@ -29,7 +29,7 @@ type funscriptFile struct {
 
 type funscriptAction struct {
 	At  json.Number `json:"at"`
-	Pos float64     `json:"pos"`
+	Pos *float64    `json:"pos"`
 }
 
 // Import parses a MagicHandy share file or standard funscript.
@@ -41,23 +41,30 @@ func (l *Library) Import(filename string, data []byte, asKind string) (ImportRes
 		return ImportResult{}, invalidContentError(fmt.Errorf("import file exceeds %d MiB", MaxImportBytes>>20))
 	}
 	var header struct {
-		Schema  string            `json:"schema"`
+		Schema  json.RawMessage   `json:"schema"`
 		Actions []json.RawMessage `json:"actions"`
 	}
 	if err := json.Unmarshal(data, &header); err != nil {
 		return ImportResult{}, invalidContentError(fmt.Errorf("import file is not valid JSON: %w", err))
 	}
-	switch header.Schema {
-	case PatternFileSchema:
-		return l.importPatternFile(data)
-	case ProgramFileSchema:
-		return l.importProgramFile(data)
-	default:
-		if header.Actions != nil {
-			return l.importFunscript(filename, data, asKind)
+	if header.Schema != nil {
+		var schema string
+		if bytes.Equal(bytes.TrimSpace(header.Schema), []byte("null")) || json.Unmarshal(header.Schema, &schema) != nil || schema == "" {
+			return ImportResult{}, invalidContentError(errors.New("unknown motion content schema"))
 		}
-		return ImportResult{}, invalidContentError(errors.New("unknown motion content schema"))
+		switch schema {
+		case PatternFileSchema:
+			return l.importPatternFile(data)
+		case ProgramFileSchema:
+			return l.importProgramFile(data)
+		default:
+			return ImportResult{}, invalidContentError(errors.New("unknown motion content schema"))
+		}
 	}
+	if header.Actions != nil {
+		return l.importFunscript(filename, data, asKind)
+	}
+	return ImportResult{}, invalidContentError(errors.New("unknown motion content schema"))
 }
 
 // ExportPattern returns one individual shareable pattern file.
@@ -128,6 +135,9 @@ func (l *Library) importFunscript(filename string, data []byte, asKind string) (
 	if asKind != importAsPattern && asKind != importAsProgram {
 		return ImportResult{}, invalidContentError(errors.New("funscript import target must be pattern or program"))
 	}
+	if err := validateFunscriptMetadata(data); err != nil {
+		return ImportResult{}, invalidContentError(err)
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	var file funscriptFile
@@ -165,6 +175,29 @@ func (l *Library) importFunscript(filename string, data []byte, asKind string) (
 	return ImportResult{Kind: importAsProgram, Program: &program}, nil
 }
 
+func validateFunscriptMetadata(data []byte) error {
+	var metadata struct {
+		Version  json.RawMessage `json:"version"`
+		Inverted json.RawMessage `json:"inverted"`
+	}
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return fmt.Errorf("decode funscript metadata: %w", err)
+	}
+	if metadata.Version != nil {
+		var version string
+		if bytes.Equal(bytes.TrimSpace(metadata.Version), []byte("null")) || json.Unmarshal(metadata.Version, &version) != nil {
+			return errors.New("funscript version must be a string")
+		}
+	}
+	if metadata.Inverted != nil {
+		var inverted bool
+		if bytes.Equal(bytes.TrimSpace(metadata.Inverted), []byte("null")) || json.Unmarshal(metadata.Inverted, &inverted) != nil {
+			return errors.New("funscript inverted flag must be boolean")
+		}
+	}
+	return nil
+}
+
 func invalidContentError(err error) error {
 	if errors.Is(err, ErrInvalidContent) {
 		return err
@@ -173,8 +206,8 @@ func invalidContentError(err error) error {
 }
 
 func funscriptPoints(file funscriptFile) ([]motion.CurvePoint, error) {
-	if len(file.Actions) < 2 || len(file.Actions) > maxProgramPoints*5 {
-		return nil, fmt.Errorf("funscript requires 2..%d actions", maxProgramPoints*5)
+	if len(file.Actions) < 2 || len(file.Actions) > maximumRawPoints {
+		return nil, fmt.Errorf("funscript requires 2..%d actions", maximumRawPoints)
 	}
 	points := make([]motion.CurvePoint, 0, len(file.Actions))
 	for index, action := range file.Actions {
@@ -182,10 +215,10 @@ func funscriptPoints(file funscriptFile) ([]motion.CurvePoint, error) {
 		if err != nil || at < 0 || at > maxContentDuration {
 			return nil, fmt.Errorf("funscript action %d has invalid time", index)
 		}
-		if math.IsNaN(action.Pos) || math.IsInf(action.Pos, 0) || action.Pos < 0 || action.Pos > 100 {
+		if action.Pos == nil || math.IsNaN(*action.Pos) || math.IsInf(*action.Pos, 0) || *action.Pos < 0 || *action.Pos > 100 {
 			return nil, fmt.Errorf("funscript action %d position must be between 0 and 100", index)
 		}
-		position := action.Pos
+		position := *action.Pos
 		if file.Inverted {
 			position = 100 - position
 		}

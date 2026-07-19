@@ -18,9 +18,11 @@ share additional entries.
 **Programs** are finite, elapsed-time curves. A funscript imported as a program
 keeps its action timing and relative spacing and does not loop. Playback may
 uniformly time-scale the complete curve through the bounded intensity control;
-the stored actions are unchanged. The engine samples it through the same path as
-patterns and sends an explicit Stop at completion. A new Start is rejected until
-that Stop returns. Patterns and programs have different SQLite tables, share
+the stored actions are unchanged. The current engine applies a 500 ms minimum
+execution period, so shorter stored programs play at that floor. The engine
+samples it through the same path as patterns and sends an explicit Stop at
+completion. A new Start is rejected until that Stop returns. Patterns and
+programs have different SQLite tables, share
 schemas, API routes, and engine definitions so callers cannot accidentally treat
 one as the other.
 
@@ -35,8 +37,10 @@ one as the other.
   simplified by vertical error while preserving every direction reversal.
   Raw input is capped at 4096 points and a saved pattern at 256 points including
   loop closure.
-- Preview samples come from the same backend `motion.Curve` used by playback.
-  The React canvas renders those samples; it does not implement interpolation.
+- Playback preview samples come from the same backend `motion.Curve` used by
+  playback. The React authoring/training canvases render those samples; they do
+  not implement playback interpolation. The import view's raw source-action
+  plot is a file-inspection timeline, not a playback preview.
 - Training's Original, Smooth, and Crisp choices produce temporary resolved
   definitions for audition. They never mutate stored points.
 
@@ -49,8 +53,13 @@ position_percent}` points; patterns also contain kind, cycle, description, and
 tags.
 
 Standard funscript `{at,pos}` actions are accepted, including the standard
-`inverted` flag. Import is bounded to 8 MiB, 24 hours, finite 0–100 positions,
-and a bounded action count. The user chooses one of two interpretations:
+`inverted` flag. Source inspection is bounded to 8 MiB, 24 hours, and 20,480
+actions; the selected payload and direct backend import are capped at 4096
+actions. Positions must be finite 0–100 values and saved names are limited to 80
+characters. The browser applies source bounds before rendering untrusted data;
+the backend validates submitted content again. Malformed actions and metadata
+are rejected rather than dropped, coerced, or clamped. The user chooses one of
+two interpretations:
 
 - **Program** preserves stored elapsed timing, relative spacing, and amplitude.
 - **Pattern** compresses stationary gaps over five seconds to 500 ms, normalizes
@@ -58,6 +67,15 @@ and a bounded action count. The user chooses one of two interpretations:
 
 Unknown schemas and unknown funscript targets are rejected. Imported bytes are
 never sent to a transport or executed directly.
+
+Funscript source time is normalized so the first action is zero. The Import tab
+starts fitted to the complete source and provides keyboard-operable zoom, pan,
+fit-selection, and fit-all controls. Its zoom viewport is independent of the
+trim selection and never changes submitted content. Both trim bounds snap to
+source actions, so the visible selection length is exactly the final selected
+action time minus the first selected action time. Submission rebases that first
+selected action to zero and preserves every selected program knot. MagicHandy
+share files carry their own content kind and bypass this trim workflow.
 
 ## Curation And Feedback
 
@@ -76,7 +94,7 @@ disable an entry after its weight reaches 0.25 or lower.
 
 ## Persistence
 
-SQLite schema v8 contains:
+SQLite schema v8 introduced (and later schema versions retain):
 
 - `patterns` for built-in/generated/user loops and visible curation state
 - `programs` for finite user/imported content

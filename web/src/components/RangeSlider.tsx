@@ -3,6 +3,7 @@
 import { useId, useRef, type ChangeEvent, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 type RangeBound = "min" | "max";
+type RangeChangeSource = "keyboard" | "pointer";
 
 interface RangeSliderProps {
   label: string;
@@ -11,12 +12,28 @@ interface RangeSliderProps {
   floor: number;
   ceil?: number;
   minGap?: number;
+  minAriaMax?: number;
+  maxAriaMin?: number;
   disabled?: boolean;
   formatValue?: (min: number, max: number) => string;
-  onChange: (next: { min: number; max: number }, changed: RangeBound) => void;
+  formatBoundValue?: (value: number, bound: RangeBound) => string;
+  onChange: (next: { min: number; max: number }, changed: RangeBound, source: RangeChangeSource) => void;
 }
 
-export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minGap = 0, disabled, formatValue, onChange }: RangeSliderProps) {
+export function RangeSlider({
+  label,
+  minValue,
+  maxValue,
+  floor,
+  ceil = 100,
+  minGap = 0,
+  minAriaMax,
+  maxAriaMin,
+  disabled,
+  formatValue,
+  formatBoundValue,
+  onChange,
+}: RangeSliderProps) {
   const id = useId();
   const valueId = useId();
   const lowRef = useRef<HTMLInputElement>(null);
@@ -26,16 +43,16 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
   const lowPct = ((minValue - floor) / span) * 100;
   const highPct = ((maxValue - floor) / span) * 100;
 
-  function changeBound(bound: RangeBound, candidate: number) {
+  function changeBound(bound: RangeBound, candidate: number, source: RangeChangeSource) {
     if (!Number.isFinite(candidate)) return;
     const value = Math.round(Math.max(floor, Math.min(ceil, candidate)));
     if (bound === "min") {
       const next = Math.min(value, maxValue - minGap);
-      if (next !== minValue) onChange({ min: next, max: maxValue }, "min");
+      if (next !== minValue) onChange({ min: next, max: maxValue }, "min", source);
       return;
     }
     const next = Math.max(value, minValue + minGap);
-    if (next !== maxValue) onChange({ min: minValue, max: next }, "max");
+    if (next !== maxValue) onChange({ min: minValue, max: next }, "max", source);
   }
 
   function valueAtPointer(event: ReactPointerEvent<HTMLDivElement>) {
@@ -58,12 +75,12 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
     activeBound.current = bound;
     event.currentTarget.setPointerCapture?.(event.pointerId);
     (bound === "min" ? lowRef : highRef).current?.focus();
-    changeBound(bound, value);
+    changeBound(bound, value, "pointer");
     event.preventDefault();
   }
 
   function continuePointerChange(event: ReactPointerEvent<HTMLDivElement>) {
-    if (activeBound.current) changeBound(activeBound.current, valueAtPointer(event));
+    if (activeBound.current) changeBound(activeBound.current, valueAtPointer(event), "pointer");
   }
 
   function finishPointerChange(event: ReactPointerEvent<HTMLDivElement>) {
@@ -92,13 +109,14 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
           className="range-slider-input range-slider-low"
           aria-label={`${label} minimum`}
           aria-describedby={valueId}
-          aria-valuemax={maxValue - minGap}
+          aria-valuemax={minAriaMax ?? maxValue - minGap}
+          aria-valuetext={formatBoundValue?.(minValue, "min")}
           min={floor}
           max={ceil}
           step={1}
           value={minValue}
           disabled={disabled}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => changeBound("min", Number(event.target.value))}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => changeBound("min", Number(event.target.value), "keyboard")}
         />
         <input
           type="range"
@@ -106,13 +124,14 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
           className="range-slider-input range-slider-high"
           aria-label={`${label} maximum`}
           aria-describedby={valueId}
-          aria-valuemin={minValue + minGap}
+          aria-valuemin={maxAriaMin ?? minValue + minGap}
+          aria-valuetext={formatBoundValue?.(maxValue, "max")}
           min={floor}
           max={ceil}
           step={1}
           value={maxValue}
           disabled={disabled}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => changeBound("max", Number(event.target.value))}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => changeBound("max", Number(event.target.value), "keyboard")}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 package patterns
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -68,6 +69,60 @@ func TestFunscriptImportBoundsAndInversion(t *testing.T) {
 	}
 	if _, err := library.Import("bad-target.funscript", data, "sequence"); err == nil {
 		t.Fatal("import accepted an unknown funscript target")
+	}
+}
+
+func TestFunscriptImportRejectsMalformedContracts(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+
+	for name, data := range map[string]string{
+		"unknown schema":    `{"schema":"other.motion.v1","actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`,
+		"empty schema":      `{"schema":"","actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`,
+		"null schema":       `{"schema":null,"actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`,
+		"missing position":  `{"actions":[{"at":0},{"at":1000,"pos":100}]}`,
+		"null position":     `{"actions":[{"at":0,"pos":null},{"at":1000,"pos":100}]}`,
+		"invalid version":   `{"version":1,"actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`,
+		"invalid inversion": `{"inverted":"true","actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`,
+		"null inversion":    `{"inverted":null,"actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := library.Import("invalid.funscript", []byte(data), importAsProgram); err == nil {
+				t.Fatalf("import accepted %s", name)
+			}
+		})
+	}
+
+	actions := make([]map[string]any, maximumRawPoints+1)
+	for index := range actions {
+		actions[index] = map[string]any{"at": index, "pos": index % 101}
+	}
+	data, err := json.Marshal(map[string]any{"actions": actions})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.Import("too-many.funscript", data, importAsProgram); err == nil || !contains(err.Error(), "4096") {
+		t.Fatalf("oversized action count error = %v", err)
+	}
+}
+
+func TestFunscriptProgramImportPreservesSourceKnots(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+	data := []byte(`{"actions":[{"at":0,"pos":0},{"at":500,"pos":50},{"at":1000,"pos":100}]}`)
+
+	result, err := library.Import("linear.funscript", data, importAsProgram)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Program.Points) != 3 || result.Program.Points[1].TimeMillis != 500 || result.Program.Points[1].PositionPercent != 50 {
+		t.Fatalf("program points = %+v, want all source knots", result.Program.Points)
 	}
 }
 
