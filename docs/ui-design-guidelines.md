@@ -182,6 +182,14 @@ component, engine-driven, with position labeled as a commanded estimate.
   and uses one track-sized pointer target so close thumbs remain reachable.
   Toggle: 40×22 track, 18px thumb; off `--line` + `--muted` thumb, on
   `--accent-strong` track + white thumb.
+- Import timeline: default to fit-all and provide labeled Zoom in, Zoom out,
+  Earlier, Later, Fit selection, and Fit all buttons. Zoom/pan changes only the
+  source viewport, never trim bounds or submitted content. Trim bounds snap to
+  source actions, and start, end, total, visible range, zoom level, selected
+  action count, and selection length remain available as text with tabular
+  numerals. The SVG is a raw source-action view, not a playback preview. Keep
+  controls keyboard-operable, wrapping without page-level overflow on mobile;
+  do not rely on wheel/pinch, animation, shading, or color alone.
 - Badge (e.g. the "testing" tag): 1px `--line-strong`, `--surface-2`, `--muted`,
   `0.68rem`, `999px` is *not* used — small `--radius-sm`/pill-ish hairline chip,
   quiet.

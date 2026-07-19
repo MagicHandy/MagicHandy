@@ -353,10 +353,6 @@ func (l *Library) CreateProgram(name, origin string, points []motion.CurvePoint,
 	if err != nil {
 		return Program{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
 	}
-	prepared, err = simplifyToLimit(prepared, 0.5, maxProgramPoints)
-	if err != nil {
-		return Program{}, fmt.Errorf("%w: %v", ErrInvalidContent, err)
-	}
 	definition, err := motion.NormalizeProgramDefinition(motion.ProgramDefinition{
 		ID: userContentID("program", name), Name: name, DurationMillis: duration, Points: prepared,
 	})

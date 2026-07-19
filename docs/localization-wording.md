@@ -49,6 +49,11 @@ MagicHandy worse at its core use case.
 | Transport | Transporte | Transporte | 传输方式 | トランスポート |
 | Dispatch owner | Origen de envío | Origem de envio | 指令来源 | 送信元 |
 | Pattern | Patrón | Padrão | 模式 | パターン |
+| Program | Programa | Programa | 程序 | プログラム |
+| Funscript | Funscript | Funscript | Funscript | Funscript |
+| Trim | Recortar | Recortar | 裁剪 | トリミング |
+| Timeline | Línea de tiempo | Linha do tempo | 时间轴 | タイムライン |
+| Selection | Selección | Seleção | 选择范围 | 選択範囲 |
 | Freestyle | Modo libre | Modo livre | 自由模式 | フリースタイル |
 | Pause / Resume | Pausar / Reanudar | Pausar / Retomar | 暂停 / 继续 | 一時停止 / 再開 |
 | Stop | Detener | Parar | 停止 | 停止 |
@@ -172,6 +177,39 @@ Motion pattern names (mild, kept short):
 | Transcription upload timed out. | Se agotó el tiempo para subir la transcripción. | O envio da transcrição expirou. | 转写上传超时。 | 文字起こしのアップロードがタイムアウトしました。 |
 | The selected microphone became unavailable. | El micrófono seleccionado dejó de estar disponible. | O microfone selecionado ficou indisponível. | 所选麦克风不可用。 | 選択したマイクが利用できなくなりました。 |
 | Chat canceled by Emergency Stop. | Chat cancelado por la parada de emergencia. | Chat cancelado pela parada de emergência. | 聊天已被紧急停止取消。 | 緊急停止によりチャットをキャンセルしました。 |
+
+## Pattern Library — Import
+
+| en | es | pt-BR | zh-Hans | ja |
+| --- | --- | --- | --- | --- |
+| Import motion content | Importar contenido de movimiento | Importar conteúdo de movimento | 导入运动内容 | モーション内容をインポート |
+| Choose file | Elegir archivo | Escolher arquivo | 选择文件 | ファイルを選択 |
+| Reading file | Leyendo archivo | Lendo arquivo | 正在读取文件 | ファイルを読み取り中 |
+| Checking the selected motion file. | Comprobando el archivo de movimiento seleccionado. | Verificando o arquivo de movimento selecionado. | 正在检查所选运动文件。 | 選択したモーションファイルを確認しています。 |
+| Timeline view | Vista de línea de tiempo | Visualização da linha do tempo | 时间轴视图 | タイムライン表示 |
+| Earlier | Anterior | Anterior | 更早 | 前へ |
+| Later | Posterior | Posterior | 更晚 | 次へ |
+| Zoom in | Acercar | Ampliar | 放大 | 拡大 |
+| Zoom out | Alejar | Reduzir | 缩小 | 縮小 |
+| Fit selection | Ajustar a la selección | Ajustar à seleção | 适合选择范围 | 選択範囲に合わせる |
+| Fit all | Mostrar todo | Mostrar tudo | 显示全部 | 全体を表示 |
+| Visible timeline range (aria) | Rango visible de la línea de tiempo | Intervalo visível da linha do tempo | 可见时间轴范围 | 表示中のタイムライン範囲 |
+| Viewing {start}-{end} at {zoom} | Vista {start}-{end} con zoom {zoom} | Exibindo {start}-{end} em {zoom} | 以 {zoom} 查看 {start}-{end} | {start}-{end}を{zoom}で表示 |
+| Funscript timeline source view, {total} total, viewing {start} to {end}, selection {selectionStart} to {selectionEnd}, {duration} selected (aria) | Vista de origen de la línea de tiempo de Funscript, {total} en total, vista de {start} a {end}, selección de {selectionStart} a {selectionEnd}, {duration} seleccionados | Visualização da origem da linha do tempo do Funscript, {total} no total, exibindo de {start} a {end}, seleção de {selectionStart} a {selectionEnd}, {duration} selecionados | Funscript 时间轴源视图，总计 {total}，正在查看 {start} 到 {end}，选择范围 {selectionStart} 到 {selectionEnd}，已选择 {duration} | Funscriptタイムラインのソース表示、全体{total}、{start}から{end}を表示、選択範囲{selectionStart}から{selectionEnd}、選択時間{duration} |
+| Current trim selection length (aria) | Duración de la selección de recorte actual | Duração da seleção de recorte atual | 当前裁剪选择长度 | 現在のトリミング選択時間 |
+| Selection length {duration} | Duración de la selección {duration} | Duração da seleção {duration} | 选择长度 {duration} | 選択時間 {duration} |
+| Name must be 80 characters or fewer. | El nombre debe tener 80 caracteres o menos. | O nome deve ter no máximo 80 caracteres. | 名称不得超过 80 个字符。 | 名前は80文字以内にしてください。 |
+| Name cannot contain path separators (/ or \). | El nombre no puede contener separadores de ruta (/ o \). | O nome não pode conter separadores de caminho (/ ou \). | 名称不能包含路径分隔符（/ 或 \）。 | 名前にパス区切り文字（/ または \）は使用できません。 |
+| {file} exceeds the 8 MiB import limit. | {file} supera el límite de importación de 8 MiB. | {file} excede o limite de importação de 8 MiB. | {file} 超过 8 MiB 导入限制。 | {file} は 8 MiB のインポート上限を超えています。 |
+| {file} uses an unknown motion content schema. | {file} usa un esquema de contenido de movimiento desconocido. | {file} usa um esquema de conteúdo de movimento desconhecido. | {file} 使用未知的运动内容架构。 | {file} は不明なモーション内容スキーマを使用しています。 |
+| {file} must contain 2 to 20480 source actions. | {file} debe contener entre 2 y 20480 acciones de origen. | {file} deve conter de 2 a 20480 ações de origem. | {file} 必须包含 2 到 20480 个源动作。 | {file} には2～20480個のソースアクションが必要です。 |
+| {file} has an invalid funscript version. | {file} tiene una versión de funscript no válida. | {file} tem uma versão de funscript inválida. | {file} 的 funscript 版本无效。 | {file} の funscript バージョンが無効です。 |
+| {file} has an invalid inverted flag. | {file} tiene un indicador de inversión no válido. | {file} tem um sinalizador de inversão inválido. | {file} 的反转标志无效。 | {file} の反転フラグが無効です。 |
+| {file} action {number} is not usable. | La acción {number} de {file} no se puede usar. | A ação {number} de {file} não pode ser usada. | {file} 的动作 {number} 不可用。 | {file} のアクション {number} は使用できません。 |
+| {file} action {number} has an invalid time. | La acción {number} de {file} tiene un tiempo no válido. | A ação {number} de {file} tem um tempo inválido. | {file} 的动作 {number} 时间无效。 | {file} のアクション {number} の時刻が無効です。 |
+| {file} action {number} position must be between 0 and 100. | La posición de la acción {number} de {file} debe estar entre 0 y 100. | A posição da ação {number} de {file} deve estar entre 0 e 100. | {file} 的动作 {number} 位置必须在 0 到 100 之间。 | {file} のアクション {number} の位置は0～100である必要があります。 |
+| Programs preserve the selected knots and duration, play once, and use a 500 ms minimum playback period. | Los programas conservan los nodos y la duración seleccionados, se reproducen una vez y usan un periodo mínimo de reproducción de 500 ms. | Os programas preservam os nós e a duração selecionados, são reproduzidos uma vez e usam um período mínimo de reprodução de 500 ms. | 程序保留所选节点和时长，仅播放一次，并使用 500 毫秒的最短播放周期。 | プログラムは選択したノットと時間を保持して1回再生し、最短再生時間は500ミリ秒です。 |
+| Loop patterns repeat: qualifying pauses over 5 seconds collapse, positions stretch to the full relative span, and the cycle closes and safety-stretches to at least 6.6 seconds. | Los patrones en bucle se repiten: las pausas válidas de más de 5 segundos se reducen, las posiciones se amplían al rango relativo completo y el ciclo se cierra y se extiende por seguridad hasta al menos 6,6 segundos. | Os padrões em loop se repetem: pausas qualificadas acima de 5 segundos são reduzidas, as posições são ampliadas para o intervalo relativo completo e o ciclo é fechado e estendido por segurança para pelo menos 6,6 segundos. | 循环模式会重复：符合条件的 5 秒以上停顿会被压缩，位置扩展到完整相对范围，周期闭合并为安全起见拉伸到至少 6.6 秒。 | ループパターンは反復します。条件を満たす5秒超の停止は短縮され、位置は相対範囲全体に拡張され、サイクルは閉じられて安全のため最低6.6秒に引き伸ばされます。 |
 
 ## Settings — Shell
 

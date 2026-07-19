@@ -269,18 +269,24 @@ path — everything plays through the shared motion engine.
   primary control because enabled patterns are the model's curation vocabulary
   (Autopilot and chat pick only from enabled entries; disabled are never
   selectable — tested).
-- **Programs / funscripts**: import and a **program player** (the reference's
-  "Reprodutor" folds in here — programs are library content, not a separate
-  top-level tab). Import hygiene strips long inactive gaps.
+- **Programs / funscripts**: finite imported content and a **program player**
+  (the reference's "Reprodutor" folds in here — programs are library content,
+  not a separate top-level route).
+- **Import**: bounded file intake with a zoomable raw-source timeline,
+  action-snapped trim, visible selection length, and explicit program/pattern
+  interpretation. Only pattern import strips qualifying long inactive gaps;
+  programs preserve selected elapsed timing.
 - **Authoring canvas**: freehand draw with simplification/interpolation and a
   backend-sampler preview (never a client-side guess).
 - **Feedback**: thumbs adjust weight/enablement **only visibly and reversibly**;
   auto-disable is opt-in.
 
-As built, Browse, Programs, Author, and Training are compact sibling tabs.
-Curves are backend-sampled playback previews rather than a second frontend
-interpolator. Desktop and 390 px mobile checks cover all four tabs, including
-the pinned Stop/footer boundary and scroll reachability.
+As built, Browse, Programs, Import, Author, and Training are compact sibling
+tabs. Playback-preview curves are backend sampled rather than a second frontend
+interpolator; Import's client-rendered source-action plot is inspection only.
+Desktop and 390 px mobile checks cover the original four Phase 14 tabs,
+including the pinned Stop/footer boundary and scroll reachability; Import has
+focused component coverage for trim, zoom, validation, and payload invariants.
 
 ## Workspace: Settings
 

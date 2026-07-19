@@ -26,7 +26,6 @@ const (
 	maxPatterns      = 250
 	maxPrograms      = 100
 	maxPatternPoints = 256
-	maxProgramPoints = 4096
 	// MaxImportBytes bounds pattern/program upload bodies at the HTTP edge.
 	MaxImportBytes      = 8 << 20
 	maxContentNameChars = 80
