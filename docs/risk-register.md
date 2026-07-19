@@ -190,14 +190,16 @@ Exit evidence:
 
 - desktop/mobile visual checks and UI tests pass for settings, quick controls, stop, and diagnostics
 
-Status 2026-07-18: every top-level route, settings subsection, and Phase 14
+Status 2026-07-19: every top-level route, settings subsection, and Phase 14
 Browse/Programs/Author/Training view passes rendered checks at 1440x900 and
 390x844 with no horizontal overflow, unnamed controls, duplicate IDs, or nested
 interactive elements. Route titles, heading progression, mobile navigation,
 manual Speed, and speech-provider names have focused coverage. Backend preview
 samples, not frontend interpolation, render every playback-preview curve. The
-Import tab's client-rendered raw action timeline is inspection-only and cannot
-start motion or construct transport payloads.
+Import tab additionally passes 1280x800 and 390x844 rendered checks with fixed
+trim targets and no overflow. Its client-side editor can only produce bounded
+motion-content input for the normal validated import endpoint; it cannot start
+motion or construct transport payloads.
 
 ## R10: Scope Creep Toward Legacy Parity
 
@@ -711,9 +713,11 @@ Mitigation:
 - validate/simplify authoring input server-side and preview with the exact
   backend sampler; never execute raw file payloads or construct transport
   commands from imported data
-- snap trims to source actions and display their exact duration; keep timeline
-  zoom/pan independent from selected and submitted content, and preserve every
-  selected knot when importing a finite program
+- snap trims to source actions and display their exact duration; keep waveform,
+  selection shading, pointer mapping, and fixed-size trim targets in one
+  coordinate system; keep zoom/pan independent from selected and submitted
+  content, leave ordinary vertical wheel input available for page scrolling,
+  and preserve every selected knot when importing a finite program
 - route all playback through the shared engine and user speed/stroke envelope;
   controller ownership, Pause, and global Stop remain unchanged
 
@@ -723,6 +727,14 @@ Exit evidence:
   shared-engine ownership pass at the HTTP layer; a capped real-device sample
   confirms generated and imported content has no unexpected stop, step, or
   reversal behavior
+
+Status 2026-07-19: browser/backend malformed-input tests pass. The Import tab
+also passes focused zoomed-coordinate and payload tests plus rendered 1280x800
+and 390x844 checks. Both trim targets measure 44 CSS pixels, fitted boundaries
+remain inside the frame, vertical wheel input scrolls the workspace, horizontal
+wheel input pans the viewport, and an isolated backend persisted the trimmed
+fixture at the displayed 4:15 duration with all 16 selected knots. Physical-feel
+evidence remains open.
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).

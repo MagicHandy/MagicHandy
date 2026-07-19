@@ -444,12 +444,15 @@ The library closes the planned pattern/training/player surface without copying
 the reference app's visual density or creating a second motion model. Browse
 exposes enabled state and visible weights; Programs keeps finite funscripts
 separate from loops; Import owns file intake — funscripts render a client-side
-raw-source trim timeline with explicit zoom/pan/fit controls, action-snapped
-dual-thumb selection, precise time readouts, and a persistent selected-length
-readout. The zoom viewport never changes the trim or payload. A program/loop-
-pattern choice is made before the trimmed selection is submitted through the
-normal validated import endpoint, while MagicHandy share files import as-is;
-Author reduces
+raw-source trim timeline whose waveform, highlight, and fixed-size draggable
+action-snapped handles share one coordinate system. A compact icon toolbar makes
+pan, zoom, fit-selection, and fit-all actions discoverable; horizontal or
+Shift-wheel pans without trapping ordinary page scrolling, and `+`, `-`, `0`,
+and arrow-key equivalents remain available. Precise time and persistent
+selected-length readouts remain visible, and the zoom viewport never changes the
+trim or payload. A program/loop-pattern choice is made before the trimmed
+selection is submitted through the normal validated import endpoint, while
+MagicHandy share files import as-is; Author reduces
 freehand input to editable knots; Training
 auditions the same enabled catalog with original/smooth/crisp feel choices and
 reversible ratings. Every playback preview comes from backend samples produced

@@ -243,7 +243,7 @@ input[type="search"] {
   margin: 0;
   font-size: 1rem;
 }
-.import-timeline-toolbar {
+.import-timeline-head {
   width: 100%;
   display: flex;
   align-items: center;
@@ -251,37 +251,109 @@ input[type="search"] {
   flex-wrap: wrap;
   gap: 8px 12px;
 }
-.import-timeline-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.import-timeline-controls .btn {
-  padding: 6px 9px;
-  font-size: 0.76rem;
-}
 .import-timeline-view {
   color: var(--muted);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
-.import-timeline {
+.import-timeline-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.import-timeline-frame {
+  position: relative;
   width: 100%;
   height: 140px;
-  display: block;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--bg-inset);
+  user-select: none;
+}
+.import-timeline-frame:focus {
+  outline: none;
+}
+.import-timeline-frame:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.import-timeline {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+.import-timeline-selection {
+  fill: rgba(91, 157, 217, 0.12);
 }
 .import-timeline-dim {
   fill: rgba(10, 11, 13, 0.62);
 }
-.import-timeline-bound {
-  stroke: var(--accent);
-  stroke-width: 1.5;
+.import-timeline-handle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: var(--handle-position);
+  width: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: ew-resize;
+  touch-action: none;
 }
-.import-card .range-slider {
-  width: 100%;
+.import-timeline-handle-start {
+  transform: translateX(0);
+}
+.import-timeline-handle-end {
+  transform: translateX(-100%);
+}
+.import-timeline-handle::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: currentColor;
+  content: "";
+}
+.import-timeline-handle-start::before {
+  left: 0;
+}
+.import-timeline-handle-end::before {
+  right: 0;
+}
+.import-timeline-handle-grip {
+  position: absolute;
+  top: 8px;
+  width: 10px;
+  height: 28px;
+  border: 1px solid var(--bg-inset);
+  border-radius: 2px;
+  background: currentColor;
+}
+.import-timeline-handle-start .import-timeline-handle-grip {
+  left: 2px;
+}
+.import-timeline-handle-end .import-timeline-handle-grip {
+  right: 2px;
+}
+.import-timeline-handle:focus-visible {
+  outline: none;
+  color: var(--focus);
+}
+.import-timeline-handle:focus-visible::before {
+  width: 3px;
+}
+.import-timeline-handle:focus-visible .import-timeline-handle-grip {
+  box-shadow: 0 0 0 2px var(--bg-inset), 0 0 0 4px var(--focus);
+}
+.import-timeline-handle[data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .import-selection-meta {
   margin: 0;
@@ -611,12 +683,12 @@ input[type="search"] {
   .rating-controls .btn {
     flex: 1 1 100%;
   }
-  .import-timeline-toolbar,
-  .import-timeline-view {
+  .import-timeline-head,
+  .import-timeline-view,
+  .import-timeline-controls {
     width: 100%;
   }
-  .import-timeline-controls .btn {
-    flex: 1 1 calc(33.333% - 6px);
-    min-height: 44px;
+  .import-timeline-controls {
+    justify-content: flex-start;
   }
 }

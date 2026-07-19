@@ -136,7 +136,7 @@ describe("PatternLibraryRoute", () => {
       target: { files: [new File([funscript], "imported.funscript", { type: "application/json" })] },
     });
 
-    expect(await screen.findByRole("img", { name: /funscript timeline/i })).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: /funscript timeline editor/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Import as program" }));
 
     // The authoritative response lands without a catalog reload, and the view

@@ -182,14 +182,23 @@ component, engine-driven, with position labeled as a commanded estimate.
   and uses one track-sized pointer target so close thumbs remain reachable.
   Toggle: 40×22 track, 18px thumb; off `--line` + `--muted` thumb, on
   `--accent-strong` track + white thumb.
-- Import timeline: default to fit-all and provide labeled Zoom in, Zoom out,
-  Earlier, Later, Fit selection, and Fit all buttons. Zoom/pan changes only the
-  source viewport, never trim bounds or submitted content. Trim bounds snap to
-  source actions, and start, end, total, visible range, zoom level, selected
-  action count, and selection length remain available as text with tabular
-  numerals. The SVG is a raw source-action view, not a playback preview. Keep
-  controls keyboard-operable, wrapping without page-level overflow on mobile;
-  do not rely on wheel/pinch, animation, shading, or color alone.
+- Import timeline: default to fit-all and put direct trim handles on the kept
+  range, following the interaction model used by
+  [QuickTime](https://support.apple.com/guide/quicktime-player/trim-a-movie-or-clip-qtpf2115f6fd/mac)
+  and [Clipchamp](https://support.microsoft.com/en-us/clipchamp/how-to-trim-videos-images-or-audio-assets).
+  Use a compact icon toolbar for Earlier, Later, Zoom in, Zoom out, Fit
+  selection, and Fit all; each icon has a tooltip and accessible name. Preserve
+  `+`, `-`, `0`, and arrow-key equivalents on the focused timeline. Horizontal
+  or Shift-wheel pans, but ordinary vertical wheel input must continue to scroll
+  the page. Keep each trim handle as a fixed-size, labeled keyboard-operable
+  slider whose dependent ARIA limits update with the other bound, as required by
+  the [WAI-ARIA multi-thumb slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/).
+  Waveform, selection shading, pointer mapping, and handles use one measured
+  coordinate system; zoom/pan changes only the source viewport, never trim bounds
+  or submitted content. Trim bounds snap to source actions, and start, end,
+  total, visible range, zoom level, selected action count, and selection length
+  remain available as text with tabular numerals. The SVG is a raw source-action
+  view, not a playback preview; do not rely on animation, shading, or color alone.
 - Badge (e.g. the "testing" tag): 1px `--line-strong`, `--surface-2`, `--muted`,
   `0.68rem`, `999px` is *not* used — small `--radius-sm`/pill-ish hairline chip,
   quiet.
