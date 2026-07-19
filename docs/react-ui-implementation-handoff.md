@@ -139,16 +139,16 @@ its backend source or local-only reason, it probably should not own that state.
    Stop and backend status.
 2. **Port existing behavior into React components.** Preserve current APIs and
    behavior: status, backend-loss lock, controller read-only lock, Stop/Escape,
-   visualizer, quick settings, manual motion test, chat streaming, settings,
-   prompt sets, memory, diagnostics.
+   visualizer, quick settings, diagnostics-owned manual motion test, chat
+   streaming, settings, prompt sets, memory, diagnostics.
 3. **Apply the sidebar-navigation shell.** Implement routes `#/chat`, `#/modes`,
    `#/library`, and `#/settings/*`; move Stop to the permanent nav footer; move
    current quick controls into the Chat route; convert Settings from overlay to
    route.
 4. **Add Preset Modes and Chat Autopilot.** Relocate deterministic Freestyle and
    its style selection to Preset Modes. Once the backend contract exists, mount
-   the Autopilot session control with the conversation on Chat; do not duplicate
-   it as another preset mode.
+   the Autopilot session control in Chat's control sidebar beside the
+   conversation; do not duplicate it as another preset mode.
 5. **Add Pattern Library.** The interim empty state shipped with the shell and
    was replaced in Phase 14 by Browse, Programs, Author, and Training backed by
    the canonical library API.

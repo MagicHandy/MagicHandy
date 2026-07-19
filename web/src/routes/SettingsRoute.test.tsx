@@ -16,6 +16,8 @@ vi.mock("../api/client", () => ({
     saveSettings: vi.fn(),
     resetSettings: vi.fn(),
     exportTrace: vi.fn(),
+    startManualTest: vi.fn(),
+    stopMotion: vi.fn(),
   },
 }));
 
@@ -24,6 +26,7 @@ vi.mock("../state/app-state", () => ({
     backendOnline: true,
     readOnly: false,
     refresh: app.refresh,
+    motion: { engine: { running: true, target: { source: "autopilot" } } },
     state: { version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } },
   }),
   useHashRoute: () => app.hash,
@@ -121,12 +124,15 @@ describe("SettingsRoute", () => {
       return { settings: current };
     });
     render(<SettingsRoute />);
-    expect(await screen.findByRole("combobox")).toHaveValue("trace");
+    expect(await screen.findByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("trace");
+    expect(screen.getByRole("heading", { name: /Manual motion/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start test" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Stop test" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Reset all settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm reset all settings" }));
 
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("normal"));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("normal"));
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].diagnostics).toEqual({ verbosity: "normal" });
@@ -143,7 +149,7 @@ describe("SettingsRoute", () => {
     expect(screen.queryByText("Loading settings…")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("normal"));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("normal"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -169,12 +175,12 @@ describe("SettingsRoute", () => {
       { body: { settings: settings("normal") } },
     ));
     render(<SettingsRoute />);
-    expect(await screen.findByRole("combobox")).toHaveValue("trace");
+    expect(await screen.findByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("trace");
 
     fireEvent.click(screen.getByRole("button", { name: "Reset all settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm reset all settings" }));
 
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("normal"));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("normal"));
     expect(app.show).toHaveBeenCalledWith(
       "Settings were reset, but the active runtime could not be stopped.",
       "error",

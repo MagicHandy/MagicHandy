@@ -75,7 +75,7 @@ check before building), **Watch** (record; act only if evidence appears),
 
 ## B. Autopilot inputs (autospeak PRs #221–#228, #248, #266, #289)
 
-MagicHandy's initial Chat Autopilot is in review in PR #101. It now uses
+MagicHandy's initial Chat Autopilot landed in PR #101. It now uses
 bounded canonical conversation context, publishes successful autonomous lines
 through Chat, preserves custom content on hold, falls back visibly after bad
 turns, and cancels announcements with Stop. The contract shapes still worth

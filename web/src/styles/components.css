@@ -849,35 +849,32 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
 }
-.chat-autopilot {
+.autopilot-control {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 8px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
 }
-.chat-autopilot-dot {
+.autopilot-control-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--line-strong);
 }
-.chat-autopilot[data-active="true"] .chat-autopilot-dot {
+.autopilot-control[data-active="true"] .autopilot-control-dot {
   background: var(--success);
 }
-.chat-autopilot-copy {
+.autopilot-control-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
 }
-.chat-autopilot-copy strong {
+.autopilot-control-copy strong {
   font-size: 0.88rem;
   font-weight: 650;
 }
-.chat-autopilot-copy span {
+.autopilot-control-copy span {
   overflow: hidden;
   color: var(--muted);
   font-size: 0.75rem;
@@ -885,11 +882,13 @@ textarea:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chat-autopilot-action {
-  min-width: 128px;
+.autopilot-control-action {
+  flex: 1 1 auto;
+  min-width: 0;
 }
-.chat-autopilot-actions {
+.autopilot-control-actions {
   display: flex;
+  grid-column: 1 / -1;
   align-items: center;
   gap: 8px;
 }
@@ -918,16 +917,6 @@ textarea:disabled {
 }
 
 @media (max-width: 480px) {
-  .chat-autopilot {
-    grid-template-columns: 8px minmax(0, 1fr);
-  }
-  .chat-autopilot-actions {
-    grid-column: 1 / -1;
-  }
-  .chat-autopilot-action {
-    flex: 1 1 auto;
-    width: 100%;
-  }
   .chat-compose-row {
     gap: 6px;
   }

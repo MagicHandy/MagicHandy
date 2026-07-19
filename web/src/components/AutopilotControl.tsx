@@ -81,13 +81,13 @@ export function AutopilotControl() {
   }
 
   return (
-    <div className="chat-autopilot" data-active={active || undefined} aria-busy={Boolean(pending) || undefined}>
-      <span className="chat-autopilot-dot" aria-hidden="true" />
-      <div className="chat-autopilot-copy">
+    <div className="autopilot-control" data-active={active || undefined} aria-busy={Boolean(pending) || undefined}>
+      <span className="autopilot-control-dot" aria-hidden="true" />
+      <div className="autopilot-control-copy">
         <strong>Autopilot</strong>
         <span role="status">{status}</span>
       </div>
-      <div className="chat-autopilot-actions">
+      <div className="autopilot-control-actions">
         {active && (
           <button
             type="button"
@@ -102,7 +102,7 @@ export function AutopilotControl() {
         )}
         <button
           type="button"
-          className={`btn ${active ? "btn-secondary" : "btn-start"} chat-autopilot-action`}
+          className={`btn ${active ? "btn-secondary" : "btn-start"} autopilot-control-action`}
           disabled={locked || Boolean(pending)}
           onClick={() => void toggle()}
         >

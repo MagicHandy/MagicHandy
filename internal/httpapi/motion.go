@@ -139,6 +139,22 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	finishModeStop := func() {}
+	if s.modes != nil {
+		finishModeStop = s.modes.BeginUserStop()
+	}
+	defer finishModeStop()
+	if state, err := s.stopActiveMotionForReplacement(r.Context(), "manual_test_replace"); err != nil {
+		s.writeMotionResult(w, state, err)
+		return
+	}
+	finishModeStop()
+	// A canceled mode operation can publish its engine while being drained.
+	// Recheck after the drain so manual testing never races a late mode start.
+	if state, err := s.stopActiveMotionForReplacement(r.Context(), "manual_test_replace"); err != nil {
+		s.writeMotionResult(w, state, err)
+		return
+	}
 	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
@@ -504,6 +520,18 @@ func (s *Server) motionAdmissionFor(engine *motion.Engine) (uint64, error) {
 		return 0, errMotionUnavailable
 	}
 	return engine.AdmissionGeneration(), nil
+}
+
+func (s *Server) stopActiveMotionForReplacement(ctx context.Context, reason string) (motion.ActiveMotionState, error) {
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		return motion.ActiveMotionState{}, nil
+	}
+	state := engine.Snapshot()
+	if !state.Running && !state.Starting && !state.Completing && !state.Paused {
+		return state, nil
+	}
+	return engine.Stop(ctx, reason)
 }
 
 func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
