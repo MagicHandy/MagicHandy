@@ -4,7 +4,7 @@ This ledger tracks the systematic reliability, maintainability, and efficiency
 review. A subsystem is complete only after its code paths, ownership and
 lifecycle boundaries, tests, and relevant documentation have been reviewed.
 
-Baseline: `origin/main` at `72868a84` (2026-07-18).
+Baseline: `origin/main` at `041f0908` (2026-07-19).
 
 | Subsystem | Status | Current evidence |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Baseline: `origin/main` at `72868a84` (2026-07-18).
 | Motion engine and transports | Reviewed in first pass | PR #87 serializes ownership and command admission, hardens transport teardown, and expands race and lifecycle coverage. Real-device behavior remains subject to the documented hardware validation matrix. |
 | Chat, LLM, memory, modes, patterns, library, validation | Reviewed in first pass | Storage failures are explicit, mutations are transactional, mode lifecycle and stale-operation races are covered, provider/runtime limits are bounded, managed-model inventory is crash-safe, and validation exports only the active run. |
 | Voice, workers, queues, and audio | Reviewed in first pass | Worker framing and deadlines, bounded request queues, cancellation, process-tree teardown, provider response limits, deterministic sampling, and reference-code validation have focused coverage. Representative listening, simultaneous GPU LLM/TTS load, and lower-VRAM acceptance remain open. |
-| Frontend state, accessibility, and UI performance | Reviewed in dedicated pass | Route lifetime now preserves settings drafts between subsections; failed settings/chat/memory/prompt/model/voice reads remain distinct from valid empty state; quick writes flush across unmount; chat tail reads retry on the next backend poll; and persistence/mode mutations are serialized before React rerenders. Every top-level route, settings subsection, and library view passes 1440x900 and 390x844 DOM/overflow checks with named controls, one H1, and valid heading progression. The suite has 141 tests and the measured bundle remains within budget. |
+| Frontend state, accessibility, and UI performance | Reviewed in dedicated pass | Route lifetime preserves settings drafts; failed reads remain distinct from valid empty state; quick writes flush across unmount; chat tail reads retry; and persistence/mode mutations serialize before React rerenders. The Import timeline now uses one measured coordinate system for waveform, selection, and fixed 44 px trim targets; zoom cannot mutate content, ordinary vertical wheel input remains available to the page, and zoomed drag-to-payload behavior has focused coverage. The complete suite has 155 tests and the measured bundle remains within budget. |
 | Install, update, packaging, and release paths | Installer/update reviewed in first pass | Installer state is closed and strongly typed, delegated relative paths remain stable, binary sets and pinned Parakeet assets replace atomically with rollback, session PATH entries survive dependency refresh, and generated launchers have an owned removal path. A real clean-machine bootstrap and Phase 16 packaging/release artifacts still require dedicated acceptance. |
 
 ## First-Pass Findings Closed
@@ -108,6 +108,13 @@ Baseline: `origin/main` at `72868a84` (2026-07-18).
   titles stayed static, and populated library views skipped heading level two.
   Explicit names, document titles, and route-local headings now have focused
   tests plus rendered desktop/mobile evidence.
+- PR #97 rendered the Import waveform and trim slider with separate coordinate
+  systems, used scaled/clipped SVG hit targets, could strand boundaries outside
+  the viewport without a discoverable recovery control, and captured ordinary
+  vertical wheel input for zoom. The integrated timeline now uses direct 44 px
+  trim handles, compact named icon controls, action snapping through the active
+  viewport, explicit fit recovery, and horizontal-only wheel panning. Desktop,
+  mobile, zoomed-payload, and isolated backend persistence checks cover it.
 - Memory, prompt-set, Freestyle, and style commands could overlap before a
   state-driven disabled control rendered. Ref-level admission guards serialize
   each mutation domain; mode-specific Stop now respects read-only ownership

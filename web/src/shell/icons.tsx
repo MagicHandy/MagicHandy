@@ -144,3 +144,35 @@ export const ChevronUpIcon = ({ size = 18, className }: P) => (
     <path d="m6 15 6-6 6 6" />
   </svg>
 );
+export const ArrowLeftIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m15 6-6 6 6 6" />
+  </svg>
+);
+export const ArrowRightIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+export const ZoomInIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="m15.5 15.5 4.5 4.5M10.5 7.5v6M7.5 10.5h6" />
+  </svg>
+);
+export const ZoomOutIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="m15.5 15.5 4.5 4.5M7.5 10.5h6" />
+  </svg>
+);
+export const FitSelectionIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M5 4v16M19 4v16M9 12h6M9 12l2-2M9 12l2 2M15 12l-2-2M15 12l-2 2" />
+  </svg>
+);
+export const FitAllIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+  </svg>
+);

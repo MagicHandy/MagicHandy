@@ -21,6 +21,20 @@ function readFileText(file: File): Promise<string> {
   });
 }
 
+async function findTimeline(): Promise<HTMLDivElement> {
+  return await screen.findByRole("group", { name: /funscript timeline editor/i }) as HTMLDivElement;
+}
+
+function setTimelineRect(timeline: HTMLDivElement, width: number) {
+  const rect = {
+    left: 0, right: width, top: 0, bottom: 140, width, height: 140, x: 0, y: 0, toJSON: () => ({}),
+  };
+  timeline.getBoundingClientRect = () => rect;
+  const plot = timeline.querySelector("svg");
+  expect(plot).not.toBeNull();
+  if (plot) plot.getBoundingClientRect = () => rect;
+}
+
 describe("MotionImport", () => {
   it("trims a funscript and submits the rebased selection with the chosen kind and name", async () => {
     const onImport = vi.fn().mockResolvedValue(true);
@@ -35,12 +49,12 @@ describe("MotionImport", () => {
     ]));
 
     // Parsed timeline rebases to 0..4000ms and defaults to the full selection.
-    expect(await screen.findByRole("img", { name: /funscript timeline/i })).toBeInTheDocument();
+    expect(await findTimeline()).toBeInTheDocument();
     expect(screen.getByText("5 of 5 actions selected")).toBeInTheDocument();
     expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:04");
 
-    fireEvent.change(screen.getByLabelText("Trim minimum"), { target: { value: "1000" } });
-    fireEvent.change(screen.getByLabelText("Trim maximum"), { target: { value: "3000" } });
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Trim start" }), { key: "ArrowRight" });
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Trim end" }), { key: "ArrowLeft" });
     expect(screen.getByText("3 of 5 actions selected")).toBeInTheDocument();
     expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:02");
 
@@ -74,13 +88,20 @@ describe("MotionImport", () => {
       { at: 2000, pos: 80 },
       { at: 3000, pos: 20 },
     ]));
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 300);
 
-    fireEvent.change(screen.getByLabelText("Trim minimum"), { target: { value: "600" } });
-    fireEvent.change(screen.getByLabelText("Trim maximum"), { target: { value: "2400" } });
+    const startHandle = screen.getByRole("slider", { name: "Trim start" });
+    const endHandle = screen.getByRole("slider", { name: "Trim end" });
+    fireEvent.pointerDown(startHandle, { button: 0, clientX: 0, pointerId: 1 });
+    fireEvent.pointerMove(startHandle, { clientX: 60, pointerId: 1 });
+    fireEvent.pointerUp(startHandle, { clientX: 60, pointerId: 1 });
+    fireEvent.pointerDown(endHandle, { button: 0, clientX: 300, pointerId: 2 });
+    fireEvent.pointerMove(endHandle, { clientX: 240, pointerId: 2 });
+    fireEvent.pointerUp(endHandle, { clientX: 240, pointerId: 2 });
 
-    expect(screen.getByLabelText("Trim minimum")).toHaveValue("1000");
-    expect(screen.getByLabelText("Trim maximum")).toHaveValue("2000");
+    expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "1000");
+    expect(screen.getByRole("slider", { name: "Trim end" })).toHaveAttribute("aria-valuenow", "2000");
     expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:01");
 
     fireEvent.click(screen.getByRole("button", { name: "Import as program" }));
@@ -102,31 +123,71 @@ describe("MotionImport", () => {
       { at: 2000, pos: 80 },
       { at: 3000, pos: 20 },
     ]));
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 300);
 
-    const trimGroup = screen.getByRole("group", { name: "Trim" });
-    const track = trimGroup.querySelector(".range-slider-track") as HTMLDivElement;
-    track.getBoundingClientRect = () => ({
-      left: 0, right: 300, top: 0, bottom: 28, width: 300, height: 28, x: 0, y: 0, toJSON: () => ({}),
-    });
+    fireEvent.pointerDown(timeline, { button: 0, clientX: 180, pointerId: 1 });
+    fireEvent.pointerUp(timeline, { clientX: 180, pointerId: 1 });
+    expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "0");
 
-    fireEvent.pointerDown(track, { button: 0, clientX: 10, pointerId: 1 });
-    fireEvent.pointerUp(track, { clientX: 10, pointerId: 1 });
-    expect(screen.getByLabelText("Trim minimum")).toHaveValue("0");
+    const startHandle = screen.getByRole("slider", { name: "Trim start" });
+    fireEvent.pointerDown(startHandle, { button: 0, clientX: 0, pointerId: 2 });
+    fireEvent.pointerMove(startHandle, { clientX: 90, pointerId: 2 });
+    fireEvent.pointerUp(startHandle, { clientX: 90, pointerId: 2 });
+    expect(startHandle).toHaveAttribute("aria-valuenow", "1000");
+    expect(startHandle).toHaveAttribute("aria-valuemax", "2000");
+    expect(startHandle).toHaveAttribute("aria-valuetext", "00:01");
 
-    fireEvent.pointerDown(track, { button: 0, clientX: 90, pointerId: 2 });
-    fireEvent.pointerUp(track, { clientX: 90, pointerId: 2 });
-    const minimum = screen.getByLabelText("Trim minimum");
-    expect(minimum).toHaveValue("1000");
-    expect(minimum).toHaveAttribute("aria-valuemax", "2000");
-    expect(minimum).toHaveAttribute("aria-valuetext", "00:01");
-
-    fireEvent.change(minimum, { target: { value: "1001" } });
-    expect(screen.getByLabelText("Trim minimum")).toHaveValue("2000");
-    expect(screen.getByLabelText("Trim maximum")).toHaveAttribute("aria-valuemin", "3000");
+    fireEvent.keyDown(startHandle, { key: "ArrowRight" });
+    expect(startHandle).toHaveAttribute("aria-valuenow", "2000");
+    expect(screen.getByRole("slider", { name: "Trim end" })).toHaveAttribute("aria-valuemin", "3000");
   });
 
-  it("zooms and pans the source timeline without changing the trim selection", async () => {
+  it("selects the nearest bound when fixed-size trim targets overlap", async () => {
+    render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
+    pickFile(funscriptFile([
+      { at: 0, pos: 0 },
+      { at: 2900, pos: 80 },
+      { at: 3000, pos: 20 },
+    ]));
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 300);
+
+    const startHandle = screen.getByRole("slider", { name: "Trim start" });
+    const endHandle = screen.getByRole("slider", { name: "Trim end" });
+    fireEvent.keyDown(startHandle, { key: "ArrowRight" });
+    expect(startHandle).toHaveAttribute("aria-valuenow", "2900");
+
+    // The end target paints over the narrow selection, but pointer proximity
+    // still chooses the visible start boundary instead of the DOM paint order.
+    fireEvent.pointerDown(endHandle, { button: 0, clientX: 291, pointerId: 1 });
+    fireEvent.pointerMove(endHandle, { clientX: 0, pointerId: 1 });
+    fireEvent.pointerUp(endHandle, { clientX: 0, pointerId: 1 });
+    expect(startHandle).toHaveAttribute("aria-valuenow", "0");
+    expect(endHandle).toHaveAttribute("aria-valuenow", "3000");
+  });
+
+  it("does not trap touch scrolling or change trim after controls become locked", async () => {
+    const { rerender } = render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
+    pickFile(funscriptFile([
+      { at: 0, pos: 0 },
+      { at: 1000, pos: 40 },
+      { at: 2000, pos: 80 },
+    ]));
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 200);
+
+    fireEvent.pointerDown(timeline, { button: 0, clientX: 80, pointerId: 1, pointerType: "touch" });
+    expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "0");
+
+    fireEvent.pointerDown(screen.getByRole("slider", { name: "Trim start" }), { button: 0, clientX: 0, pointerId: 2 });
+    rerender(<MotionImport locked importing={false} onImport={vi.fn()} />);
+    fireEvent.pointerMove(screen.getByRole("slider", { name: "Trim start", hidden: true }), { clientX: 100, pointerId: 2 });
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Trim start", hidden: true }), { key: "ArrowRight" });
+    expect(screen.getByRole("slider", { name: "Trim start", hidden: true })).toHaveAttribute("aria-valuenow", "0");
+  });
+
+  it("provides compact viewport controls, preserves page scrolling, and keeps trim geometry aligned", async () => {
     render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
     pickFile(funscriptFile([
       { at: 0, pos: 0 },
@@ -135,21 +196,71 @@ describe("MotionImport", () => {
       { at: 3000, pos: 100 },
       { at: 4000, pos: 0 },
     ]));
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 400);
 
-    fireEvent.change(screen.getByLabelText("Trim minimum"), { target: { value: "1000" } });
-    fireEvent.change(screen.getByLabelText("Trim maximum"), { target: { value: "3000" } });
-    fireEvent.click(screen.getByRole("button", { name: "Fit selection" }));
-    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:01-00:03 at 2x");
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Trim start" }), { key: "ArrowRight" });
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Trim end" }), { key: "ArrowLeft" });
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Fit selection" })).toBeEnabled();
+
+    const fullView = screen.getByLabelText("Visible timeline range").textContent;
+    expect(fireEvent.wheel(timeline, { deltaX: 0, deltaY: -100, deltaMode: 0 })).toBe(true);
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent(fullView ?? "");
 
     fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
-    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:01.500-00:02.500 at 4x");
-    expect(screen.getByLabelText("Trim minimum")).toHaveValue("1000");
-    expect(screen.getByLabelText("Trim maximum")).toHaveValue("3000");
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:01-00:03 at 2x");
+    expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "1000");
+    expect(screen.getByRole("slider", { name: "Trim end" })).toHaveAttribute("aria-valuenow", "3000");
     expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:02");
 
-    fireEvent.click(screen.getByRole("button", { name: "Earlier" }));
-    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:00.750-00:01.750 at 4x");
+    expect(screen.getByRole("button", { name: "Fit selection" })).toBeDisabled();
+    fireEvent.wheel(timeline, { deltaX: 100, deltaY: 0, deltaMode: 0 });
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:01.500-00:03.500 at 2x");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit all" }));
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:00-00:04 at 1x");
+    const dimStart = timeline.querySelector('[data-trim-dim="start"]');
+    const startHandle = screen.getByRole("slider", { name: "Trim start" });
+    expect(startHandle).toHaveStyle({ "--handle-position": "25%" });
+    expect(Number(dimStart?.getAttribute("width"))).toBeCloseTo(190, 6);
+  });
+
+  it("maps trim dragging through the zoomed viewport before building the import payload", async () => {
+    const onImport = vi.fn().mockResolvedValue(true);
+    render(<MotionImport locked={false} importing={false} onImport={onImport} />);
+    pickFile(funscriptFile([
+      { at: 0, pos: 0 },
+      { at: 1000, pos: 25 },
+      { at: 2000, pos: 50 },
+      { at: 3000, pos: 75 },
+      { at: 4000, pos: 100 },
+    ]));
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 400);
+
+    const startHandle = screen.getByRole("slider", { name: "Trim start" });
+    const endHandle = screen.getByRole("slider", { name: "Trim end" });
+    fireEvent.keyDown(startHandle, { key: "ArrowRight" });
+    fireEvent.keyDown(endHandle, { key: "ArrowLeft" });
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:01-00:03 at 2x");
+
+    fireEvent.pointerDown(startHandle, { button: 0, clientX: 0, pointerId: 1 });
+    fireEvent.pointerMove(startHandle, { clientX: 200, pointerId: 1 });
+    fireEvent.pointerUp(startHandle, { clientX: 200, pointerId: 1 });
+    expect(startHandle).toHaveAttribute("aria-valuenow", "2000");
+    expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:01");
+
+    fireEvent.click(screen.getByRole("button", { name: "Import as program" }));
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
+    const [file] = onImport.mock.calls[0] as [File, string];
+    expect(JSON.parse(await readFileText(file))).toEqual({
+      actions: [
+        { at: 0, pos: 50 },
+        { at: 1000, pos: 75 },
+      ],
+    });
   });
 
   it("keeps subsecond selection lengths visible on long files", async () => {
@@ -159,10 +270,10 @@ describe("MotionImport", () => {
       { at: 250, pos: 100 },
       { at: 3600000, pos: 0 },
     ]));
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    await findTimeline();
 
     expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 1:00:00");
-    fireEvent.change(screen.getByLabelText("Trim maximum"), { target: { value: "250" } });
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Trim end" }), { key: "ArrowLeft" });
     expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:00.250");
   });
 
@@ -171,10 +282,14 @@ describe("MotionImport", () => {
     render(<MotionImport locked={false} importing={false} onImport={onImport} />);
     const actions = Array.from({ length: 5000 }, (_, at) => ({ at, pos: at % 101 }));
     pickFile(funscriptFile(actions));
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    const timeline = await findTimeline();
+    setTimelineRect(timeline, 500);
 
     expect(screen.getByText(/Selection has 5000 actions/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Trim maximum"), { target: { value: "1000" } });
+    const endHandle = screen.getByRole("slider", { name: "Trim end" });
+    fireEvent.pointerDown(endHandle, { button: 0, clientX: 500, pointerId: 1 });
+    fireEvent.pointerMove(endHandle, { clientX: 100, pointerId: 1 });
+    fireEvent.pointerUp(endHandle, { clientX: 100, pointerId: 1 });
     expect(screen.getByText("1001 of 5000 actions selected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Import as program" }));
 
@@ -195,7 +310,7 @@ describe("MotionImport", () => {
     pickFile(share);
 
     expect(await screen.findByText("MagicHandy share file")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Trim minimum")).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Trim start" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Import pattern" }));
 
     await waitFor(() => expect(onImport).toHaveBeenCalledWith(share, "pattern"));
@@ -211,7 +326,7 @@ describe("MotionImport", () => {
       { at: 2000, pos: 50 },
     ]));
 
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    await findTimeline();
     fireEvent.click(screen.getByRole("button", { name: "Loop pattern" }));
 
     expect(screen.getByText("This selection has no usable motion span for a loop pattern.")).toBeInTheDocument();
@@ -252,7 +367,7 @@ describe("MotionImport", () => {
   it("rejects save names that the backend would interpret as a path", async () => {
     render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
     pickFile(funscriptFile([{ at: 0, pos: 0 }, { at: 1000, pos: 100 }]));
-    await screen.findByRole("img", { name: /funscript timeline/i });
+    await findTimeline();
 
     fireEvent.change(screen.getByLabelText("Save as"), { target: { value: "Warmup / Finale" } });
     expect(screen.getByText("Name cannot contain path separators (/ or \\).")).toBeInTheDocument();
