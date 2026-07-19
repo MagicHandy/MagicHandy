@@ -194,6 +194,9 @@ Motion pattern names (mild, kept short):
 | Fit selection | Ajustar a la selección | Ajustar à seleção | 适合选择范围 | 選択範囲に合わせる |
 | Fit all | Mostrar todo | Mostrar tudo | 显示全部 | 全体を表示 |
 | Visible timeline range (aria) | Rango visible de la línea de tiempo | Intervalo visível da linha do tempo | 可见时间轴范围 | 表示中のタイムライン範囲 |
+| Timeline viewport (aria) | Ventana de la línea de tiempo | Janela da linha do tempo | 时间轴视口 | タイムライン表示範囲 |
+| Scroll to zoom at cursor; Shift-scroll to pan (tooltip) | Desplázate para ampliar en el cursor; Mayús-desplazamiento para mover | Role para ampliar no cursor; Shift-rolagem para mover | 滚动以光标为中心缩放；按住 Shift 滚动以平移 | スクロールでカーソル位置を拡大縮小、Shift+スクロールで移動 |
+| Drag to move the visible timeline range (tooltip) | Arrastra para mover el rango visible de la línea de tiempo | Arraste para mover o intervalo visível da linha do tempo | 拖动以移动可见时间轴范围 | ドラッグして表示中のタイムライン範囲を移動 |
 | Viewing {start}-{end} at {zoom} | Vista {start}-{end} con zoom {zoom} | Exibindo {start}-{end} em {zoom} | 以 {zoom} 查看 {start}-{end} | {start}-{end}を{zoom}で表示 |
 | Funscript timeline editor, {total} total, viewing {start} to {end}, selection {selectionStart} to {selectionEnd}, {duration} selected (aria) | Editor de línea de tiempo de Funscript, {total} en total, vista de {start} a {end}, selección de {selectionStart} a {selectionEnd}, {duration} seleccionados | Editor da linha do tempo do Funscript, {total} no total, exibindo de {start} a {end}, seleção de {selectionStart} a {selectionEnd}, {duration} selecionados | Funscript 时间轴编辑器，总计 {total}，正在查看 {start} 到 {end}，选择范围 {selectionStart} 到 {selectionEnd}，已选择 {duration} | Funscriptタイムラインエディター、全体{total}、{start}から{end}を表示、選択範囲{selectionStart}から{selectionEnd}、選択時間{duration} |
 | Trim start (aria) | Inicio del recorte | Início do recorte | 裁剪起点 | トリミング開始 |

@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current timeline-repair tree: 20,630,528 bytes plain and 14,494,208 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current timeline-controls tree: 20,633,600 bytes plain and 14,497,280 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 858,318 raw / 554,389 gzip bytes because the isolated
-   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 414,082 raw
-   / 116,972 gzip bytes, and the stripped binary is 14,494,208 bytes. These
+   browser payload is 861,761 raw / 555,195 gzip bytes because the isolated
+   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 417,525 raw
+   / 117,778 gzip bytes, and the stripped binary is 14,497,280 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -121,19 +121,20 @@ Ranked by threat to the stated goals:
   tab now has compact keyboard-operable zoom/pan/fit controls, viewport-aware
   downsampling, fixed-size draggable action-snapped trim handles, precise
   subsecond/hour readouts, and a persistent selection-length value. Waveform,
-  selection, and pointer mapping use one coordinate system; ordinary vertical
-  wheel input scrolls the page while horizontal or Shift-wheel input pans.
-  Zoom state cannot alter trim state or submitted actions. Browser and backend
-  validation now reject unknown schemas,
+  selection, and pointer mapping use one coordinate system; vertical wheel input
+  zooms around the cursor, horizontal or Shift-wheel input pans, and a
+  proportional pointer/keyboard scrollbar moves the viewport directly. Outward
+  wheel input is released at zoom limits. Zoom state cannot alter trim state or
+  submitted actions. Browser and backend validation now reject unknown schemas,
   malformed metadata, missing/out-of-range actions, oversized files, and
   mismatched names instead of silently repairing them; sources up to 20,480
   actions remain inspectable when trimmed to the 4,096-action backend limit.
-  Finite program imports preserve all selected knots. All 155 frontend tests,
+  Finite program imports preserve all selected knots. All 156 frontend tests,
   typecheck/build, and `go test ./...` pass. Relative to the merged Import-tab
-  baseline, HTML/CSS/JS grew 5,312 raw / 1,655 gzip bytes to 414,082 / 116,972;
-  the complete embedded payload is 858,318 / 554,389 using the established
+  baseline, HTML/CSS/JS grew 8,755 raw / 2,461 gzip bytes to 417,525 / 117,778;
+  the complete embedded payload is 861,761 / 555,195 using the established
   per-file level-9 method and unchanged artwork. Plain/stripped pure-Go binaries
-  are 20,630,528 / 14,494,208 bytes. No transport path changed; real-device feel
+  are 20,633,600 / 14,497,280 bytes. No transport path changed; real-device feel
   for preserved imported knots remains R21 exit evidence. The local race build
   remains unavailable because this host has no `gcc`; CI retains the race gate.
 

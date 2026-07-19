@@ -35,6 +35,24 @@ function setTimelineRect(timeline: HTMLDivElement, width: number) {
   if (plot) plot.getBoundingClientRect = () => rect;
 }
 
+function setScrollbarRects(scrollbar: HTMLElement, width: number, thumbLeft: number, thumbWidth: number) {
+  const rect = (left: number, elementWidth: number) => ({
+    left,
+    right: left + elementWidth,
+    top: 0,
+    bottom: 32,
+    width: elementWidth,
+    height: 32,
+    x: left,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  scrollbar.getBoundingClientRect = () => rect(0, width);
+  const thumb = scrollbar.querySelector(".import-timeline-scrollbar-thumb");
+  expect(thumb).not.toBeNull();
+  if (thumb) thumb.getBoundingClientRect = () => rect(thumbLeft, thumbWidth);
+}
+
 describe("MotionImport", () => {
   it("trims a funscript and submits the rebased selection with the chosen kind and name", async () => {
     const onImport = vi.fn().mockResolvedValue(true);
@@ -187,7 +205,7 @@ describe("MotionImport", () => {
     expect(screen.getByRole("slider", { name: "Trim start", hidden: true })).toHaveAttribute("aria-valuenow", "0");
   });
 
-  it("provides compact viewport controls, preserves page scrolling, and keeps trim geometry aligned", async () => {
+  it("provides cursor-anchored wheel zoom, compact viewport controls, and aligned trim geometry", async () => {
     render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
     pickFile(funscriptFile([
       { at: 0, pos: 0 },
@@ -205,10 +223,18 @@ describe("MotionImport", () => {
     expect(screen.getByRole("button", { name: "Fit selection" })).toBeEnabled();
 
     const fullView = screen.getByLabelText("Visible timeline range").textContent;
-    expect(fireEvent.wheel(timeline, { deltaX: 0, deltaY: -100, deltaMode: 0 })).toBe(true);
+    const viewportScrollbar = screen.getByRole("scrollbar", { name: "Timeline viewport" });
+    expect(viewportScrollbar).toHaveAttribute("aria-disabled", "true");
+    expect(fireEvent.wheel(timeline, { clientX: 100, deltaX: 0, deltaY: 100, deltaMode: 0 })).toBe(true);
     expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent(fullView ?? "");
 
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(fireEvent.wheel(timeline, { clientX: 100, deltaX: 0, deltaY: -100, deltaMode: 0 })).toBe(false);
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:00.251-00:03.248 at 1.3x");
+    expect(viewportScrollbar).not.toHaveAttribute("aria-disabled");
+    expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "1000");
+    expect(screen.getByRole("slider", { name: "Trim end" })).toHaveAttribute("aria-valuenow", "3000");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit selection" }));
     expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:01-00:03 at 2x");
     expect(screen.getByRole("slider", { name: "Trim start" })).toHaveAttribute("aria-valuenow", "1000");
     expect(screen.getByRole("slider", { name: "Trim end" })).toHaveAttribute("aria-valuenow", "3000");
@@ -224,6 +250,43 @@ describe("MotionImport", () => {
     const startHandle = screen.getByRole("slider", { name: "Trim start" });
     expect(startHandle).toHaveStyle({ "--handle-position": "25%" });
     expect(Number(dimStart?.getAttribute("width"))).toBeCloseTo(190, 6);
+  });
+
+  it("moves the visible range with a proportional pointer- and keyboard-operable scrollbar", async () => {
+    render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
+    pickFile(funscriptFile([
+      { at: 0, pos: 0 },
+      { at: 1000, pos: 100 },
+      { at: 2000, pos: 0 },
+      { at: 3000, pos: 100 },
+      { at: 4000, pos: 0 },
+    ]));
+    await findTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+
+    const scrollbar = screen.getByRole("scrollbar", { name: "Timeline viewport" });
+    expect(scrollbar).toHaveAttribute("aria-valuemin", "0");
+    expect(scrollbar).toHaveAttribute("aria-valuemax", "2000");
+    expect(scrollbar).toHaveAttribute("aria-valuenow", "1000");
+    expect(scrollbar).toHaveAttribute("aria-valuetext", "00:01 to 00:03");
+    setScrollbarRects(scrollbar, 400, 100, 200);
+
+    const thumb = scrollbar.querySelector(".import-timeline-scrollbar-thumb");
+    expect(thumb).not.toBeNull();
+    fireEvent.pointerDown(thumb as Element, { button: 0, clientX: 150, pointerId: 1 });
+    fireEvent.pointerMove(scrollbar, { clientX: 250, pointerId: 1 });
+    fireEvent.pointerUp(scrollbar, { clientX: 250, pointerId: 1 });
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:02-00:04 at 2x");
+
+    fireEvent.keyDown(scrollbar, { key: "Home" });
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:00-00:02 at 2x");
+    fireEvent.keyDown(scrollbar, { key: "ArrowRight" });
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:00.200-00:02.200 at 2x");
+    fireEvent.keyDown(scrollbar, { key: "End" });
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:02-00:04 at 2x");
+    fireEvent.pointerDown(scrollbar, { button: 0, clientX: 100, pointerId: 2 });
+    fireEvent.pointerUp(scrollbar, { clientX: 100, pointerId: 2 });
+    expect(screen.getByLabelText("Visible timeline range")).toHaveTextContent("Viewing 00:00-00:02 at 2x");
   });
 
   it("maps trim dragging through the zoomed viewport before building the import payload", async () => {

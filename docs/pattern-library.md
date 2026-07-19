@@ -71,15 +71,18 @@ never sent to a transport or executed directly.
 Funscript source time is normalized so the first action is zero. The Import tab
 starts fitted to the complete source. Compact Earlier, Later, Zoom in, Zoom out,
 Fit selection, and Fit all controls keep viewport changes discoverable without a
-large editor toolbar. Horizontal or Shift-wheel input pans; ordinary vertical
-wheel input remains available for page scrolling. The focused timeline also
-supports `+`, `-`, `0`, and arrow keys. The zoom viewport is independent of the
-trim selection and never changes submitted content. Waveform, selection shading,
-and fixed-size draggable action-snapped trim handles share one timeline
-coordinate system. The visible selection length is therefore exactly the final
-selected action time minus the first selected action time. Submission rebases
-that first selected action to zero and preserves every selected program knot.
-MagicHandy share files carry their own content kind and bypass this trim workflow.
+large editor toolbar. Vertical wheel input over the timeline zooms around the
+cursor; horizontal or Shift-wheel input pans. At the fit-all and one-millisecond
+zoom limits, outward wheel input is released to the page. A proportional
+scrollbar below the plot supports direct dragging, track jumps, and standard
+arrow/Page/Home/End keys. The focused timeline also supports `+`, `-`, `0`, and
+arrow keys. The zoom viewport is independent of the trim selection and never
+changes submitted content. Waveform, higher-contrast selection shading, and
+fixed-size draggable action-snapped trim handles share one timeline coordinate
+system. The visible selection length is therefore exactly the final selected
+action time minus the first selected action time. Submission rebases that first
+selected action to zero and preserves every selected program knot. MagicHandy
+share files carry their own content kind and bypass this trim workflow.
 
 ## Curation And Feedback
 

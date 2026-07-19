@@ -446,11 +446,13 @@ exposes enabled state and visible weights; Programs keeps finite funscripts
 separate from loops; Import owns file intake — funscripts render a client-side
 raw-source trim timeline whose waveform, highlight, and fixed-size draggable
 action-snapped handles share one coordinate system. A compact icon toolbar makes
-pan, zoom, fit-selection, and fit-all actions discoverable; horizontal or
-Shift-wheel pans without trapping ordinary page scrolling, and `+`, `-`, `0`,
-and arrow-key equivalents remain available. Precise time and persistent
-selected-length readouts remain visible, and the zoom viewport never changes the
-trim or payload. A program/loop-pattern choice is made before the trimmed
+pan, zoom, fit-selection, and fit-all actions discoverable. Vertical wheel input
+zooms around the cursor, horizontal or Shift-wheel input pans, and a proportional
+scrollbar supports direct viewport movement; outward vertical input is released
+at zoom limits. `+`, `-`, `0`, and arrow-key equivalents remain available.
+Kept and excluded regions use deliberately stronger contrast while exact time
+and persistent selected-length readouts remain visible. The zoom viewport never
+changes the trim or payload. A program/loop-pattern choice is made before the trimmed
 selection is submitted through the normal validated import endpoint, while
 MagicHandy share files import as-is; Author reduces
 freehand input to editable knots; Training
