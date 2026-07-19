@@ -1135,7 +1135,10 @@ Implementation evidence: unit/API/UI tests cover generated catalogs,
 PCHIP sampling, acceleration/reversal budgets, relative projection, funscript
 normalization, long-gap stripping, finite-program completion, controller
 ownership, disabled-pattern rejection, curation fallback, feedback undo, and
-backend previews. The rendered React workspace was exercised at 1280 px and
+backend previews. Long imported loop cycles remain valid above the 6.6-second
+minimum; compact curves combine backend samples with saved knots, and the Import
+tab reports the 255 essential-knot shape limit instead of imposing a duration
+cap. The rendered React workspace was exercised at 1280 px and
 390 px across Browse, Programs, Author, and Training with no horizontal
 overflow; a mobile flex-shrink defect found during that pass was fixed. The
 later Import tab has focused UI coverage for strict file validation,

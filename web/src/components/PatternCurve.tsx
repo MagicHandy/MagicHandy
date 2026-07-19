@@ -2,6 +2,7 @@ import type { CurvePoint } from "../api/types";
 
 interface Props {
   points?: CurvePoint[];
+  knots?: CurvePoint[];
   label: string;
   className?: string;
   showKnots?: boolean;
@@ -11,14 +12,8 @@ const WIDTH = 240;
 const HEIGHT = 72;
 const PAD = 5;
 
-export function PatternCurve({ points, label, className = "", showKnots = false }: Props) {
-  const samples = (points ?? [])
-    .filter((point) => Number.isFinite(point.time_ms) && Number.isFinite(point.position_percent))
-    .map((point) => ({
-      time_ms: Math.max(0, point.time_ms),
-      position_percent: Math.min(100, Math.max(0, point.position_percent)),
-    }))
-    .sort((left, right) => left.time_ms - right.time_ms);
+export function PatternCurve({ points, knots, label, className = "", showKnots = false }: Props) {
+  const samples = normalizedCurvePoints(points, knots);
   const duration = Math.max(1, ...samples.map((point) => point.time_ms));
   const projected = samples.map((point) => ({
     x: PAD + (point.time_ms / duration) * (WIDTH - PAD * 2),
@@ -33,4 +28,19 @@ export function PatternCurve({ points, label, className = "", showKnots = false 
       {showKnots && projected.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="2.5" className="pattern-knot" />)}
     </svg>
   );
+}
+
+function normalizedCurvePoints(samples?: CurvePoint[], knots?: CurvePoint[]): CurvePoint[] {
+  const byTime = new Map<number, number>();
+  for (const source of [samples, knots]) {
+    for (const point of source ?? []) {
+      if (!Number.isFinite(point.time_ms) || !Number.isFinite(point.position_percent)) continue;
+      byTime.set(
+        Math.max(0, point.time_ms),
+        Math.min(100, Math.max(0, point.position_percent)),
+      );
+    }
+  }
+  return Array.from(byTime, ([time_ms, position_percent]) => ({ time_ms, position_percent }))
+    .sort((left, right) => left.time_ms - right.time_ms);
 }

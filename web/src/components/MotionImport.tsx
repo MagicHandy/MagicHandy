@@ -10,6 +10,8 @@ import { ImportTimeline, formatTimelineTime, type TimelinePoint, type TimeWindow
 const PATTERN_SCHEMA = "magichandy.pattern.v1";
 const PROGRAM_SCHEMA = "magichandy.program.v1";
 const MAX_IMPORT_ACTIONS = 4096;
+// The backend reserves one of its 256 stored pattern points for loop closure.
+const MAX_PATTERN_ANCHORS = 255;
 const MAX_SOURCE_ACTIONS = MAX_IMPORT_ACTIONS * 5;
 const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
 const MAX_IMPORT_DURATION = 24 * 60 * 60 * 1000;
@@ -39,7 +41,9 @@ export function MotionImport({ locked, importing, onImport }: Props) {
     if (!funscript) return [];
     return selectedActionPoints(funscript.points, trim.start, trim.end);
   }, [funscript, trim]);
-  const selectionSpan = kind === "pattern" && selection.length > 0 ? positionSpan(selection) : 0;
+  const selectionSpan = kind === "pattern" && selection.length > 0 && selection.length <= MAX_IMPORT_ACTIONS
+    ? positionSpan(selection)
+    : 0;
   const selectionProblem = !funscript ? "" : selectionProblemFor(selection, kind, selectionSpan);
   const contentName = name.trim() || funscript?.stem || "Imported funscript";
   const nameProblem = Array.from(contentName).length > MAX_NAME_CHARS
@@ -171,7 +175,7 @@ export function MotionImport({ locked, importing, onImport }: Props) {
           <p className="hint-block narrow">
             {kind === "program"
               ? "Programs preserve the selected knots and duration, play once, and use a 500 ms minimum playback period."
-              : "Loop patterns repeat: qualifying pauses over 5 seconds collapse, positions stretch to the full relative span, and the cycle closes and safety-stretches to at least 6.6 seconds."}
+              : "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes."}
           </p>
 
           {importProblem && <p className="import-problem" role="status">{importProblem}</p>}
@@ -227,7 +231,31 @@ function selectionProblemFor(selection: TimelinePoint[], kind: "pattern" | "prog
   if (kind === "pattern" && span < 1) {
     return "This selection has no usable motion span for a loop pattern.";
   }
+  if (kind === "pattern") {
+    const anchors = reversalAnchorCount(selection);
+    if (anchors > MAX_PATTERN_ANCHORS) {
+      return `This loop has ${anchors} essential reversal knots; trim to a simpler section with ${MAX_PATTERN_ANCHORS} or fewer.`;
+    }
+  }
   return "";
+}
+
+function reversalAnchorCount(points: TimelinePoint[]): number {
+  let anchors = 1;
+  let lastAnchor = 0;
+  let previousDirection = 0;
+  for (let index = 1; index < points.length; index++) {
+    const delta = points[index].pos - points[index - 1].pos;
+    const direction = Math.sign(delta);
+    if (direction === 0) continue;
+    if (previousDirection !== 0 && direction !== previousDirection && lastAnchor !== index - 1) {
+      anchors += 1;
+      lastAnchor = index - 1;
+    }
+    previousDirection = direction;
+  }
+  if (lastAnchor !== points.length - 1) anchors += 1;
+  return anchors;
 }
 
 function positionSpan(points: TimelinePoint[]): number {

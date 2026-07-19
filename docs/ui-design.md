@@ -452,14 +452,17 @@ scrollbar supports direct viewport movement; outward vertical input is released
 at zoom limits. `+`, `-`, `0`, and arrow-key equivalents remain available.
 Kept and excluded regions use deliberately stronger contrast while exact time
 and persistent selected-length readouts remain visible. The zoom viewport never
-changes the trim or payload. A program/loop-pattern choice is made before the trimmed
-selection is submitted through the normal validated import endpoint, while
-MagicHandy share files import as-is; Author reduces
+changes the trim or payload. Loop selection has no artificial 6.6-second maximum;
+the UI instead blocks shapes over the backend's 255 essential-knot limit. A
+program/loop-pattern choice is made before the trimmed selection is submitted
+through the normal validated import endpoint, while MagicHandy share files
+import as-is; Author reduces
 freehand input to editable knots; Training
 auditions the same enabled catalog with original/smooth/crisp feel choices and
-reversible ratings. Every playback preview comes from backend samples produced
-by the playback interpolator; the Import plot is explicitly a raw source-action
-inspection view, not a playback preview. Playback controls remain controller-
+reversible ratings. Pattern previews combine samples produced by the backend
+playback interpolator with backend-owned saved knots so long cycles do not alias
+away reversals; the Import plot is explicitly a raw source-action inspection
+view, not a playback preview. Playback controls remain controller-
 gated, Stop remains outside the route, and program intensity is capped by the
 backend settings envelope.
 

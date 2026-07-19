@@ -48,7 +48,7 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
               <input type="checkbox" checked={pattern.enabled} disabled={locked || mutating} aria-label={`Enable ${pattern.name}`} onChange={(event) => void onPatch(pattern.id, { enabled: event.target.checked })} />
               <span className="track" aria-hidden="true" />
             </label>
-            <PatternCurve points={pattern.preview_samples} label={`${pattern.name} backend-sampled pattern curve`} />
+            <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={`${pattern.name} backend-sampled pattern curve`} />
             <div className="pattern-copy">
               <div className="pattern-title-line">
                 <h3>{pattern.name}</h3>

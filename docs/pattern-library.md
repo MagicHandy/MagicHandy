@@ -13,7 +13,8 @@ sampling, active playback, completion, Pause, and Stop.
 are projected into the configured stroke window exactly once at the transport
 boundary. A pattern is either `routine` (minimum 6600 ms cycle) or `burst`
 (minimum 500 ms cycle). Built-ins are code-generated; users can author and
-share additional entries.
+share additional entries. The 6600 ms routine value is a minimum, not a maximum;
+a coherent imported or authored loop may retain a longer cycle.
 
 **Programs** are finite, elapsed-time curves. A funscript imported as a program
 keeps its action timing and relative spacing and does not loop. Playback may
@@ -38,7 +39,8 @@ one as the other.
   Raw input is capped at 4096 points and a saved pattern at 256 points including
   loop closure.
 - Playback preview samples come from the same backend `motion.Curve` used by
-  playback. The React authoring/training canvases render those samples; they do
+  playback. Compact pattern curves insert the backend-owned saved knots into
+  those samples so long cycles cannot visually alias away reversals. React does
   not implement playback interpolation. The import view's raw source-action
   plot is a file-inspection timeline, not a playback preview.
 - Training's Original, Smooth, and Crisp choices produce temporary resolved
@@ -64,6 +66,10 @@ two interpretations:
 - **Program** preserves stored elapsed timing, relative spacing, and amplitude.
 - **Pattern** compresses stationary gaps over five seconds to 500 ms, normalizes
   the usable span once to relative 0–100, simplifies it, and closes the loop.
+  Cycles shorter than 6600 ms are stretched to that floor; longer active timing
+  remains intact. The UI rejects a selection with more than 255 essential
+  reversal knots because loop closure and the stored 256-point limit make that
+  shape impossible to preserve. This is a shape limit, not a duration limit.
 
 Unknown schemas and unknown funscript targets are rejected. Imported bytes are
 never sent to a transport or executed directly.

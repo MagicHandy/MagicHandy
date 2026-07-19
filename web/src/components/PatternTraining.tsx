@@ -41,7 +41,7 @@ export function PatternTraining({ patterns, feedback, autoDisable, locked, busyK
           <div><span className="eyebrow">Pattern {index + 1} of {enabled.length}</span><h2>{pattern.name}</h2></div>
           <button type="button" className="btn btn-secondary" disabled={enabled.length < 2} onClick={() => setIndex((index + 1) % enabled.length)}>Next pattern</button>
         </div>
-        <PatternCurve points={pattern.preview_samples} label={`${pattern.name} backend-sampled training curve`} className="training-curve" />
+        <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={`${pattern.name} backend-sampled training curve`} className="training-curve" />
         <div className="training-stats"><span>Weight <strong>{pattern.weight.toFixed(2)}</strong></span><span>{(pattern.cycle_ms / 1000).toFixed(1)} s cycle</span><span>{pattern.kind}</span></div>
         <div className="training-controls">
           <label className="inline-slider"><span>Intensity <strong>{intensity}%</strong></span><input type="range" min={1} max={intensityCap} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} /></label>
