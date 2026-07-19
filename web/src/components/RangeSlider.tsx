@@ -12,10 +12,11 @@ interface RangeSliderProps {
   ceil?: number;
   minGap?: number;
   disabled?: boolean;
+  formatValue?: (min: number, max: number) => string;
   onChange: (next: { min: number; max: number }, changed: RangeBound) => void;
 }
 
-export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minGap = 0, disabled, onChange }: RangeSliderProps) {
+export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minGap = 0, disabled, formatValue, onChange }: RangeSliderProps) {
   const id = useId();
   const valueId = useId();
   const lowRef = useRef<HTMLInputElement>(null);
@@ -74,7 +75,7 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
     <div className="range-slider" role="group" aria-labelledby={id} data-disabled={disabled || undefined}>
       <div className="range-slider-head">
         <span className="label" id={id}>{label}</span>
-        <output id={valueId} className="range-slider-value">{minValue}–{maxValue}%</output>
+        <output id={valueId} className="range-slider-value">{formatValue ? formatValue(minValue, maxValue) : `${minValue}–${maxValue}%`}</output>
       </div>
       <div
         className="range-slider-track"

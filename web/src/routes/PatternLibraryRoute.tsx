@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { api } from "../api/client";
 import type { LibraryPattern, PatternInput, PatternLibrary, PatternPreview } from "../api/types";
+import { MotionImport } from "../components/MotionImport";
 import { PatternAuthoring } from "../components/PatternAuthoring";
 import { PatternBrowser } from "../components/PatternBrowser";
 import { PatternTraining } from "../components/PatternTraining";
@@ -9,9 +10,9 @@ import { libraryActionKey } from "../components/library-actions";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast } from "../state/app-state";
 
-type View = "browse" | "programs" | "author" | "training";
+type View = "browse" | "programs" | "import" | "author" | "training";
 
-const views: readonly View[] = ["browse", "programs", "author", "training"];
+const views: readonly View[] = ["browse", "programs", "import", "author", "training"];
 const emptyLibrary: PatternLibrary = { patterns: [], programs: [], feedback: [], auto_disable: false };
 
 export function PatternLibraryRoute() {
@@ -117,8 +118,8 @@ export function PatternLibraryRoute() {
     show(error instanceof Error ? error.message : "Pattern preview failed.", "error");
   }
 
-  async function importFile(file: File, asKind: "pattern" | "program") {
-    await withBusy(libraryActionKey.import, async () => {
+  async function importFile(file: File, asKind: "pattern" | "program"): Promise<boolean> {
+    return withBusy(libraryActionKey.import, async () => {
       const response = await api.importMotionContent(file, asKind);
       const imported = response?.import;
       if (!imported?.pattern && !imported?.program) throw new Error("The import response did not contain motion content.");
@@ -135,6 +136,7 @@ export function PatternLibraryRoute() {
       }));
       const stripped = imported.gaps_stripped > 0 ? ` ${imported.gaps_stripped} long gaps removed.` : "";
       show(`${file.name} imported.${stripped}`);
+      setView(importedPattern ? "browse" : "programs");
     });
   }
 
@@ -274,7 +276,6 @@ export function PatternLibraryRoute() {
                 offline={!backendOnline}
                 busyKeys={busyKeys}
                 maxIntensity={maxIntensity}
-                onImport={importFile}
                 onPlay={playProgram}
                 onPause={pausePlayer}
                 onResume={resumePlayer}
@@ -282,6 +283,9 @@ export function PatternLibraryRoute() {
                 onExport={exportProgramFile}
                 onDelete={removeProgram}
               />
+            </div>
+            <div role="tabpanel" id="library-import-panel" aria-labelledby="library-import-tab" hidden={view !== "import"}>
+              <MotionImport locked={locked} importing={busyKeys.has(libraryActionKey.import)} onImport={importFile} />
             </div>
             <div role="tabpanel" id="library-author-panel" aria-labelledby="library-author-tab" hidden={view !== "author"}>
               <PatternAuthoring locked={locked} saving={busyKeys.has(libraryActionKey.author)} onPreview={previewPattern} onPreviewError={showPreviewError} onSave={savePattern} />

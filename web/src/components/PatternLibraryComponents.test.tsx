@@ -99,7 +99,6 @@ describe("pattern library components", () => {
       offline={false}
       busyKeys={new Set()}
       maxIntensity={40}
-      onImport={async () => {}}
       onPlay={async () => {}}
       onPause={async () => {}}
       onResume={async () => {}}

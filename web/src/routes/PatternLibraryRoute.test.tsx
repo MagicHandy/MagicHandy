@@ -116,7 +116,7 @@ describe("PatternLibraryRoute", () => {
     expect(screen.getByLabelText("Name")).toHaveValue("Unsaved curve");
   });
 
-  it("applies an authoritative import response without reloading the catalog", async () => {
+  it("imports a trimmed funscript from the Import tab and lands on the result", async () => {
     const imported = {
       ...library.programs[0],
       id: "imported",
@@ -127,15 +127,24 @@ describe("PatternLibraryRoute", () => {
     });
     render(<PatternLibraryRoute />);
     await screen.findByRole("heading", { level: 3, name: "Stroke" });
-    fireEvent.click(screen.getByRole("tab", { name: "Programs" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Import" }));
 
-    const fileInput = screen.getByRole("region", { name: "Programs and funscripts" }).querySelector("input[type=file]");
+    const fileInput = screen.getByRole("region", { name: "Import motion content" }).querySelector("input[type=file]");
     expect(fileInput).not.toBeNull();
+    const funscript = JSON.stringify({ actions: [{ at: 0, pos: 0 }, { at: 1000, pos: 100 }, { at: 2000, pos: 10 }] });
     fireEvent.change(fileInput as HTMLInputElement, {
-      target: { files: [new File(["{}"], "imported.funscript", { type: "application/json" })] },
+      target: { files: [new File([funscript], "imported.funscript", { type: "application/json" })] },
     });
 
+    expect(await screen.findByRole("img", { name: /funscript timeline/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Import as program" }));
+
+    // The authoritative response lands without a catalog reload, and the view
+    // switches to Programs where the imported row is visible.
     expect(await screen.findByRole("heading", { level: 3, name: "Imported program" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Programs" })).toHaveAttribute("aria-selected", "true");
+    expect(importMotionContent).toHaveBeenCalledTimes(1);
+    expect(importMotionContent.mock.calls[0][1]).toBe("program");
     expect(getLibrary).toHaveBeenCalledOnce();
   });
 
