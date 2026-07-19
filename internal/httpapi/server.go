@@ -84,6 +84,8 @@ type Server struct {
 	chatCancelMu           sync.Mutex
 	chatCancels            map[uint64]context.CancelFunc
 	nextChatID             uint64
+	chatSpeechMu           sync.Mutex
+	chatSpeechRequests     map[int64]string
 	hostPathPicker         hostPathPicker
 	chatLog                *chat.MessageLog
 	patterns               *patterns.Library

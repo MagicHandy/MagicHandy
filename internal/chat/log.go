@@ -26,11 +26,12 @@ const (
 // Model/transport errors are never appended: only text a user typed or a
 // reply that was actually displayed.
 type LogMessage struct {
-	Seq       int64  `json:"seq"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	ClientID  string `json:"client_id,omitempty"`
-	CreatedAt string `json:"created_at"`
+	Seq             int64  `json:"seq"`
+	Role            string `json:"role"`
+	Content         string `json:"content"`
+	ClientID        string `json:"client_id,omitempty"`
+	CreatedAt       string `json:"created_at"`
+	SpeechRequestID string `json:"speech_request_id,omitempty"`
 }
 
 // MessageLog is the DB-backed shared chat history with per-client cursors.
@@ -137,6 +138,33 @@ func (l *MessageLog) After(after int64, limit int) ([]LogMessage, error) {
 	}
 	defer func() { _ = rows.Close() }()
 
+	return scanLogMessages(rows)
+}
+
+// Recent returns the newest messages in chronological order. It is used for
+// bounded server-owned context where a client cursor is not involved.
+func (l *MessageLog) Recent(limit int) ([]LogMessage, error) {
+	if limit <= 0 || limit > MessageLogCap {
+		limit = MessageLogCap
+	}
+	rows, err := l.db.SQL().QueryContext(context.Background(), `
+		SELECT seq, role, content, client_id, created_at
+		FROM (
+			SELECT seq, role, content, client_id, created_at
+			FROM messages
+			ORDER BY seq DESC
+			LIMIT ?
+		) AS recent
+		ORDER BY seq ASC
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("read recent chat messages: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanLogMessages(rows)
+}
+
+func scanLogMessages(rows *sql.Rows) ([]LogMessage, error) {
 	var messages []LogMessage
 	for rows.Next() {
 		var message LogMessage

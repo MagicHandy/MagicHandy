@@ -44,8 +44,9 @@ save row always rendered. That review is superseded by this document.
   round-trips into settings); chat history seeds from the canonical server
   log; deterministic stop exchange rendered from persisted state.
 - At the time of this review, Modes/Library placeholder states rendered as
-  designed. Autopilot remains coming-soon; the Library placeholder was retired
-  by Phase 14.
+  designed. The Library placeholder was retired by Phase 14; PR #101 later
+  replaces the Autopilot placeholder with a compact session control on Chat,
+  rather than activating it inside Preset Modes.
 
 ## High
 

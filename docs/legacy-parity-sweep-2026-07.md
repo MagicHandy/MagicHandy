@@ -81,8 +81,8 @@ catalog and the mode planners, not retrofits to the shipped engine.
     completion on real providers (sentence streaming should prevent it; it
     must be checked, not assumed).
 12. **Modes narrate naturally** (notes: the model "blares out motion
-    sequences" in preset modes). *Adopted*: Autopilot/preset-mode rule — any
-    mode-generated speech goes through the same reply text that chat
+    sequences" in preset modes). *Adopted*: Chat Autopilot rule — any
+    model-generated speech goes through the same reply text that chat
     displays, phrased as natural language; never raw sequence identifiers.
 13. **Voice on/off toggle in the top bar** (notes). *Adopted, amended*: the
     MagicHandy status bar is status-only by design (no controls), so the

@@ -55,7 +55,7 @@ Same vocabulary as the sweeps, plus one:
 | **LLM stroke-region control (tip/shaft/base)** | **Partial** | Engine `AreaFocus` exists; **not exposed in the chat contract** — see [llm-control-surface.md](llm-control-surface.md) idea A |
 | **LLM program/script selection** | **Partial** | Engine `ProgramID` exists; chat contract exposes only `pattern_id` — idea B |
 | **Soft-anchor loops (tip/upper/mid/lower/base)** | **Partial** | Engine `SoftAnchor` exists; no authoring UI or model access — idea G |
-| **LLM-driven autonomous mode (Autopilot)** | **Implemented (2026-07-19)** | LLM-curated segments over the Freestyle loop with deterministic planner fallback and chat-log/TTS say-lines; live-model acceptance open. Shape follows [llm-control-surface.md](llm-control-surface.md) ideas E/F |
+| **LLM-driven autonomous mode (Autopilot)** | **Initial implementation (PR #101)** | Chat-native control; bounded recent-conversation context; enabled pattern/intensity curation over the shared segment loop; visible deterministic fallback; chat-log/browser-TTS delivery. Live-model, long-session, cadence, and richer-arrangement acceptance remain open; see [llm-control-surface.md](llm-control-surface.md) ideas E/F |
 | Voice output (cloud + local cloning) | **Covered / differs** | ElevenLabs + NeuTTS Air (STGPT-RV used Chatterbox); ADR 0007 |
 | Voice input (ASR) | **Covered / differs** | Managed Parakeet (STGPT-RV also had faster-whisper); ADR 0007 |
 | Persona prompt + memory | **Covered** | Phase 10 prompt sets + inspectable memory |
@@ -83,8 +83,10 @@ into four groups, none of which is a simple port:
    [llm-control-surface.md](llm-control-surface.md). This is the largest genuine
    parity gap and the highest-leverage because the motion capability already
    exists.
-2. **Autonomous behavior.** Autopilot (LLM-driven mode) is unstarted; its shape
-   is ideas E/F in the control-surface doc.
+2. **Autonomous behavior.** Chat Autopilot's initial enabled-pattern curation
+   loop is in review in #101. Configurable cadence/autonomy levels and richer
+   arrangement, region, and program control remain ideas E/F in the
+   control-surface doc.
 3. **Deliberately-not-ported modes.** Auto/Edge/Milk are dropped as scripted
    ports (ADR 0006). If they return, they return as continuous-engine planners.
    This is a *design choice*, not an open gap.

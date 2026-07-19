@@ -145,9 +145,10 @@ its backend source or local-only reason, it probably should not own that state.
    `#/library`, and `#/settings/*`; move Stop to the permanent nav footer; move
    current quick controls into the Chat route; convert Settings from overlay to
    route.
-4. **Add Preset Modes placeholder/first implementation.** Relocate Freestyle and
-   style selection. Add Autopilot UI only when the backend contract exists; until
-   then render disabled/coming-soon with a clear reason.
+4. **Add Preset Modes and Chat Autopilot.** Relocate deterministic Freestyle and
+   its style selection to Preset Modes. Once the backend contract exists, mount
+   the Autopilot session control with the conversation on Chat; do not duplicate
+   it as another preset mode.
 5. **Add Pattern Library.** The interim empty state shipped with the shell and
    was replaced in Phase 14 by Browse, Programs, Author, and Training backed by
    the canonical library API.

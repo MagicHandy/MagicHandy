@@ -462,7 +462,17 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
+	// Autopilot appends the visible message before enqueuing TTS. Sharing this
+	// short lock with that delivery path prevents a client from observing and
+	// advancing past the row before its optional speech request ID is attached.
+	s.chatSpeechMu.Lock()
 	messages, err := s.chatLog.After(after, limit)
+	if err == nil {
+		for index := range messages {
+			messages[index].SpeechRequestID = s.chatSpeechRequests[messages[index].Seq]
+		}
+	}
+	s.chatSpeechMu.Unlock()
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return

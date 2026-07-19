@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-18. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-19. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -28,9 +28,10 @@ remains a thin shell around the app's own first-run setup wizard (decision and
 design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
 capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
 decision. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
-Autopilot is now implemented (an LLM-curated autonomous mode over the Freestyle
-loop with a deterministic planner fallback; live-model acceptance remains
-open), while the migration importer (Phase 15) is
+Chat Autopilot now has its initial implementation (conversation-aware LLM
+curation over the shared autonomous loop, with a visible deterministic planner
+fallback); live-model, long-session, and richer-autonomy acceptance remain
+open. The migration importer (Phase 15) is
 now **undecided — it may not be built at all** (rationale in
 `docs/parity-with-stgpt-rv.md`). The UI/behavior parity baseline is complete;
 the largest genuine remaining parity gap is LLM control depth (stroke regions,
@@ -91,7 +92,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
-| Autopilot | LLM-curated autonomous mode over the Freestyle loop: per-segment pattern/intensity curation through the strict chat contract, say-lines via the chat log/TTS lockstep, deterministic planner fallback on any decision failure | **Implemented; live-model acceptance open** | — |
+| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation in review; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
@@ -266,11 +267,13 @@ It ships in steps that never drop a safety control mid-migration:
 2. **Shell refactor** (front-end only): nav sidebar + top-level router, Stop to
    the pinned footer, current controls move into the Chat page, settings window
    becomes the Settings page.
-3. **Preset Modes + Autopilot**: relocate Freestyle; add an LLM-driven
-   **Autopilot** mode in `internal/modes` that changes direction/pattern from
-   context through bounded arrangement segments — an engine client, traced,
-   Stop/Pause-interruptible, clamped by the quick-settings envelope. Rides the
-   Phase 11 mode architecture.
+3. **Preset Modes + Chat Autopilot**: relocate deterministic Freestyle to
+   Preset Modes; place the explicit **Autopilot** session control beside the
+   conversation on Chat. Its execution loop remains in `internal/modes` so it
+   shares Freestyle's lifecycle and emits only semantic targets through the
+   engine. Decisions use bounded recent conversation plus enabled library
+   content, stay traced and Stop/Pause-interruptible, and remain clamped by the
+   quick-settings envelope.
 4. **Pattern Library**: the browse/import/player/authoring/curation workspace —
    implemented in Phase 14.
 
@@ -279,9 +282,10 @@ TypeScript app (`web/`, built to `web/dist`, embedded by Go; no runtime Node)
 implementing the permanent nav rail, compact status-led top bar, pinned Stop, and the
 Chat / Preset Modes / Pattern Library / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
-Vitest. Preset Modes is present while Autopilot remains a labeled coming-soon
-control until its planner exists (step 3). Pattern Library is merged to `main`
-(step 4). The legacy vanilla UI remains under `web/legacy/`
+Vitest. Preset Modes owns deterministic Freestyle; the initial Chat-native
+Autopilot control and curation loop are in review in #101 (step 3), with richer
+arrangements and user-configurable autonomous speech cadence still planned.
+Pattern Library is merged to `main` (step 4). The legacy vanilla UI remains under `web/legacy/`
 as unshipped reference only; `web/dist` is the single embedded frontend.
 
 ## Rewrite Guardrails

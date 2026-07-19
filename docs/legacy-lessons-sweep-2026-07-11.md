@@ -75,9 +75,11 @@ check before building), **Watch** (record; act only if evidence appears),
 
 ## B. Autopilot inputs (autospeak PRs #221–#228, #248, #266, #289)
 
-MagicHandy's Autopilot is planned (Phase 11 contract, UI placeholder) and
-none of STGPT's autonomous-chatter lessons have been dispositioned. The
-contract shapes worth carrying — not the implementations:
+MagicHandy's initial Chat Autopilot is in review in PR #101. It now uses
+bounded canonical conversation context, publishes successful autonomous lines
+through Chat, preserves custom content on hold, falls back visibly after bad
+turns, and cancels announcements with Stop. The contract shapes still worth
+carrying — not the old implementations — are:
 
 4. **Bounded, user-configurable cadence with the model inside the bounds**
    (#222/#224/#228). The model chooses the next-speak delay, clamped to a
@@ -86,17 +88,19 @@ contract shapes worth carrying — not the implementations:
    user clamps, non-zero floor); re-derive the numbers — 12–45 s is taste.
 5. **Autonomy ladder** (#289): Talk Only / Style Only / Full Motion levels
    for what autonomous turns may do. Adopt — it matches the existing
-   per-mode action-permission stance (off by default, opt-in).
+   per-mode action-permission stance (off by default, opt-in). **Still open.**
 6. **Autonomous turns are real conversation; deterministic narration is
    not** (#225/#227): autospeak output routes through the normal
    chat/TTS/history channel and may be chat-only (`action: continue`,
    `move: null`); planner narration stays out of chat. MagicHandy already
-   half-holds this (deterministic stop replies log but never speak); the
-   Autopilot contract must keep both halves.
+   now holds this for Chat Autopilot: model lines use the canonical log and
+   optional browser-playable TTS; deterministic fallback narration stays out.
 7. **The loop must survive bad turns** (#266): failed or malformed
    autonomous turns schedule a retry at the minimum pause instead of dying
    silently; small local models need recent-line reminders to stop
-   repeating themselves (#248). Adopt the retry; treat the anti-repetition
+   repeating themselves (#248). The initial slice keeps motion alive with a
+   traced deterministic segment and includes recent lines; user-configurable
+   retry/speech cadence remains open. Treat anti-repetition
    prompt scaffolding as a Watch — it is model-specific patchwork that a
    better model may not need.
 

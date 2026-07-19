@@ -50,7 +50,7 @@ type announceLog struct {
 	says []string
 }
 
-func (a *announceLog) announce(say string) {
+func (a *announceLog) announce(_ context.Context, say string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.says = append(a.says, say)
@@ -163,8 +163,9 @@ func TestAutopilotFallsBackToPlannerOnDecisionFailure(t *testing.T) {
 func TestAutopilotHoldKeepsCurrentSegmentWithoutDrift(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}
+	library := &motion.PatternDefinition{ID: "custom-wave", Name: "Custom wave"}
 	decider := &fakeDecider{decisions: []Decision{
-		{Segment: Segment{PatternID: motion.PatternPulse, SpeedPercent: 40, DurationMillis: 4000}},
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 40, DurationMillis: 4000}, Pattern: library},
 		{Hold: true, Say: "Staying right here."},
 	}}
 	announcer := &announceLog{}
@@ -182,13 +183,59 @@ func TestAutopilotHoldKeepsCurrentSegmentWithoutDrift(t *testing.T) {
 	engine.mu.Lock()
 	held := engine.targets[0]
 	engine.mu.Unlock()
-	if held.PatternID != motion.PatternPulse || held.SpeedPercent != 40 {
+	if held.PatternID != library.ID || held.Pattern != library || held.SpeedPercent != 40 {
 		t.Fatalf("hold target = %+v, want same pattern and speed", held)
 	}
 	if status := manager.Status(); status.DecisionSource != "hold" {
 		t.Fatalf("decision source = %q, want hold", status.DecisionSource)
 	}
 	waitFor(t, time.Second, func() bool { return len(announcer.all()) >= 1 })
+}
+
+func TestAutopilotAnnouncementContextCancelsWithStop(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	decider := &fakeDecider{decisions: []Decision{{
+		Segment: Segment{PatternID: motion.PatternStroke, SpeedPercent: 30, DurationMillis: 8000},
+		Say:     "This line is in flight.",
+	}}}
+	entered := make(chan struct{})
+	canceled := make(chan struct{})
+	options := Options{
+		Ensure:   func(context.Context) (Engine, error) { return engine, nil },
+		Current:  func() Engine { return engine },
+		Settings: func() config.MotionSettings { return config.DefaultSettings().Motion },
+		Now:      clock.Now,
+		Tick:     2 * time.Millisecond,
+		Decide:   decider.decide,
+		Announce: func(ctx context.Context, _ string) {
+			close(entered)
+			<-ctx.Done()
+			close(canceled)
+		},
+	}
+	manager, err := NewManager(options)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(manager.Shutdown)
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("announcement did not start")
+	}
+	finishStop := manager.BeginUserStop()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		finishStop()
+		t.Fatal("announcement context was not canceled by Stop")
+	}
+	finishStop()
 }
 
 func TestAutopilotUserStopEndsModeWithoutRestart(t *testing.T) {
@@ -252,7 +299,7 @@ func TestAutopilotTraceRecordsDecisionSource(t *testing.T) {
 	found := false
 	for _, row := range traces.Rows() {
 		if row.Planner != nil && row.Planner.Event == "autopilot_start" &&
-			strings.Contains(row.Planner.Note, "model") && strings.Contains(row.Planner.Note, "say") {
+			row.Planner.SegmentIndex == 1 && strings.Contains(row.Planner.Note, "model") && strings.Contains(row.Planner.Note, "say") {
 			found = true
 		}
 	}

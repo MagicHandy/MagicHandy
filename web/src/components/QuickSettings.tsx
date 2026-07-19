@@ -157,7 +157,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
       </label>}
       {showBehavior && <label className="field">
         <span className="label">
-          Style <span className="hint-inline">biases Freestyle pacing</span>
+          Style <span className="hint-inline">biases autonomous pacing</span>
         </span>
         <select
           value={vals.style}

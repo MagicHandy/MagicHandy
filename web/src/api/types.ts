@@ -136,6 +136,7 @@ export interface ChatLogMessage {
   content: string;
   client_id?: string;
   created_at: string;
+  speech_request_id?: string;
 }
 
 export interface ChatMessagesResponse {

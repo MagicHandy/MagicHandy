@@ -11,7 +11,7 @@ import (
 
 // Autopilot is Freestyle's loop with the segment choice delegated to an
 // injected LLM curation step. The model curates *what* plays next (an enabled
-// pattern, an intensity, an optional spoken line); deterministic code owns
+// pattern, an intensity, and an optional assistant line); deterministic code owns
 // *how long* it plays, every clamp, and the whole engine/transport path. Any
 // decision failure falls back to the deterministic planner with a visible
 // trace — motion never stalls and never stops on a model failure, and only
@@ -75,8 +75,8 @@ func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentCho
 		return segmentChoice{segment: segment, scores: scores, source: "fallback", note: err.Error()}
 	}
 	if decision.Hold {
-		if segment, ok := m.heldSegment(); ok {
-			return segmentChoice{segment: segment, say: decision.Say, source: "hold"}
+		if segment, pattern, ok := m.heldSegment(); ok {
+			return segmentChoice{segment: segment, pattern: pattern, say: decision.Say, source: "hold"}
 		}
 		segment, scores := m.nextPlannedSegment()
 		return segmentChoice{segment: segment, scores: scores, say: decision.Say, source: "fallback", note: "hold_without_segment"}
@@ -108,18 +108,19 @@ func (m *Manager) decisionInput() DecisionInput {
 
 // heldSegment re-arms the current segment (same pattern, same speed) for a
 // fresh deterministic duration.
-func (m *Manager) heldSegment() (Segment, bool) {
+func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
 	m.mu.Lock()
 	current := m.segment
+	patternDefinition := m.pattern
 	pattern := current.PatternID
 	m.mu.Unlock()
 	if pattern == "" {
-		return Segment{}, false
+		return Segment{}, nil, false
 	}
 	held := current
 	held.DriftToSpeedPercent = 0
 	held.DurationMillis = m.plannedDurationMillis()
-	return NormalizeSegment(held), true
+	return NormalizeSegment(held), patternDefinition, true
 }
 
 // plannedDurationMillis borrows the deterministic style duration bounds.

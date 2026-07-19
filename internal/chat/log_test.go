@@ -92,6 +92,23 @@ func TestMessageLogPrunesToCap(t *testing.T) {
 	}
 }
 
+func TestMessageLogRecentReturnsBoundedChronologicalTail(t *testing.T) {
+	log := openTestLog(t)
+	for i := 0; i < 6; i++ {
+		if _, err := log.Append(MessageRoleUser, fmt.Sprintf("message %d", i), "c"); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+
+	recent, err := log.Recent(3)
+	if err != nil {
+		t.Fatalf("Recent: %v", err)
+	}
+	if len(recent) != 3 || recent[0].Content != "message 3" || recent[2].Content != "message 5" {
+		t.Fatalf("recent tail = %+v, want messages 3..5 in chronological order", recent)
+	}
+}
+
 func TestCursorsAreIsolatedPerClient(t *testing.T) {
 	log := openTestLog(t)
 

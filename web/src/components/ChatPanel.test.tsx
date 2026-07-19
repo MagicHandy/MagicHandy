@@ -11,6 +11,7 @@ const app = vi.hoisted(() => ({
     settings: { voice: { enabled: false, asr_provider: "none" } },
   },
   show: vi.fn(),
+  queueSpeech: vi.fn(),
 }));
 
 vi.mock("../api/client", () => ({
@@ -31,7 +32,7 @@ vi.mock("../state/app-state", () => ({
 }));
 
 vi.mock("../state/voice-playback", () => ({
-  useVoicePlayback: () => ({ queueSpeech: vi.fn() }),
+  useVoicePlayback: () => ({ queueSpeech: app.queueSpeech }),
 }));
 
 const getChatMessages = vi.mocked(api.getChatMessages);
@@ -46,6 +47,7 @@ describe("ChatPanel history", () => {
       settings: { voice: { enabled: false, asr_provider: "none" } },
     };
     app.show.mockReset();
+    app.queueSpeech.mockReset();
     getChatMessages.mockReset();
     advanceChatCursor.mockReset();
     advanceChatCursor.mockResolvedValue({ cursor: 0 });
@@ -99,5 +101,41 @@ describe("ChatPanel history", () => {
 
     expect(await screen.findByText("Second")).toBeInTheDocument();
     await waitFor(() => expect(getChatMessages).toHaveBeenCalledTimes(3));
+  });
+
+  it("plays new autonomous replies but does not replay speech from initial history", async () => {
+    getChatMessages
+      .mockResolvedValueOnce({
+        messages: [{
+          seq: 1,
+          role: "assistant",
+          content: "Earlier line",
+          created_at: "now",
+          speech_request_id: "tts-old",
+        }],
+        latest_seq: 1,
+        cursor: 1,
+      })
+      .mockResolvedValueOnce({
+        messages: [{
+          seq: 2,
+          role: "assistant",
+          content: "New autonomous line",
+          created_at: "now",
+          speech_request_id: "tts-new",
+        }],
+        latest_seq: 2,
+        cursor: 1,
+      });
+    app.state = { ...app.state, chat: { latest_seq: 1 } };
+    const result = render(<ChatPanel />);
+    expect(await screen.findByText("Earlier line")).toBeInTheDocument();
+    expect(app.queueSpeech).not.toHaveBeenCalled();
+
+    app.state = { ...app.state, uptime_seconds: 2, chat: { latest_seq: 2 } };
+    result.rerender(<ChatPanel />);
+
+    expect(await screen.findByText("New autonomous line")).toBeInTheDocument();
+    expect(app.queueSpeech).toHaveBeenCalledWith("tts-new");
   });
 });

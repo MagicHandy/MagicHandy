@@ -10,8 +10,10 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
 func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
@@ -58,7 +60,7 @@ func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
 			}}
 			return server.mapAutopilotResult(result)
 		},
-		Announce: func(say string) {
+		Announce: func(_ context.Context, say string) {
 			mu.Lock()
 			says = append(says, say)
 			mu.Unlock()
@@ -138,6 +140,117 @@ func TestAutopilotFallsBackWithoutConfiguredLLM(t *testing.T) {
 	}
 	if status.SegmentIndex < 1 {
 		t.Fatalf("fallback did not arm a segment: %+v", status)
+	}
+}
+
+func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"I remember.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+	if _, err := server.chatLog.Append(chat.MessageRoleUser, "Use the slower pattern next.", "client"); err != nil {
+		t.Fatalf("append user context: %v", err)
+	}
+	if _, err := server.chatLog.Append(chat.MessageRoleAssistant, "I will keep that in mind.", ""); err != nil {
+		t.Fatalf("append assistant context: %v", err)
+	}
+
+	decision, err := server.autopilotDecide(t.Context(), modes.DecisionInput{
+		Style:           config.MotionStyleBalanced,
+		SpeedMinPercent: 20,
+		SpeedMaxPercent: 80,
+	})
+	if err != nil {
+		t.Fatalf("autopilotDecide: %v", err)
+	}
+	if !decision.Hold || decision.Say != "I remember." {
+		t.Fatalf("decision = %+v, want conversational hold", decision)
+	}
+
+	provider.mu.Lock()
+	requests := append([]llm.ChatRequest(nil), provider.requests...)
+	provider.mu.Unlock()
+	if len(requests) != 1 {
+		t.Fatalf("provider requests = %d, want 1", len(requests))
+	}
+	var contextText strings.Builder
+	for _, message := range requests[0].Messages {
+		contextText.WriteString(message.Content)
+		contextText.WriteByte('\n')
+	}
+	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot check-in"} {
+		if !strings.Contains(contextText.String(), want) {
+			t.Fatalf("provider context missing %q:\n%s", want, contextText.String())
+		}
+	}
+}
+
+func TestAutopilotAnnouncementIsDiscoverableByChatPlayback(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	startSpeakingTTS(t, server, true)
+
+	server.autopilotAnnounce(t.Context(), "Shown and spoken autonomously.")
+	messages, _, _ := getChatMessages(t, server, "")
+	if len(messages) != 1 || messages[0].Content != "Shown and spoken autonomously." {
+		t.Fatalf("autopilot message missing from chat: %+v", messages)
+	}
+	requestID := messages[0].SpeechRequestID
+	if requestID == "" {
+		t.Fatal("autopilot message has no speech request ID for browser playback")
+	}
+	pending, ok := server.voice.Request(requestID)
+	if !ok || pending.Text() != messages[0].Content {
+		t.Fatalf("speech request %q does not match displayed message", requestID)
+	}
+}
+
+func TestAutopilotAnnouncementDoesNotDeepenSpeechBacklog(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	startSpeakingTTS(t, server, true)
+
+	pending, err := server.voice.Submit(voice.RoleTTS, voice.Request{
+		Type:        voice.RequestSpeak,
+		Text:        "Already speaking.",
+		DelayMillis: 1000,
+	})
+	if err != nil {
+		t.Fatalf("submit existing speech: %v", err)
+	}
+	t.Cleanup(func() { server.voice.Worker(voice.RoleTTS).Cancel(pending) })
+	deadline := time.Now().Add(time.Second)
+	for !autopilotSpeechBacklogged(server.voice.Worker(voice.RoleTTS).Status()) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !autopilotSpeechBacklogged(server.voice.Worker(voice.RoleTTS).Status()) {
+		t.Fatal("existing speech never became active or queued")
+	}
+
+	server.autopilotAnnounce(t.Context(), "Visible while speech is busy.")
+	messages, _, _ := getChatMessages(t, server, "")
+	if len(messages) != 1 || messages[0].Content != "Visible while speech is busy." {
+		t.Fatalf("autopilot message missing from chat: %+v", messages)
+	}
+	if messages[0].SpeechRequestID != "" {
+		t.Fatalf("busy speech queue received another request: %+v", messages[0])
+	}
+	if requests := server.voice.Requests(); len(requests) != 1 || requests[0].ID != pending.ID {
+		t.Fatalf("voice requests = %+v, want only existing request %q", requests, pending.ID)
+	}
+}
+
+func TestCanceledAutopilotAnnouncementNeverEntersChat(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	server.autopilotAnnounce(ctx, "Do not publish this.")
+	messages, _, _ := getChatMessages(t, server, "")
+	if len(messages) != 0 {
+		t.Fatalf("canceled announcement entered chat: %+v", messages)
 	}
 }
 

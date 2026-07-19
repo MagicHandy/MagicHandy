@@ -374,6 +374,13 @@ engine-owned Stop. Import-boundary tests still keep `patterns`, `chat`, and
 `modes` away from transport internals. The audited Rockfire `manualqueue`
 transport owner was deliberately not merged.
 
+Status 2026-07-19: Chat Autopilot reuses Freestyle's mode lifecycle and emits
+only resolved semantic pattern targets through `Engine.Start`/`ApplyTarget`.
+Its control moved to Chat for information architecture, but the frontend still
+sends only `mode:"autopilot"`; it does not construct motion or transport
+payloads. Integration tests assert one continuous wire play across multiple
+model-curated boundaries.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium
@@ -388,6 +395,10 @@ Mitigation:
 - lockstep chat-emit and TTS-enqueue; per-client cursors over a shared log;
   single-owner audio lease; model-error path kept out of history/TTS/motion
   (see ADR 0003, "Message And Audio Delivery Ordering")
+- autonomous replies carry an ephemeral speech-request id on their canonical
+  chat row, so the controller browser can play new lines without replaying
+  initial history; an occupied TTS queue leaves later autonomous lines visible
+  but does not deepen the speech backlog
 - Phase 12 landed the substrate: versioned worker protocol with cancellation
   and queue-depth reporting, a core-owned serialized bounded queue, no-speech
   rejection (never an empty transcript into chat), and worker errors that
@@ -405,6 +416,11 @@ Exit evidence:
   can fetch the clip), `TestChatCursorsAreIsolatedAndMonotonicOverHTTP`, and
   `TestModelErrorsNeverEnterHistoryOrTTS`. The risk stays listed until a
   real provider (not the stub) has exercised the same path end to end.
+
+Status 2026-07-19: PR #101 extends the same ordering to Chat Autopilot. Tests
+cover browser-discoverable speech ids, no initial-history replay, and canceled
+announcements staying out of the log. Real-provider and long-session queue
+acceptance remain open.
 
 ## R16: Handy HSP Firmware v4 / API v3 Scope
 
