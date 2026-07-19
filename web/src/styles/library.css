@@ -287,10 +287,13 @@ input[type="search"] {
   pointer-events: none;
 }
 .import-timeline-selection {
-  fill: rgba(91, 157, 217, 0.12);
+  fill: rgba(91, 157, 217, 0.22);
+  stroke: rgba(91, 157, 217, 0.68);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
 }
 .import-timeline-dim {
-  fill: rgba(10, 11, 13, 0.62);
+  fill: rgba(3, 4, 6, 0.78);
 }
 .import-timeline-handle {
   position: absolute;
@@ -354,6 +357,58 @@ input[type="search"] {
 .import-timeline-handle[data-disabled] {
   opacity: 0.45;
   cursor: not-allowed;
+}
+.import-timeline-scrollbar {
+  position: relative;
+  width: 100%;
+  height: 32px;
+  cursor: pointer;
+  touch-action: none;
+}
+.import-timeline-scrollbar::before {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  left: 0;
+  height: 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg-inset);
+  content: "";
+}
+.import-timeline-scrollbar-thumb {
+  position: absolute;
+  top: 7px;
+  left: calc(var(--viewport-position) * (100% - max(44px, var(--viewport-size))));
+  width: max(44px, var(--viewport-size));
+  min-width: 44px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent-tint);
+}
+.import-timeline-scrollbar-thumb::after {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 50%;
+  width: 8px;
+  border-right: 1px solid var(--accent);
+  border-left: 1px solid var(--accent);
+  content: "";
+  transform: translateX(-50%);
+}
+.import-timeline-scrollbar:focus {
+  outline: none;
+}
+.import-timeline-scrollbar:focus-visible .import-timeline-scrollbar-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.import-timeline-scrollbar[aria-disabled="true"] {
+  opacity: 0.42;
+  cursor: default;
 }
 .import-selection-meta {
   margin: 0;

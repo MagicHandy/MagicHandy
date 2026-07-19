@@ -188,17 +188,22 @@ component, engine-driven, with position labeled as a commanded estimate.
   and [Clipchamp](https://support.microsoft.com/en-us/clipchamp/how-to-trim-videos-images-or-audio-assets).
   Use a compact icon toolbar for Earlier, Later, Zoom in, Zoom out, Fit
   selection, and Fit all; each icon has a tooltip and accessible name. Preserve
-  `+`, `-`, `0`, and arrow-key equivalents on the focused timeline. Horizontal
-  or Shift-wheel pans, but ordinary vertical wheel input must continue to scroll
-  the page. Keep each trim handle as a fixed-size, labeled keyboard-operable
-  slider whose dependent ARIA limits update with the other bound, as required by
-  the [WAI-ARIA multi-thumb slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/).
+  `+`, `-`, `0`, and arrow-key equivalents on the focused timeline. Vertical
+  wheel input over the plot zooms around the cursor; horizontal or Shift-wheel
+  input pans. Release outward vertical wheel input to the page at the fit-all and
+  minimum-span limits. Provide a proportional horizontal scrollbar with a
+  minimum 44px thumb, direct drag/track-jump behavior, and standard scrollbar
+  keyboard semantics. Keep each trim handle as a fixed-size, labeled
+  keyboard-operable slider whose dependent ARIA limits update with the other
+  bound, as required by the [WAI-ARIA multi-thumb slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/).
   Waveform, selection shading, pointer mapping, and handles use one measured
-  coordinate system; zoom/pan changes only the source viewport, never trim bounds
-  or submitted content. Trim bounds snap to source actions, and start, end,
-  total, visible range, zoom level, selected action count, and selection length
-  remain available as text with tabular numerals. The SVG is a raw source-action
-  view, not a playback preview; do not rely on animation, shading, or color alone.
+  coordinate system; zoom/pan changes only the source viewport, never trim
+  bounds or submitted content. Kept and excluded regions need distinct fills in
+  addition to the handles and exact text values. Trim bounds snap to source
+  actions, and start, end, total, visible range, zoom level, selected action
+  count, and selection length remain available as text with tabular numerals.
+  The SVG is a raw source-action view, not a playback preview; do not rely on
+  animation, shading, or color alone.
 - Badge (e.g. the "testing" tag): 1px `--line-strong`, `--surface-2`, `--muted`,
   `0.68rem`, `999px` is *not* used — small `--radius-sm`/pill-ish hairline chip,
   quiet.

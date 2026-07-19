@@ -716,8 +716,9 @@ Mitigation:
 - snap trims to source actions and display their exact duration; keep waveform,
   selection shading, pointer mapping, and fixed-size trim targets in one
   coordinate system; keep zoom/pan independent from selected and submitted
-  content, leave ordinary vertical wheel input available for page scrolling,
-  and preserve every selected knot when importing a finite program
+  content, provide direct proportional viewport scrolling, release wheel input
+  at zoom limits, and preserve every selected knot when importing a finite
+  program
 - route all playback through the shared engine and user speed/stroke envelope;
   controller ownership, Pause, and global Stop remain unchanged
 
@@ -731,10 +732,11 @@ Exit evidence:
 Status 2026-07-19: browser/backend malformed-input tests pass. The Import tab
 also passes focused zoomed-coordinate and payload tests plus rendered 1280x800
 and 390x844 checks. Both trim targets measure 44 CSS pixels, fitted boundaries
-remain inside the frame, vertical wheel input scrolls the workspace, horizontal
-wheel input pans the viewport, and an isolated backend persisted the trimmed
-fixture at the displayed 4:15 duration with all 16 selected knots. Physical-feel
-evidence remains open.
+remain inside the frame, vertical wheel input zooms around the cursor, horizontal
+wheel input pans, and a proportional pointer/keyboard scrollbar moves the
+viewport directly. An isolated backend persisted the trimmed fixture at the
+displayed 4:15 duration with all 16 selected knots. Physical-feel evidence
+remains open.
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).

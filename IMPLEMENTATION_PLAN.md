@@ -1141,10 +1141,10 @@ overflow; a mobile flex-shrink defect found during that pass was fixed. The
 later Import tab has focused UI coverage for strict file validation,
 action-snapped trimming, selection-length accuracy, zoom/pan independence, and
 submitted payloads. Its integrated timeline was rendered at 1280x800 and
-390x844 with fixed 44 px trim targets, no horizontal overflow, ordinary vertical
-page scrolling, horizontal timeline panning, and an exact 4:15 / 16-knot
-end-to-end program import. A refreshed complete five-tab rendered pass remains
-useful after future shared-shell changes.
+390x844 with fixed 44 px trim targets, no horizontal overflow, cursor-anchored
+wheel zoom, horizontal timeline panning, a proportional draggable viewport
+scrollbar, and an exact 4:15 / 16-knot end-to-end program import. A refreshed
+complete five-tab rendered pass remains useful after future shared-shell changes.
 The remaining manual evidence is the routine-cycle feel check on the real device,
 capped below 40% intensity; synthetic tests cannot establish physical feel.
 

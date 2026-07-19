@@ -58,10 +58,15 @@ export function ImportTimeline({
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<SVGSVGElement>(null);
+  const scrollbarRef = useRef<HTMLDivElement>(null);
+  const scrollbarThumbRef = useRef<HTMLSpanElement>(null);
   const activeBound = useRef<TrimBound | null>(null);
   const dragOffset = useRef(0);
+  const scrollbarDragging = useRef(false);
+  const scrollbarDragOffset = useRef(0);
   const handleRefs = useRef<Partial<Record<TrimBound, HTMLDivElement | null>>>({});
   const descriptionId = useId();
+  const timelineId = useId();
   const viewStart = Math.max(0, Math.min(duration - 1, viewport.start));
   const viewEnd = Math.max(viewStart + 1, Math.min(duration, viewport.end));
   const span = viewEnd - viewStart;
@@ -84,26 +89,42 @@ export function ImportTimeline({
   const selectedEndX = toX(Math.max(viewStart, Math.min(end, viewEnd)));
   const fullView = viewStart === 0 && viewEnd === duration;
   const selectionView = viewStart === start && viewEnd === end;
+  const maximumViewStart = Math.max(0, duration - span);
+  const viewportPosition = maximumViewStart > 0 ? viewStart / maximumViewStart : 0;
+  const viewportSize = duration > 0 ? span / duration : 1;
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     const handleWheel = (event: WheelEvent) => {
       const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
-      if (!horizontal && !event.shiftKey) return;
       const bounds = frame.getBoundingClientRect();
       if (bounds.width <= 0) return;
-      const rawDelta = horizontal ? event.deltaX : event.deltaY;
-      const delta = normalizeWheelDelta(rawDelta, event.deltaMode, bounds.width);
-      if (delta === 0) return;
+      if (horizontal || event.shiftKey) {
+        const rawDelta = horizontal ? event.deltaX : event.deltaY;
+        const delta = normalizeWheelDelta(rawDelta, event.deltaMode, bounds.width);
+        if (delta === 0) return;
+        event.preventDefault();
+        onViewportChange((current) => (
+          panTimelineWindowBy(current, duration, (delta / bounds.width) * (current.end - current.start))
+        ));
+        return;
+      }
+
+      const delta = normalizeWheelDelta(event.deltaY, event.deltaMode, bounds.width);
+      if (delta === 0 || (delta > 0 && span >= duration) || (delta < 0 && span <= 1)) return;
+      const anchor = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
       event.preventDefault();
-      onViewportChange((current) => (
-        panTimelineWindowBy(current, duration, (delta / bounds.width) * (current.end - current.start))
+      onViewportChange((current) => resizeTimelineWindowAt(
+        current,
+        duration,
+        wheelZoomSpan(current.end - current.start, delta),
+        anchor,
       ));
     };
     frame.addEventListener("wheel", handleWheel, { passive: false });
     return () => frame.removeEventListener("wheel", handleWheel);
-  }, [duration, onViewportChange]);
+  }, [duration, onViewportChange, span]);
 
   function timeAtClientX(clientX: number): number {
     const bounds = timelineRef.current?.getBoundingClientRect();
@@ -228,6 +249,75 @@ export function ImportTimeline({
     onViewportChange((current) => panTimelineWindowBy(current, duration, direction * (current.end - current.start) * 0.75));
   }
 
+  function setViewportStart(requestedStart: number) {
+    const nextStart = Math.max(0, Math.min(maximumViewStart, Math.round(requestedStart)));
+    onViewportChange({ start: nextStart, end: nextStart + span });
+  }
+
+  function setViewportFromScrollbar(clientX: number) {
+    const trackBounds = scrollbarRef.current?.getBoundingClientRect();
+    const thumbBounds = scrollbarThumbRef.current?.getBoundingClientRect();
+    if (!trackBounds || !thumbBounds) return;
+    const available = trackBounds.width - thumbBounds.width;
+    if (available <= 0 || maximumViewStart <= 0) return;
+    const left = Math.max(0, Math.min(available, clientX - trackBounds.left - scrollbarDragOffset.current));
+    setViewportStart((left / available) * maximumViewStart);
+  }
+
+  function startScrollbarDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (fullView || event.button > 0) return;
+    const thumbBounds = scrollbarThumbRef.current?.getBoundingClientRect();
+    if (!thumbBounds) return;
+    const onThumb = Boolean((event.target as Element).closest?.(".import-timeline-scrollbar-thumb"));
+    scrollbarDragOffset.current = onThumb ? event.clientX - thumbBounds.left : thumbBounds.width / 2;
+    scrollbarDragging.current = true;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setViewportFromScrollbar(event.clientX);
+    event.preventDefault();
+  }
+
+  function continueScrollbarDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (scrollbarDragging.current) setViewportFromScrollbar(event.clientX);
+  }
+
+  function finishScrollbarDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    scrollbarDragging.current = false;
+    scrollbarDragOffset.current = 0;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function moveScrollbar(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (fullView) return;
+    const smallStep = Math.max(1, Math.round(span * 0.1));
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowUp":
+        onViewportChange((current) => panTimelineWindowBy(current, duration, -smallStep));
+        break;
+      case "ArrowRight":
+      case "ArrowDown":
+        onViewportChange((current) => panTimelineWindowBy(current, duration, smallStep));
+        break;
+      case "PageUp":
+        panTimeline(-1);
+        break;
+      case "PageDown":
+        panTimeline(1);
+        break;
+      case "Home":
+        setViewportStart(0);
+        break;
+      case "End":
+        setViewportStart(maximumViewStart);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  }
+
   return (
     <>
       <div className="import-timeline-head">
@@ -245,11 +335,13 @@ export function ImportTimeline({
       </div>
       <div
         ref={frameRef}
+        id={timelineId}
         className="import-timeline-frame"
         role="group"
         tabIndex={0}
         aria-label={`Funscript timeline editor, ${formatTimelineTime(duration)} total, viewing ${formatTimelineTime(viewStart)} to ${formatTimelineTime(viewEnd)}, selection ${formatTimelineTime(start)} to ${formatTimelineTime(end)}, ${formatTimelineTime(end - start)} selected`}
         aria-describedby={descriptionId}
+        title="Scroll to zoom at cursor; Shift-scroll to pan"
         onPointerDown={startTrimDrag}
         onPointerMove={continueTrimDrag}
         onPointerUp={finishTrimDrag}
@@ -300,6 +392,33 @@ export function ImportTimeline({
             </div>
           );
         })}
+      </div>
+      <div
+        ref={scrollbarRef}
+        className="import-timeline-scrollbar"
+        role="scrollbar"
+        tabIndex={fullView ? -1 : 0}
+        aria-label="Timeline viewport"
+        aria-controls={timelineId}
+        aria-orientation="horizontal"
+        aria-valuemin={0}
+        aria-valuemax={maximumViewStart}
+        aria-valuenow={viewStart}
+        aria-valuetext={`${formatTimelineTime(viewStart)} to ${formatTimelineTime(viewEnd)}`}
+        aria-disabled={fullView || undefined}
+        title="Drag to move the visible timeline range"
+        style={{
+          "--viewport-position": viewportPosition,
+          "--viewport-size": `${viewportSize * 100}%`,
+        } as CSSProperties}
+        onPointerDown={startScrollbarDrag}
+        onPointerMove={continueScrollbarDrag}
+        onPointerUp={finishScrollbarDrag}
+        onPointerCancel={finishScrollbarDrag}
+        onLostPointerCapture={finishScrollbarDrag}
+        onKeyDown={moveScrollbar}
+      >
+        <span ref={scrollbarThumbRef} className="import-timeline-scrollbar-thumb" aria-hidden="true" />
       </div>
     </>
   );
@@ -374,6 +493,13 @@ function normalizeWheelDelta(delta: number, mode: number, pageSize: number): num
   if (mode === 1) return delta * 16;
   if (mode === 2) return delta * pageSize;
   return delta;
+}
+
+function wheelZoomSpan(currentSpan: number, delta: number): number {
+  const exponent = Math.max(-1, Math.min(1, delta / 240));
+  let next = Math.round(currentSpan * (2 ** exponent));
+  if (next === currentSpan) next += delta > 0 ? 1 : -1;
+  return next;
 }
 
 function pointsAroundWindow(points: TimelinePoint[], start: number, end: number): TimelinePoint[] {
