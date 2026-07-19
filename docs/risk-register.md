@@ -711,14 +711,16 @@ Mitigation:
   engine levels; only explicit pattern import strips long stationary gaps and
   normalizes relative amplitude
 - validate/simplify authoring input server-side and preview with the exact
-  backend sampler; never execute raw file payloads or construct transport
-  commands from imported data
+  backend sampler; merge backend-owned knots into compact rendered previews so
+  long-cycle reversals cannot disappear through uniform-sample aliasing; never
+  execute raw file payloads or construct transport commands from imported data
 - snap trims to source actions and display their exact duration; keep waveform,
   selection shading, pointer mapping, and fixed-size trim targets in one
   coordinate system; keep zoom/pan independent from selected and submitted
   content, provide direct proportional viewport scrolling, release wheel input
-  at zoom limits, and preserve every selected knot when importing a finite
-  program
+  at zoom limits, preserve every selected knot when importing a finite program,
+  and reject loop selections above the 255 essential-knot storage bound without
+  imposing a false 6.6-second maximum
 - route all playback through the shared engine and user speed/stroke envelope;
   controller ownership, Pause, and global Stop remain unchanged
 
@@ -736,7 +738,11 @@ remain inside the frame, vertical wheel input zooms around the cursor, horizonta
 wheel input pans, and a proportional pointer/keyboard scrollbar moves the
 viewport directly. An isolated backend persisted the trimmed fixture at the
 displayed 4:15 duration with all 16 selected knots. Physical-feel evidence
-remains open.
+remains open. Three real-world scratch funscripts (3,536-7,394 actions over
+20-37 minutes) confirmed that valid 12-20 second loop slices preserve their
+duration, while the old 74-point card preview omitted 102-190 stored knot times.
+Compact previews now insert saved knots, and impossible dense selections are
+blocked before upload by the backend's essential-knot contract.
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).

@@ -122,6 +122,24 @@ describe("pattern library components", () => {
     expect(path?.getAttribute("d")).not.toContain("NaN");
     expect(path?.getAttribute("d")).toBe("M120.00 5.00 L235.00 67.00");
   });
+
+  it("inserts saved knots into sparse backend samples for long-cycle preview fidelity", () => {
+    const result = render(<PatternCurve
+      label="Long curve"
+      points={[
+        { time_ms: 0, position_percent: 0 },
+        { time_ms: 12000, position_percent: 0 },
+      ]}
+      knots={[
+        { time_ms: 0, position_percent: 0 },
+        { time_ms: 6000, position_percent: 100 },
+        { time_ms: 12000, position_percent: 0 },
+      ]}
+    />);
+
+    expect(result.container.querySelector("path")?.getAttribute("d"))
+      .toBe("M5.00 67.00 L120.00 5.00 L235.00 67.00");
+  });
 });
 
 function engineWithPhase(phase: number): EngineSnapshot {

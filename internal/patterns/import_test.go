@@ -126,6 +126,29 @@ func TestFunscriptProgramImportPreservesSourceKnots(t *testing.T) {
 	}
 }
 
+func TestFunscriptPatternImportPreservesLongValidCycle(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+	data := []byte(`{"actions":[{"at":0,"pos":20},{"at":3000,"pos":80},{"at":6000,"pos":20},{"at":9000,"pos":80},{"at":12000,"pos":20}]}`)
+
+	result, err := library.Import("long-loop.funscript", data, importAsPattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Pattern == nil {
+		t.Fatal("long loop imported without a pattern result")
+	}
+	if result.Pattern.CycleMillis != 12000 {
+		t.Fatalf("cycle = %d, want selected 12000ms", result.Pattern.CycleMillis)
+	}
+	if len(result.Pattern.Points) != 5 || result.Pattern.Points[3].TimeMillis != 9000 {
+		t.Fatalf("stored long-loop knots = %+v", result.Pattern.Points)
+	}
+}
+
 func contains(value, part string) bool {
 	for index := 0; index+len(part) <= len(value); index++ {
 		if value[index:index+len(part)] == part {

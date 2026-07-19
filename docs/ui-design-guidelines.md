@@ -203,7 +203,11 @@ component, engine-driven, with position labeled as a commanded estimate.
   actions, and start, end, total, visible range, zoom level, selected action
   count, and selection length remain available as text with tabular numerals.
   The SVG is a raw source-action view, not a playback preview; do not rely on
-  animation, shading, or color alone.
+  animation, shading, or color alone. Do not cap loop selection at the 6.6-second
+  routine floor: longer coherent loops are valid. Disable import with the exact
+  essential-knot limit when the selected shape cannot fit the stored loop
+  representation. Compact pattern previews combine backend samples with saved
+  knots so long-cycle reversals remain visible without client interpolation.
 - Badge (e.g. the "testing" tag): 1px `--line-strong`, `--surface-2`, `--muted`,
   `0.68rem`, `999px` is *not* used — small `--radius-sm`/pill-ish hairline chip,
   quiet.

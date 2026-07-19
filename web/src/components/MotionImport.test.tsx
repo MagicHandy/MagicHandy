@@ -399,6 +399,44 @@ describe("MotionImport", () => {
     expect(screen.getByRole("button", { name: "Import as program" })).toBeEnabled();
   });
 
+  it("preserves valid loop selections longer than the 6.6-second routine floor", async () => {
+    const onImport = vi.fn().mockResolvedValue(true);
+    render(<MotionImport locked={false} importing={false} onImport={onImport} />);
+    pickFile(funscriptFile([
+      { at: 0, pos: 20 },
+      { at: 3000, pos: 80 },
+      { at: 6000, pos: 20 },
+      { at: 9000, pos: 80 },
+      { at: 12000, pos: 20 },
+    ]));
+
+    await findTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "Loop pattern" }));
+    expect(screen.getByLabelText("Current trim selection length")).toHaveTextContent("Selection length 00:12");
+    expect(screen.getByText(/Active timing remains as selected/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Import as loop pattern" }));
+
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
+    const [file, kind] = onImport.mock.calls[0] as [File, string];
+    expect(kind).toBe("pattern");
+    const actions = (JSON.parse(await readFileText(file)) as { actions: Array<{ at: number }> }).actions;
+    expect(actions[actions.length - 1].at).toBe(12000);
+  });
+
+  it("blocks loop selections that exceed the backend essential-knot limit", async () => {
+    render(<MotionImport locked={false} importing={false} onImport={vi.fn()} />);
+    pickFile(funscriptFile(Array.from({ length: 260 }, (_, index) => ({
+      at: index * 50,
+      pos: index % 2 === 0 ? 0 : 100,
+    }))));
+
+    await findTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "Loop pattern" }));
+    expect(screen.getByText("This loop has 260 essential reversal knots; trim to a simpler section with 255 or fewer."))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import as loop pattern" })).toBeDisabled();
+  });
+
   it("reports unusable files instead of submitting them", async () => {
     const onImport = vi.fn();
     render(<MotionImport locked={false} importing={false} onImport={onImport} />);
