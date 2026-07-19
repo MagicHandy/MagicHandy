@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EngineSnapshot, LibraryProgram } from "../api/types";
-import { DownloadIcon, PauseIcon, PlayIcon, StopIcon, TrashIcon, UploadIcon } from "../shell/icons";
+import { DownloadIcon, PauseIcon, PlayIcon, StopIcon, TrashIcon } from "../shell/icons";
 import { formatClock } from "../util/format";
 import { libraryActionKey, type LibraryBusyKeys } from "./library-actions";
 import { PatternCurve } from "./PatternCurve";
@@ -12,7 +12,6 @@ interface Props {
   offline: boolean;
   busyKeys: LibraryBusyKeys;
   maxIntensity: number;
-  onImport: (file: File, asKind: "pattern" | "program") => Promise<void>;
   onPlay: (id: string, intensity: number) => Promise<void>;
   onPause: () => Promise<void>;
   onResume: () => Promise<void>;
@@ -21,10 +20,8 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
-export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, maxIntensity, onImport, onPlay, onPause, onResume, onStop, onExport, onDelete }: Props) {
+export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, maxIntensity, onPlay, onPause, onResume, onStop, onExport, onDelete }: Props) {
   const intensityCap = clampIntensityCap(maxIntensity);
-  const importing = busyKeys.has(libraryActionKey.import);
-  const [importAs, setImportAs] = useState<"pattern" | "program">("program");
   const [intensity, setIntensity] = useState(Math.min(30, intensityCap));
   const activeProgram = engine?.target?.program_id;
   const rawPhase = Number.isFinite(engine?.phase) ? engine?.phase ?? 0 : 0;
@@ -45,18 +42,6 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
     <section className="library-view" aria-label="Programs and funscripts">
       {programs.length > 0 && <h2 className="visually-hidden">Programs</h2>}
       <div className="program-toolbar">
-        <div className="segmented compact-segmented" role="group" aria-label="Import as">
-          <button type="button" aria-pressed={importAs === "program"} data-active={importAs === "program" || undefined} onClick={() => setImportAs("program")}>Program</button>
-          <button type="button" aria-pressed={importAs === "pattern"} data-active={importAs === "pattern" || undefined} onClick={() => setImportAs("pattern")}>Loop pattern</button>
-        </div>
-        <label className="btn btn-secondary file-button" aria-disabled={locked || importing}>
-          <UploadIcon /> {importing ? "Importing" : "Import file"}
-          <input type="file" accept=".funscript,.json" disabled={locked || importing} onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.currentTarget.value = "";
-            if (file) void onImport(file, importAs);
-          }} />
-        </label>
         <label className="inline-slider">
           <span>Intensity <strong>{intensity}%</strong></span>
           <input type="range" min={1} max={intensityCap} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} />
@@ -93,7 +78,7 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
             </div>
           </article>;
         })}
-        {programs.length === 0 && <div className="empty-state compact-empty"><h2>No programs imported</h2></div>}
+        {programs.length === 0 && <div className="empty-state compact-empty"><h2>No programs imported</h2><p>Use the Import tab to bring in a funscript or share file.</p></div>}
       </div>
     </section>
   );

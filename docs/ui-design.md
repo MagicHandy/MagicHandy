@@ -443,7 +443,11 @@ settings UI. Server-side chat continuity remains Phase 12 with ADR 0003.
 The library closes the planned pattern/training/player surface without copying
 the reference app's visual density or creating a second motion model. Browse
 exposes enabled state and visible weights; Programs keeps finite funscripts
-separate from loops; Author reduces freehand input to editable knots; Training
+separate from loops; Import owns file intake — funscripts render a client-side
+trim timeline (dual-thumb selection, mm:ss readouts) with a program/loop-pattern
+choice before the trimmed selection is submitted through the normal validated
+import endpoint, while MagicHandy share files import as-is; Author reduces
+freehand input to editable knots; Training
 auditions the same enabled catalog with original/smooth/crisp feel choices and
 reversible ratings. Every rendered curve comes from backend preview samples
 produced by the playback interpolator. Playback controls remain controller-

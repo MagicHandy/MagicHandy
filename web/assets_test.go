@@ -66,7 +66,7 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 		"Deterministic fallback active",
 		"Backend preview",
 		"Saved knots",
-		"Import file",
+		"Import motion content",
 		"Auto-disable at low weight",
 	} {
 		if !strings.Contains(js, fragment) {
