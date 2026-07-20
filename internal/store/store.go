@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 11
+	CurrentSchemaVersion = 12
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -478,6 +478,11 @@ var migrations = [][]string{
 		`CREATE INDEX IF NOT EXISTS media_videos_missing_name
 			ON media_videos(missing, display_name, id)`,
 	},
+	// v11 -> v12: durable chat sessions. Existing global history is retained
+	// as one saved conversation; per-session cursors prevent one tab from
+	// consuming another conversation's tail. Run diagnostics are bounded JSON
+	// attached to the visible assistant row, never a prompt or credential dump.
+	{`SELECT 1`},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -518,6 +523,11 @@ func (db *DB) migrate(ctx context.Context) error {
 					return fmt.Errorf("reconcile SQLite schema at v%d: %w", next+1, err)
 				}
 			}
+			if next+1 == 12 {
+				if err := migrateChatSessions(ctx, tx); err != nil {
+					return fmt.Errorf("migrate chat sessions at v%d: %w", next+1, err)
+				}
+			}
 			if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", next+1)); err != nil {
 				return fmt.Errorf("record SQLite schema version %d: %w", next+1, err)
 			}
@@ -526,6 +536,135 @@ func (db *DB) migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// migrateChatSessions is deliberately introspective. Migration tests and the
+// Rockfire reconciliation can present a database whose user_version was
+// rewound while some newer tables remain; treating that as an ordinary v11
+// file must not duplicate or destroy those rows.
+func migrateChatSessions(ctx context.Context, tx *sql.Tx) error {
+	activeID, err := ensureChatWorkspace(ctx, tx)
+	if err != nil {
+		return err
+	}
+	return migrateChatSessionRows(ctx, tx, activeID)
+}
+
+func ensureChatWorkspace(ctx context.Context, tx *sql.Tx) (string, error) {
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS chat_sessions (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL,
+			saved INTEGER NOT NULL DEFAULT 0 CHECK (saved IN (0, 1)),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS chat_workspace (
+			id TEXT PRIMARY KEY CHECK (id = 'current'),
+			active_session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE RESTRICT,
+			updated_at TEXT NOT NULL
+		)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return "", err
+		}
+	}
+
+	var activeID string
+	err := tx.QueryRowContext(ctx, `
+		SELECT s.id
+		FROM chat_workspace w JOIN chat_sessions s ON s.id = w.active_session_id
+		WHERE w.id = 'current'
+	`).Scan(&activeID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	if activeID == "" {
+		err = tx.QueryRowContext(ctx, `SELECT id FROM chat_sessions ORDER BY updated_at DESC, id DESC LIMIT 1`).Scan(&activeID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+	}
+	if activeID == "" {
+		activeID = "legacy"
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO chat_sessions(id, title, saved, created_at, updated_at)
+			SELECT ?,
+				CASE WHEN EXISTS(SELECT 1 FROM messages) THEN 'Previous conversation' ELSE 'New chat' END,
+				CASE WHEN EXISTS(SELECT 1 FROM messages) THEN 1 ELSE 0 END,
+				COALESCE((SELECT MIN(created_at) FROM messages), ?),
+				COALESCE((SELECT MAX(created_at) FROM messages), ?)
+		`, activeID, time.Now().UTC().Format(time.RFC3339Nano), time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return "", err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO chat_workspace(id, active_session_id, updated_at)
+		VALUES('current', ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			active_session_id = excluded.active_session_id,
+			updated_at = excluded.updated_at
+	`, activeID, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return "", err
+	}
+	return activeID, nil
+}
+
+func migrateChatSessionRows(ctx context.Context, tx *sql.Tx, activeID string) error {
+	hasSessionID, err := columnExists(ctx, tx, "messages", "session_id")
+	if err != nil {
+		return err
+	}
+	if !hasSessionID {
+		for _, statement := range []string{
+			`ALTER TABLE messages RENAME TO messages_v11`,
+			`CREATE TABLE messages (
+				seq INTEGER PRIMARY KEY AUTOINCREMENT,
+				session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+				role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+				content TEXT NOT NULL,
+				client_id TEXT NOT NULL DEFAULT '',
+				diagnostics_json TEXT NOT NULL DEFAULT '{}',
+				created_at TEXT NOT NULL
+			)`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO messages(seq, session_id, role, content, client_id, diagnostics_json, created_at)
+			SELECT seq, ?, role, content, client_id, '{}', created_at FROM messages_v11
+		`, activeID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DROP TABLE messages_v11`); err != nil {
+			return err
+		}
+	}
+
+	for _, statement := range []string{
+		`CREATE INDEX IF NOT EXISTS messages_session_seq ON messages(session_id, seq)`,
+		`CREATE INDEX IF NOT EXISTS chat_sessions_saved_updated ON chat_sessions(saved DESC, updated_at DESC, id)`,
+		`CREATE TABLE IF NOT EXISTS chat_session_cursors (
+			client_id TEXT NOT NULL,
+			session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+			last_seq INTEGER NOT NULL DEFAULT 0,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(client_id, session_id)
+		)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO chat_session_cursors(client_id, session_id, last_seq, updated_at)
+		SELECT client_id, ?, last_seq, updated_at FROM client_cursors
+	`, activeID); err != nil {
+		return err
 	}
 	return nil
 }

@@ -22,6 +22,7 @@ const SECTIONS = [
   { id: "device", label: "Device" },
   { id: "media", label: "Media library" },
   { id: "model", label: "Model" },
+  { id: "chat", label: "Chat" },
   { id: "voice", label: "Voice" },
   { id: "prompts", label: "Prompts & memory" },
   { id: "diagnostics", label: "Diagnostics" },
@@ -86,6 +87,16 @@ export function SettingsRoute() {
   function patchVoice(p: Partial<PublicSettings["voice"]>) {
     setS((cur) => (cur ? { ...cur, voice: { ...cur.voice, ...p } } : cur));
   }
+  function patchChat(p: Partial<NonNullable<PublicSettings["chat"]>>) {
+    setS((cur) => (cur ? {
+      ...cur,
+      chat: {
+        startup_behavior: cur.chat?.startup_behavior ?? "previous",
+        keep_unsaved_on_exit: cur.chat?.keep_unsaved_on_exit ?? false,
+        ...p,
+      },
+    } : cur));
+  }
 
   async function save() {
     if (!s || savingRef.current) return;
@@ -138,6 +149,10 @@ export function SettingsRoute() {
         neutts_sampler_seed: s.voice?.neutts_sampler_seed ?? 3,
         ...(elevenLabsKey ? { elevenlabs_api_key: elevenLabsKey } : {}),
         clear_elevenlabs_key: elevenLabsKey ? false : clearElevenLabsKey,
+      },
+      chat: {
+        startup_behavior: s.chat?.startup_behavior ?? "previous",
+        keep_unsaved_on_exit: s.chat?.keep_unsaved_on_exit ?? false,
       },
       diagnostics: s.diagnostics,
       clear_connection_key: connectionKey ? false : clearKey,
@@ -200,6 +215,7 @@ export function SettingsRoute() {
     asr_providers: [],
     parakeet_sources: [],
     neutts_sampling_modes: [],
+    chat_startup_behaviors: [],
   };
   const sel = (value: string, onChange: (v: string) => void, options: string[] = []) => (
     <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
@@ -270,6 +286,45 @@ export function SettingsRoute() {
             locked={locked}
             onChange={patchMedia}
           />
+        )}
+
+        {section === "chat" && (
+          <>
+            <h2 className="section-title">Chat sessions</h2>
+            <label className="field">
+              <span className="label">When MagicHandy starts</span>
+              <select
+                value={s.chat?.startup_behavior ?? "previous"}
+                disabled={locked}
+                onChange={(event) => patchChat({
+                  startup_behavior: event.target.value,
+                  ...(event.target.value === "new" ? { keep_unsaved_on_exit: false } : {}),
+                })}
+              >
+                {(opt.chat_startup_behaviors ?? ["previous", "new"]).map((behavior) => (
+                  <option key={behavior} value={behavior}>{behavior === "new" ? "Start a new chat" : "Open the previous chat"}</option>
+                ))}
+              </select>
+              <span className="hint-block">Previous restores the last retained chat. New creates a blank, unsaved tab on every launch.</span>
+            </label>
+            <label className="toggle-line">
+              <span className="toggle">
+                <input
+                  type="checkbox"
+                  checked={s.chat?.keep_unsaved_on_exit ?? false}
+                  disabled={locked || s.chat?.startup_behavior === "new"}
+                  onChange={(event) => patchChat({ keep_unsaved_on_exit: event.target.checked })}
+                />
+                <span className="track" aria-hidden="true" />
+              </span>
+              <span>
+                Keep an unsaved current chat after closing MagicHandy
+                <small>{s.chat?.startup_behavior === "new"
+                  ? "Starting with a new chat always removes the prior unsaved draft."
+                  : "Off by default. Saved tabs are always kept; use Save chat from the tab menu or its right-click menu."}</small>
+              </span>
+            </label>
+          </>
         )}
 
         {section === "voice" && <VoiceSettingsPanel

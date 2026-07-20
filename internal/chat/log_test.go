@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -185,5 +186,234 @@ func TestCursorCannotAdvancePastCurrentLogHead(t *testing.T) {
 	}
 	if len(unseen) != 1 || unseen[0].Seq != second {
 		t.Fatalf("future message was skipped after cursor clamp: %+v", unseen)
+	}
+}
+
+func TestChatSessionsKeepMessagesAndCursorsIsolated(t *testing.T) {
+	log := openTestLog(t)
+	pair := seedChatSessionPair(t, log)
+
+	firstMessages, err := log.AfterSession(pair.firstID, 0, 0)
+	if err != nil || len(firstMessages) != 1 || firstMessages[0].Seq != pair.firstSeq {
+		t.Fatalf("first messages = %+v, %v", firstMessages, err)
+	}
+	if firstMessages[0].Diagnostics == nil || firstMessages[0].Diagnostics.Model != "gemma" {
+		t.Fatalf("message diagnostics were not retained: %+v", firstMessages[0])
+	}
+	secondMessages, err := log.AfterSession(pair.second.ID, 0, 0)
+	if err != nil || len(secondMessages) != 1 || secondMessages[0].Seq != pair.secondSeq {
+		t.Fatalf("second messages = %+v, %v", secondMessages, err)
+	}
+
+	if _, err := log.AdvanceCursorSession("client", pair.firstID, pair.firstSeq); err != nil {
+		t.Fatalf("advance first cursor: %v", err)
+	}
+	firstCursor, _ := log.CursorSession("client", pair.firstID)
+	secondCursor, _ := log.CursorSession("client", pair.second.ID)
+	if firstCursor != pair.firstSeq || secondCursor != 0 {
+		t.Fatalf("per-session cursors = first:%d second:%d", firstCursor, secondCursor)
+	}
+}
+
+type chatSessionPair struct {
+	firstID   string
+	firstSeq  int64
+	second    Session
+	secondSeq int64
+}
+
+func seedChatSessionPair(t *testing.T, log *MessageLog) chatSessionPair {
+	t.Helper()
+	firstID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	firstSeq, err := log.AppendTo(firstID, MessageRoleUser, "A useful first conversation", "client", &MessageDiagnostics{Source: "interactive", Model: "gemma"})
+	if err != nil {
+		t.Fatalf("append first session: %v", err)
+	}
+	first, err := log.SaveSession(firstID)
+	if err != nil {
+		t.Fatalf("save first session: %v", err)
+	}
+	if !first.Saved || first.Title != "A useful first conversation" {
+		t.Fatalf("saved session = %+v", first)
+	}
+
+	second, err := log.CreateSession(false)
+	if err != nil {
+		t.Fatalf("create second session: %v", err)
+	}
+	if !second.Active || second.Saved || second.ID == firstID {
+		t.Fatalf("new session = %+v", second)
+	}
+	secondSeq, err := log.AppendTo(second.ID, MessageRoleAssistant, "Second session reply", "", nil)
+	if err != nil {
+		t.Fatalf("append second session: %v", err)
+	}
+	return chatSessionPair{firstID: firstID, firstSeq: firstSeq, second: second, secondSeq: secondSeq}
+}
+
+func TestChatStartupPolicyDropsUnsavedUnlessExplicitlyKept(t *testing.T) {
+	log := openTestLog(t)
+	oldID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := log.Append("user", "private transient conversation", "client"); err != nil {
+		t.Fatalf("append transient chat: %v", err)
+	}
+
+	replacement, err := log.ReconcileStartup("previous", false)
+	if err != nil {
+		t.Fatalf("reconcile private startup: %v", err)
+	}
+	if replacement.ID == oldID || replacement.MessageCount != 0 || replacement.Saved {
+		t.Fatalf("replacement session = %+v", replacement)
+	}
+	if _, err := log.Session(oldID); !errors.Is(err, ErrChatSessionNotFound) {
+		t.Fatalf("unsaved prior session error = %v, want not found", err)
+	}
+
+	if _, err := log.Append("user", "retain this draft", "client"); err != nil {
+		t.Fatalf("append retained draft: %v", err)
+	}
+	kept, err := log.ReconcileStartup("previous", true)
+	if err != nil {
+		t.Fatalf("reconcile retained startup: %v", err)
+	}
+	if kept.ID != replacement.ID || kept.MessageCount != 1 {
+		t.Fatalf("retained session = %+v", kept)
+	}
+}
+
+func TestChatShutdownPolicyDropsUnsavedUnlessExplicitlyKept(t *testing.T) {
+	log := openTestLog(t)
+	discardedID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := log.Append("user", "discard on clean shutdown", "client"); err != nil {
+		t.Fatalf("append discarded draft: %v", err)
+	}
+	if err := log.ReconcileShutdown(false); err != nil {
+		t.Fatalf("reconcile private shutdown: %v", err)
+	}
+	if _, err := log.Session(discardedID); !errors.Is(err, ErrChatSessionNotFound) {
+		t.Fatalf("discarded shutdown session error = %v, want not found", err)
+	}
+
+	keptID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("replacement session: %v", err)
+	}
+	if _, err := log.Append("user", "keep on clean shutdown", "client"); err != nil {
+		t.Fatalf("append retained draft: %v", err)
+	}
+	if err := log.ReconcileShutdown(true); err != nil {
+		t.Fatalf("reconcile retained shutdown: %v", err)
+	}
+	if kept, err := log.Session(keptID); err != nil || kept.MessageCount != 1 {
+		t.Fatalf("retained shutdown session = %+v, %v", kept, err)
+	}
+}
+
+func TestActivateSessionCanDiscardTheUnsavedWorkingTab(t *testing.T) {
+	log := openTestLog(t)
+	savedID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := log.Append("user", "saved conversation", "client"); err != nil {
+		t.Fatalf("append saved chat: %v", err)
+	}
+	if _, err := log.SaveSession(savedID); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	draft, err := log.CreateSession(false)
+	if err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	if _, err := log.Append("user", "discard this draft", "client"); err != nil {
+		t.Fatalf("append draft: %v", err)
+	}
+	if _, err := log.ActivateSession(savedID, false); !errors.Is(err, ErrUnsavedSessionConflict) {
+		t.Fatalf("activate without resolving draft error = %v, want unsaved conflict", err)
+	}
+	if active, err := log.ActiveSessionID(); err != nil || active != draft.ID {
+		t.Fatalf("active session after rejected switch = %q, %v; want %q", active, err, draft.ID)
+	}
+	if _, err := log.ActivateSession(savedID, true); err != nil {
+		t.Fatalf("activate saved session: %v", err)
+	}
+	if _, err := log.Session(draft.ID); !errors.Is(err, ErrChatSessionNotFound) {
+		t.Fatalf("discarded draft error = %v, want not found", err)
+	}
+}
+
+func TestCreateSessionRequiresResolvingANonemptyUnsavedChat(t *testing.T) {
+	log := openTestLog(t)
+	oldID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := log.Append("user", "keep or discard me explicitly", "client"); err != nil {
+		t.Fatalf("append draft: %v", err)
+	}
+
+	if _, err := log.CreateSession(false); !errors.Is(err, ErrUnsavedSessionConflict) {
+		t.Fatalf("create without resolving draft error = %v, want unsaved conflict", err)
+	}
+	sessions, err := log.Sessions()
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != oldID || !sessions[0].Active {
+		t.Fatalf("sessions after rejected create = %+v", sessions)
+	}
+
+	replacement, err := log.CreateSession(true)
+	if err != nil {
+		t.Fatalf("create with discard: %v", err)
+	}
+	if replacement.ID == oldID || !replacement.Active {
+		t.Fatalf("replacement session = %+v", replacement)
+	}
+}
+
+func TestStartupKeepsAtMostOneUnsavedWorkingTab(t *testing.T) {
+	log := openTestLog(t)
+	staleID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := log.Append("user", "stale draft", "client"); err != nil {
+		t.Fatalf("append stale draft: %v", err)
+	}
+	currentID := "current-draft"
+	now := nowUTC()
+	if _, err := log.db.SQL().Exec(`
+		INSERT INTO chat_sessions(id, title, saved, created_at, updated_at)
+		VALUES(?, 'New chat', 0, ?, ?)
+	`, currentID, now, now); err != nil {
+		t.Fatalf("insert legacy current draft: %v", err)
+	}
+	if _, err := log.db.SQL().Exec(`UPDATE chat_workspace SET active_session_id = ?, updated_at = ? WHERE id = 'current'`, currentID, now); err != nil {
+		t.Fatalf("select legacy current draft: %v", err)
+	}
+	if _, err := log.AppendTo(currentID, "user", "current draft", "client", nil); err != nil {
+		t.Fatalf("append current draft: %v", err)
+	}
+
+	kept, err := log.ReconcileStartup("previous", true)
+	if err != nil {
+		t.Fatalf("reconcile startup: %v", err)
+	}
+	if kept.ID != currentID {
+		t.Fatalf("active session = %q, want %q", kept.ID, currentID)
+	}
+	if _, err := log.Session(staleID); !errors.Is(err, ErrChatSessionNotFound) {
+		t.Fatalf("inactive unsaved session error = %v, want not found", err)
 	}
 }

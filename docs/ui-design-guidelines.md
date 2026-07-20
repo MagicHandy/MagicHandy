@@ -215,9 +215,23 @@ component, engine-driven, with position labeled as a commanded estimate.
 
 ### Chat
 
+- The Chat route fills the remaining workspace beside the persistent nav rail.
+  Its conversation and compact control sidebar share the available height; do
+  not reapply the ordinary route max-width to this workspace.
+- Session tabs are a 43px restrained strip, ordered by creation time so active
+  changes do not move targets. Use an underline and border for active state, an
+  amber dot plus accessible text for unsaved state, horizontal overflow for
+  long lists, and arrow/Home/End keyboard focus. New Chat is an icon command;
+  Save/Delete live in the visible overflow menu, with right-click as a shortcut
+  rather than the only path.
+- New Chat always confirms the active session. Switching away from the one
+  unsaved working tab requires Save or discard; Autopilot stops before the
+  backend changes session. The dialog traps focus, closes with Escape when no
+  mutation is pending, and never covers the shell-level Emergency Stop.
 - Message row: 30px avatar gutter + body; assistant left, user right (mirror the
-  grid). Avatar 30px, assistant uses the accent gradient, user uses
-  `--user-bubble`.
+  grid). Avatar 30px, assistant uses solid deep steel with an accent border,
+  user uses `--user-bubble`. Assistant avatars with run provenance are focusable
+  and expose the same diagnostic tooltip on hover and keyboard focus.
 - Bubble: `--radius-sm` with the opposite bottom corner squared to `4px` (the
   tail); assistant `--surface-2`/`--line`, user `--user-bubble`/`--user-bubble-line`;
   `--shadow-soft`. Speaker label + timestamp above in `--muted` `0.72rem`.

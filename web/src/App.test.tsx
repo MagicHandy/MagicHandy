@@ -21,6 +21,7 @@ const baseState = {
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
     voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, neutts_sampling_mode: "fixed", neutts_sampler_seed: 3, elevenlabs_key_set: false },
+    chat: { startup_behavior: "previous", keep_unsaved_on_exit: false },
     diagnostics: { verbosity: "normal" },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth", "intiface"],
@@ -35,12 +36,14 @@ const baseState = {
       asr_providers: ["none", "parakeet_managed", "openai_compatible", "custom"],
       parakeet_sources: ["app_managed", "custom_local"],
       neutts_sampling_modes: ["fixed", "random"],
+      chat_startup_behaviors: ["previous", "new"],
     },
   },
   controller: { active: true, read_only: false },
   motion: { available: true },
   modes: {},
   memory: { enabled: true, memories: [] },
+  chat: { available: true, latest_seq: 0, active_session_id: "chat-test" },
 };
 
 const libraryFixture = {
@@ -156,8 +159,12 @@ function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolea
       return jsonRes(intiface);
     }
     if (u.includes("/api/transport/bluetooth/status")) return jsonRes({ status: "success", dispatch_owner: state.settings.device.hsp_dispatch_owner, bluetooth: state.bluetooth_bridge ?? {} });
-    if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0 });
-    if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length });
+    if (u.includes("/api/chat/sessions")) return jsonRes({
+      active_session_id: "chat-test",
+      sessions: [{ id: "chat-test", title: "New chat", saved: false, active: true, message_count: chatLog.length, latest_seq: chatLog.length, created_at: "now", updated_at: "now" }],
+    });
+    if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0, session_id: "chat-test" });
+    if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length, session_id: "chat-test" });
     if (u.includes("/api/voice/status")) return jsonRes(opts.voiceStatus ?? {});
     if (u.includes("/api/host/path-picker")) return jsonRes({ path: opts.pickedPath ?? "C:\\selected\\file.exe", canceled: false });
     if (u.includes("/api/library")) return jsonRes({ library: opts.library ?? libraryFixture });
@@ -1230,7 +1237,7 @@ describe("app shell safety invariants", () => {
 describe("chat stream API", () => {
   it("throws JSON error responses before trying to read an SSE body", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ error: "read-only client" }) } as Response)));
-    await expect(streamChat("hello", [], () => undefined)).rejects.toThrow("read-only client");
+    await expect(streamChat("chat-test", "hello", [], () => undefined)).rejects.toThrow("read-only client");
   });
 
   it("parses final message events", async () => {
@@ -1242,7 +1249,7 @@ describe("chat stream API", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
     const events: Array<{ event: string }> = [];
-    await streamChat("hello", [], (event) => events.push(event));
+    await streamChat("chat-test", "hello", [], (event) => events.push(event));
     expect(events).toEqual([
       expect.objectContaining({ event: "message" }),
       expect.objectContaining({ event: "done" }),
@@ -1262,7 +1269,7 @@ describe("chat stream API", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
     const events: Array<{ event: string; data: unknown }> = [];
 
-    await streamChat("hello", [], (event) => events.push(event));
+    await streamChat("chat-test", "hello", [], (event) => events.push(event));
 
     expect(events).toEqual([
       { event: "delta", data: { text: "Hello" } },
@@ -1279,7 +1286,7 @@ describe("chat stream API", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
 
-    await expect(streamChat("hello", [], () => undefined)).rejects.toThrow("malformed JSON");
+    await expect(streamChat("chat-test", "hello", [], () => undefined)).rejects.toThrow("malformed JSON");
   });
 
   it("rejects a stream that closes before its terminal event", async () => {
@@ -1291,6 +1298,6 @@ describe("chat stream API", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
 
-    await expect(streamChat("hello", [], () => undefined)).rejects.toThrow("before completion");
+    await expect(streamChat("chat-test", "hello", [], () => undefined)).rejects.toThrow("before completion");
   });
 });

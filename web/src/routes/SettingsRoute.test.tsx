@@ -85,6 +85,7 @@ function settings(verbosity: string): PublicSettings {
       neutts_sampling_mode: "fixed",
       neutts_sampler_seed: 3,
     },
+    chat: { startup_behavior: "previous", keep_unsaved_on_exit: false },
     diagnostics: { verbosity },
     options: {
       hsp_dispatch_owners: ["cloud_rest", "browser_bluetooth", "intiface"],
@@ -100,6 +101,7 @@ function settings(verbosity: string): PublicSettings {
       asr_providers: ["none"],
       parakeet_sources: ["app_managed"],
       neutts_sampling_modes: ["fixed", "random"],
+      chat_startup_behaviors: ["previous", "new"],
     },
   } as unknown as PublicSettings;
 }
@@ -185,5 +187,26 @@ describe("SettingsRoute", () => {
       "Settings were reset, but the active runtime could not be stopped.",
       "error",
     );
+  });
+
+  it("makes clean-start behavior incompatible with retaining an unsaved draft", async () => {
+    app.hash = "#/settings/chat";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const startup = await screen.findByRole("combobox", { name: /When MagicHandy starts/ });
+    const retain = screen.getByRole("checkbox", { name: /Keep an unsaved current chat/ });
+    expect(retain).toBeEnabled();
+
+    fireEvent.change(startup, { target: { value: "new" } });
+    expect(retain).not.toBeChecked();
+    expect(retain).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].chat).toEqual({
+      startup_behavior: "new",
+      keep_unsaved_on_exit: false,
+    });
   });
 });

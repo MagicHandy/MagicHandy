@@ -47,6 +47,11 @@ const (
 	DiagnosticsVerbosityDebug = "debug"
 	// DiagnosticsVerbosityTrace records the most verbose diagnostics output.
 	DiagnosticsVerbosityTrace = "trace"
+
+	// ChatStartupPrevious restores the most recently active retained chat.
+	ChatStartupPrevious = "previous"
+	// ChatStartupNew starts each process with a new unsaved chat.
+	ChatStartupNew = "new"
 )
 
 const (
@@ -138,6 +143,7 @@ type Settings struct {
 	Motion      MotionSettings      `json:"motion"`
 	LLM         LLMSettings         `json:"llm"`
 	Voice       VoiceSettings       `json:"voice"`
+	Chat        ChatSettings        `json:"chat"`
 	Diagnostics DiagnosticsSettings `json:"diagnostics"`
 }
 
@@ -352,6 +358,13 @@ type DiagnosticsSettings struct {
 	Verbosity string `json:"verbosity"`
 }
 
+// ChatSettings controls process-start restoration. Saved chats are always
+// retained; preserving an unsaved current chat is an explicit privacy choice.
+type ChatSettings struct {
+	StartupBehavior   string `json:"startup_behavior"`
+	KeepUnsavedOnExit bool   `json:"keep_unsaved_on_exit"`
+}
+
 // PublicSettings is the API-safe settings view. It intentionally omits secrets.
 type PublicSettings struct {
 	Version     int                       `json:"version"`
@@ -361,6 +374,7 @@ type PublicSettings struct {
 	Motion      MotionSettings            `json:"motion"`
 	LLM         LLMSettings               `json:"llm"`
 	Voice       PublicVoiceSettings       `json:"voice"`
+	Chat        ChatSettings              `json:"chat"`
 	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
 	Options     PublicSettingsOptionHints `json:"options"`
 }
@@ -390,6 +404,7 @@ type PublicSettingsOptionHints struct {
 	ASRProviders            []string `json:"asr_providers"`
 	ParakeetSources         []string `json:"parakeet_sources"`
 	NeuTTSSamplingModes     []string `json:"neutts_sampling_modes"`
+	ChatStartupBehaviors    []string `json:"chat_startup_behaviors"`
 }
 
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
@@ -435,6 +450,7 @@ type SettingsUpdate struct {
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMUpdate           `json:"llm"`
 	Voice              VoiceUpdate         `json:"voice"`
+	Chat               *ChatSettings       `json:"chat,omitempty"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
@@ -495,6 +511,9 @@ func DefaultSettings() Settings {
 			NeuTTSSamplingMode: NeuTTSSamplingFixed,
 			NeuTTSSamplerSeed:  DefaultNeuTTSSamplerSeed,
 		},
+		Chat: ChatSettings{
+			StartupBehavior: ChatStartupPrevious,
+		},
 		Diagnostics: DiagnosticsSettings{
 			Verbosity: DiagnosticsVerbosityNormal,
 		},
@@ -520,6 +539,7 @@ func (s Settings) Public() PublicSettings {
 		Motion:      s.Motion,
 		LLM:         s.LLM,
 		Voice:       publicVoiceSettings(s.Voice),
+		Chat:        s.Chat,
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -580,6 +600,10 @@ func (s Settings) Public() PublicSettings {
 			NeuTTSSamplingModes: []string{
 				NeuTTSSamplingFixed,
 				NeuTTSSamplingRandom,
+			},
+			ChatStartupBehaviors: []string{
+				ChatStartupPrevious,
+				ChatStartupNew,
 			},
 		},
 	}
@@ -659,6 +683,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		MotionCapabilities:   capabilities,
 	})
 	next.Voice = applyVoiceUpdate(s.Voice, update.Voice)
+	if update.Chat != nil {
+		next.Chat = *update.Chat
+	}
 	next.Diagnostics = update.Diagnostics
 
 	if update.Voice.ClearElevenLabsKey {
@@ -824,6 +851,12 @@ func validateSettings(settings Settings) error {
 	if !oneOf(settings.Diagnostics.Verbosity, DiagnosticsVerbosityNormal, DiagnosticsVerbosityDebug, DiagnosticsVerbosityTrace) {
 		return fmt.Errorf("unknown diagnostics verbosity %q", settings.Diagnostics.Verbosity)
 	}
+	if !oneOf(settings.Chat.StartupBehavior, ChatStartupPrevious, ChatStartupNew) {
+		return fmt.Errorf("unknown chat startup behavior %q", settings.Chat.StartupBehavior)
+	}
+	if settings.Chat.StartupBehavior == ChatStartupNew && settings.Chat.KeepUnsavedOnExit {
+		return errors.New("a new chat at startup cannot also retain the previous unsaved chat")
+	}
 	if err := validateMotionSettings(settings.Motion); err != nil {
 		return err
 	}
@@ -895,6 +928,9 @@ func applyMissingDefaults(settings Settings) Settings {
 		settings.LLM.ReasoningMode = defaults.LLM.ReasoningMode
 	}
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
+	if settings.Chat.StartupBehavior == "" {
+		settings.Chat.StartupBehavior = defaults.Chat.StartupBehavior
+	}
 	settings.Media = normalizeMediaSettings(settings.Media)
 	settings.LLM = normalizeLLMStrings(settings.LLM)
 	settings.Voice = normalizeVoiceStrings(settings.Voice)

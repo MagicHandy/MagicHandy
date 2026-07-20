@@ -15,6 +15,7 @@ import type {
   IntifaceTransportSnapshot,
   ChatHistoryMessage,
   ChatMessagesResponse,
+  ChatSessionsResponse,
   ConnectionCheckResult,
   PromptSetsPayload,
   PatternInput,
@@ -259,11 +260,25 @@ export const api = {
       ...payload,
     }),
 
-  // Shared chat log: the canonical history. Reads are non-destructive; each
-  // client advances only its own cursor.
-  getChatMessages: (after = 0) =>
-    request<ChatMessagesResponse>("GET", `/api/chat/messages${after > 0 ? `?after=${after}` : ""}`),
-  advanceChatCursor: (seq: number) => request<{ cursor: number }>("POST", "/api/chat/cursor", { seq }),
+  // Backend-owned chat sessions and their non-destructive per-client cursors.
+  getChatSessions: () => request<ChatSessionsResponse>("GET", "/api/chat/sessions"),
+  createChatSession: (discardCurrentUnsaved = false) =>
+    request<ChatSessionsResponse>("POST", "/api/chat/sessions", { discard_current_unsaved: discardCurrentUnsaved }),
+  activateChatSession: (sessionId: string, discardCurrentUnsaved = false) => {
+    const query = discardCurrentUnsaved ? "?discard_current_unsaved=true" : "";
+    return request<ChatSessionsResponse>("PUT", `/api/chat/sessions/${encodeURIComponent(sessionId)}/active${query}`, {});
+  },
+  saveChatSession: (sessionId: string) =>
+    request<ChatSessionsResponse>("PUT", `/api/chat/sessions/${encodeURIComponent(sessionId)}/save`, {}),
+  deleteChatSession: (sessionId: string) =>
+    request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
+  getChatMessages: (sessionId: string, after = 0) => {
+    const query = new URLSearchParams({ session_id: sessionId });
+    if (after > 0) query.set("after", String(after));
+    return request<ChatMessagesResponse>("GET", `/api/chat/messages?${query.toString()}`);
+  },
+  advanceChatCursor: (sessionId: string, seq: number) =>
+    request<{ cursor: number; session_id: string }>("POST", "/api/chat/cursor", { session_id: sessionId, seq }),
 
   // Voice workers (optional; the app runs fully without them).
   voiceStatus: () =>
@@ -367,6 +382,7 @@ async function requestWithSignal<T>(method: string, path: string, signal?: Abort
 
 // Chat is a POST SSE stream; parse named events off the response body.
 export async function streamChat(
+  sessionId: string,
   message: string,
   history: ChatHistoryMessage[],
   onEvent: (e: ChatStreamEvent) => void,
@@ -378,7 +394,7 @@ export async function streamChat(
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers,
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ session_id: sessionId, message, history }),
     signal,
   });
   if (!res.ok) {

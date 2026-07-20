@@ -118,6 +118,19 @@ conversation, while the control column holds the compact Autopilot session
 control, voice shortcuts, reverse/style motion behavior, and the motion
 visualizer. Autopilot Pause/Resume stays in that control sidebar and its
 generated lines appear in the conversation instead of a duplicate status card.
+The route uses the full remaining workspace width and height rather than the
+default content-width cap. A compact horizontal tab strip sits above the
+conversation: saved sessions remain available across restarts, while at most
+one unsaved working tab exists. Starting a new chat always confirms the active
+session; leaving an unsaved tab requires an explicit Save or discard choice.
+The same Save action is available in the visible tab menu and its right-click
+menu. Only one backend session is active, only that session can stream or own
+Autopilot, and session changes are rejected while a reply is in flight.
+Settings > Chat chooses new-versus-previous startup behavior and whether the
+current unsaved draft is retained after shutdown; saved tabs are unaffected.
+Starting clean always discards the prior draft, so its retention toggle is off
+and unavailable in that mode. A clean exit applies the choice immediately and
+the next startup repeats it after a crash.
 The testing-badged Manual motion group lives in `#/settings/diagnostics`; it
 identifies an active test from the backend motion target's `manual_ui` source,
 never from the generic engine-running flag. Starting a manual test stops any
@@ -130,7 +143,7 @@ limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
 Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
 the local media catalog and player, and
-`#/settings/device|media|model|voice|prompts|diagnostics` are sibling sections
+`#/settings/device|media|model|chat|voice|prompts|diagnostics` are sibling sections
 of the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the
 route tree so no navigation state can unmount it; backend loss shows the
@@ -235,7 +248,10 @@ hoc per-widget colors) are not.
 - **Chat messages have anatomy**: speaker label with timestamp, avatar chip,
   tail-cornered bubble with shadow, right/left role alignment, a streaming
   cursor while the model is generating, and a subtle entry animation. All
-  animation respects `prefers-reduced-motion`.
+  animation respects `prefers-reduced-motion`. Hovering or focusing an
+  assistant avatar reveals persisted non-secret response provenance (provider,
+  model, prompt set, elapsed time, parser/fallback state, and motion action)
+  without exposing prompt content, memories, raw requests, or credentials.
 - **Native controls render dark**: the `color-scheme` meta is `dark` so
   scrollbars, selects, and checkboxes match (a light scrollbar on a dark app
   is a bug), with thin themed scrollbars on top.
@@ -418,9 +434,10 @@ sections below; none remains an active parity regression:
 9. **Chat continuity.** The old app kept a server-side message log with
    per-client cursors; MagicHandy chat history was a 12-turn client array
    lost on reload and invisible to a second tab. **Closed by the Phase 13
-   delivery-ordering foundation** (ADR 0003): the SQLite `messages` log is
-   the canonical history, the panel seeds from it on load, other tabs pick
-   up new rows via the state poll, and each client advances only its own
+   delivery-ordering foundation** (ADR 0003), then extended to session tabs in
+   schema v12: SQLite chat sessions and messages are canonical, each panel
+   seeds from its selected session, other browser clients pick up active-session
+   rows via the state poll, and each client advances only its own per-session
    cursor (reads are never destructive).
 
 ### Post-Phase-10 shell pass

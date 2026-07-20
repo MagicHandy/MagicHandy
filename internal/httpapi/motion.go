@@ -474,6 +474,12 @@ func (s *Server) Close() {
 			s.voice.Shutdown()
 		}
 		if s.chatLog != nil {
+			settings, _ := s.store.Snapshot()
+			s.chatLifecycleMu.Lock()
+			if err := s.chatLog.ReconcileShutdown(settings.Chat.KeepUnsavedOnExit); err != nil {
+				s.logger.Warn("chat workspace did not reconcile cleanly during shutdown", "error", err)
+			}
+			s.chatLifecycleMu.Unlock()
 			_ = s.chatLog.Close()
 		}
 		if s.patterns != nil {
