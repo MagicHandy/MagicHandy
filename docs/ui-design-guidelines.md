@@ -248,8 +248,9 @@ label for a control.
 │ ▸ Chat       ├───────────────────────────────────────────────┤
 │   Preset     │                                                │
 │    Modes     │        routed workspace (one mounted)          │
-│   Pattern    │        Chat · Preset Modes · Library · Settings│
-│    Library   │                                                │
+│   Pattern    │        Chat · Modes · Library                  │
+│    Library   │        Videos · Settings                       │
+│   Videos     │                                                │
 │   Settings   │                                                │
 │ ──────────── │                                                │
 │ [ STOP  Esc ]│                                                │

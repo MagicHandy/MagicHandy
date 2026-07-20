@@ -172,7 +172,7 @@ export const api = {
   // Local video catalog. Streaming takes opaque catalog IDs and stays
   // read-only; scans and metadata backfill require the active controller.
   mediaVideos: (signal?: AbortSignal) => request<{ videos: MediaVideo[] }>("GET", "/api/media/videos", undefined, signal),
-  mediaScan: () => request<{ scan: MediaScanState }>("GET", "/api/media/scan"),
+  mediaScan: (signal?: AbortSignal) => request<{ scan: MediaScanState }>("GET", "/api/media/scan", undefined, signal),
   startMediaScan: () => request<{ scan: MediaScanState }>("POST", "/api/media/scan", {}),
   cancelMediaScan: () => request<{ scan: MediaScanState }>("DELETE", "/api/media/scan"),
   saveMediaDuration: (id: string, duration_ms: number) =>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { MediaScanState, MediaVideo } from "../api/types";
@@ -9,6 +9,7 @@ vi.mock("../api/client", () => ({
     mediaVideos: vi.fn(),
     mediaScan: vi.fn(),
     startMediaScan: vi.fn(),
+    cancelMediaScan: vi.fn(),
     saveMediaDuration: vi.fn(),
     mediaStreamURL: (id: string) => `/stream/${id}`,
   },
@@ -17,6 +18,7 @@ vi.mock("../api/client", () => ({
 const mediaVideos = vi.mocked(api.mediaVideos);
 const mediaScan = vi.mocked(api.mediaScan);
 const startMediaScan = vi.mocked(api.startMediaScan);
+const cancelMediaScan = vi.mocked(api.cancelMediaScan);
 
 const idleScan: MediaScanState = {
   running: false,
@@ -46,6 +48,7 @@ describe("VideoLibrary", () => {
     vi.resetAllMocks();
     mediaScan.mockResolvedValue({ scan: idleScan });
     startMediaScan.mockResolvedValue({ scan: { ...idleScan, running: true, cancellable: true } });
+    cancelMediaScan.mockResolvedValue({ scan: { ...idleScan, running: true, cancellable: false } });
   });
 
   it("searches the catalog and opens plain video playback without starting motion", async () => {
@@ -53,10 +56,11 @@ describe("VideoLibrary", () => {
       video("zeta", "Zeta session", "2026-07-18T12:00:00Z"),
       video("alpha", "Alpha session", "2026-07-19T12:00:00Z", true),
     ] });
-    render(<VideoLibrary active locked={false} />);
+    render(<VideoLibrary locked={false} />);
 
     const grid = await screen.findByRole("button", { name: "Play Alpha session" });
     expect(grid).toBeInTheDocument();
+    expect(within(grid).getByText("media", { selector: ".media-card-location" })).toHaveAttribute("title", "C:/media");
     fireEvent.change(screen.getByRole("searchbox", { name: "Search videos" }), { target: { value: "alpha" } });
     expect(screen.queryByRole("button", { name: "Play Zeta session" })).not.toBeInTheDocument();
 
@@ -72,7 +76,7 @@ describe("VideoLibrary", () => {
 
   it("offers an explicit scan from the empty state", async () => {
     mediaVideos.mockResolvedValue({ videos: [] });
-    render(<VideoLibrary active locked={false} />);
+    render(<VideoLibrary locked={false} />);
 
     const scanButton = await screen.findByRole("button", { name: "Scan library" });
     fireEvent.click(scanButton);
@@ -81,12 +85,49 @@ describe("VideoLibrary", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Scanning");
   });
 
+  it("keeps scan and cancel commands available when the catalog is populated", async () => {
+    mediaVideos.mockResolvedValue({ videos: [video("session", "Session", "2026-07-19T12:00:00Z")] });
+    render(<VideoLibrary locked={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Scan library" }));
+    await waitFor(() => expect(startMediaScan).toHaveBeenCalledOnce());
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel scan" }));
+
+    await waitFor(() => expect(cancelMediaScan).toHaveBeenCalledOnce());
+  });
+
+  it("keeps loaded videos visible when scan status is temporarily unavailable", async () => {
+    mediaVideos.mockResolvedValue({ videos: [video("session", "Session", "2026-07-19T12:00:00Z")] });
+    mediaScan.mockRejectedValueOnce(new Error("scan endpoint unavailable"));
+    render(<VideoLibrary locked={false} />);
+
+    expect(await screen.findByRole("button", { name: "Play Session" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("scan endpoint unavailable");
+  });
+
+  it("retries scan polling after a transient status failure", async () => {
+    vi.useFakeTimers();
+    mediaVideos.mockResolvedValue({ videos: [video("session", "Session", "2026-07-19T12:00:00Z")] });
+    mediaScan
+      .mockResolvedValueOnce({ scan: { ...idleScan, running: true, cancellable: true } })
+      .mockRejectedValueOnce(new Error("temporary scan failure"))
+      .mockResolvedValueOnce({ scan: idleScan });
+    render(<VideoLibrary locked={false} />);
+
+    await act(async () => Promise.resolve());
+    await act(async () => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByRole("alert")).toHaveTextContent("temporary scan failure");
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(mediaScan).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
   it("keeps unavailable entries after playable videos for every sort", async () => {
     mediaVideos.mockResolvedValue({ videos: [
       video("missing", "Alpha missing", "2026-07-20T12:00:00Z", false, true),
       video("playable", "Zeta playable", "2026-07-18T12:00:00Z"),
     ] });
-    render(<VideoLibrary active locked={false} />);
+    render(<VideoLibrary locked={false} />);
 
     await screen.findByRole("button", { name: "Play Zeta playable" });
     const catalogButtons = () => screen.getAllByRole("button", { name: /^(Play|Unavailable) / });
@@ -94,6 +135,7 @@ describe("VideoLibrary", () => {
       "Play Zeta playable",
       "Unavailable Alpha missing",
     ]);
+    expect(screen.getByRole("button", { name: "Unavailable Alpha missing" })).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "recent" } });
     expect(catalogButtons().map((button) => button.getAttribute("aria-label"))).toEqual([
@@ -102,14 +144,14 @@ describe("VideoLibrary", () => {
     ]);
   });
 
-  it("unmounts playback when the Videos tab becomes inactive", async () => {
+  it("unmounts playback when the Videos route is left", async () => {
     mediaVideos.mockResolvedValue({ videos: [video("session", "Session", "2026-07-19T12:00:00Z")] });
-    const result = render(<VideoLibrary active locked={false} />);
+    const result = render(<VideoLibrary locked={false} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Play Session" }));
     expect(screen.getByLabelText("Session")).toBeInTheDocument();
 
-    result.rerender(<VideoLibrary active={false} locked={false} />);
+    result.unmount();
     expect(screen.queryByLabelText("Session")).not.toBeInTheDocument();
   });
 });

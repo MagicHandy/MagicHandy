@@ -42,12 +42,12 @@ The implementation borrows proven interaction ideas, not whole architectures:
   trim controls; it does not become a second authoring or device-control path.
 
 The resulting reusable unit is the native-video component used by both the
-Videos tab and the optional funscript-import preview. It accepts an opaque
+dedicated Videos page and the optional funscript-import preview. It accepts an opaque
 catalog entry and playback callbacks, and knows nothing about motion.
 
 ## Requirements (from direction)
 
-1. A **video grid with search** under the library page; selecting a video
+1. A first-class **Videos page with a searchable grid**; selecting a video
    plays it.
 2. A funscript **with the exact same base name** as the video is
    **automatically played in time with** the selected video.
@@ -63,7 +63,7 @@ requirements 2-3 remain M1-M2 work.
 ## Architecture overview
 
 ```text
-web (Videos tab: grid, search, player, OSD strip)
+web (`#/videos`: grid, search, player, OSD strip)
    │  /api/media/*  (edge only)
 internal/httpapi ──────────► internal/media (NEW)
    │                           • locations scan (explicit, bounded)
@@ -226,19 +226,18 @@ downsampling is reused at canvas resolution):
 
 ## UI integration
 
-- **Videos tab** on the existing library page (per direction, alongside
-  Browse / Programs / Import / Author / Training — the tab pattern and roving
-  focus already exist). A separate nav route was considered (players want
-  width) and rejected for v1 to keep media inside the library concept; the
-  player uses the library shell's full width like the import studio does.
+- **Videos page** at `#/videos`, with its own permanent-sidebar link. Pattern
+  Library retains Browse / Programs / Import / Author / Training and does not
+  load the media catalog. The unframed video workspace uses the wide content
+  width without nesting repeated video cards inside another decorative card.
 - **Grid**: cards with display name, duration (once known), file size, a
   `script` badge when a funscript is paired, and a `missing` badge for
-  unplugged locations. **Search** is a client-side filter over name (the
-  catalog returns the full bounded list; personal libraries do not need
-  server search). Sort: name / most recent.
-- **Player view** (replaces the grid within the tab; back button returns): M0
+  unplugged locations. **Search** is a client-side filter over name or registered
+  location (the catalog returns the full bounded list; personal libraries do
+  not need server search). Sort: name / most recent.
+- **Player view** (replaces the grid within the route; back button returns): M0
   ships `<video>` with native controls and browser-reported duration backfill.
-  Leaving the Videos tab unmounts the player so hidden audio never continues.
+  Leaving the Videos route unmounts the player so hidden audio never continues.
   M1 adds the OSD strip; M2 adds the compact sync/device/drift status. The
   persistent Stop button stays global as on every route.
 - Settings > **Library locations** (new Settings section): list of
@@ -252,6 +251,35 @@ downsampling is reused at canvas resolution):
   is selected first when present, another catalog video can be chosen, and the
   timeline shares the import form's trim and viewport state. Playback remains
   preview-only and never starts motion.
+
+### M0 UI/UX and video-handling review (2026-07-20)
+
+- **Ownership and navigation:** Videos is a top-level workspace, not a Pattern
+  Library tab. Route focus, document title, active navigation state, persistent
+  Emergency Stop, and mobile icon navigation follow the shell contract.
+- **Catalog operation:** Reloading the current SQLite snapshot is distinct from
+  explicitly scanning the filesystem. Scan and Cancel remain available with a
+  populated catalog; read-only clients can search and play but cannot mutate
+  scan state or duration metadata.
+- **Failure isolation:** catalog-load and scan-status errors are separate. A
+  transient scan-status failure does not hide playable results, polling retries,
+  partial-root issues remain visible, and overlapping catalog reads cannot let
+  an older response replace a newer snapshot.
+- **Catalog legibility:** cards include the registered location label, search
+  matches name or location, missing entries remain keyboard-discoverable with
+  `aria-disabled`, and unavailable selections return an explicit state instead
+  of silently falling back to the grid.
+- **Playback recovery:** decode or network failures expose a Retry command and
+  clear after the native player can play again. Near-identical browser duration
+  readings do not repeatedly write catalog metadata.
+- **Streaming compatibility:** supported extensions receive deterministic
+  `video/mp4`, `video/webm`, or `video/quicktime` response types on every host;
+  byte ranges, `nosniff`, no-store caching, rooted file opens, and constant-memory
+  serving remain unchanged.
+- **Accepted deferrals:** thumbnails/posters, transcoding, codec bundling,
+  per-video deep links, the funscript OSD, and synchronized motion remain outside
+  this follow-up. OSD is M1 and motion is M2; neither may add a second media or
+  motion pathway.
 
 ## API surface
 
@@ -269,7 +297,7 @@ downsampling is reused at canvas resolution):
 
 - **M0 — catalog foundation (implemented)**: settings field, schema v11,
   explicit scanner with
-  bounds + summary, Settings section (add/remove/scan), Videos tab grid +
+  bounds + summary, Settings section (add/remove/scan), dedicated Videos page +
   search, Range streaming, plain video playback with **no motion**, reusable
   video player, and optional video-above-timeline funscript import preview.
   Exact-basename pairing metadata is recorded now so the grid can label it;

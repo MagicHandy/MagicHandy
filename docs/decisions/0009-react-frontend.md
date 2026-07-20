@@ -98,7 +98,7 @@ The React migration PR should add frontend checks in CI:
 At minimum, React tests should cover:
 
 - Stop is rendered outside routed workspaces and remains present on Chat,
-  Preset Modes, Pattern Library, and Settings.
+  Preset Modes, Pattern Library, Videos, and Settings.
 - Status bar is status-only and does not contain Stop or live quick controls.
 - Backend-loss state shows the persistent banner and locks backend-required
   controls.

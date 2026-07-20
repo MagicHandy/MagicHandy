@@ -111,7 +111,7 @@ func (s *Server) handleMediaVideoStream(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	contentType := mime.TypeByExtension(filepath.Ext(video.RelativePath))
+	contentType := mediaContentType(video.RelativePath)
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -119,6 +119,19 @@ func (s *Server) handleMediaVideoStream(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, filepath.Base(video.RelativePath), info.ModTime(), file)
+}
+
+func mediaContentType(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".mp4", ".m4v":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	default:
+		return mime.TypeByExtension(filepath.Ext(path))
+	}
 }
 
 func (s *Server) mediaState(ctx context.Context) map[string]any {

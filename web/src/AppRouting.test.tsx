@@ -30,6 +30,7 @@ vi.mock("./routes/SettingsRoute", async () => {
 vi.mock("./routes/ChatRoute", () => ({ ChatRoute: () => <div>Chat route</div> }));
 vi.mock("./routes/PresetModesRoute", () => ({ PresetModesRoute: () => <div>Modes route</div> }));
 vi.mock("./routes/PatternLibraryRoute", () => ({ PatternLibraryRoute: () => <div>Library route</div> }));
+vi.mock("./routes/VideoRoute", () => ({ VideoRoute: () => <div>Videos route</div> }));
 
 describe("App route lifetime", () => {
   it("preserves settings drafts between subsections but resets them after leaving Settings", () => {
@@ -48,5 +49,13 @@ describe("App route lifetime", () => {
     app.route = "#/settings/device";
     result.rerender(<App />);
     expect(screen.getByRole("textbox", { name: "Settings draft" })).toHaveValue("");
+  });
+
+  it("routes Videos independently from the pattern library", () => {
+    app.route = "#/videos";
+    render(<App />);
+
+    expect(screen.getByText("Videos route")).toBeInTheDocument();
+    expect(screen.queryByText("Library route")).not.toBeInTheDocument();
   });
 });

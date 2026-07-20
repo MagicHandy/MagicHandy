@@ -258,7 +258,7 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 
 The UI has moved to React and from the former status-bar +
 single-control-sidebar + settings-window shell to a **permanent left navigation
-sidebar that switches pages** (Chat / Preset Modes / Pattern Library /
+sidebar that switches pages** (Chat / Preset Modes / Pattern Library / Videos /
 Settings), with Stop pinned to the sidebar footer on every page. Framework
 decision and historical handoff:
 [docs/decisions/0009-react-frontend.md](docs/decisions/0009-react-frontend.md)
@@ -280,11 +280,14 @@ It ships in steps that never drop a safety control mid-migration:
    quick-settings envelope.
 4. **Pattern Library**: the browse/import/player/authoring/curation workspace —
    implemented in Phase 14.
+5. **Videos**: a first-class media catalog and native-player workspace;
+   library locations remain under Settings and media stays independent from
+   Pattern Library and motion until the reviewed sync slices.
 
 Status: steps 1 and 2 have landed together — the UI is now a Vite + React +
 TypeScript app (`web/`, built to `web/dist`, embedded by Go; no runtime Node)
 implementing the permanent nav rail, compact status-led top bar, pinned Stop, and the
-Chat / Preset Modes / Pattern Library / Settings routes with the safety
+Chat / Preset Modes / Pattern Library / Videos / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes owns deterministic Freestyle; the initial Chat-native
 Autopilot control and curation loop landed in #101 (step 3), with richer
@@ -1514,11 +1517,11 @@ freeze, or backport/abandon.
 
 ## Suggested `/goal`
 
-`/goal Implement MagicHandy Phase 18 slice M0 from docs/video-playback.md: media library locations in settings, the bounded explicit scanner with catalog schema v11, the Videos tab grid with search, and Range-capable video streaming — no motion integration yet.`
+`/goal Implement MagicHandy Phase 18 slice M0 from docs/video-playback.md: media library locations in settings, the bounded explicit scanner with catalog schema v11, the dedicated Videos page with search, and Range-capable video streaming — no motion integration yet.`
 
 ## Objective
 
-A video grid with search under the library page; a funscript with the exact
+A first-class Videos page with a searchable local catalog; a funscript with the exact
 same base name as a video plays in time with it through the one motion
 engine; the OSD carries a hideable intensity-colored funscript strip; library
 locations are added and scanned from Settings.

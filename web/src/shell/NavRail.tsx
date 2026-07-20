@@ -1,13 +1,14 @@
 // Permanent left navigation rail: profile lockup, page links, and the pinned
 // Stop footer. The rail is present on every route (docs/ui-navigation-redesign.md).
 import { useAppState, useHashRoute } from "../state/app-state";
-import { ChatIcon, LibraryIcon, ModesIcon, SettingsIcon } from "./icons";
+import { ChatIcon, LibraryIcon, ModesIcon, SettingsIcon, VideoIcon } from "./icons";
 import { StopButton } from "./StopButton";
 
 const LINKS = [
   { base: "chat", href: "#/chat", label: "Chat", Icon: ChatIcon },
   { base: "modes", href: "#/modes", label: "Preset modes", Icon: ModesIcon },
   { base: "library", href: "#/library", label: "Pattern library", Icon: LibraryIcon },
+  { base: "videos", href: "#/videos", label: "Videos", Icon: VideoIcon },
   { base: "settings", href: "#/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;
 
