@@ -104,6 +104,8 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	settings.Device.APIApplicationIDOverride = "dev-app"
 	settings.Device.HandyConnectionKey = "secret"
 	settings.LLM.OllamaModelsPath = `D:\Ollama\models`
+	capabilities := LLMMotionCapabilities{Motion: true, Patterns: false, AreaFocus: true, ExperimentalPatterns: true}
+	settings.LLM.MotionCapabilities = &capabilities
 	settings.Media.LibraryPaths = []string{filepath.Join(dir, "videos")}
 	settings.Diagnostics.Verbosity = DiagnosticsVerbosityDebug
 	if _, err := store.Save(settings); err != nil {
@@ -131,8 +133,43 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if got.LLM.OllamaModelsPath != `D:\Ollama\models` {
 		t.Fatalf("Ollama models path = %q", got.LLM.OllamaModelsPath)
 	}
+	if got.LLM.MotionCapabilities == nil || !got.LLM.MotionCapabilities.Motion || got.LLM.MotionCapabilities.Patterns || !got.LLM.MotionCapabilities.AreaFocus || !got.LLM.MotionCapabilities.ExperimentalPatterns {
+		t.Fatalf("motion capabilities did not persist: %+v", got.LLM.MotionCapabilities)
+	}
 	if len(got.Media.LibraryPaths) != 1 || got.Media.LibraryPaths[0] != filepath.Join(dir, "videos") {
 		t.Fatalf("media library paths = %v", got.Media.LibraryPaths)
+	}
+}
+
+func TestMotionCapabilitiesDoNotAliasStoreState(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	settings, _ := store.Snapshot()
+	capabilities := LLMMotionCapabilities{Motion: true, Patterns: false, AreaFocus: true, ExperimentalPatterns: true}
+	settings.LLM.MotionCapabilities = &capabilities
+	if _, err := store.Save(settings); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	capabilities.Patterns = true
+	snapshot, _ := store.Snapshot()
+	if snapshot.LLM.MotionCapabilities == nil || snapshot.LLM.MotionCapabilities.Patterns {
+		t.Fatalf("saved motion capabilities aliased caller state: %+v", snapshot.LLM.MotionCapabilities)
+	}
+	snapshot.LLM.MotionCapabilities.Patterns = true
+	fresh, _ := store.Snapshot()
+	if fresh.LLM.MotionCapabilities.Patterns {
+		t.Fatal("motion capabilities snapshot aliases the store")
+	}
+	public := fresh.Public()
+	public.LLM.MotionCapabilities.Patterns = true
+	fresh, _ = store.Snapshot()
+	if fresh.LLM.MotionCapabilities.Patterns {
+		t.Fatal("public motion capabilities alias the store")
 	}
 }
 

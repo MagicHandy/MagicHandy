@@ -396,47 +396,42 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       </div>
 
       <fieldset className="capability-gates">
-        <legend className="label">Model motion control</legend>
-        <p className="hint-block narrow">
-          What the model may do in chat and Autopilot. Disabled methods are never described to the
-          model and are ignored if it tries them. Your controls — Stop, limits, manual motion — are
-          never affected.
-        </p>
-        <label className="capability-gate">
+        <legend className="label">Model permissions</legend>
+        <label className="capability-gate" title="Allow chat and Autopilot to issue motion commands">
           <input
             type="checkbox"
             checked={capabilities.motion}
             disabled={locked}
             onChange={(event) => patchCapability("motion", event.target.checked)}
           />
-          <span>Motion control <span className="hint-inline">off makes the model chat-only</span></span>
+          <span>Motion commands</span>
         </label>
-        <label className="capability-gate">
+        <label className="capability-gate" title="Allow selection from enabled library patterns">
           <input
             type="checkbox"
             checked={capabilities.patterns}
             disabled={locked || !capabilities.motion}
             onChange={(event) => patchCapability("patterns", event.target.checked)}
           />
-          <span>Pattern selection <span className="hint-inline">curate enabled library patterns</span></span>
+          <span>Pattern selection</span>
         </label>
-        <label className="capability-gate">
+        <label className="capability-gate" title="Allow tip, shaft, base, and full-range targets">
           <input
             type="checkbox"
             checked={capabilities.area_focus}
             disabled={locked || !capabilities.motion}
             onChange={(event) => patchCapability("area_focus", event.target.checked)}
           />
-          <span>Area focus <span className="hint-inline">tip / shaft / base zones</span></span>
+          <span>Area focus</span>
         </label>
-        <label className="capability-gate">
+        <label className="capability-gate" title="Allow experimental-tagged library patterns">
           <input
             type="checkbox"
             checked={capabilities.experimental_patterns}
             disabled={locked || !capabilities.motion || !capabilities.patterns}
             onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
           />
-          <span>Experimental patterns <span className="hint-inline">include experimental-tagged catalog entries</span></span>
+          <span>Experimental patterns</span>
         </label>
       </fieldset>
 
@@ -649,14 +644,20 @@ function OllamaDaemonModels({ models, selected, message, locked, onUse }: { mode
   if (message) return <p className="form-status">{message}</p>;
   if (!models.length) return <p className="form-status">No models reported by Ollama.</p>;
   return (
-    <div className="ollama-daemon-list" aria-label="Models reported by Ollama">
-      {models.map((model) => (
-        <div className="ollama-daemon-row" key={model.name}>
-          <ModelIdentity name={model.name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes)]} />
-          <button type="button" className="btn btn-secondary" disabled={locked || selected === model.name} onClick={() => onUse(model)}>{selected === model.name ? "Selected" : "Use"}</button>
-        </div>
-      ))}
-    </div>
+    <details className="ollama-daemon-disclosure">
+      <summary>
+        <span>Installed Ollama models</span>
+        <span className="ollama-daemon-count">{models.length}</span>
+      </summary>
+      <div className="ollama-daemon-list" aria-label="Models reported by Ollama">
+        {models.map((model) => (
+          <div className="ollama-daemon-row" key={model.name}>
+            <ModelIdentity name={model.name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes)]} />
+            <button type="button" className="btn btn-secondary" disabled={locked || selected === model.name} onClick={() => onUse(model)}>{selected === model.name ? "Selected" : "Use"}</button>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

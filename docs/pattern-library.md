@@ -27,6 +27,22 @@ programs have different SQLite tables, share
 schemas, API routes, and engine definitions so callers cannot accidentally treat
 one as the other.
 
+## Built-In Catalog
+
+The built-in catalog contains three established patterns (`Stroke`, `Pulse`,
+and `Tease`) plus twelve clearly labeled experimental patterns: `Waves`,
+`Climb`, `Flutter`, `Sway`, `Drift`, `Double Tap`, `Cascade`, `Pendulum`,
+`Cradle`, `Surge`, `Rolling`, and `Syncopate`. This is four times the initial
+three-pattern experimental slice.
+
+Every experimental entry is an authored complete cycle with an explicit return
+to its starting position. The generator stretches a cycle only to satisfy the
+same reversal and acceleration budgets as every other built-in; it does not
+truncate or sample a random interval. The supplied funscript libraries were
+reviewed for useful shape vocabulary, but their long/video-specific scripts
+were not copied as arbitrary excerpts. Users can inspect, audition, disable,
+weight, and export experimental entries exactly like other built-ins.
+
 ## Sampling And Authoring
 
 - Curves use wall-time PCHIP/Fritsch-Carlson interpolation. Tests require C1
@@ -96,8 +112,23 @@ The chat prompt receives only enabled `{id,name,description,tags,weight}` rows,
 ordered by visible weight. The primary LLM motion vocabulary is
 `{pattern_id,intensity}`. Parsing rejects IDs outside that supplied catalog;
 dispatch resolves the ID again to protect against a concurrent disable. When no
-pattern is enabled, the deterministic semantic speed/pattern contract remains
+pattern is enabled, the deterministic semantic speed-only contract remains
 available.
+
+Model permissions further narrow that catalog. Turning pattern selection off
+removes pattern fields and skips the pattern-store read for the turn. Turning
+experimental patterns off (the default) excludes `experimental`-tagged rows
+while retaining the three established built-ins. Area focus is independent of
+catalog storage. These permissions persist in the existing versioned settings
+document in SQLite and therefore do not add a table or schema migration.
+
+Interactive chat receives the current engine target and a bounded tail of
+recent chat-selected pattern ids from the runtime trace ring. Steady and
+pacing-only requests preserve the current pattern. Explicit variation prefers
+an enabled pattern outside the recent tail; one repair pass and a deterministic
+fresh-pattern fallback prevent a weak model from returning a semantic no-op or
+rapidly alternating the same two choices. The recent tail is runtime context,
+not durable user data, so it is not migrated to SQLite.
 
 A thumbs rating moves weight by 0.15 within 0.1–3.0 and records before/after
 weight and enabled state in `pattern_feedback`. Undo restores the exact prior

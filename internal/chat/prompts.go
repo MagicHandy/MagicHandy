@@ -35,37 +35,40 @@ const (
 // every system prompt by code. User-editable prompt sets can change persona
 // and tone, but never this contract (IMPLEMENTATION_PLAN.md Phase 10 rule).
 // Capability gates compose reduced variants via contractInstructions.
-const ContractInstructions = contractBase + "\n" + contractAreaSection
+const ContractInstructions = contractBase + "\n" + contractPatternSection + "\n" + contractAreaSection
 
 const contractBase = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
 
-Choose one valid base shape below, or a valid curated-pattern shape shown with the enabled catalog:
-- Chat only: {"reply":"short user-facing reply"}
-- Explicitly no motion change: {"reply":"short user-facing reply","motion":{"action":"none"}}
-- Start deterministic motion: {"reply":"short user-facing reply","motion":{"action":"start","speed_percent":25}}
-- Adjust active motion: {"reply":"short user-facing reply","motion":{"action":"target","speed_percent":25}}
-- Stop motion: {"reply":"short user-facing reply","motion":{"action":"stop"}}
+Choose one valid base shape below, or a valid curated-pattern shape when pattern selection is enabled:
+- Chat only: {"reply":"I hear you."}
+- Explicitly no motion change: {"reply":"Keeping it steady.","motion":{"action":"none"}}
+- Start deterministic motion: {"reply":"Starting gently.","motion":{"action":"start","speed_percent":25}}
+- Adjust active motion: {"reply":"Adjusting the pace.","motion":{"action":"target","speed_percent":25}}
+- Stop motion: {"reply":"Stopping.","motion":{"action":"stop"}}
 
 Rules:
 - Omit "motion" or use only {"action":"none"} when the user is only chatting.
 - Use "start" only when the user asks to begin motion.
 - Use "target" only to adjust active motion.
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
-- Prefer an enabled pattern_id with intensity when a catalog entry fits the request.
-- Omit pattern_id and intensity and use speed_percent as the deterministic fallback when no enabled pattern fits.
-- Never include both intensity and speed_percent.
-- Translate pacing words onto the scale deterministically: "slow"/"gentle" means the low third, unqualified requests the middle, "fast"/"hard"/"as fast as you can" means the top of the scale — the app clamps everything to the user's own limits.
-- Vary the feel over time: when adjusting, prefer a different speed or pattern than the current one; small speed changes (10-20 apart) read as natural pacing, and identical repeats read as robotic.
-- Never invent pattern IDs, device commands, API calls, Bluetooth commands, URLs, or transport details.
-- Never copy example values: "short user-facing reply" is a placeholder — always write your own reply in your own words.
+- Use speed_percent for deterministic pacing when no pattern is selected.
+- Apply the supplied speed bands to speed_percent: "slow"/"gentle" means low, "moderate"/"medium" and unqualified requests mean middle, and "fast"/"hard"/"as fast as you can" means high. Never choose a value outside the requested band or the supplied user limits.
+- Never invent device commands, API calls, Bluetooth commands, URLs, or transport details.
+- Write a concise reply that fits the user's request; examples show structure, not required wording.
 - Keep speeds conservative unless the user explicitly asks otherwise.`
 
-const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", "area":"shaft", or "area":"base" to a start or target (combine freely with pattern_id/intensity or speed_percent); use "area":"full" to clear an active focus.
-- Zone focus example: {"reply":"short user-facing reply","motion":{"action":"target","area":"tip","speed_percent":30}}
+const contractPatternSection = `- Pattern selection is enabled. Prefer an enabled pattern_id with intensity when a catalog entry fits the request.
+- Choose pattern_id only from the enabled catalog supplied below.
+- Apply the exact supplied speed bands and limits to intensity too.
+- Omit pattern_id and intensity and use speed_percent when no enabled pattern fits.
+- Never include both intensity and speed_percent, and never invent pattern IDs.`
+
+const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", "area":"shaft", or "area":"base" to a start or target; use "area":"full" to clear an active focus.
+- Zone focus example: {"reply":"Focusing there.","motion":{"action":"target","area":"tip","speed_percent":30}}
 - Use a zone when the user names a place or asks to concentrate somewhere; return to "full" when they ask for everything again.`
 
 const contractChatOnly = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
-Always use exactly this shape: {"reply":"short user-facing reply"}
+Always return an object with exactly one string field named "reply".
 Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
 
 // contractInstructions composes the code-owned contract for the enabled
@@ -76,6 +79,9 @@ func contractInstructions(capabilities Capabilities) string {
 		return contractChatOnly
 	}
 	text := contractBase
+	if capabilities.Patterns {
+		text += "\n" + contractPatternSection
+	}
 	if capabilities.AreaFocus {
 		text += "\n" + contractAreaSection
 	}
@@ -98,7 +104,7 @@ func FullCapabilities() Capabilities {
 }
 
 const finalOutputGuard = `FINAL OUTPUT RULE:
-Return one JSON object matching one valid example in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return only {"reply":"short user-facing reply"}.`
+Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return an object containing only the reply field.`
 
 var builtinPromptSets = []PromptSet{
 	{
@@ -183,6 +189,16 @@ func ComposeSystemWithPatterns(set PromptSet, memories []string, patterns []Patt
 // ComposeSystemWithCapabilities composes the system prompt for the enabled
 // capability set: disabled control methods are never described to the model.
 func ComposeSystemWithCapabilities(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities) string {
+	return composeSystem(set, memories, patterns, capabilities, nil)
+}
+
+// ComposeSystemWithMotionContext adds the authoritative semantic motion state
+// for one interactive turn. The state is code-owned data, not chat history.
+func ComposeSystemWithMotionContext(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, context MotionContext) string {
+	return composeSystem(set, memories, patterns, capabilities, &context)
+}
+
+func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, context *MotionContext) string {
 	if !capabilities.Motion || !capabilities.Patterns {
 		patterns = nil
 	}
@@ -195,9 +211,13 @@ func ComposeSystemWithCapabilities(set PromptSet, memories []string, patterns []
 	builder.WriteString(behavior)
 	builder.WriteString("\n\n")
 	builder.WriteString(contractInstructions(capabilities))
-	if capabilities.Motion {
+	if capabilities.Motion && capabilities.Patterns {
 		builder.WriteString("\n\n")
 		builder.WriteString(curationInstructions(patterns))
+	}
+	if capabilities.Motion && context != nil {
+		builder.WriteString("\n\n")
+		builder.WriteString(motionContextInstructions(*context, capabilities, patterns))
 	}
 
 	if len(memories) > 0 {
@@ -238,13 +258,13 @@ func curationInstructions(patterns []PatternChoice) string {
 	}
 	data, _ := json.Marshal(items)
 	startExample, _ := json.Marshal(map[string]any{
-		"reply": "short user-facing reply",
+		"reply": "Starting that pattern.",
 		"motion": map[string]any{
 			"action": "start", "pattern_id": items[0].ID, "intensity": 40,
 		},
 	})
 	targetExample, _ := json.Marshal(map[string]any{
-		"reply": "short user-facing reply",
+		"reply": "Changing the feel.",
 		"motion": map[string]any{
 			"action": "target", "pattern_id": items[0].ID, "intensity": 40,
 		},

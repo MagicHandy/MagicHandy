@@ -63,15 +63,46 @@ type PatternChoice struct {
 
 // ParseAssistantResponse validates one strict JSON response from the model.
 func ParseAssistantResponse(raw string) (AssistantResponse, error) {
-	return parseAssistantResponse(raw, defaultPatternChoices(), false)
+	return parseAssistantResponse(raw, defaultPatternChoices(), false, nil)
 }
 
 // ParseAssistantResponseWithPatterns accepts only the supplied enabled IDs.
 func ParseAssistantResponseWithPatterns(raw string, patterns []PatternChoice) (AssistantResponse, error) {
-	return parseAssistantResponse(raw, patterns, true)
+	return parseAssistantResponse(raw, patterns, true, nil)
 }
 
-func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool) (AssistantResponse, error) {
+func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice, capabilities Capabilities, context *MotionContext) (AssistantResponse, error) {
+	response, err := decodeAssistantResponse(raw)
+	if err != nil {
+		return AssistantResponse{}, err
+	}
+	enforceCapabilities(&response, capabilities)
+	patternsEnabled := capabilities.Motion && capabilities.Patterns
+	var currentSpeed *int
+	if patternsEnabled && context != nil && context.Running && context.SpeedPercent >= 1 && context.SpeedPercent <= 100 {
+		speed := context.SpeedPercent
+		currentSpeed = &speed
+	}
+	preserveCurrentPatternSpeed(&response, currentSpeed)
+	if err := validateAssistantResponse(&response, patterns, patternsEnabled); err != nil {
+		return AssistantResponse{}, err
+	}
+	return response, nil
+}
+
+func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool, currentSpeed *int) (AssistantResponse, error) {
+	response, err := decodeAssistantResponse(raw)
+	if err != nil {
+		return AssistantResponse{}, err
+	}
+	preserveCurrentPatternSpeed(&response, currentSpeed)
+	if err := validateAssistantResponse(&response, patterns, curation); err != nil {
+		return AssistantResponse{}, err
+	}
+	return response, nil
+}
+
+func decodeAssistantResponse(raw string) (AssistantResponse, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return AssistantResponse{}, errors.New("assistant response is empty")
@@ -87,10 +118,15 @@ func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool)
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return AssistantResponse{}, errors.New("assistant response must contain exactly one JSON object")
 	}
-	if err := validateAssistantResponse(&response, patterns, curation); err != nil {
-		return AssistantResponse{}, err
-	}
 	return response, nil
+}
+
+func preserveCurrentPatternSpeed(response *AssistantResponse, currentSpeed *int) {
+	if currentSpeed != nil && response.Motion != nil && strings.TrimSpace(response.Motion.PatternID) != "" &&
+		response.Motion.Intensity == nil && response.Motion.SpeedPercent == nil {
+		speed := *currentSpeed
+		response.Motion.SpeedPercent = &speed
+	}
 }
 
 func validateAssistantResponse(response *AssistantResponse, patterns []PatternChoice, curation bool) error {

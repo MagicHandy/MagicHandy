@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-19. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-20. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -30,12 +30,15 @@ capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
 decision. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
 Chat Autopilot now has its initial implementation (conversation-aware LLM
 curation over the shared autonomous loop, with a visible deterministic planner
-fallback); live-model, long-session, and richer-autonomy acceptance remain
-open. The migration importer (Phase 15) is
+fallback). Interactive chat motion now has live-provider evidence on the
+primary managed llama.cpp/Gemma path and the secondary Ollama/Granite path;
+long-session Autopilot, cadence, and richer-autonomy acceptance remain open.
+The migration importer (Phase 15) is
 now **undecided — it may not be built at all** (rationale in
 `docs/parity-with-stgpt-rv.md`). The UI/behavior parity baseline is complete;
-the largest genuine remaining parity gap is LLM control depth (stroke regions,
-program selection, soft anchors), catalogued in `docs/llm-control-surface.md`.
+the largest genuine remaining parity gap is LLM control depth (program
+selection and soft anchors; named stroke regions are now shipped), catalogued
+in `docs/llm-control-surface.md`.
 
 Recent work (PRs #63-#83) hardens connection and live-limit controls, bounds
 LLM output with honest provider-native reasoning control, makes source updates
@@ -92,7 +95,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
-| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
+| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; interactive managed llama.cpp + Ollama model matrix passed; long-session, cadence, and richer-arrangement acceptance open** | #101, #106 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0 implemented; M1-M3 planned** | #104 |
@@ -140,9 +143,13 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - Streaming LLM chat (managed llama.cpp primary, external llama.cpp, Ollama
   secondary) with a strict JSON contract, one repair pass, malformed-response
   indication, bounded output, explicit automatic/off reasoning policy, and
-  chat-driven motion through the engine only. Provider-native controls carry
-  visible latency/quality warnings; no hardware tuning knob is promoted without
-  measurement.
+  chat-driven motion through the engine only. Each turn receives authoritative
+  engine state, limits, speed bands, area, and bounded recent pattern context;
+  explicit variation avoids recent choices while steady, ordinary, and
+  pacing-only turns preserve continuity. Model permissions independently gate
+  motion, patterns, named area focus, and experimental content. Provider-native
+  controls carry visible latency/quality warnings; no hardware tuning knob is
+  promoted without measurement.
 - SQLite-backed LLM model manager with managed GGUF copies, standalone GGUF
   import, read-only Ollama library discovery/import, daemon model listing,
   external llama.cpp model listing, SHA-256 verification,
@@ -158,8 +165,10 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
-  training. The LLM can select only enabled pattern IDs and falls back to the
-  deterministic semantic target contract when no library entry applies.
+  training. The catalog now has three established and twelve clearly labeled,
+  complete-cycle experimental built-ins. The LLM can select only enabled
+  pattern IDs and falls back to the deterministic semantic target contract when
+  no library entry applies.
 - CI: gofmt, `go vet`, `golangci-lint`, tests, race tests, `CGO_ENABLED=0`
   build, import-boundary tests.
 
@@ -193,9 +202,10 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    verify mic→parakeet.cpp audio-format compatibility end to end, prune
    abandoned `client_cursors` rows, and stop blocked chat sends from eating
    the draft. The autospeak contract shapes feed the Autopilot slice; the
-   motion items (differentiated retarget lead, semantic no-op guard,
-   clamp-once speed test) carry explicit skepticism notes — contract shapes
-   over copied constants.
+   motion items still prefer contract shapes over copied constants.
+   State-aware chat context, the semantic no-op repair/fallback guard, and
+   single-envelope speed behavior now have automated and live managed
+   llama.cpp/Ollama evidence; differentiated retarget lead remains open.
 5. **Emergency Stop delivery**: active, paused, repeated-idle, and no-engine
    requests now attempt the selected dispatch owner's Stop while preserving
    local stopped state and reporting transport failure honestly. An unreachable
@@ -292,6 +302,10 @@ invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes owns deterministic Freestyle; the initial Chat-native
 Autopilot control and curation loop landed in #101 (step 3), with richer
 arrangements and user-configurable autonomous speech cadence still planned.
+The follow-up in #106 adds named area focus, explicit capability gates,
+state-aware continuity, bounded recent-pattern variation, and twelve opt-in
+experimental built-ins. Interactive chat passed live managed llama.cpp/Gemma
+and Ollama/Granite matrices; long-running autonomous acceptance remains open.
 Pattern Library is merged to `main` (step 4). The legacy vanilla UI remains under `web/legacy/`
 as unshipped reference only; `web/dist` is the single embedded frontend.
 

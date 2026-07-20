@@ -71,14 +71,11 @@ type Curve struct {
 	loop     bool
 }
 
-var builtinPatternCatalog = []PatternDefinition{
+var builtinPatternCatalog = append([]PatternDefinition{
 	generateStrokePattern(),
 	generatePulsePattern(),
 	generateTeasePattern(),
-	generateWavesPattern(),
-	generateClimbPattern(),
-	generateFlutterPattern(),
-}
+}, generateExperimentalPatterns()...)
 
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
 func NewCurve(points []CurvePoint, durationMillis int64, loop bool) (Curve, error) {
@@ -468,51 +465,120 @@ func generateTeasePattern() PatternDefinition {
 	})
 }
 
-// generateWavesPattern swells stroke amplitude up and back down across one
-// cycle, so intensity breathes instead of holding one level.
-func generateWavesPattern() PatternDefinition {
-	positions := []float64{30, 55, 25, 75, 20, 95, 25, 75, 30, 55}
-	points := make([]CurvePoint, 0, len(positions)+1)
-	for index, position := range positions {
-		points = append(points, CurvePoint{TimeMillis: int64(index) * 550, PositionPercent: position})
-	}
-	points = append(points, CurvePoint{TimeMillis: int64(len(positions)) * 550, PositionPercent: positions[0]})
-	return mustFitCatalog(PatternDefinition{
-		ID: PatternWaves, Name: "Waves", Description: "Experimental: strokes swell deeper, crest, and recede.",
-		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
-		Tags: []string{TagExperimental, "swell", "varied", "breathing"},
-	})
+type experimentalPatternSpec struct {
+	ID           PatternID
+	Name         string
+	Description  string
+	Positions    []float64
+	TravelMillis []int64
+	Tags         []string
 }
 
-// generateClimbPattern ratchets progressively deeper with shallow recoveries,
-// then releases across the full span.
-func generateClimbPattern() PatternDefinition {
-	positions := []float64{10, 40, 20, 55, 30, 70, 40, 85, 50, 100}
-	points := make([]CurvePoint, 0, len(positions)+1)
-	for index, position := range positions {
-		points = append(points, CurvePoint{TimeMillis: int64(index) * 550, PositionPercent: position})
-	}
-	points = append(points, CurvePoint{TimeMillis: int64(len(positions)) * 550, PositionPercent: positions[0]})
-	return mustFitCatalog(PatternDefinition{
-		ID: PatternClimb, Name: "Climb", Description: "Experimental: a ratcheting build — each stroke reaches further before the release.",
-		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
-		Tags: []string{TagExperimental, "build", "progressive", "release"},
-	})
+// experimentalPatternSpecs are complete authored cycles. None is a random
+// excerpt from an imported script; every final travel interval closes the
+// shape back onto its first point before the hardware-budget pass runs.
+var experimentalPatternSpecs = []experimentalPatternSpec{
+	{
+		ID: PatternWaves, Name: "Waves", Description: "Strokes swell deeper, crest, and recede.",
+		Positions:    []float64{30, 55, 25, 75, 20, 95, 25, 75, 30, 55},
+		TravelMillis: []int64{600, 550, 650, 550, 750, 650, 550, 650, 550, 700},
+		Tags:         []string{"swell", "varied", "breathing"},
+	},
+	{
+		ID: PatternClimb, Name: "Climb", Description: "Each stroke reaches farther before a full release.",
+		Positions:    []float64{10, 40, 20, 55, 30, 70, 40, 85, 50, 100},
+		TravelMillis: []int64{620, 560, 620, 560, 620, 560, 620, 560, 720, 720},
+		Tags:         []string{"build", "progressive", "release"},
+	},
+	{
+		ID: PatternFlutter, Name: "Flutter", Description: "Tight mid-span strokes open into one full sweep.",
+		Positions:    []float64{45, 70, 45, 70, 45, 70, 45, 70, 5, 95},
+		TravelMillis: []int64{500, 500, 500, 500, 500, 500, 500, 850, 900, 850},
+		Tags:         []string{"flutter", "contrast", "tight"},
+	},
+	{
+		ID: PatternSway, Name: "Sway", Description: "Broad asymmetric arcs lean from side to side.",
+		Positions:    []float64{18, 82, 34, 94, 26, 74, 42, 88},
+		TravelMillis: []int64{850, 650, 900, 600, 800, 700, 900, 1200},
+		Tags:         []string{"broad", "asymmetric", "flowing"},
+	},
+	{
+		ID: PatternDrift, Name: "Drift", Description: "A steady-width stroke migrates upward and returns.",
+		Positions:    []float64{15, 45, 22, 55, 30, 65, 40, 78, 48, 82, 38, 68, 28, 55},
+		TravelMillis: []int64{520, 520, 540, 540, 560, 560, 580, 580, 560, 560, 540, 540, 520, 580},
+		Tags:         []string{"migrating", "progressive", "smooth"},
+	},
+	{
+		ID: PatternDoubleTap, Name: "Double Tap", Description: "Paired accents alternate with deeper sweeps.",
+		Positions:    []float64{18, 72, 28, 76, 18, 96, 32, 90},
+		TravelMillis: []int64{620, 500, 560, 780, 900, 620, 540, 1080},
+		Tags:         []string{"paired", "accent", "contrast"},
+	},
+	{
+		ID: PatternCascade, Name: "Cascade", Description: "Successive peaks descend before a clean reset.",
+		Positions:    []float64{12, 96, 24, 82, 34, 68, 42, 56},
+		TravelMillis: []int64{760, 620, 760, 620, 760, 620, 760, 1700},
+		Tags:         []string{"descending", "release", "stepped"},
+	},
+	{
+		ID: PatternPendulum, Name: "Pendulum", Description: "Long and short centered arcs alternate evenly.",
+		Positions:    []float64{10, 90, 28, 72, 16, 84, 38, 62},
+		TravelMillis: []int64{900, 650, 1050, 600, 850, 700, 1000, 850},
+		Tags:         []string{"alternating", "centered", "swing"},
+	},
+	{
+		ID: PatternCradle, Name: "Cradle", Description: "Restrained centered arcs breathe wider and narrower.",
+		Positions:    []float64{32, 68, 28, 72, 38, 62, 24, 76},
+		TravelMillis: []int64{780, 700, 820, 680, 760, 720, 840, 1300},
+		Tags:         []string{"centered", "gentle", "breathing"},
+	},
+	{
+		ID: PatternSurge, Name: "Surge", Description: "One full sweep settles through progressively smaller echoes.",
+		Positions:    []float64{10, 100, 28, 88, 40, 76, 48, 66},
+		TravelMillis: []int64{900, 620, 800, 620, 720, 620, 660, 1660},
+		Tags:         []string{"full", "decay", "echo"},
+	},
+	{
+		ID: PatternRolling, Name: "Rolling", Description: "Offset medium and deep strokes keep the center moving.",
+		Positions:    []float64{20, 65, 35, 85, 25, 75, 45, 95, 30, 70},
+		TravelMillis: []int64{650, 560, 720, 580, 680, 560, 760, 600, 700, 790},
+		Tags:         []string{"layered", "varied", "flowing"},
+	},
+	{
+		ID: PatternSyncopate, Name: "Syncopate", Description: "Uneven accents resolve through a complete repeating phrase.",
+		Positions:    []float64{18, 78, 30, 92, 22, 62, 12, 88, 40, 72},
+		TravelMillis: []int64{520, 900, 560, 700, 500, 1100, 620, 540, 960, 700},
+		Tags:         []string{"syncopated", "accent", "varied"},
+	},
 }
 
-// generateFlutterPattern holds quick shallow mid-span strokes, then opens one
-// full sweep before returning to the flutter.
-func generateFlutterPattern() PatternDefinition {
-	positions := []float64{45, 70, 45, 70, 45, 70, 45, 70, 5, 95}
-	points := make([]CurvePoint, 0, len(positions)+1)
-	for index, position := range positions {
-		points = append(points, CurvePoint{TimeMillis: int64(index) * 550, PositionPercent: position})
+func generateExperimentalPatterns() []PatternDefinition {
+	definitions := make([]PatternDefinition, 0, len(experimentalPatternSpecs))
+	for _, spec := range experimentalPatternSpecs {
+		definitions = append(definitions, generateExperimentalPattern(spec))
 	}
-	points = append(points, CurvePoint{TimeMillis: int64(len(positions)) * 550, PositionPercent: positions[0]})
+	return definitions
+}
+
+func generateExperimentalPattern(spec experimentalPatternSpec) PatternDefinition {
+	if len(spec.Positions) < 2 || len(spec.TravelMillis) != len(spec.Positions) {
+		panic("experimental pattern requires one closing travel interval per position")
+	}
+	points := make([]CurvePoint, 0, len(spec.Positions)+1)
+	points = append(points, CurvePoint{PositionPercent: spec.Positions[0]})
+	elapsed := int64(0)
+	for index, travelMillis := range spec.TravelMillis {
+		if travelMillis <= 0 {
+			panic("experimental pattern travel time must be positive")
+		}
+		elapsed += travelMillis
+		next := spec.Positions[(index+1)%len(spec.Positions)]
+		points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: next})
+	}
+	tags := append([]string{TagExperimental}, spec.Tags...)
 	return mustFitCatalog(PatternDefinition{
-		ID: PatternFlutter, Name: "Flutter", Description: "Experimental: tight mid-span flutter broken by one full sweep.",
-		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
-		Tags: []string{TagExperimental, "flutter", "contrast", "tight"},
+		ID: spec.ID, Name: spec.Name, Description: "Experimental: " + spec.Description,
+		Kind: PatternKindRoutine, CycleMillis: elapsed, Points: points, Tags: tags,
 	})
 }
 

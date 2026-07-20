@@ -1148,6 +1148,10 @@ func trimArgs(args []string) []string {
 
 func cloneSettings(settings Settings) Settings {
 	settings.Media.LibraryPaths = append([]string{}, settings.Media.LibraryPaths...)
+	if settings.LLM.MotionCapabilities != nil {
+		capabilities := *settings.LLM.MotionCapabilities
+		settings.LLM.MotionCapabilities = &capabilities
+	}
 	settings.Voice.TTSWorkerArgs = cloneStrings(settings.Voice.TTSWorkerArgs)
 	settings.Voice.ASRWorkerArgs = cloneStrings(settings.Voice.ASRWorkerArgs)
 	return settings

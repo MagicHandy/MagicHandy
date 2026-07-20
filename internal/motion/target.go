@@ -28,6 +28,24 @@ const (
 	PatternClimb PatternID = "climb"
 	// PatternFlutter is the experimental shallow-flutter-with-sweep pattern.
 	PatternFlutter PatternID = "flutter"
+	// PatternSway is the experimental asymmetric broad-arc pattern.
+	PatternSway PatternID = "sway"
+	// PatternDrift migrates a consistent stroke window across a cycle.
+	PatternDrift PatternID = "drift"
+	// PatternDoubleTap groups paired accents around deeper sweeps.
+	PatternDoubleTap PatternID = "double-tap"
+	// PatternCascade steps peak depth downward before resetting.
+	PatternCascade PatternID = "cascade"
+	// PatternPendulum alternates long and short centered arcs.
+	PatternPendulum PatternID = "pendulum"
+	// PatternCradle uses restrained centered arcs with changing width.
+	PatternCradle PatternID = "cradle"
+	// PatternSurge follows one full sweep with decaying echoes.
+	PatternSurge PatternID = "surge"
+	// PatternRolling layers offset medium and deep strokes.
+	PatternRolling PatternID = "rolling"
+	// PatternSyncopate uses an intentionally uneven complete rhythm.
+	PatternSyncopate PatternID = "syncopate"
 )
 
 // AreaFocus constrains semantic sampling to a focus region.

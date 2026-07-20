@@ -74,6 +74,7 @@
 
 .capability-gates {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 0 0 14px;
   padding: 12px 14px;
@@ -83,13 +84,11 @@
 .capability-gates legend {
   padding: 0 4px;
 }
-.capability-gates .hint-block {
-  margin: 0;
-}
 .capability-gate {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 9px;
+  min-height: 28px;
   cursor: pointer;
 }
 .capability-gate input {
@@ -204,11 +203,37 @@
   margin: 14px 0 0;
 }
 
+.ollama-daemon-disclosure {
+  margin: 2px 0 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.ollama-daemon-disclosure summary {
+  min-height: 42px;
+  padding: 11px 2px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ollama-daemon-count {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
 .model-list,
 .ollama-candidates,
 .ollama-daemon-list,
 .provider-model-list,
 .model-import-progress {
+  border-top: 1px solid var(--line);
+}
+
+.ollama-daemon-disclosure .ollama-daemon-list {
   border-top: 1px solid var(--line);
 }
 
@@ -357,6 +382,10 @@
   .model-generation-settings,
   .model-import-form,
   .model-import-path {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .capability-gates {
     grid-template-columns: minmax(0, 1fr);
   }
 

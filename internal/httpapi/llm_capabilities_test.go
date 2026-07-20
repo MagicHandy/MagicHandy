@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
@@ -104,7 +105,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	}
 }
 
-func TestIdleTargetCommandStartsMotion(t *testing.T) {
+func TestIdleTargetCommandCannotStartMotion(t *testing.T) {
 	fake := transport.NewFake()
 	server := newTestServerWithRuntime(t, Runtime{
 		Traces:          diagnostics.NewTraceRing(256),
@@ -119,14 +120,63 @@ func TestIdleTargetCommandStartsMotion(t *testing.T) {
 		SpeedPercent: &speed,
 		Area:         chat.AreaZoneTip,
 	})
-	if err != nil {
-		t.Fatalf("idle target must start motion (small-model leniency): %v", err)
+	if err == nil || !strings.Contains(err.Error(), "use start") {
+		t.Fatalf("idle target error = %v, want explicit start requirement", err)
 	}
-	if !dispatch.Applied || !dispatch.Engine.Running {
-		t.Fatalf("dispatch = %+v, want running engine", dispatch)
+	if dispatch.Applied {
+		t.Fatalf("idle target was applied: %+v", dispatch)
 	}
-	if dispatch.Engine.Target.AreaFocus == nil || dispatch.Engine.Target.AreaFocus.MinPercent != 66 {
-		t.Fatalf("area focus not applied: %+v", dispatch.Engine.Target.AreaFocus)
+	if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+		t.Fatal("idle target started the motion engine")
+	}
+}
+
+func TestChatPatternChoicesSkipStorageWhenControlDisabled(t *testing.T) {
+	server := &Server{}
+	for _, capabilities := range []chat.Capabilities{
+		{},
+		{Motion: true},
+	} {
+		choices, err := server.chatPatternChoicesFor(capabilities)
+		if err != nil || len(choices) != 0 {
+			t.Fatalf("disabled capabilities %+v read pattern storage: choices=%v err=%v", capabilities, choices, err)
+		}
+	}
+}
+
+func TestChatAreaZoneDescribesEngineFocus(t *testing.T) {
+	cases := []struct {
+		focus *motion.AreaFocus
+		want  string
+	}{
+		{nil, chat.AreaZoneFull},
+		{&motion.AreaFocus{MinPercent: 66, MaxPercent: 100}, chat.AreaZoneTip},
+		{&motion.AreaFocus{MinPercent: 33, MaxPercent: 67}, chat.AreaZoneShaft},
+		{&motion.AreaFocus{MinPercent: 0, MaxPercent: 34}, chat.AreaZoneBase},
+		{&motion.AreaFocus{MinPercent: 20, MaxPercent: 60}, "custom"},
+	}
+	for _, test := range cases {
+		if got := chatAreaZone(test.focus); got != test.want {
+			t.Fatalf("chatAreaZone(%+v) = %q, want %q", test.focus, got, test.want)
+		}
+	}
+}
+
+func TestRecentChatPatternIDsCollapseTraceNoise(t *testing.T) {
+	ring := diagnostics.NewTraceRing(16)
+	for _, row := range []diagnostics.MotionTraceRow{
+		{Source: "manual_ui", Target: &diagnostics.MotionTraceTarget{PatternIdentifier: "stroke"}},
+		{Source: "chat", Target: &diagnostics.MotionTraceTarget{PatternIdentifier: "pulse"}},
+		{Source: "chat", Target: &diagnostics.MotionTraceTarget{PatternIdentifier: "pulse"}},
+		{Source: "chat", Retarget: &diagnostics.MotionTraceRetarget{NextPatternIdentifier: "tease"}},
+		{Source: "chat", Target: &diagnostics.MotionTraceTarget{PatternIdentifier: "tease"}},
+		{Source: "chat", Target: &diagnostics.MotionTraceTarget{PatternIdentifier: "waves"}},
+	} {
+		ring.Add(row)
+	}
+	server := &Server{traces: ring}
+	if got := strings.Join(server.recentChatPatternIDs(2), ","); got != "tease,waves" {
+		t.Fatalf("recent chat patterns = %q, want tease,waves", got)
 	}
 }
 
