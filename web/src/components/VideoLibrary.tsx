@@ -74,6 +74,10 @@ export function VideoLibrary({ active, locked }: Props) {
   }, [query, sort, videos]);
   const selected = videos.find((video) => video.id === selectedID);
 
+  // The tab panel stays mounted to preserve filters and selection. Unmount its
+  // media subtree while inactive so audio cannot continue from a hidden tab.
+  if (!active) return null;
+
   async function startScan() {
     setError("");
     try {

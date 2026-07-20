@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current Phase 18 M0 tree: 20,828,672 bytes plain and 14,649,856 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current Phase 18 M0 tree: 20,867,072 bytes plain and 14,654,976 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 885,491 raw / 560,630 gzip bytes because the isolated
-   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 441,255 raw
-   / 123,233 gzip bytes, and the stripped binary is 14,649,856 bytes. These
+   browser payload is 885,610 raw / 560,924 gzip bytes because the isolated
+   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 441,374 raw
+   / 123,497 gzip bytes, and the stripped binary is 14,654,976 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -119,25 +119,31 @@ Ranked by threat to the stated goals:
 
 - **2026-07-19** - Phase 18 M0 media foundation: schema v11 adds a nullable,
   indexed video catalog fed only by saved absolute locations and explicit
-  depth/file-bounded scans. Opaque IDs, component-level symlink rejection, and
-  `http.ServeContent` provide jailed constant-memory Range streaming. The
+  depth/file-bounded scans. Opaque IDs, rooted file handles, component-level
+  symlink rejection, file-identity validation, and `http.ServeContent` provide
+  jailed constant-memory Range streaming. The
   Videos grid/search and native player share one motion-free component with the
   optional funscript import preview; exact-basename script presence is metadata
-  only. Startup reconciles catalog rows to saved locations, and the Videos tab
-  remains available when the independent pattern catalog fails. Modal layering
-  and focus preserve global Emergency Stop. The Autopilot regression was an
+  only. Hidden library tabs unmount their player so playback cannot continue
+  invisibly. Startup reconciles catalog rows to saved locations, and the Videos
+  tab remains available when the independent pattern catalog fails. Modal
+  layering and focus preserve global Emergency Stop. The Autopilot regression was an
   ownership/provenance defect, not a second schema: Chat retains the Autopilot
   sidebar control, Diagnostics retains Manual Motion, both key active state to
   `target.source`, and the API rejects manual retargets of autonomous or idle
-  engines. All 185 frontend tests, typecheck/build, `go test ./...`, `go vet
+  engines. All 186 frontend tests, typecheck/build, `go test ./...`, `go vet
   ./...`, `golangci-lint`, and plain/stripped `CGO_ENABLED=0` builds pass.
   Desktop 1440x900 and mobile 390x844 rendered checks had no horizontal
   overflow; a 640x360 eight-second sample reached browser ready state 4. Final
-  HTML/CSS/JS is 441,255 raw / 123,233 gzip bytes; complete embedded output is
-  885,491 / 560,630. Plain/stripped binaries are 20,828,672 / 14,649,856 bytes.
+  HTML/CSS/JS is 441,374 raw / 123,497 gzip bytes; complete embedded output is
+  885,610 / 560,924. Plain/stripped binaries are 20,867,072 / 14,654,976 bytes.
   The local race build remains unavailable without `gcc`; CI retains that gate.
-  No hardware motion was run. A representative multi-folder scan and 2 GB
-  stable-RSS stream remain manual M0 acceptance before M1.
+  No hardware motion was run. Resumed manual acceptance scanned two roots with
+  four encountered files into three videos and one exact-basename pair without
+  issues. A full 2 GiB sparse stream returned 200 and 2,147,483,648 bytes in
+  0.829 s; peak server RSS rose 1,495,040 bytes (63,774,720 to 65,269,760), and
+  a 648-byte tail Range returned 206. M0's multi-root and constant-memory checks
+  are closed before M1.
 
 - **2026-07-19** - Manual-test ownership and control placement: Chat's compact
   control sidebar now owns Autopilot, while the explicitly badged Manual Motion

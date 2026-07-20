@@ -313,60 +313,89 @@ func (c *Catalog) OpenVideo(ctx context.Context, id string) (*os.File, Video, er
 	if video.Missing {
 		return nil, video, fmt.Errorf("%w: catalog entry is marked missing", ErrVideoUnavailable)
 	}
-	resolved, err := resolveInsideRoot(video.LocationPath, video.RelativePath)
-	if err != nil {
-		return nil, video, fmt.Errorf("%w: resolve catalog path: %w", ErrVideoUnavailable, err)
-	}
-	file, err := os.Open(resolved) // #nosec G304 -- resolved from an opaque catalog ID and revalidated inside its registered root.
+	file, err := openInsideRoot(video.LocationPath, video.RelativePath)
 	if err != nil {
 		return nil, video, fmt.Errorf("%w: open catalog file: %w", ErrVideoUnavailable, err)
-	}
-	info, err := file.Stat()
-	if err != nil {
-		_ = file.Close()
-		return nil, video, fmt.Errorf("%w: inspect catalog file: %w", ErrVideoUnavailable, err)
-	}
-	if !info.Mode().IsRegular() {
-		_ = file.Close()
-		return nil, video, fmt.Errorf("%w: catalog path is not a regular file", ErrVideoUnavailable)
 	}
 	return file, video, nil
 }
 
-func resolveInsideRoot(root, relative string) (string, error) {
+func openInsideRoot(root, relative string) (*os.File, error) {
+	root, cleanRelative, rootInfo, err := validateRootedPath(root, relative)
+	if err != nil {
+		return nil, err
+	}
+
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rootHandle.Close() }()
+	openedRootInfo, err := rootHandle.Stat(".")
+	if err != nil || !os.SameFile(rootInfo, openedRootInfo) {
+		return nil, ErrVideoUnavailable
+	}
+
+	expectedFileInfo, err := validateRootedComponents(rootHandle, cleanRelative)
+	if err != nil {
+		return nil, err
+	}
+	file, err := rootHandle.Open(cleanRelative)
+	if err != nil {
+		return nil, err
+	}
+	openedFileInfo, err := file.Stat()
+	if err != nil || !openedFileInfo.Mode().IsRegular() || !os.SameFile(expectedFileInfo, openedFileInfo) {
+		_ = file.Close()
+		return nil, ErrVideoUnavailable
+	}
+	return file, nil
+}
+
+func validateRootedPath(root, relative string) (string, string, fs.FileInfo, error) {
 	if filepath.IsAbs(relative) || relative == "" {
-		return "", ErrVideoUnavailable
+		return "", "", nil, ErrVideoUnavailable
 	}
 	root, err := filepath.Abs(filepath.Clean(root))
 	if err != nil {
-		return "", err
+		return "", "", nil, err
 	}
-	candidate := filepath.Join(root, filepath.FromSlash(relative))
+	cleanRelative := filepath.Clean(filepath.FromSlash(relative))
+	candidate := filepath.Join(root, cleanRelative)
 	if !pathWithin(root, candidate) {
-		return "", ErrVideoUnavailable
+		return "", "", nil, ErrVideoUnavailable
 	}
 	rootInfo, err := os.Lstat(root)
 	if err != nil {
-		return "", err
+		return "", "", nil, err
 	}
 	if !rootInfo.IsDir() || rootInfo.Mode()&fs.ModeSymlink != 0 {
-		return "", ErrVideoUnavailable
+		return "", "", nil, ErrVideoUnavailable
 	}
+	return root, cleanRelative, rootInfo, nil
+}
 
-	cleanRelative := filepath.Clean(filepath.FromSlash(relative))
-	current := root
+func validateRootedComponents(rootHandle *os.Root, cleanRelative string) (fs.FileInfo, error) {
+	current := ""
+	var expectedFileInfo fs.FileInfo
 	parts := strings.Split(cleanRelative, string(filepath.Separator))
 	for index, part := range parts {
 		current = filepath.Join(current, part)
-		info, lstatErr := os.Lstat(current)
+		info, lstatErr := rootHandle.Lstat(current)
 		if lstatErr != nil {
-			return "", lstatErr
+			return nil, lstatErr
 		}
 		if info.Mode()&fs.ModeSymlink != 0 || index < len(parts)-1 && !info.IsDir() {
-			return "", ErrVideoUnavailable
+			return nil, ErrVideoUnavailable
+		}
+		if index == len(parts)-1 {
+			expectedFileInfo = info
 		}
 	}
-	return candidate, nil
+	if expectedFileInfo == nil {
+		return nil, ErrVideoUnavailable
+	}
+	return expectedFileInfo, nil
 }
 
 func pathWithin(root, candidate string) bool {

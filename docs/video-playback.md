@@ -145,8 +145,9 @@ also enables an optional client-captured poster frame in a later slice.
   constant memory). **The path jail is the catalog**: no endpoint accepts a
   filesystem path; only scan-recorded ids resolve, and resolution re-checks
   that the joined path stays under its registered root and that the root, file,
-  and every intermediate component are not symlinks (defense against post-scan
-  root edits without depending on platform-wide ancestor resolution).
+  and every intermediate component are not symlinks. The final open uses Go's
+  rooted filesystem handle and verifies file identity, closing the path-swap
+  race without depending on platform-wide ancestor resolution.
 - In M1, `GET /api/media/videos/{id}/funscript` serves the paired script (bounded
   read, `MaxMediaFunscriptBytes` 16 MiB) for the OSD strip; the same loader
   feeds the sync session server-side, so the strip and the device always
@@ -237,6 +238,7 @@ downsampling is reused at canvas resolution):
   server search). Sort: name / most recent.
 - **Player view** (replaces the grid within the tab; back button returns): M0
   ships `<video>` with native controls and browser-reported duration backfill.
+  Leaving the Videos tab unmounts the player so hidden audio never continues.
   M1 adds the OSD strip; M2 adds the compact sync/device/drift status. The
   persistent Stop button stays global as on every route.
 - Settings > **Library locations** (new Settings section): list of
@@ -274,8 +276,12 @@ downsampling is reused at canvas resolution):
   the script is not read or played. Automated gates cover explicit scan,
   bounds, missing-file retention, partial-scan preservation, catalog path
   jailing, byte-range responses, controller gates, frontend search/playback,
-  and the import preview. A representative real multi-folder scan and the
-  2 GB stable-RSS stream check remain manual acceptance before M1.
+  and the import preview. The 2026-07-19 resumed acceptance scan covered two
+  roots, four encountered files, three videos, and one exact-basename pair
+  without issues. A complete 2 GiB sparse-file stream returned 200 in 0.829 s
+  with a 1,495,040-byte peak RSS increase; a tail Range returned 206 and the
+  requested 648 bytes. These close M0's multi-root and constant-memory manual
+  checks before M1.
 - **M1 — paired-script reading + OSD**: bounded funscript endpoint, canvas
   strip with intensity ramp + playhead + click-seek + hide toggle.
   Still no motion. *Gate: strip matches the script for feature-length files;

@@ -214,6 +214,7 @@ func TestBorrowedLogicalStoresDoNotCloseProcessDatastore(t *testing.T) {
 		{name: "prompt sets", close: server.personalization.prompts.Close},
 		{name: "chat log", close: server.chatLog.Close},
 		{name: "patterns", close: server.patterns.Close},
+		{name: "media catalog", close: server.media.Close},
 		{name: "model inventory", close: server.models.Close},
 	}
 	for _, borrower := range borrowers {

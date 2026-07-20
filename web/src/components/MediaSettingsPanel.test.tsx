@@ -59,6 +59,7 @@ describe("MediaSettingsPanel", () => {
     expect(screen.getByRole("button", { name: "Scan now" })).toBeDisabled();
 
     result.rerender(<MediaSettingsPanel locations={["C:/media", "D:/new"]} savedLocations={["C:/media", "D:/new"]} locked={false} onChange={onChange} />);
+    await waitFor(() => expect(mediaVideos).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
     await waitFor(() => expect(startMediaScan).toHaveBeenCalledOnce());
   });

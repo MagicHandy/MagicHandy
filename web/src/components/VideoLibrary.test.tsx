@@ -101,4 +101,15 @@ describe("VideoLibrary", () => {
       "Unavailable Alpha missing",
     ]);
   });
+
+  it("unmounts playback when the Videos tab becomes inactive", async () => {
+    mediaVideos.mockResolvedValue({ videos: [video("session", "Session", "2026-07-19T12:00:00Z")] });
+    const result = render(<VideoLibrary active locked={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Play Session" }));
+    expect(screen.getByLabelText("Session")).toBeInTheDocument();
+
+    result.rerender(<VideoLibrary active={false} locked={false} />);
+    expect(screen.queryByLabelText("Session")).not.toBeInTheDocument();
+  });
 });

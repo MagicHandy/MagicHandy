@@ -17,25 +17,33 @@ export function MediaSettingsPanel({ locations, savedLocations, locked, onChange
   const [scan, setScan] = useState<MediaScanState | null>(null);
   const [error, setError] = useState("");
   const mounted = useRef(true);
+  const refreshGeneration = useRef(0);
   const dirty = JSON.stringify(locations) !== JSON.stringify(savedLocations);
+  const savedLocationsKey = JSON.stringify(savedLocations);
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     try {
       const [videoResponse, scanResponse] = await Promise.all([api.mediaVideos(), api.mediaScan()]);
-      if (!mounted.current) return;
+      if (!mounted.current || generation !== refreshGeneration.current) return;
       setVideos(videoResponse.videos ?? []);
       setScan(scanResponse.scan);
       setError("");
     } catch (reason) {
-      if (mounted.current) setError(reason instanceof Error ? reason.message : "Media library status could not be loaded.");
+      if (mounted.current && generation === refreshGeneration.current) {
+        setError(reason instanceof Error ? reason.message : "Media library status could not be loaded.");
+      }
     }
   }, []);
 
   useEffect(() => {
     mounted.current = true;
     void refresh();
-    return () => { mounted.current = false; };
-  }, [refresh]);
+    return () => {
+      mounted.current = false;
+      refreshGeneration.current += 1;
+    };
+  }, [refresh, savedLocationsKey]);
 
   useEffect(() => {
     if (!scan?.running) return undefined;
