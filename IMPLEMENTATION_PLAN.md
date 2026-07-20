@@ -95,7 +95,7 @@ status column and in "Known Gaps Carried Forward" below.
 | Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
-| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0 implemented; M1-M3 planned** | current PR |
+| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0 implemented; M1-M3 planned** | #104 |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
