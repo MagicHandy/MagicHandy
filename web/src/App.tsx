@@ -3,6 +3,7 @@ import { PatternLibraryRoute } from "./routes/PatternLibraryRoute";
 import { PresetModesRoute } from "./routes/PresetModesRoute";
 import { ChatRoute } from "./routes/ChatRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
+import { VideoRoute } from "./routes/VideoRoute";
 import { AppShell } from "./shell/AppShell";
 import { routeBase } from "./shell/NavRail";
 import { useAppState, useHashRoute } from "./state/app-state";
@@ -34,6 +35,8 @@ export function App() {
           <PresetModesRoute />
         ) : base === "library" ? (
           <PatternLibraryRoute />
+        ) : base === "videos" ? (
+          <VideoRoute />
         ) : base === "settings" ? (
           <SettingsRoute />
         ) : (

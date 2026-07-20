@@ -28,11 +28,6 @@ vi.mock("../api/client", () => ({
     resumeMotion: vi.fn(),
     stopMotion: vi.fn(),
     setPatternAutoDisable: vi.fn(),
-    mediaVideos: vi.fn(),
-    mediaScan: vi.fn(),
-    startMediaScan: vi.fn(),
-    saveMediaDuration: vi.fn(),
-    mediaStreamURL: (id: string) => `/stream/${id}`,
   },
 }));
 
@@ -84,18 +79,11 @@ const library: PatternLibrary = {
 const getLibrary = vi.mocked(api.getLibrary);
 const patternFeedback = vi.mocked(api.patternFeedback);
 const importMotionContent = vi.mocked(api.importMotionContent);
-const mediaVideos = vi.mocked(api.mediaVideos);
-const mediaScan = vi.mocked(api.mediaScan);
 
 describe("PatternLibraryRoute", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getLibrary.mockResolvedValue({ library });
-    mediaVideos.mockResolvedValue({ videos: [] });
-    mediaScan.mockResolvedValue({ scan: {
-      running: false, cancellable: false, cancelled: false, files_visited: 0, videos_found: 0,
-      summary: { locations: 0, added: 0, updated: 0, missing: 0, removed: 0, skipped: 0, issues: [] },
-    } });
   });
 
   it("shows a recoverable storage error instead of a false empty catalog", async () => {
@@ -158,39 +146,6 @@ describe("PatternLibraryRoute", () => {
     expect(importMotionContent).toHaveBeenCalledTimes(1);
     expect(importMotionContent.mock.calls[0][1]).toBe("program");
     expect(getLibrary).toHaveBeenCalledOnce();
-  });
-
-  it("keeps Videos as a library tab and loads its catalog only when selected", async () => {
-    mediaVideos.mockResolvedValue({ videos: [{
-      id: "video", location_path: "C:/media", display_name: "Catalog video", size_bytes: 1024,
-      modified_at: "2026-07-19T12:00:00Z", duration_ms: null, has_funscript: false, missing: false,
-      scanned_at: "2026-07-19T12:00:00Z",
-    }] });
-    render(<PatternLibraryRoute />);
-    await screen.findByRole("heading", { level: 3, name: "Stroke" });
-    expect(mediaVideos).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Videos" }));
-
-    expect(await screen.findByRole("button", { name: "Play Catalog video" })).toBeInTheDocument();
-    expect(mediaVideos).toHaveBeenCalledOnce();
-    expect(screen.getByRole("tabpanel", { name: "Videos" })).toBeVisible();
-  });
-
-  it("keeps Videos usable when the pattern catalog fails independently", async () => {
-    getLibrary.mockRejectedValueOnce(new Error("pattern database unavailable"));
-    mediaVideos.mockResolvedValue({ videos: [{
-      id: "independent-video", location_path: "C:/media", display_name: "Independent video", size_bytes: 1024,
-      modified_at: "2026-07-19T12:00:00Z", duration_ms: null, has_funscript: false, missing: false,
-      scanned_at: "2026-07-19T12:00:00Z",
-    }] });
-    render(<PatternLibraryRoute />);
-    expect(await screen.findByText("pattern database unavailable")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Videos" }));
-
-    expect(await screen.findByRole("button", { name: "Play Independent video" })).toBeInTheDocument();
-    expect(screen.queryByText("pattern database unavailable")).not.toBeInTheDocument();
   });
 
   it("deduplicates one pattern mutation without hiding another in-flight mutation", async () => {

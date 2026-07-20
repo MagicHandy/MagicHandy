@@ -35,7 +35,9 @@ describe("shell accessibility", () => {
     expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Preset modes" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Pattern library" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Videos" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(routeBase("#/videos/session")).toBe("videos");
     expect(routeBase("#/not-a-route/details")).toBe("chat");
   });
 

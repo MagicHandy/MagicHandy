@@ -5,8 +5,9 @@
 Proposed 2026-07-06; **implemented 2026-07-08 through Phase 14** with the React
 migration (ADR 0009, PRs #37/#38; mobile-footer refinement in #46). Updated
 2026-07-19 for PR #101: Autopilot is an assistant session on Chat, not a preset
-mode. This is now the as-built shell specification: the nav rail with pinned
-Stop, status-only bar, and four routed workspaces all exist. Pattern Library's
+mode. Updated 2026-07-20 when Videos became a peer workspace. This is now the
+as-built shell specification: the nav rail with pinned Stop, status-only bar,
+and five routed workspaces all exist. Pattern Library's
 Phase 14 workspace is implemented; Chat Autopilot's initial curation loop is in
 place, with the remaining autonomy work called out below. This
 document specifies the **shell and information architecture**; it does not
@@ -26,9 +27,10 @@ distinct workspaces:
 - **Chat** — the conversation, assistant Autopilot, and live control.
 - **Preset Modes** — deterministic autonomous motion (the renamed "Hands-free").
 - **Pattern Library** — browse, import, enable, and author motion content.
+- **Videos** — scan, search, and play local media without owning motion.
 - **Settings** — device, model, prompts/memory, diagnostics.
 
-Four peer workspaces do not fit a "one view plus an overlay window" model:
+Peer workspaces do not fit a "one view plus an overlay window" model:
 overlaying three of them over the chat would stack surfaces, and hiding chat to
 show a full window fights the value that motivated the window in the first
 place. The right information architecture for peer workspaces is a **permanent
@@ -92,7 +94,8 @@ One link per workspace, each an icon + label row:
 | 1 | Chat | `#/chat` (default) | conversation |
 | 2 | Preset Modes | `#/modes` | autonomous motion |
 | 3 | Pattern Library | `#/library` | saved patterns |
-| 4 | Settings | `#/settings/*` | configuration |
+| 4 | Videos | `#/videos` | local media playback |
+| 5 | Settings | `#/settings/*` | configuration |
 
 Row spec: 40px tall, `0 12px` padding, 18px icon + 0.9rem label, radius
 `--radius-sm` for every state. Hover uses neutral `--surface-2`. Active uses the
@@ -120,7 +123,7 @@ render and can trigger it (`data-allow-readonly`, `data-allow-backend-offline`).
   block, still pinned. Collapse is a layout change, not a content change — no
   safety control disappears.
 - **Mobile** (`≤ 720px`): the nav becomes a bottom tab bar (Chat / Modes /
-  Library / Settings), and **Stop detaches into its own fixed bottom bar above
+  Library / Videos / Settings), and **Stop detaches into its own fixed bottom bar above
   the tabs** so the keyboard never hides it — the same rule as today, carried
   forward. The profile lockup moves into the Settings page header.
 
@@ -132,10 +135,12 @@ sub-sections as today.
 - `#/` and `#/chat` → Chat (default)
 - `#/modes` → Preset Modes
 - `#/library` → Pattern Library
+- `#/videos` → Videos
 - `#/settings`, `#/settings/device|model|prompts|diagnostics` → Settings
 
-One workspace is mounted at a time; the others are `hidden` (never occluding
-overlays). On navigation, move focus to the workspace's `<h1>` (`tabindex="-1"`)
+One workspace is mounted at a time; the others are unmounted (never occluding
+the active page or leaving hidden media running). On navigation, move focus to
+the workspace's `<h1>` (`tabindex="-1"`)
 so keyboard and screen-reader users land in the new page. Routes are
 deep-linkable and back/forward-navigable. The router stays the single source of
 which page is visible — no parallel `display` toggling from feature modules.
@@ -374,7 +379,7 @@ Every ui-design.md safety property maps to a home in the new shell:
 | One feedback channel, never occluded | Toast + backend banner above all pages |
 | Single active controller | Unchanged; extra clients read-only with Stop |
 | Backend-loss lock | Banner at workspace top below status bar; required controls lock |
-| Motion through engine only | Chat Autopilot / Preset Modes / Library are engine clients |
+| Motion through engine only | Chat Autopilot / Preset Modes / Library are engine clients; future synced Videos must use the same engine |
 | Viewport-safe sizing | The shell may own `100vh`; no overflow-prone page-wide `100vw`; popovers stay bounded |
 | Flat navigation, no stacked modals | Router mounts one workspace; no overlay windows |
 

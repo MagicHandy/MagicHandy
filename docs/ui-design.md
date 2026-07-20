@@ -40,7 +40,7 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > **As built (2026-07-08, React shell).** The app is the **permanent left
 > navigation sidebar that switches pages** from
 > [ui-navigation-redesign.md](ui-navigation-redesign.md): a nav rail
-> (Chat / Preset Modes / Pattern Library / Settings) with **Stop pinned to
+> (Chat / Preset Modes / Pattern Library / Videos / Settings) with **Stop pinned to
 > the rail footer on every page**, a compact status-led top bar (dot+text
 > readouts, stopwatch, mini visualizer, and the connection disclosure), and
 > workspaces as routed pages under a hash router. The shell-owned connection
@@ -128,7 +128,8 @@ relabeled by a stale diagnostic control. The shell-level connection manager owns
 saved dispatch owner's connect/check/discover actions and immediate speed/stroke
 limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
-Browse / Programs / Videos / Import / Author / Training workspace, and
+Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
+the local media catalog and player, and
 `#/settings/device|media|model|voice|prompts|diagnostics` are sibling sections
 of the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the

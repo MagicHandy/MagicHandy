@@ -64,12 +64,33 @@ func TestMediaScanCatalogAndRangeStreaming(t *testing.T) {
 	if rangeResponse.Header().Get("Accept-Ranges") != "bytes" || rangeResponse.Header().Get("Content-Range") != "bytes 2-5/10" {
 		t.Fatalf("range headers = %v", rangeResponse.Header())
 	}
+	if rangeResponse.Header().Get("Content-Type") != "video/mp4" || rangeResponse.Header().Get("Cache-Control") != "no-store" || rangeResponse.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("stream safety headers = %v", rangeResponse.Header())
+	}
 
 	duration := httptest.NewRecorder()
 	durationBody := `{"id":"` + payload.Videos[0].ID + `","duration_ms":42000}`
 	server.Handler().ServeHTTP(duration, withController(httptest.NewRequest(http.MethodPost, "/api/media/duration", strings.NewReader(durationBody))))
 	if duration.Code != http.StatusOK {
 		t.Fatalf("duration status = %d: %s", duration.Code, duration.Body.String())
+	}
+}
+
+func TestMediaContentTypeDoesNotDependOnHostRegistry(t *testing.T) {
+	for _, testCase := range []struct {
+		path string
+		want string
+	}{
+		{path: "sample.mp4", want: "video/mp4"},
+		{path: "sample.m4v", want: "video/mp4"},
+		{path: "sample.webm", want: "video/webm"},
+		{path: "sample.mov", want: "video/quicktime"},
+	} {
+		t.Run(filepath.Ext(testCase.path), func(t *testing.T) {
+			if got := mediaContentType(testCase.path); got != testCase.want {
+				t.Fatalf("mediaContentType(%q) = %q, want %q", testCase.path, got, testCase.want)
+			}
+		})
 	}
 }
 

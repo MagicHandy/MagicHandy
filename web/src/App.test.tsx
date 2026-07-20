@@ -223,7 +223,7 @@ describe("app shell safety invariants", () => {
     await screen.findByText("No messages yet");
     const status = screen.getByRole("region", { name: /status/i });
     expect(status).not.toContainElement(stop);
-    for (const hash of ["#/modes", "#/library", "#/settings", "#/chat"]) {
+    for (const hash of ["#/modes", "#/library", "#/videos", "#/settings", "#/chat"]) {
       go(hash);
       expect(screen.getByRole("button", { name: /emergency stop/i })).toBeInTheDocument();
       if (hash === "#/chat") await screen.findByText("No messages yet");
@@ -244,7 +244,7 @@ describe("app shell safety invariants", () => {
     installFetch();
     renderApp();
     const trigger = await screen.findByRole("button", { name: /the handy connection key required/i });
-    for (const hash of ["#/modes", "#/library", "#/settings", "#/chat"]) {
+    for (const hash of ["#/modes", "#/library", "#/videos", "#/settings", "#/chat"]) {
       go(hash);
       expect(screen.getByRole("button", { name: /the handy connection key required/i })).toBeInTheDocument();
     }

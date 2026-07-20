@@ -21,6 +21,7 @@ export function MediaVideoPlayer({
 }: Props) {
   const [playbackError, setPlaybackError] = useState("");
   const reported = useRef("");
+  const playerRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setPlaybackError("");
@@ -32,7 +33,8 @@ export function MediaVideoPlayer({
     if (!Number.isFinite(durationMillis) || durationMillis <= 0) return;
     onDuration?.(durationMillis);
     const reportKey = `${video.id}:${durationMillis}`;
-    if (!allowMetadataWrite || video.duration_ms === durationMillis || reported.current === reportKey) return;
+    const savedDurationMatches = video.duration_ms !== null && Math.abs(video.duration_ms - durationMillis) <= 250;
+    if (!allowMetadataWrite || savedDurationMatches || reported.current === reportKey) return;
     reported.current = reportKey;
     try {
       await api.saveMediaDuration(video.id, durationMillis);
@@ -44,10 +46,16 @@ export function MediaVideoPlayer({
     }
   }
 
+  function retryPlayback() {
+    setPlaybackError("");
+    playerRef.current?.load();
+  }
+
   return (
     <div className="media-player" aria-label={`Video player for ${video.display_name}`}>
       <div className="media-video-frame">
         <video
+          ref={playerRef}
           key={video.id}
           controls
           playsInline
@@ -57,10 +65,11 @@ export function MediaVideoPlayer({
           onLoadedMetadata={(event) => void loadedMetadata(event)}
           onTimeUpdate={(event) => onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000))}
           onSeeking={(event) => onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000))}
+          onCanPlay={() => setPlaybackError("")}
           onError={() => setPlaybackError("This video could not be loaded. Verify that the file still exists and uses a browser-supported codec.")}
         />
       </div>
-      {playbackError && <p className="form-status media-playback-error" role="alert">{playbackError}</p>}
+      {playbackError && <div className="form-status media-playback-error media-playback-error-row" role="alert"><span>{playbackError}</span><button type="button" className="btn btn-secondary compact-command" onClick={retryPlayback}>Retry video</button></div>}
       {children}
     </div>
   );
