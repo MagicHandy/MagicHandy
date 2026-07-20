@@ -163,7 +163,19 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) {
 	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
 		return
 	}
-	replySeq := s.appendChatMessage(chat.MessageRoleAssistant, say, "")
+	sessionID, err := s.chatLog.ActiveSessionID()
+	if err != nil {
+		s.logger.Warn("Autopilot chat session unavailable", "error", err)
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	diagnostics := &chat.MessageDiagnostics{
+		Source:    "autopilot",
+		Provider:  settings.LLM.Provider,
+		Model:     settings.LLM.Model,
+		PromptSet: settings.LLM.PromptSet,
+	}
+	replySeq := s.appendChatMessageTo(sessionID, chat.MessageRoleAssistant, say, "", diagnostics)
 	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
 		s.deleteAutopilotLine(replySeq)
 		return

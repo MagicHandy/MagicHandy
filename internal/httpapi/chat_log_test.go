@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -71,6 +72,9 @@ func TestChatStreamAppendsToSharedLog(t *testing.T) {
 	}
 	if messages[1].Role != chat.MessageRoleAssistant || messages[1].Content != "Logged reply." {
 		t.Fatalf("second row = %+v, want the displayed reply", messages[1])
+	}
+	if messages[1].Diagnostics == nil || messages[1].Diagnostics.Source != "interactive" {
+		t.Fatalf("assistant diagnostics = %+v, want interactive provenance", messages[1].Diagnostics)
 	}
 	if latest != messages[1].Seq {
 		t.Fatalf("latest_seq = %d, want %d", latest, messages[1].Seq)
@@ -159,6 +163,13 @@ func TestChatCursorsAreIsolatedAndMonotonicOverHTTP(t *testing.T) {
 	server.Handler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("cursor without client id = %d, want 400", recorder.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/chat/cursor", strings.NewReader(`{"session_id":"missing","seq":1}`))
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, withControllerID(request, "tab-a"))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("cursor for missing session = %d, want 404: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -316,5 +327,146 @@ func TestChatLogStorageFailureIsExplicitAndRedacted(t *testing.T) {
 	state := server.chatState()
 	if available, ok := state["available"].(bool); !ok || available {
 		t.Fatalf("chat state availability = %#v, want false", state["available"])
+	}
+}
+
+func TestChatSessionHTTPFlowKeepsOneActiveConversation(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	list := func() struct {
+		ActiveID string         `json:"active_session_id"`
+		Sessions []chat.Session `json:"sessions"`
+	} {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/chat/sessions", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("list sessions = %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var payload struct {
+			ActiveID string         `json:"active_session_id"`
+			Sessions []chat.Session `json:"sessions"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode sessions: %v", err)
+		}
+		return payload
+	}
+
+	initial := list()
+	if len(initial.Sessions) != 1 || !initial.Sessions[0].Active {
+		t.Fatalf("initial sessions = %+v", initial)
+	}
+	if _, err := server.chatLog.Append(chat.MessageRoleUser, "keep this conversation", "client"); err != nil {
+		t.Fatalf("append initial chat: %v", err)
+	}
+
+	rejected := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rejected, withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/chat/sessions",
+		strings.NewReader(`{"discard_current_unsaved":false}`),
+	)))
+	if rejected.Code != http.StatusConflict || !strings.Contains(rejected.Body.String(), "save or discard") {
+		t.Fatalf("unresolved draft create = %d: %s", rejected.Code, rejected.Body.String())
+	}
+
+	save := httptest.NewRecorder()
+	server.Handler().ServeHTTP(save, withController(httptest.NewRequest(
+		http.MethodPut,
+		"/api/chat/sessions/"+initial.ActiveID+"/save",
+		strings.NewReader(`{}`),
+	)))
+	if save.Code != http.StatusOK {
+		t.Fatalf("save session = %d: %s", save.Code, save.Body.String())
+	}
+
+	create := httptest.NewRecorder()
+	server.Handler().ServeHTTP(create, withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/chat/sessions",
+		strings.NewReader(`{"discard_current_unsaved":false}`),
+	)))
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create session = %d: %s", create.Code, create.Body.String())
+	}
+	created := list()
+	if len(created.Sessions) != 2 || created.ActiveID == initial.ActiveID {
+		t.Fatalf("created sessions = %+v", created)
+	}
+
+	activate := httptest.NewRecorder()
+	server.Handler().ServeHTTP(activate, withController(httptest.NewRequest(
+		http.MethodPut,
+		"/api/chat/sessions/"+initial.ActiveID+"/active?discard_current_unsaved=true",
+		strings.NewReader(`{}`),
+	)))
+	if activate.Code != http.StatusOK {
+		t.Fatalf("activate session = %d: %s", activate.Code, activate.Body.String())
+	}
+	active := list()
+	if active.ActiveID != initial.ActiveID {
+		t.Fatalf("active session = %q, want %q", active.ActiveID, initial.ActiveID)
+	}
+	if len(active.Sessions) != 1 {
+		t.Fatalf("discarded working session remains in list: %+v", active.Sessions)
+	}
+	activeCount := 0
+	for _, session := range active.Sessions {
+		if session.Active {
+			activeCount++
+		}
+	}
+	if activeCount != 1 {
+		t.Fatalf("active session count = %d, want 1", activeCount)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/chat/messages?session_id="+initial.ActiveID, nil)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "keep this conversation") {
+		t.Fatalf("session messages = %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestChatStreamRejectsAStaleSessionSelection(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	request := withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/chat/stream",
+		strings.NewReader(`{"session_id":"not-active","message":"hello"}`),
+	))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("stale chat stream = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "no longer active") {
+		t.Fatalf("stale session response = %s", recorder.Body.String())
+	}
+}
+
+func TestServerCloseAppliesTheDefaultUnsavedChatPolicy(t *testing.T) {
+	server := newTestServer(t)
+	dataDir := server.store.DataDir()
+	discardedID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := server.chatLog.Append(chat.MessageRoleUser, "discard at shutdown", "client"); err != nil {
+		t.Fatalf("append draft: %v", err)
+	}
+
+	server.Close()
+	reopened, err := chat.OpenMessageLog(dataDir)
+	if err != nil {
+		t.Fatalf("reopen chat log: %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	if _, err := reopened.Session(discardedID); !errors.Is(err, chat.ErrChatSessionNotFound) {
+		t.Fatalf("shutdown draft error = %v, want not found", err)
 	}
 }

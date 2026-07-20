@@ -65,8 +65,9 @@ chat panel never displayed. The core must keep these ordered:
 
 - chat text emit and TTS enqueue happen in lockstep: a reply that is spoken is
   always also displayed
-- clients read chat from a shared log via per-client cursors, not a destructively
-  drained global queue, so one client cannot consume another's messages
+- clients read each backend-owned chat session from the shared log via
+  per-client, per-session cursors, not a destructively drained global queue, so
+  one client or conversation cannot consume another's messages
 - audio playback uses a single-owner lease (the active controller) so multiple
   clients never speak the same clip at once
 - model/transport errors return to the initiating client as a visible error and

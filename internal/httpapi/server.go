@@ -82,6 +82,7 @@ type Server struct {
 	quiescing              atomic.Bool
 	quiesceOnce            sync.Once
 	closeOnce              sync.Once
+	chatLifecycleMu        sync.Mutex
 	chatCancelMu           sync.Mutex
 	chatCancels            map[uint64]context.CancelFunc
 	nextChatID             uint64
@@ -171,7 +172,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
 
-	if err := server.openPersistentDomains(settings.Media.LibraryPaths); err != nil {
+	if err := server.openPersistentDomains(settings.Media.LibraryPaths, settings.Chat); err != nil {
 		server.modes.Shutdown()
 		if server.voice != nil {
 			server.voice.Shutdown()
@@ -190,9 +191,13 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	return server, nil
 }
 
-func (s *Server) openPersistentDomains(mediaLocations []string) error {
+func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings config.ChatSettings) error {
 	chatLog, err := chat.OpenMessageLogWithDatabase(s.store.Datastore())
 	if err != nil {
+		return err
+	}
+	if _, err := chatLog.ReconcileStartup(chatSettings.StartupBehavior, chatSettings.KeepUnsavedOnExit); err != nil {
+		_ = chatLog.Close()
 		return err
 	}
 	s.chatLog = chatLog
@@ -248,9 +253,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
 	s.llmRoutes(mux)
-	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
-	mux.HandleFunc("GET /api/chat/messages", s.handleChatMessages)
-	mux.HandleFunc("POST /api/chat/cursor", s.handleChatCursor)
+	s.chatRoutes(mux)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
 	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)
 	mux.HandleFunc("POST /api/transport/cloud/check", s.handleCloudConnectionCheck)

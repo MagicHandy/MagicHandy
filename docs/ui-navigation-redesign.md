@@ -172,16 +172,19 @@ current page. It is a popover from measured geometry, not a `100vw` panel.
 The default page. Two columns on desktop, mirroring the reference `Controle`
 layout — the conversation beside a compact control column:
 
-- **Conversation** (left, fills remaining width): the chat log (grows with the
-  viewport, keeps near-bottom scrollback stickiness and the jump-to-latest
-  affordance) and the composer. Autonomous replies render in this same log
-  rather than in a mode card.
+- **Conversation** (left, fills remaining width): stable session tabs, the chat
+  log (grows with the viewport, keeps near-bottom scrollback stickiness and the
+  jump-to-latest affordance), and the composer. Saved tabs persist; one unsaved
+  working tab is retained or discarded according to Settings > Chat. Autonomous
+  replies render in this same log rather than in a mode card.
 - **Control column** (right, ~300px): the compact **Autopilot** session control
   with Pause/Resume and decision provenance, voice shortcuts, live **quick
   settings** (speed, stroke, reverse, style — immediate-apply), and the
   **detailed visualizer** with commanded-estimate labeling.
 Manual device testing is intentionally absent from Chat and lives under
-Settings > Diagnostics. Nothing in this page is a stacked modal.
+Settings > Diagnostics. The only Chat modal is the focused Save/discard
+confirmation before replacing or leaving the active working session; it cannot
+stack and the shell-level Stop remains outside it.
 
 Rationale for keeping quick settings here rather than in Settings: mid-session
 speed/stroke/style/reverse changes must not force the user out of chat — that
@@ -306,10 +309,13 @@ focused component coverage for trim, zoom, validation, and payload invariants.
 ## Workspace: Settings
 
 The former settings **window** becomes the Settings **page**, reached from the
-profile lockup or any `#/settings/*` route. It contains Device / Model / Voice /
-Prompts & Memory / Diagnostics sections, immediate-apply live device settings,
-explicit and confirmed destructive actions (reset, clear memory), the protected
-built-in prompt sets, and the redacted connection key that is never echoed back.
+profile lockup or any `#/settings/*` route. It contains Device / Media library /
+Model / Chat / Voice / Prompts & Memory / Diagnostics sections, immediate-apply
+live device settings, explicit and confirmed destructive actions (reset, clear
+memory), the protected built-in prompt sets, and the redacted connection key
+that is never echoed back. Chat settings own startup restoration and unsaved
+working-tab retention; clean-start mode disables retention, while saved
+sessions are always durable.
 
 Diagnostics owns the explicitly badged **Manual motion / testing** group. Its
 Start action stops the active run and drains any Freestyle, Chat keepalive, or
@@ -381,7 +387,7 @@ Every ui-design.md safety property maps to a home in the new shell:
 | Backend-loss lock | Banner at workspace top below status bar; required controls lock |
 | Motion through engine only | Chat Autopilot / Preset Modes / Library are engine clients; future synced Videos must use the same engine |
 | Viewport-safe sizing | The shell may own `100vh`; no overflow-prone page-wide `100vw`; popovers stay bounded |
-| Flat navigation, no stacked modals | Router mounts one workspace; no overlay windows |
+| Flat navigation, no stacked modals | Router mounts one workspace; a single transient confirmation may guard a destructive session transition |
 
 ## Historical Migration Sequence
 

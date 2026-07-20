@@ -2,7 +2,10 @@ package chat
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,38 +14,70 @@ import (
 	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
-// MessageLogCap bounds the shared chat log. Appends prune the oldest rows
-// past this cap so the log cannot grow without bound.
+// MessageLogCap bounds each chat session independently.
 const MessageLogCap = 200
 
-// Message roles in the shared log.
+// Message roles accepted by the visible chat log.
 const (
 	MessageRoleUser      = "user"
 	MessageRoleAssistant = "assistant"
+	defaultSessionTitle  = "New chat"
 )
 
-// LogMessage is one row of the shared chat message log — the single
-// canonical history every client reads via its own cursor (ADR 0003).
-// Model/transport errors are never appended: only text a user typed or a
-// reply that was actually displayed.
-type LogMessage struct {
-	Seq             int64  `json:"seq"`
-	Role            string `json:"role"`
-	Content         string `json:"content"`
-	ClientID        string `json:"client_id,omitempty"`
-	CreatedAt       string `json:"created_at"`
-	SpeechRequestID string `json:"speech_request_id,omitempty"`
+// Session lifecycle errors returned by MessageLog mutations.
+var (
+	ErrChatSessionNotFound    = errors.New("chat session not found")
+	ErrActiveSessionDelete    = errors.New("the active chat session cannot be deleted")
+	ErrUnsavedSessionConflict = errors.New("the active unsaved chat must be saved or discarded first")
+)
+
+// MessageDiagnostics is the non-secret provenance retained with one visible
+// assistant reply. Prompts, memories, request bodies, and credentials never
+// enter this payload.
+type MessageDiagnostics struct {
+	Source           string `json:"source,omitempty"`
+	Provider         string `json:"provider,omitempty"`
+	Model            string `json:"model,omitempty"`
+	PromptSet        string `json:"prompt_set,omitempty"`
+	RequestMillis    int64  `json:"request_ms,omitempty"`
+	Repaired         bool   `json:"repaired,omitempty"`
+	SemanticFallback bool   `json:"semantic_fallback,omitempty"`
+	InitialMalformed bool   `json:"initial_malformed,omitempty"`
+	MotionAction     string `json:"motion_action,omitempty"`
 }
 
-// MessageLog is the DB-backed shared chat history with per-client cursors.
-// Reads are non-destructive: one client reading never consumes another
-// client's view of the log.
+// LogMessage is one visible row in a chat session.
+type LogMessage struct {
+	Seq             int64               `json:"seq"`
+	Role            string              `json:"role"`
+	Content         string              `json:"content"`
+	ClientID        string              `json:"client_id,omitempty"`
+	CreatedAt       string              `json:"created_at"`
+	Diagnostics     *MessageDiagnostics `json:"diagnostics,omitempty"`
+	SpeechRequestID string              `json:"speech_request_id,omitempty"`
+}
+
+// Session is one retained or process-local conversation tab. Exactly one row
+// is active through the chat_workspace singleton.
+type Session struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Saved        bool   `json:"saved"`
+	Active       bool   `json:"active"`
+	MessageCount int    `json:"message_count"`
+	LatestSeq    int64  `json:"latest_seq"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+// MessageLog owns chat sessions, their bounded messages, and per-client,
+// per-session cursors in the process datastore.
 type MessageLog struct {
 	db     *dbstore.DB
 	ownsDB bool
 }
 
-// OpenMessageLog opens the shared chat log in the app datastore.
+// OpenMessageLog opens a chat log that owns its datastore connection.
 func OpenMessageLog(dataDir string) (*MessageLog, error) {
 	database, err := dbstore.Open(dataDir)
 	if err != nil {
@@ -51,7 +86,7 @@ func OpenMessageLog(dataDir string) (*MessageLog, error) {
 	return &MessageLog{db: database, ownsDB: true}, nil
 }
 
-// OpenMessageLogWithDatabase borrows the process-owned datastore.
+// OpenMessageLogWithDatabase opens a chat log over the process datastore.
 func OpenMessageLogWithDatabase(database *dbstore.DB) (*MessageLog, error) {
 	if database == nil {
 		return nil, errors.New("chat message datastore is required")
@@ -59,7 +94,7 @@ func OpenMessageLogWithDatabase(database *dbstore.DB) (*MessageLog, error) {
 	return &MessageLog{db: database}, nil
 }
 
-// Close releases the log's database handle.
+// Close releases the datastore only when the log opened it.
 func (l *MessageLog) Close() error {
 	if !l.ownsDB {
 		return nil
@@ -67,9 +102,328 @@ func (l *MessageLog) Close() error {
 	return l.db.Close()
 }
 
-// Append adds one message and prunes the log to MessageLogCap. It returns
-// the assigned sequence number.
+// ReconcileStartup applies the configured restart policy once when the server
+// opens its persistent domains. Saved sessions are never removed.
+func (l *MessageLog) ReconcileStartup(startupBehavior string, keepUnsaved bool) (Session, error) {
+	ctx := context.Background()
+	var activeID string
+	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var currentID string
+		var currentSaved bool
+		err := tx.QueryRowContext(ctx, `
+			SELECT s.id, s.saved
+			FROM chat_workspace w
+			JOIN chat_sessions s ON s.id = w.active_session_id
+			WHERE w.id = 'current'
+		`).Scan(&currentID, &currentSaved)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		if startupBehavior == "previous" && currentID != "" && (currentSaved || keepUnsaved) {
+			activeID = currentID
+		}
+		if startupBehavior == "previous" && activeID == "" {
+			_ = tx.QueryRowContext(ctx, `
+				SELECT id FROM chat_sessions WHERE saved = 1
+				ORDER BY updated_at DESC, id DESC LIMIT 1
+			`).Scan(&activeID)
+		}
+		if startupBehavior == "new" || activeID == "" {
+			var err error
+			activeID, err = insertSession(ctx, tx)
+			if err != nil {
+				return err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO chat_workspace(id, active_session_id, updated_at)
+			VALUES('current', ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				active_session_id = excluded.active_session_id,
+				updated_at = excluded.updated_at
+		`, activeID, nowUTC()); err != nil {
+			return err
+		}
+		// Saved tabs plus one unsaved working tab are the whole retained
+		// workspace. This also cleans up drafts created by older builds that
+		// allowed an unsaved tab to become inactive.
+		_, err = tx.ExecContext(ctx, `DELETE FROM chat_sessions WHERE saved = 0 AND id <> ?`, activeID)
+		return err
+	})
+	if err != nil {
+		return Session{}, fmt.Errorf("reconcile chat startup: %w", err)
+	}
+	return l.Session(activeID)
+}
+
+// ReconcileShutdown removes an unsaved working conversation during a clean
+// shutdown unless the user explicitly chose to retain it. Startup performs
+// the same reconciliation because a killed process cannot run this hook.
+func (l *MessageLog) ReconcileShutdown(keepUnsaved bool) error {
+	if keepUnsaved {
+		return nil
+	}
+	if _, err := l.ReconcileStartup("previous", false); err != nil {
+		return fmt.Errorf("reconcile chat shutdown: %w", err)
+	}
+	return nil
+}
+
+// ActiveSessionID returns the singleton workspace's selected session.
+func (l *MessageLog) ActiveSessionID() (string, error) {
+	var id string
+	err := l.db.SQL().QueryRowContext(context.Background(), `
+		SELECT active_session_id FROM chat_workspace WHERE id = 'current'
+	`).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", ErrChatSessionNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("read active chat session: %w", err)
+	}
+	return id, nil
+}
+
+// Sessions lists retained tabs in stable creation order.
+func (l *MessageLog) Sessions() ([]Session, error) {
+	rows, err := l.db.SQL().QueryContext(context.Background(), `
+		SELECT s.id, s.title, s.saved, s.id = w.active_session_id,
+			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
+		FROM chat_sessions s
+		CROSS JOIN chat_workspace w
+		LEFT JOIN messages m ON m.session_id = s.id
+		WHERE w.id = 'current'
+		GROUP BY s.id, s.title, s.saved, w.active_session_id, s.created_at, s.updated_at
+		ORDER BY s.created_at ASC, s.id ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list chat sessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var sessions []Session
+	for rows.Next() {
+		var session Session
+		if err := rows.Scan(&session.ID, &session.Title, &session.Saved, &session.Active,
+			&session.MessageCount, &session.LatestSeq, &session.CreatedAt, &session.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan chat session: %w", err)
+		}
+		sessions = append(sessions, session)
+	}
+	return sessions, rows.Err()
+}
+
+// Session returns one retained tab and its current summary.
+func (l *MessageLog) Session(id string) (Session, error) {
+	var session Session
+	err := l.db.SQL().QueryRowContext(context.Background(), `
+		SELECT s.id, s.title, s.saved, s.id = w.active_session_id,
+			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
+		FROM chat_sessions s
+		CROSS JOIN chat_workspace w
+		LEFT JOIN messages m ON m.session_id = s.id
+		WHERE s.id = ? AND w.id = 'current'
+		GROUP BY s.id, s.title, s.saved, w.active_session_id, s.created_at, s.updated_at
+	`, id).Scan(&session.ID, &session.Title, &session.Saved, &session.Active,
+		&session.MessageCount, &session.LatestSeq, &session.CreatedAt, &session.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return Session{}, ErrChatSessionNotFound
+	}
+	if err != nil {
+		return Session{}, fmt.Errorf("read chat session: %w", err)
+	}
+	return session, nil
+}
+
+// CreateSession selects a new unsaved conversation. discardCurrentUnsaved is
+// used only after explicit UI confirmation; saved sessions are never deleted.
+func (l *MessageLog) CreateSession(discardCurrentUnsaved bool) (Session, error) {
+	ctx := context.Background()
+	var id string
+	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var currentID string
+		var currentSaved bool
+		var currentCount int
+		if err := tx.QueryRowContext(ctx, `
+			SELECT s.id, s.saved, COUNT(m.seq)
+			FROM chat_workspace w
+			JOIN chat_sessions s ON s.id = w.active_session_id
+			LEFT JOIN messages m ON m.session_id = s.id
+			WHERE w.id = 'current'
+			GROUP BY s.id, s.saved
+		`).Scan(&currentID, &currentSaved, &currentCount); err != nil {
+			return err
+		}
+		if !currentSaved && currentCount > 0 && !discardCurrentUnsaved {
+			return ErrUnsavedSessionConflict
+		}
+		var err error
+		id, err = insertSession(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE chat_workspace SET active_session_id = ?, updated_at = ? WHERE id = 'current'
+		`, id, nowUTC()); err != nil {
+			return err
+		}
+		if !currentSaved && (discardCurrentUnsaved || currentCount == 0) {
+			_, err = tx.ExecContext(ctx, `DELETE FROM chat_sessions WHERE id = ?`, currentID)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, fmt.Errorf("create chat session: %w", err)
+	}
+	return l.Session(id)
+}
+
+// ActivateSession selects one tab and optionally discards the prior unsaved tab.
+func (l *MessageLog) ActivateSession(id string, discardCurrentUnsaved bool) (Session, error) {
+	ctx := context.Background()
+	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var currentID string
+		var currentSaved bool
+		var currentCount int
+		if err := tx.QueryRowContext(ctx, `
+			SELECT s.id, s.saved, COUNT(m.seq)
+			FROM chat_workspace w
+			JOIN chat_sessions s ON s.id = w.active_session_id
+			LEFT JOIN messages m ON m.session_id = s.id
+			WHERE w.id = 'current'
+			GROUP BY s.id, s.saved
+		`).Scan(&currentID, &currentSaved, &currentCount); err != nil {
+			return err
+		}
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT 1 FROM chat_sessions WHERE id = ?`, id).Scan(&exists); err != nil {
+			if err == sql.ErrNoRows {
+				return ErrChatSessionNotFound
+			}
+			return err
+		}
+		if currentID != id && !currentSaved && currentCount > 0 && !discardCurrentUnsaved {
+			return ErrUnsavedSessionConflict
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE chat_workspace SET active_session_id = ?, updated_at = ? WHERE id = 'current'
+		`, id, nowUTC()); err != nil {
+			return err
+		}
+		if !currentSaved && currentID != id && (discardCurrentUnsaved || currentCount == 0) {
+			_, err := tx.ExecContext(ctx, `DELETE FROM chat_sessions WHERE id = ?`, currentID)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, fmt.Errorf("activate chat session: %w", err)
+	}
+	return l.Session(id)
+}
+
+// SaveSession marks one tab for retention across process starts.
+func (l *MessageLog) SaveSession(id string) (Session, error) {
+	ctx := context.Background()
+	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET saved = 1, updated_at = ? WHERE id = ?`, nowUTC(), id)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return ErrChatSessionNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, fmt.Errorf("save chat session: %w", err)
+	}
+	return l.Session(id)
+}
+
+// DeleteSession removes an inactive retained tab and its dependent rows.
+func (l *MessageLog) DeleteSession(id string) error {
+	ctx := context.Background()
+	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var activeID string
+		if err := tx.QueryRowContext(ctx, `SELECT active_session_id FROM chat_workspace WHERE id = 'current'`).Scan(&activeID); err != nil {
+			return err
+		}
+		if id == activeID {
+			return ErrActiveSessionDelete
+		}
+		result, err := tx.ExecContext(ctx, `DELETE FROM chat_sessions WHERE id = ?`, id)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return ErrChatSessionNotFound
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("delete chat session: %w", err)
+	}
+	return nil
+}
+
+func insertSession(ctx context.Context, tx *sql.Tx) (string, error) {
+	id, err := newSessionID()
+	if err != nil {
+		return "", err
+	}
+	now := nowUTC()
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO chat_sessions(id, title, saved, created_at, updated_at)
+		VALUES(?, ?, 0, ?, ?)
+	`, id, defaultSessionTitle, now, now)
+	return id, err
+}
+
+func newSessionID() (string, error) {
+	buffer := make([]byte, 12)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", fmt.Errorf("generate chat session id: %w", err)
+	}
+	return "chat-" + hex.EncodeToString(buffer), nil
+}
+
+func nowUTC() string {
+	return time.Now().UTC().Format(time.RFC3339Nano)
+}
+
+func chatTitle(content string) string {
+	value := strings.Join(strings.Fields(content), " ")
+	runes := []rune(value)
+	if len(runes) > 42 {
+		value = string(runes[:39]) + "..."
+	}
+	if value == "" {
+		return defaultSessionTitle
+	}
+	return value
+}
+
+// Append adds to the active session. New code that binds a streaming request
+// to a session should use AppendTo so a tab switch cannot redirect its reply.
 func (l *MessageLog) Append(role string, content string, clientID string) (int64, error) {
+	sessionID, err := l.ActiveSessionID()
+	if err != nil {
+		return 0, err
+	}
+	return l.AppendTo(sessionID, role, content, clientID, nil)
+}
+
+// AppendTo adds one visible message to the selected session.
+func (l *MessageLog) AppendTo(sessionID, role, content, clientID string, diagnostics *MessageDiagnostics) (int64, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return 0, fmt.Errorf("chat log rejects empty %s messages", role)
@@ -77,14 +431,30 @@ func (l *MessageLog) Append(role string, content string, clientID string) (int64
 	if role != MessageRoleUser && role != MessageRoleAssistant {
 		return 0, fmt.Errorf("chat log rejects role %q", role)
 	}
+	diagnosticsJSON := []byte("{}")
+	var err error
+	if diagnostics != nil {
+		diagnosticsJSON, err = json.Marshal(diagnostics)
+		if err != nil {
+			return 0, fmt.Errorf("encode chat diagnostics: %w", err)
+		}
+	}
 
 	ctx := context.Background()
 	var seq int64
-	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+	err = l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT 1 FROM chat_sessions WHERE id = ?`, sessionID).Scan(&exists); err != nil {
+			if err == sql.ErrNoRows {
+				return ErrChatSessionNotFound
+			}
+			return err
+		}
+		now := nowUTC()
 		result, err := tx.ExecContext(ctx, `
-			INSERT INTO messages(role, content, client_id, created_at)
-			VALUES(?, ?, ?, ?)
-		`, role, content, clientID, time.Now().UTC().Format(time.RFC3339Nano))
+			INSERT INTO messages(session_id, role, content, client_id, diagnostics_json, created_at)
+			VALUES(?, ?, ?, ?, ?, ?)
+		`, sessionID, role, content, clientID, string(diagnosticsJSON), now)
 		if err != nil {
 			return err
 		}
@@ -92,10 +462,24 @@ func (l *MessageLog) Append(role string, content string, clientID string) (int64
 		if err != nil {
 			return err
 		}
+		if role == MessageRoleUser {
+			_, err = tx.ExecContext(ctx, `
+				UPDATE chat_sessions
+				SET title = CASE WHEN title = ? THEN ? ELSE title END, updated_at = ?
+				WHERE id = ?
+			`, defaultSessionTitle, chatTitle(content), now, sessionID)
+		} else {
+			_, err = tx.ExecContext(ctx, `UPDATE chat_sessions SET updated_at = ? WHERE id = ?`, now, sessionID)
+		}
+		if err != nil {
+			return err
+		}
 		_, err = tx.ExecContext(ctx, `
 			DELETE FROM messages
-			WHERE seq <= (SELECT MAX(seq) FROM messages) - ?
-		`, MessageLogCap)
+			WHERE session_id = ? AND seq NOT IN (
+				SELECT seq FROM messages WHERE session_id = ? ORDER BY seq DESC LIMIT ?
+			)
+		`, sessionID, sessionID, MessageLogCap)
 		return err
 	})
 	if err != nil {
@@ -104,8 +488,7 @@ func (l *MessageLog) Append(role string, content string, clientID string) (int64
 	return seq, nil
 }
 
-// Delete removes one message that was invalidated before it became visible.
-// Sequence numbers are intentionally not reused.
+// Delete removes one message by its process-wide sequence number.
 func (l *MessageLog) Delete(seq int64) error {
 	if seq <= 0 {
 		return nil
@@ -120,43 +503,56 @@ func (l *MessageLog) Delete(seq int64) error {
 	return nil
 }
 
-// After returns messages with seq greater than after, oldest first, capped
-// at limit (or the full bounded log when limit <= 0).
+// After returns active-session messages after a sequence number.
 func (l *MessageLog) After(after int64, limit int) ([]LogMessage, error) {
+	sessionID, err := l.ActiveSessionID()
+	if err != nil {
+		return nil, err
+	}
+	return l.AfterSession(sessionID, after, limit)
+}
+
+// AfterSession returns selected-session messages after a sequence number.
+func (l *MessageLog) AfterSession(sessionID string, after int64, limit int) ([]LogMessage, error) {
 	if limit <= 0 || limit > MessageLogCap {
 		limit = MessageLogCap
 	}
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT seq, role, content, client_id, created_at
+		SELECT seq, role, content, client_id, diagnostics_json, created_at
 		FROM messages
-		WHERE seq > ?
+		WHERE session_id = ? AND seq > ?
 		ORDER BY seq ASC
 		LIMIT ?
-	`, after, limit)
+	`, sessionID, after, limit)
 	if err != nil {
 		return nil, fmt.Errorf("read chat messages: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-
 	return scanLogMessages(rows)
 }
 
-// Recent returns the newest messages in chronological order. It is used for
-// bounded server-owned context where a client cursor is not involved.
+// Recent returns the active session's newest messages in chronological order.
 func (l *MessageLog) Recent(limit int) ([]LogMessage, error) {
+	sessionID, err := l.ActiveSessionID()
+	if err != nil {
+		return nil, err
+	}
+	return l.RecentSession(sessionID, limit)
+}
+
+// RecentSession returns one session's newest messages in chronological order.
+func (l *MessageLog) RecentSession(sessionID string, limit int) ([]LogMessage, error) {
 	if limit <= 0 || limit > MessageLogCap {
 		limit = MessageLogCap
 	}
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT seq, role, content, client_id, created_at
+		SELECT seq, role, content, client_id, diagnostics_json, created_at
 		FROM (
-			SELECT seq, role, content, client_id, created_at
-			FROM messages
-			ORDER BY seq DESC
-			LIMIT ?
+			SELECT seq, role, content, client_id, diagnostics_json, created_at
+			FROM messages WHERE session_id = ? ORDER BY seq DESC LIMIT ?
 		) AS recent
 		ORDER BY seq ASC
-	`, limit)
+	`, sessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("read recent chat messages: %w", err)
 	}
@@ -168,34 +564,61 @@ func scanLogMessages(rows *sql.Rows) ([]LogMessage, error) {
 	var messages []LogMessage
 	for rows.Next() {
 		var message LogMessage
-		if err := rows.Scan(&message.Seq, &message.Role, &message.Content, &message.ClientID, &message.CreatedAt); err != nil {
+		var diagnosticsJSON string
+		if err := rows.Scan(&message.Seq, &message.Role, &message.Content, &message.ClientID, &diagnosticsJSON, &message.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan chat message: %w", err)
+		}
+		if diagnosticsJSON != "" && diagnosticsJSON != "{}" {
+			var diagnostics MessageDiagnostics
+			if err := json.Unmarshal([]byte(diagnosticsJSON), &diagnostics); err != nil {
+				return nil, fmt.Errorf("decode chat message diagnostics: %w", err)
+			}
+			message.Diagnostics = &diagnostics
 		}
 		messages = append(messages, message)
 	}
 	return messages, rows.Err()
 }
 
-// LatestSeq returns the newest sequence number (0 for an empty log).
+// LatestSeq returns the active session's newest sequence number.
 func (l *MessageLog) LatestSeq() (int64, error) {
-	var seq sql.NullInt64
-	err := l.db.SQL().QueryRowContext(context.Background(),
-		`SELECT MAX(seq) FROM messages`).Scan(&seq)
+	sessionID, err := l.ActiveSessionID()
 	if err != nil {
-		return 0, fmt.Errorf("read chat log head: %w", err)
+		return 0, err
+	}
+	return l.LatestSeqSession(sessionID)
+}
+
+// LatestSeqSession returns one session's newest sequence number.
+func (l *MessageLog) LatestSeqSession(sessionID string) (int64, error) {
+	var seq sql.NullInt64
+	err := l.db.SQL().QueryRowContext(context.Background(), `
+		SELECT MAX(seq) FROM messages WHERE session_id = ?
+	`, sessionID).Scan(&seq)
+	if err != nil {
+		return 0, fmt.Errorf("read chat session head: %w", err)
 	}
 	return seq.Int64, nil
 }
 
-// Cursor returns the stored read position for one client (0 if none).
+// Cursor returns a client's read position for the active session.
 func (l *MessageLog) Cursor(clientID string) (int64, error) {
+	sessionID, err := l.ActiveSessionID()
+	if err != nil {
+		return 0, err
+	}
+	return l.CursorSession(clientID, sessionID)
+}
+
+// CursorSession returns a client's read position for one session.
+func (l *MessageLog) CursorSession(clientID, sessionID string) (int64, error) {
 	if clientID == "" {
 		return 0, nil
 	}
 	var seq int64
 	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT last_seq FROM client_cursors WHERE client_id = ?
-	`, clientID).Scan(&seq)
+		SELECT last_seq FROM chat_session_cursors WHERE client_id = ? AND session_id = ?
+	`, clientID, sessionID).Scan(&seq)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}
@@ -205,11 +628,19 @@ func (l *MessageLog) Cursor(clientID string) (int64, error) {
 	return seq, nil
 }
 
-// AdvanceCursor moves a client's cursor forward, never backward, so one
-// misbehaving request cannot make a client re-consume history it acked.
+// AdvanceCursor moves a client's active-session cursor monotonically forward.
 func (l *MessageLog) AdvanceCursor(clientID string, seq int64) (int64, error) {
+	sessionID, err := l.ActiveSessionID()
+	if err != nil {
+		return 0, err
+	}
+	return l.AdvanceCursorSession(clientID, sessionID, seq)
+}
+
+// AdvanceCursorSession moves a client's selected-session cursor forward.
+func (l *MessageLog) AdvanceCursorSession(clientID, sessionID string, seq int64) (int64, error) {
 	if clientID == "" {
-		return 0, fmt.Errorf("a client id is required to advance a chat cursor")
+		return 0, errors.New("a client id is required to advance a chat cursor")
 	}
 	if seq < 0 {
 		seq = 0
@@ -218,25 +649,25 @@ func (l *MessageLog) AdvanceCursor(clientID string, seq int64) (int64, error) {
 	var stored int64
 	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var latest sql.NullInt64
-		if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM messages`).Scan(&latest); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM messages WHERE session_id = ?`, sessionID).Scan(&latest); err != nil {
 			return err
 		}
 		if seq > latest.Int64 {
 			seq = latest.Int64
 		}
 		_, err := tx.ExecContext(ctx, `
-			INSERT INTO client_cursors(client_id, last_seq, updated_at)
-			VALUES(?, ?, ?)
-			ON CONFLICT(client_id) DO UPDATE SET
-				last_seq = MIN(?, MAX(client_cursors.last_seq, excluded.last_seq)),
+			INSERT INTO chat_session_cursors(client_id, session_id, last_seq, updated_at)
+			VALUES(?, ?, ?, ?)
+			ON CONFLICT(client_id, session_id) DO UPDATE SET
+				last_seq = MIN(?, MAX(chat_session_cursors.last_seq, excluded.last_seq)),
 				updated_at = excluded.updated_at
-		`, clientID, seq, time.Now().UTC().Format(time.RFC3339Nano), latest.Int64)
+		`, clientID, sessionID, seq, nowUTC(), latest.Int64)
 		if err != nil {
 			return err
 		}
 		return tx.QueryRowContext(ctx, `
-			SELECT last_seq FROM client_cursors WHERE client_id = ?
-		`, clientID).Scan(&stored)
+			SELECT last_seq FROM chat_session_cursors WHERE client_id = ? AND session_id = ?
+		`, clientID, sessionID).Scan(&stored)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("advance chat cursor: %w", err)
@@ -244,15 +675,35 @@ func (l *MessageLog) AdvanceCursor(clientID string, seq int64) (int64, error) {
 	return stored, nil
 }
 
-// Clear removes all messages and cursors (used by tests and future reset
-// affordances; settings reset does not touch chat history).
+// Clear resets every chat session and cursor. It is test support; settings
+// reset intentionally does not erase conversations.
 func (l *MessageLog) Clear() error {
 	ctx := context.Background()
+	id, err := newSessionID()
+	if err != nil {
+		return err
+	}
 	return l.db.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM messages`); err != nil {
+		for _, statement := range []string{
+			`DELETE FROM chat_session_cursors`,
+			`DELETE FROM client_cursors`,
+			`DELETE FROM messages`,
+			`DELETE FROM chat_workspace`,
+			`DELETE FROM chat_sessions`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return err
+			}
+		}
+		now := nowUTC()
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO chat_sessions(id, title, saved, created_at, updated_at) VALUES(?, ?, 0, ?, ?)
+		`, id, defaultSessionTitle, now, now); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `DELETE FROM client_cursors`)
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO chat_workspace(id, active_session_id, updated_at) VALUES('current', ?, ?)
+		`, id, now)
 		return err
 	})
 }

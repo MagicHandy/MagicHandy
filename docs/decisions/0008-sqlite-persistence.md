@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for the rewrite plan. Implemented in Phase 11B; extended through
-schema v10 by the persistence reliability audit.
+schema v12 by the backend-owned chat workspace.
 
 ## Context
 
@@ -65,8 +65,10 @@ only their durability substrate moves from JSON files to DB tables.
   - `prompt_sets(id TEXT PRIMARY KEY, name, system, created_at)` — user sets
     only; built-ins remain code-defined and never enter the DB.
   - (landed with the Phase 13 delivery-ordering foundation, schema v2) a
-    `messages` shared chat log and `client_cursors` per-client
-    cursors (ADR 0003).
+    `messages` shared chat log and `client_cursors` per-client cursors (ADR
+    0003); schema v12 scopes messages and cursors to `chat_sessions`, adds the
+    singleton `chat_workspace` active-session record, and retains bounded,
+    non-secret response provenance in `diagnostics_json`.
   - (landed in Phase 14, schema v3) `patterns`, `programs`, and
     `pattern_feedback`. Pattern points and tags are JSON payloads inside
     relational catalog rows; finite programs stay in a separate table so a
@@ -90,7 +92,7 @@ The 2026-07-18 persistence-boundary audit classifies the remaining state so a
 new feature does not accidentally create a second datastore:
 
 - SQLite is authoritative for app settings and settings recovery history,
-  memories, user prompt sets, shared chat messages/cursors,
+  memories, user prompt sets, chat sessions/messages/per-session cursors,
   patterns/programs/feedback, and managed-model inventory/import lineage.
 - Files are intentional for large or atomically activated artifacts: model and
   runner bytes, activation manifests, voice reference WAV/code artifacts, and
@@ -159,6 +161,25 @@ Successful settings-document migrations are rewritten immediately so a restart
 does not repeat an in-memory-only migration. App and legacy-file reads are
 bounded to the same 256 KiB document limit enforced before writes.
 
+Schema v11 adds the explicit-scan video catalog described in
+`docs/video-playback.md`. Schema v12 turns the single chat stream into a
+backend-owned workspace. Existing messages migrate into one saved "Previous
+conversation" session; sequence values remain stable. `chat_sessions` owns tab
+metadata and manual-save state, `chat_workspace` owns the one active session,
+and `chat_session_cursors` isolates each browser cursor by session. Saved tabs
+are durable. At startup, settings either restore the previous working session
+or create a new unsaved one, and transactionally remove any other unsaved
+drafts. A clean shutdown discards the working draft immediately when retention
+is off; startup repeats that reconciliation because crashes and forced shutdowns
+cannot run an exit hook. Starting with a new chat always discards the prior
+unsaved draft, so that policy cannot be combined with unsaved-draft retention.
+
+`messages.diagnostics_json` stores only bounded run provenance needed by the
+assistant-avatar tooltip: source, provider/model identifiers, prompt-set ID,
+elapsed time, parser/fallback flags, and semantic motion action. Prompt text,
+memories, raw model output, request bodies, user text beyond the message itself,
+and credentials are excluded.
+
 Opening a current schema validates the expected tables, columns, indexes,
 foreign-key enforcement, and `foreign_key_check`. Negative and newer-than-
 binary `user_version` values fail clearly without indexing the migration list
@@ -213,8 +234,8 @@ Positive:
 - One transactional store: atomic multi-row operations, one durability
   mechanism, one migration runner, one datastore to back up — replacing three
   bespoke atomic-write + version + recovery implementations.
-- The chat log and Phase 14 library use the same transaction and migration
-  substrate instead of inventing persistence per feature.
+- The chat workspace and Phase 14 library use the same transaction and
+  migration substrate instead of inventing persistence per feature.
 - Still fully embedded and offline; still `CGO_ENABLED=0`; still one binary;
   cross-builds stay free.
 

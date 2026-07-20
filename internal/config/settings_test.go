@@ -278,6 +278,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
 		t.Fatalf("missing Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
 	}
+	if settings.Chat.StartupBehavior != ChatStartupPrevious || settings.Chat.KeepUnsavedOnExit {
+		t.Fatalf("missing chat settings were not defaulted: %+v", settings.Chat)
+	}
 }
 
 func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
@@ -291,6 +294,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	current.Voice.InputSensitivity = 68
 	current.Voice.InputSilenceMillis = 1400
 	current.Voice.InputNoiseSuppress = false
+	current.Chat = ChatSettings{StartupBehavior: ChatStartupPrevious, KeepUnsavedOnExit: true}
 	llmUpdate := LLMUpdateFromSettings(current.LLM)
 	llmUpdate.MaxOutputTokens = nil
 	llmUpdate.ReasoningMode = nil
@@ -338,6 +342,17 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	if next.Voice.InputMode != VoiceInputModeHold || next.Voice.InputSensitivity != 68 ||
 		next.Voice.InputSilenceMillis != 1400 || next.Voice.InputNoiseSuppress {
 		t.Fatalf("older update reset voice input tuning: %+v", next.Voice)
+	}
+	if next.Chat != current.Chat {
+		t.Fatalf("older update reset chat settings: %+v", next.Chat)
+	}
+}
+
+func TestNewChatStartupRejectsUnsavedDraftRetention(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Chat = ChatSettings{StartupBehavior: ChatStartupNew, KeepUnsavedOnExit: true}
+	if err := validateSettings(settings); err == nil || !strings.Contains(err.Error(), "cannot also retain") {
+		t.Fatalf("chat startup conflict error = %v", err)
 	}
 }
 

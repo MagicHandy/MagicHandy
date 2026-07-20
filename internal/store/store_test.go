@@ -388,10 +388,12 @@ func TestMigrationUpgradesV1DatabaseInPlace(t *testing.T) {
 	if version != CurrentSchemaVersion {
 		t.Fatalf("user_version = %d, want %d", version, CurrentSchemaVersion)
 	}
-	if _, err := upgraded.SQL().Exec(
-		`INSERT INTO messages(role, content, client_id, created_at) VALUES('user', 'hi', 'c', '2026-01-01T00:00:00Z')`,
-	); err != nil {
-		t.Fatalf("v2 messages table missing after upgrade: %v", err)
+	if _, err := upgraded.SQL().Exec(`
+		INSERT INTO messages(session_id, role, content, client_id, created_at)
+		SELECT active_session_id, 'user', 'hi', 'c', '2026-01-01T00:00:00Z'
+		FROM chat_workspace WHERE id = 'current'
+	`); err != nil {
+		t.Fatalf("migrated messages table is not writable: %v", err)
 	}
 	var kept string
 	if err := upgraded.SQL().QueryRow(`SELECT text FROM memories WHERE id = 'm1'`).Scan(&kept); err != nil || kept != "keep me" {
@@ -720,6 +722,76 @@ func TestMigrationUpgradesV10ToNullableMediaCatalog(t *testing.T) {
 		) VALUES('video', 'C:/media', 'video.mp4', 'video', 1, 'now', NULL, NULL, 0, 'now')
 	`); err != nil {
 		t.Fatalf("nullable media row: %v", err)
+	}
+}
+
+func TestMigrationUpgradesV11ToChatSessionsWithoutLosingHistory(t *testing.T) {
+	dir := t.TempDir()
+	database, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	path := database.Path()
+	if err := database.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	for _, statement := range []string{
+		`ALTER TABLE messages RENAME TO messages_v12`,
+		`CREATE TABLE messages (
+			seq INTEGER PRIMARY KEY AUTOINCREMENT,
+			role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+			content TEXT NOT NULL,
+			client_id TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`DROP TABLE messages_v12`,
+		`DROP TABLE chat_session_cursors`,
+		`DROP TABLE chat_workspace`,
+		`DROP TABLE chat_sessions`,
+		`INSERT INTO messages(seq, role, content, client_id, created_at)
+			VALUES(41, 'user', 'legacy conversation', 'browser-a', '2026-07-20T12:00:00Z')`,
+		`INSERT INTO client_cursors(client_id, last_seq, updated_at)
+			VALUES('browser-a', 41, '2026-07-20T12:01:00Z')`,
+		`PRAGMA user_version = 11`,
+	} {
+		if _, err := raw.Exec(statement); err != nil {
+			_ = raw.Close()
+			t.Fatalf("rewind %q: %v", statement, err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	upgraded, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen v11 database: %v", err)
+	}
+	t.Cleanup(func() { _ = upgraded.Close() })
+	var sessionID, title, content, diagnostics string
+	var saved, cursor int
+	if err := upgraded.SQL().QueryRow(`
+		SELECT s.id, s.title, s.saved, m.content, m.diagnostics_json
+		FROM chat_sessions s JOIN messages m ON m.session_id = s.id
+		WHERE m.seq = 41
+	`).Scan(&sessionID, &title, &saved, &content, &diagnostics); err != nil {
+		t.Fatalf("read migrated conversation: %v", err)
+	}
+	if sessionID == "" || title != "Previous conversation" || saved != 1 || content != "legacy conversation" || diagnostics != "{}" {
+		t.Fatalf("migrated conversation = id:%q title:%q saved:%d content:%q diagnostics:%q", sessionID, title, saved, content, diagnostics)
+	}
+	if err := upgraded.SQL().QueryRow(`
+		SELECT last_seq FROM chat_session_cursors WHERE client_id = 'browser-a' AND session_id = ?
+	`, sessionID).Scan(&cursor); err != nil {
+		t.Fatalf("read migrated cursor: %v", err)
+	}
+	if cursor != 41 {
+		t.Fatalf("migrated cursor = %d, want 41", cursor)
 	}
 }
 

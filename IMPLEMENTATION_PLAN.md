@@ -110,6 +110,17 @@ enqueued text is byte-identical to the logged reply; error/malformed paths
 never reach either), and retained speak audio is served only to the active
 controller (the single-owner audio lease), bounded per request and count.
 
+Chat-workspace hardening (2026-07-20) extends that foundation in schema v12:
+SQLite now owns stable session tabs, one active-session record, per-session
+browser cursors, manual-save state, and bounded assistant-run provenance. The
+Chat route fills its available workspace beside the existing control sidebar.
+New/switch actions serialize against streaming and Autopilot; an unsaved working
+tab must be saved or discarded, and Settings controls whether startup creates a
+new draft or restores the previous one and whether that draft survives the next
+launch. Starting clean disables unsaved-draft retention; saved sessions are
+always retained. Graceful shutdown applies the policy immediately, while the
+next startup reconciles the same state after a crash or forced exit.
+
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
 the fake transport (one continuous stream across many segment retargets, one
 HSP play, zero stops). Real-hardware freestyle validation rides the next

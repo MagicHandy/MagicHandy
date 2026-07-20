@@ -136,13 +136,43 @@ export interface ChatLogMessage {
   content: string;
   client_id?: string;
   created_at: string;
+  diagnostics?: ChatMessageDiagnostics;
   speech_request_id?: string;
+}
+
+export interface ChatMessageDiagnostics {
+  source?: string;
+  provider?: string;
+  model?: string;
+  prompt_set?: string;
+  request_ms?: number;
+  repaired?: boolean;
+  semantic_fallback?: boolean;
+  initial_malformed?: boolean;
+  motion_action?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  saved: boolean;
+  active: boolean;
+  message_count: number;
+  latest_seq: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionsResponse {
+  active_session_id: string;
+  sessions: ChatSession[];
 }
 
 export interface ChatMessagesResponse {
   messages: ChatLogMessage[];
   latest_seq: number;
   cursor: number;
+  session_id: string;
 }
 
 // LLMMotionCapabilities is the user-selected checkbox list of control methods
@@ -447,6 +477,7 @@ export interface OptionHints {
   asr_providers?: string[];
   parakeet_sources?: string[];
   neutts_sampling_modes?: string[];
+  chat_startup_behaviors?: string[];
 }
 
 export interface PublicSettings {
@@ -476,6 +507,10 @@ export interface PublicSettings {
     motion_capabilities?: LLMMotionCapabilities;
   };
   voice: VoiceSettings;
+  chat?: {
+    startup_behavior: "previous" | "new" | string;
+    keep_unsaved_on_exit: boolean;
+  };
   diagnostics: { verbosity: string };
   options: OptionHints;
 }
@@ -607,6 +642,7 @@ export interface SettingsUpdate {
   motion: MotionSettings;
   llm: PublicSettings["llm"];
   voice: VoiceSettingsUpdate;
+  chat?: NonNullable<PublicSettings["chat"]>;
   diagnostics: { verbosity: string };
   clear_connection_key: boolean;
 }
@@ -701,7 +737,7 @@ export interface AppState {
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
-  chat?: { available?: boolean; latest_seq?: number };
+  chat?: { available?: boolean; latest_seq?: number; active_session_id?: string };
   library?: LibrarySummary;
   media?: MediaSummary;
   transport?: Record<string, unknown>;
@@ -719,9 +755,9 @@ export interface MotionTarget {
 }
 
 export type ChatStreamEvent =
-  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; user_seq?: number } }
+  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; session_id?: string; user_seq?: number } }
   | { event: "delta" | "repair_delta"; data: { phase?: string; text?: string } }
-  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; initial_malformed?: boolean; seq?: number } }
+  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; initial_malformed?: boolean; diagnostics?: ChatMessageDiagnostics; seq?: number } }
   | { event: "speech"; data: { request_id?: string } }
   | { event: "motion"; data: { applied?: boolean; action?: string; error?: string } }
   | { event: "malformed"; data: { repaired?: boolean; recoverable?: boolean; phase?: string; error?: string } }
