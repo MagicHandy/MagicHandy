@@ -31,31 +31,80 @@ const (
 	PromptSetIDJapanese = "magichandy_motion_v1_ja"
 )
 
-// ContractInstructions is the response contract appended to every system
-// prompt by code. User-editable prompt sets can change persona and tone, but
-// never this contract (IMPLEMENTATION_PLAN.md Phase 10 rule).
-const ContractInstructions = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
+// ContractInstructions is the full-capability response contract appended to
+// every system prompt by code. User-editable prompt sets can change persona
+// and tone, but never this contract (IMPLEMENTATION_PLAN.md Phase 10 rule).
+// Capability gates compose reduced variants via contractInstructions.
+const ContractInstructions = contractBase + "\n" + contractPatternSection + "\n" + contractAreaSection
 
-Choose one valid base shape below, or a valid curated-pattern shape shown with the enabled catalog:
-- Chat only: {"reply":"short user-facing reply"}
-- Explicitly no motion change: {"reply":"short user-facing reply","motion":{"action":"none"}}
-- Start deterministic motion: {"reply":"short user-facing reply","motion":{"action":"start","speed_percent":25}}
-- Adjust active motion: {"reply":"short user-facing reply","motion":{"action":"target","speed_percent":25}}
-- Stop motion: {"reply":"short user-facing reply","motion":{"action":"stop"}}
+const contractBase = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
+
+Choose one valid base shape below, or a valid curated-pattern shape when pattern selection is enabled:
+- Chat only: {"reply":"I hear you."}
+- Explicitly no motion change: {"reply":"Keeping it steady.","motion":{"action":"none"}}
+- Start deterministic motion: {"reply":"Starting gently.","motion":{"action":"start","speed_percent":25}}
+- Adjust active motion: {"reply":"Adjusting the pace.","motion":{"action":"target","speed_percent":25}}
+- Stop motion: {"reply":"Stopping.","motion":{"action":"stop"}}
 
 Rules:
 - Omit "motion" or use only {"action":"none"} when the user is only chatting.
 - Use "start" only when the user asks to begin motion.
 - Use "target" only to adjust active motion.
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
-- Prefer an enabled pattern_id with intensity when a catalog entry fits the request.
-- Omit pattern_id and intensity and use speed_percent as the deterministic fallback when no enabled pattern fits.
-- Never include both intensity and speed_percent.
-- Never invent pattern IDs, device commands, API calls, Bluetooth commands, URLs, or transport details.
+- Use speed_percent for deterministic pacing when no pattern is selected.
+- Apply the supplied speed bands to speed_percent: "slow"/"gentle" means low, "moderate"/"medium" and unqualified requests mean middle, and "fast"/"hard"/"as fast as you can" means high. Never choose a value outside the requested band or the supplied user limits.
+- Never invent device commands, API calls, Bluetooth commands, URLs, or transport details.
+- Write a concise reply that fits the user's request; examples show structure, not required wording.
 - Keep speeds conservative unless the user explicitly asks otherwise.`
 
+const contractPatternSection = `- Pattern selection is enabled. Prefer an enabled pattern_id with intensity when a catalog entry fits the request.
+- Choose pattern_id only from the enabled catalog supplied below.
+- Apply the exact supplied speed bands and limits to intensity too.
+- Omit pattern_id and intensity and use speed_percent when no enabled pattern fits.
+- Never include both intensity and speed_percent, and never invent pattern IDs.`
+
+const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", "area":"shaft", or "area":"base" to a start or target; use "area":"full" to clear an active focus.
+- Zone focus example: {"reply":"Focusing there.","motion":{"action":"target","area":"tip","speed_percent":30}}
+- Use a zone when the user names a place or asks to concentrate somewhere; return to "full" when they ask for everything again.`
+
+const contractChatOnly = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
+Always return an object with exactly one string field named "reply".
+Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
+
+// contractInstructions composes the code-owned contract for the enabled
+// capability set. Disabled methods are simply never described — the model
+// cannot follow instructions it never saw, and the parser strips strays.
+func contractInstructions(capabilities Capabilities) string {
+	if !capabilities.Motion {
+		return contractChatOnly
+	}
+	text := contractBase
+	if capabilities.Patterns {
+		text += "\n" + contractPatternSection
+	}
+	if capabilities.AreaFocus {
+		text += "\n" + contractAreaSection
+	}
+	return text
+}
+
+// Capabilities mirrors the user's checkbox gates for prompt composition and
+// post-parse enforcement. The zero value is chat-only; callers resolve
+// defaults from settings.
+type Capabilities struct {
+	Motion               bool
+	Patterns             bool
+	AreaFocus            bool
+	ExperimentalPatterns bool
+}
+
+// FullCapabilities matches the historical always-on behavior plus area focus.
+func FullCapabilities() Capabilities {
+	return Capabilities{Motion: true, Patterns: true, AreaFocus: true, ExperimentalPatterns: true}
+}
+
 const finalOutputGuard = `FINAL OUTPUT RULE:
-Return one JSON object matching one valid example in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return only {"reply":"short user-facing reply"}.`
+Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return an object containing only the reply field.`
 
 var builtinPromptSets = []PromptSet{
 	{
@@ -131,8 +180,28 @@ func ComposeSystem(set PromptSet, memories []string) string {
 }
 
 // ComposeSystemWithPatterns appends enabled catalog data after the immutable
-// contract. Pattern labels are untrusted data; only IDs are selectable.
+// contract with every capability enabled. Pattern labels are untrusted data;
+// only IDs are selectable.
 func ComposeSystemWithPatterns(set PromptSet, memories []string, patterns []PatternChoice) string {
+	return ComposeSystemWithCapabilities(set, memories, patterns, FullCapabilities())
+}
+
+// ComposeSystemWithCapabilities composes the system prompt for the enabled
+// capability set: disabled control methods are never described to the model.
+func ComposeSystemWithCapabilities(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities) string {
+	return composeSystem(set, memories, patterns, capabilities, nil)
+}
+
+// ComposeSystemWithMotionContext adds the authoritative semantic motion state
+// for one interactive turn. The state is code-owned data, not chat history.
+func ComposeSystemWithMotionContext(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, context MotionContext) string {
+	return composeSystem(set, memories, patterns, capabilities, &context)
+}
+
+func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, context *MotionContext) string {
+	if !capabilities.Motion || !capabilities.Patterns {
+		patterns = nil
+	}
 	var builder strings.Builder
 	behavior := strings.TrimSpace(set.System)
 	if behavior == "" {
@@ -141,9 +210,15 @@ func ComposeSystemWithPatterns(set PromptSet, memories []string, patterns []Patt
 	}
 	builder.WriteString(behavior)
 	builder.WriteString("\n\n")
-	builder.WriteString(ContractInstructions)
-	builder.WriteString("\n\n")
-	builder.WriteString(curationInstructions(patterns))
+	builder.WriteString(contractInstructions(capabilities))
+	if capabilities.Motion && capabilities.Patterns {
+		builder.WriteString("\n\n")
+		builder.WriteString(curationInstructions(patterns))
+	}
+	if capabilities.Motion && context != nil {
+		builder.WriteString("\n\n")
+		builder.WriteString(motionContextInstructions(*context, capabilities, patterns))
+	}
 
 	if len(memories) > 0 {
 		builder.WriteString("\n\n")
@@ -183,13 +258,13 @@ func curationInstructions(patterns []PatternChoice) string {
 	}
 	data, _ := json.Marshal(items)
 	startExample, _ := json.Marshal(map[string]any{
-		"reply": "short user-facing reply",
+		"reply": "Starting that pattern.",
 		"motion": map[string]any{
 			"action": "start", "pattern_id": items[0].ID, "intensity": 40,
 		},
 	})
 	targetExample, _ := json.Marshal(map[string]any{
-		"reply": "short user-facing reply",
+		"reply": "Changing the feel.",
 		"motion": map[string]any{
 			"action": "target", "pattern_id": items[0].ID, "intensity": 40,
 		},

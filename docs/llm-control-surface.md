@@ -42,14 +42,36 @@ accepts:
 | `action` | `none` / `start` / `target` / `stop` | start, retarget, or stop motion through the engine |
 | `pattern_id` | an **enabled** library id | curate one enabled pattern (rejected if disabled/unknown) |
 | `intensity` | 1–100 | playback intensity for the chosen pattern (maps to speed within limits) |
-| `speed_percent` | 1–100 | plain speed with no pattern |
+| `speed_percent` | 1–100 | absolute semantic speed, clamped again by the user's limits |
+| `area` | `tip` / `shaft` / `base` / `full` | select a named stroke zone; `full` clears an active focus |
 
-Validation already enforces the safe combinations: intensity requires a
-pattern, curated patterns require an intensity, intensity and speed are mutually
-exclusive, and `none`/`stop` carry no target fields. Disabled or unknown
-pattern ids are rejected, and an all-disabled library keeps the deterministic
-fallback. This is real curation — the model selects from author-owned content —
-but it is a narrow slice of what the engine can do.
+Validation enforces the safe combinations: intensity requires a pattern,
+intensity and speed are mutually exclusive, and `none`/`stop` carry no target
+fields. A stopped engine accepts only `start`; `target` never starts motion as
+a side effect. A running pattern change may omit pace, in which case
+deterministic code preserves the current speed. Disabled or unknown pattern ids
+are rejected, and an all-disabled library keeps the deterministic speed-only
+contract. This is real curation — the model selects from author-owned content —
+but it is still narrower than the engine.
+
+Each interactive turn also receives one authoritative runtime snapshot:
+stopped/running/paused state, current pattern or program, current speed and
+area, the persisted speed envelope split into low/middle/high bands, and up to
+four recent chat-selected pattern ids. This state is prompt data, not a second
+frontend motion model. It is derived from the engine snapshot and bounded trace
+ring, so it is deliberately runtime-only and requires no database migration.
+
+Continuity and variation are separate intents. Ordinary conversation,
+"continue", and steady/hold requests preserve motion; pacing-only requests
+preserve content and area. An explicit request to vary selects a non-current
+pattern and avoids the bounded recent set while a fresh enabled choice exists.
+Semantic no-op targets receive the existing single repair pass. If a small
+model repeats a no-op on an ordinary or steady turn, deterministic recovery
+drops the motion command and preserves the valid reply. Only an explicit motion
+variation request can fall back to a fresh pattern after repair; that fallback
+changes the pattern while preserving valid speed and area intent. This prevents
+both per-turn churn and short two-pattern oscillation without turning selection
+into a static sequence.
 
 Chat Autopilot reuses this same contract at bounded segment boundaries. Its
 request includes the latest 12 canonical conversation messages, current style
@@ -67,15 +89,40 @@ engine actually consumes — is richer than the chat contract that feeds it:
 | --- | --- | --- |
 | `PatternID` | repeatable pattern | **yes** |
 | `SpeedPercent` | speed within limits | **yes** (as intensity/speed) |
-| `AreaFocus{MinPercent,MaxPercent}` | constrain sampling to a **stroke region** | **no** |
+| `AreaFocus{MinPercent,MaxPercent}` | constrain sampling to a **stroke region** | **yes**, through named zones |
 | `SoftAnchor{PositionPercent,WeightPercent}` | gently bias motion toward a point | **no** |
 | `ProgramID` | play a finite **program/funscript** | **no** |
 
-This is the single most useful fact for planning LLM-control work: **stroke
-regions, soft anchors, and program playback already exist in the engine and its
-tests.** The near-term ideas below are mostly about *safely exposing existing
-engine capability to the model through a versioned contract*, not about building
-new motion. That keeps them small and low-risk relative to their apparent scope.
+Soft anchors and program playback already exist in the engine and its tests but
+remain outside the model contract. The near-term ideas below are mostly about
+*safely exposing existing engine capability through a versioned contract*, not
+about building new motion.
+
+## Capability gates and live-provider evidence
+
+Settings > Model exposes four persisted model permissions: motion commands,
+pattern selection, area focus, and experimental patterns. Dependencies remain
+visible but disabled when their parent permission is off. Disabled methods are
+absent from the prompt and stripped from model noise before dispatch. The
+settings live in the existing versioned settings JSON document in SQLite;
+absent older values resolve to conservative defaults, so no schema/table
+migration is needed.
+
+The 2026-07-20 live matrix exercised the final service against both supported
+provider paths with a 20–40% test envelope and no transport dispatch:
+
+- managed `llama.cpp b9966` CUDA with the installed Gemma 4 11.9B Q4_0 model:
+  13/13 first-pass valid turns; start 23%, relative increase 33%, pattern
+  targets 30%; hold, area clear, and chat-only behavior were correct; five
+  repeated variation requests selected five distinct patterns before an older
+  choice became eligible
+- Ollama with Granite 4.1 3B Q4_K_M as a deliberately weaker small-model case:
+  all scenarios completed within the contract, with repair used where needed;
+  the same five-turn variation sequence avoided immediate reuse and every speed
+  stayed at or below 40%
+
+This closes interactive provider/prompt evidence. It is not a real-device feel
+check or a long-running Chat Autopilot acceptance run; those remain separate.
 
 ## Ideas, ranked by leverage-to-risk
 
@@ -83,22 +130,19 @@ Each idea notes whether it **restores** reference-app parity or is **net-new**,
 its main dependency, and an honest disposition. Ordering is a suggestion, not a
 commitment.
 
-### A. Stroke-region focus (parity; low risk)
+### A. Stroke-region focus (parity; low risk) — **shipped 2026-07-20**
 
-Let the model request a focus region — either a named zone (`tip` / `shaft` /
-`base`) or an explicit `depth_min`/`depth_max` — that compiles to the engine's
-existing `AreaFocus`. The reference app called this area-focus and localized
-`tip`/`shaft`/`base` into bounded local stroke windows before sending them
-(`motion_control_modes.md`). This directly answers "LLM selection of stroke
-regions."
-
-- Dependency: a small contract addition plus a named-zone→percent table;
-  `AreaFocus` and its clamping already exist.
-- Disposition: strong candidate. Carry across the reference app's hard lesson —
-  **active** focus changes should take the smoother live-stroke path, not a
-  flushed morph replacement — so region changes mid-session do not reintroduce
-  the "stop/go morph" reports. Named zones are safer to expose than raw numbers
-  because they localize to bounded windows.
+Implemented: the chat contract accepts `"area":"tip"|"shaft"|"base"|"full"` on
+start/target; named zones localize to bounded windows in deterministic code
+(tip 66–100, shaft 33–67, base 0–34; `full` clears), a focus persists across
+plain adjustments until changed, and region changes ride the engine's normal
+retarget path. Autopilot decisions carry the same field. Gated by the
+**Model motion control** checkbox list in Settings > Model
+(`llm.motion_capabilities`: motion / patterns / area focus / experimental
+patterns) — disabled methods are never described to the model and are stripped
+if emitted, without failing the turn. Live-verified against a local Ollama 3B:
+`{"action":"target","area":"tip","speed_percent":25}` for "focus on the tip,
+keep it gentle".
 
 ### B. Program / script selection (parity; low–moderate risk)
 
@@ -114,15 +158,18 @@ programs from loops ([pattern-library.md](pattern-library.md)).
   catalog "the LLM keeps picking the same two scripts" becomes the failure
   mode. Worth doing; pair with a note that catalog size gates its value.
 
-### C. Bounded relative deltas (net-new polish; low risk)
+### C. Bounded relative deltas (net-new polish; low risk) — **partially shipped**
 
 Map "a little faster", "deeper", "shorter strokes" to bounded *relative*
 adjustments of the current target, clamped **once** at the transport boundary.
 The reference sweeps flag a real bug here: clamping speed at multiple layers
 compounded. Keep it single-clamp and visible.
 
-- Disposition: cheap ergonomics win; mostly a prompt/normalization concern. Low
-  risk if clamp-once is enforced by a test.
+- Current state: the authoritative snapshot lets the model translate phrases
+  such as "a little faster" into a nearby absolute semantic speed while
+  preserving content and area. Deterministic speed-band prompt tests and both
+  live providers cover that path. Raw model-authored delta fields and
+  stroke-depth deltas are still intentionally absent.
 
 ### D. Style / mood bias as visible state (parity; low risk)
 

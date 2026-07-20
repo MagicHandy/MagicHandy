@@ -345,6 +345,18 @@ pinned managed automatic path receives half the total budget, length finishes ar
 and repair retains context while requesting reasoning off. This is one diagnostic case,
 not broad fixed-model quality evidence; R13 remains High.
 
+Live-provider follow-up (2026-07-20): the installed managed `llama.cpp b9966`
+CUDA runner loaded the imported Gemma 4 11.9B Q4_0 model on an isolated port and
+completed a 13-turn state-aware motion matrix with no repairs or malformed
+responses. Start/relative/curated speeds stayed within the test's 20–40%
+envelope; hold, area clear, and chat-only turns were correct; five repeated
+variation requests selected five distinct patterns before an older choice was
+eligible. The same final service completed the matrix against Ollama/Granite
+4.1 3B, using the bounded repair path where that smaller model needed it. This
+supplies real CUDA load/chat and secondary-provider evidence without dispatching
+to hardware. Curated downloads and hardware-fit guidance remain open, so R13
+stays High.
+
 ## R14: Per-Source Motion Path Divergence
 
 Level: High

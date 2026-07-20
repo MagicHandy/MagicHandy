@@ -114,11 +114,11 @@ func TestNoEnabledPatternsExposeDeterministicFallback(t *testing.T) {
 
 func TestPromptExamplesMatchStrictParserAndGuardIsLast(t *testing.T) {
 	examples := []string{
-		`{"reply":"short user-facing reply"}`,
-		`{"reply":"short user-facing reply","motion":{"action":"none"}}`,
-		`{"reply":"short user-facing reply","motion":{"action":"start","speed_percent":25}}`,
-		`{"reply":"short user-facing reply","motion":{"action":"target","speed_percent":25}}`,
-		`{"reply":"short user-facing reply","motion":{"action":"stop"}}`,
+		`{"reply":"I hear you."}`,
+		`{"reply":"Keeping it steady.","motion":{"action":"none"}}`,
+		`{"reply":"Starting gently.","motion":{"action":"start","speed_percent":25}}`,
+		`{"reply":"Adjusting the pace.","motion":{"action":"target","speed_percent":25}}`,
+		`{"reply":"Stopping.","motion":{"action":"stop"}}`,
 	}
 	for _, example := range examples {
 		if _, err := ParseAssistantResponseWithPatterns(example, nil); err != nil {
@@ -129,6 +129,9 @@ func TestPromptExamplesMatchStrictParserAndGuardIsLast(t *testing.T) {
 	prompt := ComposeSystemWithPatterns(set, []string{"keep replies brief"}, []PatternChoice{{ID: "pulse", Name: "Pulse"}})
 	if !strings.HasSuffix(prompt, finalOutputGuard) {
 		t.Fatalf("final output guard is not last:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "short user-facing reply") {
+		t.Fatal("prompt contains a placeholder small models may copy verbatim")
 	}
 	for _, line := range strings.Split(prompt, "\n") {
 		if !strings.HasPrefix(line, "Valid curated ") {

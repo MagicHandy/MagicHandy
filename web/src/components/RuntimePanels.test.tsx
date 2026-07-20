@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { LLMModelManagerSnapshot, LLMProviderStatus, PublicSettings } from "../api/types";
@@ -110,6 +111,56 @@ describe("runtime panels", () => {
     expect(screen.queryByText("No models reported by Ollama.")).not.toBeInTheDocument();
   });
 
+  it("persists model motion capability choices as one complete gate set", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    const patch = vi.fn();
+    const user = userEvent.setup();
+    renderModelPanel({
+      ...llmSettings,
+      motion_capabilities: { motion: true, patterns: true, area_focus: true, experimental_patterns: false },
+    }, patch);
+
+    await user.click(screen.getByRole("checkbox", { name: "Experimental patterns" }));
+
+    expect(patch).toHaveBeenCalledWith({
+      motion_capabilities: { motion: true, patterns: true, area_focus: true, experimental_patterns: true },
+    });
+  });
+
+  it("keeps dependent model controls visible but unavailable in chat-only mode", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    renderModelPanel({
+      ...llmSettings,
+      motion_capabilities: { motion: false, patterns: true, area_focus: true, experimental_patterns: true },
+    });
+
+    expect(await screen.findByText("No managed models.")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Motion commands" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "Pattern selection" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Area focus" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Experimental patterns" })).toBeDisabled();
+  });
+
+  it("keeps a large Ollama inventory collapsed until requested", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    ollamaModels.mockResolvedValue({
+      available: true,
+      models: [
+        { name: "small:latest", size_bytes: 1024, parameter_size: "3B", quantization: "Q4_K_M" },
+        { name: "large:latest", size_bytes: 2048, parameter_size: "8B", quantization: "Q4_K_M" },
+      ],
+    });
+    const user = userEvent.setup();
+    const { container } = renderModelPanel({ ...llmSettings, provider: "ollama", model: "small:latest" });
+
+    await screen.findByText("Installed Ollama models");
+    const disclosure = container.querySelector<HTMLDetailsElement>(".ollama-daemon-disclosure");
+    expect(disclosure).not.toBeNull();
+    expect(disclosure).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Installed Ollama models"));
+    expect(disclosure).toHaveAttribute("open");
+  });
+
   it("names speech providers distinctly and surfaces voice-status failures", async () => {
     voiceStatus.mockRejectedValue(new Error("voice endpoint unavailable"));
     render(
@@ -131,7 +182,7 @@ describe("runtime panels", () => {
   });
 });
 
-function renderModelPanel(settings: PublicSettings["llm"] = llmSettings) {
+function renderModelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn()) {
   return render(
     <ModelSettingsPanel
       settings={settings}
@@ -141,7 +192,7 @@ function renderModelPanel(settings: PublicSettings["llm"] = llmSettings) {
       reasoningModes={["off", "auto"]}
       maxOutputOptions={[128, 256, 512]}
       locked={false}
-      patch={vi.fn()}
+      patch={patch}
     />,
   );
 }

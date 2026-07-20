@@ -145,6 +145,16 @@ export interface ChatMessagesResponse {
   cursor: number;
 }
 
+// LLMMotionCapabilities is the user-selected checkbox list of control methods
+// the model may use; enforcement is server-side. Absent means "never saved"
+// and resolves to the defaults (everything but experimental patterns).
+export interface LLMMotionCapabilities {
+  motion: boolean;
+  patterns: boolean;
+  area_focus: boolean;
+  experimental_patterns: boolean;
+}
+
 export interface ModesStatus {
   running?: boolean;
   mode?: string;
@@ -463,6 +473,7 @@ export interface PublicSettings {
     request_timeout_ms: number;
     max_output_tokens: number;
     reasoning_mode: string;
+    motion_capabilities?: LLMMotionCapabilities;
   };
   voice: VoiceSettings;
   diagnostics: { verbosity: string };

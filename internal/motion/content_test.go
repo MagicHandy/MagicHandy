@@ -1,7 +1,10 @@
 package motion
 
 import (
+	"fmt"
 	"math"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +30,49 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 		if metrics.MinReversalGapMillis > 0 && metrics.MinReversalGapMillis < catalogMinReversalGap {
 			t.Fatalf("pattern %q reversal gap = %d, budget %d", definition.ID, metrics.MinReversalGapMillis, catalogMinReversalGap)
 		}
+	}
+}
+
+func TestExperimentalCatalogContainsTwelveDistinctClosedCycles(t *testing.T) {
+	seenIDs := make(map[PatternID]bool)
+	seenShapes := make(map[string]PatternID)
+	experimental := 0
+	for _, definition := range BuiltinPatternDefinitions() {
+		if seenIDs[definition.ID] {
+			t.Fatalf("duplicate built-in pattern id %q", definition.ID)
+		}
+		seenIDs[definition.ID] = true
+		if !slices.Contains(definition.Tags, TagExperimental) {
+			continue
+		}
+		experimental++
+		if !strings.HasPrefix(definition.Description, "Experimental: ") {
+			t.Fatalf("experimental pattern %q is not visibly labeled", definition.ID)
+		}
+		first := definition.Points[0]
+		last := definition.Points[len(definition.Points)-1]
+		if first.TimeMillis != 0 || last.TimeMillis != definition.CycleMillis || first.PositionPercent != last.PositionPercent {
+			t.Fatalf("experimental pattern %q is not a complete closed cycle: first=%+v last=%+v cycle=%d", definition.ID, first, last, definition.CycleMillis)
+		}
+		minimum, maximum := first.PositionPercent, first.PositionPercent
+		for index, point := range definition.Points {
+			minimum = math.Min(minimum, point.PositionPercent)
+			maximum = math.Max(maximum, point.PositionPercent)
+			if index > 0 && point.PositionPercent == definition.Points[index-1].PositionPercent {
+				t.Fatalf("experimental pattern %q has a stationary adjacent knot at %d", definition.ID, index)
+			}
+		}
+		if maximum-minimum < 25 {
+			t.Fatalf("experimental pattern %q span = %.1f, want a meaningful motion range", definition.ID, maximum-minimum)
+		}
+		signature := fmt.Sprint(definition.Points)
+		if other, exists := seenShapes[signature]; exists {
+			t.Fatalf("experimental patterns %q and %q have identical curves", other, definition.ID)
+		}
+		seenShapes[signature] = definition.ID
+	}
+	if experimental < 12 {
+		t.Fatalf("experimental pattern count = %d, want at least 12", experimental)
 	}
 }
 

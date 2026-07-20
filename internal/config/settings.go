@@ -195,6 +195,43 @@ type LLMSettings struct {
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
 	MaxOutputTokens      int    `json:"max_output_tokens"`
 	ReasoningMode        string `json:"reasoning_mode"`
+	// MotionCapabilities gates which motion control methods the model may
+	// use. A nil pointer means "never saved" and resolves to the defaults, so
+	// older payloads keep today's behavior; an explicit all-false is a valid
+	// saved choice (chat-only model).
+	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
+}
+
+// LLMMotionCapabilities is the user-selected checkbox list of control methods
+// the model may use. Enforcement is server-side: disabled methods are neither
+// advertised in the prompt nor honored if the model emits them. Stop and all
+// user controls are unaffected — these gates only ever restrict the model.
+type LLMMotionCapabilities struct {
+	// Motion is the master gate: off makes the model chat-only.
+	Motion bool `json:"motion"`
+	// Patterns lets the model curate enabled library patterns.
+	Patterns bool `json:"patterns"`
+	// AreaFocus lets the model focus motion on a named zone (tip/shaft/base).
+	AreaFocus bool `json:"area_focus"`
+	// ExperimentalPatterns includes experimental-tagged patterns in the
+	// model's catalog. They stay visible and playable in the library UI
+	// regardless — this only gates model access.
+	ExperimentalPatterns bool `json:"experimental_patterns"`
+}
+
+// DefaultLLMMotionCapabilities matches the pre-gate behavior plus area focus;
+// experimental patterns are opt-in.
+func DefaultLLMMotionCapabilities() LLMMotionCapabilities {
+	return LLMMotionCapabilities{Motion: true, Patterns: true, AreaFocus: true, ExperimentalPatterns: false}
+}
+
+// Capabilities resolves the saved motion-capability gates, applying defaults
+// for payloads that predate the field.
+func (s LLMSettings) Capabilities() LLMMotionCapabilities {
+	if s.MotionCapabilities == nil {
+		return DefaultLLMMotionCapabilities()
+	}
+	return *s.MotionCapabilities
 }
 
 // VoiceSettings configures the optional voice worker processes (ADR 0003).
@@ -368,6 +405,9 @@ type LLMUpdate struct {
 	RequestTimeoutMillis int     `json:"request_timeout_ms"`
 	MaxOutputTokens      *int    `json:"max_output_tokens,omitempty"`
 	ReasoningMode        *string `json:"reasoning_mode,omitempty"`
+	// MotionCapabilities replaces the saved gates when present; omitted
+	// preserves the current persisted values (older clients keep working).
+	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
 }
 
 // LLMUpdateFromSettings creates a complete write payload from a settings view.
@@ -383,6 +423,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		RequestTimeoutMillis: settings.RequestTimeoutMillis,
 		MaxOutputTokens:      &settings.MaxOutputTokens,
 		ReasoningMode:        &settings.ReasoningMode,
+		MotionCapabilities:   settings.MotionCapabilities,
 	}
 }
 
@@ -599,6 +640,11 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.LLM.ReasoningMode != nil {
 		reasoningMode = *update.LLM.ReasoningMode
 	}
+	capabilities := s.LLM.MotionCapabilities
+	if update.LLM.MotionCapabilities != nil {
+		copied := *update.LLM.MotionCapabilities
+		capabilities = &copied
+	}
 	next.LLM = normalizeLLMStrings(LLMSettings{
 		Provider:             update.LLM.Provider,
 		LlamaCPPMode:         update.LLM.LlamaCPPMode,
@@ -610,6 +656,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		RequestTimeoutMillis: update.LLM.RequestTimeoutMillis,
 		MaxOutputTokens:      maxOutputTokens,
 		ReasoningMode:        reasoningMode,
+		MotionCapabilities:   capabilities,
 	})
 	next.Voice = applyVoiceUpdate(s.Voice, update.Voice)
 	next.Diagnostics = update.Diagnostics
@@ -1101,6 +1148,10 @@ func trimArgs(args []string) []string {
 
 func cloneSettings(settings Settings) Settings {
 	settings.Media.LibraryPaths = append([]string{}, settings.Media.LibraryPaths...)
+	if settings.LLM.MotionCapabilities != nil {
+		capabilities := *settings.LLM.MotionCapabilities
+		settings.LLM.MotionCapabilities = &capabilities
+	}
 	settings.Voice.TTSWorkerArgs = cloneStrings(settings.Voice.TTSWorkerArgs)
 	settings.Voice.ASRWorkerArgs = cloneStrings(settings.Voice.ASRWorkerArgs)
 	return settings

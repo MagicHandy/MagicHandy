@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
+  LLMMotionCapabilities,
   LLMProviderStatus,
   ManagedLlamaRuntimeBuild,
   ManagedLlamaRuntimeStatus,
@@ -35,6 +36,10 @@ const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.s
 const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status === "queued" || build?.status === "building";
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
 const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider default" : mode === "off" ? "Disabled when supported" : mode;
+
+// Absent capabilities resolve to the server defaults: everything but
+// experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
+const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
 
 export function ModelSettingsPanel({ settings, saved, providers, llamaModes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
   const { show } = useToast();
@@ -69,6 +74,11 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   const statusModel = saved?.model ?? settings.model;
   const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
   const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).sort((a, b) => a - b);
+  const capabilities = settings.motion_capabilities ?? defaultCapabilities;
+
+  function patchCapability(key: keyof LLMMotionCapabilities, value: boolean) {
+    patch({ motion_capabilities: { ...capabilities, [key]: value } });
+  }
 
   const refreshManager = useCallback(async () => {
     if (managerRefresh.current) return managerRefresh.current;
@@ -385,6 +395,46 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
           : "Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply."}</p>
       </div>
 
+      <fieldset className="capability-gates">
+        <legend className="label">Model permissions</legend>
+        <label className="capability-gate" title="Allow chat and Autopilot to issue motion commands">
+          <input
+            type="checkbox"
+            checked={capabilities.motion}
+            disabled={locked}
+            onChange={(event) => patchCapability("motion", event.target.checked)}
+          />
+          <span>Motion commands</span>
+        </label>
+        <label className="capability-gate" title="Allow selection from enabled library patterns">
+          <input
+            type="checkbox"
+            checked={capabilities.patterns}
+            disabled={locked || !capabilities.motion}
+            onChange={(event) => patchCapability("patterns", event.target.checked)}
+          />
+          <span>Pattern selection</span>
+        </label>
+        <label className="capability-gate" title="Allow tip, shaft, base, and full-range targets">
+          <input
+            type="checkbox"
+            checked={capabilities.area_focus}
+            disabled={locked || !capabilities.motion}
+            onChange={(event) => patchCapability("area_focus", event.target.checked)}
+          />
+          <span>Area focus</span>
+        </label>
+        <label className="capability-gate" title="Allow experimental-tagged library patterns">
+          <input
+            type="checkbox"
+            checked={capabilities.experimental_patterns}
+            disabled={locked || !capabilities.motion || !capabilities.patterns}
+            onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
+          />
+          <span>Experimental patterns</span>
+        </label>
+      </fieldset>
+
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
         <div className="row-actions model-runtime-actions">
           <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== ""} onClick={() => void runtimeAction("load")}>{busy === "load" ? "Loading..." : "Load"}</button>
@@ -594,14 +644,20 @@ function OllamaDaemonModels({ models, selected, message, locked, onUse }: { mode
   if (message) return <p className="form-status">{message}</p>;
   if (!models.length) return <p className="form-status">No models reported by Ollama.</p>;
   return (
-    <div className="ollama-daemon-list" aria-label="Models reported by Ollama">
-      {models.map((model) => (
-        <div className="ollama-daemon-row" key={model.name}>
-          <ModelIdentity name={model.name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes)]} />
-          <button type="button" className="btn btn-secondary" disabled={locked || selected === model.name} onClick={() => onUse(model)}>{selected === model.name ? "Selected" : "Use"}</button>
-        </div>
-      ))}
-    </div>
+    <details className="ollama-daemon-disclosure">
+      <summary>
+        <span>Installed Ollama models</span>
+        <span className="ollama-daemon-count">{models.length}</span>
+      </summary>
+      <div className="ollama-daemon-list" aria-label="Models reported by Ollama">
+        {models.map((model) => (
+          <div className="ollama-daemon-row" key={model.name}>
+            <ModelIdentity name={model.name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes)]} />
+            <button type="button" className="btn btn-secondary" disabled={locked || selected === model.name} onClick={() => onUse(model)}>{selected === model.name ? "Selected" : "Use"}</button>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
