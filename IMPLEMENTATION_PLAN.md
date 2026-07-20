@@ -95,6 +95,7 @@ status column and in "Known Gaps Carried Forward" below.
 | Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
+| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **Planned — design complete, slices M0–M3 not started** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -1508,6 +1509,46 @@ freeze, or backport/abandon.
 ## Out Of Scope
 
 - fixing every gap discovered during review
+
+# Phase 18: Video Library And Synced Funscript Playback
+
+## Suggested `/goal`
+
+`/goal Implement MagicHandy Phase 18 slice M0 from docs/video-playback.md: media library locations in settings, the bounded explicit scanner with catalog schema v11, the Videos tab grid with search, and Range-capable video streaming — no motion integration yet.`
+
+## Objective
+
+A video grid with search under the library page; a funscript with the exact
+same base name as a video plays in time with it through the one motion
+engine; the OSD carries a hideable intensity-colored funscript strip; library
+locations are added and scanned from Settings.
+
+## Scope
+
+Designed in full in [docs/video-playback.md](docs/video-playback.md),
+including the architecture (`internal/media`, media never imports transport,
+engine `Reanchor` as the only engine addition), the schema v11 catalog, the
+explicit bounded scanner, the video-clock-master sync session with drift
+correction and heartbeat-loss pause, the design-system intensity ramp, and
+the safety inheritance (stroke window/speed caps at the transport, Stop
+unconditional, controller lease, read-only spectators). Implementation is
+sliced M0 (catalog foundation) → M1 (pairing + OSD) → M2 (synced motion) →
+M3 (hardware acceptance + polish); each slice's gate is in the design doc.
+
+This phase supersedes the feature-ideas "video sync player" non-goal by
+explicit direction (2026-07-19); the non-goal's concerns are carried as
+guardrails (no transcoding, no media management, no new motion pathway).
+
+## Done Criteria
+
+- M2's integration gate (real engine over the fake transport through
+  play/seek/pause/resume/ended with one play command) and M3's real-device
+  alignment evidence both recorded.
+
+## Out Of Scope
+
+- transcoding or codec bundling (`.mkv` excluded), external players, media
+  tagging/management, multi-axis funscript variants, network exposure
 
 # Cross-Phase Testing Requirements
 

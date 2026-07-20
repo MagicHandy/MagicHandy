@@ -104,6 +104,7 @@ Contributions are welcome, from people and AI coding tools alike.
 - [LLM control surface — current state and ideas](docs/llm-control-surface.md)
 - [Parity with StrokeGPT-ReVibed](docs/parity-with-stgpt-rv.md) ·
   [Feature ideas catalog](docs/feature-ideas.md)
+- [Video library and synced playback design](docs/video-playback.md)
 - [UI design](docs/ui-design.md) ·
   [UI design guidelines](docs/ui-design-guidelines.md)
 - [MagicHandy + LSO integration plan](docs/lso-merge-integration.md)
