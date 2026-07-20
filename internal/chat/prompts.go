@@ -31,10 +31,13 @@ const (
 	PromptSetIDJapanese = "magichandy_motion_v1_ja"
 )
 
-// ContractInstructions is the response contract appended to every system
-// prompt by code. User-editable prompt sets can change persona and tone, but
-// never this contract (IMPLEMENTATION_PLAN.md Phase 10 rule).
-const ContractInstructions = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
+// ContractInstructions is the full-capability response contract appended to
+// every system prompt by code. User-editable prompt sets can change persona
+// and tone, but never this contract (IMPLEMENTATION_PLAN.md Phase 10 rule).
+// Capability gates compose reduced variants via contractInstructions.
+const ContractInstructions = contractBase + "\n" + contractAreaSection
+
+const contractBase = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
 
 Choose one valid base shape below, or a valid curated-pattern shape shown with the enabled catalog:
 - Chat only: {"reply":"short user-facing reply"}
@@ -51,8 +54,48 @@ Rules:
 - Prefer an enabled pattern_id with intensity when a catalog entry fits the request.
 - Omit pattern_id and intensity and use speed_percent as the deterministic fallback when no enabled pattern fits.
 - Never include both intensity and speed_percent.
+- Translate pacing words onto the scale deterministically: "slow"/"gentle" means the low third, unqualified requests the middle, "fast"/"hard"/"as fast as you can" means the top of the scale — the app clamps everything to the user's own limits.
+- Vary the feel over time: when adjusting, prefer a different speed or pattern than the current one; small speed changes (10-20 apart) read as natural pacing, and identical repeats read as robotic.
 - Never invent pattern IDs, device commands, API calls, Bluetooth commands, URLs, or transport details.
+- Never copy example values: "short user-facing reply" is a placeholder — always write your own reply in your own words.
 - Keep speeds conservative unless the user explicitly asks otherwise.`
+
+const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", "area":"shaft", or "area":"base" to a start or target (combine freely with pattern_id/intensity or speed_percent); use "area":"full" to clear an active focus.
+- Zone focus example: {"reply":"short user-facing reply","motion":{"action":"target","area":"tip","speed_percent":30}}
+- Use a zone when the user names a place or asks to concentrate somewhere; return to "full" when they ask for everything again.`
+
+const contractChatOnly = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
+Always use exactly this shape: {"reply":"short user-facing reply"}
+Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
+
+// contractInstructions composes the code-owned contract for the enabled
+// capability set. Disabled methods are simply never described — the model
+// cannot follow instructions it never saw, and the parser strips strays.
+func contractInstructions(capabilities Capabilities) string {
+	if !capabilities.Motion {
+		return contractChatOnly
+	}
+	text := contractBase
+	if capabilities.AreaFocus {
+		text += "\n" + contractAreaSection
+	}
+	return text
+}
+
+// Capabilities mirrors the user's checkbox gates for prompt composition and
+// post-parse enforcement. The zero value is chat-only; callers resolve
+// defaults from settings.
+type Capabilities struct {
+	Motion               bool
+	Patterns             bool
+	AreaFocus            bool
+	ExperimentalPatterns bool
+}
+
+// FullCapabilities matches the historical always-on behavior plus area focus.
+func FullCapabilities() Capabilities {
+	return Capabilities{Motion: true, Patterns: true, AreaFocus: true, ExperimentalPatterns: true}
+}
 
 const finalOutputGuard = `FINAL OUTPUT RULE:
 Return one JSON object matching one valid example in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return only {"reply":"short user-facing reply"}.`
@@ -131,8 +174,18 @@ func ComposeSystem(set PromptSet, memories []string) string {
 }
 
 // ComposeSystemWithPatterns appends enabled catalog data after the immutable
-// contract. Pattern labels are untrusted data; only IDs are selectable.
+// contract with every capability enabled. Pattern labels are untrusted data;
+// only IDs are selectable.
 func ComposeSystemWithPatterns(set PromptSet, memories []string, patterns []PatternChoice) string {
+	return ComposeSystemWithCapabilities(set, memories, patterns, FullCapabilities())
+}
+
+// ComposeSystemWithCapabilities composes the system prompt for the enabled
+// capability set: disabled control methods are never described to the model.
+func ComposeSystemWithCapabilities(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities) string {
+	if !capabilities.Motion || !capabilities.Patterns {
+		patterns = nil
+	}
 	var builder strings.Builder
 	behavior := strings.TrimSpace(set.System)
 	if behavior == "" {
@@ -141,9 +194,11 @@ func ComposeSystemWithPatterns(set PromptSet, memories []string, patterns []Patt
 	}
 	builder.WriteString(behavior)
 	builder.WriteString("\n\n")
-	builder.WriteString(ContractInstructions)
-	builder.WriteString("\n\n")
-	builder.WriteString(curationInstructions(patterns))
+	builder.WriteString(contractInstructions(capabilities))
+	if capabilities.Motion {
+		builder.WriteString("\n\n")
+		builder.WriteString(curationInstructions(patterns))
+	}
 
 	if len(memories) > 0 {
 		builder.WriteString("\n\n")

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -72,7 +73,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.writePersonalizationStorageError(w, "memory", err)
 		return
 	}
-	patternChoices, err := s.chatPatternChoices()
+	capabilities := chatCapabilities(settings.LLM)
+	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		s.writeLibraryStorageError(w, err)
 		return
@@ -93,6 +95,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		Memories:              memories,
 		Patterns:              patternChoices,
+		Capabilities:          &capabilities,
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -272,7 +275,22 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	case chat.MotionActionTarget:
 		engine := s.currentMotionEngine()
 		if engine == nil || !engine.Snapshot().Running {
-			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running")
+			// Small models regularly answer "begin motion" with a target
+			// command. Idle target starts motion — the mirror of the existing
+			// start-while-running retarget leniency, and what the user asked
+			// for in that turn either way.
+			engineForStart, admission, err := s.motionEngineForStart()
+			if err != nil {
+				return chatMotionDispatch{Action: command.Action}, err
+			}
+			target, err := s.chatMotionTarget(command, engineForStart.Snapshot())
+			if err != nil {
+				return chatMotionDispatch{Action: command.Action}, err
+			}
+			s.notifyChatTarget(target)
+			settings, _ := s.store.Snapshot()
+			state, err := engineForStart.StartAtGeneration(ctx, target, settings.Motion, admission)
+			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
 		}
 		current := engine.Snapshot()
 		target, err := s.chatMotionTarget(command, current)
@@ -578,22 +596,80 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 		SpeedPercent: speedPercent,
 		Pattern:      definition,
 		Program:      programDefinition,
+		AreaFocus:    resolveAreaFocus(command.Area, current),
 	}, nil
 }
 
+// resolveAreaFocus maps a named zone onto the engine's bounded focus window.
+// An unset zone preserves the running target's focus (a focus persists until
+// changed — the STGPT-RV behavior); "full" explicitly clears it.
+func resolveAreaFocus(zone string, current motion.ActiveMotionState) *motion.AreaFocus {
+	if zone == "" {
+		if current.Running && current.Target.AreaFocus != nil {
+			carried := *current.Target.AreaFocus
+			return &carried
+		}
+		return nil
+	}
+	focus, ok := zoneAreaFocus(zone)
+	if !ok {
+		return nil
+	}
+	return focus
+}
+
+// zoneAreaFocus localizes a named zone into a bounded relative window. Zones
+// are semantic thirds with overlap so transitions stay smooth; "full" clears
+// focus entirely.
+func zoneAreaFocus(zone string) (*motion.AreaFocus, bool) {
+	switch zone {
+	case chat.AreaZoneTip:
+		return &motion.AreaFocus{MinPercent: 66, MaxPercent: 100}, true
+	case chat.AreaZoneShaft:
+		return &motion.AreaFocus{MinPercent: 33, MaxPercent: 67}, true
+	case chat.AreaZoneBase:
+		return &motion.AreaFocus{MinPercent: 0, MaxPercent: 34}, true
+	case chat.AreaZoneFull:
+		return nil, true
+	default:
+		return nil, false
+	}
+}
+
 func (s *Server) chatPatternChoices() ([]chat.PatternChoice, error) {
+	return s.chatPatternChoicesFor(chat.FullCapabilities())
+}
+
+// chatPatternChoicesFor builds the model-visible catalog for the enabled
+// capability gates: experimental-tagged patterns stay in the library UI but
+// leave the model's menu unless the user opted in.
+func (s *Server) chatPatternChoicesFor(capabilities chat.Capabilities) ([]chat.PatternChoice, error) {
 	choices, err := s.patterns.EnabledChoices()
 	if err != nil {
 		return nil, err
 	}
 	result := make([]chat.PatternChoice, 0, len(choices))
 	for _, choice := range choices {
+		if !capabilities.ExperimentalPatterns && slices.Contains(choice.Tags, motion.TagExperimental) {
+			continue
+		}
 		result = append(result, chat.PatternChoice{
 			ID: choice.ID, Name: choice.Name, Description: choice.Description,
 			Tags: choice.Tags, Weight: choice.Weight,
 		})
 	}
 	return result, nil
+}
+
+// chatCapabilities resolves the settings gates into the chat-layer shape.
+func chatCapabilities(settings config.LLMSettings) chat.Capabilities {
+	resolved := settings.Capabilities()
+	return chat.Capabilities{
+		Motion:               resolved.Motion,
+		Patterns:             resolved.Patterns,
+		AreaFocus:            resolved.AreaFocus,
+		ExperimentalPatterns: resolved.ExperimentalPatterns,
+	}
 }
 
 func isChatStopMessage(message string) bool {

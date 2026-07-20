@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
+  LLMMotionCapabilities,
   LLMProviderStatus,
   ManagedLlamaRuntimeBuild,
   ManagedLlamaRuntimeStatus,
@@ -35,6 +36,10 @@ const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.s
 const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status === "queued" || build?.status === "building";
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
 const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider default" : mode === "off" ? "Disabled when supported" : mode;
+
+// Absent capabilities resolve to the server defaults: everything but
+// experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
+const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
 
 export function ModelSettingsPanel({ settings, saved, providers, llamaModes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
   const { show } = useToast();
@@ -69,6 +74,11 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   const statusModel = saved?.model ?? settings.model;
   const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
   const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).sort((a, b) => a - b);
+  const capabilities = settings.motion_capabilities ?? defaultCapabilities;
+
+  function patchCapability(key: keyof LLMMotionCapabilities, value: boolean) {
+    patch({ motion_capabilities: { ...capabilities, [key]: value } });
+  }
 
   const refreshManager = useCallback(async () => {
     if (managerRefresh.current) return managerRefresh.current;
@@ -384,6 +394,51 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
           ? `Requesting disabled reasoning is recommended for compact structured replies from small ${providerLabel(settings.provider)} models. Unsupported models may ignore or reject it.`
           : "Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply."}</p>
       </div>
+
+      <fieldset className="capability-gates">
+        <legend className="label">Model motion control</legend>
+        <p className="hint-block narrow">
+          What the model may do in chat and Autopilot. Disabled methods are never described to the
+          model and are ignored if it tries them. Your controls — Stop, limits, manual motion — are
+          never affected.
+        </p>
+        <label className="capability-gate">
+          <input
+            type="checkbox"
+            checked={capabilities.motion}
+            disabled={locked}
+            onChange={(event) => patchCapability("motion", event.target.checked)}
+          />
+          <span>Motion control <span className="hint-inline">off makes the model chat-only</span></span>
+        </label>
+        <label className="capability-gate">
+          <input
+            type="checkbox"
+            checked={capabilities.patterns}
+            disabled={locked || !capabilities.motion}
+            onChange={(event) => patchCapability("patterns", event.target.checked)}
+          />
+          <span>Pattern selection <span className="hint-inline">curate enabled library patterns</span></span>
+        </label>
+        <label className="capability-gate">
+          <input
+            type="checkbox"
+            checked={capabilities.area_focus}
+            disabled={locked || !capabilities.motion}
+            onChange={(event) => patchCapability("area_focus", event.target.checked)}
+          />
+          <span>Area focus <span className="hint-inline">tip / shaft / base zones</span></span>
+        </label>
+        <label className="capability-gate">
+          <input
+            type="checkbox"
+            checked={capabilities.experimental_patterns}
+            disabled={locked || !capabilities.motion || !capabilities.patterns}
+            onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
+          />
+          <span>Experimental patterns <span className="hint-inline">include experimental-tagged catalog entries</span></span>
+        </label>
+      </fieldset>
 
       {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
         <div className="row-actions model-runtime-actions">

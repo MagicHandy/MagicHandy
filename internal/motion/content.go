@@ -24,6 +24,11 @@ const (
 	catalogSampleMillis     int64 = 25
 	catalogMinReversalGap   int64 = 450
 	catalogMaxAcceleration        = 3000.0
+
+	// TagExperimental marks catalog content that is fully playable in the
+	// library but exposed to the model only behind the user's
+	// experimental-patterns capability gate.
+	TagExperimental = "experimental"
 )
 
 // CurvePoint is one relative 0..100 motion sample at wall-clock time.
@@ -70,6 +75,9 @@ var builtinPatternCatalog = []PatternDefinition{
 	generateStrokePattern(),
 	generatePulsePattern(),
 	generateTeasePattern(),
+	generateWavesPattern(),
+	generateClimbPattern(),
+	generateFlutterPattern(),
 }
 
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
@@ -457,6 +465,54 @@ func generateTeasePattern() PatternDefinition {
 		ID: PatternTease, Name: "Tease", Description: "Progressive peaks with a consistent return.",
 		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
 		Tags: []string{"progressive", "varied", "build"},
+	})
+}
+
+// generateWavesPattern swells stroke amplitude up and back down across one
+// cycle, so intensity breathes instead of holding one level.
+func generateWavesPattern() PatternDefinition {
+	positions := []float64{30, 55, 25, 75, 20, 95, 25, 75, 30, 55}
+	points := make([]CurvePoint, 0, len(positions)+1)
+	for index, position := range positions {
+		points = append(points, CurvePoint{TimeMillis: int64(index) * 550, PositionPercent: position})
+	}
+	points = append(points, CurvePoint{TimeMillis: int64(len(positions)) * 550, PositionPercent: positions[0]})
+	return mustFitCatalog(PatternDefinition{
+		ID: PatternWaves, Name: "Waves", Description: "Experimental: strokes swell deeper, crest, and recede.",
+		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
+		Tags: []string{TagExperimental, "swell", "varied", "breathing"},
+	})
+}
+
+// generateClimbPattern ratchets progressively deeper with shallow recoveries,
+// then releases across the full span.
+func generateClimbPattern() PatternDefinition {
+	positions := []float64{10, 40, 20, 55, 30, 70, 40, 85, 50, 100}
+	points := make([]CurvePoint, 0, len(positions)+1)
+	for index, position := range positions {
+		points = append(points, CurvePoint{TimeMillis: int64(index) * 550, PositionPercent: position})
+	}
+	points = append(points, CurvePoint{TimeMillis: int64(len(positions)) * 550, PositionPercent: positions[0]})
+	return mustFitCatalog(PatternDefinition{
+		ID: PatternClimb, Name: "Climb", Description: "Experimental: a ratcheting build — each stroke reaches further before the release.",
+		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
+		Tags: []string{TagExperimental, "build", "progressive", "release"},
+	})
+}
+
+// generateFlutterPattern holds quick shallow mid-span strokes, then opens one
+// full sweep before returning to the flutter.
+func generateFlutterPattern() PatternDefinition {
+	positions := []float64{45, 70, 45, 70, 45, 70, 45, 70, 5, 95}
+	points := make([]CurvePoint, 0, len(positions)+1)
+	for index, position := range positions {
+		points = append(points, CurvePoint{TimeMillis: int64(index) * 550, PositionPercent: position})
+	}
+	points = append(points, CurvePoint{TimeMillis: int64(len(positions)) * 550, PositionPercent: positions[0]})
+	return mustFitCatalog(PatternDefinition{
+		ID: PatternFlutter, Name: "Flutter", Description: "Experimental: tight mid-span flutter broken by one full sweep.",
+		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
+		Tags: []string{TagExperimental, "flutter", "contrast", "tight"},
 	})
 }
 

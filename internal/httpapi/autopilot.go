@@ -40,7 +40,8 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve memories: %w", err)
 	}
-	patternChoices, err := s.chatPatternChoices()
+	capabilities := chatCapabilities(settings.LLM)
+	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve pattern catalog: %w", err)
 	}
@@ -61,6 +62,7 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		Memories:              memories,
 		Patterns:              patternChoices,
+		Capabilities:          &capabilities,
 	}
 
 	message := chat.AutopilotDecisionMessage(chat.AutopilotContext{
@@ -127,11 +129,17 @@ func (s *Server) mapAutopilotResult(result chat.Result) (modes.Decision, error) 
 		// now-disabled selection.
 		return modes.Decision{Hold: true, Say: say}, nil
 	}
+	segment := modes.Segment{
+		PatternID:    motion.PatternID(resolved.ID),
+		SpeedPercent: speed,
+	}
+	if command.Area != "" {
+		if focus, ok := zoneAreaFocus(command.Area); ok {
+			segment.AreaFocus = focus
+		}
+	}
 	return modes.Decision{
-		Segment: modes.Segment{
-			PatternID:    motion.PatternID(resolved.ID),
-			SpeedPercent: speed,
-		},
+		Segment: segment,
 		Pattern: &resolved,
 		Say:     say,
 	}, nil

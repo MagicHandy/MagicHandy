@@ -72,6 +72,33 @@
   margin-top: 4px;
 }
 
+.capability-gates {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.capability-gates legend {
+  padding: 0 4px;
+}
+.capability-gates .hint-block {
+  margin: 0;
+}
+.capability-gate {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  cursor: pointer;
+}
+.capability-gate input {
+  accent-color: var(--accent);
+}
+.capability-gate input:disabled + span {
+  opacity: 0.55;
+}
+
 .model-runtime-actions {
   align-items: center;
   min-height: 42px;

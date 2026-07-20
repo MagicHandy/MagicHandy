@@ -22,6 +22,12 @@ const (
 	PatternPulse PatternID = "pulse"
 	// PatternTease is a fixed shallow-to-deep pattern.
 	PatternTease PatternID = "tease"
+	// PatternWaves is the experimental swelling-amplitude pattern.
+	PatternWaves PatternID = "waves"
+	// PatternClimb is the experimental ratcheting-build pattern.
+	PatternClimb PatternID = "climb"
+	// PatternFlutter is the experimental shallow-flutter-with-sweep pattern.
+	PatternFlutter PatternID = "flutter"
 )
 
 // AreaFocus constrains semantic sampling to a focus region.

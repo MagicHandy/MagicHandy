@@ -54,6 +54,39 @@ type Service struct {
 	ReasoningBudgetTokens int
 	Memories              []string
 	Patterns              []PatternChoice
+	// Capabilities gates which control methods the prompt advertises and the
+	// result may carry. Nil preserves the historical full-capability behavior.
+	Capabilities *Capabilities
+}
+
+func (s Service) capabilities() Capabilities {
+	if s.Capabilities == nil {
+		return FullCapabilities()
+	}
+	return *s.Capabilities
+}
+
+// enforceCapabilities strips disallowed control fields from a validated
+// response instead of failing the turn: the prompt never advertised them, so
+// a stray field is model noise, not a contract violation worth a repair loop.
+func enforceCapabilities(response *AssistantResponse, capabilities Capabilities) {
+	if response.Motion == nil {
+		return
+	}
+	if !capabilities.Motion {
+		response.Motion = nil
+		return
+	}
+	if !capabilities.AreaFocus {
+		response.Motion.Area = ""
+	}
+	if !capabilities.Patterns && response.Motion.PatternID != "" {
+		response.Motion.PatternID = ""
+		if response.Motion.SpeedPercent == nil {
+			response.Motion.SpeedPercent = response.Motion.Intensity
+		}
+		response.Motion.Intensity = nil
+	}
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -73,7 +106,8 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if strings.TrimSpace(prompt.ID) == "" {
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
-	systemPrompt := ComposeSystemWithPatterns(prompt, s.Memories, s.Patterns)
+	capabilities := s.capabilities()
+	systemPrompt := ComposeSystemWithCapabilities(prompt, s.Memories, s.Patterns, capabilities)
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
@@ -93,6 +127,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	response, parseErr := ParseAssistantResponseWithPatterns(raw, s.Patterns)
 	if parseErr == nil {
+		enforceCapabilities(&response, capabilities)
 		return Result{Response: response, Raw: raw}, nil
 	}
 	if truncated {
@@ -141,6 +176,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, nil
 	}
 
+	enforceCapabilities(&repaired, capabilities)
 	result.Response = repaired
 	result.Malformed = false
 	result.Repaired = true

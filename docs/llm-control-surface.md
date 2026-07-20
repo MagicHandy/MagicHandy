@@ -83,22 +83,19 @@ Each idea notes whether it **restores** reference-app parity or is **net-new**,
 its main dependency, and an honest disposition. Ordering is a suggestion, not a
 commitment.
 
-### A. Stroke-region focus (parity; low risk)
+### A. Stroke-region focus (parity; low risk) — **shipped 2026-07-20**
 
-Let the model request a focus region — either a named zone (`tip` / `shaft` /
-`base`) or an explicit `depth_min`/`depth_max` — that compiles to the engine's
-existing `AreaFocus`. The reference app called this area-focus and localized
-`tip`/`shaft`/`base` into bounded local stroke windows before sending them
-(`motion_control_modes.md`). This directly answers "LLM selection of stroke
-regions."
-
-- Dependency: a small contract addition plus a named-zone→percent table;
-  `AreaFocus` and its clamping already exist.
-- Disposition: strong candidate. Carry across the reference app's hard lesson —
-  **active** focus changes should take the smoother live-stroke path, not a
-  flushed morph replacement — so region changes mid-session do not reintroduce
-  the "stop/go morph" reports. Named zones are safer to expose than raw numbers
-  because they localize to bounded windows.
+Implemented: the chat contract accepts `"area":"tip"|"shaft"|"base"|"full"` on
+start/target; named zones localize to bounded windows in deterministic code
+(tip 66–100, shaft 33–67, base 0–34; `full` clears), a focus persists across
+plain adjustments until changed, and region changes ride the engine's normal
+retarget path. Autopilot decisions carry the same field. Gated by the
+**Model motion control** checkbox list in Settings > Model
+(`llm.motion_capabilities`: motion / patterns / area focus / experimental
+patterns) — disabled methods are never described to the model and are stripped
+if emitted, without failing the turn. Live-verified against a local Ollama 3B:
+`{"action":"target","area":"tip","speed_percent":25}` for "focus on the tip,
+keep it gentle".
 
 ### B. Program / script selection (parity; low–moderate risk)
 
