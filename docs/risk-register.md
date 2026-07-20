@@ -916,3 +916,42 @@ the risk and quantify first-word accuracy and end-to-end latency.
 
 Relates to R17 (voice dependency and latency risk) and R18 (browser security and
 LAN microphone access).
+
+## R25: Browser-Clock Media Sync Alignment
+
+Level: High
+
+Description:
+Phase 18's future synchronized funscript player will use the browser video as
+its clock while device commands cross transports with different buffering and
+wire latency. Poor anchoring, over-eager drift correction, a lost heartbeat, or
+a seek race could make motion visibly late, jump phases, or continue after the
+player is no longer authoritative.
+
+Mitigation:
+
+- keep media as a semantic client of the one motion engine; it never imports or
+  dispatches to a transport directly
+- make the video clock authoritative through explicit controller-gated
+  play/pause/seek/heartbeat events, one bounded sync session, and generation
+  fencing around seeks and replacement
+- use the engine's phase-preserving pause and low-jump reanchor behavior; do not
+  continuously chase sub-threshold drift
+- pause motion after a bounded heartbeat loss, preserve unconditional Stop,
+  and expose drift/reanchor reasons in `motion_trace.v3`
+- require fake-transport integration tests before device use, followed by a
+  capped real-device alignment session across the supported owners
+
+Exit evidence:
+
+- M2 tests cover play, seek, pause, resume, ended, stale events, heartbeat loss,
+  Stop, and controller loss with one engine play path and no goroutine leaks;
+  M3 records trace-derived drift and subjective alignment on real hardware
+
+Status 2026-07-19: M0 adds only an explicit local catalog, Range streaming,
+plain browser playback, and an import preview. It cannot load a script into the
+engine or emit sync events, so this risk is not yet activated. M2 and M3 retain
+the implementation and hardware gates above.
+
+Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
+regression), R14 (one motion path), and R23 (Stop delivery).

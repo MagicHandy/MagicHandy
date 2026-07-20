@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ type motionRequest struct {
 func (r motionRequest) target() motion.MotionTarget {
 	return motion.MotionTarget{
 		Label:        "Manual",
-		Source:       "manual_ui",
+		Source:       motion.TargetSourceManualUI,
 		PatternID:    motion.PatternID(r.Pattern),
 		SpeedPercent: r.SpeedPercent,
 	}
@@ -179,6 +180,13 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
 		return
 	}
+	state := engine.Snapshot()
+	manualActive := state.Target.Source == motion.TargetSourceManualUI &&
+		(state.Running || state.Starting || state.Paused || state.Completing)
+	if !manualActive {
+		writeError(w, http.StatusConflict, errors.New("manual target changes require an active manual motion test"))
+		return
+	}
 	var body motionRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &body); err != nil {
@@ -186,8 +194,8 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	state, err := engine.ApplyTarget(r.Context(), body.target(), "ui_target")
-	s.writeMotionResult(w, state, err)
+	updated, err := engine.ApplyTarget(r.Context(), body.target(), "ui_target")
+	s.writeMotionResult(w, updated, err)
 }
 
 // handleMotionQuick patches motion settings (speed/stroke/direction), persists
@@ -380,9 +388,14 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
 	s.applyVoiceSettingsTransition(next)
 	var runtimeErr error
+	if s.media != nil && !slices.Equal(previous.Media.LibraryPaths, next.Media.LibraryPaths) {
+		if _, err := s.media.RetainLocations(ctx, next.Media.LibraryPaths); err != nil {
+			runtimeErr = errors.Join(runtimeErr, fmt.Errorf("apply media library settings: %w", err))
+		}
+	}
 	if llmRuntimeSettingsChanged(previous.LLM, next.LLM) {
 		if err := s.closeLLM(); err != nil {
-			runtimeErr = fmt.Errorf("apply LLM settings: %w", err)
+			runtimeErr = errors.Join(runtimeErr, fmt.Errorf("apply LLM settings: %w", err))
 		}
 	}
 	ownerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
@@ -465,6 +478,9 @@ func (s *Server) Close() {
 		}
 		if s.patterns != nil {
 			_ = s.patterns.Close()
+		}
+		if s.media != nil {
+			_ = s.media.Close()
 		}
 		if s.models != nil {
 			_ = s.models.Close()

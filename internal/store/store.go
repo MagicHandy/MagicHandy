@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 10
+	CurrentSchemaVersion = 11
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -457,6 +457,26 @@ var migrations = [][]string{
 		)`,
 		`CREATE INDEX IF NOT EXISTS settings_recoveries_recovered_at
 			ON settings_recoveries(recovered_at DESC, id DESC)`,
+	},
+	// v10 -> v11: explicit-scan video catalog. Media files stay outside the
+	// datastore; rows contain only bounded discovery metadata and jailed paths.
+	{
+		`CREATE TABLE IF NOT EXISTS media_videos (
+			id TEXT PRIMARY KEY,
+			location_path TEXT NOT NULL,
+			relative_path TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+			modified_at TEXT NOT NULL,
+			duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+			funscript_relative_path TEXT,
+			missing INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
+			scanned_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS media_videos_location_relative
+			ON media_videos(location_path, relative_path)`,
+		`CREATE INDEX IF NOT EXISTS media_videos_missing_name
+			ON media_videos(missing, display_name, id)`,
 	},
 }
 

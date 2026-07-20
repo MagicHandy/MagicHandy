@@ -26,6 +26,8 @@ import type {
   LLMModelManagerSnapshot,
   LLMProviderStatus,
   ManagedLlamaRuntimeBuild,
+  MediaScanState,
+  MediaVideo,
   OllamaModelInfo,
   OllamaModelScan,
   PatternFeedback,
@@ -166,6 +168,16 @@ export const api = {
   importMotionContent: (file: File, asKind: "pattern" | "program") => importMotionContent(file, asKind),
   exportPattern: (id: string) => download(`/api/library/patterns/${encodeURIComponent(id)}/export`),
   exportProgram: (id: string) => download(`/api/library/programs/${encodeURIComponent(id)}/export`),
+
+  // Local video catalog. Streaming takes opaque catalog IDs and stays
+  // read-only; scans and metadata backfill require the active controller.
+  mediaVideos: (signal?: AbortSignal) => request<{ videos: MediaVideo[] }>("GET", "/api/media/videos", undefined, signal),
+  mediaScan: () => request<{ scan: MediaScanState }>("GET", "/api/media/scan"),
+  startMediaScan: () => request<{ scan: MediaScanState }>("POST", "/api/media/scan", {}),
+  cancelMediaScan: () => request<{ scan: MediaScanState }>("DELETE", "/api/media/scan"),
+  saveMediaDuration: (id: string, duration_ms: number) =>
+    request<{ status: string }>("POST", "/api/media/duration", { id, duration_ms }),
+  mediaStreamURL: (id: string) => `/api/media/videos/${encodeURIComponent(id)}/stream`,
 
   // Memory.
   getMemory: () => request<MemoryState>("GET", "/api/memory"),

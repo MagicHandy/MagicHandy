@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { PauseIcon, PlayIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
+import { ownsActiveMotion } from "../util/motion";
 
 const decisionSourceCopy: Record<string, string> = {
   model: "Assistant selected",
@@ -17,7 +18,10 @@ export function AutopilotControl() {
   const { show } = useToast();
   const modes = state?.modes;
   const active = modes?.mode === "autopilot" || modes?.active_mode === "autopilot";
-  const canPause = Boolean(motion?.engine?.running || motion?.engine?.paused);
+  const engine = motion?.engine;
+  const autopilotMotionActive = ownsActiveMotion(engine, "autopilot");
+  const autopilotPaused = autopilotMotionActive && engine?.paused === true;
+  const canPause = active && autopilotMotionActive && Boolean(engine?.running || engine?.paused);
   const locked = !backendOnline || !state || readOnly;
   const [pending, setPending] = useState<"start" | "stop" | "pause" | "resume" | "">("");
   const pendingRef = useRef(false);
@@ -44,8 +48,8 @@ export function AutopilotControl() {
   }
 
   async function togglePause() {
-    if (pendingRef.current || locked || !active) return;
-    const paused = motion?.engine?.paused === true;
+    if (pendingRef.current || locked || !canPause) return;
+    const paused = autopilotPaused;
     pendingRef.current = true;
     setPending(paused ? "resume" : "pause");
     try {
@@ -69,7 +73,7 @@ export function AutopilotControl() {
   let status = "Off";
   if (pending) {
     status = { start: "Starting", stop: "Stopping", pause: "Pausing", resume: "Resuming" }[pending];
-  } else if (active && motion?.engine?.paused) {
+  } else if (active && autopilotPaused) {
     status = "Paused";
   } else if (active && segment === 0) {
     status = "Choosing first segment";
@@ -92,12 +96,12 @@ export function AutopilotControl() {
           <button
             type="button"
             className="icon-button"
-            aria-label={motion?.engine?.paused ? "Resume Autopilot" : "Pause Autopilot"}
-            title={!canPause ? "Motion has not started" : motion?.engine?.paused ? "Resume Autopilot" : "Pause Autopilot"}
+            aria-label={autopilotPaused ? "Resume Autopilot" : "Pause Autopilot"}
+            title={!canPause ? "Autopilot motion has not started" : autopilotPaused ? "Resume Autopilot" : "Pause Autopilot"}
             disabled={locked || Boolean(pending) || !canPause}
             onClick={() => void togglePause()}
           >
-            {motion?.engine?.paused ? <PlayIcon /> : <PauseIcon />}
+            {autopilotPaused ? <PlayIcon /> : <PauseIcon />}
           </button>
         )}
         <button

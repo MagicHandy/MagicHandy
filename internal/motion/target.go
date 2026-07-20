@@ -8,6 +8,10 @@ import (
 
 const defaultSpeedPercent = 50
 
+// TargetSourceManualUI identifies motion explicitly started by the diagnostic
+// manual-test controls. Autonomous modes use their mode identifier as source.
+const TargetSourceManualUI = "manual_ui"
+
 // PatternID identifies a repeatable semantic motion pattern.
 type PatternID string
 

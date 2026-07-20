@@ -1,11 +1,12 @@
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
-// routes: #/settings/device|model|prompts|diagnostics. Device/model/diagnostics
+// routes: #/settings/device|media|model|prompts|diagnostics. Routed sections
 // share one Save; prompt sets, memory, reset use their own immediate APIs.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, SettingsUpdate } from "../api/types";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { ManualMotionTest } from "../components/ManualMotionTest";
+import { MediaSettingsPanel } from "../components/MediaSettingsPanel";
 import { MemoryManager } from "../components/MemoryManager";
 import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
 import { PromptSetEditor } from "../components/PromptSetEditor";
@@ -19,6 +20,7 @@ const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v
   : value;
 const SECTIONS = [
   { id: "device", label: "Device" },
+  { id: "media", label: "Media library" },
   { id: "model", label: "Model" },
   { id: "voice", label: "Voice" },
   { id: "prompts", label: "Prompts & memory" },
@@ -78,6 +80,9 @@ export function SettingsRoute() {
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
   }
+  function patchMedia(libraryPaths: string[]) {
+    setS((cur) => (cur ? { ...cur, media: { library_paths: libraryPaths } } : cur));
+  }
   function patchVoice(p: Partial<PublicSettings["voice"]>) {
     setS((cur) => (cur ? { ...cur, voice: { ...cur.voice, ...p } } : cur));
   }
@@ -90,6 +95,7 @@ export function SettingsRoute() {
     const elevenLabsKey = newElevenLabsKey.trim();
     const update: SettingsUpdate = {
       server: { port: s.server.port },
+      media: { library_paths: s.media?.library_paths ?? [] },
       device: {
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
         intiface_server_address: s.device.intiface_server_address,
@@ -254,6 +260,15 @@ export function SettingsRoute() {
             maxOutputOptions={opt.llm_max_output_tokens ?? []}
             locked={locked}
             patch={patchLLM}
+          />
+        )}
+
+        {section === "media" && (
+          <MediaSettingsPanel
+            locations={s.media?.library_paths ?? []}
+            savedLocations={saved?.media?.library_paths ?? []}
+            locked={locked}
+            onChange={patchMedia}
           />
         )}
 

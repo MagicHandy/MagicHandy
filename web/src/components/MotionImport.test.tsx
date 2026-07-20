@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "../api/client";
 import { MotionImport } from "./MotionImport";
 
 function funscriptFile(actions: Array<{ at: number; pos: number }>, name = "session.funscript", extra: Record<string, unknown> = {}) {
@@ -54,6 +55,8 @@ function setScrollbarRects(scrollbar: HTMLElement, width: number, thumbLeft: num
 }
 
 describe("MotionImport", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("trims a funscript and submits the rebased selection with the chosen kind and name", async () => {
     const onImport = vi.fn().mockResolvedValue(true);
     render(<MotionImport locked={false} importing={false} onImport={onImport} />);
@@ -94,6 +97,56 @@ describe("MotionImport", () => {
 
     // A successful import clears the studio back to the pick-a-file state.
     expect(await screen.findByText("No file selected")).toBeInTheDocument();
+  });
+
+  it("opens a video preview, matches the funscript basename, and keeps the trim timeline below playback", async () => {
+    vi.spyOn(api, "mediaVideos").mockResolvedValue({ videos: [
+      {
+        id: "other", location_path: "C:/media", display_name: "Other", size_bytes: 1,
+        modified_at: "now", duration_ms: null, has_funscript: false, missing: false, scanned_at: "now",
+      },
+      {
+        id: "session", location_path: "C:/media", display_name: "Session", size_bytes: 1,
+        modified_at: "now", duration_ms: null, has_funscript: true, missing: false, scanned_at: "now",
+      },
+    ] });
+    render(<>
+      <button type="button" data-emergency-stop>Emergency stop all motion</button>
+      <MotionImport locked={false} importing={false} onImport={vi.fn()} />
+    </>);
+    pickFile(funscriptFile([{ at: 0, pos: 0 }, { at: 1000, pos: 100 }], "Session.funscript"));
+    await findTimeline();
+
+    const previewButton = screen.getByRole("button", { name: "Preview with video" });
+    previewButton.focus();
+    fireEvent.click(previewButton);
+
+    const dialog = await screen.findByRole("dialog", { name: "Match video and timeline" });
+    expect(within(dialog).getByRole("combobox", { name: "Video" })).toHaveValue("session");
+    const player = within(dialog).getByLabelText("Session") as HTMLVideoElement;
+    const timeline = within(dialog).getByRole("group", { name: /funscript timeline editor/i });
+    expect(player).toHaveAttribute("src", "/api/media/videos/session/stream");
+    expect(player.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    Object.defineProperty(player, "duration", { configurable: true, value: 5 });
+    Object.defineProperty(player, "currentTime", { configurable: true, value: 4 });
+    fireEvent.loadedMetadata(player);
+    fireEvent.timeUpdate(player);
+    expect(within(dialog).getByText("Playhead 00:04")).toBeInTheDocument();
+    expect(within(dialog).getByText("Lengths differ by 00:04")).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Video" }), { target: { value: "other" } });
+    await waitFor(() => expect(within(dialog).getByText("Playhead 00:00")).toBeInTheDocument());
+    expect(within(dialog).queryByText(/Lengths differ/)).not.toBeInTheDocument();
+
+    const close = within(dialog).getByRole("button", { name: "Close video preview" });
+    close.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(screen.getByRole("button", { name: "Emergency stop all motion" })).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(previewButton).toHaveFocus();
   });
 
   it("snaps trim bounds to source actions so the visible length matches the imported duration", async () => {

@@ -95,7 +95,7 @@ status column and in "Known Gaps Carried Forward" below.
 | Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; live-model, long-session, cadence, and richer-arrangement acceptance open** | #101 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
-| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **Planned — design complete, slices M0–M3 not started** | — |
+| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0 implemented; M1-M3 planned** | current PR |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -1532,8 +1532,11 @@ explicit bounded scanner, the video-clock-master sync session with drift
 correction and heartbeat-loss pause, the design-system intensity ramp, and
 the safety inheritance (stroke window/speed caps at the transport, Stop
 unconditional, controller lease, read-only spectators). Implementation is
-sliced M0 (catalog foundation) → M1 (pairing + OSD) → M2 (synced motion) →
-M3 (hardware acceptance + polish); each slice's gate is in the design doc.
+sliced M0 (catalog foundation, implemented) → M1 (paired-script OSD) → M2
+(synced motion) → M3 (hardware acceptance + polish); each slice's gate is in
+the design doc. M0 also reuses the plain video player in an optional funscript
+import modal, directly above the existing shared trim timeline; it has no
+motion integration.
 
 This phase supersedes the feature-ideas "video sync player" non-goal by
 explicit direction (2026-07-19); the non-goal's concerns are carried as

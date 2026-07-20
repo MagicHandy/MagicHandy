@@ -104,6 +104,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	settings.Device.APIApplicationIDOverride = "dev-app"
 	settings.Device.HandyConnectionKey = "secret"
 	settings.LLM.OllamaModelsPath = `D:\Ollama\models`
+	settings.Media.LibraryPaths = []string{filepath.Join(dir, "videos")}
 	settings.Diagnostics.Verbosity = DiagnosticsVerbosityDebug
 	if _, err := store.Save(settings); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -129,6 +130,44 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if got.LLM.OllamaModelsPath != `D:\Ollama\models` {
 		t.Fatalf("Ollama models path = %q", got.LLM.OllamaModelsPath)
+	}
+	if len(got.Media.LibraryPaths) != 1 || got.Media.LibraryPaths[0] != filepath.Join(dir, "videos") {
+		t.Fatalf("media library paths = %v", got.Media.LibraryPaths)
+	}
+}
+
+func TestMediaSettingsNormalizePathsAndRejectRelativeLocation(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "videos")
+	settings := DefaultSettings()
+	settings.Media.LibraryPaths = []string{"  " + root + "  ", root, ""}
+
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if len(normalized.Media.LibraryPaths) != 1 || normalized.Media.LibraryPaths[0] != filepath.Clean(root) {
+		t.Fatalf("normalized paths = %v", normalized.Media.LibraryPaths)
+	}
+	public := normalized.Public()
+	public.Media.LibraryPaths[0] = "changed"
+	if normalized.Media.LibraryPaths[0] == "changed" {
+		t.Fatal("public media paths alias private settings")
+	}
+
+	settings.Media.LibraryPaths = []string{"relative/videos"}
+	if _, err := NormalizeSettings(settings); err == nil || !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("relative path error = %v", err)
+	}
+}
+
+func TestDefaultMediaSettingsPublishAnEmptyArray(t *testing.T) {
+	normalized, err := NormalizeSettings(DefaultSettings())
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	public := normalized.Public()
+	if public.Media.LibraryPaths == nil || len(public.Media.LibraryPaths) != 0 {
+		t.Fatalf("default public media paths = %#v, want non-nil empty slice", public.Media.LibraryPaths)
 	}
 }
 

@@ -1106,7 +1106,7 @@ textarea:disabled {
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
   max-width: min(92vw, 420px);
-  z-index: 40;
+  z-index: var(--layer-feedback);
 }
 .toast[data-visible="true"] {
   opacity: 1;

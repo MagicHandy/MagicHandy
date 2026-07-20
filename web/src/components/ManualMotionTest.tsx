@@ -3,15 +3,14 @@
 import { useId, useState } from "react";
 import { api } from "../api/client";
 import { useAppState, useToast } from "../state/app-state";
+import { ownsActiveMotion } from "../util/motion";
 
 export function ManualMotionTest() {
   const { backendOnline, readOnly, motion, refresh } = useAppState();
   const { show } = useToast();
   const locked = !backendOnline || readOnly;
   const engine = motion?.engine;
-  const manualActive = engine?.target?.source === "manual_ui" && Boolean(
-    engine.running || engine.starting || engine.paused || engine.completing,
-  );
+  const manualActive = ownsActiveMotion(engine, "manual_ui");
   const [pattern, setPattern] = useState("stroke");
   const [speed, setSpeed] = useState(50);
   const speedID = useId();

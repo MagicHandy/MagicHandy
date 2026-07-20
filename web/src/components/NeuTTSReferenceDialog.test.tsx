@@ -59,12 +59,15 @@ describe("NeuTTSReferenceDialog", () => {
   });
 
   it("requires both source inputs before generation", () => {
-    render(<NeuTTSReferenceDialog
-      initialWAV=""
-      initialTranscript=""
-      onApply={vi.fn()}
-      onClose={vi.fn()}
-    />);
+    render(<>
+      <button type="button" data-emergency-stop>Emergency stop all motion</button>
+      <NeuTTSReferenceDialog
+        initialWAV=""
+        initialTranscript=""
+        onApply={vi.fn()}
+        onClose={vi.fn()}
+      />
+    </>);
 
     const generate = screen.getByRole("button", { name: /generate reference codes/i });
     expect(generate).toBeDisabled();
@@ -76,6 +79,10 @@ describe("NeuTTSReferenceDialog", () => {
       target: { value: "Exact words." },
     });
     expect(generate).toBeEnabled();
+
+    screen.getByRole("button", { name: /close reference voice window/i }).focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(screen.getByRole("button", { name: /emergency stop all motion/i })).toHaveFocus();
   });
 
   it("applies a corrected transcript without re-encoding the same audio", async () => {

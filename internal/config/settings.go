@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -131,6 +133,7 @@ const (
 type Settings struct {
 	Version     int                 `json:"version"`
 	Server      ServerSettings      `json:"server"`
+	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
 	LLM         LLMSettings         `json:"llm"`
@@ -141,6 +144,12 @@ type Settings struct {
 // ServerSettings contains local HTTP server settings.
 type ServerSettings struct {
 	Port int `json:"port"`
+}
+
+// MediaSettings contains user-selected roots for explicit video catalog scans.
+// Paths are not secrets, but the scanner never accepts them from media routes.
+type MediaSettings struct {
+	LibraryPaths []string `json:"library_paths"`
 }
 
 // DeviceSettings contains device transport configuration.
@@ -310,6 +319,7 @@ type DiagnosticsSettings struct {
 type PublicSettings struct {
 	Version     int                       `json:"version"`
 	Server      ServerSettings            `json:"server"`
+	Media       MediaSettings             `json:"media"`
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
 	LLM         LLMSettings               `json:"llm"`
@@ -379,6 +389,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 // SettingsUpdate is the payload accepted by the settings API.
 type SettingsUpdate struct {
 	Server             ServerSettings      `json:"server"`
+	Media              *MediaSettings      `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMUpdate           `json:"llm"`
@@ -454,6 +465,9 @@ func (s Settings) Public() PublicSettings {
 	return PublicSettings{
 		Version: s.Version,
 		Server:  s.Server,
+		Media: MediaSettings{
+			LibraryPaths: append([]string{}, s.Media.LibraryPaths...),
+		},
 		Device: PublicDeviceSettings{
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
 			IntifaceServerAddress:    s.Device.IntifaceServerAddress,
@@ -568,6 +582,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next := s
 	next.Version = CurrentSettingsVersion
 	next.Server = update.Server
+	if update.Media != nil {
+		next.Media = normalizeMediaSettings(*update.Media)
+	}
 	next.Device.HSPDispatchOwner = update.Device.HSPDispatchOwner
 	next.Device.IntifaceServerAddress = strings.TrimSpace(update.Device.IntifaceServerAddress)
 	next.Device.FirmwareAPIRequirement = update.Device.FirmwareAPIRequirement
@@ -766,6 +783,9 @@ func validateSettings(settings Settings) error {
 	if err := validateLLMSettings(settings.LLM); err != nil {
 		return err
 	}
+	if err := validateMediaSettings(settings.Media); err != nil {
+		return err
+	}
 	return validateVoiceSettings(settings.Voice)
 }
 
@@ -828,6 +848,7 @@ func applyMissingDefaults(settings Settings) Settings {
 		settings.LLM.ReasoningMode = defaults.LLM.ReasoningMode
 	}
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
+	settings.Media = normalizeMediaSettings(settings.Media)
 	settings.LLM = normalizeLLMStrings(settings.LLM)
 	settings.Voice = normalizeVoiceStrings(settings.Voice)
 	if settings.Diagnostics.Verbosity == "" {
@@ -1079,9 +1100,49 @@ func trimArgs(args []string) []string {
 }
 
 func cloneSettings(settings Settings) Settings {
+	settings.Media.LibraryPaths = append([]string{}, settings.Media.LibraryPaths...)
 	settings.Voice.TTSWorkerArgs = cloneStrings(settings.Voice.TTSWorkerArgs)
 	settings.Voice.ASRWorkerArgs = cloneStrings(settings.Voice.ASRWorkerArgs)
 	return settings
+}
+
+func normalizeMediaSettings(settings MediaSettings) MediaSettings {
+	paths := make([]string, 0, len(settings.LibraryPaths))
+	for _, value := range settings.LibraryPaths {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		value = filepath.Clean(value)
+		duplicate := false
+		for _, existing := range paths {
+			if existing == value || (runtime.GOOS == "windows" && strings.EqualFold(existing, value)) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			paths = append(paths, value)
+		}
+	}
+	settings.LibraryPaths = paths
+	return settings
+}
+
+func validateMediaSettings(settings MediaSettings) error {
+	const maxLibraryPaths = 32
+	if len(settings.LibraryPaths) > maxLibraryPaths {
+		return fmt.Errorf("media library supports at most %d locations", maxLibraryPaths)
+	}
+	for _, value := range settings.LibraryPaths {
+		if !filepath.IsAbs(value) {
+			return fmt.Errorf("media library location must be an absolute path: %q", value)
+		}
+		if len(value) > 4096 {
+			return errors.New("media library location is too long")
+		}
+	}
+	return nil
 }
 
 func cloneStrings(values []string) []string {

@@ -10,7 +10,9 @@ const app = vi.hoisted(() => ({
     modes: { mode?: string; segment_index?: number; decision_source?: string };
     settings: Record<string, unknown>;
   },
-  motion: { engine: { running: true, paused: false } } as { engine?: { running?: boolean; paused?: boolean } },
+  motion: { engine: { running: true, paused: false, target: { source: "autopilot" } } } as {
+    engine?: { running?: boolean; starting?: boolean; completing?: boolean; paused?: boolean; target?: { source?: string } };
+  },
   refresh: vi.fn(),
   show: vi.fn(),
 }));
@@ -39,7 +41,7 @@ describe("AutopilotControl", () => {
     app.backendOnline = true;
     app.readOnly = false;
     app.state = { modes: {}, settings: {} };
-    app.motion = { engine: { running: true, paused: false } };
+    app.motion = { engine: { running: true, paused: false, target: { source: "autopilot" } } };
     app.refresh.mockReset();
     app.show.mockReset();
     startMode.mockReset();
@@ -90,7 +92,7 @@ describe("AutopilotControl", () => {
     await act(async () => screen.getByRole("button", { name: "Pause Autopilot" }).click());
     expect(pauseMotion).toHaveBeenCalledOnce();
 
-    app.motion = { engine: { running: false, paused: true } };
+    app.motion = { engine: { running: false, paused: true, target: { source: "autopilot" } } };
     result.rerender(<AutopilotControl />);
     await act(async () => screen.getByRole("button", { name: "Resume Autopilot" }).click());
     expect(resumeMotion).toHaveBeenCalledOnce();
@@ -104,5 +106,15 @@ describe("AutopilotControl", () => {
 
     expect(screen.getByRole("button", { name: "Pause Autopilot" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Stop Autopilot" })).toBeEnabled();
+  });
+
+  it("does not expose Autopilot pause controls for motion owned by manual testing", () => {
+    app.state = { modes: { mode: "autopilot", segment_index: 2 }, settings: {} };
+    app.motion = { engine: { running: false, paused: true, target: { source: "manual_ui" } } };
+
+    render(<AutopilotControl />);
+
+    expect(screen.getByRole("button", { name: "Pause Autopilot" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Resume Autopilot" })).not.toBeInTheDocument();
   });
 });

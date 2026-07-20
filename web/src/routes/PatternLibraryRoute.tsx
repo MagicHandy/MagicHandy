@@ -6,13 +6,14 @@ import { PatternAuthoring } from "../components/PatternAuthoring";
 import { PatternBrowser } from "../components/PatternBrowser";
 import { PatternTraining } from "../components/PatternTraining";
 import { ProgramLibrary } from "../components/ProgramLibrary";
+import { VideoLibrary } from "../components/VideoLibrary";
 import { libraryActionKey } from "../components/library-actions";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast } from "../state/app-state";
 
-type View = "browse" | "programs" | "import" | "author" | "training";
+type View = "browse" | "programs" | "videos" | "import" | "author" | "training";
 
-const views: readonly View[] = ["browse", "programs", "import", "author", "training"];
+const views: readonly View[] = ["browse", "programs", "videos", "import", "author", "training"];
 const emptyLibrary: PatternLibrary = { patterns: [], programs: [], feedback: [], auto_disable: false };
 
 export function PatternLibraryRoute() {
@@ -234,7 +235,7 @@ export function PatternLibraryRoute() {
   return (
     <>
       <WorkspaceHead title="Pattern library" />
-      <section className="panel library-shell" data-requires-backend aria-busy={loading || undefined}>
+      <section className="panel library-shell" data-requires-backend aria-busy={(view !== "videos" && loading) || undefined}>
         <nav className="library-tabs" aria-label="Pattern library views" role="tablist">
           {views.map((tab) => (
             <button
@@ -255,7 +256,11 @@ export function PatternLibraryRoute() {
           ))}
         </nav>
 
-        {loading ? (
+        <div role="tabpanel" id="library-videos-panel" aria-labelledby="library-videos-tab" hidden={view !== "videos"}>
+          <VideoLibrary active={view === "videos"} locked={locked} />
+        </div>
+
+        {view !== "videos" && (loading ? (
           <div className="empty-state compact-empty" role="status"><h2>Loading library</h2></div>
         ) : loadError ? (
           <div className="empty-state compact-empty" role="alert">
@@ -305,7 +310,7 @@ export function PatternLibraryRoute() {
               />
             </div>
           </>
-        )}
+        ))}
       </section>
     </>
   );

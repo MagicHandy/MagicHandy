@@ -111,6 +111,10 @@
   flex: 1 1 auto;
   min-height: 8px;
 }
+.stop-button.nav-stop {
+  position: relative;
+  z-index: var(--layer-emergency-stop);
+}
 
 /* ---- Status bar (top of workspace column) ---- */
 .status-bar {
@@ -708,7 +712,7 @@
     width: auto;
     top: 6px;
     bottom: auto;
-    z-index: 30;
+    z-index: var(--layer-emergency-stop);
   }
   .connection-manager-panel {
     top: calc(var(--status-h) + 8px);

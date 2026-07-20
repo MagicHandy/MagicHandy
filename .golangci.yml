@@ -21,6 +21,7 @@ linters:
             - internal/llm/**/*.go
             - internal/modes/**/*.go
             - internal/patterns/**/*.go
+            - internal/media/**/*.go
             - internal/voice/**/*.go
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
@@ -31,10 +32,11 @@ linters:
             - internal/llm/**/*.go
             - internal/modes/**/*.go
             - internal/patterns/**/*.go
+            - internal/media/**/*.go
             - internal/voice/**/*.go
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/transport
-              desc: Chat, LLM, modes, patterns, and voice produce semantic outputs and must not call transport.
+              desc: Chat, LLM, modes, patterns, media, and voice produce semantic outputs and must not call transport.
         voice-never-touches-motion:
           files:
             - internal/voice/**/*.go
