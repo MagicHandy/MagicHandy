@@ -42,6 +42,7 @@ interface Props {
   end: number;
   viewport: TimeWindow;
   disabled: boolean;
+  playhead?: number;
   onTrimChange: Dispatch<SetStateAction<TimeWindow>>;
   onViewportChange: Dispatch<SetStateAction<TimeWindow>>;
 }
@@ -53,6 +54,7 @@ export function ImportTimeline({
   end,
   viewport,
   disabled,
+  playhead,
   onTrimChange,
   onViewportChange,
 }: Props) {
@@ -92,6 +94,7 @@ export function ImportTimeline({
   const maximumViewStart = Math.max(0, duration - span);
   const viewportPosition = maximumViewStart > 0 ? viewStart / maximumViewStart : 0;
   const viewportSize = duration > 0 ? span / duration : 1;
+  const playheadVisible = playhead !== undefined && playhead >= viewStart && playhead <= viewEnd;
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -363,6 +366,7 @@ export function ImportTimeline({
           {selectionOutsideView && <rect className="import-timeline-dim" x={0} y={0} width={TIMELINE_W} height={TIMELINE_H} />}
           {!selectionOutsideView && start > viewStart && <rect className="import-timeline-dim" data-trim-dim="start" x={0} y={0} width={selectedStartX} height={TIMELINE_H} />}
           {!selectionOutsideView && end < viewEnd && <rect className="import-timeline-dim" data-trim-dim="end" x={selectedEndX} y={0} width={TIMELINE_W - selectedEndX} height={TIMELINE_H} />}
+          {playheadVisible && <line className="import-timeline-playhead" x1={toX(playhead)} y1={0} x2={toX(playhead)} y2={TIMELINE_H} />}
         </svg>
         {(["start", "end"] as const).map((bound) => {
           const value = bound === "start" ? start : end;

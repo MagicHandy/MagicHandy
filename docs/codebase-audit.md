@@ -4,16 +4,17 @@ This ledger tracks the systematic reliability, maintainability, and efficiency
 review. A subsystem is complete only after its code paths, ownership and
 lifecycle boundaries, tests, and relevant documentation have been reviewed.
 
-Baseline: `origin/main` at `b81e9eb2` (2026-07-19).
+Baseline: `origin/main` at `0d4ec1e5` (2026-07-19).
 
 | Subsystem | Status | Current evidence |
 | --- | --- | --- |
-| Configuration and persistence boundaries | Reviewed in dedicated pass | One process-owned SQLite pool serves six logical domains; writes share one transaction lock, schema v10 preserves invalid settings, physical corruption is quarantined, logical damage fails clearly, and schema/version/permission/lifecycle behavior has focused coverage. |
+| Configuration and persistence boundaries | Reviewed in dedicated pass; media follow-up in Phase 18 M0 | One process-owned SQLite pool serves seven logical domains; writes share one transaction lock, schema v11 adds the explicit-scan media catalog while preserving invalid settings, physical corruption is quarantined, logical damage fails clearly, and schema/version/permission/lifecycle behavior has focused coverage. |
 | Diagnostics and structured logging | Reviewed in first pass | Trace storage now overwrites in O(1) and returns independent snapshots. Logging volume and redaction need review with each provider/transport. |
 | HTTP and process lifecycle | Reviewed in first pass | Oversized JSON is rejected, response encoding cannot panic after committing headers, browser requests are loopback same-origin, mutating leases require headers, and shutdown quiesces device work before closing stores. |
 | Motion engine and transports | Reviewed in first pass | PR #87 serializes ownership and command admission, hardens transport teardown, and expands race and lifecycle coverage. Real-device behavior remains subject to the documented hardware validation matrix. |
 | Chat, LLM, memory, modes, patterns, library, validation | Reviewed in first pass; Autopilot follow-up in PR #101 | Storage failures are explicit, mutations are transactional, mode lifecycle and stale-operation races are covered, provider/runtime limits are bounded, managed-model inventory is crash-safe, and validation exports only the active run. Chat Autopilot now consumes bounded canonical conversation context, preserves resolved custom patterns across hold/drift, cancels announcements with the mode, and falls back visibly without creating a second motion path. Live-model and long-session acceptance remain open. |
 | Voice, workers, queues, and audio | Reviewed in first pass | Worker framing and deadlines, bounded request queues, cancellation, process-tree teardown, provider response limits, deterministic sampling, and reference-code validation have focused coverage. Representative listening, simultaneous GPU LLM/TTS load, and lower-VRAM acceptance remain open. |
+| Media catalog and plain playback | Reviewed in Phase 18 M0 | Saved absolute roots feed only an explicit depth/file-bounded scanner; opaque catalog IDs, rooted file handles, and file-identity checks jail Range streaming. Videos and the reusable import-preview player do not import motion or transport. Multi-root scanning and a complete 2 GiB stable-RSS stream passed manual acceptance on 2026-07-19. |
 | Frontend state, accessibility, and UI performance | Reviewed in dedicated pass; Autopilot follow-up in PR #101 | Route lifetime preserves settings drafts; failed reads remain distinct from valid empty state; quick writes flush across unmount; chat tail reads retry; and persistence/mode mutations serialize before React rerenders. The Import timeline uses one measured coordinate system for waveform, selection, and fixed 44 px trim targets; zoom cannot mutate content, wheel zoom is cursor-anchored, and a proportional pointer/keyboard scrollbar directly moves the viewport. Long loops preserve duration, impossible essential-knot counts fail before upload, and compact previews retain saved reversals. Chat's control sidebar owns the single Autopilot control, including Pause/Resume and model/fallback provenance; Preset Modes remains deterministic. Manual motion lives in Diagnostics and keys its active state from backend target provenance rather than the generic running flag. Autonomous lines use the canonical log and only newly observed speech IDs reach browser playback. Full-suite count and final bundle measurement are recorded in the current scorecard entry. |
 | Install, update, packaging, and release paths | Installer/update reviewed in first pass | Installer state is closed and strongly typed, delegated relative paths remain stable, binary sets and pinned Parakeet assets replace atomically with rollback, session PATH entries survive dependency refresh, and generated launchers have an owned removal path. A real clean-machine bootstrap and Phase 16 packaging/release artifacts still require dedicated acceptance. |
 
@@ -128,7 +129,9 @@ Baseline: `origin/main` at `b81e9eb2` (2026-07-19).
   Autopilot changed the diagnostic control to "Restart test" and enabled its
   local Stop. The React contract now reads `target.source`, and manual start
   stops the active run and drains the mode before taking ownership of the
-  shared engine. This is runtime provenance and lifecycle state, not persisted
+  shared engine. The manual-target endpoint additionally requires a live
+  `manual_ui` owner, preventing a stale control from relabeling Autopilot or an
+  idle engine. This is runtime provenance and lifecycle state, not persisted
   data; no database migration is required.
 - Holding an LLM-selected custom library pattern retained its ID but lost the
   resolved definition, so the engine could silently play the built-in fallback.

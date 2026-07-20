@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, clientId } from "../api/client";
 import type { NeuTTSReference } from "../api/types";
+import { trapModalTab } from "../util/modal";
 import { HostPathField } from "./HostPathField";
 
 interface Props {
@@ -30,20 +31,7 @@ export function NeuTTSReferenceDialog({ initialWAV, initialTranscript, onApply, 
         onClose();
         return;
       }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), audio[controls], [tabindex]:not([tabindex="-1"])',
-      ));
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      if (dialogRef.current) trapModalTab(event, dialogRef.current);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -111,7 +99,6 @@ export function NeuTTSReferenceDialog({ initialWAV, initialTranscript, onApply, 
         ref={dialogRef}
         className="reference-dialog"
         role="dialog"
-        aria-modal="true"
         aria-labelledby="neutts-reference-title"
         aria-describedby="neutts-reference-description"
         tabIndex={-1}

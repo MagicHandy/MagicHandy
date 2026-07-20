@@ -1,8 +1,8 @@
 # Video Library And Synced Funscript Playback — Design
 
-Status: **planned, not scheduled** — this is the design and integration plan
-(2026-07-19). Implementation is sliced at the end; nothing lands until a slice
-becomes a PR.
+Status: **M0 implemented (2026-07-19); M1-M3 remain planned**. M0 is the
+catalog and plain-playback foundation only: it does not load a funscript for
+playback and cannot command motion.
 
 ## Decision note — this supersedes a recorded non-goal
 
@@ -20,6 +20,31 @@ the non-goal do not disappear; they become this design's guardrails:
 - **Nothing heavy happens implicitly**: library scans are explicit user
   actions with visible progress; startup never scans, hashes, or probes media.
 
+## Reference review
+
+The implementation borrows proven interaction ideas, not whole architectures:
+
+- [Syncopathy](https://github.com/ofs69/syncopathy) validates an offline media
+  library, obvious filtering, exact video/script pairing, and a lightweight
+  single-file workflow. MagicHandy adopts those concepts. It does not adopt
+  Syncopathy's Flutter shell, FFmpeg thumbnail requirement, ObjectBox native
+  persistence, custom `media_kit` fork, or direct BLE playback path; those
+  conflict with the embedded web UI, pure-Go core, and one-motion-path rule.
+- [EroDeck](https://gitlab.com/Archon-Dev/erodeck) validates keeping local
+  video/script metadata in SQLite and staging authenticated remote imports for
+  user review. Remote topic ingestion, uploaded-media copies, and handoff to an
+  external IVE player are deliberately excluded from M0. A reviewed remote
+  metadata queue is a possible later feature, separate from local playback.
+- [ScriptCompiler](https://docs.scriptcompiler.com/getting-started/quick-start/)
+  validates putting the video directly above its timeline and matching the
+  `.funscript` basename to the media file. MagicHandy's import preview adopts
+  that spatial relationship while retaining the existing bounded parser and
+  trim controls; it does not become a second authoring or device-control path.
+
+The resulting reusable unit is the native-video component used by both the
+Videos tab and the optional funscript-import preview. It accepts an opaque
+catalog entry and playback callbacks, and knows nothing about motion.
+
 ## Requirements (from direction)
 
 1. A **video grid with search** under the library page; selecting a video
@@ -30,6 +55,10 @@ the non-goal do not disappear; they become this design's guardrails:
    color-coded to intensity**.
 4. **Settings where library locations can be added and scanned** for library
    entries.
+
+M0 fulfills requirements 1 and 4 for plain playback and records the pairing
+metadata needed by requirement 2. Automatic funscript playback and the OSD in
+requirements 2-3 remain M1-M2 work.
 
 ## Architecture overview
 
@@ -102,6 +131,9 @@ also enables an optional client-captured poster frame in a later slice.
   marked `missing` (kept for one rescan cycle so a temporarily unplugged
   drive does not wipe the grid), and a scan summary (added/updated/missing/
   skipped) is returned and shown.
+- Permission failures and file-limit truncation make a root explicitly
+  partial. Discovered rows may still update, but unseen existing rows are not
+  marked missing and Settings shows the preservation warning.
 - Scans run server-side with progress polling like model imports
   (`/api/media/scan` returns a scan-state object; one scan at a time;
   cancellable; controller-gated).
@@ -112,9 +144,11 @@ also enables an optional client-captured poster frame in a later slice.
   and serves the file with `http.ServeContent` (native Range support,
   constant memory). **The path jail is the catalog**: no endpoint accepts a
   filesystem path; only scan-recorded ids resolve, and resolution re-checks
-  that the joined path stays under its registered root (defense against
-  post-scan root edits).
-- `GET /api/media/videos/{id}/funscript` serves the paired script (bounded
+  that the joined path stays under its registered root and that the root, file,
+  and every intermediate component are not symlinks. The final open uses Go's
+  rooted filesystem handle and verifies file identity, closing the path-swap
+  race without depending on platform-wide ancestor resolution.
+- In M1, `GET /api/media/videos/{id}/funscript` serves the paired script (bounded
   read, `MaxMediaFunscriptBytes` 16 MiB) for the OSD strip; the same loader
   feeds the sync session server-side, so the strip and the device always
   render the same data.
@@ -122,7 +156,7 @@ also enables an optional client-captured poster frame in a later slice.
   and therefore not controller-gated, but every motion-affecting endpoint
   below is.
 
-## Sync design — the heart of the feature
+## Sync design — planned for M2
 
 **The video element is the clock master.** The browser owns play/pause/seek;
 the backend anchors motion to the reported media clock:
@@ -167,7 +201,7 @@ source; read-only tabs can watch video but their sync events are ignored for
 motion (they get a visible "read-only — motion stays with the controller"
 note).
 
-## OSD funscript strip
+## OSD funscript strip — planned for M1
 
 A hideable strip rendered under the video (canvas, not SVG — feature-length
 scripts have 10⁴–10⁵ actions; the import timeline's min/max bucket
@@ -202,38 +236,54 @@ downsampling is reused at canvas resolution):
   unplugged locations. **Search** is a client-side filter over name (the
   catalog returns the full bounded list; personal libraries do not need
   server search). Sort: name / most recent.
-- **Player view** (replaces the grid within the tab; back button returns):
-  `<video>` with native controls + the OSD strip + a compact status line
-  (sync state, device following/paused, drift) + the standard read-only/
-  controller messaging. The persistent Stop button stays global as on every
-  route.
+- **Player view** (replaces the grid within the tab; back button returns): M0
+  ships `<video>` with native controls and browser-reported duration backfill.
+  Leaving the Videos tab unmounts the player so hidden audio never continues.
+  M1 adds the OSD strip; M2 adds the compact sync/device/drift status. The
+  persistent Stop button stays global as on every route.
 - Settings > **Library locations** (new Settings section): list of
   registered paths with per-path entry counts, Add via the existing
-  controller-gated `POST /api/host/path-picker`, Remove (catalog rows for
-  that root are deleted after a confirm), Scan-now with progress and the
-  last scan summary.
+  controller-gated `POST /api/host/path-picker`, Remove (after confirmation,
+  catalog rows for that root are deleted when Settings is saved), Scan-now with
+  progress and the last scan summary. Startup reconciles rows to saved
+  locations without scanning files, closing a crash window after settings save.
+- **Funscript import preview** (M0): after a funscript is parsed, an optional
+  modal uses the same player above the existing timeline. Exact-basename media
+  is selected first when present, another catalog video can be chosen, and the
+  timeline shares the import form's trim and viewport state. Playback remains
+  preview-only and never starts motion.
 
 ## API surface
 
-| Endpoint | Gate | Purpose |
-| --- | --- | --- |
-| `GET /api/media/videos` | read | catalog list (id, name, badges, duration) |
-| `GET /api/media/videos/{id}/stream` | read | Range-capable file streaming |
-| `GET /api/media/videos/{id}/funscript` | read | paired script for the OSD |
-| `POST /api/media/scan` / `GET /api/media/scan` | controller / read | start scan; poll progress + summary |
-| `PUT /api/settings` (`media.library_paths`) | controller | manage locations |
-| `POST /api/media/sync` | controller | play/pause/seek/heartbeat anchor events |
-| `POST /api/media/duration` | controller | browser-reported `duration_ms` backfill |
+| Endpoint | Gate | Slice | Purpose |
+| --- | --- | --- | --- |
+| `GET /api/media/videos` | read | M0 | catalog list (id, name, badges, duration) |
+| `GET /api/media/videos/{id}/stream` | read | M0 | Range-capable file streaming |
+| `POST /api/media/scan` / `GET /api/media/scan` / `DELETE /api/media/scan` | controller / read / controller | M0 | start, poll, or cancel an explicit scan |
+| `PUT /api/settings` (`media.library_paths`) | controller | M0 | manage locations |
+| `POST /api/media/duration` | controller | M0 | browser-reported `duration_ms` backfill |
+| `GET /api/media/videos/{id}/funscript` | read | M1 | paired script for the OSD |
+| `POST /api/media/sync` | controller | M2 | play/pause/seek/heartbeat anchor events |
 
 ## Slices (each is one reviewable PR with its own validation)
 
-- **M0 — catalog foundation**: settings field, schema v11, scanner with
+- **M0 — catalog foundation (implemented)**: settings field, schema v11,
+  explicit scanner with
   bounds + summary, Settings section (add/remove/scan), Videos tab grid +
-  search, Range streaming, plain video playback with **no motion**.
-  *Gate: scan a real multi-folder library; grid renders; a 2 GB file streams
-  with stable RSS; traversal attempts 404.*
-- **M1 — pairing + OSD**: exact-basename pairing at scan, funscript endpoint,
-  canvas strip with intensity ramp + playhead + click-seek + hide toggle.
+  search, Range streaming, plain video playback with **no motion**, reusable
+  video player, and optional video-above-timeline funscript import preview.
+  Exact-basename pairing metadata is recorded now so the grid can label it;
+  the script is not read or played. Automated gates cover explicit scan,
+  bounds, missing-file retention, partial-scan preservation, catalog path
+  jailing, byte-range responses, controller gates, frontend search/playback,
+  and the import preview. The 2026-07-19 resumed acceptance scan covered two
+  roots, four encountered files, three videos, and one exact-basename pair
+  without issues. A complete 2 GiB sparse-file stream returned 200 in 0.829 s
+  with a 1,495,040-byte peak RSS increase; a tail Range returned 206 and the
+  requested 648 bytes. These close M0's multi-root and constant-memory manual
+  checks before M1.
+- **M1 — paired-script reading + OSD**: bounded funscript endpoint, canvas
+  strip with intensity ramp + playhead + click-seek + hide toggle.
   Still no motion. *Gate: strip matches the script for feature-length files;
   rendering stays smooth at 10⁵ actions; hide state persists.*
 - **M2 — synced motion**: media timeline loader + engine `Reanchor`, sync
@@ -258,9 +308,11 @@ downsampling is reused at canvas resolution):
   impact beyond the new package. Embedded UI: grid + player + canvas strip,
   no new dependencies (the design system and bucket-downsampling code carry
   over); watch-list item 4 still applies to any imagery.
-- RSS: streaming is constant-memory; the loaded sync curve is the one
+- RSS: streaming is constant-memory; an M0 scan holds bounded discovery
+  metadata for at most 10,000 encountered files per root while it runs. The
+  loaded sync curve is the one
   meaningful allocation (≤ ~3 MB for 100k points) and is released when the
-  player closes; scans hold only counters.
+  player closes in M2.
 - The `.mkv` exclusion, no-transcoding stance, and localhost-only serving are
   deliberate scope walls; revisiting any of them is a new decision, not
   scope drift.

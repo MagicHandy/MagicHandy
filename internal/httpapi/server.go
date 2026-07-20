@@ -21,6 +21,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/media"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -89,6 +90,7 @@ type Server struct {
 	hostPathPicker         hostPathPicker
 	chatLog                *chat.MessageLog
 	patterns               *patterns.Library
+	media                  *media.Catalog
 	started                time.Time
 	version                VersionInfo
 	handler                http.Handler
@@ -169,24 +171,16 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
 
-	chatLog, err := chat.OpenMessageLogWithDatabase(store.Datastore())
-	if err != nil {
+	if err := server.openPersistentDomains(settings.Media.LibraryPaths); err != nil {
+		server.modes.Shutdown()
+		if server.voice != nil {
+			server.voice.Shutdown()
+		}
 		managedLLM.Close()
 		_ = modelManager.Close()
 		personalization.Close()
 		return nil, err
 	}
-	server.chatLog = chatLog
-
-	patternLibrary, err := patterns.OpenWithDatabase(store.Datastore())
-	if err != nil {
-		_ = chatLog.Close()
-		managedLLM.Close()
-		_ = modelManager.Close()
-		personalization.Close()
-		return nil, err
-	}
-	server.patterns = patternLibrary
 
 	mux := http.NewServeMux()
 	server.routes(mux)
@@ -194,6 +188,40 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.startVoiceAutoload(settings.Voice)
 
 	return server, nil
+}
+
+func (s *Server) openPersistentDomains(mediaLocations []string) error {
+	chatLog, err := chat.OpenMessageLogWithDatabase(s.store.Datastore())
+	if err != nil {
+		return err
+	}
+	s.chatLog = chatLog
+
+	patternLibrary, err := patterns.OpenWithDatabase(s.store.Datastore())
+	if err != nil {
+		_ = chatLog.Close()
+		return err
+	}
+	s.patterns = patternLibrary
+
+	mediaCatalog, err := media.OpenWithDatabase(s.store.Datastore(), s.logger)
+	if err != nil {
+		_ = patternLibrary.Close()
+		_ = chatLog.Close()
+		return err
+	}
+	removed, err := mediaCatalog.RetainLocations(context.Background(), mediaLocations)
+	if err != nil {
+		_ = mediaCatalog.Close()
+		_ = patternLibrary.Close()
+		_ = chatLog.Close()
+		return fmt.Errorf("reconcile media catalog locations: %w", err)
+	}
+	if removed > 0 {
+		s.logger.Info("removed media outside configured locations", "video_count", removed)
+	}
+	s.media = mediaCatalog
+	return nil
 }
 
 func (s *Server) configureVoice(settings config.VoiceSettings, executablePath, dataDir string) {
@@ -265,6 +293,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
 	s.libraryRoutes(mux)
+	s.mediaRoutes(mux)
 	s.voiceRoutes(mux)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
@@ -329,7 +358,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		},
 		"features": map[string]string{
 			"chat":      "local_llm_streaming",
-			"library":   "patterns_programs_authoring",
+			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
@@ -364,7 +393,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		},
 		"features": map[string]string{
 			"chat":      "local_llm_streaming",
-			"library":   "patterns_programs_authoring",
+			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",
 			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
@@ -376,6 +405,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"voice":               s.voiceState(),
 		"chat":                s.chatState(),
 		"library":             s.libraryState(),
+		"media":               s.mediaState(r.Context()),
 		"motion":              s.motionState(),
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),

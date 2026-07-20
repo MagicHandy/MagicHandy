@@ -10,6 +10,7 @@ import (
 type schemaColumn struct {
 	name     string
 	typeName string
+	nullable bool
 }
 
 type schemaTable struct {
@@ -73,6 +74,10 @@ var requiredSchemaTables = []schemaTable{
 		"model_path:TEXT", "license:TEXT", "imported_at:TEXT", "updated_at:TEXT",
 	), primaryKey: []string{"id"}},
 	{name: "settings_recoveries", columns: columns("id:INTEGER", "document:TEXT", "reason:TEXT", "recovered_at:TEXT"), primaryKey: []string{"id"}},
+	{name: "media_videos", columns: columns(
+		"id:TEXT", "location_path:TEXT", "relative_path:TEXT", "display_name:TEXT", "size_bytes:INTEGER",
+		"modified_at:TEXT", "duration_ms:INTEGER?", "funscript_relative_path:TEXT?", "missing:INTEGER", "scanned_at:TEXT",
+	), primaryKey: []string{"id"}},
 }
 
 var requiredSchemaIndexes = []schemaIndex{
@@ -81,6 +86,8 @@ var requiredSchemaIndexes = []schemaIndex{
 	{table: "llm_models", name: "llm_models_sha256", unique: true, columns: indexColumns("sha256")},
 	{table: "llm_models", name: "llm_models_path", unique: true, columns: indexColumns("model_path")},
 	{table: "settings_recoveries", name: "settings_recoveries_recovered_at", columns: indexColumns("-recovered_at", "-id")},
+	{table: "media_videos", name: "media_videos_location_relative", unique: true, columns: indexColumns("location_path", "relative_path")},
+	{table: "media_videos", name: "media_videos_missing_name", columns: indexColumns("missing", "display_name", "id")},
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
@@ -156,8 +163,11 @@ func (db *DB) validateSchemaTables(ctx context.Context) error {
 					column.typeName,
 				)
 			}
-			if actualColumn.primaryKey == 0 && !actualColumn.notNull {
+			if !column.nullable && actualColumn.primaryKey == 0 && !actualColumn.notNull {
 				return fmt.Errorf("%w: required column %s.%s permits NULL", ErrInvalidSchema, table.name, column.name)
+			}
+			if column.nullable && actualColumn.notNull {
+				return fmt.Errorf("%w: required column %s.%s does not permit NULL", ErrInvalidSchema, table.name, column.name)
 			}
 		}
 		actualPrimaryKey := make([]string, len(table.primaryKey))
@@ -257,7 +267,8 @@ func columns(specifications ...string) []schemaColumn {
 	result := make([]schemaColumn, 0, len(specifications))
 	for _, specification := range specifications {
 		name, typeName, _ := strings.Cut(specification, ":")
-		result = append(result, schemaColumn{name: name, typeName: typeName})
+		nullable := strings.HasSuffix(typeName, "?")
+		result = append(result, schemaColumn{name: name, typeName: strings.TrimSuffix(typeName, "?"), nullable: nullable})
 	}
 	return result
 }

@@ -44,8 +44,15 @@ func TestStoreAddToggleRemoveClearPersists(t *testing.T) {
 	if len(snapshot.Memories) != 2 {
 		t.Fatalf("persisted memories = %d, want 2", len(snapshot.Memories))
 	}
-	if snapshot.Memories[1].Enabled {
-		t.Fatal("disabled memory did not persist as disabled")
+	persistedSecond := Memory{}
+	for _, item := range snapshot.Memories {
+		if item.ID == second.ID {
+			persistedSecond = item
+			break
+		}
+	}
+	if persistedSecond.ID == "" || persistedSecond.Enabled {
+		t.Fatalf("disabled memory did not persist as disabled: %+v", persistedSecond)
 	}
 
 	if err := reopened.Remove(first.ID); err != nil {

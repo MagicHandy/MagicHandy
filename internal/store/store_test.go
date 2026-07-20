@@ -435,7 +435,7 @@ func TestMigrationUpgradesV2DatabaseToPatternSchema(t *testing.T) {
 	}
 	defer func() { _ = upgraded.Close() }()
 
-	for _, table := range []string{"patterns", "programs", "pattern_feedback", "llm_models", "settings_recoveries"} {
+	for _, table := range []string{"patterns", "programs", "pattern_feedback", "llm_models", "settings_recoveries", "media_videos"} {
 		assertTableExists(t, upgraded.SQL(), table)
 	}
 	var version int
@@ -676,6 +676,50 @@ func TestMigrationUpgradesV9ToSettingsRecoveryHistory(t *testing.T) {
 	}
 	if document != `{"version":1}` {
 		t.Fatalf("settings document changed across v10 migration: %q", document)
+	}
+}
+
+func TestMigrationUpgradesV10ToNullableMediaCatalog(t *testing.T) {
+	dir := t.TempDir()
+	database, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	path := database.Path()
+	if err := database.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("raw open: %v", err)
+	}
+	for _, statement := range []string{
+		"DROP TABLE media_videos",
+		"PRAGMA user_version = 10",
+	} {
+		if _, err := raw.Exec(statement); err != nil {
+			_ = raw.Close()
+			t.Fatalf("rewind %q: %v", statement, err)
+		}
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("raw close: %v", err)
+	}
+
+	upgraded, err := Open(dir)
+	if err != nil {
+		t.Fatalf("reopen v10 database: %v", err)
+	}
+	t.Cleanup(func() { _ = upgraded.Close() })
+	assertTableExists(t, upgraded.SQL(), "media_videos")
+	if _, err := upgraded.SQL().Exec(`
+		INSERT INTO media_videos(
+			id, location_path, relative_path, display_name, size_bytes,
+			modified_at, duration_ms, funscript_relative_path, missing, scanned_at
+		) VALUES('video', 'C:/media', 'video.mp4', 'video', 1, 'now', NULL, NULL, 0, 'now')
+	`); err != nil {
+		t.Fatalf("nullable media row: %v", err)
 	}
 }
 

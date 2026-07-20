@@ -30,6 +30,10 @@
   --radius-sm: 8px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
   --shadow-soft: 0 3px 10px rgba(0, 0, 0, 0.28);
+  /* Global layers. Emergency Stop must remain above every route and overlay. */
+  --layer-modal: 1000;
+  --layer-feedback: 1100;
+  --layer-emergency-stop: 1200;
   --gap: 16px;
   --rail-width: clamp(212px, 18vw, 236px);
   --status-h: 48px;

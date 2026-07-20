@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { UploadIcon } from "../shell/icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PlayIcon, UploadIcon } from "../shell/icons";
 import { ImportTimeline, formatTimelineTime, type TimelinePoint, type TimeWindow } from "./ImportTimeline";
+import { MediaPreviewDialog } from "./MediaPreviewDialog";
 
 // Import studio: funscripts get a client-side trim timeline before the file
 // subset is submitted through the normal validated import endpoint; MagicHandy
@@ -34,7 +35,9 @@ export function MotionImport({ locked, importing, onImport }: Props) {
   const [kind, setKind] = useState<"pattern" | "program">("program");
   const [name, setName] = useState("");
   const [reading, setReading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const readRequest = useRef(0);
+  const closePreview = useCallback(() => setPreviewOpen(false), []);
 
   const funscript = parsed?.type === "funscript" ? parsed : null;
   const selection = useMemo(() => {
@@ -60,6 +63,7 @@ export function MotionImport({ locked, importing, onImport }: Props) {
     const request = ++readRequest.current;
     setReading(true);
     setParsed(null);
+    setPreviewOpen(false);
     const next = await parseImportFile(file);
     if (request !== readRequest.current) return;
     setReading(false);
@@ -83,7 +87,10 @@ export function MotionImport({ locked, importing, onImport }: Props) {
       const payload = JSON.stringify({ actions: rebased });
       ok = await onImport(new File([payload], `${contentName}.funscript`, { type: "application/json" }), kind);
     }
-    if (ok) setParsed(null);
+    if (ok) {
+      setPreviewOpen(false);
+      setParsed(null);
+    }
   }
 
   return (
@@ -102,6 +109,7 @@ export function MotionImport({ locked, importing, onImport }: Props) {
             }}
           />
         </label>
+        {funscript && <button type="button" className="btn btn-secondary" disabled={locked || importing} onClick={() => setPreviewOpen(true)}><PlayIcon />Preview with video</button>}
         <span className="hint-inline">Funscripts (.funscript) and MagicHandy share files (.json).</span>
       </div>
 
@@ -188,6 +196,19 @@ export function MotionImport({ locked, importing, onImport }: Props) {
             {importing ? "Importing" : kind === "program" ? "Import as program" : "Import as loop pattern"}
           </button>
         </div>
+      )}
+      {funscript && previewOpen && (
+        <MediaPreviewDialog
+          funscriptName={funscript.stem}
+          points={funscript.points}
+          duration={funscript.duration}
+          trim={trim}
+          viewport={viewport}
+          disabled={locked || importing}
+          onTrimChange={setTrim}
+          onViewportChange={setViewport}
+          onClose={closePreview}
+        />
       )}
     </section>
   );

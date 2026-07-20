@@ -208,6 +208,53 @@ export interface PatternLibrary {
   auto_disable: boolean;
 }
 
+export interface MediaVideo {
+  id: string;
+  location_path: string;
+  display_name: string;
+  size_bytes: number;
+  modified_at: string;
+  duration_ms: number | null;
+  has_funscript: boolean;
+  missing: boolean;
+  scanned_at: string;
+}
+
+export interface MediaScanIssue {
+  location: string;
+  message: string;
+}
+
+export interface MediaScanState {
+  running: boolean;
+  cancellable: boolean;
+  cancelled: boolean;
+  started_at?: string;
+  completed_at?: string;
+  current_location?: string;
+  files_visited: number;
+  videos_found: number;
+  summary: {
+    locations: number;
+    added: number;
+    updated: number;
+    missing: number;
+    removed: number;
+    skipped: number;
+    issues: MediaScanIssue[] | null;
+  };
+  error?: string;
+}
+
+export interface MediaSummary {
+  available: boolean;
+  error?: string;
+  video_count?: number;
+  available_count?: number;
+  paired_count?: number;
+  scan?: MediaScanState;
+}
+
 export interface PatternInput {
   name: string;
   description?: string;
@@ -395,6 +442,7 @@ export interface OptionHints {
 export interface PublicSettings {
   version: number;
   server: { port: number };
+  media?: { library_paths: string[] };
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;
@@ -536,6 +584,7 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
+  media: { library_paths: string[] };
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;
@@ -643,6 +692,7 @@ export interface AppState {
   voice?: VoiceState;
   chat?: { available?: boolean; latest_seq?: number };
   library?: LibrarySummary;
+  media?: MediaSummary;
   transport?: Record<string, unknown>;
   cloud_transport?: TransportDiagnostics;
   bluetooth_transport?: TransportDiagnostics;

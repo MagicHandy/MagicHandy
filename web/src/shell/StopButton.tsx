@@ -56,6 +56,7 @@ export function StopButton({ className = "" }: { className?: string }) {
     <button
       type="button"
       className={`stop-button ${className}`.trim()}
+      data-emergency-stop
       onClick={() => void stop()}
       aria-label="Emergency stop all motion"
     >

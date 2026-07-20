@@ -228,7 +228,7 @@ func TestMotionStartStateStop(t *testing.T) {
 	if started.Engine.Target.SpeedPercent != 60 {
 		t.Fatalf("target speed = %d, want 60", started.Engine.Target.SpeedPercent)
 	}
-	if started.Engine.Target.Source != "manual_ui" {
+	if started.Engine.Target.Source != motion.TargetSourceManualUI {
 		t.Fatalf("target source = %q, want manual_ui", started.Engine.Target.Source)
 	}
 	restarted := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
@@ -276,8 +276,64 @@ func TestManualMotionStartEndsActiveMode(t *testing.T) {
 	if status := server.modes.Status(); status.Active {
 		t.Fatalf("mode survived manual motion start: %+v", status)
 	}
-	if !started.Engine.Running || started.Engine.Target.Source != "manual_ui" {
+	if !started.Engine.Running || started.Engine.Target.Source != motion.TargetSourceManualUI {
 		t.Fatalf("manual motion did not own the engine: %+v", started.Engine)
+	}
+}
+
+func TestManualTargetCannotRelabelAutopilotMotion(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	t.Cleanup(server.Close)
+
+	if _, err := server.modes.Start(t.Context(), modes.ModeAutopilot); err != nil {
+		t.Fatalf("start autopilot: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	engine := server.currentMotionEngine()
+	if engine == nil || engine.Snapshot().Target.Source != modes.ModeAutopilot {
+		t.Fatalf("autopilot did not own motion before retarget: %+v", engine)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/target", strings.NewReader(`{"pattern":"pulse","speed_percent":30}`))
+	request = withController(request)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("manual retarget status = %d, want %d: %s", recorder.Code, http.StatusConflict, recorder.Body.String())
+	}
+	if source := engine.Snapshot().Target.Source; source != modes.ModeAutopilot {
+		t.Fatalf("target source = %q after rejected retarget, want %q", source, modes.ModeAutopilot)
+	}
+}
+
+func TestManualTargetRequiresRunningManualTest(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/target", strings.NewReader(`{"pattern":"pulse","speed_percent":25}`))
+	request = withController(request)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("idle manual retarget status = %d, want %d: %s", recorder.Code, http.StatusConflict, recorder.Body.String())
+	}
+	if state := server.currentMotionEngine().Snapshot(); state.Running || state.Target.PatternID != motion.PatternStroke {
+		t.Fatalf("idle engine changed after rejected retarget: %+v", state)
 	}
 }
 

@@ -122,13 +122,15 @@ The testing-badged Manual motion group lives in `#/settings/diagnostics`; it
 identifies an active test from the backend motion target's `manual_ui` source,
 never from the generic engine-running flag. Starting a manual test stops any
 active run and drains its autonomous owner before the diagnostic claims the
-shared engine. The shell-level connection manager owns the
+shared engine. The manual-target API also rejects retargeting unless that
+`manual_ui` session is still active, so an idle or autonomous target cannot be
+relabeled by a stale diagnostic control. The shell-level connection manager owns the
 saved dispatch owner's connect/check/discover actions and immediate speed/stroke
 limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
-Phase 14 Browse / Programs / Import / Author / Training workspace, and
-`#/settings/device|model|voice|prompts|diagnostics` are sibling sections of
-the routed Settings page — deep-linkable, no window, no stacked overlays.
+Browse / Programs / Videos / Import / Author / Training workspace, and
+`#/settings/device|media|model|voice|prompts|diagnostics` are sibling sections
+of the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the
 route tree so no navigation state can unmount it; backend loss shows the
 persistent banner and locks backend-required controls while Stop stays
@@ -304,6 +306,9 @@ hoc per-widget colors) are not.
 - Full keyboard operability, visible focus, logical order. The connection
   manager is a non-modal disclosure: opening focuses its Close button and
   closing restores the trigger; it does not capture Escape, which remains Stop.
+- Focused media/reference dialogs keep the shell-level Emergency Stop in their
+  keyboard focus cycle and below no overlay layer; they do not claim that the
+  rest of the app is inert while this safety control remains operable.
 - Status is never color-only.
 - `prefers-reduced-motion` is respected for visualizer animation and transitions.
 - Live regions are minimal and intentional: one polite region for status; the

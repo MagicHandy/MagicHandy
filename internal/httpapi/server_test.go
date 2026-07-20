@@ -214,6 +214,7 @@ func TestBorrowedLogicalStoresDoNotCloseProcessDatastore(t *testing.T) {
 		{name: "prompt sets", close: server.personalization.prompts.Close},
 		{name: "chat log", close: server.chatLog.Close},
 		{name: "patterns", close: server.patterns.Close},
+		{name: "media catalog", close: server.media.Close},
 		{name: "model inventory", close: server.models.Close},
 	}
 	for _, borrower := range borrowers {
@@ -452,6 +453,47 @@ func TestMissingAssetReturnsNotFound(t *testing.T) {
 
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestServerStartupPrunesMediaOutsideConfiguredLocations(t *testing.T) {
+	store, err := config.OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	keep := filepath.Join(t.TempDir(), "keep")
+	removed := filepath.Join(t.TempDir(), "removed")
+	settings, _ := store.Snapshot()
+	settings.Media.LibraryPaths = []string{keep}
+	if _, err := store.Save(settings); err != nil {
+		t.Fatalf("Save settings: %v", err)
+	}
+	for _, row := range []struct {
+		id   string
+		root string
+	}{
+		{id: "keep-video", root: keep},
+		{id: "removed-video", root: removed},
+	} {
+		if _, err := store.Datastore().SQL().Exec(`
+			INSERT INTO media_videos(
+				id, location_path, relative_path, display_name, size_bytes,
+				modified_at, duration_ms, funscript_relative_path, missing, scanned_at
+			) VALUES(?, ?, 'video.mp4', ?, 1, 'now', NULL, NULL, 0, 'now')
+		`, row.id, row.root, row.id); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+
+	server := newTestServerWithStore(t, store, Runtime{})
+	videos, err := server.media.List(t.Context())
+	if err != nil {
+		t.Fatalf("List media: %v", err)
+	}
+	if len(videos) != 1 || videos[0].ID != "keep-video" {
+		t.Fatalf("startup media catalog = %+v, want only keep-video", videos)
 	}
 }
 

@@ -23,20 +23,20 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-19, motion ownership and control placement
+## Snapshot — 2026-07-19, Phase 18 M0 media foundation
 
 ### Goal 1: Maintainability
 
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
-| Import boundaries | chat/llm/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings: `internal/config/settings.go` 1,110 lines, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 846, `internal/motion/engine_test.go` 866, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,373. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings: `web/src/App.test.tsx` 1,296 lines, `web/src/styles/components.css` 1,408, and retired reference-only `web/legacy/app.css` 846. The Autopilot and manual-test components remain isolated from their routes; `web/dist` remains the single shipped build. |
+| Import boundaries | chat/llm/media/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings: `internal/config/settings.go` 1,171 lines, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 846, `internal/motion/engine_test.go` 866, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,373. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings: `web/src/App.test.tsx` 1,296 lines, `web/src/styles/components.css` 1,408, `web/src/styles/library.css` 1,060, and retired reference-only `web/legacy/app.css` 846. Media behavior is split into focused components despite sharing the established library stylesheet; `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,479 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
-| God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; library persistence/import/feedback live in `internal/patterns`, while the engine owns playback and completion. |
-| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phases through 14C and the ahead-of-phase model/runtime/installer work are merged by PR with code, tests, migrations, risk updates, and budget measurements. Post-#63 rendered UI evidence still needs a refresh and is tracked explicitly. |
+| God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
+| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phase 18 M0 ships schema v11, bounded scanner, settings, reusable playback, import preview, tests, risk updates, rendered QA, and budget measurements together; synced motion remains explicitly deferred to M2. |
 
 ### Goal 2: Core Memory
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current motion-ownership tree: 20,685,312 bytes plain and 14,537,216 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current Phase 18 M0 tree: 20,867,072 bytes plain and 14,654,976 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -105,9 +105,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 864,637 raw / 556,052 gzip bytes because the isolated
-   connection artwork contributes 437,417 gzip bytes. HTML/CSS/JS is 420,401 raw
-   / 118,635 gzip bytes, and the stripped binary is 14,537,216 bytes. These
+   browser payload is 885,610 raw / 560,924 gzip bytes because the isolated
+   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 441,374 raw
+   / 123,497 gzip bytes, and the stripped binary is 14,654,976 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -116,6 +116,34 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-19** - Phase 18 M0 media foundation: schema v11 adds a nullable,
+  indexed video catalog fed only by saved absolute locations and explicit
+  depth/file-bounded scans. Opaque IDs, rooted file handles, component-level
+  symlink rejection, file-identity validation, and `http.ServeContent` provide
+  jailed constant-memory Range streaming. The
+  Videos grid/search and native player share one motion-free component with the
+  optional funscript import preview; exact-basename script presence is metadata
+  only. Hidden library tabs unmount their player so playback cannot continue
+  invisibly. Startup reconciles catalog rows to saved locations, and the Videos
+  tab remains available when the independent pattern catalog fails. Modal
+  layering and focus preserve global Emergency Stop. The Autopilot regression was an
+  ownership/provenance defect, not a second schema: Chat retains the Autopilot
+  sidebar control, Diagnostics retains Manual Motion, both key active state to
+  `target.source`, and the API rejects manual retargets of autonomous or idle
+  engines. All 186 frontend tests, typecheck/build, `go test ./...`, `go vet
+  ./...`, `golangci-lint`, and plain/stripped `CGO_ENABLED=0` builds pass.
+  Desktop 1440x900 and mobile 390x844 rendered checks had no horizontal
+  overflow; a 640x360 eight-second sample reached browser ready state 4. Final
+  HTML/CSS/JS is 441,374 raw / 123,497 gzip bytes; complete embedded output is
+  885,610 / 560,924. Plain/stripped binaries are 20,867,072 / 14,654,976 bytes.
+  The local race build remains unavailable without `gcc`; CI retains that gate.
+  No hardware motion was run. Resumed manual acceptance scanned two roots with
+  four encountered files into three videos and one exact-basename pair without
+  issues. A full 2 GiB sparse stream returned 200 and 2,147,483,648 bytes in
+  0.829 s; peak server RSS rose 1,495,040 bytes (63,774,720 to 65,269,760), and
+  a 648-byte tail Range returned 206. M0's multi-root and constant-memory checks
+  are closed before M1.
 
 - **2026-07-19** - Manual-test ownership and control placement: Chat's compact
   control sidebar now owns Autopilot, while the explicitly badged Manual Motion

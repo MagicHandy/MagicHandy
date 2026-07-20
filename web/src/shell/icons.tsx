@@ -67,6 +67,12 @@ export const PlayIcon = ({ size = 18, className }: P) => (
     <path d="M7 4.5 19 12 7 19.5z" />
   </svg>
 );
+export const VideoIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <rect x="3" y="5" width="14" height="14" rx="2" />
+    <path d="m17 10 4-2v8l-4-2" />
+  </svg>
+);
 export const PauseIcon = ({ size = 18, className }: P) => (
   <svg {...base(size, className)} fill="currentColor" stroke="none">
     <rect x="6" y="5" width="4" height="14" rx="1" />
