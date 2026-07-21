@@ -255,66 +255,6 @@ func (s *Server) handleBluetoothEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleBluetoothStrokeWindow(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
-		return
-	}
-
-	var command transport.StrokeWindowCommand
-	if err := decodeJSON(r, &command); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	bluetooth, err := s.newBluetoothTransport()
-	if err != nil {
-		s.writeBluetoothSetupError(w, err)
-		return
-	}
-
-	result, err := bluetooth.SetStrokeWindow(r.Context(), command)
-	s.writeBluetoothCommandResponse(w, string(transport.CommandKindStrokeWindow), bluetooth, result, err)
-}
-
-func (s *Server) handleBluetoothHSPAdd(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
-		return
-	}
-
-	var command transport.AppendPointsCommand
-	if err := decodeJSON(r, &command); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	bluetooth, err := s.newBluetoothTransport()
-	if err != nil {
-		s.writeBluetoothSetupError(w, err)
-		return
-	}
-
-	result, err := bluetooth.AppendPoints(r.Context(), command)
-	s.writeBluetoothCommandResponse(w, string(transport.CommandKindPointsAdd), bluetooth, result, err)
-}
-
-func (s *Server) handleBluetoothHSPPlay(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
-		return
-	}
-
-	var command transport.PlayCommand
-	if err := decodeJSON(r, &command); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	bluetooth, err := s.newBluetoothTransport()
-	if err != nil {
-		s.writeBluetoothSetupError(w, err)
-		return
-	}
-
-	result, err := bluetooth.Play(r.Context(), command)
-	s.writeBluetoothCommandResponse(w, string(transport.CommandKindPointsPlay), bluetooth, result, err)
-}
-
 func (s *Server) handleBluetoothStop(w http.ResponseWriter, r *http.Request) {
 	command := transport.StopCommand{Reason: "manual_bluetooth_stop"}
 	if err := decodeOptionalJSON(r, &command); err != nil {

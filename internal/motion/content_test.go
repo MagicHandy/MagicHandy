@@ -313,3 +313,76 @@ func TestMotionPlanPreservesFractionalSamplePosition(t *testing.T) {
 		t.Fatalf("sample position = %.9f, want fractional curve value %.9f without sampler rounding", got, want)
 	}
 }
+
+func TestNormalizePatternDefinitionRemovesLegacyReversalChatter(t *testing.T) {
+	definition, err := NormalizePatternDefinition(PatternDefinition{
+		ID: "legacy-chatter", Name: "Legacy chatter", Kind: PatternKindRoutine, CycleMillis: 6600,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 1000, PositionPercent: 20},
+			{TimeMillis: 1100, PositionPercent: 19},
+			{TimeMillis: 2000, PositionPercent: 30},
+			{TimeMillis: 6600, PositionPercent: 0},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchors := curveReversalAnchors(definition.Points)
+	if len(anchors) != 3 || definition.Points[anchors[1]].PositionPercent != 30 {
+		t.Fatalf("normalized points = %+v anchors = %v, want only the meaningful 30%% reversal", definition.Points, anchors)
+	}
+}
+
+func TestNormalizePatternDefinitionPreservesSlowSubtleReversal(t *testing.T) {
+	definition, err := NormalizePatternDefinition(PatternDefinition{
+		ID: "slow-subtle", Name: "Slow subtle", Kind: PatternKindRoutine, CycleMillis: 6600,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 1000, PositionPercent: 20},
+			{TimeMillis: 2000, PositionPercent: 19},
+			{TimeMillis: 3000, PositionPercent: 30},
+			{TimeMillis: 6600, PositionPercent: 0},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(definition.Points, func(point CurvePoint) bool {
+		return point.TimeMillis == 2000 && point.PositionPercent == 19
+	}) {
+		t.Fatalf("normalized points = %+v, want slow 1%% reversal preserved", definition.Points)
+	}
+}
+
+func TestLoopCurveKeepsVelocityAcrossMonotonicSeam(t *testing.T) {
+	curve, err := NewCurve([]CurvePoint{
+		{TimeMillis: 0, PositionPercent: 50},
+		{TimeMillis: 1000, PositionPercent: 70},
+		{TimeMillis: 2000, PositionPercent: 30},
+		{TimeMillis: 3000, PositionPercent: 50},
+	}, 3000, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if velocity := curve.Velocity(0); math.Abs(velocity-20) > 0.001 {
+		t.Fatalf("seam velocity = %.6f%%/s, want continuous 20%%/s", velocity)
+	}
+	if difference := math.Abs(curve.Velocity(1) - curve.Velocity(2999)); difference > 0.2 {
+		t.Fatalf("velocity jumps %.3f%%/s across monotonic loop seam", difference)
+	}
+}
+
+func TestLoopCurveStopsAtSeamReversal(t *testing.T) {
+	curve, err := NewCurve([]CurvePoint{
+		{TimeMillis: 0, PositionPercent: 20},
+		{TimeMillis: 1000, PositionPercent: 80},
+		{TimeMillis: 2000, PositionPercent: 20},
+	}, 2000, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if velocity := math.Abs(curve.Velocity(0)); velocity > 0.001 {
+		t.Fatalf("reversing seam velocity = %.6f%%/s, want zero", velocity)
+	}
+}

@@ -119,6 +119,25 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-20** - Motion pathway and subtle-jitter audit: all production
+  sources now converge on the shared engine; unused raw Cloud/Bluetooth
+  stroke/add/play HTTP routes were removed. Across the 29-pattern catalog over
+  two cycles at 10% focus, fixed 125 ms Cloud-rounded sampling produced 3,385
+  points, 915 duplicate edges, and 113,001 ms of stationary segments.
+  Authored-knot plus 25 ms adaptive sampling reduced that to 2,294 / 528 /
+  71,232 ms. A Cloud-resolution-aware engine pass reduced it again to 1,420 /
+  151 / 29,717 ms (74% less stationary time than the old grid), with 0.843%
+  worst measured wire error versus a 3.125% missed `Hard and Regular` peak on
+  the old grid. Semantic output remains bounded to 0.35%. Loop seams now retain
+  cyclic velocity unless they truly reverse,
+  retargets use a 750 ms C1 blend whose final frame removes generated <=2%
+  chatter, Browser Bluetooth retains 0.1% native point resolution, and loop
+  import rejects <5% source spans plus rapid <=2% chatter.
+  Slow subtle reversals and stored finite programs remain source-exact. Focused
+  Go, frontend, typecheck, and lint gates pass. The rebuilt embedded UI is
+  914,048 raw / 567,909 gzip bytes total (+475 / +172), with HTML/CSS/JS at
+  469,812 / 130,482 bytes. Matched below-40% hardware feel remains open.
+
 - **2026-07-20** - Hardware-feedback pattern curation and rename:
   live inspection found 6 disabled rows among 29 patterns. `Deep Bookends`,
   `Lower Midrange Mix`, `Midrange with Full Finish`, `Mid-to-Top Switch`,

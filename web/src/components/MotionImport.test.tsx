@@ -445,7 +445,7 @@ describe("MotionImport", () => {
     await findTimeline();
     fireEvent.click(screen.getByRole("button", { name: "Loop pattern" }));
 
-    expect(screen.getByText("This selection has no usable motion span for a loop pattern.")).toBeInTheDocument();
+    expect(screen.getByText("Select at least 5% of source motion span for a loop pattern.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import as loop pattern" })).toBeDisabled();
     // The same flat selection is still importable as a program; the backend owns that judgement.
     fireEvent.click(screen.getByRole("button", { name: "Program" }));

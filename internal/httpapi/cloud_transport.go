@@ -137,66 +137,6 @@ func (s *Server) handleCloudEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleCloudStrokeWindow(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
-		return
-	}
-
-	var command transport.StrokeWindowCommand
-	if err := decodeJSON(r, &command); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	cloud, err := s.newCloudTransport()
-	if err != nil {
-		s.writeCloudSetupError(w, err)
-		return
-	}
-
-	result, err := cloud.SetStrokeWindow(r.Context(), command)
-	s.writeCloudCommandResponse(w, string(transport.CommandKindStrokeWindow), cloud, result, err)
-}
-
-func (s *Server) handleCloudHSPAdd(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
-		return
-	}
-
-	var command transport.AppendPointsCommand
-	if err := decodeJSON(r, &command); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	cloud, err := s.newCloudTransport()
-	if err != nil {
-		s.writeCloudSetupError(w, err)
-		return
-	}
-
-	result, err := cloud.AppendPoints(r.Context(), command)
-	s.writeCloudCommandResponse(w, string(transport.CommandKindPointsAdd), cloud, result, err)
-}
-
-func (s *Server) handleCloudHSPPlay(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
-		return
-	}
-
-	var command transport.PlayCommand
-	if err := decodeJSON(r, &command); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	cloud, err := s.newCloudTransport()
-	if err != nil {
-		s.writeCloudSetupError(w, err)
-		return
-	}
-
-	result, err := cloud.Play(r.Context(), command)
-	s.writeCloudCommandResponse(w, string(transport.CommandKindPointsPlay), cloud, result, err)
-}
-
 func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {
 	command := transport.StopCommand{Reason: "manual_cloud_stop"}
 	if err := decodeOptionalJSON(r, &command); err != nil {

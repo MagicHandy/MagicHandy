@@ -6,13 +6,20 @@ These invariants preserve lessons learned from StrokeGPT-ReVibed's Handy firmwar
 
 ## Invariant 1: HSP Position Units
 
-HSP timed points use Handy's current `0..100` position units.
-
-Do not scale HSP `x` values to `0..1000` unless upstream Handy documentation and real-device traces prove the schema changed.
+The shared engine and Cloud REST API use semantic `0..100` position units. API
+v3 Cloud `PointPosition` is an integer, so the Cloud owner rounds only while
+building its request. Firmware-v4 Bluetooth protobuf uses a native `0..1000`
+integer field; the browser owner keeps semantic fractions until its codec maps
+them to that wire scale. The `0..1000` value must never leak back into the
+engine, stored content, HTTP bridge body, or diagnostics.
 
 Test expectation:
 
 - generated HSP point payloads never contain `x` outside `0..100` for normal sampled motion
+- Cloud payloads quantize to whole percent, while Browser Bluetooth preserves
+  semantic fractions and maps them to the native 0..1000 protobuf field
+- Cloud's owner-declared 1% resolution may reduce redundant knots only in the
+  shared engine and only under the combined 0.8% wire-error bound
 - intentional invalid data is rejected before transport dispatch
 
 ## Invariant 2: Stroke Range Is A Transport Envelope
@@ -54,6 +61,8 @@ HSP stream timing must preserve authored or sampled timing. Do not stretch HSP t
 Test expectation:
 
 - HSP point timestamps follow the sampled plan timing
+- buffered frames include authored knots and a bounded adaptive approximation,
+  rather than relying on an unrelated fixed tick to happen near each reversal
 - speed limits do not flatten HSP point slopes into a fixed direct-position velocity budget
 
 ## Invariant 6: Same-Pattern Updates Preserve Phase
@@ -72,7 +81,8 @@ A new-pattern replacement may change shape, but it should not blindly start at p
 Test expectation:
 
 - replacement phase selection considers current sampled position
-- generated bridge/handoff points do not snap to stale endpoint or phase-zero position without explicit recovery reason
+- generated 750 ms continuity transitions do not snap to a stale endpoint or
+  phase-zero position without an explicit recovery reason
 
 ## Invariant 8: HSP Unavailable Is A Clear Error, Not A Fallback
 

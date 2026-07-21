@@ -113,11 +113,28 @@ func (p MotionPlan) Retarget(
 	streamMillis int64,
 	createdAt time.Time,
 ) MotionPlan {
+	return p.retargetFromState(
+		id, target, settings, streamMillis,
+		p.SampleAt(streamMillis).PositionPercent,
+		p.DirectionAt(streamMillis),
+		createdAt,
+	)
+}
+
+func (p MotionPlan) retargetFromState(
+	id string,
+	target MotionTarget,
+	settings config.MotionSettings,
+	streamMillis int64,
+	currentPosition float64,
+	currentDirection int,
+	createdAt time.Time,
+) MotionPlan {
 	target = NormalizeTarget(target, normalizeMotionSettings(settings))
 	phase := p.PhaseAt(streamMillis)
 	preserved := motionContentID(p.Target) == motionContentID(target)
 	if !preserved {
-		phase = chooseNearestPhase(target, settings, p.SampleAt(streamMillis).PositionPercent, p.DirectionAt(streamMillis))
+		phase = chooseNearestPhase(target, settings, currentPosition, currentDirection)
 	}
 	next := NewMotionPlan(id, target, settings, phase, streamMillis, createdAt)
 	next.PhasePreserved = preserved

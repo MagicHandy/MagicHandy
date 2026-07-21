@@ -116,7 +116,7 @@ func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command Ap
 	}
 	points := make([]map[string]any, len(command.Points))
 	for index, point := range command.Points {
-		x, ok := quantizeHandyPosition(point.PositionPercent, t.options.ReverseDirection)
+		x, ok := mapHandyPosition(point.PositionPercent, t.options.ReverseDirection)
 		if !ok {
 			err := fmt.Errorf("HSP point %d x must be between 0 and 100", index)
 			return t.recordBuildError(CommandKindPointsAdd, err), err

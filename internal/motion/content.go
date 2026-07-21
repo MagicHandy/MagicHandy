@@ -176,6 +176,7 @@ func NormalizePatternDefinition(definition PatternDefinition) (PatternDefinition
 		points = scalePointTimes(points, duration, minimum)
 		duration = minimum
 	}
+	points = StabilizePatternReversals(points, MinimumPatternReversalProminence)
 	definition.CycleMillis = duration
 	definition.Points = points
 	definition.Tags = normalizeTags(definition.Tags)
@@ -296,18 +297,28 @@ func monotoneSlopes(points []CurvePoint, loop bool) []float64 {
 	}
 	slopes := make([]float64, count)
 	for index := 1; index < count-1; index++ {
-		if delta[index-1]*delta[index] <= 0 {
-			continue
-		}
-		w1 := 2*h[index] + h[index-1]
-		w2 := h[index] + 2*h[index-1]
-		slopes[index] = (w1 + w2) / (w1/delta[index-1] + w2/delta[index])
+		slopes[index] = interiorSlope(h[index-1], h[index], delta[index-1], delta[index])
 	}
-	if !loop && count > 2 {
+	if loop {
+		seam := interiorSlope(
+			h[count-2], h[0], delta[count-2], delta[0],
+		)
+		slopes[0] = seam
+		slopes[count-1] = seam
+	} else if count > 2 {
 		slopes[0] = endpointSlope(h[0], h[1], delta[0], delta[1])
 		slopes[count-1] = endpointSlope(h[count-2], h[count-3], delta[count-2], delta[count-3])
 	}
 	return slopes
+}
+
+func interiorSlope(previousWidth, nextWidth, previousDelta, nextDelta float64) float64 {
+	if previousDelta*nextDelta <= 0 {
+		return 0
+	}
+	w1 := 2*nextWidth + previousWidth
+	w2 := nextWidth + 2*previousWidth
+	return (w1 + w2) / (w1/previousDelta + w2/nextDelta)
 }
 
 func endpointSlope(here, next, deltaHere, deltaNext float64) float64 {

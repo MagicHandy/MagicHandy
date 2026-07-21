@@ -54,6 +54,18 @@ type MotionTimingCapabilitiesProvider interface {
 	MotionTimingCapabilities() MotionTimingCapabilities
 }
 
+// MotionSamplingCapabilities describes owner encoding limits that affect how
+// the shared engine reduces a semantic frame before the owner quantizes it.
+type MotionSamplingCapabilities struct {
+	PositionResolutionPercent float64
+}
+
+// MotionSamplingCapabilitiesProvider exposes optional output-resolution
+// constraints without moving curve processing into a transport owner.
+type MotionSamplingCapabilitiesProvider interface {
+	MotionSamplingCapabilities() MotionSamplingCapabilities
+}
+
 // PlaybackStartTimeProvider reports when transport playback actually began.
 // Owners that perform a pre-roll use this to align the shared engine clock.
 type PlaybackStartTimeProvider interface {

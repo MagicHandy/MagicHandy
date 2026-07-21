@@ -54,31 +54,33 @@ type Engine struct {
 	sampleInterval   time.Duration
 	streamIDPrefix   string
 
-	running          bool
-	starting         bool
-	completing       bool
-	paused           bool
-	pausedPhase      float64
-	frozenPhase      float64
-	pausedTarget     MotionTarget
-	runMillisAccum   int64
-	generation       uint64
-	runEpoch         uint64
-	stopGeneration   uint64
-	stopBarriers     uint64
-	streamID         string
-	plan             MotionPlan
-	settings         config.MotionSettings
-	startedAt        time.Time
-	nextSampleMillis int64
-	lastSample       *MotionSample
-	lastResult       *transport.CommandResult
-	lastError        string
-	latencyMillis    []int64
-	bridgeSample     *MotionSample
-	runCtx           context.Context
-	cancel           context.CancelFunc
-	done             chan struct{}
+	running                   bool
+	starting                  bool
+	completing                bool
+	paused                    bool
+	pausedPhase               float64
+	frozenPhase               float64
+	pausedTarget              MotionTarget
+	runMillisAccum            int64
+	generation                uint64
+	runEpoch                  uint64
+	stopGeneration            uint64
+	stopBarriers              uint64
+	streamID                  string
+	plan                      MotionPlan
+	settings                  config.MotionSettings
+	startedAt                 time.Time
+	nextSampleMillis          int64
+	lastSample                *MotionSample
+	lastResult                *transport.CommandResult
+	lastError                 string
+	latencyMillis             []int64
+	transition                *planTransition
+	preservePlanKnots         bool
+	positionResolutionPercent float64
+	runCtx                    context.Context
+	cancel                    context.CancelFunc
+	done                      chan struct{}
 }
 
 // ActiveMotionState is a safe snapshot of the current motion loop.
@@ -108,19 +110,33 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		return nil, errors.New("motion transport is required")
 	}
 	engine := &Engine{
-		transport:        options.Transport,
-		traces:           options.Traces,
-		now:              options.Now,
-		chunkSize:        options.ChunkSize,
-		dispatchInterval: options.DispatchInterval,
-		sampleInterval:   options.SampleInterval,
-		streamIDPrefix:   options.StreamIDPrefix,
+		transport:         options.Transport,
+		traces:            options.Traces,
+		now:               options.Now,
+		chunkSize:         options.ChunkSize,
+		dispatchInterval:  options.DispatchInterval,
+		sampleInterval:    options.SampleInterval,
+		streamIDPrefix:    options.StreamIDPrefix,
+		preservePlanKnots: true,
 	}
 	engine.applyDefaults()
 	if provider, ok := options.Transport.(transport.MotionTimingCapabilitiesProvider); ok {
 		capabilities := provider.MotionTimingCapabilities()
 		if capabilities.MinimumPointInterval > engine.sampleInterval {
 			engine.sampleInterval = capabilities.MinimumPointInterval
+		}
+		// An immediate-mode owner with a declared timing floor cannot always
+		// represent authored knots that are closer together than that floor.
+		// Keep its neutral cadence valid instead of injecting points it must
+		// reject. Buffered HSP owners preserve authored knot timing.
+		if capabilities.MinimumPointInterval > 0 {
+			engine.preservePlanKnots = false
+		}
+	}
+	if provider, ok := options.Transport.(transport.MotionSamplingCapabilitiesProvider); ok {
+		capabilities := provider.MotionSamplingCapabilities()
+		if capabilities.PositionResolutionPercent > 0 && capabilities.PositionResolutionPercent <= 100 {
+			engine.positionResolutionPercent = capabilities.PositionResolutionPercent
 		}
 	}
 	return engine, nil
@@ -334,7 +350,7 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	e.lastResult = nil
 	e.lastError = ""
 	e.latencyMillis = nil
-	e.bridgeSample = nil
+	e.transition = nil
 	e.frozenPhase = e.pausedPhase
 	plan := NewMotionPlan(e.planIDLocked(), e.pausedTarget, e.settings, e.pausedPhase, 0, e.startedAt)
 	plan.PhasePreserved = true
@@ -427,7 +443,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.lastResult = nil
 	e.lastError = ""
 	e.latencyMillis = nil
-	e.bridgeSample = nil
+	e.transition = nil
 	e.paused = false
 	e.completing = false
 	e.starting = true
@@ -463,18 +479,21 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 	recentLatency := e.recentCommandLatencyMillisLocked()
 	previous := e.plan
 	previousSettings := e.settings
-	current := previous.SampleAt(estimatedMillis)
-	previousHandoff := previous.SampleAt(handoff)
+	previousTransition := pruneTransitionHistory(e.transition, estimatedMillis)
+	e.transition = previousTransition
+	current := sampleMotionPath(previous, previousTransition, estimatedMillis)
+	handoffPosition := sampleMotionPath(previous, previousTransition, handoff).PositionPercent
+	handoffDirection := motionPathDirection(previous, previousTransition, handoff)
 	e.generation++
-	next := previous.Retarget(e.planIDLocked(), target, e.settings, handoff, now)
-	nextHandoff := next.SampleAt(handoff)
-	bridgeInserted := shouldInsertBridgePoint(previousHandoff, nextHandoff)
+	next := previous.retargetFromState(
+		e.planIDLocked(), target, e.settings, handoff,
+		handoffPosition, handoffDirection, now,
+	)
+	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {
-		bridge := previousHandoff
-		bridge.PlanID = next.ID
-		e.bridgeSample = &bridge
+		e.transition = newPlanTransition(previous, previousTransition, handoff)
 	} else {
-		e.bridgeSample = nil
+		e.transition = nil
 	}
 	e.plan = next
 	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
@@ -499,21 +518,19 @@ func (e *Engine) refreshSettings(runEpoch uint64, settings config.MotionSettings
 	recentLatency := e.recentCommandLatencyMillisLocked()
 	previous := e.plan
 	previousSettings := e.settings
-	current := previous.SampleAt(estimatedMillis)
+	previousTransition := pruneTransitionHistory(e.transition, estimatedMillis)
+	e.transition = previousTransition
+	current := sampleMotionPath(previous, previousTransition, estimatedMillis)
 	target := NormalizeTarget(e.plan.Target, settings)
 	e.generation++
 	e.settings = settings
 	next := previous.Retarget(e.planIDLocked(), target, settings, handoff, now)
 	next.PhasePreserved = true
-	previousHandoff := previous.SampleAt(handoff)
-	nextHandoff := next.SampleAt(handoff)
-	bridgeInserted := shouldInsertBridgePoint(previousHandoff, nextHandoff)
+	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {
-		bridge := previousHandoff
-		bridge.PlanID = next.ID
-		e.bridgeSample = &bridge
+		e.transition = newPlanTransition(previous, previousTransition, handoff)
 	} else {
-		e.bridgeSample = nil
+		e.transition = nil
 	}
 	e.plan = next
 	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
@@ -804,15 +821,6 @@ func waitForLoop(done <-chan struct{}) {
 	if done != nil {
 		<-done
 	}
-}
-
-func shouldInsertBridgePoint(previous MotionSample, next MotionSample) bool {
-	const maxRetargetJumpPercent = 12
-	delta := previous.PositionPercent - next.PositionPercent
-	if delta < 0 {
-		delta = -delta
-	}
-	return delta > maxRetargetJumpPercent
 }
 
 func playbackStateNeedsRecovery(state string) bool {

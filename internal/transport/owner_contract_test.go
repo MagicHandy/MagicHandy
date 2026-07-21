@@ -95,7 +95,7 @@ func TestTransportOwnersPreserveNeutralFrameContract(t *testing.T) {
 			t.Fatalf("stroke window = %+v, want 20..80", windowCommands[0].Body)
 		}
 		points := pointCommands[0].Body["points"].([]map[string]any)
-		assertHandyPoints(t, points)
+		assertHandyPoints(t, points, []float64{89.75, 49.5, 10.25})
 		assertSemanticFixtureUnchanged(t, fixture)
 	})
 
@@ -297,21 +297,20 @@ func assertHandyContractPayload(t *testing.T, windowBody, pointsBody []byte) {
 	for index, point := range appendBody.Points {
 		points[index] = map[string]any{"x": point.X, "t": point.T}
 	}
-	assertHandyPoints(t, points)
+	assertHandyPoints(t, points, []float64{90, 50, 10})
 }
 
-func assertHandyPoints(t *testing.T, points []map[string]any) {
+func assertHandyPoints(t *testing.T, points []map[string]any, wantX []float64) {
 	t.Helper()
 	if len(points) != 3 {
 		t.Fatalf("point count = %d, want 3 (no resampling)", len(points))
 	}
-	wantX := []int{90, 50, 10}
 	wantT := []int64{0, 40, 100}
 	for index, point := range points {
-		gotX := int64(numberValue(point["x"]))
+		gotX := numberValue(point["x"])
 		gotT := int64(numberValue(point["t"]))
-		if gotX != int64(wantX[index]) || gotT != wantT[index] {
-			t.Fatalf("point %d = %+v, want x=%d t=%d", index, point, wantX[index], wantT[index])
+		if math.Abs(gotX-wantX[index]) > 0.0001 || gotT != wantT[index] {
+			t.Fatalf("point %d = %+v, want x=%g t=%d", index, point, wantX[index], wantT[index])
 		}
 	}
 }

@@ -132,8 +132,9 @@ func simplifyToLimit(points []motion.CurvePoint, tolerance float64, limit int) (
 	if tolerance < 0.1 {
 		tolerance = 0.1
 	}
+	points = stabilizeReversalChatter(points, motion.MinimumPatternReversalProminence)
 	for range 12 {
-		simplified := simplifyPreservingReversals(points, tolerance)
+		simplified := simplifyPreparedPreservingReversals(points, tolerance)
 		if len(simplified) <= limit {
 			return simplified, nil
 		}
@@ -143,6 +144,11 @@ func simplifyToLimit(points []motion.CurvePoint, tolerance float64, limit int) (
 }
 
 func simplifyPreservingReversals(points []motion.CurvePoint, tolerance float64) []motion.CurvePoint {
+	points = stabilizeReversalChatter(points, motion.MinimumPatternReversalProminence)
+	return simplifyPreparedPreservingReversals(points, tolerance)
+}
+
+func simplifyPreparedPreservingReversals(points []motion.CurvePoint, tolerance float64) []motion.CurvePoint {
 	anchors := reversalAnchors(points)
 	result := make([]motion.CurvePoint, 0, len(points))
 	for index := 1; index < len(anchors); index++ {
@@ -153,6 +159,13 @@ func simplifyPreservingReversals(points []motion.CurvePoint, tolerance float64) 
 		result = append(result, segment...)
 	}
 	return result
+}
+
+// stabilizeReversalChatter removes only rapid extrema whose smaller adjacent
+// swing is too small to represent intentional motion. Slow subtle motion and
+// meaningful reversals remain available to the bounded-error pass.
+func stabilizeReversalChatter(points []motion.CurvePoint, minimumProminence float64) []motion.CurvePoint {
+	return motion.StabilizePatternReversals(points, minimumProminence)
 }
 
 func reversalAnchors(points []motion.CurvePoint) []int {

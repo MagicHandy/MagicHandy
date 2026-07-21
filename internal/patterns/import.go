@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	importAsPattern           = "pattern"
-	importAsProgram           = "program"
-	inactiveGapMillis   int64 = 5000
-	inactiveReplacement int64 = 500
+	importAsPattern                  = "pattern"
+	importAsProgram                  = "program"
+	inactiveGapMillis          int64 = 5000
+	inactiveReplacement        int64 = 500
+	minimumRelativePatternSpan       = 5.0
 )
 
 type funscriptFile struct {
@@ -154,6 +155,7 @@ func (l *Library) importFunscript(filename string, data []byte, asKind string) (
 	}
 	if asKind == importAsPattern {
 		points, gaps := stripInactiveGaps(points)
+		points = stabilizeReversalChatter(points, motion.MinimumPatternReversalProminence)
 		points, err = normalizeRelativeSpan(points)
 		if err != nil {
 			return ImportResult{}, invalidContentError(err)
@@ -268,7 +270,7 @@ func normalizeRelativeSpan(points []motion.CurvePoint) ([]motion.CurvePoint, err
 		minimum = math.Min(minimum, point.PositionPercent)
 		maximum = math.Max(maximum, point.PositionPercent)
 	}
-	if maximum-minimum < 1 {
+	if maximum-minimum < minimumRelativePatternSpan {
 		return nil, errors.New("funscript example has no usable motion span")
 	}
 	result := append([]motion.CurvePoint(nil), points...)

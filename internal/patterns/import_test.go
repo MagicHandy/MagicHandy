@@ -149,6 +149,29 @@ func TestFunscriptPatternImportPreservesLongValidCycle(t *testing.T) {
 	}
 }
 
+func TestFunscriptPatternImportRejectsNoiseScaleAndStabilizesChatter(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+
+	noise := []byte(`{"actions":[{"at":0,"pos":50},{"at":1000,"pos":52},{"at":2000,"pos":49},{"at":3000,"pos":51}]}`)
+	if _, err := library.Import("noise.funscript", noise, importAsPattern); err == nil || !contains(err.Error(), "no usable motion span") {
+		t.Fatalf("noise-scale pattern error = %v", err)
+	}
+
+	chatter := []byte(`{"actions":[{"at":0,"pos":20},{"at":1000,"pos":80},{"at":1100,"pos":79},{"at":2000,"pos":81},{"at":4000,"pos":20}]}`)
+	result, err := library.Import("chatter.funscript", chatter, importAsPattern)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchors := reversalAnchors(result.Pattern.Points)
+	if len(anchors) != 3 {
+		t.Fatalf("imported chatter points = %+v anchors = %v, want one meaningful peak", result.Pattern.Points, anchors)
+	}
+}
+
 func contains(value, part string) bool {
 	for index := 0; index+len(part) <= len(value); index++ {
 		if value[index:index+len(part)] == part {
