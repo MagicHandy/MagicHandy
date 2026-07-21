@@ -866,6 +866,15 @@ firmware point resolution; Cloud's integer API floor is documented rather than
 hidden. A matched subjective run of shallow patterns and active envelope
 changes is still required, so the risk remains Medium.
 
+Review update 2026-07-21: selected Intiface `StepCount` now participates in the
+shared quantization-aware reduction after scaling through the stroke window.
+Cloud and Browser Bluetooth align the engine clock to accepted Play rather than
+including setup/prebuffer time. A capped Cloud retarget checklist completed 15
+commands without failure or starvation and ended in confirmed Stop; corrected
+clocking reduced the run from 13 add batches / 125 points to 10 / 90. The risk
+remains Medium pending the matched subjective Intiface run and a non-Handy
+linear-device check.
+
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
 

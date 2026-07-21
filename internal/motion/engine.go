@@ -54,33 +54,35 @@ type Engine struct {
 	sampleInterval   time.Duration
 	streamIDPrefix   string
 
-	running                   bool
-	starting                  bool
-	completing                bool
-	paused                    bool
-	pausedPhase               float64
-	frozenPhase               float64
-	pausedTarget              MotionTarget
-	runMillisAccum            int64
-	generation                uint64
-	runEpoch                  uint64
-	stopGeneration            uint64
-	stopBarriers              uint64
-	streamID                  string
-	plan                      MotionPlan
-	settings                  config.MotionSettings
-	startedAt                 time.Time
-	nextSampleMillis          int64
-	lastSample                *MotionSample
-	lastResult                *transport.CommandResult
-	lastError                 string
-	latencyMillis             []int64
-	transition                *planTransition
-	preservePlanKnots         bool
-	positionResolutionPercent float64
-	runCtx                    context.Context
-	cancel                    context.CancelFunc
-	done                      chan struct{}
+	running                     bool
+	starting                    bool
+	completing                  bool
+	paused                      bool
+	pausedPhase                 float64
+	frozenPhase                 float64
+	pausedTarget                MotionTarget
+	runMillisAccum              int64
+	generation                  uint64
+	runEpoch                    uint64
+	stopGeneration              uint64
+	stopBarriers                uint64
+	streamID                    string
+	plan                        MotionPlan
+	settings                    config.MotionSettings
+	startedAt                   time.Time
+	nextSampleMillis            int64
+	lastSample                  *MotionSample
+	lastResult                  *transport.CommandResult
+	lastError                   string
+	latencyMillis               []int64
+	transition                  *planTransition
+	preservePlanKnots           bool
+	positionResolutionPercent   float64
+	resolutionAfterStrokeWindow bool
+	maximumChunkPoints          int
+	runCtx                      context.Context
+	cancel                      context.CancelFunc
+	done                        chan struct{}
 }
 
 // ActiveMotionState is a safe snapshot of the current motion loop.
@@ -110,14 +112,15 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		return nil, errors.New("motion transport is required")
 	}
 	engine := &Engine{
-		transport:         options.Transport,
-		traces:            options.Traces,
-		now:               options.Now,
-		chunkSize:         options.ChunkSize,
-		dispatchInterval:  options.DispatchInterval,
-		sampleInterval:    options.SampleInterval,
-		streamIDPrefix:    options.StreamIDPrefix,
-		preservePlanKnots: true,
+		transport:          options.Transport,
+		traces:             options.Traces,
+		now:                options.Now,
+		chunkSize:          options.ChunkSize,
+		dispatchInterval:   options.DispatchInterval,
+		sampleInterval:     options.SampleInterval,
+		streamIDPrefix:     options.StreamIDPrefix,
+		preservePlanKnots:  true,
+		maximumChunkPoints: maximumAdaptiveChunkPoints,
 	}
 	engine.applyDefaults()
 	if provider, ok := options.Transport.(transport.MotionTimingCapabilitiesProvider); ok {
@@ -137,6 +140,10 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		capabilities := provider.MotionSamplingCapabilities()
 		if capabilities.PositionResolutionPercent > 0 && capabilities.PositionResolutionPercent <= 100 {
 			engine.positionResolutionPercent = capabilities.PositionResolutionPercent
+			engine.resolutionAfterStrokeWindow = capabilities.ResolutionAfterStrokeWindow
+		}
+		if capabilities.MaximumPointsPerAppend >= 2 && capabilities.MaximumPointsPerAppend < engine.maximumChunkPoints {
+			engine.maximumChunkPoints = capabilities.MaximumPointsPerAppend
 		}
 	}
 	return engine, nil
@@ -672,11 +679,19 @@ func (e *Engine) ensureLeadBuffer(ctx context.Context, runEpoch uint64, reason s
 }
 
 func (e *Engine) ensurePlaybackHealthy(ctx context.Context, runEpoch uint64, reason string) error {
-	if err := e.validateRun(runEpoch); err != nil {
+	e.mu.Lock()
+	if err := e.validateRunLocked(runEpoch); err != nil {
+		e.mu.Unlock()
 		return err
 	}
+	starting := e.starting
+	e.mu.Unlock()
 	diagnostics := e.transport.Diagnostics()
-	if !playbackStateNeedsRecovery(diagnostics.PlaybackState) {
+	state := strings.ToLower(strings.TrimSpace(diagnostics.PlaybackState))
+	if starting && (state == "not_initialized" || state == "stopped") {
+		return nil
+	}
+	if !playbackStateNeedsRecovery(state) {
 		return nil
 	}
 	message := fmt.Sprintf("motion recovery stopped active stream after playback state %q during %s", diagnostics.PlaybackState, reason)
@@ -826,7 +841,7 @@ func waitForLoop(done <-chan struct{}) {
 func playbackStateNeedsRecovery(state string) bool {
 	state = strings.ToLower(strings.TrimSpace(state))
 	switch state {
-	case "paused", "starved", "rejected", "stale", "hsp_paused_on_starving", "hsp_starving", "hsp_state_paused", "hsp_state_starving":
+	case "not_initialized", "stopped", "paused", "starved", "starving", "rejected", "stale", "hsp_paused_on_starving", "hsp_starving", "hsp_state_paused", "hsp_state_starving":
 		return true
 	default:
 		return false

@@ -119,6 +119,21 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-21** - Motion boundary follow-up: live API v3 state returned numeric
+  `play_state`, which the string-only readiness parser rejected, and Cloud's
+  engine clock included all setup/prebuffer latency. Numeric states now map to
+  named health states; established stopped/not-initialized playback forces
+  recovery Stop; and buffered owners align to the accepted Play midpoint. A
+  capped 20% clock run reduced engine/device skew from about 1.4-1.5 s to
+  120-160 ms including a state-read round trip. A 30%-maximum retarget checklist
+  completed 15 commands with zero failures, 307-355 ms Cloud latency, 668-1,141
+  ms retarget lead, and confirmed Emergency Stop. Correct clocking reduced
+  prebuffer output from 13 batches / 125 points to 10 / 90. Intiface now feeds
+  selected `StepCount`, scaled through the active stroke window, into the shared
+  bounded sampler. Cloud enforces its 100-point add limit, and Handy reverse
+  mapping mirrors native quantized steps exactly. No dependency or browser
+  payload changed; full gate results are recorded by the PR.
+
 - **2026-07-20** - Motion pathway and subtle-jitter audit: all production
   sources now converge on the shared engine; unused raw Cloud/Bluetooth
   stroke/add/play HTTP routes were removed. Across the 29-pattern catalog over

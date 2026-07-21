@@ -83,6 +83,32 @@ func TestCloudHandyEncodingQuantizesFractionalPointsAndRejectsNonFinite(t *testi
 	}
 }
 
+func TestCloudReverseQuantizationMirrorsNativeSteps(t *testing.T) {
+	for _, position := range []float64{0, 0.5, 25.5, 50.5, 99.5, 100} {
+		forward, ok := quantizeHandyPosition(position, false)
+		if !ok {
+			t.Fatalf("forward position %.1f was rejected", position)
+		}
+		reverse, ok := quantizeHandyPosition(position, true)
+		if !ok || reverse != 100-forward {
+			t.Fatalf("position %.1f encoded as forward=%d reverse=%d, want mirrored native steps", position, forward, reverse)
+		}
+	}
+}
+
+func TestCloudHSPAddRejectsOversizedPointBatch(t *testing.T) {
+	points := make([]TimedPoint, maximumCloudHSPAddPoints+1)
+	for index := range points {
+		points[index] = TimedPoint{PositionPercent: 50, TimeMillis: int64(index)}
+	}
+	_, err := newCloudBuilder(t, CloudBuildOptions{}).BuildHSPAdd(AppendPointsCommand{
+		StreamID: "oversized", Points: points,
+	})
+	if err == nil || !strings.Contains(err.Error(), "at most 100") {
+		t.Fatalf("oversized HSP add error = %v, want point-limit rejection", err)
+	}
+}
+
 func TestStrokeWindowDoesNotRewriteHSPPoints(t *testing.T) {
 	builder := newCloudBuilder(t, CloudBuildOptions{})
 	window, err := builder.BuildStrokeWindow(StrokeWindowCommand{MinPercent: 20, MaxPercent: 80})

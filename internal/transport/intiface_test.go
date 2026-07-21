@@ -771,6 +771,10 @@ func TestIntifaceTimingGapStepCountAndResolution(t *testing.T) {
 	if resolution := owner.Status().SelectedResolutionPercent; math.Abs(resolution-0.5) > 1e-12 {
 		t.Fatalf("selected resolution = %v, want 0.5", resolution)
 	}
+	sampling := owner.MotionSamplingCapabilities()
+	if math.Abs(sampling.PositionResolutionPercent-0.5) > 1e-12 || !sampling.ResolutionAfterStrokeWindow {
+		t.Fatalf("sampling capabilities = %+v, want physical 0.5%% resolution", sampling)
+	}
 	result, err := owner.AppendPoints(context.Background(), AppendPointsCommand{
 		StreamID: "too-fast",
 		Points: []TimedPoint{

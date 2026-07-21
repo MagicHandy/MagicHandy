@@ -54,13 +54,15 @@ Stop remain available.
    compatibility.
 5. **Premature and unaccounted Handy quantization.** The shared frame already
    carries `float64`, but both Handy owners rounded it to whole percent. Browser
-   Bluetooth now keeps the semantic fraction until the protobuf codec maps it
-   to firmware's native 0-1000 point scale, preserving 0.1% resolution. Cloud
-   REST must still use the API v3 integer `PointPosition`; it now advertises
-   that one-percent limit to the shared sampler. A second bounded reduction
-   removes rounded dwell/catch-up knots only when the resulting Cloud line
-   remains within 0.8% at every retained semantic probe. Curve fitting stays in
-   the engine rather than becoming a second transport motion model.
+   Bluetooth now maps to firmware's native 0-1000 point scale, preserving 0.1%
+   resolution. Cloud REST must still use the API v3 integer `PointPosition`; it
+   advertises that one-percent limit to the shared sampler. Both owners quantize
+   the semantic position before mirroring the native step, so reverse mode is
+   an exact reflection instead of differing by one step at half-way ties. A
+   second bounded reduction removes rounded dwell/catch-up knots only when the
+   resulting wire line remains within the owner-specific error bound. Curve
+   fitting stays in the engine rather than becoming a second transport motion
+   model.
 6. **Immediate-mode cadence.** Intiface continues to use the selected device's
    `DeviceMessageTimingGap` plus its scheduler margin. The shared engine does
    not inject authored knots below that floor; tests inspect the emitted frame,
@@ -87,6 +89,47 @@ whole-percent wire path dwells before catching up.
   29,717 ms stationary. This cuts rounded stationary time by 74% relative to
   the old grid; worst measured wire error is 0.843% (`Waves`).
 - The old fixed grid missed a `Hard and Regular` peak by 3.125%.
+
+## Follow-Up Review - 2026-07-21
+
+The first review's algorithms were retained, but four boundary defects were
+confirmed and fixed:
+
+1. API v3 returns `play_state` as enum integers (`0..4`). Treating only strings
+   as valid made an online Handy look HSP-unavailable. The state parser now maps
+   the documented enum, and stopped/not-initialized are accepted only during
+   startup. Either state during an established run forces the shared recovery
+   Stop.
+2. The Cloud engine clock began before stroke setup, HSP setup, initial add, and
+   Play. On the live device it ran about 1.4-1.5 seconds ahead of HSP
+   `current_time`, causing avoidable old-plan buffering and late-feeling
+   retargets. Cloud and Browser Bluetooth now report the successful Play request
+   midpoint as their stream origin, matching the existing Intiface post-anchor
+   clock contract.
+3. Intiface exposed `StepCount` in diagnostics but did not expose it to the
+   shared sampler. A 100-step actuator behind a 20-80% stroke window has an
+   effective semantic resolution of about 1.67%, not 1%. The engine now scales
+   physical resolution through the current window before its bounded reduction.
+   Positions remain floats until the owner boundary; this is not a transport
+   deadband or a second motion model.
+4. Cloud accepted engine frames up to 128 points although API v3 permits at
+   most 100 points per `/hsp/add`. The owner advertises and validates the
+   100-point cap, so dense content fails before an oversized HTTP request.
+
+A catalog probe covered all 29 built-ins at 5%, 10%, 20%, and full focus;
+20%, 40%, and 100% speed; and both 1% Cloud and 1.67% effective Intiface
+resolution. No rapid one-native-step reversal remained at normal 20% or wider
+focus. Very narrow 5-10% focus can intentionally collapse a pattern to only a
+few physical steps; it was not replaced with ScriptPlayer's fixed 10-unit
+deadband because that would make the requested subtle motion static.
+
+Two capped 20% Cradle clock runs and one full 30%-maximum retarget checklist
+were completed over Cloud REST. Before alignment, sampled engine/device clocks
+were about 1.4-1.5 seconds apart. After alignment they were 120-160 ms apart
+while the state read itself crossed the network. The full checklist completed
+15 transport commands with zero failures, ten add batches / 90 points, Cloud
+latency of 307-355 ms, retarget lead of 668-1,141 ms, and an explicit successful
+Emergency Stop. The pre-fix comparison emitted 13 add batches / 125 points.
 
 Whole-percent Cloud output still has a physical resolution floor. The fix
 removes avoidable aliasing and premature rounding; it does not claim that a 10%
@@ -124,8 +167,8 @@ Behavior deliberately not copied:
 
 - Cloud REST integer position encoding is unavoidable under the current API v3
   [schema](https://www.handyfeeling.com/api/handy-rest/v3/docs/). Browser
-  Bluetooth and Intiface should be judged separately because they retain finer
-  position resolution.
+  Bluetooth has 0.1% HSP encoding. Intiface resolution is device-specific and
+  is now included in shared sampling after stroke-window projection.
 - Stroke-window and reverse settings are owner-level envelope changes. HSP may
   apply them to already buffered points immediately, while Intiface snapshots
   reverse at append time. A cross-owner ramped-envelope design needs matched

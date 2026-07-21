@@ -50,8 +50,8 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 	if !ok || len(points) != 2 {
 		t.Fatalf("points = %#v, want two bridge points", command.Body["points"])
 	}
-	if points[0]["x"] != 74.75 || points[1]["x"] != 24.25 {
-		t.Fatalf("reverse points = %+v, want fractional positions 74.75 then 24.25", points)
+	if math.Abs(numberValue(points[0]["x"])-74.7) > 1e-9 || math.Abs(numberValue(points[1]["x"])-24.2) > 1e-9 {
+		t.Fatalf("reverse points = %+v, want native-step positions 74.7 then 24.2", points)
 	}
 
 	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{
@@ -82,6 +82,35 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 	}
 	if diagnostics.CommandCount != 1 {
 		t.Fatalf("command count = %d, want 1", diagnostics.CommandCount)
+	}
+}
+
+func TestBrowserBluetoothReportsPlayAcknowledgementMidpoint(t *testing.T) {
+	bridge := NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(BrowserBluetoothClientStatus{ClientID: "clock-client", Connected: &connected})
+	bluetooth := newTestBrowserBluetoothTransport(t, bridge, BrowserBluetoothOptions{})
+
+	done := make(chan resultAndError, 1)
+	before := time.Now()
+	go func() {
+		result, err := bluetooth.Play(context.Background(), PlayCommand{StreamID: "clock"})
+		done <- resultAndError{result: result, err: err}
+	}()
+	commands, err := bridge.NextCommands(context.Background(), "clock-client", time.Second)
+	if err != nil || len(commands) != 1 {
+		t.Fatalf("Play bridge command = %+v, %v", commands, err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	bridge.Acknowledge("clock-client", BrowserBluetoothBridgeAck{ID: commands[0].ID, OK: true})
+	outcome := readBluetoothOutcome(t, done)
+	after := time.Now()
+	if outcome.err != nil {
+		t.Fatalf("Play: %v", outcome.err)
+	}
+	origin := bluetooth.PlaybackStartTime()
+	if origin.IsZero() || origin.Before(before) || origin.After(after) {
+		t.Fatalf("playback origin = %v, want acknowledgement midpoint within %v..%v", origin, before, after)
 	}
 }
 

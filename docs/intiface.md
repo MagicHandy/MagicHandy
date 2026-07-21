@@ -51,8 +51,11 @@ dispatch owner are persisted normally.
   compression; otherwise playback reports `starved` and stops.
 - The unsent queue is capped at 64 segments. A device's
   `DeviceMessageTimingGap` raises the shared engine sampling interval with a
-  scheduler margin. `StepCount` is reported as physical resolution but positions
-  remain floats; MagicHandy does not apply a second quantizer.
+  scheduler margin. `StepCount` also reports physical endpoint resolution to
+  the shared sampler. The sampler scales that resolution through the active
+  stroke window before bounded reduction, avoiding commands that collapse onto
+  the same physical step. Positions remain floats until `LinearCmd`; the owner
+  does not apply a deadband or reshape the curve.
 - **Emergency Stop**, owner changes, disconnect, server shutdown, pacer
   underrun, and rejected linear commands clear queued work and issue
   `StopDeviceCmd` where the session is still reachable.

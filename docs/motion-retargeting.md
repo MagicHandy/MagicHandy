@@ -50,11 +50,13 @@ The shared path must:
   velocity at reversals
 - for buffered owners, merge authored knots with 25 ms probes and simplify the
   emitted frame to at most 0.3 percentage-point vertical error; reject more
-  than 128 essential points in a nominal frame instead of flooding a transport
+  essential points than the owner accepts (100 for one Cloud `/hsp/add`, 128
+  otherwise) instead of flooding a transport
 - when an owner declares a coarser endpoint resolution, run a second
   quantization-aware reduction in the shared engine. Cloud's 1% endpoint scale
-  uses a combined 0.8% bound to remove dwell/catch-up plateaus; higher-resolution
-  owners keep the semantic frame
+  uses a combined 0.8% bound to remove dwell/catch-up plateaus; Browser
+  Bluetooth uses its 0.1% native endpoint scale; Intiface scales the selected
+  actuator's physical `StepCount` through the active stroke window first
 - for immediate-mode owners, honor the selected device timing floor and do not
   inject authored knots that violate its minimum command interval
 - never weaken hardware safety clamping (speed, range, step size) for
@@ -139,7 +141,8 @@ The motion engine must track at least:
 - active plan identity
 - active semantic target
 - active generation ID
-- stream start monotonic time
+- transport-aligned stream start monotonic time (post-anchor for Intiface,
+  successful Play request midpoint for buffered owners)
 - semantic phase offset
 - transport stream offset
 - last scheduled tail time

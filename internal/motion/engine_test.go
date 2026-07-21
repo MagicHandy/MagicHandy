@@ -479,6 +479,38 @@ func TestEngineStopsForUnhealthyPlaybackDuringRetarget(t *testing.T) {
 	}
 }
 
+func TestPlaybackStateRecoveryClassification(t *testing.T) {
+	for _, state := range []string{"not_initialized", "stopped", "paused", "starved", "starving", "rejected", "stale"} {
+		if !playbackStateNeedsRecovery(state) {
+			t.Errorf("playback state %q did not require recovery", state)
+		}
+	}
+	for _, state := range []string{"", "unknown", "buffering", "playing"} {
+		if playbackStateNeedsRecovery(state) {
+			t.Errorf("playback state %q unexpectedly required recovery", state)
+		}
+	}
+}
+
+func TestEngineAllowsStoppedPlaybackStateDuringStartup(t *testing.T) {
+	fake := newPlaybackStateTransport("stopped")
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), time.Hour)
+
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start rejected expected pre-play stopped state: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	fake.SetPlaybackState("stopped")
+	state, err := engine.ApplyTarget(context.Background(), testTarget(), "remote_stop_check")
+	if err == nil {
+		t.Fatal("ApplyTarget accepted stopped state after startup")
+	}
+	if state.Running {
+		t.Fatalf("state = %+v, want recovery stopped", state)
+	}
+}
+
 func TestEngineRecoveryStopWaitsForInFlightDispatch(t *testing.T) {
 	fake := newBlockingAddTransport("playing")
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(128), time.Millisecond)
