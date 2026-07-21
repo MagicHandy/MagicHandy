@@ -8,7 +8,6 @@ import { ChatTabs } from "../components/ChatTabs";
 import { MotionVisualizer } from "../components/MotionVisualizer";
 import { QuickSettings } from "../components/QuickSettings";
 import { VoiceQuickControls } from "../components/VoiceQuickControls";
-import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast } from "../state/app-state";
 
 type PendingChange = { action: "new" } | { action: "switch"; target: ChatSession };
@@ -128,20 +127,17 @@ export function ChatRoute() {
 
   return (
     <div className="chat-route">
-      <WorkspaceHead title="Chat" wide />
       <div className="chat-workbench">
         <section className="chat-conversation" aria-label="Conversation">
-          {workspace && active && (
-            <ChatTabs
-              sessions={sessions}
-              activeId={active.id}
-              disabled={locked}
-              onActivate={requestActivate}
-              onNew={requestNew}
-              onSave={saveSession}
-              onDelete={deleteSession}
-            />
-          )}
+          <ChatTabs
+            sessions={sessions}
+            activeId={active?.id ?? ""}
+            disabled={locked}
+            onActivate={requestActivate}
+            onNew={requestNew}
+            onSave={saveSession}
+            onDelete={deleteSession}
+          />
           {loadError ? (
             <div className="chat-session-state" role="alert">
               <strong>Chat tabs unavailable</strong>

@@ -34,6 +34,7 @@ type ConnectionCheckResult struct {
 	HSPAvailable  bool                 `json:"hsp_available"`
 	PlaybackState string               `json:"playback_state,omitempty"`
 	LatencyMillis int64                `json:"latency_ms"`
+	Message       string               `json:"message,omitempty"`
 	Diagnostics   TransportDiagnostics `json:"diagnostics"`
 }
 
@@ -258,6 +259,7 @@ func (t *CloudRESTTransport) CheckConnection(ctx context.Context) (ConnectionChe
 	}
 	if !snapshot.Available {
 		err := hspUnavailable("hsp_unavailable", "hsp", "HSP is unavailable for this device/API state")
+		check.Message = err.Message
 		t.recordError(CommandKindConnectionCheck, err)
 		check.Diagnostics = t.Diagnostics()
 		return check, err

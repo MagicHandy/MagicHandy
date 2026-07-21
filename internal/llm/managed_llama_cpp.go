@@ -30,11 +30,13 @@ type ManagedLlamaCPPOptions struct {
 
 // ManagedLlamaCPPProvider starts and owns one configured llama-server process.
 type ManagedLlamaCPPProvider struct {
-	baseURL    string
-	model      string
-	runnerPath string
-	modelPath  string
-	client     *LlamaCPPProvider
+	preferredBaseURL string
+	httpOptions      HTTPProviderOptions
+	baseURL          string
+	model            string
+	runnerPath       string
+	modelPath        string
+	client           *LlamaCPPProvider
 
 	mu       sync.Mutex
 	process  *exec.Cmd
@@ -50,17 +52,22 @@ func NewManagedLlamaCPPProvider(options ManagedLlamaCPPOptions) (*ManagedLlamaCP
 	if err != nil {
 		return nil, err
 	}
+	if _, _, err = llamaHostPort(httpOptions.BaseURL); err != nil {
+		return nil, err
+	}
 	client, err := NewLlamaCPPProvider(httpOptions)
 	if err != nil {
 		return nil, err
 	}
 	return &ManagedLlamaCPPProvider{
-		baseURL:    httpOptions.BaseURL,
-		model:      httpOptions.Model,
-		runnerPath: strings.TrimSpace(options.RunnerPath),
-		modelPath:  strings.TrimSpace(options.ModelPath),
-		client:     client,
-		stderr:     newTailBuffer(4096),
+		preferredBaseURL: httpOptions.BaseURL,
+		httpOptions:      httpOptions,
+		baseURL:          httpOptions.BaseURL,
+		model:            httpOptions.Model,
+		runnerPath:       strings.TrimSpace(options.RunnerPath),
+		modelPath:        strings.TrimSpace(options.ModelPath),
+		client:           client,
+		stderr:           newTailBuffer(4096),
 	}, nil
 }
 
@@ -74,7 +81,7 @@ func (p *ManagedLlamaCPPProvider) StreamChat(ctx context.Context, request ChatRe
 			return "", errors.New(status.Message)
 		}
 	}
-	raw, err := p.client.StreamChat(ctx, request, onDelta)
+	raw, err := p.clientSnapshot().StreamChat(ctx, request, onDelta)
 	if err != nil && !errors.Is(err, ErrOutputTruncated) && ctx.Err() == nil {
 		p.setReady(false)
 	}
@@ -89,12 +96,19 @@ func (p *ManagedLlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 		return status
 	}
 	if !p.running() {
+		status.Loaded = false
 		status.Message = "llama.cpp runner is not loaded"
 		return status
 	}
-	providerStatus := p.client.Status(ctx)
+	providerStatus := p.clientSnapshot().Status(ctx)
 	providerStatus.Managed = true
-	providerStatus.Loaded = true
+	providerStatus.Loaded = p.running()
+	if !providerStatus.Loaded {
+		providerStatus.Available = false
+		providerStatus.ModelAvailable = false
+		providerStatus.Message = p.stderrMessage("llama.cpp runner exited")
+		return providerStatus
+	}
 	if !providerStatus.Available && providerStatus.Message == "" {
 		providerStatus.Message = p.stderrMessage("llama.cpp runner is not ready")
 	}
@@ -115,9 +129,15 @@ func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 
 	deadline := time.Now().Add(managedLlamaLoadTimeout)
 	for {
-		providerStatus := p.client.Status(ctx)
+		providerStatus := p.clientSnapshot().Status(ctx)
 		providerStatus.Managed = true
 		providerStatus.Loaded = p.running()
+		if !providerStatus.Loaded {
+			providerStatus.Available = false
+			providerStatus.ModelAvailable = false
+			providerStatus.Message = p.stderrMessage("llama.cpp runner exited before becoming ready")
+			return providerStatus
+		}
 		if providerStatus.Available {
 			p.setReady(true)
 			return providerStatus
@@ -199,12 +219,14 @@ func (p *ManagedLlamaCPPProvider) Close() error {
 }
 
 func (p *ManagedLlamaCPPProvider) baseStatus() ProviderStatus {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	return ProviderStatus{
 		Provider: llamaCPPProviderName,
 		BaseURL:  p.baseURL,
 		Model:    p.model,
 		Managed:  true,
-		Loaded:   p.running(),
+		Loaded:   p.runningLocked(),
 	}
 }
 
@@ -237,10 +259,22 @@ func (p *ManagedLlamaCPPProvider) ensureStarted() error {
 }
 
 func (p *ManagedLlamaCPPProvider) startLocked() error {
-	host, port, err := llamaHostPort(p.baseURL)
+	baseURL, err := selectManagedLlamaBaseURL(p.preferredBaseURL)
 	if err != nil {
 		return err
 	}
+	httpOptions := p.httpOptions
+	httpOptions.BaseURL = baseURL
+	client, err := NewLlamaCPPProvider(httpOptions)
+	if err != nil {
+		return err
+	}
+	host, port, err := llamaHostPort(baseURL)
+	if err != nil {
+		return err
+	}
+	p.baseURL = baseURL
+	p.client = client
 	args := []string{
 		"--host", host,
 		"--port", strconv.Itoa(port),
@@ -254,6 +288,7 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 	// and are passed directly to exec without shell expansion.
 	command := exec.Command(p.runnerPath, args...)
 	command.Dir = filepath.Dir(p.runnerPath)
+	p.stderr.Reset()
 	command.Stderr = p.stderr
 	command.Stdout = p.stderr
 	if err := command.Start(); err != nil {
@@ -276,6 +311,12 @@ func (p *ManagedLlamaCPPProvider) readyToServe() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.runningLocked() && p.ready
+}
+
+func (p *ManagedLlamaCPPProvider) clientSnapshot() *LlamaCPPProvider {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.client
 }
 
 func (p *ManagedLlamaCPPProvider) setReady(ready bool) {
@@ -350,10 +391,51 @@ func llamaHostPort(baseURL string) (string, int, error) {
 	if err != nil || port < 1 || port > 65535 {
 		return "", 0, fmt.Errorf("llama.cpp base URL %q has invalid port", baseURL)
 	}
-	if ip != nil && ip.IsUnspecified() {
+	if strings.EqualFold(host, "localhost") || (ip != nil && ip.IsUnspecified()) {
 		host = "127.0.0.1"
 	}
 	return host, port, nil
+}
+
+// selectManagedLlamaBaseURL keeps the configured port when it is available and
+// otherwise selects a free loopback port. Managed mode owns its server process,
+// so it must not probe or send prompts to an unrelated service on the preferred
+// port.
+func selectManagedLlamaBaseURL(baseURL string) (string, error) {
+	host, preferredPort, err := llamaHostPort(baseURL)
+	if err != nil {
+		return "", err
+	}
+
+	port, err := availableManagedLlamaPort(host, preferredPort)
+	if err != nil {
+		return "", err
+	}
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+	}).String(), nil
+}
+
+func availableManagedLlamaPort(host string, preferredPort int) (int, error) {
+	preferredAddress := net.JoinHostPort(host, strconv.Itoa(preferredPort))
+	listener, preferredErr := net.Listen("tcp", preferredAddress)
+	if preferredErr == nil {
+		if err := listener.Close(); err != nil {
+			return 0, fmt.Errorf("release managed llama.cpp endpoint %s: %w", preferredAddress, err)
+		}
+		return preferredPort, nil
+	}
+
+	listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		return 0, fmt.Errorf("managed llama.cpp endpoint %s is unavailable (%v) and no free loopback port could be selected: %w", preferredAddress, preferredErr, err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		return 0, fmt.Errorf("release managed llama.cpp fallback endpoint: %w", err)
+	}
+	return port, nil
 }
 
 type tailBuffer struct {
@@ -382,6 +464,12 @@ func (b *tailBuffer) Write(data []byte) (int, error) {
 
 func (b *tailBuffer) WriteString(value string) {
 	_, _ = b.Write([]byte(value))
+}
+
+func (b *tailBuffer) Reset() {
+	b.mu.Lock()
+	b.data = nil
+	b.mu.Unlock()
 }
 
 func (b *tailBuffer) String() string {

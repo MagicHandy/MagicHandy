@@ -653,6 +653,7 @@ export interface ConnectionCheckResult {
   hsp_available: boolean;
   playback_state?: string;
   latency_ms: number;
+  message?: string;
 }
 
 export interface TransportDiagnostics {

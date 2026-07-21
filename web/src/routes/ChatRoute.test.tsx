@@ -38,9 +38,6 @@ vi.mock("../components/QuickSettings", () => ({
 vi.mock("../components/VoiceQuickControls", () => ({
   VoiceQuickControls: () => <div>Voice controls</div>,
 }));
-vi.mock("../components/WorkspaceHead", () => ({
-  WorkspaceHead: () => <h1>Chat</h1>,
-}));
 vi.mock("../api/client", () => ({
   api: {
     getChatSessions: mocks.getChatSessions,
@@ -73,6 +70,8 @@ describe("ChatRoute", () => {
 
     const conversation = screen.getByRole("region", { name: "Conversation" });
     const controls = screen.getByRole("complementary", { name: "Motion controls" });
+    const title = within(conversation).getByRole("heading", { name: "Chat", level: 1 });
+    expect(title.closest(".chat-tabs-bar")).toContainElement(within(conversation).getByRole("tablist", { name: "Chat sessions" }));
     expect(await within(conversation).findByText("Conversation content")).toBeInTheDocument();
     expect(within(conversation).queryByText("Autopilot control")).not.toBeInTheDocument();
     expect(within(controls).getByText("Autopilot control")).toBeInTheDocument();
