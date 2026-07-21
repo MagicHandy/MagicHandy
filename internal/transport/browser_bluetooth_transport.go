@@ -26,8 +26,23 @@ type BrowserBluetoothTransport struct {
 	activeStreamID          string
 	activeBluetoothStreamID int
 	nextBluetoothStreamID   uint32
+	playbackStartedAt       time.Time
 
 	diagnosis TransportDiagnostics
+}
+
+// MotionSamplingCapabilities reports the Handy BLE HSP protobuf's native
+// 0..1000 point encoding.
+func (*BrowserBluetoothTransport) MotionSamplingCapabilities() MotionSamplingCapabilities {
+	return MotionSamplingCapabilities{PositionResolutionPercent: 0.1}
+}
+
+// PlaybackStartTime reports the estimated stream origin at the successful
+// browser bridge Play acknowledgement midpoint.
+func (t *BrowserBluetoothTransport) PlaybackStartTime() time.Time {
+	t.hspMu.Lock()
+	defer t.hspMu.Unlock()
+	return t.playbackStartedAt
 }
 
 // NewBrowserBluetoothTransport returns a transport backed by a browser bridge.
@@ -57,6 +72,7 @@ func (t *BrowserBluetoothTransport) Stop(ctx context.Context, command StopComman
 	defer t.hspMu.Unlock()
 
 	result, err := t.dispatch(ctx, recorded, "hsp/stop", nil)
+	t.playbackStartedAt = time.Time{}
 	if result.OK {
 		t.activeStreamID = ""
 		t.activeBluetoothStreamID = 0
@@ -116,7 +132,7 @@ func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command Ap
 	}
 	points := make([]map[string]any, len(command.Points))
 	for index, point := range command.Points {
-		x, ok := mapHandyPosition(point.PositionPercent, t.options.ReverseDirection)
+		x, ok := quantizeHandyPositionAtResolution(point.PositionPercent, 0.1, t.options.ReverseDirection)
 		if !ok {
 			err := fmt.Errorf("HSP point %d x must be between 0 and 100", index)
 			return t.recordBuildError(CommandKindPointsAdd, err), err
@@ -175,10 +191,16 @@ func (t *BrowserBluetoothTransport) Play(ctx context.Context, command PlayComman
 		"stream_id":  bluetoothStreamID,
 		"start_time": command.StartTimeMillis,
 	}
+	dispatchedAt := time.Now()
 	result, err := t.dispatch(ctx, recorded, "hsp/play", body)
 	if result.OK {
 		t.activeStreamID = semanticStreamID
 		t.activeBluetoothStreamID = bluetoothStreamID
+		acknowledgedAt := time.Now()
+		t.playbackStartedAt = dispatchedAt.Add(acknowledgedAt.Sub(dispatchedAt) / 2).
+			Add(-time.Duration(command.StartTimeMillis) * time.Millisecond)
+	} else {
+		t.playbackStartedAt = time.Time{}
 	}
 	return result, err
 }

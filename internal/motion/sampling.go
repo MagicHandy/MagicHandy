@@ -62,7 +62,11 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	if e.preservePlanKnots && probeIntervalMillis > bufferedProbeIntervalMillis {
 		probeIntervalMillis = bufferedProbeIntervalMillis
 	}
-	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+maximumAdaptiveChunkPoints-1)/maximumAdaptiveChunkPoints)
+	maximumPoints := e.maximumChunkPoints
+	if maximumPoints < 2 {
+		maximumPoints = maximumAdaptiveChunkPoints
+	}
+	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+int64(maximumPoints)-1)/int64(maximumPoints))
 	probeIntervalMillis = max(probeIntervalMillis, minimumBoundedProbe)
 	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+len(e.plan.curve.points))
 	for streamMillis := chunkStart; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
@@ -96,11 +100,12 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	if transitionInChunk {
 		samples = stabilizeTransitionSamples(samples, mandatory)
 	}
-	if e.positionResolutionPercent > 0 {
+	positionResolution := e.effectivePositionResolutionPercentLocked()
+	if positionResolution > 0 {
 		samples = simplifyQuantizedMotionSamples(
 			samples,
-			e.positionResolutionPercent,
-			wireApproximationTolerance+e.positionResolutionPercent/2,
+			positionResolution,
+			wireApproximationTolerance+positionResolution/2,
 			mandatory,
 		)
 	}
@@ -110,7 +115,7 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	if len(samples) == 0 {
 		return nil, errors.New("motion sampler produced an empty output window")
 	}
-	if len(samples) > maximumAdaptiveChunkPoints {
+	if len(samples) > maximumPoints {
 		return nil, fmt.Errorf(
 			"motion content has %d essential points in the %dms output window; trim or slow the content",
 			len(samples), chunkEnd-chunkStart,
@@ -121,6 +126,18 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	lastSample := samples[len(samples)-1]
 	e.lastSample = &lastSample
 	return samples, nil
+}
+
+func (e *Engine) effectivePositionResolutionPercentLocked() float64 {
+	resolution := e.positionResolutionPercent
+	if resolution <= 0 || !e.resolutionAfterStrokeWindow {
+		return resolution
+	}
+	strokeSpan := e.settings.StrokeMaxPercent - e.settings.StrokeMinPercent
+	if strokeSpan <= 0 {
+		return resolution
+	}
+	return math.Min(100, resolution*100/float64(strokeSpan))
 }
 
 func stabilizeTransitionSamples(samples []MotionSample, mandatory map[int64]struct{}) []MotionSample {

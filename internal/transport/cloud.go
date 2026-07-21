@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	cloudRESTName = "handy_cloud_rest"
+	cloudRESTName            = "handy_cloud_rest"
+	maximumCloudHSPAddPoints = 100
 
 	cloudPathStrokeWindow = "slider/stroke"
 	cloudPathHSPSetup     = "hsp/setup"
@@ -173,6 +174,9 @@ func (b *CloudRESTBuilder) buildHSPAdd(command AppendPointsCommand, flush bool, 
 	if len(command.Points) == 0 {
 		return CloudRequest{}, errors.New("HSP add requires at least one point")
 	}
+	if len(command.Points) > maximumCloudHSPAddPoints {
+		return CloudRequest{}, fmt.Errorf("HSP add supports at most %d points", maximumCloudHSPAddPoints)
+	}
 	if tailPointStreamIndex < len(command.Points) {
 		return CloudRequest{}, errors.New("HSP tail point stream index must cover the appended points")
 	}
@@ -320,21 +324,22 @@ func percentFraction(value int) float64 {
 }
 
 func quantizeHandyPosition(position float64, reverse bool) (int, bool) {
-	mapped, ok := mapHandyPosition(position, reverse)
+	mapped, ok := quantizeHandyPositionAtResolution(position, 1, reverse)
 	if !ok {
 		return 0, false
 	}
-	return int(math.Round(mapped)), true
+	return int(mapped), true
 }
 
-func mapHandyPosition(position float64, reverse bool) (float64, bool) {
-	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 100 {
+func quantizeHandyPositionAtResolution(position, resolution float64, reverse bool) (float64, bool) {
+	if position < 0 || position > 100 || math.IsNaN(position) || math.IsInf(position, 0) || resolution <= 0 {
 		return 0, false
 	}
+	quantized := math.Max(0, math.Min(100, math.Round(position/resolution)*resolution))
 	if reverse {
-		position = 100 - position
+		quantized = 100 - quantized
 	}
-	return position, true
+	return quantized, true
 }
 
 func validateStrokeWindow(command StrokeWindowCommand) error {

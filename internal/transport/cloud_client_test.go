@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
@@ -119,6 +121,86 @@ func TestCloudRESTTransportConnectionCheck(t *testing.T) {
 	}
 	if !check.OK || !check.HSPAvailable || check.PlaybackState != "idle" {
 		t.Fatalf("check = %+v, want available idle", check)
+	}
+}
+
+func TestCloudRESTTransportConnectionCheckParsesV3HSPState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"result": {
+				"play_state": 2,
+				"points": 0,
+				"max_points": 9707,
+				"current_point": 0,
+				"current_time": 424639,
+				"loop": true,
+				"playback_rate": 1,
+				"first_point_time": 0,
+				"last_point_time": 0,
+				"stream_id": 0,
+				"tail_point_stream_index": 0,
+				"tail_point_stream_index_threshold": 0,
+				"pause_on_starving": false
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	check, err := cloud.CheckConnection(context.Background())
+	if err != nil {
+		t.Fatalf("CheckConnection: %v", err)
+	}
+	if !check.OK || !check.HSPAvailable || check.PlaybackState != "stopped" {
+		t.Fatalf("check = %+v, want available stopped HSP", check)
+	}
+}
+
+func TestCloudRESTTransportReportsPlayRequestMidpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/servertime" {
+			_, _ = fmt.Fprintf(w, `{"server_time":%d}`, time.Now().UnixMilli())
+			return
+		}
+		if r.URL.Path == "/hsp/play" {
+			time.Sleep(20 * time.Millisecond)
+			_, _ = w.Write([]byte(`{"result":{"play_state":1}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	before := time.Now()
+	if _, err := cloud.Play(context.Background(), PlayCommand{StreamID: "clock", StartTimeMillis: 250}); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
+	after := time.Now()
+	origin := cloud.PlaybackStartTime()
+	if origin.IsZero() || origin.Before(before.Add(-260*time.Millisecond)) || origin.After(after.Add(-240*time.Millisecond)) {
+		t.Fatalf("playback origin = %v, want request midpoint minus 250ms within %v..%v", origin, before, after)
+	}
+}
+
+func TestParseHSPPlaybackStateRejectsInvalidNumericEnums(t *testing.T) {
+	for _, value := range []any{-1, 5, 1.5, math.NaN(), math.Inf(1), ""} {
+		if state, ok := parseHSPPlaybackState(value); ok {
+			t.Fatalf("parseHSPPlaybackState(%v) = %q, true; want rejected", value, state)
+		}
+	}
+	for value, want := range map[int]string{
+		0: "not_initialized",
+		1: "playing",
+		2: "stopped",
+		3: "paused",
+		4: "starving",
+	} {
+		if state, ok := parseHSPPlaybackState(value); !ok || state != want {
+			t.Fatalf("parseHSPPlaybackState(%d) = %q, %t; want %q, true", value, state, ok, want)
+		}
 	}
 }
 

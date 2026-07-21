@@ -9,17 +9,21 @@ These invariants preserve lessons learned from StrokeGPT-ReVibed's Handy firmwar
 The shared engine and Cloud REST API use semantic `0..100` position units. API
 v3 Cloud `PointPosition` is an integer, so the Cloud owner rounds only while
 building its request. Firmware-v4 Bluetooth protobuf uses a native `0..1000`
-integer field; the browser owner keeps semantic fractions until its codec maps
-them to that wire scale. The `0..1000` value must never leak back into the
-engine, stored content, HTTP bridge body, or diagnostics.
+integer field; the browser owner rounds to its corresponding 0.1% semantic step
+at the bridge boundary before the codec maps it to that wire scale. The
+`0..1000` value must never leak back into the engine, stored content, HTTP
+bridge body, or diagnostics.
 
 Test expectation:
 
 - generated HSP point payloads never contain `x` outside `0..100` for normal sampled motion
-- Cloud payloads quantize to whole percent, while Browser Bluetooth preserves
-  semantic fractions and maps them to the native 0..1000 protobuf field
+- Cloud payloads quantize to whole percent, while Browser Bluetooth quantizes
+  to 0.1% and maps that value to the native 0..1000 protobuf field
 - Cloud's owner-declared 1% resolution may reduce redundant knots only in the
   shared engine and only under the combined 0.8% wire-error bound
+- quantize before reverse mapping so forward and reversed output are exact
+  mirrors in native endpoint steps
+- one Cloud `/hsp/add` contains at most the API v3 limit of 100 points
 - intentional invalid data is rejected before transport dispatch
 
 ## Invariant 2: Stroke Range Is A Transport Envelope
@@ -132,7 +136,8 @@ session, not tear it down. Real Cloud HSP sessions reported stop/go playback
 after morphs when this was done wrong, and it recurred repeatedly.
 
 - bridge into an exact point at the active stream's replacement time
-- flush replacement points through the add path and update the tail threshold
+- append replacement points at the future handoff and update the cumulative
+  tail threshold; only the first add of a newly set-up HSP stream uses `flush`
 - do not replay play while firmware reports a healthy active stream
 - keep flushed replacement indexes and thresholds local to the newly added
   buffer; do not carry old stream indexes into a flushed replacement
@@ -144,3 +149,19 @@ Test expectation:
 - a replacement does not issue a new play on a stream firmware reports healthy
 - replacement indexes/threshold are buffer-local, not inherited from the old stream
 - the first replacement point's lead is at least the recent command-latency estimate
+
+## Invariant 12: Playback Time Starts At Accepted Play
+
+Setup, initial buffering, browser bridge work, and Intiface anchoring are not
+elapsed playback. Each owner reports its best monotonic stream origin after
+Play is accepted. The engine uses that origin before starting lead management
+or selecting retarget handoffs.
+
+Test expectation:
+
+- setup/add latency does not advance semantic phase before playback starts
+- Cloud and Browser Bluetooth use the successful Play request/acknowledgement
+  midpoint; Intiface uses its completed startup anchor
+- API v3 numeric `play_state` values are mapped to named health states
+- stopped/not-initialized is tolerated only while starting; it triggers
+  recovery Stop during an established run

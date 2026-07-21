@@ -118,9 +118,11 @@ initial-condition rules, not semantic interpolation or resampling.
 
 `DeviceMessageTimingGap` is exposed as a transport capability. The shared engine
 raises its neutral sample interval when a selected device requires a slower
-message cadence, including a bounded scheduler margin. `StepCount` remains a
-reported physical-resolution limit; MagicHandy keeps the neutral float position
-and does not add a second quantizer.
+message cadence, including a bounded scheduler margin. `StepCount` is exposed
+as a sampling capability as well. The shared engine scales that physical
+resolution through the active stroke window and uses it only for bounded frame
+reduction. MagicHandy keeps neutral positions as floats and does not add an
+owner-local deadband or curve filter.
 
 The existing HSP invariant suite generalizes into an owner-agnostic contract
 suite run against all owners (the fake transport, the Cloud builder, the

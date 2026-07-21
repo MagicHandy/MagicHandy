@@ -562,6 +562,21 @@ func (i *Intiface) MotionTimingCapabilities() MotionTimingCapabilities {
 	return MotionTimingCapabilities{MinimumPointInterval: i.selection.minimumPointInterval()}
 }
 
+// MotionSamplingCapabilities reports the selected actuator's physical step
+// resolution. The engine scales it back through the active stroke window
+// before reducing semantic samples.
+func (i *Intiface) MotionSamplingCapabilities() MotionSamplingCapabilities {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if !i.selected {
+		return MotionSamplingCapabilities{}
+	}
+	return MotionSamplingCapabilities{
+		PositionResolutionPercent:   i.selection.resolutionPercent,
+		ResolutionAfterStrokeWindow: true,
+	}
+}
+
 func (i *Intiface) motionAdmissionClosed() bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()

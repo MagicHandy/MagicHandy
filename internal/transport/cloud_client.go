@@ -65,6 +65,7 @@ type CloudRESTTransport struct {
 	activeStreamID         string
 	nextHSPStreamID        uint32
 	hspPointCount          int
+	playbackStartedAt      time.Time
 	serverTimeOffsetMillis int64
 	serverTimeSyncedAt     time.Time
 }
@@ -73,7 +74,19 @@ type CloudRESTTransport struct {
 // resolution. The shared engine uses this only to reduce redundant wire knots;
 // CloudRESTTransport remains a mapping/dispatch owner.
 func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabilities {
-	return MotionSamplingCapabilities{PositionResolutionPercent: 1}
+	return MotionSamplingCapabilities{
+		PositionResolutionPercent: 1,
+		MaximumPointsPerAppend:    maximumCloudHSPAddPoints,
+	}
+}
+
+// PlaybackStartTime reports the estimated stream origin at the successful
+// Play request midpoint. This excludes Cloud setup and prebuffer latency from
+// the engine's playback clock.
+func (t *CloudRESTTransport) PlaybackStartTime() time.Time {
+	t.hspMu.Lock()
+	defer t.hspMu.Unlock()
+	return t.playbackStartedAt
 }
 
 // NewCloudRESTTransport validates prerequisites and creates a live Cloud REST transport.
@@ -124,6 +137,7 @@ func (t *CloudRESTTransport) Stop(ctx context.Context, _ StopCommand) (CommandRe
 	defer t.hspMu.Unlock()
 
 	result, err := t.dispatch(ctx, t.builder.BuildStop())
+	t.playbackStartedAt = time.Time{}
 	if err == nil {
 		t.activeStreamID = ""
 		t.hspPointCount = 0
@@ -181,6 +195,7 @@ func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPoi
 		}
 		t.activeStreamID = streamID
 		t.hspPointCount = 0
+		t.playbackStartedAt = time.Time{}
 	}
 
 	tailPointStreamIndex := t.hspPointCount + len(command.Points)
@@ -212,7 +227,16 @@ func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (Com
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
-	return t.dispatch(ctx, request)
+	dispatchedAt := time.Now()
+	result, err := t.dispatch(ctx, request)
+	if err != nil {
+		t.playbackStartedAt = time.Time{}
+		return result, err
+	}
+	acknowledgedAt := time.Now()
+	t.playbackStartedAt = dispatchedAt.Add(acknowledgedAt.Sub(dispatchedAt) / 2).
+		Add(-time.Duration(command.StartTimeMillis) * time.Millisecond)
+	return result, nil
 }
 
 // CheckConnection probes Cloud REST HSP state without sending motion.
@@ -605,13 +629,52 @@ func stateAvailabilitySignals(candidate map[string]any) (bool, bool) {
 
 func statePlaybackValue(candidate map[string]any) string {
 	for _, key := range []string{"playback_state", "state", "play_state", "playState"} {
-		if state, ok := candidate[key].(string); ok {
-			if state = strings.TrimSpace(state); state != "" {
-				return state
-			}
+		if state, ok := parseHSPPlaybackState(candidate[key]); ok {
+			return state
 		}
 	}
 	return ""
+}
+
+func parseHSPPlaybackState(value any) (string, bool) {
+	if state, ok := value.(string); ok {
+		state = strings.TrimSpace(state)
+		return state, state != ""
+	}
+
+	var numeric float64
+	switch value := value.(type) {
+	case float64:
+		numeric = value
+	case float32:
+		numeric = float64(value)
+	case int:
+		numeric = float64(value)
+	case int32:
+		numeric = float64(value)
+	case int64:
+		numeric = float64(value)
+	case uint:
+		numeric = float64(value)
+	case uint32:
+		numeric = float64(value)
+	case uint64:
+		if value > 1<<53 {
+			return "", false
+		}
+		numeric = float64(value)
+	default:
+		return "", false
+	}
+	if math.IsNaN(numeric) || math.IsInf(numeric, 0) || numeric != math.Trunc(numeric) {
+		return "", false
+	}
+	states := [...]string{"not_initialized", "playing", "stopped", "paused", "starving"}
+	index := int(numeric)
+	if index < 0 || index >= len(states) {
+		return "", false
+	}
+	return states[index], true
 }
 
 func statePayloadCandidates(payload any) []map[string]any {

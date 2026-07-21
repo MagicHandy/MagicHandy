@@ -73,13 +73,25 @@ func TestEngineFrameHonorsImmediateModeTimingFloor(t *testing.T) {
 }
 
 func TestEngineReadsOwnerPositionResolution(t *testing.T) {
-	commandTransport := &samplingCapabilityTransport{Fake: transport.NewFake(), resolution: 1}
+	commandTransport := &samplingCapabilityTransport{
+		Fake: transport.NewFake(), resolution: 1, afterStrokeWindow: true, maximumPoints: 100,
+	}
 	engine, err := NewEngine(EngineOptions{Transport: commandTransport})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if engine.positionResolutionPercent != 1 {
 		t.Fatalf("position resolution = %g, want owner-advertised 1%%", engine.positionResolutionPercent)
+	}
+	if !engine.resolutionAfterStrokeWindow || engine.maximumChunkPoints != 100 {
+		t.Fatalf("sampling capabilities were not retained: %+v", engine)
+	}
+	settings := config.DefaultSettings().Motion
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+	engine.settings = settings
+	if got := engine.effectivePositionResolutionPercentLocked(); math.Abs(got-5.0/3.0) > 1e-12 {
+		t.Fatalf("effective 60%%-window resolution = %g, want 5/3%%", got)
 	}
 }
 
@@ -634,9 +646,15 @@ func interpolateQuantizedMotionSamples(samples []MotionSample, at int64, resolut
 
 type samplingCapabilityTransport struct {
 	*transport.Fake
-	resolution float64
+	resolution        float64
+	afterStrokeWindow bool
+	maximumPoints     int
 }
 
 func (t *samplingCapabilityTransport) MotionSamplingCapabilities() transport.MotionSamplingCapabilities {
-	return transport.MotionSamplingCapabilities{PositionResolutionPercent: t.resolution}
+	return transport.MotionSamplingCapabilities{
+		PositionResolutionPercent:   t.resolution,
+		ResolutionAfterStrokeWindow: t.afterStrokeWindow,
+		MaximumPointsPerAppend:      t.maximumPoints,
+	}
 }
