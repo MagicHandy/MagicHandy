@@ -20,6 +20,9 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 		if definition.CycleMillis < RoutineCycleFloorMillis {
 			t.Fatalf("pattern %q cycle = %d, below routine floor", definition.ID, definition.CycleMillis)
 		}
+		if slices.Contains(definition.Tags, TagCurated) {
+			continue
+		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
 		if err != nil {
 			t.Fatalf("measure %q: %v", definition.ID, err)
@@ -33,7 +36,7 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 	}
 }
 
-func TestExperimentalCatalogContainsTwentyFourDistinctClosedCycles(t *testing.T) {
+func TestExperimentalCatalogContainsSixVariableClosedCycles(t *testing.T) {
 	seenIDs := make(map[PatternID]bool)
 	seenShapes := make(map[string]PatternID)
 	experimental := 0
@@ -46,50 +49,102 @@ func TestExperimentalCatalogContainsTwentyFourDistinctClosedCycles(t *testing.T)
 			continue
 		}
 		experimental++
-		if !strings.HasPrefix(definition.Description, "Experimental: ") {
-			t.Fatalf("experimental pattern %q is not visibly labeled", definition.ID)
-		}
-		first := definition.Points[0]
-		last := definition.Points[len(definition.Points)-1]
-		if first.TimeMillis != 0 || last.TimeMillis != definition.CycleMillis || first.PositionPercent != last.PositionPercent {
-			t.Fatalf("experimental pattern %q is not a complete closed cycle: first=%+v last=%+v cycle=%d", definition.ID, first, last, definition.CycleMillis)
-		}
-		minimum, maximum := first.PositionPercent, first.PositionPercent
-		for index, point := range definition.Points {
-			minimum = math.Min(minimum, point.PositionPercent)
-			maximum = math.Max(maximum, point.PositionPercent)
-			if index > 0 && point.PositionPercent == definition.Points[index-1].PositionPercent {
-				t.Fatalf("experimental pattern %q has a stationary adjacent knot at %d", definition.ID, index)
-			}
-		}
-		if maximum-minimum < 25 {
-			t.Fatalf("experimental pattern %q span = %.1f, want a meaningful motion range", definition.ID, maximum-minimum)
-		}
+		assertExperimentalPatternQuality(t, definition)
 		signature := fmt.Sprint(definition.Points)
 		if other, exists := seenShapes[signature]; exists {
 			t.Fatalf("experimental patterns %q and %q have identical curves", other, definition.ID)
 		}
 		seenShapes[signature] = definition.ID
 	}
-	if experimental < 24 {
-		t.Fatalf("experimental pattern count = %d, want at least 24", experimental)
+	if experimental != 6 {
+		t.Fatalf("experimental pattern count = %d, want 6 replacements", experimental)
+	}
+}
+
+func assertExperimentalPatternQuality(t *testing.T, definition PatternDefinition) {
+	t.Helper()
+	if !strings.HasPrefix(definition.Description, "Experimental: ") {
+		t.Fatalf("experimental pattern %q is not visibly labeled", definition.ID)
+	}
+	first := definition.Points[0]
+	last := definition.Points[len(definition.Points)-1]
+	if first.TimeMillis != 0 || last.TimeMillis != definition.CycleMillis || first.PositionPercent != last.PositionPercent {
+		t.Fatalf("experimental pattern %q is not a complete closed cycle: first=%+v last=%+v cycle=%d", definition.ID, first, last, definition.CycleMillis)
+	}
+	minimum, maximum := first.PositionPercent, first.PositionPercent
+	amplitudeBands := make(map[int]bool)
+	positionUses := make(map[int]int)
+	repeatedAmplitudeRun := 1
+	longestAmplitudeRun := 1
+	previousAmplitude := -1.0
+	for index, point := range definition.Points[:len(definition.Points)-1] {
+		minimum = math.Min(minimum, point.PositionPercent)
+		maximum = math.Max(maximum, point.PositionPercent)
+		if index > 0 && point.PositionPercent == definition.Points[index-1].PositionPercent {
+			t.Fatalf("experimental pattern %q has a stationary adjacent knot at %d", definition.ID, index)
+		}
+		next := definition.Points[index+1]
+		amplitude := math.Abs(next.PositionPercent - point.PositionPercent)
+		if amplitude < 30 {
+			t.Fatalf("experimental pattern %q travel %d amplitude = %.1f, want at least 30", definition.ID, index, amplitude)
+		}
+		amplitudeBands[int(math.Round(amplitude/10))] = true
+		positionUses[int(math.Round(point.PositionPercent/5))]++
+		if math.Abs(amplitude-previousAmplitude) < 5 {
+			repeatedAmplitudeRun++
+		} else {
+			repeatedAmplitudeRun = 1
+		}
+		longestAmplitudeRun = max(longestAmplitudeRun, repeatedAmplitudeRun)
+		previousAmplitude = amplitude
+	}
+	if maximum-minimum < 65 {
+		t.Fatalf("experimental pattern %q span = %.1f, want a meaningful motion range", definition.ID, maximum-minimum)
+	}
+	if len(amplitudeBands) < 4 || longestAmplitudeRun > 2 {
+		t.Fatalf("experimental pattern %q has weak reach variation: bands=%d longest run=%d", definition.ID, len(amplitudeBands), longestAmplitudeRun)
+	}
+	for band, uses := range positionUses {
+		if uses > 2 {
+			t.Fatalf("experimental pattern %q repeats endpoint band %d %d times", definition.ID, band, uses)
+		}
+	}
+}
+
+func TestOnlyReplacementPatternsAreExperimental(t *testing.T) {
+	want := map[PatternID]bool{
+		PatternDeepMediumShortPairs: true,
+		PatternFallingCrest:         true,
+		PatternThreeDeepOneShort:    true,
+		PatternDescendingLadder:     true,
+		PatternWanderingSwell:       true,
+		PatternRisingReach:          true,
+	}
+	for _, definition := range BuiltinPatternDefinitions() {
+		hasTag := slices.Contains(definition.Tags, TagExperimental)
+		if hasTag != want[definition.ID] {
+			t.Fatalf("pattern %q experimental = %t, want %t", definition.ID, hasTag, want[definition.ID])
+		}
+		if hasTag != strings.HasPrefix(definition.Description, "Experimental: ") {
+			t.Fatalf("pattern %q tag/description label mismatch", definition.ID)
+		}
 	}
 }
 
 func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 	want := map[PatternID]string{
-		PatternFourLevelCircuit:    "Four-Level Circuit",
-		PatternHighLowBlocks:       "High-Low Blocks",
-		PatternDeepShallowSequence: "Deep-Shallow Sequence",
-		PatternShortMediumSteps:    "Short-Medium Steps",
-		PatternTopAnchoredDepths:   "Top-Anchored Depths",
-		PatternDeepBookends:        "Deep Bookends",
-		PatternOneDeepThreeShallow: "One Deep, Three Shallow",
-		PatternLowerMidrangeMix:    "Lower Midrange Mix",
-		PatternMidTopSwitch:        "Mid-to-Top Switch",
-		PatternSlowFastFull:        "Slow-to-Fast Full",
-		PatternMidrangeFullFinish:  "Midrange with Full Finish",
-		PatternDeepPartialSequence: "Deep-Partial Sequence",
+		PatternFourLevelCircuit:     "Four-Level Circuit",
+		PatternHighLowBlocks:        "High-Low Blocks",
+		PatternDeepShallowSequence:  "Deep-Shallow Sequence",
+		PatternShortMediumSteps:     "Short-Medium Steps",
+		PatternDeepMediumShortPairs: "Deep, Medium, Short",
+		PatternFallingCrest:         "Falling Crest",
+		PatternThreeDeepOneShort:    "Three Deep, One Short",
+		PatternDescendingLadder:     "Descending Ladder",
+		PatternSlowFastFull:         "Slow-to-Fast Full",
+		PatternWanderingSwell:       "Wandering Swell",
+		PatternDeepPartialSequence:  "Deep-Partial Sequence",
+		PatternRisingReach:          "Rising Reach",
 	}
 	for _, definition := range BuiltinPatternDefinitions() {
 		name, ok := want[definition.ID]
@@ -103,6 +158,33 @@ func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing sampled patterns: %+v", want)
+	}
+}
+
+func TestPromotedUserPatternsKeepAcceptedNamesAndTiming(t *testing.T) {
+	want := map[PatternID]struct {
+		name       string
+		cycle      int64
+		pointCount int
+	}{
+		PatternHardAndRegular: {name: "Hard and Regular", cycle: 7333, pointCount: 49},
+		PatternPlayfulJerk:    {name: "playful jerk", cycle: 11704, pointCount: 33},
+	}
+	for _, definition := range PromotedBuiltinPatternDefinitions() {
+		expected, ok := want[definition.ID]
+		if !ok {
+			t.Fatalf("unexpected promoted pattern %q", definition.ID)
+		}
+		if definition.Name != expected.name || definition.CycleMillis != expected.cycle || len(definition.Points) != expected.pointCount {
+			t.Fatalf("promoted pattern %q = name %q cycle %d points %d", definition.ID, definition.Name, definition.CycleMillis, len(definition.Points))
+		}
+		if slices.Contains(definition.Tags, TagExperimental) || !slices.Contains(definition.Tags, TagCurated) {
+			t.Fatalf("promoted pattern %q tags = %v", definition.ID, definition.Tags)
+		}
+		delete(want, definition.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing promoted patterns: %+v", want)
 	}
 }
 

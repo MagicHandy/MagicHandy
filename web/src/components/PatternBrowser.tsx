@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryPattern } from "../api/types";
-import { DownloadIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon, TrashIcon } from "../shell/icons";
+import { CheckIcon, CloseIcon, DownloadIcon, PencilIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon, TrashIcon } from "../shell/icons";
 import { libraryActionKey, type LibraryBusyKeys } from "./library-actions";
 import { PatternCurve } from "./PatternCurve";
 
@@ -9,7 +9,7 @@ interface Props {
   locked: boolean;
   offline: boolean;
   busyKeys: LibraryBusyKeys;
-  onPatch: (id: string, patch: Partial<Pick<LibraryPattern, "enabled" | "weight">>) => Promise<boolean>;
+  onPatch: (id: string, patch: Partial<Pick<LibraryPattern, "name" | "enabled" | "weight">>) => Promise<boolean>;
   onPlay: (id: string) => Promise<void>;
   onFeedback: (id: string, rating: -1 | 1) => Promise<void>;
   onExport: (id: string) => Promise<void>;
@@ -50,10 +50,7 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
             </label>
             <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={`${pattern.name} backend-sampled pattern curve`} />
             <div className="pattern-copy">
-              <div className="pattern-title-line">
-                <h3>{pattern.name}</h3>
-                <span className="origin-label">{pattern.origin}</span>
-              </div>
+              <PatternNameEditor pattern={pattern} locked={locked || mutating} onCommit={(name) => onPatch(pattern.id, { name })} />
               {pattern.description && <p>{pattern.description}</p>}
               <div className="pattern-meta"><span>{(pattern.cycle_ms / 1000).toFixed(1)} s</span><span>{pattern.kind}</span><span>{pattern.points.length} knots</span></div>
               {pattern.tags.length > 0 && <div className="tag-list">{pattern.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
@@ -71,6 +68,65 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
         {filtered.length === 0 && <div className="empty-state compact-empty"><h2>No matching patterns</h2></div>}
       </div>
     </section>
+  );
+}
+
+function PatternNameEditor({ pattern, locked, onCommit }: { pattern: LibraryPattern; locked: boolean; onCommit: (name: string) => Promise<boolean> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(pattern.name);
+  const [committing, setCommitting] = useState(false);
+  useEffect(() => {
+    if (!editing) setDraft(pattern.name);
+  }, [editing, pattern.name]);
+
+  function cancel() {
+    setDraft(pattern.name);
+    setEditing(false);
+  }
+
+  async function commit() {
+    const name = draft.trim();
+    if (!name || name === pattern.name || committing) {
+      if (name === pattern.name) setEditing(false);
+      return;
+    }
+    setCommitting(true);
+    try {
+      if (await onCommit(name)) setEditing(false);
+    } finally {
+      setCommitting(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form className="pattern-title-line pattern-rename-form" onSubmit={(event) => { event.preventDefault(); void commit(); }}>
+        <input
+          type="text"
+          aria-label={`Rename ${pattern.name}`}
+          maxLength={80}
+          value={draft}
+          disabled={locked || committing}
+          autoFocus
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") { event.preventDefault(); void commit(); }
+            if (event.key === "Escape") { event.preventDefault(); cancel(); }
+          }}
+        />
+        <button type="submit" className="icon-button pattern-title-action" title="Save name" aria-label={`Save name for ${pattern.name}`} disabled={locked || committing || !draft.trim()}><CheckIcon size={16} /></button>
+        <button type="button" className="icon-button pattern-title-action" title="Cancel rename" aria-label={`Cancel renaming ${pattern.name}`} disabled={committing} onClick={cancel}><CloseIcon size={16} /></button>
+        <span className="origin-label">{pattern.origin}</span>
+      </form>
+    );
+  }
+
+  return (
+    <div className="pattern-title-line">
+      <h3>{pattern.name}</h3>
+      <span className="origin-label">{pattern.origin}</span>
+      <button type="button" className="icon-button pattern-title-action" title="Rename pattern" aria-label={`Rename ${pattern.name}`} disabled={locked} onClick={() => setEditing(true)}><PencilIcon size={15} /></button>
+    </div>
   );
 }
 

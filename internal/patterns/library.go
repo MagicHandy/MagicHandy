@@ -30,7 +30,7 @@ const patternByIDQuery = `
 `
 
 // Open opens the library and seeds code-generated built-ins without replacing
-// user enablement or feedback-derived weights.
+// user names, enablement, or feedback-derived weights.
 func Open(dataDir string) (*Library, error) {
 	database, err := dbstore.Open(dataDir)
 	if err != nil {
@@ -223,7 +223,7 @@ func (l *Library) CreatePattern(input PatternInput) (Pattern, error) {
 	return pattern, nil
 }
 
-// UpdatePattern applies visible row controls and editable user content.
+// UpdatePattern applies visible row controls and names; built-in curves remain immutable.
 func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) {
 	ctx := context.Background()
 	var next Pattern
@@ -235,7 +235,7 @@ func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) 
 		if err != nil {
 			return err
 		}
-		if current.Origin == OriginBuiltin && patchChangesContent(patch) {
+		if current.Origin == OriginBuiltin && patchChangesBuiltinContent(patch) {
 			return ErrBuiltinPattern
 		}
 		next, err = applyPatternPatch(current, patch)
@@ -414,6 +414,20 @@ func (l *Library) DeleteProgram(id string) error {
 
 func (l *Library) seedBuiltins(ctx context.Context) error {
 	return l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, id := range motion.RetiredBuiltinPatternIDs() {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM patterns WHERE id = ? AND origin = 'builtin'`, id); err != nil {
+				return err
+			}
+		}
+		promotions := make([]promotedPatternState, 0, len(motion.PromotedBuiltinPatternDefinitions()))
+		for _, definition := range motion.PromotedBuiltinPatternDefinitions() {
+			state, err := findPromotedPatternState(ctx, tx, definition)
+			if err != nil {
+				return err
+			}
+			promotions = append(promotions, state)
+		}
+
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		for _, definition := range motion.BuiltinPatternDefinitions() {
 			points, _ := json.Marshal(definition.Points)
@@ -423,7 +437,7 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 					cycle_ms, points_json, tags_json, created_at, updated_at)
 				VALUES(?, ?, ?, 'builtin', ?, 1, 1.0, ?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
-					name = excluded.name, description = excluded.description,
+					description = excluded.description,
 					origin = 'builtin', kind = excluded.kind, cycle_ms = excluded.cycle_ms,
 					points_json = excluded.points_json, tags_json = excluded.tags_json,
 					updated_at = excluded.updated_at
@@ -433,8 +447,88 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 				return err
 			}
 		}
+		for _, promotion := range promotions {
+			if promotion.transferPreference {
+				if _, err := tx.ExecContext(ctx, `
+					UPDATE patterns SET enabled = ?, weight = ?, updated_at = ? WHERE id = ?
+				`, boolInt(promotion.enabled), promotion.weight, now, promotion.canonicalID); err != nil {
+					return err
+				}
+			}
+			for _, duplicateID := range promotion.duplicateIDs {
+				if _, err := tx.ExecContext(ctx, `DELETE FROM patterns WHERE id = ? AND origin = 'user'`, duplicateID); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	})
+}
+
+type promotedPatternState struct {
+	canonicalID        string
+	transferPreference bool
+	enabled            bool
+	weight             float64
+	duplicateIDs       []string
+}
+
+func findPromotedPatternState(ctx context.Context, tx *sql.Tx, definition motion.PatternDefinition) (promotedPatternState, error) {
+	state := promotedPatternState{canonicalID: string(definition.ID)}
+	var canonicalExists int
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM patterns WHERE id = ?)`, definition.ID).Scan(&canonicalExists); err != nil {
+		return promotedPatternState{}, err
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, enabled, weight, kind, cycle_ms, points_json
+		FROM patterns
+		WHERE origin = 'user' AND name = ? COLLATE NOCASE
+		ORDER BY updated_at DESC, id
+	`, definition.Name)
+	if err != nil {
+		return promotedPatternState{}, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, kind, pointsJSON string
+		var enabled int
+		var weight float64
+		var cycleMillis int64
+		if err := rows.Scan(&id, &enabled, &weight, &kind, &cycleMillis, &pointsJSON); err != nil {
+			return promotedPatternState{}, err
+		}
+		var points []motion.CurvePoint
+		if json.Unmarshal([]byte(pointsJSON), &points) != nil || kind != definition.Kind ||
+			cycleMillis != definition.CycleMillis || !sameCurvePoints(points, definition.Points) {
+			continue
+		}
+		if id == string(definition.ID) {
+			continue
+		}
+		if canonicalExists == 0 && !state.transferPreference {
+			state.transferPreference = true
+			state.enabled = enabled != 0
+			state.weight = weight
+		}
+		state.duplicateIDs = append(state.duplicateIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return promotedPatternState{}, err
+	}
+	return state, nil
+}
+
+func sameCurvePoints(left, right []motion.CurvePoint) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index].TimeMillis != right[index].TimeMillis ||
+			math.Abs(left[index].PositionPercent-right[index].PositionPercent) > 0.000001 {
+			return false
+		}
+	}
+	return true
 }
 
 func (l *Library) insertPattern(pattern Pattern) error {
@@ -658,9 +752,9 @@ func userContentID(prefix, name string) string {
 	return prefix + "-" + slug + "-" + hex.EncodeToString(buffer)
 }
 
-func patchChangesContent(patch PatternPatch) bool {
-	return patch.Name != nil || patch.Description != nil || patch.Kind != nil ||
-		patch.CycleMillis != nil || patch.Points != nil || patch.Tags != nil
+func patchChangesBuiltinContent(patch PatternPatch) bool {
+	return patch.Description != nil || patch.Kind != nil || patch.CycleMillis != nil ||
+		patch.Points != nil || patch.Tags != nil
 }
 
 func normalizeKind(kind string) string {

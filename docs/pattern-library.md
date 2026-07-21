@@ -29,31 +29,48 @@ one as the other.
 
 ## Built-In Catalog
 
-The built-in catalog contains three established patterns (`Stroke`, `Pulse`,
-and `Tease`) plus 24 clearly labeled experimental patterns. The original set is
-`Waves`, `Climb`, `Flutter`, `Sway`, `Drift`, `Double Tap`, `Cascade`,
-`Pendulum`, `Cradle`, `Surge`, `Rolling`, and `Syncopate`. The motion-sampled
-set is `Four-Level Circuit`, `High-Low Blocks`, `Deep-Shallow Sequence`,
-`Short-Medium Steps`, `Top-Anchored Depths`, `Deep Bookends`, `One Deep, Three
-Shallow`, `Lower Midrange Mix`, `Mid-to-Top Switch`, `Slow-to-Fast Full`,
-`Midrange with Full Finish`, and `Deep-Partial Sequence`.
+The built-in catalog contains 29 patterns: three established patterns
+(`Stroke`, `Pulse`, and `Tease`), 18 accepted generated patterns, six new
+experimental replacements, and two timing-preserved user-curated patterns.
+`experimental` is now an active review state rather than a historical label:
+retained patterns no longer carry the tag or the `Experimental:` description
+prefix. Only `Deep, Medium, Short`, `Falling Crest`, `Three Deep, One Short`,
+`Descending Ladder`, `Wandering Swell`, and `Rising Reach` are experimental.
 
-The second set was selected from 899 user-provided funscripts across three
-local collections. Analysis reduced each action stream to semantic reversal
-extrema, then considered complete phrases with endpoint closure, meaningful
-travel, bounded reversal spacing, and a coherent repeating structure. Source
-filenames played no role in naming, descriptions, tags, or selection, because
-those names do not describe motion feel. Only the transformed sparse positions
-and normalized relative timing are committed; source paths, filenames, and
-payloads are not retained.
+The replacement pass used live library feedback from a connected device. The
+six disabled patterns were `Deep Bookends`, `Lower Midrange Mix`, `Midrange
+with Full Finish`, `Mid-to-Top Switch`, `One Deep, Three Shallow`, and
+`Top-Anchored Depths`. Their shared weakness was not simply regularity. Each
+repeated a nearly fixed endpoint; four mixed in 10-20% micro-strokes and the
+other two repeated nearly identical 30-40% spans near the reversal floor. That
+combination produced limited phrase variation and physically jittery or shaking
+motion. Regular full-range motion remains a useful, deliberate behavior.
 
-Every experimental entry is a complete cycle with an explicit return to its
-starting position. The generator stretches a cycle only to satisfy the same
-reversal and acceleration budgets as every other built-in; it never truncates a
-random interval. Users can inspect, audition, disable, weight, and export these
-entries exactly like other built-ins. Existing databases receive them through
-the catalog's idempotent built-in seed, so this expansion does not require a
-schema migration and preserves user enablement and weights.
+Replacement screening again reduced source action streams to reversal extrema
+and considered only complete phrases whose final source travel closed onto the
+first point. The six selected phrases come from six distinct source
+fingerprints. Each generated replacement has at least 30% travel per stroke,
+four amplitude bands, no endpoint band used more than twice, and no run longer
+than two near-equal stroke amplitudes. Generator tests also retain the 450 ms
+reversal-gap and 3000 relative-position/s2 acceleration budgets. Source
+filenames played no role in selection, names, descriptions, or tags; source
+paths, filenames, and payloads are not retained.
+
+`Hard and Regular` and `playful jerk` are exact curves promoted from the live
+user library. Their accepted timing is intentionally preserved instead of being
+passed through the generated-pattern time fitter, which would change their
+feel. They carry the `curated` tag, are bounded by the same persisted motion
+envelope, and still play only through the shared engine. On an existing
+database, seed reconciliation transfers enabled state and weight from an exact
+name-and-curve match to the canonical built-in, then removes only that proven
+duplicate. Similar names or edited curves are left untouched.
+
+The seed also removes the six explicitly retired built-in IDs, including their
+cascading feedback rows, and inserts the six replacement IDs. No SQLite schema
+change is required. Existing names, enablement, and weights on retained
+built-ins remain user-owned. The library's inline rename control changes the
+display name for any pattern and persists it across restart; IDs and built-in
+curve content remain immutable, so chat and playback keep a stable contract.
 
 ## Sampling And Authoring
 
@@ -129,10 +146,11 @@ available.
 
 Model permissions further narrow that catalog. Turning pattern selection off
 removes pattern fields and skips the pattern-store read for the turn. Turning
-experimental patterns off (the default) excludes `experimental`-tagged rows
-while retaining the three established built-ins. Area focus is independent of
-catalog storage. These permissions persist in the existing versioned settings
-document in SQLite and therefore do not add a table or schema migration.
+experimental patterns off (the default) excludes the six replacement rows
+while retaining all accepted and user-curated built-ins. Area focus is
+independent of catalog storage. These permissions persist in the existing
+versioned settings document in SQLite and therefore do not add a table or
+schema migration.
 
 Interactive chat receives the current engine target and a bounded tail of
 recent chat-selected pattern ids from the runtime trace ring. Steady and
@@ -157,9 +175,11 @@ SQLite schema v8 introduced (and later schema versions retain):
 - `pattern_feedback` for the reversible rating ledger
 - `app_kv['patterns.auto_disable']` for the opt-in preference
 
-Built-ins are seeded idempotently on open while preserving user enablement and
-weights. Library writes use the datastore transaction helper. Runtime databases,
-WAL files, imports, and exports remain user data and are never committed.
+Built-ins are seeded idempotently on open while preserving user names,
+enablement, and weights. Explicit catalog retirement and exact-curve promotion
+also run in that transaction. Library writes use the datastore transaction
+helper. Runtime databases, WAL files, imports, and exports remain user data and
+are never committed.
 
 Schema v8 also reconciles databases produced by the divergent `Rockfire`
 branch. It preserves Rockfire-only motion-block, funscript, queue, persona, and

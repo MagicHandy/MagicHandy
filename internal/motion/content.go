@@ -29,6 +29,8 @@ const (
 	// library but exposed to the model only behind the user's
 	// experimental-patterns capability gate.
 	TagExperimental = "experimental"
+	// TagCurated marks exact user-tested curves promoted into the built-in catalog.
+	TagCurated = "curated"
 )
 
 // CurvePoint is one relative 0..100 motion sample at wall-clock time.
@@ -71,11 +73,18 @@ type Curve struct {
 	loop     bool
 }
 
-var builtinPatternCatalog = append([]PatternDefinition{
-	generateStrokePattern(),
-	generatePulsePattern(),
-	generateTeasePattern(),
-}, generateExperimentalPatterns()...)
+var builtinPatternCatalog = buildBuiltinPatternCatalog()
+
+func buildBuiltinPatternCatalog() []PatternDefinition {
+	definitions := []PatternDefinition{
+		generateStrokePattern(),
+		generatePulsePattern(),
+		generateTeasePattern(),
+	}
+	definitions = append(definitions, generateCatalogPatterns()...)
+	definitions = append(definitions, PromotedBuiltinPatternDefinitions()...)
+	return definitions
+}
 
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
 func NewCurve(points []CurvePoint, durationMillis int64, loop bool) (Curve, error) {
@@ -465,19 +474,20 @@ func generateTeasePattern() PatternDefinition {
 	})
 }
 
-type experimentalPatternSpec struct {
+type catalogPatternSpec struct {
 	ID           PatternID
 	Name         string
 	Description  string
 	Positions    []float64
 	TravelMillis []int64
 	Tags         []string
+	Experimental bool
 }
 
-// experimentalPatternSpecs are deliberately selected complete cycles. None is
+// catalogPatternSpecs are deliberately selected complete cycles. None is
 // a random excerpt; every final travel interval closes the shape back onto its
 // first point before the hardware-budget pass runs.
-var experimentalPatternSpecs = []experimentalPatternSpec{
+var catalogPatternSpecs = []catalogPatternSpec{
 	{
 		ID: PatternWaves, Name: "Waves", Description: "Strokes swell deeper, crest, and recede.",
 		Positions:    []float64{30, 55, 25, 75, 20, 95, 25, 75, 30, 55},
@@ -575,34 +585,28 @@ var experimentalPatternSpecs = []experimentalPatternSpec{
 		Tags:         []string{"short", "medium", "lower-return"},
 	},
 	{
-		ID: PatternTopAnchoredDepths, Name: "Top-Anchored Depths", Description: "A common upper return visits shallow, deep, and medium depths.",
-		Positions:    []float64{100, 88, 100, 10, 100, 60, 100, 60},
-		TravelMillis: []int64{777, 485, 874, 1650, 809, 566, 469, 970},
-		Tags:         []string{"upper-return", "depth-cycle", "varied"},
+		ID: PatternDeepMediumShortPairs, Name: "Deep, Medium, Short", Description: "Paired strokes move from broad reaches through medium and shorter ranges.",
+		Positions:    []float64{10, 90, 0, 40, 10, 60, 0, 40},
+		TravelMillis: []int64{1246, 1134, 1466, 534, 500, 733, 400, 533},
+		Tags:         []string{"paired", "range-change", "descending"}, Experimental: true,
 	},
 	{
-		ID: PatternDeepBookends, Name: "Deep Bookends", Description: "Deep sweeps surround one short and one medium lower-anchored stroke.",
-		Positions:    []float64{0, 80, 0, 10, 0, 30, 0, 80},
-		TravelMillis: []int64{1262, 901, 505, 433, 1046, 1298, 686, 469},
-		Tags:         []string{"deep", "bookended", "lower-return"},
+		ID: PatternFallingCrest, Name: "Falling Crest", Description: "Broad strokes lower successive upper reversals while the return point wanders.",
+		Positions:    []float64{100, 11, 89, 0, 78, 33, 67, 0},
+		TravelMillis: []int64{719, 640, 602, 927, 1177, 669, 1039, 1545},
+		Tags:         []string{"descending", "broad", "migrating"}, Experimental: true,
 	},
 	{
-		ID: PatternOneDeepThreeShallow, Name: "One Deep, Three Shallow", Description: "One deep upper-anchored stroke resolves through three shallow pulses.",
-		Positions:    []float64{100, 40, 100, 90, 100, 90, 100, 90},
-		TravelMillis: []int64{1034, 2171, 552, 448, 534, 552, 672, 637},
-		Tags:         []string{"deep", "shallow", "upper-return"},
+		ID: PatternThreeDeepOneShort, Name: "Three Deep, One Short", Description: "A grouped run of broad strokes resolves with one shorter phrase.",
+		Positions:    []float64{0, 100, 20, 90, 0, 100, 10, 50},
+		TravelMillis: []int64{1615, 1139, 1020, 1273, 1574, 1366, 1241, 1606},
+		Tags:         []string{"deep", "grouped", "contrast"}, Experimental: true,
 	},
 	{
-		ID: PatternLowerMidrangeMix, Name: "Lower Midrange Mix", Description: "Restrained lower-half strokes vary their center and depth.",
-		Positions:    []float64{0, 50, 10, 40, 0, 40, 0, 40, 0, 40},
-		TravelMillis: []int64{492, 493, 492, 493, 492, 1149, 493, 492, 493, 1511},
-		Tags:         []string{"restrained", "lower", "midrange"},
-	},
-	{
-		ID: PatternMidTopSwitch, Name: "Mid-to-Top Switch", Description: "Broad midrange strokes switch into a tight block of upper pulses.",
-		Positions:    []float64{20, 80, 20, 100, 80, 100, 80, 100},
-		TravelMillis: []int64{998, 608, 1130, 521, 694, 651, 1521, 477},
-		Tags:         []string{"zones", "midrange", "upper"},
+		ID: PatternDescendingLadder, Name: "Descending Ladder", Description: "Both endpoints step downward before one broad rebound.",
+		Positions:    []float64{100, 50, 90, 40, 80, 20, 100, 60},
+		TravelMillis: []int64{445, 468, 410, 439, 474, 730, 1657, 784},
+		Tags:         []string{"stepped", "descending", "rebound"}, Experimental: true,
 	},
 	{
 		ID: PatternSlowFastFull, Name: "Slow-to-Fast Full", Description: "Two measured full strokes transition into a run of faster full strokes.",
@@ -611,10 +615,10 @@ var experimentalPatternSpecs = []experimentalPatternSpec{
 		Tags:         []string{"full", "tempo-change", "accelerating"},
 	},
 	{
-		ID: PatternMidrangeFullFinish, Name: "Midrange with Full Finish", Description: "Restrained midrange pulses grow into one full-range sweep.",
-		Positions:    []float64{20, 50, 20, 50, 20, 60, 20, 100},
-		TravelMillis: []int64{692, 656, 588, 553, 484, 760, 1831, 1036},
-		Tags:         []string{"midrange", "build", "full-finish"},
+		ID: PatternWanderingSwell, Name: "Wandering Swell", Description: "Changing centers and stroke spans build toward a full closing sweep.",
+		Positions:    []float64{20, 80, 10, 60, 30, 90, 20, 79, 4, 100},
+		TravelMillis: []int64{767, 1535, 701, 400, 801, 901, 634, 1668, 1268, 834},
+		Tags:         []string{"migrating", "swell", "varied"}, Experimental: true,
 	},
 	{
 		ID: PatternDeepPartialSequence, Name: "Deep-Partial Sequence", Description: "Lower returns mix full-depth and partial-depth strokes with uneven accents.",
@@ -622,34 +626,45 @@ var experimentalPatternSpecs = []experimentalPatternSpec{
 		TravelMillis: []int64{462, 462, 462, 463, 1418, 496, 1452, 453, 471, 461},
 		Tags:         []string{"uneven", "deep", "partial"},
 	},
+	{
+		ID: PatternRisingReach, Name: "Rising Reach", Description: "Alternating returns reach progressively higher before a full release.",
+		Positions:    []float64{10, 50, 0, 60, 20, 60, 10, 70, 0, 90},
+		TravelMillis: []int64{501, 467, 501, 467, 467, 467, 500, 501, 1068, 834},
+		Tags:         []string{"progressive", "ascending", "varied"}, Experimental: true,
+	},
 }
 
-func generateExperimentalPatterns() []PatternDefinition {
-	definitions := make([]PatternDefinition, 0, len(experimentalPatternSpecs))
-	for _, spec := range experimentalPatternSpecs {
-		definitions = append(definitions, generateExperimentalPattern(spec))
+func generateCatalogPatterns() []PatternDefinition {
+	definitions := make([]PatternDefinition, 0, len(catalogPatternSpecs))
+	for _, spec := range catalogPatternSpecs {
+		definitions = append(definitions, generateCatalogPattern(spec))
 	}
 	return definitions
 }
 
-func generateExperimentalPattern(spec experimentalPatternSpec) PatternDefinition {
+func generateCatalogPattern(spec catalogPatternSpec) PatternDefinition {
 	if len(spec.Positions) < 2 || len(spec.TravelMillis) != len(spec.Positions) {
-		panic("experimental pattern requires one closing travel interval per position")
+		panic("catalog pattern requires one closing travel interval per position")
 	}
 	points := make([]CurvePoint, 0, len(spec.Positions)+1)
 	points = append(points, CurvePoint{PositionPercent: spec.Positions[0]})
 	elapsed := int64(0)
 	for index, travelMillis := range spec.TravelMillis {
 		if travelMillis <= 0 {
-			panic("experimental pattern travel time must be positive")
+			panic("catalog pattern travel time must be positive")
 		}
 		elapsed += travelMillis
 		next := spec.Positions[(index+1)%len(spec.Positions)]
 		points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: next})
 	}
-	tags := append([]string{TagExperimental}, spec.Tags...)
+	description := spec.Description
+	tags := append([]string(nil), spec.Tags...)
+	if spec.Experimental {
+		description = "Experimental: " + description
+		tags = append([]string{TagExperimental}, tags...)
+	}
 	return mustFitCatalog(PatternDefinition{
-		ID: spec.ID, Name: spec.Name, Description: "Experimental: " + spec.Description,
+		ID: spec.ID, Name: spec.Name, Description: description,
 		Kind: PatternKindRoutine, CycleMillis: elapsed, Points: points, Tags: tags,
 	})
 }

@@ -22,13 +22,13 @@ const (
 	PatternPulse PatternID = "pulse"
 	// PatternTease is a fixed shallow-to-deep pattern.
 	PatternTease PatternID = "tease"
-	// PatternWaves is the experimental swelling-amplitude pattern.
+	// PatternWaves is the swelling-amplitude pattern.
 	PatternWaves PatternID = "waves"
-	// PatternClimb is the experimental ratcheting-build pattern.
+	// PatternClimb is the ratcheting-build pattern.
 	PatternClimb PatternID = "climb"
-	// PatternFlutter is the experimental shallow-flutter-with-sweep pattern.
+	// PatternFlutter is the shallow-flutter-with-sweep pattern.
 	PatternFlutter PatternID = "flutter"
-	// PatternSway is the experimental asymmetric broad-arc pattern.
+	// PatternSway is the asymmetric broad-arc pattern.
 	PatternSway PatternID = "sway"
 	// PatternDrift migrates a consistent stroke window across a cycle.
 	PatternDrift PatternID = "drift"
@@ -54,22 +54,38 @@ const (
 	PatternDeepShallowSequence PatternID = "deep-shallow-sequence"
 	// PatternShortMediumSteps repeats short and medium lower-anchored strokes.
 	PatternShortMediumSteps PatternID = "short-medium-steps"
-	// PatternTopAnchoredDepths cycles several depths from a common upper return.
+	// PatternTopAnchoredDepths identifies a retired upper-return catalog pattern.
 	PatternTopAnchoredDepths PatternID = "top-anchored-depths"
-	// PatternDeepBookends wraps short and medium strokes with deep sweeps.
+	// PatternDeepBookends identifies a retired lower-return catalog pattern.
 	PatternDeepBookends PatternID = "deep-bookends"
-	// PatternOneDeepThreeShallow follows one deep stroke with three shallow pulses.
+	// PatternOneDeepThreeShallow identifies a retired shallow-pulse catalog pattern.
 	PatternOneDeepThreeShallow PatternID = "one-deep-three-shallow"
-	// PatternLowerMidrangeMix varies restrained strokes in the lower half.
+	// PatternLowerMidrangeMix identifies a retired lower-midrange catalog pattern.
 	PatternLowerMidrangeMix PatternID = "lower-midrange-mix"
-	// PatternMidTopSwitch moves from broad midrange strokes to tight upper pulses.
+	// PatternMidTopSwitch identifies a retired upper-pulse catalog pattern.
 	PatternMidTopSwitch PatternID = "mid-top-switch"
 	// PatternSlowFastFull changes from slow full strokes to fast full strokes.
 	PatternSlowFastFull PatternID = "slow-fast-full"
-	// PatternMidrangeFullFinish grows restrained midrange strokes into a full sweep.
+	// PatternMidrangeFullFinish identifies a retired repeated-midrange pattern.
 	PatternMidrangeFullFinish PatternID = "midrange-full-finish"
 	// PatternDeepPartialSequence mixes full and partial lower-anchored strokes.
 	PatternDeepPartialSequence PatternID = "deep-partial-sequence"
+	// PatternDeepMediumShortPairs moves through paired reach bands.
+	PatternDeepMediumShortPairs PatternID = "deep-medium-short-pairs"
+	// PatternFallingCrest lowers successive upper reversals across broad strokes.
+	PatternFallingCrest PatternID = "falling-crest"
+	// PatternThreeDeepOneShort resolves grouped broad strokes with a shorter phrase.
+	PatternThreeDeepOneShort PatternID = "three-deep-one-short"
+	// PatternDescendingLadder steps both endpoints downward before rebounding.
+	PatternDescendingLadder PatternID = "descending-ladder"
+	// PatternWanderingSwell changes both center and reach before a full sweep.
+	PatternWanderingSwell PatternID = "wandering-swell"
+	// PatternRisingReach progressively extends alternating upper reversals.
+	PatternRisingReach PatternID = "rising-reach"
+	// PatternHardAndRegular is a promoted user-curated full-range rhythm.
+	PatternHardAndRegular PatternID = "hard-and-regular"
+	// PatternPlayfulJerk is a promoted user-curated staggered full-range rhythm.
+	PatternPlayfulJerk PatternID = "playful-jerk"
 )
 
 // AreaFocus constrains semantic sampling to a focus region.

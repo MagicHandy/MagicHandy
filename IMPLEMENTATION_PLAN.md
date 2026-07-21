@@ -1150,8 +1150,10 @@ paid for on a real device; do not rediscover them):
 - patterns are authored on a 0–100 **relative span** and projected into the
   stroke window exactly once at dispatch (double projection collapses
   amplitude into twitches)
-- the catalog is **generated parametrically** with wall-clock acceleration
-  and reversal-gap budgets enforced by the generator, not hand keyframes
+- generated catalog entries are **generated parametrically** with wall-clock
+  acceleration and reversal-gap budgets enforced by the generator, not hand
+  keyframes; exact user-tested timing exceptions are explicitly tagged
+  `curated` and still use the shared engine/envelope
 - sampling is **time-parameterized monotone cubic** (PCHIP-style): C1 in
   wall time, no overshoot, zero-velocity reversals
 - routine pattern cycles get a **~6.6 s floor** (time-only stretch; burst
@@ -1174,12 +1176,21 @@ Implementation evidence: unit/API/UI tests cover generated catalogs,
 PCHIP sampling, acceleration/reversal budgets, relative projection, funscript
 normalization, long-gap stripping, finite-program completion, controller
 ownership, disabled-pattern rejection, curation fallback, feedback undo, and
-backend previews. A follow-up content slice expanded the catalog to 24
-experimental patterns. Twelve new loops were selected from semantic reversal
-structures across the supplied local funscript collections; source filenames
-did not influence or enter pattern metadata. Only transformed sparse curves are
-committed, and the existing idempotent built-in seed adds them without a schema
-migration. Long imported loop cycles remain valid above the 6.6-second
+backend previews. A follow-up content slice expanded the catalog with 24
+generated patterns. Live device curation then retired six disabled loops whose
+fixed-endpoint shallow strokes or repeated same-span strokes produced jittery
+motion. Six complete-cycle replacements from distinct source fingerprints add
+minimum-travel, amplitude-band, endpoint-diversity, and repetition checks on top
+of the existing acceleration/reversal budgets. Only those replacements remain
+tagged experimental; accepted generated loops no longer carry a provisional
+label. Exact `Hard and Regular` and `playful jerk` user curves are promoted as
+timing-preserved curated built-ins. Idempotent seed reconciliation removes the
+retired IDs, deduplicates only exact promoted curves, and preserves names,
+enablement, and weights without a schema migration. Inline rename updates any
+pattern's display name while stable IDs and built-in curve content remain
+immutable. Source filenames did not influence or enter pattern metadata. Only
+transformed sparse curves are committed. Long imported loop cycles remain valid
+above the 6.6-second
 minimum; compact curves combine backend samples with saved knots, and the Import
 tab reports the 255 essential-knot shape limit instead of imposing a duration
 cap. The rendered React workspace was exercised at 1280 px and
@@ -1192,8 +1203,10 @@ submitted payloads. Its integrated timeline was rendered at 1280x800 and
 wheel zoom, horizontal timeline panning, a proportional draggable viewport
 scrollbar, and an exact 4:15 / 16-knot end-to-end program import. A refreshed
 complete five-tab rendered pass remains useful after future shared-shell changes.
-The remaining manual evidence is the routine-cycle feel check on the real device,
-capped below 40% intensity; synthetic tests cannot establish physical feel.
+The remaining manual evidence is the six replacement-pattern feel check on the
+real device, capped below 40% intensity; synthetic tests cannot establish
+physical feel. The six retired rows and two promoted user curves reflect prior
+live curation, not a new automated hardware run.
 
 ## Done Criteria
 

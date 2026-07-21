@@ -66,7 +66,7 @@ export function PatternLibraryRoute() {
     }));
   }
 
-  async function patchPattern(id: string, patch: Partial<Pick<LibraryPattern, "enabled" | "weight">>): Promise<boolean> {
+  async function patchPattern(id: string, patch: Partial<Pick<LibraryPattern, "name" | "enabled" | "weight">>): Promise<boolean> {
     return withBusy(libraryActionKey.pattern(id), async () => {
       const response = await api.patchPattern(id, patch);
       replacePattern(response.pattern);

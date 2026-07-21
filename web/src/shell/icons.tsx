@@ -200,3 +200,14 @@ export const SaveIcon = ({ size = 18, className }: P) => (
     <path d="M8 4v6h8V4M8 20v-6h8v6" />
   </svg>
 );
+export const PencilIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z" />
+    <path d="m14 7 3 3M4 20h5" />
+  </svg>
+);
+export const CheckIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="m5 12 4 4L19 6" />
+  </svg>
+);
