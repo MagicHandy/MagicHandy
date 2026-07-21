@@ -31,11 +31,16 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   }
   const stateLabel = state === "completing" ? "Completing" : state.charAt(0).toUpperCase() + state.slice(1);
   const roundedPosition = Math.round(pos);
-  const speed = typeof engine?.target?.speed_percent === "number" ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%` : "--";
-  let target = engine?.target?.label?.trim();
-  if (!target) {
-    target = starting ? "Starting motion" : running ? "Engine motion" : "No active motion";
-  }
+  const active = running || starting || paused || engine?.completing === true;
+  const speed = active && typeof engine?.target?.speed_percent === "number"
+    ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%`
+    : "--";
+  const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
+  const patternName = active
+    ? resolvedPatternName || (engine?.target?.program_id ? "Program playback" : "Unknown pattern")
+    : "No active pattern";
+  const rawSource = engine?.target?.source?.trim();
+  const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";
   // The stroking sleeve rides a vertical channel on the body's right edge, the
   // way The Handy 2's sleeve carriage travels. 100% is the top of the channel.
   const travelTop = 30;
@@ -44,7 +49,7 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const rangeTop = toChannelY(max);
   const rangeBottom = toChannelY(min);
   const carriageStyle = { "--viz-carriage-y": `${toChannelY(pos)}px` } as CSSProperties;
-  const label = `Motion ${state}; commanded position estimate ${roundedPosition} percent; stroke range ${Math.round(min)} to ${Math.round(max)} percent`;
+  const label = `Motion ${state}; pattern ${patternName}; commanded position estimate ${roundedPosition} percent; stroke range ${Math.round(min)} to ${Math.round(max)} percent`;
 
   return (
     <div className={`visualizer${mini ? " mini" : ""}`} data-state={state} role="img" aria-label={label}>
@@ -74,17 +79,17 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
       </svg>
       {!mini && (
         <div className="viz-telemetry">
-          <div className="viz-primary">
-            <span>Commanded position estimate</span>
-            <strong>{roundedPosition}%</strong>
+          <div className="viz-summary">
+            <span className="viz-state"><span className="viz-state-dot" aria-hidden="true" />{stateLabel}</span>
+            <span className="viz-commanded"><strong>{roundedPosition}%</strong><small>commanded</small></span>
+          </div>
+          <div className="viz-pattern">
+            <span>Pattern</span>
+            <strong title={patternName}>{patternName}</strong>
           </div>
           <dl className="viz-metrics">
             <div>
-              <dt>State</dt>
-              <dd><span className="viz-state-dot" aria-hidden="true" />{stateLabel}</dd>
-            </div>
-            <div>
-              <dt>Stroke</dt>
+              <dt>Range</dt>
               <dd>{Math.round(min)}-{Math.round(max)}%</dd>
             </div>
             <div>
@@ -92,8 +97,8 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
               <dd>{speed}</dd>
             </div>
             <div>
-              <dt>Target</dt>
-              <dd title={target}>{target}</dd>
+              <dt>Source</dt>
+              <dd title={source}>{source}</dd>
             </div>
           </dl>
         </div>

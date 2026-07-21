@@ -336,9 +336,9 @@ textarea:disabled {
 /* ---- Motion visualizer ---- */
 .visualizer {
   display: grid;
-  grid-template-columns: minmax(78px, 96px) minmax(0, 1fr);
-  align-items: center;
-  gap: 14px;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
   min-width: 0;
 }
 .visualizer.mini {
@@ -350,11 +350,13 @@ textarea:disabled {
 .viz-device {
   display: block;
   width: 100%;
+  max-width: 62px;
   height: auto;
   aspect-ratio: 96 / 132;
 }
 .visualizer.mini .viz-device {
   width: 30px;
+  max-width: none;
   height: 40px;
 }
 /* The Handy 2 body: a charcoal capsule held vertically. */
@@ -450,55 +452,89 @@ textarea:disabled {
   background: var(--danger);
 }
 .viz-telemetry {
+  display: grid;
+  gap: 7px;
   min-width: 0;
 }
-.viz-primary {
+.viz-summary {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-bottom: 7px;
-  border-bottom: 1px solid var(--line);
 }
-.viz-primary span {
-  color: var(--muted);
-  font-size: 0.7rem;
-  line-height: 1.25;
-}
-.viz-primary strong {
-  flex: 0 0 auto;
+.viz-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--text);
-  font-size: 1.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.viz-commanded {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+.viz-commanded strong {
+  color: var(--text);
+  font-size: 1rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+.viz-commanded small,
+.viz-pattern span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+.viz-pattern {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.viz-pattern strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .viz-metrics {
   display: grid;
-  gap: 4px;
-  margin: 7px 0 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
 }
 .viz-metrics > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
   min-width: 0;
+  padding: 0 6px;
+  border-left: 1px solid var(--line);
+}
+.viz-metrics > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.viz-metrics > div:last-child {
+  padding-right: 0;
 }
 .viz-metrics dt,
 .viz-metrics dd {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 }
 .viz-metrics dt {
   color: var(--muted);
 }
 .viz-metrics dd {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   min-width: 0;
-  max-width: 64%;
   overflow: hidden;
   color: var(--text);
   font-variant-numeric: tabular-nums;

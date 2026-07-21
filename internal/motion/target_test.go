@@ -69,6 +69,23 @@ func TestSamplerSupportsFixedPatternsAreaFocusAndSoftAnchor(t *testing.T) {
 	}
 }
 
+func TestMotionPlanPublishesResolvedPatternName(t *testing.T) {
+	builtin := NewMotionPlan("builtin", MotionTarget{PatternID: PatternPulse}, config.DefaultSettings().Motion, 0, 0, time.Unix(0, 0))
+	if builtin.Target.PatternName != "Pulse" {
+		t.Fatalf("builtin pattern name = %q, want Pulse", builtin.Target.PatternName)
+	}
+
+	custom := PatternDefinition{
+		ID: "custom-loop", Name: "Custom Loop", Kind: PatternKindRoutine,
+		CycleMillis: RoutineCycleFloorMillis,
+		Points:      []CurvePoint{{TimeMillis: 0}, {TimeMillis: 3300, PositionPercent: 100}, {TimeMillis: 6600}},
+	}
+	resolved := NewMotionPlan("custom", MotionTarget{Pattern: &custom}, config.DefaultSettings().Motion, 0, 0, time.Unix(0, 0))
+	if resolved.Target.PatternName != custom.Name {
+		t.Fatalf("custom pattern name = %q, want %q", resolved.Target.PatternName, custom.Name)
+	}
+}
+
 func TestSamePatternRetargetPreservesPhase(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	started := time.Unix(0, 0)

@@ -116,8 +116,9 @@ with Save reachable.
 `#/chat` is the primary workspace: the main column holds the canonical
 conversation, while the control column holds the compact Autopilot session
 control, voice shortcuts, reverse/style motion behavior, and the motion
-visualizer. Autopilot Pause/Resume stays in that control sidebar and its
-generated lines appear in the conversation instead of a duplicate status card.
+visualizer in an attached bottom status band. Autopilot Pause/Resume stays in
+that control sidebar and its generated lines appear in the conversation instead
+of a duplicate status card.
 The route uses the full remaining workspace width and height rather than the
 default content-width cap. A compact horizontal tab strip sits above the
 conversation: saved sessions remain available across restarts, while at most
@@ -168,7 +169,9 @@ One component, one source of truth.
 - Uses a restrained vertical Handy 2-inspired body and sleeve rather than an
   abstract progress bar. The configured stroke envelope surrounds the moving
   sleeve, which follows the backend sample position. Detailed telemetry names
-  state, target speed, and active target without adding controls to the artwork.
+  state, target speed, range, source, and the backend-resolved active pattern
+  without adding controls to the artwork. On Chat, this compact telemetry is an
+  attached status band in the control rail rather than a floating panel.
 - Is never itself a click target: controls are separate, labeled elements
   (limits live in the connection manager and behavior lives in Chat), not
   artwork turned into a mystery button.

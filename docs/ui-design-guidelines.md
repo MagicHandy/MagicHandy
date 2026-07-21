@@ -122,8 +122,10 @@ The current React status bar uses compact readouts; the retired legacy
 - the run timer is `--muted` label + tabular-nums value with a clock icon.
 
 The one authoritative visualizer keeps a compact vertical Handy 2-inspired body
-and sleeve in the status bar and its detailed form on the Chat page. One
-component, engine-driven, with position labeled as a commanded estimate.
+and sleeve in the status bar and its detailed form in an attached motion-status
+band at the bottom of Chat's control rail. One component, engine-driven, with
+position labeled as a commanded estimate and the active pattern name resolved
+by the backend rather than inferred from client controls.
 
 ### Buttons
 
