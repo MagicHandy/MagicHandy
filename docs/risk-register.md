@@ -751,6 +751,10 @@ Mitigation:
   imposing a false 6.6-second maximum
 - route all playback through the shared engine and user speed/stroke envelope;
   controller ownership, Pause, and global Stop remain unchanged
+- for generated catalog loops, reject repeated fixed-endpoint micro-strokes and
+  repeated same-span runs before the acceleration/reversal fitter; keep
+  user-tested timing-preserved promotions visibly `curated` instead of implying
+  that generated-motion budgets were applied
 
 Exit evidence:
 
@@ -771,6 +775,16 @@ remains open. Three real-world scratch funscripts (3,536-7,394 actions over
 duration, while the old 74-point card preview omitted 102-190 stored knot times.
 Compact previews now insert saved knots, and impossible dense selections are
 blocked before upload by the backend's essential-knot contract.
+
+Status 2026-07-20: live curation identified and retired six built-ins that
+combined a fixed return point with 10-20% micro-strokes or repeated 30-40%
+spans near the reversal floor. Six replacement source cycles now have a 30%
+per-travel floor, at least four amplitude bands, bounded endpoint reuse, and no
+long equal-amplitude run before the existing acceleration/reversal fit. Only
+those six carry the experimental gate. `Hard and Regular` and `playful jerk`
+preserve their accepted user timing under a `curated` tag. Automated hardware
+motion was not run for the replacements; their below-40% physical-feel pass
+remains open.
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).

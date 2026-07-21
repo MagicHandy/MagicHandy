@@ -475,8 +475,12 @@ settings UI. Server-side chat continuity remains Phase 12 with ADR 0003.
 
 The library closes the planned pattern/training/player surface without copying
 the reference app's visual density or creating a second motion model. Browse
-exposes enabled state and visible weights; Programs keeps finite funscripts
-separate from loops; Import owns file intake — funscripts render a client-side
+exposes enabled state and visible weights. A compact pencil beside each pattern
+name opens an inline 80-character editor with explicit save/cancel icons,
+Enter-submit form behavior, and Escape cancellation. The backend owns the
+result; renamed display text persists for built-ins and user rows while IDs and
+built-in curves remain immutable. Programs keeps finite funscripts separate
+from loops; Import owns file intake — funscripts render a client-side
 raw-source trim timeline whose waveform, highlight, and fixed-size draggable
 action-snapped handles share one coordinate system. A compact icon toolbar makes
 pan, zoom, fit-selection, and fit-all actions discoverable. Vertical wheel input

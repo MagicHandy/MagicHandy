@@ -57,6 +57,20 @@ describe("pattern library components", () => {
     await waitFor(() => expect(weight).toHaveValue(1.75));
   });
 
+  it("renames patterns inline while keeping curve edits out of the browser", async () => {
+    const onRename = vi.fn();
+    render(<RenameBrowser onRename={onRename} />);
+
+    expect(screen.getByRole("button", { name: "Rename Stroke" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Rename Custom" }));
+    const input = screen.getByRole("textbox", { name: "Rename Custom" });
+    fireEvent.change(input, { target: { value: "Rolling custom" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("custom", "Rolling custom"));
+    await waitFor(() => expect(screen.getByRole("heading", { level: 3, name: "Rolling custom" })).toBeInTheDocument());
+  });
+
   it("clamps program progress and invalid intensity limits before rendering", () => {
     const props = {
       programs: [],
@@ -164,6 +178,32 @@ function NormalizedWeightBrowser() {
       busyKeys={new Set()}
       onPatch={async () => {
         setCurrent((value) => ({ ...value, weight: 1.75 }));
+        return true;
+      }}
+      onPlay={async () => {}}
+      onFeedback={async () => {}}
+      onExport={async () => {}}
+      onDelete={async () => {}}
+    />
+  );
+}
+
+function RenameBrowser({ onRename }: { onRename: (id: string, name: string) => void }) {
+  const [patterns, setPatterns] = useState<LibraryPattern[]>([
+    pattern,
+    { ...pattern, id: "stroke", name: "Stroke", origin: "builtin" },
+  ]);
+  return (
+    <PatternBrowser
+      patterns={patterns}
+      locked={false}
+      offline={false}
+      busyKeys={new Set()}
+      onPatch={async (id, patch) => {
+        if (patch.name) {
+          onRename(id, patch.name);
+          setPatterns((current) => current.map((item) => item.id === id ? { ...item, name: patch.name! } : item));
+        }
         return true;
       }}
       onPlay={async () => {}}

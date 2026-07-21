@@ -119,6 +119,30 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-20** - Hardware-feedback pattern curation and rename:
+  live inspection found 6 disabled rows among 29 patterns. `Deep Bookends`,
+  `Lower Midrange Mix`, `Midrange with Full Finish`, `Mid-to-Top Switch`,
+  `One Deep, Three Shallow`, and `Top-Anchored Depths` shared fixed-endpoint
+  micro-strokes or repeated same-span runs that produced limited variation and
+  jittery motion. They are explicitly retired and replaced by six complete
+  source cycles from distinct source fingerprints. Tests require each new
+  experimental replacement to keep at least 30% travel, four amplitude bands,
+  bounded endpoint reuse, and no long equal-amplitude run before the existing
+  acceleration/reversal fit. All retained patterns lose the experimental tag.
+  Exact `Hard and Regular` and `playful jerk` timing is promoted under a
+  `curated` tag; seed reconciliation preserves names, enablement, and weights
+  while removing only exact duplicates. Inline rename now works for every
+  pattern while IDs and built-in curves stay immutable. Fresh-data API QA found
+  29 total / 6 experimental / 2 curated / 0 retired rows. Desktop 1280x800 and
+  mobile 390x844 rendered checks found no body overflow; the mobile rename form
+  remained within the viewport. All 205 frontend tests, typecheck/build,
+  `go test ./...`, `go vet ./...`, `golangci-lint`, and plain/stripped
+  `CGO_ENABLED=0` builds pass. HTML/CSS/JS is 469,337 raw / 130,310 gzip bytes;
+  complete embedded output is 913,573 / 567,737. Plain/stripped binaries are
+  21,082,624 / 14,827,520 bytes. Local race testing remains unavailable because
+  `gcc` is absent from `PATH`; CI retains that gate. No automated hardware
+  motion was run, and physical feel for the six replacements remains open.
+
 - **2026-07-20** - Motion-semantic sampled loops and attached Chat status:
   899 user-provided funscripts across three local collections were reduced to
   reversal extrema and screened for complete, closed, meaningfully ranged

@@ -3,6 +3,7 @@ package patterns
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -58,6 +59,69 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	}
 }
 
+func TestLibraryReconcilesRetiredAndPromotedBuiltins(t *testing.T) {
+	dir := t.TempDir()
+	library, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	promoted := motion.PromotedBuiltinPatternDefinitions()
+	legacyUserIDs := make(map[motion.PatternID]string, len(promoted))
+	for index, definition := range promoted {
+		if _, err := library.db.SQL().Exec(`DELETE FROM patterns WHERE id = ?`, definition.ID); err != nil {
+			t.Fatal(err)
+		}
+		legacyUserID := fmt.Sprintf("pattern-promoted-legacy-%d", index)
+		legacyUserIDs[definition.ID] = legacyUserID
+		if err := library.insertPattern(Pattern{
+			ID: legacyUserID, Name: definition.Name, Description: "Imported funscript example.",
+			Origin: OriginUser, Kind: definition.Kind, Enabled: index == 1, Weight: 1.7 + float64(index)/10,
+			CycleMillis: definition.CycleMillis, Points: definition.Points, Tags: []string{"imported"},
+			CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := library.insertPattern(Pattern{
+		ID: string(motion.PatternDeepBookends), Name: "Deep Bookends", Origin: OriginBuiltin,
+		Kind: motion.PatternKindRoutine, Enabled: false, Weight: 1,
+		CycleMillis: motion.RoutineCycleFloorMillis,
+		Points: []motion.CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: motion.RoutineCycleFloorMillis / 2, PositionPercent: 80},
+			{TimeMillis: motion.RoutineCycleFloorMillis, PositionPercent: 0},
+		},
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	if _, err := reopened.Pattern(string(motion.PatternDeepBookends)); !errors.Is(err, ErrPatternNotFound) {
+		t.Fatalf("retired built-in error = %v, want ErrPatternNotFound", err)
+	}
+	for index, definition := range promoted {
+		if _, err := reopened.Pattern(legacyUserIDs[definition.ID]); !errors.Is(err, ErrPatternNotFound) {
+			t.Fatalf("promoted duplicate %q error = %v, want ErrPatternNotFound", definition.ID, err)
+		}
+		canonical, err := reopened.Pattern(string(definition.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if canonical.Origin != OriginBuiltin || canonical.Enabled != (index == 1) || canonical.Weight != 1.7+float64(index)/10 {
+			t.Fatalf("promoted canonical %q = %+v", definition.ID, canonical)
+		}
+	}
+}
+
 func TestAuthoredPatternIsSparseEditableAndShareable(t *testing.T) {
 	library, err := Open(t.TempDir())
 	if err != nil {
@@ -89,6 +153,46 @@ func TestAuthoredPatternIsSparseEditableAndShareable(t *testing.T) {
 	}
 	if imported.Pattern.ID == created.ID || imported.Pattern.Name != created.Name {
 		t.Fatalf("reimported pattern = %+v", imported.Pattern)
+	}
+}
+
+func TestPatternNamesAreEditableButBuiltinCurvesStayCanonical(t *testing.T) {
+	dir := t.TempDir()
+	library, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := library.CreatePattern(authoredFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "Renamed pattern"
+	renamed, err := library.UpdatePattern(created.ID, PatternPatch{Name: &name})
+	if err != nil || renamed.Name != name {
+		t.Fatalf("rename = %+v err=%v", renamed, err)
+	}
+	builtinName := "Renamed built-in"
+	builtin, err := library.UpdatePattern(string(motion.PatternStroke), PatternPatch{Name: &builtinName})
+	if err != nil || builtin.Name != builtinName {
+		t.Fatalf("built-in rename = %+v err=%v", builtin, err)
+	}
+	points := []motion.CurvePoint{{TimeMillis: 0}, {TimeMillis: motion.RoutineCycleFloorMillis}}
+	if _, err := library.UpdatePattern(string(motion.PatternStroke), PatternPatch{Points: &points}); !errors.Is(err, ErrBuiltinPattern) {
+		t.Fatalf("built-in curve edit error = %v, want ErrBuiltinPattern", err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	for id, want := range map[string]string{created.ID: name, string(motion.PatternStroke): builtinName} {
+		pattern, err := reopened.Pattern(id)
+		if err != nil || pattern.Name != want {
+			t.Fatalf("persisted name for %q = %q err=%v, want %q", id, pattern.Name, err, want)
+		}
 	}
 }
 

@@ -137,9 +137,25 @@ input[type="search"] {
 }
 .pattern-title-line {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.pattern-title-action {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+}
+.pattern-rename-form {
+  width: 100%;
+  flex-wrap: nowrap;
+}
+.pattern-rename-form input {
+  width: min(100%, 280px);
+  min-width: 80px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.9rem;
 }
 .origin-label {
   color: var(--muted);
@@ -972,6 +988,11 @@ input[type="search"] {
 }
 
 @media (max-width: 760px) {
+  .pattern-title-action {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
   .pattern-row,
   .program-row {
     grid-template-columns: 40px minmax(0, 1fr);
