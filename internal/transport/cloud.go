@@ -320,13 +320,21 @@ func percentFraction(value int) float64 {
 }
 
 func quantizeHandyPosition(position float64, reverse bool) (int, bool) {
+	mapped, ok := mapHandyPosition(position, reverse)
+	if !ok {
+		return 0, false
+	}
+	return int(math.Round(mapped)), true
+}
+
+func mapHandyPosition(position float64, reverse bool) (float64, bool) {
 	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 100 {
 		return 0, false
 	}
 	if reverse {
 		position = 100 - position
 	}
-	return int(math.Round(position)), true
+	return position, true
 }
 
 func validateStrokeWindow(command StrokeWindowCommand) error {

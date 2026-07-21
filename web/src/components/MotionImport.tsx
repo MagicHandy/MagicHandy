@@ -17,6 +17,10 @@ const MAX_SOURCE_ACTIONS = MAX_IMPORT_ACTIONS * 5;
 const MAX_IMPORT_BYTES = 8 * 1024 * 1024;
 const MAX_IMPORT_DURATION = 24 * 60 * 60 * 1000;
 const MAX_NAME_CHARS = 80;
+const MIN_PATTERN_SOURCE_SPAN = 5;
+const MIN_REVERSAL_PROMINENCE = 2;
+const MAX_CHATTER_FLANK_MS = 250;
+const CHATTER_CYCLE_PARTS = 25;
 type ParsedFile =
   | { type: "funscript"; stem: string; points: TimelinePoint[]; duration: number }
   | { type: "share"; file: File; kind: "pattern" | "program"; name: string }
@@ -44,10 +48,7 @@ export function MotionImport({ locked, importing, onImport }: Props) {
     if (!funscript) return [];
     return selectedActionPoints(funscript.points, trim.start, trim.end);
   }, [funscript, trim]);
-  const selectionSpan = kind === "pattern" && selection.length > 0 && selection.length <= MAX_IMPORT_ACTIONS
-    ? positionSpan(selection)
-    : 0;
-  const selectionProblem = !funscript ? "" : selectionProblemFor(selection, kind, selectionSpan);
+  const selectionProblem = !funscript ? "" : selectionProblemFor(selection, kind);
   const contentName = name.trim() || funscript?.stem || "Imported funscript";
   const nameProblem = Array.from(contentName).length > MAX_NAME_CHARS
     ? `Name must be ${MAX_NAME_CHARS} characters or fewer.`
@@ -242,18 +243,19 @@ function firstPointAfter(points: TimelinePoint[], at: number): number {
   return low;
 }
 
-function selectionProblemFor(selection: TimelinePoint[], kind: "pattern" | "program", span: number): string {
+function selectionProblemFor(selection: TimelinePoint[], kind: "pattern" | "program"): string {
   if (selection.length < 2 || selection[selection.length - 1].at === selection[0].at) {
     return "Select at least two actions with distinct times.";
   }
   if (selection.length > MAX_IMPORT_ACTIONS) {
     return `Selection has ${selection.length} actions; trim it to ${MAX_IMPORT_ACTIONS} or fewer.`;
   }
-  if (kind === "pattern" && span < 1) {
-    return "This selection has no usable motion span for a loop pattern.";
-  }
   if (kind === "pattern") {
-    const anchors = reversalAnchorCount(selection);
+    const stabilized = stabilizeReversalChatter(selection, MIN_REVERSAL_PROMINENCE);
+    if (positionSpan(stabilized) < MIN_PATTERN_SOURCE_SPAN) {
+      return `Select at least ${MIN_PATTERN_SOURCE_SPAN}% of source motion span for a loop pattern.`;
+    }
+    const anchors = reversalAnchorCount(stabilized);
     if (anchors > MAX_PATTERN_ANCHORS) {
       return `This loop has ${anchors} essential reversal knots; trim to a simpler section with ${MAX_PATTERN_ANCHORS} or fewer.`;
     }
@@ -262,21 +264,48 @@ function selectionProblemFor(selection: TimelinePoint[], kind: "pattern" | "prog
 }
 
 function reversalAnchorCount(points: TimelinePoint[]): number {
-  let anchors = 1;
-  let lastAnchor = 0;
+  return reversalAnchorIndexes(points).length;
+}
+
+function reversalAnchorIndexes(points: TimelinePoint[]): number[] {
+  if (points.length === 0) return [];
+  const anchors = [0];
   let previousDirection = 0;
   for (let index = 1; index < points.length; index++) {
     const delta = points[index].pos - points[index - 1].pos;
     const direction = Math.sign(delta);
     if (direction === 0) continue;
-    if (previousDirection !== 0 && direction !== previousDirection && lastAnchor !== index - 1) {
-      anchors += 1;
-      lastAnchor = index - 1;
+    if (previousDirection !== 0 && direction !== previousDirection && anchors[anchors.length - 1] !== index - 1) {
+      anchors.push(index - 1);
     }
     previousDirection = direction;
   }
-  if (lastAnchor !== points.length - 1) anchors += 1;
+  if (anchors[anchors.length - 1] !== points.length - 1) anchors.push(points.length - 1);
   return anchors;
+}
+
+function stabilizeReversalChatter(points: TimelinePoint[], minimumProminence: number): TimelinePoint[] {
+  const result = [...points];
+  while (result.length > 2) {
+    const anchors = reversalAnchorIndexes(result);
+    const duration = result[result.length - 1].at - result[0].at;
+    const chatterFlank = Math.max(1, Math.min(MAX_CHATTER_FLANK_MS, Math.floor(duration / CHATTER_CYCLE_PARTS)));
+    let removed = false;
+    for (let index = 1; index < anchors.length - 1; index++) {
+      const left = result[anchors[index - 1]].pos;
+      const current = result[anchors[index]].pos;
+      const right = result[anchors[index + 1]].pos;
+      const prominence = Math.min(Math.abs(current - left), Math.abs(current - right));
+      const leftMillis = result[anchors[index]].at - result[anchors[index - 1]].at;
+      const rightMillis = result[anchors[index + 1]].at - result[anchors[index]].at;
+      if (prominence > minimumProminence || Math.min(leftMillis, rightMillis) > chatterFlank) continue;
+      result.splice(anchors[index], 1);
+      removed = true;
+      break;
+    }
+    if (!removed) break;
+  }
+  return result;
 }
 
 function positionSpan(points: TimelinePoint[]): number {

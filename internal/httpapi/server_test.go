@@ -41,6 +41,28 @@ func TestHealthzReturnsOK(t *testing.T) {
 	}
 }
 
+func TestRawTransportMotionRoutesAreNotExposed(t *testing.T) {
+	server := newTestServer(t)
+	paths := []string{
+		"/api/transport/cloud/stroke-window",
+		"/api/transport/cloud/hsp-add",
+		"/api/transport/cloud/hsp-play",
+		"/api/transport/bluetooth/stroke-window",
+		"/api/transport/bluetooth/hsp-add",
+		"/api/transport/bluetooth/hsp-play",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := withController(httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`)))
+			server.Handler().ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("status = %d, want method-not-allowed for removed raw transport motion route", recorder.Code)
+			}
+		})
+	}
+}
+
 func TestBrowserBoundaryRequiresLoopbackSameOrigin(t *testing.T) {
 	server := newTestServer(t)
 

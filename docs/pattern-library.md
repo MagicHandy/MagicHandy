@@ -75,14 +75,21 @@ curve content remain immutable, so chat and playback keep a stable contract.
 ## Sampling And Authoring
 
 - Curves use wall-time PCHIP/Fritsch-Carlson interpolation. Tests require C1
-  continuity, no overshoot, and zero velocity at reversal knots.
+  continuity, no overshoot, zero velocity at reversal knots, and a continuous
+  cyclic derivative when a loop crosses its seam without reversing.
 - Generated patterns are time-stretched until they satisfy a 450 ms reversal-
   gap floor and 3000 relative-position/s² acceleration budget. Stretching never
   changes amplitude.
 - Freehand input is validated on the backend, sorted/deduplicated by time, and
-  simplified by vertical error while preserving every direction reversal.
-  Raw input is capped at 4096 points and a saved pattern at 256 points including
-  loop closure.
+  simplified by vertical error while preserving meaningful direction
+  reversals. Rapid reversal chatter at or below 2% prominence is removed; a
+  slow subtle excursion is retained. Raw input is capped at 4096 points and a
+  saved pattern at 256 points including loop closure.
+- Buffered playback combines authored knot times with 25 ms probes, then emits
+  a 0.3%-error-bounded adaptive frame. This prevents fixed-grid aliasing of
+  short reversals. Cloud additionally declares its 1% endpoint resolution so
+  the engine can remove redundant rounded plateaus under a combined 0.8% wire
+  bound; Bluetooth and Intiface retain the finer semantic frame.
 - Playback preview samples come from the same backend `motion.Curve` used by
   playback. Compact pattern curves insert the backend-owned saved knots into
   those samples so long cycles cannot visually alias away reversals. React does
@@ -109,8 +116,9 @@ are rejected rather than dropped, coerced, or clamped. The user chooses one of
 two interpretations:
 
 - **Program** preserves stored elapsed timing, relative spacing, and amplitude.
-- **Pattern** compresses stationary gaps over five seconds to 500 ms, normalizes
-  the usable span once to relative 0–100, simplifies it, and closes the loop.
+- **Pattern** compresses stationary gaps over five seconds to 500 ms, requires
+  at least 5% source span, normalizes it once to relative 0–100, removes only
+  rapid low-prominence reversal chatter, simplifies it, and closes the loop.
   Cycles shorter than 6600 ms are stretched to that floor; longer active timing
   remains intact. The UI rejects a selection with more than 255 essential
   reversal knots because loop closure and the stored 256-point limit make that

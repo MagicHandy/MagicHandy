@@ -50,8 +50,8 @@ func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 	if !ok || len(points) != 2 {
 		t.Fatalf("points = %#v, want two bridge points", command.Body["points"])
 	}
-	if points[0]["x"] != 75 || points[1]["x"] != 24 {
-		t.Fatalf("reverse points = %+v, want rounded positions 75 then 24", points)
+	if points[0]["x"] != 74.75 || points[1]["x"] != 24.25 {
+		t.Fatalf("reverse points = %+v, want fractional positions 74.75 then 24.25", points)
 	}
 
 	bridge.Acknowledge("client-1", BrowserBluetoothBridgeAck{

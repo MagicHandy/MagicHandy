@@ -69,6 +69,13 @@ type CloudRESTTransport struct {
 	serverTimeSyncedAt     time.Time
 }
 
+// MotionSamplingCapabilities reports API v3's whole-percent HSP endpoint
+// resolution. The shared engine uses this only to reduce redundant wire knots;
+// CloudRESTTransport remains a mapping/dispatch owner.
+func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabilities {
+	return MotionSamplingCapabilities{PositionResolutionPercent: 1}
+}
+
 // NewCloudRESTTransport validates prerequisites and creates a live Cloud REST transport.
 func NewCloudRESTTransport(prerequisites CloudPrerequisites, options CloudBuildOptions, endpoint CloudEndpointConfig, client *http.Client) (*CloudRESTTransport, error) {
 	builder, err := NewCloudRESTBuilder(prerequisites, options)

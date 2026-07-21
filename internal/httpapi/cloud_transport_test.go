@@ -28,64 +28,6 @@ func TestResolveCloudApplicationIDFallsBackToBundled(t *testing.T) {
 	}
 }
 
-func TestCloudManualHSPAddUsesSettingsAndTraces(t *testing.T) {
-	requests := make(chan capturedCloudRequest, 2)
-	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requests <- captureCloudRequest(t, r)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"ok":true,"hsp_available":true,"playback_state":"buffered"}`))
-	}))
-	defer cloudServer.Close()
-
-	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
-	saveCloudSettings(t, server)
-
-	recorder := httptest.NewRecorder()
-	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/cloud/hsp-add", strings.NewReader(`{
-		"stream_id": "stream-A",
-		"points": [{"position_percent": 25, "time_ms": 10}]
-	}`)))
-	server.Handler().ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
-	}
-	if contains(recorder.Body.String(), cloudTestConnectionKey) {
-		t.Fatalf("manual cloud response leaked connection key: %s", recorder.Body.String())
-	}
-
-	setup := readCapturedCloudRequest(t, requests)
-	if setup.Method != http.MethodPut || setup.Path != "/hsp/setup" {
-		t.Fatalf("request = %+v, want HSP setup path", setup)
-	}
-	if setup.ApplicationID != "dev-app-id" || setup.ConnectionKey != cloudTestConnectionKey {
-		t.Fatalf("auth headers = %+v, want settings-derived credentials", setup)
-	}
-	seen := readCapturedCloudRequest(t, requests)
-	if seen.Method != http.MethodPut || seen.Path != "/hsp/add" {
-		t.Fatalf("request = %+v, want HSP add path", seen)
-	}
-	if seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey {
-		t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
-	}
-	if !strings.Contains(seen.Body, `"x":75`) || !strings.Contains(seen.Body, `"t":10`) ||
-		!strings.Contains(seen.Body, `"flush":true`) {
-		t.Fatalf("body = %s, want reversed HSP point", seen.Body)
-	}
-
-	var response cloudCommandResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode cloud command response: %v", err)
-	}
-	if response.Result.Kind != transport.CommandKindPointsAdd || !response.Result.OK {
-		t.Fatalf("result = %+v, want successful HSP add", response.Result)
-	}
-	rows := server.traces.Rows()
-	if len(rows) != 1 || rows[0].TransportResult.Kind != transport.CommandKindPointsAdd {
-		t.Fatalf("trace rows = %+v, want one HSP add row", rows)
-	}
-}
-
 func TestCloudConnectionCheckEndpointReadsState(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/hsp/state" {

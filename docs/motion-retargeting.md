@@ -24,7 +24,8 @@ Lead time:
 The minimum future buffer time required so a replacement reaches the device before it is needed.
 
 Bridge points:
-Short transition points added before or around handoff to avoid jumps. Bridge points must not become a long stationary hold.
+The legacy trace name for a bounded continuity transition around handoff. The
+current engine uses a path blend rather than one stationary bridge sample.
 
 ## Shared Sampling And Smoothing Protections
 
@@ -44,8 +45,18 @@ The shared path must:
 - smooth turn apexes and direction reversals
 - sample with wall-time-parameterized monotone interpolation (PCHIP /
   Fritsch-Carlson style) that yields an exact zero-velocity instant at reversal
-  knots; do not use an index/phase-parameterized Catmull-Rom spline, which
-  reintroduces instantaneous velocity at reversals
+  knots and a cyclic derivative through non-reversing loop seams; do not use an
+  index/phase-parameterized Catmull-Rom spline, which reintroduces instantaneous
+  velocity at reversals
+- for buffered owners, merge authored knots with 25 ms probes and simplify the
+  emitted frame to at most 0.3 percentage-point vertical error; reject more
+  than 128 essential points in a nominal frame instead of flooding a transport
+- when an owner declares a coarser endpoint resolution, run a second
+  quantization-aware reduction in the shared engine. Cloud's 1% endpoint scale
+  uses a combined 0.8% bound to remove dwell/catch-up plateaus; higher-resolution
+  owners keep the semantic frame
+- for immediate-mode owners, honor the selected device timing floor and do not
+  inject authored knots that violate its minimum command interval
 - never weaken hardware safety clamping (speed, range, step size) for
   convenience or smoothness
 
@@ -182,7 +193,8 @@ For new-pattern retargets:
 - choose a candidate phase whose sampled position is close to the current sampled position
 - prefer candidates that do not immediately oppose current travel direction
 - avoid candidates at near-hold segments if they would feel like a stop
-- use bounded bridge points only when needed
+- use the effective path (including a transition already in progress) for phase
+  selection, then apply the bounded continuity transition only when paths differ
 
 For area-focus retargets:
 
@@ -200,6 +212,14 @@ Bridge points are allowed when they reduce discontinuity. They must obey:
 - no reset to a stale endpoint
 - exact point at replacement stream time when needed to prevent snap
 - trace annotation marking bridge points
+
+The current implementation crossfades the old effective path into the new plan
+for 750 ms with a smootherstep weight. The weight has zero first derivative at
+both boundaries, so the handoff does not introduce a position or velocity snap.
+Because two moving curves can crossfade into a small extra turn, the final
+transition frame removes rapid reversals at or below 2% prominence while
+protecting its start and end. The old `bridge_points=true` trace annotation is
+retained for compatibility.
 
 ## Settings Retargets
 
@@ -289,8 +309,12 @@ connection key.
   treated as a reference implementation because its physical motion was poor.
 - Pattern and program sampling now uses the Phase 14 PCHIP implementation and
   shared engine path. Automated curve, projection, completion, stop, and
-  lifecycle checks pass; the 6.6 s routine floor still needs a capped
+  lifecycle checks pass. Authored-knot/adaptive-frame checks now cover subtle
+  focus windows and loop seams; the 6.6 s routine floor still needs a capped
   real-device feel check because that threshold was hardware-derived.
+- Stroke-window and reverse changes remain immediate owner-envelope operations.
+  Their interaction with points already buffered by HSP needs matched hardware
+  traces before introducing a separate ramped-envelope contract.
 - Recovery currently stops and reports unhealthy playback states when the
   transport reports paused, starved, rejected, or stale playback. More nuanced
   resume/play recovery can be added after real-device traces prove the state

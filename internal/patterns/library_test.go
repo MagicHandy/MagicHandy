@@ -312,6 +312,21 @@ func TestSimplificationPreservesDirectionReversals(t *testing.T) {
 	}
 }
 
+func TestSimplificationRemovesInsignificantReversalChatter(t *testing.T) {
+	points := []motion.CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 100, PositionPercent: 20},
+		{TimeMillis: 110, PositionPercent: 19},
+		{TimeMillis: 200, PositionPercent: 30},
+		{TimeMillis: 400, PositionPercent: 0},
+	}
+	stabilized := stabilizeReversalChatter(points, motion.MinimumPatternReversalProminence)
+	anchors := reversalAnchors(stabilized)
+	if len(anchors) != 3 || stabilized[anchors[1]].PositionPercent != 30 {
+		t.Fatalf("stabilized points = %+v anchors = %v, want only the meaningful 30%% reversal", stabilized, anchors)
+	}
+}
+
 func authoredFixture() PatternInput {
 	points := make([]motion.CurvePoint, 0, 101)
 	for index := range 101 {

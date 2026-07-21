@@ -138,16 +138,12 @@ func (e *Engine) nextChunk(runEpoch uint64) (string, []transport.TimedPoint, *Mo
 		return "", nil, nil, err
 	}
 
-	points := make([]transport.TimedPoint, e.chunkSize)
-	var lastSample MotionSample
-	for index := range points {
-		streamMillis := e.nextSampleMillis + int64(index)*e.sampleInterval.Milliseconds()
-		sample := e.plan.SampleAt(streamMillis)
-		if e.bridgeSample != nil && streamMillis >= e.bridgeSample.TimeMillis {
-			sample = *e.bridgeSample
-			sample.TimeMillis = streamMillis
-			e.bridgeSample = nil
-		}
+	samples, err := e.nextMotionSamplesLocked()
+	if err != nil {
+		return "", nil, nil, err
+	}
+	points := make([]transport.TimedPoint, len(samples))
+	for index, sample := range samples {
 		// Emit the semantic 0..100 travel position. Reverse direction is a
 		// transport-boundary mapping (docs/hsp-v4-invariants.md, Invariant 3):
 		// the Cloud REST and Browser Bluetooth transports invert x from the
@@ -156,10 +152,8 @@ func (e *Engine) nextChunk(runEpoch uint64) (string, []transport.TimedPoint, *Mo
 			PositionPercent: sample.PositionPercent,
 			TimeMillis:      sample.TimeMillis,
 		}
-		lastSample = sample
 	}
-	e.nextSampleMillis += int64(e.chunkSize) * e.sampleInterval.Milliseconds()
-	e.lastSample = &lastSample
+	lastSample := samples[len(samples)-1]
 	return e.streamID, points, &lastSample, nil
 }
 

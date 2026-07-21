@@ -70,6 +70,14 @@ function strokeWindow(encoded: Uint8Array) {
   };
 }
 
+function hspPositions(encoded: Uint8Array): number[] {
+  const request = bytesValue(parseFields(encoded), 2);
+  const body = bytesValue(parseFields(request), 861);
+  return parseFields(body)
+    .filter((field) => field.field === 1 && field.value instanceof Uint8Array)
+    .map((field) => Number(parseFields(field.value as Uint8Array).find((pointField) => pointField.field === 2)?.value));
+}
+
 describe("Handy BLE codec", () => {
   it("encodes the backend's semantic stroke percentages without guessing normalized units", () => {
     expect(strokeWindow(encodeHandyRequest("slider/stroke", { min: 1, max: 40 }, 7))).toEqual({
@@ -83,6 +91,13 @@ describe("Handy BLE codec", () => {
       min: 0,
       max: 100,
     });
+  });
+
+  it("keeps sub-percent HSP positions through the Bluetooth wire scale", () => {
+    const encoded = encodeHandyRequest("hsp/add", {
+      points: [{ t: 0, x: 25.25 }, { t: 125, x: 75.75 }],
+    });
+    expect(hspPositions(encoded)).toEqual([253, 758]);
   });
 
   it("rejects truncated length-delimited fields", () => {

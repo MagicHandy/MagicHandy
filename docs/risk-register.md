@@ -393,6 +393,18 @@ sends only `mode:"autopilot"`; it does not construct motion or transport
 payloads. Integration tests assert one continuous wire play across multiple
 model-curated boundaries.
 
+Status 2026-07-20: the full producer-to-owner audit still finds one dispatch
+path. Buffered frames now merge authored knots with 25 ms probes under a 0.3%
+error bound, loop seams preserve velocity when they are not reversals, and
+retargets use a bounded C1 path blend. Import hygiene rejects <5% loop spans and
+removes only rapid <=2% reversal chatter; slow subtle motion and finite programs
+remain intact. Cloud's declared 1% endpoint resolution enables an engine-owned
+0.8%-bounded fit that cuts catalog shallow-focus stationary wire time by 74%.
+Unused raw Cloud/Bluetooth stroke/add/play HTTP routes were removed, so only the
+engine calls mutating transport methods other than emergency Stop. Physical
+feel and immediate stroke-envelope changes remain covered by R1/R22 rather than
+being declared solved from simulation.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium
@@ -846,6 +858,13 @@ and wire-telemetry cases now cover the immediate-mode deficiencies found in the
 follow-up review. The risk remains Medium until the revised pacer receives a
 matched subjective run; no non-Handy linear device was available for the
 conditional run.
+
+Review update 2026-07-20: adaptive buffered owners preserve authored knots,
+while an Intiface frame deliberately stays on the selected device timing floor
+and is tested not to inject a closer knot. Browser Bluetooth retains 0.1%
+firmware point resolution; Cloud's integer API floor is documented rather than
+hidden. A matched subjective run of shallow patterns and active envelope
+changes is still required, so the risk remains Medium.
 
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).

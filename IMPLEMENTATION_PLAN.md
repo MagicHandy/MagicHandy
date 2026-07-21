@@ -1208,6 +1208,19 @@ real device, capped below 40% intensity; synthetic tests cannot establish
 physical feel. The six retired rows and two promoted user curves reflect prior
 live curation, not a new automated hardware run.
 
+A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
+buffered frames now preserve authored knots through a bounded adaptive sampler,
+loop PCHIP carries velocity through non-reversing seams, rapid <=2% reversal
+chatter is removed without flattening slow subtle motion, and active retargets
+use a 750 ms C1 continuity blend. Pattern imports require 5% source span before
+relative normalization; finite programs remain exact. Cloud keeps its required
+whole-percent API encoding but declares that resolution so the engine can
+remove bounded rounded plateaus, while Browser Bluetooth now retains semantic
+fractions to the firmware's 0..1000 field. Unused raw Cloud/Bluetooth
+stroke/add/play HTTP routes were removed to enforce the single motion path. See
+`docs/motion-pathway-review-2026-07-20.md`. Matched below-40% physical-feel and
+buffered-envelope refresh checks remain manual evidence.
+
 ## Done Criteria
 
 - Authored content routes through the shared motion engine.

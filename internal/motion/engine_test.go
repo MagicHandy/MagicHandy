@@ -365,7 +365,7 @@ func TestEngineApplyTargetPreservesSamePatternWithoutRestart(t *testing.T) {
 	}
 	assertNoRestartBeforeStop(t, fake.Commands())
 	assertNoTraceRestartBeforeStop(t, traces.Rows())
-	assertTraceAnnotation(t, traces.Rows(), "target_update", "phase_preserved=true")
+	assertTraceAnnotation(t, traces.Rows(), "target_update", "phase_preserved=true;bridge_points=true")
 }
 
 func TestEngineRetargetUsesLatencyAwareLeadAndTraceExportFields(t *testing.T) {
