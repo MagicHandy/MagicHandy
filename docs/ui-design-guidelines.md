@@ -153,6 +153,9 @@ by the backend rather than inferred from client controls.
   stroke limits.
   Cloud REST includes one compact write-only connection-key row and identifies
   whether the bundled or developer API v3 application ID is active.
+- A non-motion connection check reports the backend's safe HSP explanation when
+  the device responds but is unavailable. Do not replace that distinction with
+  a generic client-side "not ready" message.
 - Artwork is a reference-guided transparent isolation of the reviewed conductor
   hand, rendered directly without a runtime mask or clip. Scale the hand, three
   signal arcs, and the poster's tall capsule, domed body, LED, and square marker
@@ -220,12 +223,13 @@ by the backend rather than inferred from client controls.
 - The Chat route fills the remaining workspace beside the persistent nav rail.
   Its conversation and compact control sidebar share the available height; do
   not reapply the ordinary route max-width to this workspace.
-- Session tabs are a 43px restrained strip, ordered by creation time so active
-  changes do not move targets. Use an underline and border for active state, an
-  amber dot plus accessible text for unsaved state, horizontal overflow for
-  long lists, and arrow/Home/End keyboard focus. New Chat is an icon command;
-  Save/Delete live in the visible overflow menu, with right-click as a shortcut
-  rather than the only path.
+- Session tabs are a 43px restrained strip with the compact `Chat` route title
+  attached at its leading edge, ordered by creation time so active changes do
+  not move targets. Use an underline and border for active state, an amber dot
+  plus accessible text for unsaved state, horizontal overflow for long lists,
+  and arrow/Home/End keyboard focus. New Chat is an icon command immediately
+  after the rightmost tab in that scrolling row; Save/Delete live in the visible
+  overflow menu, with right-click as a shortcut rather than the only path.
 - New Chat always confirms the active session. Switching away from the one
   unsaved working tab requires Save or discard; Autopilot stops before the
   backend changes session. The dialog traps focus, closes with Escape when no

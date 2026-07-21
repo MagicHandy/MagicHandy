@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -179,6 +181,10 @@ func runManagedLlamaRunnerHelper() {
 			_ = file.Close()
 		}
 	}
+	if message := os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER_EXIT"); message != "" {
+		_, _ = os.Stderr.WriteString(message + "\n")
+		return
+	}
 	for {
 		time.Sleep(time.Hour)
 	}
@@ -290,6 +296,99 @@ func TestManagedLlamaCPPRequiresLoopbackHTTPBaseURL(t *testing.T) {
 		if _, _, err := llamaHostPort(baseURL); err != nil {
 			t.Fatalf("llamaHostPort rejected %q: %v", baseURL, err)
 		}
+	}
+}
+
+func TestManagedLlamaCPPSelectsFallbackWhenPreferredPortIsOccupied(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on occupied test port: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+	preferredPort := listener.Addr().(*net.TCPAddr).Port
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "model.gguf")
+	if err := os.WriteFile(modelPath, []byte("test model"), 0o600); err != nil {
+		t.Fatalf("write model fixture: %v", err)
+	}
+	argsPath := filepath.Join(dir, "args.txt")
+	countPath := filepath.Join(dir, "starts.txt")
+	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER", "1")
+	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER_ARGS", argsPath)
+	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER_COUNT", countPath)
+
+	provider, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
+		HTTPProviderOptions: HTTPProviderOptions{
+			BaseURL: fmt.Sprintf("http://127.0.0.1:%d", preferredPort),
+			Model:   "local-model",
+		},
+		RunnerPath: os.Args[0],
+		ModelPath:  modelPath,
+	})
+	if err != nil {
+		t.Fatalf("NewManagedLlamaCPPProvider: %v", err)
+	}
+	t.Cleanup(func() {
+		provider.Unload(context.Background())
+	})
+	if err := provider.ensureStarted(); err != nil {
+		t.Fatalf("ensureStarted: %v", err)
+	}
+	if got := waitForStartCount(t, countPath); got != 1 {
+		t.Fatalf("runner starts = %d, want 1", got)
+	}
+
+	selectedBaseURL := provider.baseStatus().BaseURL
+	_, selectedPort, err := llamaHostPort(selectedBaseURL)
+	if err != nil {
+		t.Fatalf("selected base URL %q: %v", selectedBaseURL, err)
+	}
+	if selectedPort == preferredPort {
+		t.Fatalf("selected occupied port %d", preferredPort)
+	}
+	if provider.clientSnapshot().baseURL != selectedBaseURL {
+		t.Fatalf("HTTP client base URL = %q, want %q", provider.clientSnapshot().baseURL, selectedBaseURL)
+	}
+	arguments, err := os.ReadFile(argsPath) // #nosec G304 -- temp fixture path.
+	if err != nil {
+		t.Fatalf("read runner arguments: %v", err)
+	}
+	if !strings.Contains(string(arguments), fmt.Sprintf("--port\n%d", selectedPort)) {
+		t.Fatalf("runner arguments %q do not use selected port %d", arguments, selectedPort)
+	}
+}
+
+func TestManagedLlamaCPPLoadReportsEarlyRunnerExit(t *testing.T) {
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "model.gguf")
+	if err := os.WriteFile(modelPath, []byte("test model"), 0o600); err != nil {
+		t.Fatalf("write model fixture: %v", err)
+	}
+	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER", "1")
+	t.Setenv("MAGICHANDY_TEST_LLAMA_RUNNER_EXIT", "test runner could not bind")
+
+	provider, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
+		HTTPProviderOptions: HTTPProviderOptions{
+			BaseURL: "http://127.0.0.1:18080",
+			Model:   "local-model",
+		},
+		RunnerPath: os.Args[0],
+		ModelPath:  modelPath,
+	})
+	if err != nil {
+		t.Fatalf("NewManagedLlamaCPPProvider: %v", err)
+	}
+
+	started := time.Now()
+	status := provider.Load(t.Context())
+	if status.Available || status.Loaded {
+		t.Fatalf("status = %+v, want exited runner", status)
+	}
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
+		t.Fatalf("early runner exit took %s to report", elapsed)
+	}
+	if !strings.Contains(status.Message, "exited before becoming ready") || !strings.Contains(status.Message, "test runner could not bind") {
+		t.Fatalf("status message = %q, want early-exit diagnostics", status.Message)
 	}
 }
 

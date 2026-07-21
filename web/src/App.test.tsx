@@ -3,7 +3,13 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { streamChat } from "./api/client";
-import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot, LLMModelManagerSnapshot, TransportDiagnostics } from "./api/types";
+import type {
+  BluetoothBridgeSnapshot,
+  ConnectionCheckResult,
+  IntifaceTransportSnapshot,
+  LLMModelManagerSnapshot,
+  TransportDiagnostics,
+} from "./api/types";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
 
 // These tests guard the safety-critical UI invariants from
@@ -125,7 +131,24 @@ type TestState = typeof baseState & {
   intiface_transport?: IntifaceTransportSnapshot;
 };
 
-function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolean; stopError?: string; stopStatus?: number; stateGate?: Promise<void>; connectionCheckGate?: Promise<void>; intifaceConnectError?: string; chatLog?: unknown[]; voiceStatus?: unknown; library?: typeof libraryFixture; modelManager?: LLMModelManagerSnapshot; pickedPath?: string } = {}) {
+interface InstallFetchOptions {
+  state?: TestState;
+  memory?: unknown;
+  fail?: boolean;
+  stopError?: string;
+  stopStatus?: number;
+  stateGate?: Promise<void>;
+  connectionCheckGate?: Promise<void>;
+  connectionCheckResult?: ConnectionCheckResult;
+  intifaceConnectError?: string;
+  chatLog?: unknown[];
+  voiceStatus?: unknown;
+  library?: typeof libraryFixture;
+  modelManager?: LLMModelManagerSnapshot;
+  pickedPath?: string;
+}
+
+function installFetch(opts: InstallFetchOptions = {}) {
   const state = JSON.parse(JSON.stringify(opts.state ?? baseState)) as TestState;
   const chatLog = opts.chatLog ?? [];
   let intiface: IntifaceTransportSnapshot = state.intiface_transport ?? {
@@ -147,8 +170,9 @@ function installFetch(opts: { state?: TestState; memory?: unknown; fail?: boolea
     }
     if (u.includes("/api/transport/cloud/check")) {
       await opts.connectionCheckGate;
-      state.cloud_transport = { connected: true };
-      return jsonRes({ ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 });
+      const check = opts.connectionCheckResult ?? { ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 };
+      state.cloud_transport = { connected: check.ok };
+      return jsonRes(check);
     }
     if (u.includes("/api/transport/intiface")) {
       if (u.endsWith("/connect") && opts.intifaceConnectError) throw new Error(opts.intifaceConnectError);
@@ -461,6 +485,27 @@ describe("app shell safety invariants", () => {
     const artwork = screen.getByRole("img", { name: /the handy wireless connection$/i });
     expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
     expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "connected");
+  });
+
+  it("shows the backend explanation when Cloud responds without HSP", async () => {
+    installFetch({
+      connectionCheckResult: {
+        ok: false,
+        status: "http_200",
+        hsp_available: false,
+        playback_state: "unsupported",
+        latency_ms: 42,
+        message: "HSP is unavailable for this device/API state",
+      },
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, connection_key_set: true } },
+      },
+    });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy not checked/i }));
+    fireEvent.click(screen.getByRole("button", { name: /check connection/i }));
+    expect(await screen.findByText("HSP is unavailable for this device/API state")).toBeInTheDocument();
   });
 
   it("shows startup recovery without exposing controls backed by missing state", async () => {

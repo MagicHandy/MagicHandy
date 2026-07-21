@@ -119,6 +119,24 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-21** - Managed LLM endpoint and Chat workspace hardening: managed
+  llama.cpp keeps its preferred port when free and selects another loopback
+  port immediately before process start when occupied, so it cannot mistake an
+  unrelated local service for its runner. Early child exits now return bounded
+  stderr without waiting for the full load timeout. With NVIDIA Broadcast still
+  listening on 8080, the installed CUDA Gemma model loaded on the selected
+  fallback in 3.82 seconds and completed a structured request in 0.38 seconds.
+  The live Cloud connection check reported HSP available/stopped without a
+  motion command. Chat now attaches its compact title to the 43px session strip
+  and places New Chat directly after the rightmost tab; 1280x720 and 390x844
+  rendered checks found no clipping or fixed-control overlap. All 207 frontend
+  tests, typecheck/build, `go test ./...`, `go vet ./...`, `golangci-lint`, and
+  plain/stripped `CGO_ENABLED=0` builds pass. HTML/CSS/JS is 470,214 raw /
+  130,566 gzip bytes; complete embedded output is 914,450 / 567,993 (+402 /
+  +84, measured like-for-like against the checked-in bundle). Plain/stripped
+  binaries are 21,143,040 / 14,890,496 bytes. The local
+  race build remains unavailable without `gcc`; CI retains that mandatory gate.
+
 - **2026-07-21** - Motion boundary follow-up: live API v3 state returned numeric
   `play_state`, which the string-only readiness parser rejected, and Cloud's
   engine clock included all setup/prebuffer latency. Numeric states now map to

@@ -357,6 +357,16 @@ supplies real CUDA load/chat and secondary-provider evidence without dispatching
 to hardware. Curated downloads and hardware-fit guidance remain open, so R13
 stays High.
 
+Managed-endpoint hardening (2026-07-21): live diagnosis found NVIDIA Broadcast
+occupying the former fixed managed port 8080 while the installed CUDA runner and
+Gemma model loaded normally on an isolated loopback port. Managed mode now keeps
+8080 when available, otherwise selects a free loopback port before constructing
+its HTTP client, and reports an early runner exit with bounded stderr instead of
+polling an unrelated service for the full load timeout. Collision and early-exit
+paths have regression coverage. This removes one local-service conflict but does
+not change the remaining curated-download and hardware-fit work, so R13 stays
+High.
+
 ## R14: Per-Source Motion Path Divergence
 
 Level: High

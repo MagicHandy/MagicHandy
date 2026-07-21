@@ -223,6 +223,9 @@ func TestCloudRESTTransportConnectionCheckReportsUnavailable(t *testing.T) {
 	if check.OK || check.HSPAvailable {
 		t.Fatalf("check = %+v, want unavailable", check)
 	}
+	if check.Message != unavailable.Message || check.Message == "" {
+		t.Fatalf("check message = %q, want %q", check.Message, unavailable.Message)
+	}
 }
 
 func TestCloudRESTTransportConnectionCheckHonorsOKFalse(t *testing.T) {

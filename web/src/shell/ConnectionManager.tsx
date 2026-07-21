@@ -117,7 +117,12 @@ export function ConnectionManager() {
     try {
       const result = await api.connectionCheck("cloud");
       setCloudAttemptFailed(!result.ok);
-      show(result.ok ? `The Handy is reachable (${result.latency_ms} ms).` : "The Handy did not report HSP ready.", result.ok ? "info" : "error");
+      show(
+        result.ok
+          ? `The Handy is reachable (${result.latency_ms} ms).`
+          : result.message?.trim() || "The Handy responded, but HSP is unavailable for its current device state.",
+        result.ok ? "info" : "error",
+      );
     } catch (error) {
       setCloudAttemptFailed(true);
       show(error instanceof Error ? error.message : "Connection check failed.", "error");

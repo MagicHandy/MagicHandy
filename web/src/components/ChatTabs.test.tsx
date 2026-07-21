@@ -36,6 +36,12 @@ describe("ChatTabs", () => {
     expect(activate).toHaveBeenCalledWith(sessions[1]);
     fireEvent.click(screen.getByRole("button", { name: "Start a new chat" }));
     expect(start).toHaveBeenCalledOnce();
+
+    const title = screen.getByRole("heading", { name: "Chat", level: 1 });
+    const tablist = screen.getByRole("tablist", { name: "Chat sessions" });
+    const newButton = screen.getByRole("button", { name: "Start a new chat" });
+    expect(title.closest(".chat-tabs-bar")).toContainElement(tablist);
+    expect(tablist.nextElementSibling).toBe(newButton);
   });
 
   it("moves keyboard focus across tabs without activating them", () => {

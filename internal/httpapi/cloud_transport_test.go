@@ -57,6 +57,31 @@ func TestCloudConnectionCheckEndpointReadsState(t *testing.T) {
 	}
 }
 
+func TestCloudConnectionCheckEndpointExplainsHSPUnavailable(t *testing.T) {
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"hsp_available":false,"playback_state":"unsupported"}`))
+	}))
+	defer cloudServer.Close()
+
+	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
+	saveCloudSettings(t, server)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/transport/cloud/check", nil)
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var check transport.ConnectionCheckResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &check); err != nil {
+		t.Fatalf("decode check response: %v", err)
+	}
+	if check.OK || check.HSPAvailable || check.Message == "" {
+		t.Fatalf("check = %+v, want unavailable with explanation", check)
+	}
+}
+
 func TestCloudManualTransportFailureRedactsSecrets(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "rejected "+cloudTestConnectionKey, http.StatusUnauthorized)
