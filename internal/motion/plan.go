@@ -146,6 +146,7 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 			target.Program = &definition
 			target.ProgramID = definition.ID
 			target.PatternID = ""
+			target.PatternName = ""
 			return target, curve, false, definition.DurationMillis
 		}
 		target.Program = nil
@@ -156,6 +157,7 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 			curve, _ := NewCurve(definition.Points, definition.CycleMillis, true)
 			target.Pattern = &definition
 			target.PatternID = definition.ID
+			target.PatternName = definition.Name
 			target.ProgramID = ""
 			return target, curve, true, definition.CycleMillis
 		}
@@ -167,6 +169,7 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 	}
 	curve, _ := NewCurve(definition.Points, definition.CycleMillis, true)
 	target.Pattern = &definition
+	target.PatternName = definition.Name
 	target.ProgramID = ""
 	return target, curve, true, definition.CycleMillis
 }

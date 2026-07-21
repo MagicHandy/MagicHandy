@@ -1209,7 +1209,7 @@ describe("app shell safety invariants", () => {
           paused: false,
           last_sample: { position_percent: 72, time_ms: 1000 },
           settings: { ...baseState.settings.motion, stroke_min_percent: 20, stroke_max_percent: 80 },
-          target: { label: "Steady stroke", speed_percent: 35 },
+          target: { label: "Steady stroke", source: "chat", pattern_id: "stroke", pattern_name: "Stroke", speed_percent: 35 },
         },
       },
     };
@@ -1226,11 +1226,12 @@ describe("app shell safety invariants", () => {
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-position", "72");
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-min", "20");
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-max", "80");
-    expect(within(detailed as HTMLElement).getByText(/commanded position estimate/i)).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("commanded")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("72%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("20-80%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("35%")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("Steady stroke")).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("Stroke")).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("chat")).toBeInTheDocument();
   });
 });
 

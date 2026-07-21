@@ -46,6 +46,30 @@ const (
 	PatternRolling PatternID = "rolling"
 	// PatternSyncopate uses an intentionally uneven complete rhythm.
 	PatternSyncopate PatternID = "syncopate"
+	// PatternFourLevelCircuit cycles full and partial strokes across both zones.
+	PatternFourLevelCircuit PatternID = "four-level-circuit"
+	// PatternHighLowBlocks groups upper and lower zone pulses.
+	PatternHighLowBlocks PatternID = "high-low-blocks"
+	// PatternDeepShallowSequence mixes deep and medium upper-anchored strokes.
+	PatternDeepShallowSequence PatternID = "deep-shallow-sequence"
+	// PatternShortMediumSteps repeats short and medium lower-anchored strokes.
+	PatternShortMediumSteps PatternID = "short-medium-steps"
+	// PatternTopAnchoredDepths cycles several depths from a common upper return.
+	PatternTopAnchoredDepths PatternID = "top-anchored-depths"
+	// PatternDeepBookends wraps short and medium strokes with deep sweeps.
+	PatternDeepBookends PatternID = "deep-bookends"
+	// PatternOneDeepThreeShallow follows one deep stroke with three shallow pulses.
+	PatternOneDeepThreeShallow PatternID = "one-deep-three-shallow"
+	// PatternLowerMidrangeMix varies restrained strokes in the lower half.
+	PatternLowerMidrangeMix PatternID = "lower-midrange-mix"
+	// PatternMidTopSwitch moves from broad midrange strokes to tight upper pulses.
+	PatternMidTopSwitch PatternID = "mid-top-switch"
+	// PatternSlowFastFull changes from slow full strokes to fast full strokes.
+	PatternSlowFastFull PatternID = "slow-fast-full"
+	// PatternMidrangeFullFinish grows restrained midrange strokes into a full sweep.
+	PatternMidrangeFullFinish PatternID = "midrange-full-finish"
+	// PatternDeepPartialSequence mixes full and partial lower-anchored strokes.
+	PatternDeepPartialSequence PatternID = "deep-partial-sequence"
 )
 
 // AreaFocus constrains semantic sampling to a focus region.
@@ -67,6 +91,7 @@ type MotionTarget struct {
 	Label        string      `json:"label,omitempty"`
 	Source       string      `json:"source,omitempty"`
 	PatternID    PatternID   `json:"pattern_id,omitempty"`
+	PatternName  string      `json:"pattern_name,omitempty"`
 	ProgramID    string      `json:"program_id,omitempty"`
 	SpeedPercent int         `json:"speed_percent"`
 	AreaFocus    *AreaFocus  `json:"area_focus,omitempty"`
@@ -82,6 +107,7 @@ type MotionTarget struct {
 func NormalizeTarget(target MotionTarget, settings config.MotionSettings) MotionTarget {
 	target.Label = strings.TrimSpace(target.Label)
 	target.Source = strings.TrimSpace(target.Source)
+	target.PatternName = strings.TrimSpace(target.PatternName)
 	if target.Source == "" {
 		target.Source = "motion"
 	}
@@ -89,6 +115,7 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 	if target.Program != nil {
 		target.ProgramID = strings.TrimSpace(target.Program.ID)
 		target.PatternID = ""
+		target.PatternName = ""
 	}
 	if target.Pattern != nil {
 		target.PatternID = target.Pattern.ID

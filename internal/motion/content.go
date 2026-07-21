@@ -120,7 +120,7 @@ func (c Curve) Preview(intervalMillis int64) []CurvePoint {
 	return points
 }
 
-// BuiltinPatternDefinitions returns the small parametrically generated catalog.
+// BuiltinPatternDefinitions returns the parametrically generated catalog.
 func BuiltinPatternDefinitions() []PatternDefinition {
 	definitions := make([]PatternDefinition, len(builtinPatternCatalog))
 	for index, definition := range builtinPatternCatalog {
@@ -474,9 +474,9 @@ type experimentalPatternSpec struct {
 	Tags         []string
 }
 
-// experimentalPatternSpecs are complete authored cycles. None is a random
-// excerpt from an imported script; every final travel interval closes the
-// shape back onto its first point before the hardware-budget pass runs.
+// experimentalPatternSpecs are deliberately selected complete cycles. None is
+// a random excerpt; every final travel interval closes the shape back onto its
+// first point before the hardware-budget pass runs.
 var experimentalPatternSpecs = []experimentalPatternSpec{
 	{
 		ID: PatternWaves, Name: "Waves", Description: "Strokes swell deeper, crest, and recede.",
@@ -549,6 +549,78 @@ var experimentalPatternSpecs = []experimentalPatternSpec{
 		Positions:    []float64{18, 78, 30, 92, 22, 62, 12, 88, 40, 72},
 		TravelMillis: []int64{520, 900, 560, 700, 500, 1100, 620, 540, 960, 700},
 		Tags:         []string{"syncopated", "accent", "varied"},
+	},
+	{
+		ID: PatternFourLevelCircuit, Name: "Four-Level Circuit", Description: "Full and partial strokes rotate through both halves of the range.",
+		Positions:    []float64{99, 0, 25, 0, 99, 74, 99, 0, 25, 0},
+		TravelMillis: []int64{942, 472, 471, 943, 472, 471, 943, 471, 472, 943},
+		Tags:         []string{"multi-level", "alternating", "full"},
+	},
+	{
+		ID: PatternHighLowBlocks, Name: "High-Low Blocks", Description: "Upper-zone pulses switch to lower-zone pulses between full sweeps.",
+		Positions:    []float64{0, 99, 70, 99, 70, 99, 70, 99, 0, 30, 0, 30},
+		TravelMillis: []int64{942, 472, 472, 471, 472, 472, 472, 942, 472, 471, 472, 470},
+		Tags:         []string{"zones", "grouped", "contrast"},
+	},
+	{
+		ID: PatternDeepShallowSequence, Name: "Deep-Shallow Sequence", Description: "Upper returns move between medium and full-depth strokes in an uneven phrase.",
+		Positions:    []float64{99, 63, 99, 0, 99, 63, 99, 0, 99, 63},
+		TravelMillis: []int64{446, 446, 1337, 625, 446, 446, 1337, 625, 446, 446},
+		Tags:         []string{"uneven", "deep", "upper-return"},
+	},
+	{
+		ID: PatternShortMediumSteps, Name: "Short-Medium Steps", Description: "Lower returns repeat short peaks with occasional medium reaches.",
+		Positions:    []float64{0, 25, 0, 45, 0, 25, 0, 25, 0, 45},
+		TravelMillis: []int64{471, 472, 1414, 472, 471, 472, 472, 471, 1414, 471},
+		Tags:         []string{"short", "medium", "lower-return"},
+	},
+	{
+		ID: PatternTopAnchoredDepths, Name: "Top-Anchored Depths", Description: "A common upper return visits shallow, deep, and medium depths.",
+		Positions:    []float64{100, 88, 100, 10, 100, 60, 100, 60},
+		TravelMillis: []int64{777, 485, 874, 1650, 809, 566, 469, 970},
+		Tags:         []string{"upper-return", "depth-cycle", "varied"},
+	},
+	{
+		ID: PatternDeepBookends, Name: "Deep Bookends", Description: "Deep sweeps surround one short and one medium lower-anchored stroke.",
+		Positions:    []float64{0, 80, 0, 10, 0, 30, 0, 80},
+		TravelMillis: []int64{1262, 901, 505, 433, 1046, 1298, 686, 469},
+		Tags:         []string{"deep", "bookended", "lower-return"},
+	},
+	{
+		ID: PatternOneDeepThreeShallow, Name: "One Deep, Three Shallow", Description: "One deep upper-anchored stroke resolves through three shallow pulses.",
+		Positions:    []float64{100, 40, 100, 90, 100, 90, 100, 90},
+		TravelMillis: []int64{1034, 2171, 552, 448, 534, 552, 672, 637},
+		Tags:         []string{"deep", "shallow", "upper-return"},
+	},
+	{
+		ID: PatternLowerMidrangeMix, Name: "Lower Midrange Mix", Description: "Restrained lower-half strokes vary their center and depth.",
+		Positions:    []float64{0, 50, 10, 40, 0, 40, 0, 40, 0, 40},
+		TravelMillis: []int64{492, 493, 492, 493, 492, 1149, 493, 492, 493, 1511},
+		Tags:         []string{"restrained", "lower", "midrange"},
+	},
+	{
+		ID: PatternMidTopSwitch, Name: "Mid-to-Top Switch", Description: "Broad midrange strokes switch into a tight block of upper pulses.",
+		Positions:    []float64{20, 80, 20, 100, 80, 100, 80, 100},
+		TravelMillis: []int64{998, 608, 1130, 521, 694, 651, 1521, 477},
+		Tags:         []string{"zones", "midrange", "upper"},
+	},
+	{
+		ID: PatternSlowFastFull, Name: "Slow-to-Fast Full", Description: "Two measured full strokes transition into a run of faster full strokes.",
+		Positions:    []float64{0, 100, 0, 100, 0, 100, 0, 100, 0, 100},
+		TravelMillis: []int64{702, 1170, 701, 1204, 471, 470, 470, 470, 471, 471},
+		Tags:         []string{"full", "tempo-change", "accelerating"},
+	},
+	{
+		ID: PatternMidrangeFullFinish, Name: "Midrange with Full Finish", Description: "Restrained midrange pulses grow into one full-range sweep.",
+		Positions:    []float64{20, 50, 20, 50, 20, 60, 20, 100},
+		TravelMillis: []int64{692, 656, 588, 553, 484, 760, 1831, 1036},
+		Tags:         []string{"midrange", "build", "full-finish"},
+	},
+	{
+		ID: PatternDeepPartialSequence, Name: "Deep-Partial Sequence", Description: "Lower returns mix full-depth and partial-depth strokes with uneven accents.",
+		Positions:    []float64{0, 100, 0, 80, 0, 100, 0, 100, 0, 80},
+		TravelMillis: []int64{462, 462, 462, 463, 1418, 496, 1452, 453, 471, 461},
+		Tags:         []string{"uneven", "deep", "partial"},
 	},
 }
 

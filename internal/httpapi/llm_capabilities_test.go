@@ -95,7 +95,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	for _, choice := range open {
 		found[choice.ID] = true
 	}
-	for _, want := range []motion.PatternID{motion.PatternWaves, motion.PatternClimb, motion.PatternFlutter} {
+	for _, want := range []motion.PatternID{motion.PatternWaves, motion.PatternClimb, motion.PatternFlutter, motion.PatternHighLowBlocks, motion.PatternSlowFastFull} {
 		if !found[string(want)] {
 			t.Fatalf("experimental pattern %q missing with the gate enabled", want)
 		}

@@ -33,7 +33,7 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 	}
 }
 
-func TestExperimentalCatalogContainsTwelveDistinctClosedCycles(t *testing.T) {
+func TestExperimentalCatalogContainsTwentyFourDistinctClosedCycles(t *testing.T) {
 	seenIDs := make(map[PatternID]bool)
 	seenShapes := make(map[string]PatternID)
 	experimental := 0
@@ -71,8 +71,38 @@ func TestExperimentalCatalogContainsTwelveDistinctClosedCycles(t *testing.T) {
 		}
 		seenShapes[signature] = definition.ID
 	}
-	if experimental < 12 {
-		t.Fatalf("experimental pattern count = %d, want at least 12", experimental)
+	if experimental < 24 {
+		t.Fatalf("experimental pattern count = %d, want at least 24", experimental)
+	}
+}
+
+func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
+	want := map[PatternID]string{
+		PatternFourLevelCircuit:    "Four-Level Circuit",
+		PatternHighLowBlocks:       "High-Low Blocks",
+		PatternDeepShallowSequence: "Deep-Shallow Sequence",
+		PatternShortMediumSteps:    "Short-Medium Steps",
+		PatternTopAnchoredDepths:   "Top-Anchored Depths",
+		PatternDeepBookends:        "Deep Bookends",
+		PatternOneDeepThreeShallow: "One Deep, Three Shallow",
+		PatternLowerMidrangeMix:    "Lower Midrange Mix",
+		PatternMidTopSwitch:        "Mid-to-Top Switch",
+		PatternSlowFastFull:        "Slow-to-Fast Full",
+		PatternMidrangeFullFinish:  "Midrange with Full Finish",
+		PatternDeepPartialSequence: "Deep-Partial Sequence",
+	}
+	for _, definition := range BuiltinPatternDefinitions() {
+		name, ok := want[definition.ID]
+		if !ok {
+			continue
+		}
+		if definition.Name != name || strings.Contains(strings.ToLower(definition.Description), "funscript") {
+			t.Fatalf("pattern %q metadata = %q / %q, want motion-semantic metadata", definition.ID, definition.Name, definition.Description)
+		}
+		delete(want, definition.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing sampled patterns: %+v", want)
 	}
 }
 

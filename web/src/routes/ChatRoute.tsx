@@ -160,7 +160,7 @@ export function ChatRoute() {
           )}
         </section>
 
-        <aside className="chat-sidebar panel" aria-label="Motion controls">
+        <aside className="chat-sidebar" aria-label="Motion controls">
           <h2 className="section-title">Controls</h2>
           <AutopilotControl />
           <div className="divider" />
@@ -168,9 +168,10 @@ export function ChatRoute() {
           <div className="divider" />
           <h2 className="section-title">Motion behavior</h2>
           <QuickSettings section="behavior" />
-          <div className="divider" />
-          <h3 className="group-title">Live motion</h3>
-          <MotionVisualizer motion={motion} />
+          <div className="chat-motion-status">
+            <h3 className="group-title">Motion status</h3>
+            <MotionVisualizer motion={motion} />
+          </div>
         </aside>
       </div>
 

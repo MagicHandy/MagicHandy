@@ -30,18 +30,30 @@ one as the other.
 ## Built-In Catalog
 
 The built-in catalog contains three established patterns (`Stroke`, `Pulse`,
-and `Tease`) plus twelve clearly labeled experimental patterns: `Waves`,
-`Climb`, `Flutter`, `Sway`, `Drift`, `Double Tap`, `Cascade`, `Pendulum`,
-`Cradle`, `Surge`, `Rolling`, and `Syncopate`. This is four times the initial
-three-pattern experimental slice.
+and `Tease`) plus 24 clearly labeled experimental patterns. The original set is
+`Waves`, `Climb`, `Flutter`, `Sway`, `Drift`, `Double Tap`, `Cascade`,
+`Pendulum`, `Cradle`, `Surge`, `Rolling`, and `Syncopate`. The motion-sampled
+set is `Four-Level Circuit`, `High-Low Blocks`, `Deep-Shallow Sequence`,
+`Short-Medium Steps`, `Top-Anchored Depths`, `Deep Bookends`, `One Deep, Three
+Shallow`, `Lower Midrange Mix`, `Mid-to-Top Switch`, `Slow-to-Fast Full`,
+`Midrange with Full Finish`, and `Deep-Partial Sequence`.
 
-Every experimental entry is an authored complete cycle with an explicit return
-to its starting position. The generator stretches a cycle only to satisfy the
-same reversal and acceleration budgets as every other built-in; it does not
-truncate or sample a random interval. The supplied funscript libraries were
-reviewed for useful shape vocabulary, but their long/video-specific scripts
-were not copied as arbitrary excerpts. Users can inspect, audition, disable,
-weight, and export experimental entries exactly like other built-ins.
+The second set was selected from 899 user-provided funscripts across three
+local collections. Analysis reduced each action stream to semantic reversal
+extrema, then considered complete phrases with endpoint closure, meaningful
+travel, bounded reversal spacing, and a coherent repeating structure. Source
+filenames played no role in naming, descriptions, tags, or selection, because
+those names do not describe motion feel. Only the transformed sparse positions
+and normalized relative timing are committed; source paths, filenames, and
+payloads are not retained.
+
+Every experimental entry is a complete cycle with an explicit return to its
+starting position. The generator stretches a cycle only to satisfy the same
+reversal and acceleration budgets as every other built-in; it never truncates a
+random interval. Users can inspect, audition, disable, weight, and export these
+entries exactly like other built-ins. Existing databases receive them through
+the catalog's idempotent built-in seed, so this expansion does not require a
+schema migration and preserves user enablement and weights.
 
 ## Sampling And Authoring
 

@@ -180,7 +180,8 @@ layout — the conversation beside a compact control column:
 - **Control column** (right, ~300px): the compact **Autopilot** session control
   with Pause/Resume and decision provenance, voice shortcuts, live **quick
   settings** (speed, stroke, reverse, style — immediate-apply), and the
-  **detailed visualizer** with commanded-estimate labeling.
+  attached **motion-status band** with a detailed visualizer, commanded-estimate
+  labeling, and the backend-resolved active pattern name.
 Manual device testing is intentionally absent from Chat and lives under
 Settings > Diagnostics. The only Chat modal is the focused Save/discard
 confirmation before replacing or leaving the active working session; it cannot

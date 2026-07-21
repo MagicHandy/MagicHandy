@@ -1174,7 +1174,12 @@ Implementation evidence: unit/API/UI tests cover generated catalogs,
 PCHIP sampling, acceleration/reversal budgets, relative projection, funscript
 normalization, long-gap stripping, finite-program completion, controller
 ownership, disabled-pattern rejection, curation fallback, feedback undo, and
-backend previews. Long imported loop cycles remain valid above the 6.6-second
+backend previews. A follow-up content slice expanded the catalog to 24
+experimental patterns. Twelve new loops were selected from semantic reversal
+structures across the supplied local funscript collections; source filenames
+did not influence or enter pattern metadata. Only transformed sparse curves are
+committed, and the existing idempotent built-in seed adds them without a schema
+migration. Long imported loop cycles remain valid above the 6.6-second
 minimum; compact curves combine backend samples with saved knots, and the Import
 tab reports the 255 essential-knot shape limit instead of imposing a duration
 cap. The rendered React workspace was exercised at 1280 px and
@@ -1199,7 +1204,8 @@ capped below 40% intensity; synthetic tests cannot establish physical feel.
 
 ## Out Of Scope
 
-- growing a large curated built-in catalog (content work, not architecture)
+- mirroring complete source libraries or retaining source paths and filenames
+  in built-in metadata
 
 # Phase 14B: Intiface Dispatch Owner
 

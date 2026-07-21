@@ -49,8 +49,29 @@
 }
 
 .chat-sidebar {
+  display: flex;
+  min-width: 0;
   min-height: 0;
+  flex-direction: column;
+  padding: 14px;
   overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.chat-motion-status {
+  margin: auto -14px -14px;
+  padding: 11px 14px 13px;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  background: var(--bg-inset);
+}
+
+.chat-motion-status .group-title {
+  margin-bottom: 9px;
+  font-size: 0.72rem;
+  letter-spacing: 0;
 }
 
 .chat-tabs-bar {
