@@ -541,6 +541,7 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 		{method: http.MethodPut, path: "/slider/stroke"},
 		{method: http.MethodPut, path: "/hsp/setup"},
 		{method: http.MethodPut, path: "/hsp/add"},
+		{method: http.MethodPut, path: "/hsp/add"},
 		{method: http.MethodGet, path: "/servertime"},
 		{method: http.MethodPut, path: "/hsp/play"},
 	}

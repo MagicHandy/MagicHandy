@@ -294,16 +294,13 @@ func TestAutopilotTraceRecordsDecisionSource(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts >= 1 })
-
-	found := false
-	for _, row := range traces.Rows() {
-		if row.Planner != nil && row.Planner.Event == "autopilot_start" &&
-			row.Planner.SegmentIndex == 1 && strings.Contains(row.Planner.Note, "model") && strings.Contains(row.Planner.Note, "say") {
-			found = true
+	waitFor(t, time.Second, func() bool {
+		for _, row := range traces.Rows() {
+			if row.Planner != nil && row.Planner.Event == "autopilot_start" &&
+				row.Planner.SegmentIndex == 1 && strings.Contains(row.Planner.Note, "model") && strings.Contains(row.Planner.Note, "say") {
+				return true
+			}
 		}
-	}
-	if !found {
-		t.Fatal("autopilot start trace with model+say note not found")
-	}
+		return false
+	})
 }

@@ -107,9 +107,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 911,657 raw / 567,073 gzip bytes because the isolated
-   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 467,421 raw
-   / 129,676 gzip bytes, and the stripped binary is 14,832,128 bytes. These
+   browser payload is 914,780 raw / 568,066 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 470,544 raw
+   / 130,639 gzip bytes, and the stripped binary is 14,897,152 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -118,6 +118,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-21** - Cloud buffer continuity and Chat tab hit targets: a 194-row
+  live trace showed ordinary HSP adds acknowledged with only 80-125 ms left in
+  the preceding buffer and three responses after its tail, including -540 ms
+  on a 958 ms request. Cloud now declares a 1.5-second accepted-buffer floor,
+  the engine reaches it before Play, lead selection reserves the dispatch tick,
+  and checks use the actual emitted tail. API v3 HTTP 200 `error` envelopes now
+  fail without advancing the HSP index. The current device check returned
+  `DeviceNotConnected`, so no automated motion was attempted and the capped
+  physical rerun remains open. Chat gives New Chat a separate 46 px trailing
+  slot and omits actionless menu triggers; 1280x720 and overflowing 390x844
+  checks found no blocked or overlapping hit area. All 208 frontend tests,
+  typecheck/build, `go test ./...`, `go vet ./...`, `golangci-lint`, and plain
+  plus stripped `CGO_ENABLED=0` builds pass. HTML/CSS/JS is 470,544 raw /
+  130,639 gzip bytes; complete embedded output is 914,780 / 568,066 (+330 /
+  +73). Plain/stripped binaries are 21,154,304 / 14,897,152 bytes. The local
+  race build remains unavailable because `gcc` is absent; CI retains the gate.
 
 - **2026-07-21** - Managed LLM endpoint and Chat workspace hardening: managed
   llama.cpp keeps its preferred port when free and selects another loopback

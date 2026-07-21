@@ -59,7 +59,7 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reas
 	e.mu.Lock()
 	if e.validateRunLocked(runEpoch) == nil {
 		requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
-		needsLead = e.nextSampleMillis < requiredTail
+		needsLead = e.bufferedTailMillisLocked() < requiredTail
 	} else {
 		e.mu.Unlock()
 		return errRunInvalidated
@@ -69,6 +69,32 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reas
 		return nil
 	}
 	return e.dispatchNextChunk(ctx, runEpoch, reason)
+}
+
+// prebufferBeforePlay gives high-latency buffered owners enough accepted
+// coverage to survive their first append after playback begins. Owners without
+// a declared buffered-lead requirement retain the ordinary one-chunk startup.
+func (e *Engine) prebufferBeforePlay(ctx context.Context, runEpoch uint64, reason string) error {
+	for range 64 {
+		e.mu.Lock()
+		if err := e.validateRunLocked(runEpoch); err != nil {
+			e.mu.Unlock()
+			return err
+		}
+		requiredLead := e.minimumBufferedLeadMillis
+		if requiredLead > 0 {
+			requiredLead = e.leadMillisLocked()
+		}
+		ready := requiredLead <= 0 || e.bufferedTailMillisLocked() >= requiredLead
+		e.mu.Unlock()
+		if ready {
+			return nil
+		}
+		if err := e.dispatchNextChunk(ctx, runEpoch, reason); err != nil {
+			return err
+		}
+	}
+	return errors.New("motion startup could not build the transport's minimum lead buffer")
 }
 
 func (e *Engine) setStrokeWindow(ctx context.Context, runEpoch uint64, reason string, recoverFailure bool) error {

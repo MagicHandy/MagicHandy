@@ -115,6 +115,20 @@ confirmed and fixed:
 4. Cloud accepted engine frames up to 128 points although API v3 permits at
    most 100 points per `/hsp/add`. The owner advertises and validates the
    100-point cap, so dense content fails before an oversized HTTP request.
+5. The lead calculation spent its 250 ms safety allowance on a dispatch loop
+   that can notice a low buffer 200 ms late. In the captured Cloud trace,
+   ordinary adds were sometimes acknowledged with only 80-125 ms left in the
+   prior buffer; three acknowledgements crossed the tail, including -540 ms on
+   a 958 ms request. With `pause_on_starving` enabled, those underruns are the
+   reported micro-stops. Cloud now declares a 1.5-second minimum accepted lead,
+   startup prebuffers to it, the dynamic calculation reserves a dispatch tick,
+   and checks use the actual last emitted timestamp instead of a nominal frame
+   boundary.
+6. API v3 can return an HTTP 200 response containing an `error` envelope. The
+   Cloud owner treated that as accepted and advanced its cumulative point
+   index, leaving an unfilled interval in the device buffer. Error envelopes
+   now fail the command without advancing the tail; response messages are not
+   copied into errors or diagnostics.
 
 A catalog probe covered all 29 built-ins at 5%, 10%, 20%, and full focus;
 20%, 40%, and 100% speed; and both 1% Cloud and 1.67% effective Intiface

@@ -79,60 +79,76 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
   return (
     <header className="chat-tabs-bar">
       <h1 className="chat-tabs-title">Chat</h1>
-      <div className="chat-tabs-scroll">
-        <div className="chat-tabs-list" role="tablist" aria-label="Chat sessions">
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              ref={session.id === activeId ? activeRef : undefined}
-              className="chat-tab-wrap"
-              data-active={session.id === activeId || undefined}
-            >
-              <button
-                type="button"
-                className="chat-tab"
-                id={`chat-tab-${session.id}`}
-                role="tab"
-                aria-selected={session.id === activeId}
-                aria-controls="active-chat-panel"
-                tabIndex={session.id === activeId ? 0 : -1}
-                disabled={disabled}
-                title={session.saved ? session.title : `${session.title} (not saved)`}
-                onClick={() => onActivate(session)}
-                onKeyDown={(event) => {
-                  if (["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) {
-                    event.preventDefault();
-                    moveTabFocus(session, event.key);
-                  }
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  openMenu(session, event.clientX, event.clientY, event.currentTarget);
-                }}
-              >
-                <span>{session.title}</span>
-                {!session.saved && <span className="chat-tab-unsaved" aria-label="Not saved" />}
-              </button>
-              <button
-                type="button"
-                className="chat-tab-menu-button"
-                aria-label={`Open options for ${session.title}`}
-                aria-haspopup="menu"
-                aria-expanded={menu?.session.id === session.id}
-                disabled={disabled || (session.saved && session.active)}
-                onClick={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  openMenu(session, rect.right - 190, rect.bottom + 4, event.currentTarget);
-                }}
-              >
-                <MoreHorizontalIcon size={16} />
-              </button>
-            </div>
-          ))}
+      <div className="chat-tabs-track">
+        <div className="chat-tabs-scroll">
+          <div className="chat-tabs-list" role="tablist" aria-label="Chat sessions">
+            {sessions.map((session) => {
+              const hasMenuActions = !session.saved || !session.active;
+              return (
+                <div
+                  key={session.id}
+                  ref={session.id === activeId ? activeRef : undefined}
+                  className="chat-tab-wrap"
+                  data-active={session.id === activeId || undefined}
+                >
+                  <button
+                    type="button"
+                    className="chat-tab"
+                    id={`chat-tab-${session.id}`}
+                    role="tab"
+                    aria-selected={session.id === activeId}
+                    aria-controls="active-chat-panel"
+                    tabIndex={session.id === activeId ? 0 : -1}
+                    disabled={disabled}
+                    title={session.saved ? session.title : `${session.title} (not saved)`}
+                    onClick={() => onActivate(session)}
+                    onKeyDown={(event) => {
+                      if (["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) {
+                        event.preventDefault();
+                        moveTabFocus(session, event.key);
+                      }
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      openMenu(session, event.clientX, event.clientY, event.currentTarget);
+                    }}
+                  >
+                    <span>{session.title}</span>
+                    {!session.saved && <span className="chat-tab-unsaved" aria-label="Not saved" />}
+                  </button>
+                  {hasMenuActions && (
+                    <button
+                      type="button"
+                      className="chat-tab-menu-button"
+                      aria-label={`Open options for ${session.title}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.session.id === session.id}
+                      disabled={disabled}
+                      onClick={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        openMenu(session, rect.right - 190, rect.bottom + 4, event.currentTarget);
+                      }}
+                    >
+                      <MoreHorizontalIcon size={16} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <button type="button" className="icon-button chat-new-button" aria-label="Start a new chat" title="New chat" disabled={disabled} onClick={onNew}>
-          <PlusIcon />
-        </button>
+        <div className="chat-new-slot">
+          <button
+            type="button"
+            className="icon-button chat-new-button"
+            aria-label="Start a new chat"
+            title="New chat"
+            disabled={disabled}
+            onClick={onNew}
+          >
+            <PlusIcon />
+          </button>
+        </div>
       </div>
       {menu && (
         <div

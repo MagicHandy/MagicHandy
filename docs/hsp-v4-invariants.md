@@ -165,3 +165,22 @@ Test expectation:
 - API v3 numeric `play_state` values are mapped to named health states
 - stopped/not-initialized is tolerated only while starting; it triggers
   recovery Stop during an established run
+
+## Invariant 13: Buffered Lead Is Accepted Coverage
+
+The lead calculation uses the timestamp of the last point actually emitted,
+not the nominal end of its sampling window. It accounts for both observed
+append latency and the dispatch-loop polling interval. A buffered owner may
+declare a higher minimum; the engine must reach it before Play and maintain it
+while active. Cloud REST currently requires 1.5 seconds of accepted coverage so
+ordinary latency variance does not repeatedly trigger `pause_on_starving`.
+
+An HTTP 2xx status is not proof that an HSP command was accepted. API v3 error
+envelopes are failures and must not advance the cumulative point index.
+
+Test expectation:
+
+- Cloud has at least 1.5 seconds of emitted-point coverage before Play
+- lead checks compare against the emitted tail and reserve one dispatch tick
+- a 2xx `error` envelope records a failed command and leaves the HSP tail index
+  unchanged, so a retry retains first-add flush/index semantics
