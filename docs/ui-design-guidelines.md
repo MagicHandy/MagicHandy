@@ -229,8 +229,12 @@ by the backend rather than inferred from client controls.
   single bottom accent; do not combine a one-sided hard edge, a three-sided
   outline, and an underline. Focus belongs to the complete tab shape, not only
   its label segment when a menu action shares the tab. Use an amber dot plus
-  accessible text for unsaved state, horizontal overflow for long lists, and
-  arrow/Home/End keyboard focus.
+  accessible text for unsaved state, and arrow/Home/End keyboard focus. Tabs
+  start at a 236px preferred width, share the strip evenly as sessions are
+  added, and stop shrinking at 112px (104px on narrow screens). Only after that
+  floor may the list overflow horizontally. Keep the native scrollbar hidden;
+  touch, trackpad, mouse-wheel, keyboard focus, and active-session changes must
+  all reveal the intended tab.
   New Chat is a borderless-at-rest icon command in a protected trailing slot
   immediately after the rightmost tab; hover and focus may add a neutral surface.
   When tabs overflow, only the tab list scrolls and New Chat remains reachable.

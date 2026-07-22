@@ -19,14 +19,48 @@ interface MenuState {
   opener: HTMLElement;
 }
 
+const PREFERRED_TAB_WIDTH = 236;
+const TAB_GAP = 2;
+const TAB_STRIP_INLINE_PADDING = 8;
+
+function preferredTabStripWidth(tabCount: number) {
+  return tabCount * PREFERRED_TAB_WIDTH
+    + Math.max(0, tabCount - 1) * TAB_GAP
+    + TAB_STRIP_INLINE_PADDING;
+}
+
 export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSave, onDelete }: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    activeRef.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const revealActiveTab = () => {
+      activeRef.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    };
+    revealActiveTab();
+
+    const strip = scrollRef.current;
+    if (!strip || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(revealActiveTab);
+    observer.observe(strip);
+    return () => observer.disconnect();
   }, [activeId]);
+
+  useEffect(() => {
+    const strip = scrollRef.current;
+    if (!strip) return;
+    const scrollOverflow = (event: WheelEvent) => {
+      if (strip.scrollWidth <= strip.clientWidth) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (delta === 0) return;
+      event.preventDefault();
+      strip.scrollLeft += delta;
+    };
+    strip.addEventListener("wheel", scrollOverflow, { passive: false });
+    return () => strip.removeEventListener("wheel", scrollOverflow);
+  }, []);
 
   useEffect(() => {
     if (!menu) return;
@@ -73,14 +107,20 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
     else if (key === "Home") next = 0;
     else if (key === "End") next = sessions.length - 1;
     else return;
-    document.getElementById(`chat-tab-${sessions[next].id}`)?.focus();
+    const nextTab = document.getElementById(`chat-tab-${sessions[next].id}`);
+    nextTab?.focus();
+    nextTab?.closest(".chat-tab-wrap")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }
 
   return (
     <header className="chat-tabs-bar">
       <h1 className="chat-tabs-title">Chat</h1>
       <div className="chat-tabs-track">
-        <div className="chat-tabs-scroll">
+        <div
+          ref={scrollRef}
+          className="chat-tabs-scroll"
+          style={{ width: preferredTabStripWidth(sessions.length) }}
+        >
           <div className="chat-tabs-list" role="tablist" aria-label="Chat sessions">
             {sessions.map((session) => {
               const hasMenuActions = !session.saved || !session.active;

@@ -42,6 +42,7 @@ describe("ChatTabs", () => {
     const newButton = screen.getByRole("button", { name: "Start a new chat" });
     expect(title.closest(".chat-tabs-bar")).toContainElement(tablist);
     expect(tablist.closest(".chat-tabs-scroll")?.nextElementSibling).toContainElement(newButton);
+    expect(tablist.closest(".chat-tabs-scroll")).toHaveStyle({ width: "482px" });
     expect(newButton).toHaveClass("chat-new-button");
     expect(newButton).not.toHaveClass("icon-button");
   });
@@ -83,5 +84,29 @@ describe("ChatTabs", () => {
     fireEvent.keyDown(first, { key: "ArrowRight" });
     expect(second).toHaveFocus();
     expect(activate).not.toHaveBeenCalled();
+  });
+
+  it("uses the wheel to traverse overflow after tabs reach their compact limit", () => {
+    render(
+      <ChatTabs
+        sessions={sessions}
+        activeId="one"
+        disabled={false}
+        onActivate={vi.fn()}
+        onNew={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    const strip = screen.getByRole("tablist", { name: "Chat sessions" }).closest(".chat-tabs-scroll") as HTMLDivElement;
+    Object.defineProperties(strip, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: { configurable: true, value: 482 },
+    });
+    const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 48 });
+    fireEvent(strip, wheel);
+    expect(strip.scrollLeft).toBe(48);
+    expect(wheel.defaultPrevented).toBe(true);
   });
 });
