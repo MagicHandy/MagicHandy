@@ -140,7 +140,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
         <div className="chat-new-slot">
           <button
             type="button"
-            className="icon-button chat-new-button"
+            className="chat-new-button"
             aria-label="Start a new chat"
             title="New chat"
             disabled={disabled}

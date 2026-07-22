@@ -107,9 +107,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 914,780 raw / 568,066 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 470,544 raw
-   / 130,639 gzip bytes, and the stripped binary is 14,897,152 bytes. These
+   browser payload is 915,304 raw / 568,156 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 471,068 raw
+   / 130,729 gzip bytes, and the stripped binary is 14,897,664 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -118,6 +118,16 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-22** - Chat tab visual correction: the protected New Chat slot now
+  uses a 32 px borderless-at-rest icon aligned to the tab-label baseline. Active
+  tabs use one symmetric top-corner surface and bottom accent without the former
+  three-sided outline. Focus moves to the complete compound tab shape instead
+  of stopping between its label and menu segments. Rendered 1280x720 and
+  overflowing 390x844 checks confirmed that New Chat remains the center-point
+  hit owner with no overlap. HTML/CSS/JS is 471,068 raw / 130,729 gzip bytes;
+  complete embedded output is 915,304 / 568,156 (+524 / +90). Plain/stripped
+  `CGO_ENABLED=0` binaries are 21,154,816 / 14,897,664 bytes.
 
 - **2026-07-21** - Cloud buffer continuity and Chat tab hit targets: a 194-row
   live trace showed ordinary HSP adds acknowledged with only 80-125 ms left in

@@ -225,13 +225,18 @@ by the backend rather than inferred from client controls.
   not reapply the ordinary route max-width to this workspace.
 - Session tabs are a 43px restrained strip with the compact `Chat` route title
   attached at its leading edge, ordered by creation time so active changes do
-  not move targets. Use an underline and border for active state, an amber dot
-  plus accessible text for unsaved state, horizontal overflow for long lists,
-  and arrow/Home/End keyboard focus. New Chat is an icon command in a protected
-  trailing slot immediately after the rightmost tab; when tabs overflow, only
-  the tab list scrolls and New Chat remains reachable. Do not render an overflow
-  trigger when that tab has no available action. Save/Delete live in the visible
-  overflow menu, with right-click as a shortcut rather than the only path.
+  not move targets. The active tab uses one symmetric top-corner surface and a
+  single bottom accent; do not combine a one-sided hard edge, a three-sided
+  outline, and an underline. Focus belongs to the complete tab shape, not only
+  its label segment when a menu action shares the tab. Use an amber dot plus
+  accessible text for unsaved state, horizontal overflow for long lists, and
+  arrow/Home/End keyboard focus.
+  New Chat is a borderless-at-rest icon command in a protected trailing slot
+  immediately after the rightmost tab; hover and focus may add a neutral surface.
+  When tabs overflow, only the tab list scrolls and New Chat remains reachable.
+  Do not render an overflow trigger when that tab has no available action.
+  Save/Delete live in the visible overflow menu, with right-click as a shortcut
+  rather than the only path.
 - New Chat always confirms the active session. Switching away from the one
   unsaved working tab requires Save or discard; Autopilot stops before the
   backend changes session. The dialog traps focus, closes with Escape when no

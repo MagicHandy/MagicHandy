@@ -42,6 +42,8 @@ describe("ChatTabs", () => {
     const newButton = screen.getByRole("button", { name: "Start a new chat" });
     expect(title.closest(".chat-tabs-bar")).toContainElement(tablist);
     expect(tablist.closest(".chat-tabs-scroll")?.nextElementSibling).toContainElement(newButton);
+    expect(newButton).toHaveClass("chat-new-button");
+    expect(newButton).not.toHaveClass("icon-button");
   });
 
   it("does not put a disabled menu hit target beside New Chat", () => {

@@ -82,7 +82,7 @@
   flex: 0 0 auto;
   align-items: center;
   margin: 0;
-  padding: 0 14px;
+  padding: 5px 14px 0;
   border-right: 1px solid var(--line);
   color: var(--text);
   font-size: 0.86rem;
@@ -100,10 +100,10 @@
   display: flex;
   width: fit-content;
   min-width: 0;
-  max-width: calc(100% - 46px);
+  max-width: calc(100% - 40px);
   flex: 0 1 auto;
   align-items: end;
-  padding: 5px 5px 0 4px;
+  padding: 5px 2px 0 6px;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -123,19 +123,26 @@
   height: 37px;
   flex: 0 0 210px;
   align-items: stretch;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 4px 4px 0 0;
+  border-radius: 6px 6px 0 0;
+  transition: background-color 120ms ease;
 }
 
-.chat-tab-wrap:hover {
+.chat-tab-wrap:hover:not([data-active="true"]) {
   background: var(--surface-2);
 }
 
 .chat-tab-wrap[data-active="true"] {
-  border-color: var(--line-strong);
   background: var(--surface);
   box-shadow: inset 0 -2px var(--accent);
+}
+
+.chat-tab:focus-visible {
+  outline: none;
+}
+
+.chat-tab-wrap:has(.chat-tab:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .chat-tab,
@@ -154,7 +161,7 @@
   flex: 1 1 auto;
   align-items: center;
   gap: 7px;
-  padding-left: 10px;
+  padding: 0 10px;
   text-align: left;
 }
 
@@ -197,19 +204,43 @@
 }
 
 .chat-new-button {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
   margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.chat-new-button:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.chat-new-button:focus-visible {
+  outline-offset: -2px;
+}
+
+.chat-new-button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .chat-new-slot {
   display: flex;
   box-sizing: border-box;
-  width: 46px;
-  flex: 0 0 46px;
+  width: 40px;
+  flex: 0 0 40px;
   align-items: end;
-  padding: 5px 5px 1px;
+  padding: 5px 4px 3px;
 }
 
 .chat-tab-menu {
