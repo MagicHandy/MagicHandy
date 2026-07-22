@@ -1591,7 +1591,8 @@ Status: **M0-M2 implemented; M3 pending (2026-07-22).**
 
 A first-class Videos page with a searchable local catalog; a funscript with the exact
 same base name as a video plays in time with it through the one motion
-engine; the OSD carries a hideable intensity-colored funscript strip; library
+engine; the OSD carries a hideable compact position trace with a separate
+single-hue activity rail; library
 locations are added and scanned from Settings.
 
 ## Scope

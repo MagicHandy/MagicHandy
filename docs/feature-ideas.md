@@ -142,7 +142,7 @@ independent of everything.
   management, no new motion pathway); the full design — library locations +
   scan, a dedicated video grid/search page, exact-basename funscript
   pairing, reusable plain playback and import preview, synced playback anchored
-  to the video clock, and the hideable intensity-colored OSD strip — lives in
+  to the video clock, and the hideable position trace plus activity rail — lives in
   [video-playback.md](video-playback.md).
 
 ### Platform & data

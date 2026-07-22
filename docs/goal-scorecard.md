@@ -119,6 +119,21 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-22** - Paired-video timeline clarity follow-up: corrected extrema
+  bucketing that attached both ends of every sparse segment to the later
+  endpoint's screen column, creating false vertical bars. The 88 px
+  multi-color plot is now a 60 px high-contrast azure position trace with
+  same-pixel dense extrema, sparse guides, a smoothed three-pixel activity
+  rail, and an outlined playhead. Rendered fake-transport QA at 1280x720 and
+  390x844 covered a 3,536-action script, measured the timeline at 60 px on both
+  viewports, found no horizontal overflow, and produced a clean browser
+  console. All 223 frontend tests, typecheck/build, `go test ./...`,
+  `go vet ./...`, `golangci-lint`, and the `CGO_ENABLED=0` build pass.
+  HTML/CSS/JS is
+  490,439 raw / 136,606 gzip bytes; complete embedded output is 934,675 /
+  574,033 (+799 / +270 from M1-M2). No dependency or runtime-memory budget
+  moved.
+
 - **2026-07-22** - Phase 18 M1-M2 paired-video playback: exact-basename
   funscripts now load through one jailed 16 MiB / 100,000-action parser, render
   in a hideable intensity timeline below the native video, and run as finite

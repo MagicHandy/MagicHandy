@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { MediaFunscript } from "../api/types";
-import { FunscriptTimeline, intensityBand } from "./FunscriptTimeline";
+import { activityOpacity, buildTimelineSamples, FunscriptTimeline } from "./FunscriptTimeline";
 
 const script: MediaFunscript = {
   video_id: "video-1",
@@ -17,11 +17,32 @@ const script: MediaFunscript = {
 };
 
 describe("FunscriptTimeline", () => {
-  it("classifies authored segment speed without flattening high-intensity motion", () => {
-    expect(intensityBand(50)).toBe("idle");
-    expect(intensityBand(51)).toBe("moderate");
-    expect(intensityBand(201)).toBe("fast");
-    expect(intensityBand(401)).toBe("very-fast");
+  it("keeps activity legible with a bounded single-hue opacity ramp", () => {
+    expect(activityOpacity(0)).toBeCloseTo(0.18);
+    expect(activityOpacity(50)).toBeGreaterThan(activityOpacity(10));
+    expect(activityOpacity(500)).toBeCloseTo(1);
+    expect(activityOpacity(5_000)).toBe(1);
+  });
+
+  it("only creates extrema envelopes when authored actions share a pixel", () => {
+    const samples = buildTimelineSamples([
+      { at: 0, pos: 0 },
+      { at: 10_000, pos: 100 },
+    ], 10_000, 11);
+
+    expect(samples.count[0]).toBe(1);
+    expect(samples.count[5]).toBe(0);
+    expect(samples.count[10]).toBe(1);
+    expect(samples.position[5]).toBeCloseTo(50);
+
+    const dense = buildTimelineSamples([
+      { at: 0, pos: 10 },
+      { at: 1, pos: 90 },
+      { at: 10_000, pos: 50 },
+    ], 10_000, 11);
+    expect(dense.count[0]).toBe(2);
+    expect(dense.minimum[0]).toBe(10);
+    expect(dense.maximum[0]).toBe(90);
   });
 
   it("renders an accessible timeline and supports pointer and keyboard seeking", () => {
@@ -33,8 +54,9 @@ describe("FunscriptTimeline", () => {
     expect(canvas).not.toBeNull();
     Object.defineProperty(canvas as HTMLCanvasElement, "getBoundingClientRect", {
       configurable: true,
-      value: () => ({ left: 10, width: 200, top: 0, right: 210, bottom: 88, height: 88, x: 10, y: 0, toJSON() {} }),
+      value: () => ({ left: 10, width: 200, top: 0, right: 210, bottom: 60, height: 60, x: 10, y: 0, toJSON() {} }),
     });
+    expect(canvas).toHaveAttribute("height", "60");
     fireEvent.pointerDown(timeline, { button: 0, clientX: 110, pointerId: 1 });
     expect(onSeek).toHaveBeenLastCalledWith(5_000);
 
