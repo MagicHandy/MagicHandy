@@ -17,6 +17,7 @@ const (
 	startupArrivalRetryDelay        = 150 * time.Millisecond
 	startupMinimumLeadIn            = 500 * time.Millisecond
 	startupArrivalSettle            = 150 * time.Millisecond
+	startupTargetHold               = 10 * time.Second
 	startupStationaryAttempts       = 3
 	startupArrivalAttempts          = 6
 )
@@ -344,6 +345,11 @@ func (e *Engine) appendStartupLeadIn(
 		Points: []transport.TimedPoint{
 			{PositionPercent: profile.currentSemantic, TimeMillis: 0},
 			{PositionPercent: profile.targetSemantic, TimeMillis: profile.leadInDuration.Milliseconds()},
+			// HSP pause-on-starving can pause before the final segment has
+			// physically settled. Keep stationary coverage after the target so
+			// arrival polling observes an active position command, then Stop it
+			// as soon as the measured slider arrives.
+			{PositionPercent: profile.targetSemantic, TimeMillis: (profile.leadInDuration + startupTargetHold).Milliseconds()},
 		},
 	}
 	result, err := e.transport.AppendPoints(commandCtx, command)

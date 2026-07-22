@@ -115,6 +115,43 @@ describe("SyncedVideoPlayer", () => {
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "playing", event: "seeked" }), 9, expect.any(AbortSignal), false));
   });
 
+  it("cancels an obsolete arm and re-arms at the latest seek timestamp", async () => {
+    let initialArmSignal: AbortSignal | undefined;
+    mediaSync.mockImplementation((event, _sequence, signal) => {
+      if (event.event === "play") {
+        initialArmSignal = signal;
+        return new Promise<{ sync: MediaSyncStatus }>((_, reject) => {
+          signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      }
+      const sync: MediaSyncStatus = event.state === "playing"
+        ? { ...following, last_event: event.event }
+        : {
+            active: false,
+            video_id: event.video_id,
+            state: event.state === "closed" ? "idle" : event.state,
+            last_event: event.event,
+          };
+      return Promise.resolve({ sync });
+    });
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={11} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+
+    fireEvent.play(player);
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ event: "play" }), 11, expect.any(AbortSignal), false));
+    Object.defineProperty(player, "currentTime", { configurable: true, writable: true, value: 4.25 });
+    fireEvent.seeking(player);
+    fireEvent.seeked(player);
+
+    await waitFor(() => expect(initialArmSignal?.aborted).toBe(true));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
+      state: "playing",
+      event: "seeked",
+      media_time_ms: 4_250,
+    }), 11, expect.any(AbortSignal), false));
+    expect(screen.getByText("Device following video")).toBeInTheDocument();
+  });
+
   it("keeps paired playback visualization-only for a read-only tab", async () => {
     render(<SyncedVideoPlayer video={video()} locked stopSequence={7} />);
     const player = await screen.findByLabelText("Paired session");

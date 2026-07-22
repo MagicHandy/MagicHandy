@@ -111,6 +111,49 @@ func TestTimelineFromRejectsCompletedOrInvalidRate(t *testing.T) {
 	}
 }
 
+func TestTimelineFromAnchorsArbitraryVideoTimestamps(t *testing.T) {
+	script := Funscript{
+		VideoID: "seek-test",
+		Name:    "Seek test",
+		Actions: []FunscriptAction{
+			{AtMillis: 0, Position: 0},
+			{AtMillis: 1000, Position: 100},
+			{AtMillis: 1500, Position: 25},
+			{AtMillis: 5000, Position: 75},
+		},
+		DurationMillis: 5000,
+	}
+	for _, test := range []struct {
+		name          string
+		at            int64
+		rate          float64
+		wantPosition  float64
+		wantNextTime  int64
+		wantNextValue float64
+	}{
+		{name: "exact action", at: 1000, rate: 1, wantPosition: 100, wantNextTime: 500, wantNextValue: 25},
+		{name: "between actions", at: 1250, rate: 1, wantPosition: 62.5, wantNextTime: 250, wantNextValue: 25},
+		{name: "playback rate", at: 1250, rate: 2, wantPosition: 62.5, wantNextTime: 125, wantNextValue: 25},
+		{name: "near end", at: 4999, rate: 1, wantPosition: 74.985714, wantNextTime: 1, wantNextValue: 75},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			timeline, err := script.TimelineFrom(test.at, test.rate)
+			if err != nil {
+				t.Fatalf("TimelineFrom: %v", err)
+			}
+			if len(timeline.Points) < 2 {
+				t.Fatalf("timeline points = %+v, want exact anchor and a future action", timeline.Points)
+			}
+			if got := timeline.Points[0]; got.TimeMillis != 0 || math.Abs(got.PositionPercent-test.wantPosition) > 0.0001 {
+				t.Fatalf("anchor = %+v, want t=0 position %.6f", got, test.wantPosition)
+			}
+			if got := timeline.Points[1]; got.TimeMillis != test.wantNextTime || got.PositionPercent != test.wantNextValue {
+				t.Fatalf("next point = %+v, want t=%d position %.2f", got, test.wantNextTime, test.wantNextValue)
+			}
+		})
+	}
+}
+
 func TestTimelineFromPreservesReportedReversalsNearOneSeventeen(t *testing.T) {
 	script := Funscript{
 		VideoID: "reported-script", Name: "Reported script", DurationMillis: 83_703,
