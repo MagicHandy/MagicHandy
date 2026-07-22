@@ -95,6 +95,81 @@ func TestEngineReadsOwnerPositionResolution(t *testing.T) {
 	}
 }
 
+func TestLinearMediaSamplerDoesNotInsertChunkBoundaryPoints(t *testing.T) {
+	timeline := MediaTimelineDefinition{
+		ID: "reported-media", Name: "Reported media", DurationMillis: 7546,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 46},
+			{TimeMillis: 977, PositionPercent: 81},
+			{TimeMillis: 1931, PositionPercent: 41},
+			{TimeMillis: 2855, PositionPercent: 66},
+			{TimeMillis: 3831, PositionPercent: 37},
+			{TimeMillis: 4823, PositionPercent: 67},
+			{TimeMillis: 5938, PositionPercent: 35},
+			{TimeMillis: 6629, PositionPercent: 70},
+			{TimeMillis: 7546, PositionPercent: 41},
+		},
+	}
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 30
+	plan := NewMotionPlan("reported-media", MotionTarget{
+		Label: "Reported media", Source: TargetSourceMedia, SpeedPercent: 30,
+		Media: &timeline,
+	}, settings, 0, 0, time.Unix(0, 0))
+	engine := &Engine{
+		plan: plan, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
+		preservePlanKnots: true, maximumChunkPoints: 100,
+	}
+
+	first, err := engine.nextLinearMediaSamplesLocked(5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMotionSampleTimes(t, first, []int64{0, 977, 1931, 2855, 3831, 4823, 5938})
+	wantPositions := []float64{46, 81, 41, 66, 37, 67, 35}
+	for index, sample := range first {
+		if math.Abs(sample.PositionPercent-wantPositions[index]) > 0.001 {
+			t.Fatalf("sample %d position = %.3f, want authored %.3f", index, sample.PositionPercent, wantPositions[index])
+		}
+	}
+	for _, boundary := range []int64{1000, 2000, 3000, 4000, 5000} {
+		for _, sample := range first {
+			if sample.TimeMillis == boundary {
+				t.Fatalf("samples include unrelated chunk boundary %d: %+v", boundary, first)
+			}
+		}
+	}
+
+	second, err := engine.nextLinearMediaSamplesLocked(10000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMotionSampleTimes(t, second, []int64{6629, 7546, 10000})
+	if got, want := second[len(second)-1].PositionPercent, plan.SampleAt(10000).PositionPercent; got != want {
+		t.Fatalf("terminal hold position = %g, want %g", got, want)
+	}
+}
+
+func assertMotionSampleTimes(t *testing.T, samples []MotionSample, want []int64) {
+	t.Helper()
+	if len(samples) != len(want) {
+		t.Fatalf("sample times = %v, want %v", motionSampleTimes(samples), want)
+	}
+	for index, sample := range samples {
+		if sample.TimeMillis != want[index] {
+			t.Fatalf("sample times = %v, want %v", motionSampleTimes(samples), want)
+		}
+	}
+}
+
+func motionSampleTimes(samples []MotionSample) []int64 {
+	times := make([]int64, len(samples))
+	for index, sample := range samples {
+		times[index] = sample.TimeMillis
+	}
+	return times
+}
+
 func TestAdaptiveSamplesBoundLinearApproximation(t *testing.T) {
 	definition := PatternDefinition{
 		ID: "subtle", Name: "Subtle", Kind: PatternKindRoutine, CycleMillis: 6600,

@@ -107,9 +107,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 933,876 raw / 573,763 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 489,640 raw
-   / 136,336 gzip bytes, and the stripped binary is 14,995,456 bytes. These
+   browser payload is 937,161 raw / 574,432 gzip bytes because the isolated
+   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 492,925 raw
+   / 137,035 gzip bytes, and the stripped binary is 15,059,968 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -119,18 +119,26 @@ Ranked by threat to the stated goals:
 
 ## History
 
-- **2026-07-22** - Script and pattern continuity follow-up: a retained Cloud
-  trace proved the paired funscript's 1:17 reversals survived parsing, slicing,
-  motion scaling, and HSP framing, while accepted coverage stayed near 2.1
-  seconds. Clock-locked Cloud media now selects a batched 10-second lead with
-  four-second refill headroom and the existing 100-point cap; interactive
-  targets retain the 1.5-second retarget horizon. Loop patterns confine
-  zero-velocity reversal easing to a 75 ms trapezoidal ramp per side, and
-  post-quantization transition cleanup removes newly exposed <=2% chatter.
-  Catalog measurement records 97,191 ms fixed-grid stationary time, 36,633 ms
-  semantic adaptive time, and 14,135 ms Cloud-fitted time with 0.818% worst
-  wire error. Focused motion/transport tests pass; a capped post-fix subjective
-  hardware run remains the acceptance gate.
+- **2026-07-22** - Video and pattern continuity follow-up: the retained failing
+  trace proved parsing and slicing were source-exact, but exposed two later
+  defects. Cloud accepted only about 2.1 seconds ahead, and media sampling then
+  contracted every position around 50% by the configured maximum. At 30%,
+  `81 -> 41 -> 66` became about `59.3 -> 47.3 -> 54.8`, turning subtle authored
+  strokes into near-resolution movement with a perceived dwell at reversals.
+  Clock-locked Cloud media now maintains a batched 10-second lead under the
+  100-point owner cap, emits exact authored knots without synthetic one-second
+  chunk points, and preserves authored video timing and position by default.
+  Settings > Media adds an opt-in causal speed cap; changing its effective value
+  Stops and re-arms media without stopping unrelated patterns. Startup remains
+  independently speed-bounded. A capped Cloud run kept sixteen 750 ms
+  heartbeats `following` with 1 ms calibrated drift and 327-364 ms successful
+  append latency; a 01:16 to 01:30 seek re-armed once and stayed healthy.
+  Pattern/program speed remains timeline-based, and a capped pattern trace had
+  no duplicate positions or explicit holds. The full Go suite, 228 frontend
+  tests, typecheck, build, vet, lint, and `CGO_ENABLED=0` build pass. Embedded UI
+  is 937,161 raw / 574,432 gzip bytes; stripped binary is 15,059,968 bytes.
+  Subjective continuity and matched Browser Bluetooth/Intiface evidence remain
+  the acceptance gate.
 
 - **2026-07-22** - Position-aware Cloud startup: the first capped continuity
   run exposed an unbounded first action because HSP's `t=0` point was treated

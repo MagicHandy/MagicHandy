@@ -1,8 +1,9 @@
 # Video Library And Synced Funscript Playback — Design
 
-Status: **M0-M2 implemented (2026-07-22); M3 remains planned**. Exact-name
-funscripts now render below the video and play through the shared motion
-engine. Real-device alignment and transport-specific tuning remain M3 work.
+Status: **M0-M2 implemented (2026-07-22); M3 hardware acceptance is in progress**.
+Exact-name funscripts render below the video and play through the shared motion
+engine. Cloud startup, buffering, and seek/re-arm behavior now have objective
+real-device evidence; subjective continuity and the other owners remain M3 work.
 
 ## Decision note — this supersedes a recorded non-goal
 
@@ -182,19 +183,24 @@ the backend anchors motion to the reported media clock:
   never passes through pattern-import caps. Funscript segments use **linear
   interpolation**, matching the authored format; pattern curves keep PCHIP.
 - Play, resume, seek completion, and rate change each start a fresh finite
-  timeline at the exact browser media time. Pause, seek start, waiting/stalled
-  playback, decode failure, end, close, and heartbeat loss call engine
-  **Stop**, not Pause. Replacement stops the previous source before reading
+  timeline at the exact browser media time. The browser does not arm motion
+  until the player has future data (`readyState >= 3`). Pause, seek start,
+  actual `waiting`, decode failure, end, close, and heartbeat loss call engine
+  **Stop**, not Pause. A later `canplay` explicitly re-arms when playback is
+  still desired. The advisory `stalled` event alone does not stop a player that
+  still has buffered data. Replacement stops the previous source before reading
   the next script, so a slow or invalid file cannot leave old motion running.
 - This deliberately does **not** add `Reanchor`. Buffered transports can
   already hold future points, and changing an engine phase cannot retract that
   queue. Stop/re-arm is the only honest discontinuity operation until every
   transport exposes a proven queue-flush contract.
-- Each heartbeat compares browser time with the current anchor. Drift beyond
-  250 ms or a rate mismatch stops motion and returns `requires_reanchor`; the
-  browser then holds the video and explicitly re-arms. Sub-threshold drift is
-  observed but not chased. A heartbeat can validate or stop a run, **never
-  start one**.
+- Each heartbeat compares browser time with the current anchor after projecting
+  a bounded request age. The first valid heartbeat calibrates command/HTTP delay
+  unless it already shows hard drift. Two consecutive observations beyond 250 ms
+  stop motion; drift at or beyond 750 ms and playback-rate changes stop
+  immediately and return `requires_reanchor`. The browser then holds the video
+  and explicitly re-arms. Sub-threshold drift is observed but not chased. A
+  heartbeat can validate or stop a run, **never start one**.
 - Heartbeat loss for more than five seconds stops the engine. A closed,
   crashed, suspended, or controller-lost player therefore cannot leave a
   resumable media target behind.
@@ -216,13 +222,17 @@ the backend anchors motion to the reported media clock:
   latency. Trace rows record anchors, drift, and stop/re-arm reasons so M3 can
   validate real alignment without creating a transport-specific media path.
 
-Safety inheritance: authored timestamps stay locked to the video. The user's
-configured maximum speed percentage contracts semantic position excursions
-around the 50% midpoint before the normal stroke-window projection; it reduces
-authored velocity without slowing the video, but is not a calibrated physical
-velocity guarantee. Emergency Stop and the controller lease behave like every
-other motion source. Read-only tabs can watch video and inspect the timeline,
-but are visibly labeled visualization-only and emit no motion events.
+Safety inheritance: authored timestamps and positions stay locked to the video
+by default. Settings > Media can opt into a semantic slew cap derived from the
+configured maximum speed (300 semantic percentage points/second at 100%, scaled
+by the selected maximum). The cap changes only over-limit positions, never the
+media clock, and is not calibrated physical-velocity feedback. Changing the
+effective cap during an active media run Stops and invalidates that run because
+already-buffered HSP points cannot be rewritten; Play starts a clean stream.
+Startup acquisition remains speed-bounded by the configured maximum even when
+the playback cap is off. Emergency Stop and the controller lease behave like
+every other motion source. Read-only tabs can watch video and inspect the
+timeline, but are visibly labeled visualization-only and emit no motion events.
 
 ## Funscript timeline (M1 implemented)
 
@@ -264,12 +274,15 @@ downsampling is reused at canvas resolution):
   Paired videos load the M1 canvas timeline before controls become available;
   M2 adds compact sync/device/drift status. The persistent Stop button stays
   global as on every route.
-- Settings > **Library locations** (new Settings section): list of
-  registered paths with per-path entry counts, Add via the existing
-  controller-gated `POST /api/host/path-picker`, Remove (after confirmation,
-  catalog rows for that root are deleted when Settings is saved), Scan-now with
-  progress and the last scan summary. Startup reconciles rows to saved
-  locations without scanning files, closing a crash window after settings save.
+- Settings > **Media** begins with the video-script speed policy. It defaults
+  off so paired scripts keep their authored movement and timing; enabling it
+  applies the configured motion maximum only to over-limit segments.
+- The same section owns **Library locations**: registered paths with per-path
+  entry counts, Add via the existing controller-gated
+  `POST /api/host/path-picker`, Remove after confirmation (catalog rows for that
+  root are deleted when Settings is saved), and Scan now with progress and the
+  last scan summary. Startup reconciles rows to saved locations without scanning
+  files, closing a crash window after settings save.
 - **Funscript import preview** (M0): after a funscript is parsed, an optional
   modal uses the same player above the existing timeline. Exact-basename media
   is selected first when present, another catalog video can be chosen, and the
@@ -325,9 +338,10 @@ downsampling is reused at canvas resolution):
   geometry. The playback strip follows that separation while using the app's
   existing azure ramp rather than importing either tool's multi-hue heat
   palette.
-- **Honest control:** play holds the video while the backend arms; pause, seek,
-  rate change, buffering/decode failure, end, close, drift, and heartbeat loss
-  have explicit status.
+- **Honest control:** play holds the video until enough data is available and
+  the backend arms. Pause, seek, actual buffering, decode failure, end, close,
+  drift, and heartbeat loss have explicit status; a bare advisory `stalled`
+  event does not manufacture a stop while playback still has future data.
   Read-only tabs retain ordinary video and timeline access without pretending
   to control motion.
 - **Buffered-owner safety:** discontinuities Stop and re-arm rather than phase
@@ -339,8 +353,8 @@ downsampling is reused at canvas resolution):
   video to continue. A likely script/video duration mismatch is visible beside
   the paired-script metadata without disabling playback.
 - **Accepted deferrals:** poster frames, resume position, fullscreen timeline,
-  and transport-specific alignment tuning remain M3. M1-M2 make no hardware
-  alignment claim.
+  subjective continuity across every owner, and transport-specific alignment
+  tuning remain M3. M1-M2 make no blanket hardware-alignment claim.
 
 ### Seek and startup reliability review (2026-07-22)
 
@@ -396,6 +410,21 @@ with the saved maximum speed temporarily capped from 53% to 30%:
   intentionally left unchanged. The safe trace export is retained only as
   ignored local QA output, not repository content.
 
+A later continuity run at 01:17 used the same Cloud owner with playback speed
+limiting disabled and the saved maximum temporarily at 30% for startup safety:
+
+- Sixteen 750 ms heartbeats remained `following`; calibrated drift was 1 ms.
+- The trace retained authored linear reversals (`81 -> 41 -> 66 -> 37 -> 67 ->
+  35 -> 70`) instead of contracting them around center.
+- About ten seconds of accepted coverage stayed queued. Append requests returned
+  HTTP 200 in 327-364 ms without starvation or a synthetic chunk-boundary hold.
+- A separate 01:16 to 01:30 seek stopped and re-armed once, then remained
+  `following` for six heartbeats.
+- A capped pattern baseline contained no duplicate positions or explicit holds.
+  Its bounded PCHIP reversal easing remains intentional; subjective comparison
+  after the media amplitude fix is still an M3 acceptance item.
+- Cleanup issued Stop and restored the saved 53% maximum.
+
 ## API surface
 
 | Endpoint | Gate | Slice | Purpose |
@@ -431,22 +460,27 @@ with the saved maximum speed temporarily capped from 53% to 30%:
   keyboard seeking, and a persisted hide toggle.
 - **M2 — synchronized motion (implemented)**: the serialized browser-clock
   session starts finite linear media targets through the shared engine and
-  Stop/re-arms at discontinuities. Integration tests cover play, heartbeat,
-  seek, pause, resume, media stalls, end, timeout, stale Stop generations,
-  closed-session ordering, controller gates, one transport Play per explicit
-  arm, and no heartbeat-triggered restart.
+  Stop/re-arms at discontinuities. Exact media knots survive engine chunking;
+  no synthetic point is inserted at each nominal chunk boundary. Integration
+  tests cover play readiness, heartbeat calibration, confirmed/hard drift, seek,
+  pause, resume, waiting/recovery, decode failure, end, timeout, stale Stop
+  generations, closed-session ordering, controller gates, one transport Play per
+  explicit arm, no heartbeat-triggered restart, and clean re-arm after a video
+  speed-policy change.
 - **M3 — hardware acceptance + polish**: real-device alignment measurement
-  via the trace rows, drift-threshold tuning, client-captured poster frames,
-  resume-from-last-position, fullscreen strip overlay decision.
-  *Gate: a scripted video session on the real Handy with recorded
-  drift numbers; subjective alignment acceptable.*
+  is in progress. Cloud has objective startup, buffering, heartbeat, drift, and
+  seek/re-arm evidence. Remaining work is subjective continuity confirmation,
+  equivalent supported-owner evidence, client-captured poster frames,
+  resume-from-last-position, and the fullscreen strip-overlay decision.
+  *Gate: a scripted video session on the real Handy with recorded drift numbers;
+  subjective alignment acceptable.*
 
 ## Risks and budgets
 
-- **Risk R25 (media sync)** remains open: browser-clock anchoring
-  over a ~wire-latency transport may feel misaligned on hardware; mitigation
-  is the M2 trace evidence + M3 acceptance gate before the feature is called
-  done; fallback is honest labeling ("device follows with ~Xms lead").
+- **Risk R25 (media sync)** remains open: Cloud objective traces now cover
+  startup, sustained heartbeat, deep buffering, and seek/re-arm, but subjective
+  alignment and equivalent supported-owner evidence remain M3 gates before the
+  feature is called done; fallback is honest measured-latency labeling.
 - Binary: stdlib-only (`http.ServeContent`, `filepath.WalkDir`) — no size
   impact beyond the new package. Embedded UI: grid + player + canvas strip,
   no new dependencies (the design system and bucket-downsampling code carry

@@ -8,6 +8,12 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
+// At 100%, media may traverse the full semantic stroke three times per
+// second. Lower speed limits cap only segments that exceed that rate; they do
+// not contract every authored excursion and turn ordinary slow strokes into
+// sub-minimum-speed moves with a dwell at each reversal.
+const mediaFullSpeedRatePercentPerSecond = 300.0
+
 // MotionPlan is repeatable or finite semantic content sampled over stream time.
 //
 //revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
@@ -79,10 +85,6 @@ func (p MotionPlan) SampleAt(streamMillis int64) MotionSample {
 	phase := p.PhaseAt(streamMillis)
 	curveMillis := int64(math.Round(phase * float64(p.curve.duration)))
 	value := p.curve.Sample(curveMillis)
-	if p.Target.Media != nil {
-		scale := float64(p.Target.SpeedPercent) / 100
-		value = 50 + (value-50)*scale
-	}
 	position := applyTargetFocus(value/100, p.Target)
 	return MotionSample{
 		PlanID:          p.ID,
@@ -171,6 +173,9 @@ func (p MotionPlan) DirectionAt(streamMillis int64) int {
 func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) {
 	if target.Media != nil {
 		if definition, err := NormalizeMediaTimelineDefinition(*target.Media); err == nil {
+			if target.MediaSpeedLimitEnabled {
+				definition.Points = limitMediaTimelineRate(definition.Points, target.SpeedPercent)
+			}
 			curve, _ := newCurve(definition.Points, definition.DurationMillis, false, true, MaximumMediaTimelinePoints)
 			target.Media = &definition
 			target.MediaID = definition.ID
@@ -217,6 +222,30 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 	target.ProgramID = ""
 	target.MediaID = ""
 	return target, curve, true, definition.CycleMillis
+}
+
+// limitMediaTimelineRate keeps the video clock and every point timestamp
+// unchanged while bounding only physically over-fast travel. This is a
+// conventional slew limiter: each accepted point becomes the anchor for the
+// next segment, so the output cannot hide an unsafe jump after one clipped
+// segment. Ordinary authored travel below the selected limit is unchanged.
+func limitMediaTimelineRate(points []CurvePoint, speedPercent int) []CurvePoint {
+	if len(points) < 2 {
+		return append([]CurvePoint(nil), points...)
+	}
+	maximumRate := mediaFullSpeedRatePercentPerSecond * float64(clamp(speedPercent, 1, 100)) / 100
+	limited := append([]CurvePoint(nil), points...)
+	for index := 1; index < len(limited); index++ {
+		elapsedMillis := limited[index].TimeMillis - limited[index-1].TimeMillis
+		maximumDelta := maximumRate * float64(elapsedMillis) / 1000
+		minimum := limited[index-1].PositionPercent - maximumDelta
+		maximum := limited[index-1].PositionPercent + maximumDelta
+		limited[index].PositionPercent = math.Max(
+			minimum,
+			math.Min(maximum, limited[index].PositionPercent),
+		)
+	}
+	return limited
 }
 
 func periodForContent(baseDuration int64, speedPercent int, loop bool, kind string) int64 {

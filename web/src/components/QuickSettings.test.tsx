@@ -31,6 +31,7 @@ const initialMotion: MotionSettings = {
   stroke_min_percent: 20,
   stroke_max_percent: 80,
   reverse_direction: false,
+  apply_video_speed_limit: false,
   style: "balanced",
 };
 

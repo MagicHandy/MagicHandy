@@ -269,6 +269,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.Motion.SpeedMaxPercent != DefaultSettings().Motion.SpeedMaxPercent {
 		t.Fatal("missing motion settings were not defaulted")
 	}
+	if settings.Motion.ApplyVideoSpeedLimit {
+		t.Fatal("missing video speed-limit policy should default off")
+	}
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatal("missing LLM settings were not defaulted")
 	}

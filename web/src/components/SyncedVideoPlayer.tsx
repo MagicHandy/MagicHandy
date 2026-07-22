@@ -41,6 +41,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const seekInProgress = useRef(false);
   const resumeAfterSeek = useRef(false);
   const seekingStop = useRef<Promise<void>>(Promise.resolve());
+  const awaitingMedia = useRef(false);
+  const bufferingStop = useRef<Promise<void>>(Promise.resolve());
+  const readyArm = useRef<"play" | "seeked" | "ratechange" | "resync">("play");
   const heartbeatPending = useRef(false);
   const ignoredPlay = useRef(false);
   const ignoredPause = useRef(false);
@@ -70,6 +73,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     desiredPlaying.current = false;
     activeSync.current = false;
     seekInProgress.current = false;
+    awaitingMedia.current = false;
+    bufferingStop.current = Promise.resolve();
+    readyArm.current = "play";
     capturedStopSequence.current = undefined;
     setLoadingScript(video.has_funscript);
     if (!video.has_funscript) return () => controller.abort();
@@ -109,8 +115,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   useEffect(() => {
     const previous = latestStopSequence.current;
     latestStopSequence.current = stopSequence;
-    if (previous === undefined || stopSequence === undefined || previous === stopSequence || !activeSync.current) return;
+    if (previous === undefined || stopSequence === undefined || previous === stopSequence || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
     desiredPlaying.current = false;
+    awaitingMedia.current = false;
+    pendingArm.current = null;
+    bufferingStop.current = Promise.resolve();
     generation.current += 1;
     armAbort.current?.abort();
     const player = playerRef.current;
@@ -130,6 +139,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     if (!mounted.current) return;
     const status = syncStatusFromError(reason);
     activeSync.current = false;
+    awaitingMedia.current = false;
     if (status) setSync(status);
     else setSync({ active: false, state: "error", message: fallback });
     setSyncError(reason instanceof Error && reason.message ? reason.message : fallback);
@@ -186,6 +196,18 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       showSyncFailure(new Error("Synchronized playback supports video speeds from 0.25x to 4x."), "The video speed is unsupported.");
       return;
     }
+    if (!mediaHasFutureData(player)) {
+      awaitingMedia.current = true;
+      readyArm.current = event;
+      if (activeSync.current) {
+        bufferingStop.current = stopPlaybackMotion(player, "paused", "waiting");
+      } else {
+        setSyncError("");
+        setSync({ active: false, video_id: video.id, state: "seeking", last_event: "waiting", message: "Buffering video before motion starts." });
+      }
+      return;
+    }
+    awaitingMedia.current = false;
 
     const commandGeneration = ++generation.current;
     capturedStopSequence.current = sequence;
@@ -251,6 +273,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (mediaTimeMillis(player) >= script.duration_ms) {
         desiredPlaying.current = false;
         activeSync.current = false;
+        awaitingMedia.current = false;
         setSync({
           active: false,
           video_id: video.id,
@@ -274,6 +297,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (seekInProgress.current || player.ended) return;
       desiredPlaying.current = false;
       generation.current += 1;
+      awaitingMedia.current = false;
       armAbort.current?.abort();
       void stopPlaybackMotion(player, "paused", "pause");
       return;
@@ -282,6 +306,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (seekInProgress.current) return;
       seekInProgress.current = true;
       resumeAfterSeek.current = desiredPlaying.current || !player.paused;
+      awaitingMedia.current = false;
       holdVideo(player);
       generation.current += 1;
       armAbort.current?.abort();
@@ -301,7 +326,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       return;
     }
     if (event === "ratechange") {
-      if (desiredPlaying.current && !player.paused) {
+      if (desiredPlaying.current) {
         generation.current += 1;
         void armPlayback(player, "ratechange");
       }
@@ -310,17 +335,52 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     if (event === "ended") {
       desiredPlaying.current = false;
       generation.current += 1;
+      awaitingMedia.current = false;
       armAbort.current?.abort();
       void stopPlaybackMotion(player, "ended", "ended");
       return;
     }
-    if (event === "waiting" || event === "stalled" || event === "error") {
+    if (event === "canplay") {
+      if (!awaitingMedia.current || !desiredPlaying.current || seekInProgress.current || !mediaHasFutureData(player)) return;
+      const recovery = bufferingStop.current;
+      void recovery.then(() => {
+        if (!awaitingMedia.current || !desiredPlaying.current || seekInProgress.current || !mediaHasFutureData(player)) return;
+        awaitingMedia.current = false;
+        void armPlayback(player, readyArm.current);
+      });
+      return;
+    }
+    if (event === "stalled") return;
+    if (event === "waiting") {
       if (!desiredPlaying.current && !activeSync.current && !arming.current) return;
-      desiredPlaying.current = false;
+      const mustStop = activeSync.current || arming.current;
+      desiredPlaying.current = true;
+      awaitingMedia.current = true;
+      readyArm.current = "resync";
       generation.current += 1;
       armAbort.current?.abort();
       holdVideo(player);
-      void stopPlaybackMotion(player, "paused", event);
+      activeSync.current = false;
+      setSyncError("");
+      setSync({
+        active: false,
+        video_id: video.id,
+        state: "paused",
+        last_event: "waiting",
+        media_time_ms: mediaTimeMillis(player),
+        message: "Video is buffering; device motion is stopped.",
+      });
+      bufferingStop.current = mustStop ? stopPlaybackMotion(player, "paused", "waiting") : Promise.resolve();
+      return;
+    }
+    if (event === "error") {
+      if (!desiredPlaying.current && !activeSync.current && !arming.current) return;
+      desiredPlaying.current = false;
+      awaitingMedia.current = false;
+      generation.current += 1;
+      armAbort.current?.abort();
+      holdVideo(player);
+      void stopPlaybackMotion(player, "paused", "error");
     }
   }, [armPlayback, holdVideo, locked, script, stopPlaybackMotion, video.id]);
 
@@ -348,10 +408,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   }, [armPlayback, holdVideo, locked, script, showSyncFailure, syncEvent]);
 
   useEffect(() => {
-    if (!locked || !activeSync.current) return;
+    if (!locked || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
     desiredPlaying.current = false;
     generation.current += 1;
     armAbort.current?.abort();
+    awaitingMedia.current = false;
     const player = playerRef.current;
     if (player) holdVideo(player);
     activeSync.current = false;
@@ -366,6 +427,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       generation.current += 1;
       pendingArm.current = null;
       armAbort.current?.abort();
+      awaitingMedia.current = false;
       window.clearTimeout(ignoredPlayTimer.current);
       window.clearTimeout(ignoredPauseTimer.current);
       const player = playerRef.current ?? lastPlayer.current;
@@ -439,7 +501,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         <FunscriptTimeline script={script} currentTime={currentTime} hidden={timelineHidden} onSeek={seek} />
         <div className="media-sync-readout" data-state={sync.state} role="status">
           <span className="media-sync-state"><span aria-hidden="true" />{statusLabel}</span>
-          {sync.active && typeof sync.motion_scale_percent === "number" && <span>{sync.motion_scale_percent}% motion scale</span>}
+          {sync.active && typeof sync.motion_speed_limit_percent === "number" && <span>{sync.motion_speed_limit_percent}% speed limit</span>}
           {sync.active && typeof sync.drift_ms === "number" && <span aria-hidden="true">{Math.abs(sync.drift_ms)} ms drift</span>}
           <span className="media-sync-time">{formatTimelineTime(currentTime)}</span>
         </div>
@@ -476,6 +538,10 @@ function supportedPlaybackRate(rate: number): boolean {
   return Number.isFinite(rate) && rate >= 0.25 && rate <= 4;
 }
 
+function mediaHasFutureData(player: HTMLVideoElement): boolean {
+  return player.readyState >= 3;
+}
+
 function syncStatusFromError(reason: unknown): MediaSyncStatus | null {
   if (!(reason instanceof ApiError) || !reason.body || typeof reason.body !== "object" || !("sync" in reason.body)) return null;
   const candidate = (reason.body as { sync?: unknown }).sync;
@@ -487,10 +553,13 @@ function syncStatusLabel(sync: MediaSyncStatus, locked: boolean): string {
   if (locked) return "Timeline only; this tab does not control motion";
   switch (sync.state) {
     case "following": return "Device following video";
-    case "seeking": return sync.last_event === "play" ? "Arming device" : "Motion stopped while seeking";
-    case "paused": return sync.last_event === "waiting" || sync.last_event === "stalled" || sync.last_event === "error"
-      ? "Playback interrupted; motion stopped"
-      : "Video paused; motion stopped";
+    case "seeking":
+      if (sync.last_event === "waiting") return "Buffering video before motion starts";
+      return sync.last_event === "play" ? "Arming device" : "Motion stopped while seeking";
+    case "paused":
+      if (sync.last_event === "waiting") return "Buffering video; motion stopped";
+      if (sync.last_event === "stalled" || sync.last_event === "error") return "Playback interrupted; motion stopped";
+      return "Video paused; motion stopped";
     case "ended":
     case "completed": return "Script playback complete";
     case "drifted": return "Timing changed; re-arming device";

@@ -154,6 +154,59 @@ func TestMediaSyncDrivesPairedTimelineThroughSharedEngine(t *testing.T) {
 		t.Fatalf("ended status = %d engine=%+v", ended.Code, server.currentMotionEngine().Snapshot())
 	}
 }
+func TestVideoSpeedPolicyChangeStopsAndInvalidatesActiveMedia(t *testing.T) {
+	server := newTestServer(t)
+	fake := server.transport.(*transport.Fake)
+	root := t.TempDir()
+	writeMediaPair(t, root, "Policy", `{"actions":[{"at":0,"pos":0},{"at":10000,"pos":100}]}`)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Media.LibraryPaths = []string{root}
+		return settings
+	})
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+	if play := postMediaSync(t, server, server.stopSequence.Load(), video.ID, "playing", "play", 0, 1); play.Code != http.StatusOK {
+		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
+	}
+
+	previous, _ := server.store.Snapshot()
+	next := previous
+	next.Motion.ApplyVideoSpeedLimit = true
+	if err := server.applySettingsRuntimeTransition(t.Context(), previous, next); err != nil {
+		t.Fatalf("apply settings transition: %v", err)
+	}
+	if engine := server.currentMotionEngine(); engine != nil {
+		t.Fatalf("media engine survived speed-policy change: %+v", engine.Snapshot())
+	}
+	status := server.mediaSync.Status()
+	if status.State != "stopped" || status.LastEvent != "media_speed_policy_changed" {
+		t.Fatalf("media sync status = %+v, want invalidated speed-policy run", status)
+	}
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want Stop after speed-policy change", commands)
+	}
+}
+
+func TestVideoSpeedPolicyChangeDoesNotStopPatternMotion(t *testing.T) {
+	server := newTestServer(t)
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("pattern motion did not start")
+	}
+	previous, _ := server.store.Snapshot()
+	next := previous
+	next.Motion.ApplyVideoSpeedLimit = true
+	if err := server.applySettingsRuntimeTransition(t.Context(), previous, next); err != nil {
+		t.Fatalf("apply settings transition: %v", err)
+	}
+	engine := server.currentMotionEngine()
+	if engine == nil || !engine.Snapshot().Running {
+		t.Fatal("video-only policy change stopped pattern motion")
+	}
+}
 
 func TestMediaSyncReturnsSafeMotionStartupError(t *testing.T) {
 	owner := &mediaStartupFailureTransport{Fake: transport.NewFake()}
@@ -273,7 +326,65 @@ func TestMediaSyncHeartbeatReportsNaturalScriptCompletionWithoutStoppingVideo(t 
 	}
 }
 
-func TestMediaSyncDriftStopsAndRequiresExplicitRearm(t *testing.T) {
+func TestMediaSyncConfirmsModerateDriftBeforeStopping(t *testing.T) {
+	server := newTestServer(t)
+	root := t.TempDir()
+	writeMediaPair(t, root, "Confirmed drift", `{"actions":[{"at":0,"pos":0},{"at":10000,"pos":100}]}`)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Media.LibraryPaths = []string{root}
+		return settings
+	})
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+	sequence := server.stopSequence.Load()
+	if got := postMediaSync(t, server, sequence, video.ID, "playing", "play", 0, 1); got.Code != http.StatusOK {
+		t.Fatalf("play status = %d: %s", got.Code, got.Body.String())
+	}
+	if got := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1); got.Code != http.StatusOK {
+		t.Fatalf("clock calibration status = %d: %s", got.Code, got.Body.String())
+	}
+
+	server.mediaSync.mu.Lock()
+	server.mediaSync.anchorAt = server.mediaSync.anchorAt.Add(-400 * time.Millisecond)
+	server.mediaSync.mu.Unlock()
+	first := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1)
+	if first.Code != http.StatusOK || strings.Contains(first.Body.String(), `"requires_reanchor":true`) {
+		t.Fatalf("first variance status = %d: %s", first.Code, first.Body.String())
+	}
+	if !server.currentMotionEngine().Snapshot().Running || server.mediaSync.Status().State != "following" {
+		t.Fatalf("first variance stopped motion: sync=%+v engine=%+v", server.mediaSync.Status(), server.currentMotionEngine().Snapshot())
+	}
+
+	second := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1)
+	if second.Code != http.StatusOK || !strings.Contains(second.Body.String(), `"requires_reanchor":true`) {
+		t.Fatalf("confirmed drift status = %d: %s", second.Code, second.Body.String())
+	}
+	if server.currentMotionEngine().Snapshot().Running {
+		t.Fatal("confirmed drift left media motion running")
+	}
+}
+
+func TestMediaTimeAtReceiptCompensatesBoundedRequestAge(t *testing.T) {
+	now := time.UnixMilli(5_000)
+	event := mediaSyncEvent{MediaTimeMillis: 1_000, ClientTimeMillis: 4_500, PlaybackRate: 2}
+	if got := mediaTimeAtReceipt(event, now); got != 2_000 {
+		t.Fatalf("projected media time = %d, want 2000", got)
+	}
+
+	event.ClientTimeMillis = 2_000
+	if got := mediaTimeAtReceipt(event, now); got != 1_000 {
+		t.Fatalf("stale client time projected to %d, want unchanged 1000", got)
+	}
+	event.ClientTimeMillis = 5_100
+	if got := mediaTimeAtReceipt(event, now); got != 1_000 {
+		t.Fatalf("future client time projected to %d, want unchanged 1000", got)
+	}
+}
+
+func TestMediaSyncHardDriftStopsAndRequiresExplicitRearm(t *testing.T) {
 	server := newTestServer(t)
 	fake := server.transport.(*transport.Fake)
 	root := t.TempDir()

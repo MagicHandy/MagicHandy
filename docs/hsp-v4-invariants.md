@@ -51,7 +51,10 @@ Test expectation:
 
 ## Invariant 4: Semantic Speed Is Not Physical Velocity Feedback
 
-LLM/user speed percent is intent. HSP timed-point spacing and point deltas encode motion speed for HSP streams. Physical velocity calculations must not overwrite semantic speed and then feed back into the motion engine.
+LLM/user speed percent is intent. HSP timed-point spacing and point deltas
+encode motion speed for HSP streams. Physical velocity calculations must not
+overwrite semantic speed and then feed back into the motion engine. A video
+speed cap is an explicit plan policy, not transport-derived feedback.
 
 Test expectation:
 
@@ -70,7 +73,13 @@ Test expectation:
 - clock-locked media keeps a transport-declared deeper accepted buffer than
   interactive patterns, while append batching remains under the owner's point
   cap; interactive retargets must not inherit the media-sized horizon
-- speed limits do not flatten HSP point slopes into a fixed direct-position velocity budget
+- interactive speed limits do not flatten HSP slopes into a fixed transport
+  velocity budget
+- clock-locked video preserves authored timestamps and positions by default
+- the optional video cap may causally limit over-speed positions, but it never
+  stretches media timestamps or becomes transport feedback
+- changing an effective video cap during playback stops and re-arms because
+  already-buffered HSP points cannot be rewritten
 
 ## Invariant 6: Same-Pattern Updates Preserve Phase
 
@@ -114,11 +123,17 @@ Test expectation:
 
 ## Invariant 9: Active Settings Changes Refresh Motion Immediately
 
-Active speed-limit, stroke-range, and reverse-direction changes must update active motion without waiting for a later LLM or mode retarget.
+Active interactive speed-limit, stroke-range, and reverse-direction changes
+must update motion without waiting for a later LLM or mode retarget. The
+buffered-media exception is explicit: a change to its effective speed policy
+Stops and invalidates the synchronized run, then requires a clean Play re-arm.
 
 Test expectation:
 
-- changing speed limits while active emits a refresh/replacement or active transport update
+- changing interactive speed limits while active emits a phase-preserving
+  refresh/replacement or active transport update
+- changing an effective video speed policy while active stops media and cannot
+  stop unrelated pattern motion
 - changing stroke range while active emits a stroke-window update/replacement
 - changing reverse direction while active refreshes outgoing transport mapping
 

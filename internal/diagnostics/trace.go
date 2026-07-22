@@ -57,6 +57,7 @@ type MotionTraceTarget struct {
 	PatternIdentifier         string `json:"pattern_id,omitempty"`
 	ProgramIdentifier         string `json:"program_id,omitempty"`
 	MediaIdentifier           string `json:"media_id,omitempty"`
+	MediaSpeedLimitEnabled    bool   `json:"media_speed_limit_enabled,omitempty"`
 	AreaMinPercent            int    `json:"area_min_percent,omitempty"`
 	AreaMaxPercent            int    `json:"area_max_percent,omitempty"`
 	SoftAnchorPositionPercent int    `json:"soft_anchor_position_percent,omitempty"`

@@ -298,14 +298,14 @@ func TestChooseNearestPhaseIncludesFiniteEndpoint(t *testing.T) {
 	}
 }
 
-func TestMediaTimelineKeepsAuthoredClockAndUsesLinearTravel(t *testing.T) {
+func TestMediaTimelineKeepsAuthoredClockAndPreservesSubLimitTravel(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 40
 	timeline := MediaTimelineDefinition{
 		ID: "video", Name: "Video", DurationMillis: 1000,
 		Points: []CurvePoint{
 			{TimeMillis: 0, PositionPercent: 0},
-			{TimeMillis: 500, PositionPercent: 100},
+			{TimeMillis: 500, PositionPercent: 40},
 			{TimeMillis: 1000, PositionPercent: 0},
 		},
 	}
@@ -317,12 +317,44 @@ func TestMediaTimelineKeepsAuthoredClockAndUsesLinearTravel(t *testing.T) {
 		t.Fatalf("media plan timing = period %d loop %v", plan.PeriodMillis, plan.Loop)
 	}
 	if plan.Target.SpeedPercent != 40 {
-		t.Fatalf("media motion scale = %d, want configured maximum 40", plan.Target.SpeedPercent)
+		t.Fatalf("media speed limit = %d, want configured maximum 40", plan.Target.SpeedPercent)
 	}
-	// Authored position at 125ms is 25. A 40% motion scale contracts that
-	// around center to 40 without stretching the video clock.
-	if got := plan.SampleAt(125).PositionPercent; math.Abs(got-40) > 0.001 {
-		t.Fatalf("linear scaled sample = %.3f, want 40", got)
+	if plan.Target.MediaSpeedLimitEnabled {
+		t.Fatal("media speed limit unexpectedly enabled by default")
+	}
+	if got := plan.SampleAt(125).PositionPercent; math.Abs(got-10) > 0.001 {
+		t.Fatalf("sub-limit authored sample = %.3f, want 10", got)
+	}
+}
+
+func TestMediaTimelineCapsOverFastTravelWithoutChangingClock(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 40
+	settings.ApplyVideoSpeedLimit = true
+	timeline := MediaTimelineDefinition{
+		ID: "fast-video", Name: "Fast video", DurationMillis: 200,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 100, PositionPercent: 100},
+			{TimeMillis: 200, PositionPercent: 0},
+		},
+	}
+	plan := NewMotionPlan("fast-media", MotionTarget{
+		Label: "Fast video", Source: TargetSourceMedia, MediaID: timeline.ID, Media: &timeline,
+	}, settings, 0, 0, time.Unix(0, 0))
+
+	if plan.PeriodMillis != timeline.DurationMillis || plan.Loop {
+		t.Fatalf("media plan timing = period %d loop %v", plan.PeriodMillis, plan.Loop)
+	}
+	want := []CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 100, PositionPercent: 12},
+		{TimeMillis: 200, PositionPercent: 0},
+	}
+	for index, point := range plan.Target.Media.Points {
+		if point != want[index] {
+			t.Fatalf("limited point %d = %+v, want %+v", index, point, want[index])
+		}
 	}
 }
 

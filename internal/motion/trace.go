@@ -171,14 +171,15 @@ func (e *Engine) traceTargetSnapshot() *diagnostics.MotionTraceTarget {
 
 func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnostics.MotionTraceTarget {
 	trace := &diagnostics.MotionTraceTarget{
-		Label:             target.Label,
-		SpeedPercent:      target.SpeedPercent,
-		StrokeMinPercent:  settings.StrokeMinPercent,
-		StrokeMaxPercent:  settings.StrokeMaxPercent,
-		ReverseDirection:  settings.ReverseDirection,
-		PatternIdentifier: string(target.PatternID),
-		ProgramIdentifier: target.ProgramID,
-		MediaIdentifier:   target.MediaID,
+		Label:                  target.Label,
+		SpeedPercent:           target.SpeedPercent,
+		StrokeMinPercent:       settings.StrokeMinPercent,
+		StrokeMaxPercent:       settings.StrokeMaxPercent,
+		ReverseDirection:       settings.ReverseDirection,
+		PatternIdentifier:      string(target.PatternID),
+		ProgramIdentifier:      target.ProgramID,
+		MediaIdentifier:        target.MediaID,
+		MediaSpeedLimitEnabled: target.MediaSpeedLimitEnabled,
 	}
 	if target.AreaFocus != nil {
 		trace.AreaMinPercent = target.AreaFocus.MinPercent

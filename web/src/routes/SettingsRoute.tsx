@@ -84,6 +84,9 @@ export function SettingsRoute() {
   function patchMedia(libraryPaths: string[]) {
     setS((cur) => (cur ? { ...cur, media: { library_paths: libraryPaths } } : cur));
   }
+  function patchMotion(p: Partial<PublicSettings["motion"]>) {
+    setS((cur) => (cur ? { ...cur, motion: { ...cur.motion, ...p } } : cur));
+  }
   function patchVoice(p: Partial<PublicSettings["voice"]>) {
     setS((cur) => (cur ? { ...cur, voice: { ...cur.voice, ...p } } : cur));
   }
@@ -283,6 +286,8 @@ export function SettingsRoute() {
           <MediaSettingsPanel
             locations={s.media?.library_paths ?? []}
             savedLocations={saved?.media?.library_paths ?? []}
+            limitVideoScriptSpeed={s.motion.apply_video_speed_limit ?? false}
+            onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
             locked={locked}
             onChange={patchMedia}
           />

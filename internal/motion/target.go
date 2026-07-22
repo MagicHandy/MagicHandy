@@ -107,15 +107,16 @@ type SoftAnchor struct {
 //
 //revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
 type MotionTarget struct {
-	Label        string      `json:"label,omitempty"`
-	Source       string      `json:"source,omitempty"`
-	PatternID    PatternID   `json:"pattern_id,omitempty"`
-	PatternName  string      `json:"pattern_name,omitempty"`
-	ProgramID    string      `json:"program_id,omitempty"`
-	MediaID      string      `json:"media_id,omitempty"`
-	SpeedPercent int         `json:"speed_percent"`
-	AreaFocus    *AreaFocus  `json:"area_focus,omitempty"`
-	SoftAnchor   *SoftAnchor `json:"soft_anchor,omitempty"`
+	Label                  string      `json:"label,omitempty"`
+	Source                 string      `json:"source,omitempty"`
+	PatternID              PatternID   `json:"pattern_id,omitempty"`
+	PatternName            string      `json:"pattern_name,omitempty"`
+	ProgramID              string      `json:"program_id,omitempty"`
+	MediaID                string      `json:"media_id,omitempty"`
+	SpeedPercent           int         `json:"speed_percent"`
+	MediaSpeedLimitEnabled bool        `json:"media_speed_limit_enabled,omitempty"`
+	AreaFocus              *AreaFocus  `json:"area_focus,omitempty"`
+	SoftAnchor             *SoftAnchor `json:"soft_anchor,omitempty"`
 
 	// Resolved content is backend-owned and never serialized to clients. The
 	// public IDs above remain the authoritative snapshot vocabulary.
@@ -134,6 +135,7 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 	}
 	target.ProgramID = strings.TrimSpace(target.ProgramID)
 	target.MediaID = strings.TrimSpace(target.MediaID)
+	target.MediaSpeedLimitEnabled = false
 	if target.Media != nil {
 		target.MediaID = strings.TrimSpace(target.Media.ID)
 		target.PatternID = ""
@@ -141,10 +143,11 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 		target.ProgramID = ""
 		target.Pattern = nil
 		target.Program = nil
-		// Media timestamps remain locked to the video clock. The configured
-		// maximum scales excursions around center instead of stretching time,
-		// which reduces authored velocity without creating audiovisual drift.
+		// The maximum remains available for safe startup positioning, but changes
+		// the authored timeline only when the user explicitly enables that policy.
+		// Video timestamps always remain locked to the media clock.
 		target.SpeedPercent = settings.SpeedMaxPercent
+		target.MediaSpeedLimitEnabled = settings.ApplyVideoSpeedLimit
 	}
 	if target.Program != nil {
 		target.ProgramID = strings.TrimSpace(target.Program.ID)
