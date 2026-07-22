@@ -232,6 +232,57 @@ func TestStartupCalibrationUsesAbsolutePositionInsteadOfWindowRelativePosition(t
 	}
 }
 
+func TestStartupCalibrationAllowsSliderOutsideActiveStrokeWindow(t *testing.T) {
+	state := transport.MotionStartupState{
+		PositionWithinStrokePercent: -54.7983,
+		PositionAbsolute:            5.333334,
+		StrokeMinPercent:            25,
+		StrokeMaxPercent:            70,
+		StrokeMinAbsolute:           29.4565,
+		StrokeMaxAbsolute:           73.478195,
+	}
+	if err := validateStartupState(state); err != nil {
+		t.Fatalf("validateStartupState: %v", err)
+	}
+	calibration, err := newStartupCalibration(state)
+	if err != nil {
+		t.Fatalf("newStartupCalibration: %v", err)
+	}
+	fullPercent := calibration.fullPercentAt(state.PositionAbsolute)
+	if fullPercent < 0.3 || fullPercent > 0.4 {
+		t.Fatalf("full-travel position = %.4f%%, want about 0.34%%", fullPercent)
+	}
+	if targetAbsolute := calibration.absoluteAt(20); targetAbsolute < 24.5 || targetAbsolute > 24.7 {
+		t.Fatalf("20%% full-travel target = %.4fmm, want about 24.6mm", targetAbsolute)
+	}
+}
+
+func TestEngineRejectsStartupPositionOutsideCalibratedTravel(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{{
+			PositionWithinStrokePercent: -90,
+			PositionAbsolute:            -10,
+			StrokeMinPercent:            25,
+			StrokeMaxPercent:            70,
+			StrokeMinAbsolute:           29.4565,
+			StrokeMaxAbsolute:           73.478195,
+		}},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
+	settings := config.DefaultSettings().Motion
+
+	_, err := engine.Start(context.Background(), MotionTarget{
+		PatternID: PatternStroke, SpeedPercent: 20,
+	}, settings)
+	if err == nil || !strings.Contains(err.Error(), "outside calibrated full travel") {
+		t.Fatalf("Start error = %v, want fail-closed absolute-position rejection", err)
+	}
+	if countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 0 {
+		t.Fatalf("commands = %+v, want no playback for invalid absolute geometry", owner.Commands())
+	}
+}
+
 type startupStateTransport struct {
 	*transport.Fake
 	mu     sync.Mutex

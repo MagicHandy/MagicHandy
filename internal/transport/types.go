@@ -88,9 +88,10 @@ type PlaybackStartTimeProvider interface {
 
 // MotionStartupState is the physical device state needed to anchor the first
 // timed point without an implicit reposition. Stroke bounds use full physical
-// travel; PositionWithinStrokePercent is relative to those active bounds. The
-// absolute fields share one device coordinate system and are authoritative for
-// reconstructing full-travel position, independent of semantic direction.
+// travel; PositionWithinStrokePercent is relative to those active bounds and
+// may extrapolate below 0 or above 100 when the slider is parked outside them.
+// The absolute fields share one device coordinate system and are authoritative
+// for reconstructing full-travel position, independent of semantic direction.
 type MotionStartupState struct {
 	PositionWithinStrokePercent float64
 	PositionAbsolute            float64

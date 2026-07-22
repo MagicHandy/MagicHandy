@@ -126,6 +126,31 @@ func TestCloudRESTTransportReadsMotionStartupState(t *testing.T) {
 	}
 }
 
+func TestCloudRESTTransportAcceptsPositionOutsideActiveStrokeWindow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/slider/state":
+			_, _ = w.Write([]byte(`{"result":{"position":-0.547983,"speed_absolute":0,"position_absolute":5.333334}}`))
+		case "/slider/stroke":
+			_, _ = w.Write([]byte(`{"result":{"min":0.25,"max":0.7,"min_absolute":29.4565,"max_absolute":73.478195}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	state, _, err := cloud.ReadMotionStartupState(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMotionStartupState: %v", err)
+	}
+	if math.Abs(state.PositionWithinStrokePercent-(-54.7983)) > 0.0001 ||
+		math.Abs(state.PositionAbsolute-5.333334) > 0.0001 || state.SpeedAbsolute != 0 {
+		t.Fatalf("startup slider state = %+v", state)
+	}
+}
+
 func TestCloudRESTTransportRejectsIncompleteMotionStartupState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

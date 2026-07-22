@@ -220,6 +220,16 @@ validation sequence completed and its final emergency Stop returned HTTP 200.
 The objective startup gate therefore passes; subjective confirmation that the
 first action no longer feels abrupt remains open.
 
+A subsequent video run exposed one remaining parser assumption: with a 25-70%
+stroke window and the stopped slider at 5.33 mm below that window, API v3
+correctly returned a window-relative `position` of `-0.547983`. Startup treated
+that extrapolated value as malformed and failed before queuing the paired
+script. The Cloud parser now accepts finite relative extrapolation; the engine
+continues to calculate from the 5.33 mm absolute position and the absolute
+stroke endpoints, and its calibrated full-travel bounds remain the safety gate.
+Media synchronization also returns that redacted motion error instead of an
+opaque generic 502 when startup state is genuinely unusable.
+
 This evidence and correction apply to Cloud REST. Browser Bluetooth does not
 currently perform a slider-state read because that probe has destabilized live
 GATT sessions, and Intiface has no actuator-position feedback even though its
