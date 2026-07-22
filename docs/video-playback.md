@@ -306,10 +306,21 @@ downsampling is reused at canvas resolution):
 - **One document, two consumers:** the opaque video id resolves the same
   bounded exact-name script for the browser canvas and the backend timeline.
   Neither API returns a filesystem path.
-- **Timeline legibility:** min/max buckets preserve dense extrema at canvas
-  resolution; segment intensity uses the established neutral/azure/amber/white
-  tokens while red remains Stop-only; a separate playhead canvas avoids rebuilding the feature-length
-  curve on each `timeupdate`.
+- **Timeline legibility:** the 60 px overview keeps position and intensity as
+  separate layers: a continuous high-contrast azure position trace above a
+  smoothed three-pixel, single-hue activity rail. Extrema envelopes appear only
+  when multiple authored actions collapse into one pixel; sparse segments no
+  longer acquire false vertical bars from endpoint bucketing. A separate
+  white-on-dark playhead canvas avoids rebuilding the feature-length curve on
+  each `timeupdate`, and red remains Stop-only.
+- **Reference review:** [ScriptPlayer's position editor](https://github.com/FredTungsten/ScriptPlayer/blob/master/ScriptPlayer/ScriptPlayer.Shared/Controls/PositionBar.cs)
+  preserves a clear geometric trace and outlines it against the canvas, but its
+  per-segment speed colors become busy when compressed to a whole-video
+  overview. [OpenFunscripter's player](https://github.com/OpenFunscripter/OFS/blob/master/OFS-lib/UI/OFS_VideoplayerControls.cpp)
+  instead keeps its whole-file heatmap separate from the editor's action
+  geometry. The playback strip follows that separation while using the app's
+  existing azure ramp rather than importing either tool's multi-hue heat
+  palette.
 - **Honest control:** play holds the video while the backend arms; pause, seek,
   rate change, buffering/decode failure, end, close, drift, and heartbeat loss
   have explicit status.

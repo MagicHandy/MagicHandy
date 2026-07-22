@@ -1,11 +1,13 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import type { MediaFunscript } from "../api/types";
+import type { MediaFunscript, MediaFunscriptAction } from "../api/types";
 import { formatTimelineTime } from "./ImportTimeline";
 
-const TIMELINE_HEIGHT = 88;
-const INTENSITY_SLOW = 50;
-const INTENSITY_FAST = 200;
-const INTENSITY_VERY_FAST = 400;
+const TIMELINE_HEIGHT = 60;
+const PLOT_TOP = 5;
+const ACTIVITY_HEIGHT = 3;
+const ACTIVITY_BOTTOM = 3;
+const ACTIVITY_TOP = TIMELINE_HEIGHT - ACTIVITY_HEIGHT - ACTIVITY_BOTTOM;
+const PLOT_BOTTOM = ACTIVITY_TOP - 5;
 
 interface Props {
   script: MediaFunscript;
@@ -45,13 +47,21 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
     if (!context) return;
     const width = Math.max(1, canvas.clientWidth || 760);
     context.clearRect(0, 0, width, TIMELINE_HEIGHT);
-    const x = Math.round(progress * width) + 0.5;
+    const x = Math.round(progress * Math.max(0, width - 1)) + 0.5;
+    context.strokeStyle = cssColor("--bg-inset", "#101215");
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.lineTo(x, TIMELINE_HEIGHT);
+    context.stroke();
     context.strokeStyle = cssColor("--text", "#f4f7fa");
     context.lineWidth = 1;
     context.beginPath();
     context.moveTo(x, 0);
     context.lineTo(x, TIMELINE_HEIGHT);
     context.stroke();
+    context.fillStyle = cssColor("--text", "#f4f7fa");
+    context.fillRect(x - 1.5, 0, 3, 3);
   }, [currentTime, hidden, progress]);
 
   function seekAtClientX(clientX: number) {
@@ -147,61 +157,119 @@ function drawFunscript(canvas: HTMLCanvasElement, script: MediaFunscript) {
   context.clearRect(0, 0, width, TIMELINE_HEIGHT);
   context.fillStyle = cssColor("--bg-inset", "#111418");
   context.fillRect(0, 0, width, TIMELINE_HEIGHT);
-  context.strokeStyle = cssColor("--line", "#343a42");
-  context.lineWidth = 1;
-  context.beginPath();
-  context.moveTo(0, TIMELINE_HEIGHT / 2 + 0.5);
-  context.lineTo(width, TIMELINE_HEIGHT / 2 + 0.5);
-  context.stroke();
+
+  drawPositionGuides(context, width);
+  context.fillStyle = cssColor("--line-strong", "#3d434c");
+  context.fillRect(0, ACTIVITY_TOP, width, ACTIVITY_HEIGHT);
   if (actions.length < 2) return;
 
+  const samples = buildTimelineSamples(actions, duration, width);
+  const accent = cssColor("--accent", "#5b9dd9");
+
+  // Only dense authored actions get an extrema envelope. Long, sparse
+  // segments remain diagonals instead of acquiring false vertical bars.
+  context.fillStyle = accent;
+  context.globalAlpha = 0.2;
+  for (let x = 0; x < width; x++) {
+    if (samples.count[x] < 2 || samples.maximum[x] <= samples.minimum[x]) continue;
+    const top = yForPosition(samples.maximum[x]);
+    const bottom = yForPosition(samples.minimum[x]);
+    context.fillRect(x, top, 1, Math.max(1, bottom - top));
+  }
+  context.globalAlpha = 1;
+
+  context.strokeStyle = accent;
+  context.lineWidth = 1.75;
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  context.beginPath();
+  for (let x = 0; x < width; x++) {
+    const y = yForPosition(samples.position[x]);
+    if (x === 0) context.moveTo(0, y);
+    else context.lineTo(x, y);
+  }
+  context.stroke();
+
+  drawActivityRail(context, samples.speed, accent);
+  context.globalAlpha = 1;
+}
+
+function drawPositionGuides(context: CanvasRenderingContext2D, width: number) {
+  context.strokeStyle = cssColor("--line", "#343a42");
+  context.lineWidth = 1;
+  context.globalAlpha = 0.58;
+  context.beginPath();
+  for (const position of [25, 50, 75]) {
+    const y = Math.round(yForPosition(position)) + 0.5;
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+  }
+  context.stroke();
+  context.globalAlpha = 1;
+}
+
+function drawActivityRail(context: CanvasRenderingContext2D, speeds: Float64Array, accent: string) {
+  const radius = 2;
+  let total = 0;
+  for (let index = 0; index <= radius && index < speeds.length; index++) total += speeds[index];
+  context.fillStyle = accent;
+  for (let x = 0; x < speeds.length; x++) {
+    if (x > 0) {
+      const incoming = x + radius;
+      const outgoing = x - radius - 1;
+      if (incoming < speeds.length) total += speeds[incoming];
+      if (outgoing >= 0) total -= speeds[outgoing];
+    }
+    const sampleCount = Math.min(speeds.length - 1, x + radius) - Math.max(0, x - radius) + 1;
+    context.globalAlpha = activityOpacity(total / sampleCount);
+    context.fillRect(x, ACTIVITY_TOP, 1, ACTIVITY_HEIGHT);
+  }
+}
+
+interface TimelineSamples {
+  position: Float64Array;
+  speed: Float64Array;
+  minimum: Float64Array;
+  maximum: Float64Array;
+  count: Uint32Array;
+}
+
+export function buildTimelineSamples(actions: MediaFunscriptAction[], duration: number, requestedWidth: number): TimelineSamples {
+  const width = Math.max(1, Math.floor(requestedWidth));
+  const boundedDuration = Math.max(1, duration);
+  const position = new Float64Array(width);
+  const speed = new Float64Array(width);
   const minimum = new Float64Array(width);
   const maximum = new Float64Array(width);
-  const bucketSpeed = new Float64Array(width);
+  const count = new Uint32Array(width);
   minimum.fill(Number.POSITIVE_INFINITY);
   maximum.fill(Number.NEGATIVE_INFINITY);
-  for (let index = 1; index < actions.length; index++) {
-    const left = actions[index - 1];
-    const right = actions[index];
-    const bucket = Math.max(0, Math.min(width - 1, Math.floor((right.at / duration) * width)));
-    minimum[bucket] = Math.min(minimum[bucket], left.pos, right.pos);
-    maximum[bucket] = Math.max(maximum[bucket], left.pos, right.pos);
-    const elapsed = Math.max(1, right.at - left.at);
-    bucketSpeed[bucket] = Math.max(bucketSpeed[bucket], Math.abs(right.pos - left.pos) * 1000 / elapsed);
+
+  for (const action of actions) {
+    const bucket = Math.max(0, Math.min(width - 1, Math.round((action.at / boundedDuration) * (width - 1))));
+    minimum[bucket] = Math.min(minimum[bucket], action.pos);
+    maximum[bucket] = Math.max(maximum[bucket], action.pos);
+    count[bucket]++;
+  }
+
+  if (actions.length === 0) return { position, speed, minimum, maximum, count };
+  if (actions.length === 1) {
+    position.fill(actions[0].pos);
+    return { position, speed, minimum, maximum, count };
   }
 
   let actionIndex = 1;
-  let previousY = yForPosition(actions[0].pos);
-  for (let x = 1; x < width; x++) {
-    const at = (x / Math.max(1, width - 1)) * duration;
+  for (let x = 0; x < width; x++) {
+    const at = (x / Math.max(1, width - 1)) * boundedDuration;
     while (actionIndex < actions.length - 1 && actions[actionIndex].at < at) actionIndex++;
     const left = actions[Math.max(0, actionIndex - 1)];
     const right = actions[actionIndex];
     const elapsed = Math.max(1, right.at - left.at);
     const fraction = Math.max(0, Math.min(1, (at - left.at) / elapsed));
-    const position = left.pos + (right.pos - left.pos) * fraction;
-    const y = yForPosition(position);
-    const speed = Math.abs(right.pos - left.pos) * 1000 / elapsed;
-    context.strokeStyle = intensityColor(speed);
-    context.lineWidth = 1.5;
-    context.beginPath();
-    context.moveTo(x - 1, previousY);
-    context.lineTo(x, y);
-    context.stroke();
-    previousY = y;
+    position[x] = left.pos + (right.pos - left.pos) * fraction;
+    speed[x] = Math.abs(right.pos - left.pos) * 1000 / elapsed;
   }
-
-  for (let x = 0; x < width; x++) {
-    if (!Number.isFinite(minimum[x]) || maximum[x] <= minimum[x]) continue;
-    context.strokeStyle = intensityColor(bucketSpeed[x]);
-    context.globalAlpha = 0.82;
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(x + 0.5, yForPosition(maximum[x]));
-    context.lineTo(x + 0.5, yForPosition(minimum[x]));
-    context.stroke();
-  }
-  context.globalAlpha = 1;
+  return { position, speed, minimum, maximum, count };
 }
 
 function sizeCanvas(canvas: HTMLCanvasElement, height: number) {
@@ -217,24 +285,12 @@ function sizeCanvas(canvas: HTMLCanvasElement, height: number) {
 }
 
 function yForPosition(position: number): number {
-  const padding = 6;
-  return padding + ((100 - position) / 100) * (TIMELINE_HEIGHT - padding * 2);
+  return PLOT_TOP + ((100 - position) / 100) * (PLOT_BOTTOM - PLOT_TOP);
 }
 
-export function intensityBand(speed: number): "idle" | "moderate" | "fast" | "very-fast" {
-  if (speed <= INTENSITY_SLOW) return "idle";
-  if (speed <= INTENSITY_FAST) return "moderate";
-  if (speed <= INTENSITY_VERY_FAST) return "fast";
-  return "very-fast";
-}
-
-function intensityColor(speed: number): string {
-  switch (intensityBand(speed)) {
-    case "moderate": return cssColor("--accent", "#4d91c6");
-    case "fast": return cssColor("--warn", "#d8a23e");
-    case "very-fast": return cssColor("--text", "#f4f7fa");
-    default: return cssColor("--line-strong", "#68717c");
-  }
+export function activityOpacity(speed: number): number {
+  const normalized = Math.log1p(Math.max(0, speed) / 40) / Math.log1p(500 / 40);
+  return 0.18 + Math.min(1, normalized) * 0.82;
 }
 
 function cssColor(name: string, fallback: string): string {
