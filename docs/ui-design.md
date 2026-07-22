@@ -122,11 +122,13 @@ of a duplicate status card.
 The route uses the full remaining workspace width and height rather than the
 default content-width cap. Its compact `Chat` title occupies the leading edge
 of the horizontal session strip instead of a separate route heading, leaving
-the conversation more vertical room. New Chat follows the rightmost tab in the
-same horizontally scrolling row rather than floating at the far edge. Saved
-sessions remain available across restarts, while at most one unsaved working
-tab exists. Starting a new chat always confirms the active session; leaving an
-unsaved tab requires an explicit Save or discard choice.
+the conversation more vertical room. New Chat follows the rightmost tab in a
+dedicated trailing hit area; only the tab list scrolls when it overflows, so the
+command cannot be clipped or covered by a tab menu. Tabs with no available
+Save/Delete action omit the menu trigger instead of exposing a disabled target.
+Saved sessions remain available across restarts, while at most one unsaved
+working tab exists. Starting a new chat always confirms the active session;
+leaving an unsaved tab requires an explicit Save or discard choice.
 The same Save action is available in the visible tab menu and its right-click
 menu. Only one backend session is active, only that session can stream or own
 Autopilot, and session changes are rejected while a reply is in flight.

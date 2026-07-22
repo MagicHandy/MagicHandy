@@ -35,6 +35,14 @@ generated/imported curves pass automated safety checks, but routine-cycle feel
 still needs a capped hardware check. The revised Intiface pacer also needs a
 matched `motion_trace.v3` hardware run and subjective feel confirmation.
 
+Status 2026-07-21: review of a 194-row Cloud run found three HSP adds accepted
+after the preceding buffer tail, including a 958 ms request that crossed it by
+540 ms. The engine now prebuffers and maintains the Cloud owner's 1.5-second
+minimum using actual emitted coverage, and HTTP 200 API error envelopes no
+longer masquerade as accepted points. The device reported
+`DeviceNotConnected` during the follow-up, so a capped post-fix feel/trace run
+remains required.
+
 ## R2: Two-Codebase Drift
 
 Level: High

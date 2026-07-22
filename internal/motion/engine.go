@@ -77,6 +77,7 @@ type Engine struct {
 	latencyMillis               []int64
 	transition                  *planTransition
 	preservePlanKnots           bool
+	minimumBufferedLeadMillis   int64
 	positionResolutionPercent   float64
 	resolutionAfterStrokeWindow bool
 	maximumChunkPoints          int
@@ -135,6 +136,9 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		if capabilities.MinimumPointInterval > 0 {
 			engine.preservePlanKnots = false
 		}
+		if capabilities.MinimumBufferedLead > 0 {
+			engine.minimumBufferedLeadMillis = max(int64(1), capabilities.MinimumBufferedLead.Milliseconds())
+		}
 	}
 	if provider, ok := options.Transport.(transport.MotionSamplingCapabilitiesProvider); ok {
 		capabilities := provider.MotionSamplingCapabilities()
@@ -183,6 +187,10 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 	}
 	if err := e.dispatchNextChunk(loopCtx, runEpoch, "start_points"); err != nil {
 		e.abortStartup(loopCtx, runEpoch, "start_points_failed", err)
+		return e.Snapshot(), err
+	}
+	if err := e.prebufferBeforePlay(loopCtx, runEpoch, "start_prebuffer_points"); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "start_prebuffer_failed", err)
 		return e.Snapshot(), err
 	}
 	if err := e.play(loopCtx, runEpoch); err != nil {
@@ -320,6 +328,11 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	}
 	if err := e.dispatchNextChunk(loopCtx, runEpoch, "resume_points"); err != nil {
 		e.abortStartup(loopCtx, runEpoch, "resume_points_failed", err)
+		e.restorePaused(runEpoch, resumeAdmission)
+		return e.Snapshot(), err
+	}
+	if err := e.prebufferBeforePlay(loopCtx, runEpoch, "resume_prebuffer_points"); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "resume_prebuffer_failed", err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
@@ -662,7 +675,7 @@ func (e *Engine) ensureLeadBuffer(ctx context.Context, runEpoch uint64, reason s
 		e.mu.Lock()
 		if e.validateRunLocked(runEpoch) == nil {
 			requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
-			needsLead = e.nextSampleMillis < requiredTail
+			needsLead = e.bufferedTailMillisLocked() < requiredTail
 		} else {
 			e.mu.Unlock()
 			return errRunInvalidated
@@ -812,14 +825,28 @@ func (e *Engine) alignPlaybackStart(runEpoch uint64) {
 }
 
 func (e *Engine) leadMillisLocked() int64 {
-	lead := e.recentCommandLatencyMillisLocked() + leadSafetyPaddingMillis
+	// The dispatch loop may notice a low buffer as much as one tick late, and
+	// the append still has to cross the owner before the new points are usable.
+	// Keep the safety padding as accepted-buffer margin after accounting for
+	// both costs rather than spending almost all of it on the polling interval.
+	lead := e.recentCommandLatencyMillisLocked() + leadSafetyPaddingMillis + e.dispatchInterval.Milliseconds()
 	if lead < minLeadMillis {
-		return minLeadMillis
+		lead = minLeadMillis
 	}
 	if lead > maxLeadMillis {
-		return maxLeadMillis
+		lead = maxLeadMillis
+	}
+	if lead < e.minimumBufferedLeadMillis {
+		lead = e.minimumBufferedLeadMillis
 	}
 	return lead
+}
+
+func (e *Engine) bufferedTailMillisLocked() int64 {
+	if e.lastSample == nil {
+		return 0
+	}
+	return e.lastSample.TimeMillis
 }
 
 func (e *Engine) recentCommandLatencyMillisLocked() int64 {

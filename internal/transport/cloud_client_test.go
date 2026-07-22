@@ -80,6 +80,73 @@ func TestCloudRESTTransportDispatchesHSPCommands(t *testing.T) {
 	}
 }
 
+func TestCloudRESTTransportDeclaresBufferedLead(t *testing.T) {
+	capabilities := (&CloudRESTTransport{}).MotionTimingCapabilities()
+	if capabilities.MinimumBufferedLead != 1500*time.Millisecond {
+		t.Fatalf("minimum buffered lead = %v, want 1.5s", capabilities.MinimumBufferedLead)
+	}
+}
+
+func TestCloudRESTTransportRejectsHTTP200ErrorWithoutAdvancingTail(t *testing.T) {
+	addAttempts := 0
+	var addBodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/hsp/setup":
+			_, _ = w.Write([]byte(`{"result":{"play_state":2}}`))
+		case "/hsp/add":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read add body: %v", err)
+			}
+			addBodies = append(addBodies, string(body))
+			addAttempts++
+			if addAttempts == 1 {
+				_, _ = fmt.Fprintf(w, `{"error":{"code":1001,"name":"DeviceNotConnected","message":"private %s"}}`, cloudSecretFixture)
+				return
+			}
+			_, _ = w.Write([]byte(`{"result":{"play_state":2}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	command := AppendPointsCommand{
+		StreamID: "error-envelope",
+		Points: []TimedPoint{
+			{PositionPercent: 20, TimeMillis: 0},
+			{PositionPercent: 80, TimeMillis: 250},
+		},
+	}
+	result, err := cloud.AppendPoints(context.Background(), command)
+	if err == nil || result.OK {
+		t.Fatalf("first AppendPoints result = %+v, error = %v; want rejected HTTP 200 envelope", result, err)
+	}
+	if !strings.Contains(err.Error(), "DeviceNotConnected") || strings.Contains(err.Error(), cloudSecretFixture) {
+		t.Fatalf("error = %q, want safe API code without response message", err)
+	}
+	if cloud.hspPointCount != 0 {
+		t.Fatalf("point count = %d, want failed add not to advance the HSP tail", cloud.hspPointCount)
+	}
+	if diagnostics := cloud.Diagnostics(); diagnostics.Connected || diagnostics.LastResult == nil || diagnostics.LastResult.OK {
+		t.Fatalf("diagnostics = %+v, want failed 200 response recorded as disconnected", diagnostics)
+	}
+
+	result, err = cloud.AppendPoints(context.Background(), command)
+	if err != nil || !result.OK {
+		t.Fatalf("retry AppendPoints result = %+v, error = %v", result, err)
+	}
+	if cloud.hspPointCount != len(command.Points) {
+		t.Fatalf("point count = %d, want %d after accepted retry", cloud.hspPointCount, len(command.Points))
+	}
+	if len(addBodies) != 2 || !strings.Contains(addBodies[1], `"tail_point_stream_index":2`) || !strings.Contains(addBodies[1], `"flush":true`) {
+		t.Fatalf("add bodies = %q, want retry to retain first-add tail and flush semantics", addBodies)
+	}
+}
+
 func TestCloudRESTTransportRedactsDiagnostics(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "rejected "+cloudSecretFixture, http.StatusUnauthorized)

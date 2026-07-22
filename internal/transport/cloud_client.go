@@ -19,6 +19,7 @@ import (
 const (
 	defaultCloudBaseURL      = "https://www.handyfeeling.com/api/handy-rest/v3/"
 	serverTimeSyncTTLSeconds = 300
+	cloudMinimumBufferedLead = 1500 * time.Millisecond
 )
 
 // CloudEndpointConfig controls the Cloud REST endpoint paths used by the client.
@@ -79,6 +80,14 @@ func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabiliti
 		PositionResolutionPercent: 1,
 		MaximumPointsPerAppend:    maximumCloudHSPAddPoints,
 	}
+}
+
+// MotionTimingCapabilities reserves enough accepted HSP coverage for Cloud
+// round trips and the engine's dispatch tick. A live trace observed a 958 ms
+// add response; 1.5 seconds keeps a useful margin without making retargets
+// needlessly sluggish.
+func (*CloudRESTTransport) MotionTimingCapabilities() MotionTimingCapabilities {
+	return MotionTimingCapabilities{MinimumBufferedLead: cloudMinimumBufferedLead}
 }
 
 // PlaybackStartTime reports the estimated stream origin at the successful
@@ -377,15 +386,68 @@ func (t *CloudRESTTransport) dispatchWithBody(ctx context.Context, request Cloud
 		return result, body, readErr
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		err := fmt.Errorf("cloud REST %s returned HTTP %d: %s", request.Operation, response.StatusCode, strings.TrimSpace(string(body)))
+		err := fmt.Errorf("cloud REST %s returned HTTP %d", request.Operation, response.StatusCode)
 		result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
 		t.rememberPlaybackState(body)
+		return result, body, err
+	}
+	if err := cloudAPIResponseError(request.Operation, body); err != nil {
+		result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), err)
 		return result, body, err
 	}
 
 	result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), nil)
 	t.rememberPlaybackState(body)
 	return result, body, nil
+}
+
+func cloudAPIResponseError(operation string, body []byte) error {
+	var envelope struct {
+		Error json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil || len(envelope.Error) == 0 {
+		return nil
+	}
+	raw := strings.TrimSpace(string(envelope.Error))
+	if raw == "" || raw == "null" || raw == "false" {
+		return nil
+	}
+	if code := cloudAPIErrorCode(envelope.Error); code != "" {
+		return fmt.Errorf("cloud REST %s rejected request (%s)", operation, code)
+	}
+	return fmt.Errorf("cloud REST %s rejected request", operation)
+}
+
+func cloudAPIErrorCode(raw json.RawMessage) string {
+	var object map[string]any
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return ""
+	}
+	for _, key := range []string{"code", "name", "type"} {
+		value, ok := object[key].(string)
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" || len(value) > 64 {
+			continue
+		}
+		valid := true
+		for _, character := range value {
+			if (character >= 'a' && character <= 'z') ||
+				(character >= 'A' && character <= 'Z') ||
+				(character >= '0' && character <= '9') ||
+				character == '_' || character == '-' || character == '.' {
+				continue
+			}
+			valid = false
+			break
+		}
+		if valid {
+			return value
+		}
+	}
+	return ""
 }
 
 func (t *CloudRESTTransport) newHTTPRequest(ctx context.Context, request CloudRequest) (*http.Request, error) {

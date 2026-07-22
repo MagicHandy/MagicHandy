@@ -227,8 +227,10 @@ by the backend rather than inferred from client controls.
   attached at its leading edge, ordered by creation time so active changes do
   not move targets. Use an underline and border for active state, an amber dot
   plus accessible text for unsaved state, horizontal overflow for long lists,
-  and arrow/Home/End keyboard focus. New Chat is an icon command immediately
-  after the rightmost tab in that scrolling row; Save/Delete live in the visible
+  and arrow/Home/End keyboard focus. New Chat is an icon command in a protected
+  trailing slot immediately after the rightmost tab; when tabs overflow, only
+  the tab list scrolls and New Chat remains reachable. Do not render an overflow
+  trigger when that tab has no available action. Save/Delete live in the visible
   overflow menu, with right-click as a shortcut rather than the only path.
 - New Chat always confirms the active session. Switching away from the one
   unsaved working tab requires Save or discard; Autopilot stops before the

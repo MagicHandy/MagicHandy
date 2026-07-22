@@ -47,6 +47,10 @@ type DiagnosticsProvider interface {
 // engine must honor before producing its transport-neutral frame.
 type MotionTimingCapabilities struct {
 	MinimumPointInterval time.Duration
+	// MinimumBufferedLead is the minimum accepted timed-point coverage a
+	// buffered owner needs ahead of playback. The engine prebuffers to this
+	// duration before Play and maintains it while the stream is active.
+	MinimumBufferedLead time.Duration
 }
 
 // MotionTimingCapabilitiesProvider exposes optional device timing constraints.

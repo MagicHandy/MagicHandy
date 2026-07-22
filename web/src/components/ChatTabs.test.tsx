@@ -41,7 +41,24 @@ describe("ChatTabs", () => {
     const tablist = screen.getByRole("tablist", { name: "Chat sessions" });
     const newButton = screen.getByRole("button", { name: "Start a new chat" });
     expect(title.closest(".chat-tabs-bar")).toContainElement(tablist);
-    expect(tablist.nextElementSibling).toBe(newButton);
+    expect(tablist.closest(".chat-tabs-scroll")?.nextElementSibling).toContainElement(newButton);
+  });
+
+  it("does not put a disabled menu hit target beside New Chat", () => {
+    render(
+      <ChatTabs
+        sessions={[{ ...sessions[1], active: true }]}
+        activeId="two"
+        disabled={false}
+        onActivate={vi.fn()}
+        onNew={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Open options for Saved conversation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start a new chat" })).toBeEnabled();
   });
 
   it("moves keyboard focus across tabs without activating them", () => {

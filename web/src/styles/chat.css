@@ -89,10 +89,19 @@
   font-weight: 650;
 }
 
-.chat-tabs-scroll {
+.chat-tabs-track {
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
+  align-items: stretch;
+}
+
+.chat-tabs-scroll {
+  display: flex;
+  width: fit-content;
+  min-width: 0;
+  max-width: calc(100% - 46px);
+  flex: 0 1 auto;
   align-items: end;
   padding: 5px 5px 0 4px;
   overflow-x: auto;
@@ -191,8 +200,16 @@
   width: 36px;
   height: 36px;
   flex: 0 0 36px;
-  align-self: center;
-  margin: 0 4px 1px;
+  margin: 0;
+}
+
+.chat-new-slot {
+  display: flex;
+  box-sizing: border-box;
+  width: 46px;
+  flex: 0 0 46px;
+  align-items: end;
+  padding: 5px 5px 1px;
 }
 
 .chat-tab-menu {

@@ -1221,6 +1221,15 @@ stroke/add/play HTTP routes were removed to enforce the single motion path. See
 `docs/motion-pathway-review-2026-07-20.md`. Matched below-40% physical-feel and
 buffered-envelope refresh checks remain manual evidence.
 
+A 2026-07-21 trace follow-up identified transport starvation beyond curve
+quality: Cloud acknowledgements sometimes arrived after the previously emitted
+tail, while API v3 HTTP 200 error envelopes were counted as successful adds.
+Cloud now declares a 1.5-second minimum accepted lead; startup reaches it before
+Play, active checks include one dispatch interval and use the actual emitted
+tail, and rejected envelopes do not advance stream indexes. The current Handy
+was offline for the post-fix check, so the below-40% physical-feel gate remains
+open rather than inferred from automated tests.
+
 ## Done Criteria
 
 - Authored content routes through the shared motion engine.

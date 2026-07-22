@@ -67,6 +67,68 @@ func TestEngineHonorsTransportTimingFloor(t *testing.T) {
 	}
 }
 
+func TestEnginePrebuffersTransportMinimumLeadBeforePlay(t *testing.T) {
+	commandTransport := &timingCapabilityTransport{
+		Fake:                transport.NewFake(),
+		minimumBufferedLead: 150 * time.Millisecond,
+	}
+	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(32), time.Hour)
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	commands := commandTransport.Commands()
+	playIndex := -1
+	addsBeforePlay := 0
+	var bufferedThrough int64
+	engine.mu.Lock()
+	selectedLead := engine.leadMillisLocked()
+	engine.mu.Unlock()
+	for index, command := range commands {
+		switch command.Kind {
+		case transport.CommandKindPointsAdd:
+			if playIndex < 0 {
+				addsBeforePlay++
+				points := command.PointsAdd.Points
+				bufferedThrough = points[len(points)-1].TimeMillis
+			}
+		case transport.CommandKindPointsPlay:
+			playIndex = index
+		}
+	}
+	if playIndex < 0 || addsBeforePlay < 2 {
+		t.Fatalf("commands = %+v, want multiple prebuffer adds before Play", commands)
+	}
+	if bufferedThrough < selectedLead {
+		t.Fatalf("prebuffer tail = %dms, want selected lead of at least %dms", bufferedThrough, selectedLead)
+	}
+}
+
+func TestEngineLeadUsesActualEmittedTail(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(32), time.Hour)
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	engine.mu.Lock()
+	runEpoch := engine.runEpoch
+	engine.startedAt = engine.now()
+	engine.nextSampleMillis = 600
+	engine.lastSample = &MotionSample{TimeMillis: 400, PositionPercent: 50}
+	engine.mu.Unlock()
+	before := countCommands(fake.Commands(), transport.CommandKindPointsAdd)
+	if err := engine.dispatchIfLeadNeeded(context.Background(), runEpoch, "actual_tail_test"); err != nil {
+		t.Fatalf("dispatchIfLeadNeeded: %v", err)
+	}
+	after := countCommands(fake.Commands(), transport.CommandKindPointsAdd)
+	if after != before+1 {
+		t.Fatalf("add count = %d, want %d; nominal chunk end hid an underfilled emitted tail", after, before+1)
+	}
+}
+
 func TestEngineClampsSubMillisecondSampleInterval(t *testing.T) {
 	engine, err := NewEngine(EngineOptions{
 		Transport:      transport.NewFake(),
@@ -868,11 +930,15 @@ type completionBlockingTransport struct {
 
 type timingCapabilityTransport struct {
 	*transport.Fake
-	minimumInterval time.Duration
+	minimumInterval     time.Duration
+	minimumBufferedLead time.Duration
 }
 
 func (t *timingCapabilityTransport) MotionTimingCapabilities() transport.MotionTimingCapabilities {
-	return transport.MotionTimingCapabilities{MinimumPointInterval: t.minimumInterval}
+	return transport.MotionTimingCapabilities{
+		MinimumPointInterval: t.minimumInterval,
+		MinimumBufferedLead:  t.minimumBufferedLead,
+	}
 }
 
 func (t *completionBlockingTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {
