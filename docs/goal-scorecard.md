@@ -147,6 +147,19 @@ Ranked by threat to the stated goals:
   prevents main playback; subjective confirmation of first-action feel remains
   open.
 
+- **2026-07-22** - Cloud startup arrival sequencing: a failed video trace showed
+  the physical slider still catching up after the scheduled lead-in duration.
+  The engine had issued Stop before observing arrival, freezing motion short of
+  the target and making repeated starts inch forward. Startup now leaves the
+  final lead-in target active for up to six cancelable physical reads, Stops
+  only after stationary in-window arrival, and verifies once more after Stop.
+  Automated coverage pins delayed convergence, bounded fail-stop, post-Stop
+  drift rejection, and Emergency Stop during polling. A capped 10% Cloud run
+  then moved from 92.00 mm (88.93%) to the 5.00 mm endpoint, observed and
+  post-Stop verified 4.67 mm at zero reported speed, started the main stream,
+  and ended with Stop HTTP 200. All 128 concurrent `/api/state` probes
+  succeeded in 1-5 ms, ruling out a startup-held core-state lock.
+
 - **2026-07-22** - Paired-video timeline clarity follow-up: corrected extrema
   bucketing that attached both ends of every sparse segment to the later
   endpoint's screen column, creating false vertical bars. The 88 px

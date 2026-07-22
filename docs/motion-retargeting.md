@@ -87,20 +87,26 @@ the first planned position is not already within 1%:
 1. Widen the physical window only to the union of the old window, current
    position, requested window, and first target.
 2. Play an engine-owned two-point HSP lead-in from measured position to target.
-   Duration is at least `physical distance / requested speed`, where speed N is
-   at most N percentage points of full slider travel per second, with a 500 ms
-   floor.
-3. Stop that lead-in and verify the device reached the physical target, is
-   stationary, and is inside the requested final stroke window.
-4. Apply the requested stroke window, build the ordinary lead buffer, and Play
+   Duration is at least `physical distance / requested speed`, using N as a
+   conservative startup schedule of N full-travel percentage points per second
+   with a 500 ms floor. This startup-only mapping does not redefine the regular
+   pattern speed setting as a measured physical velocity.
+3. After the scheduled lead-in time, keep its final target active while polling
+   physical position through a bounded, cancelable arrival window. This avoids
+   freezing a Cloud-controlled slider that is still catching up to HSP time.
+4. Once the slider is at the physical target, stationary, and inside the
+   requested window within the same calibrated 1% tolerance, Stop the lead-in
+   and verify the same conditions again.
+5. Apply the requested stroke window, build the ordinary lead buffer, and Play
    the main stream from semantic time zero.
 
 The Start request remains in `starting` state during this sequence, so video
 and finite-program clocks do not advance during positioning. Every read, wait,
 append, Play, and Stop uses the run context; Emergency Stop invalidates the run
 and prevents main playback. A state-capable owner must fail stopped if it
-cannot establish current geometry. It must not silently use the old unanchored
-first point.
+cannot establish current geometry or settle within the bounded arrival window.
+It must not silently use the old unanchored first point. Failed arrival and
+post-Stop drift both issue a fail-safe Stop before Start returns.
 
 ### Phase 14 content semantics
 

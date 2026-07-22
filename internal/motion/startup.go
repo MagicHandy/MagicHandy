@@ -14,9 +14,11 @@ const (
 	startupPositionTolerancePercent = 1.0
 	startupStationarySpeedAbsolute  = 5.0
 	startupStationaryRetryDelay     = 150 * time.Millisecond
+	startupArrivalRetryDelay        = 150 * time.Millisecond
 	startupMinimumLeadIn            = 500 * time.Millisecond
 	startupArrivalSettle            = 150 * time.Millisecond
 	startupStationaryAttempts       = 3
+	startupArrivalAttempts          = 6
 )
 
 type startupMotionProfile struct {
@@ -81,34 +83,104 @@ func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, pref
 	if err := e.waitForStartupLeadIn(ctx, profile.leadInDuration); err != nil {
 		return err
 	}
+	if _, err := e.waitForStartupArrival(ctx, runEpoch, provider, profile, prefix); err != nil {
+		return err
+	}
 	if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_startup_lead_in_complete"); err != nil {
 		return err
 	}
 
-	verified, _, err := e.readMotionStartupState(ctx, runEpoch, provider, prefix+"_startup_verify")
+	verified, _, err := e.readMotionStartupState(ctx, runEpoch, provider, prefix+"_startup_stopped_verify")
 	if err != nil {
 		return err
 	}
-	arrivalError := math.Abs(verified.PositionAbsolute - profile.targetAbsolute)
-	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
-	if arrivalError > arrivalTolerance {
-		return fmt.Errorf(
-			"motion startup lead-in stopped %.2f mm from target, outside %.1f%% travel tolerance",
-			arrivalError,
-			startupPositionTolerancePercent,
-		)
-	}
-	if verified.SpeedAbsolute > startupStationarySpeedAbsolute {
-		return errors.New("device slider was still moving after the motion startup lead-in")
-	}
-	if verified.PositionAbsolute < profile.finalMinAbsolute ||
-		verified.PositionAbsolute > profile.finalMaxAbsolute {
-		return errors.New("motion startup lead-in stopped outside the requested stroke window")
+	if err := startupArrivalError(verified, profile, "stopped"); err != nil {
+		return err
 	}
 	if profile.finalWindowReady {
 		return nil
 	}
 	return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false)
+}
+
+// waitForStartupArrival observes the physical slider while the final lead-in
+// point remains active. Cloud playback can finish its scheduled HSP time before
+// the device has physically settled; stopping first freezes that lag and makes
+// repeated user retries inch toward the same target. A bounded observation
+// window lets the existing command complete without starting semantic/media
+// time. The caller's startup failure path issues Stop on every error.
+func (e *Engine) waitForStartupArrival(
+	ctx context.Context,
+	runEpoch uint64,
+	provider transport.MotionStartupStateProvider,
+	profile startupMotionProfile,
+	prefix string,
+) (transport.MotionStartupState, error) {
+	var state transport.MotionStartupState
+	for attempt := range startupArrivalAttempts {
+		var err error
+		state, _, err = e.readMotionStartupState(ctx, runEpoch, provider, prefix+"_startup_arrival")
+		if err != nil {
+			return transport.MotionStartupState{}, err
+		}
+		ready, err := startupArrivalReady(state, profile)
+		if err != nil {
+			return transport.MotionStartupState{}, err
+		}
+		if ready {
+			return state, nil
+		}
+		if attempt+1 < startupArrivalAttempts {
+			if err := e.startupWait(ctx, startupArrivalRetryDelay); err != nil {
+				return transport.MotionStartupState{}, err
+			}
+		}
+	}
+	return state, startupArrivalError(state, profile, "did not settle")
+}
+
+func startupArrivalReady(state transport.MotionStartupState, profile startupMotionProfile) (bool, error) {
+	if err := validateStartupState(state); err != nil {
+		return false, err
+	}
+	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
+	fullMinimum := profile.targetAbsolute - profile.targetFullPercent/100*profile.fullTravelAbsolute
+	fullMaximum := fullMinimum + profile.fullTravelAbsolute
+	if state.PositionAbsolute < fullMinimum-arrivalTolerance || state.PositionAbsolute > fullMaximum+arrivalTolerance {
+		return false, errors.New("motion startup position moved outside calibrated full travel")
+	}
+	return math.Abs(state.PositionAbsolute-profile.targetAbsolute) <= arrivalTolerance &&
+		state.SpeedAbsolute <= startupStationarySpeedAbsolute &&
+		state.PositionAbsolute >= profile.finalMinAbsolute-arrivalTolerance &&
+		state.PositionAbsolute <= profile.finalMaxAbsolute+arrivalTolerance, nil
+}
+
+func startupArrivalError(state transport.MotionStartupState, profile startupMotionProfile, disposition string) error {
+	ready, err := startupArrivalReady(state, profile)
+	if err != nil {
+		return err
+	}
+	if ready {
+		return nil
+	}
+	arrivalError := math.Abs(state.PositionAbsolute - profile.targetAbsolute)
+	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
+	if arrivalError > arrivalTolerance {
+		return fmt.Errorf(
+			"motion startup lead-in %s %.2f mm from target, outside %.1f%% travel tolerance",
+			disposition,
+			arrivalError,
+			startupPositionTolerancePercent,
+		)
+	}
+	if state.SpeedAbsolute > startupStationarySpeedAbsolute {
+		return fmt.Errorf(
+			"motion startup lead-in %s while device slider speed remained %.2f",
+			disposition,
+			state.SpeedAbsolute,
+		)
+	}
+	return fmt.Errorf("motion startup lead-in %s outside the requested stroke window", disposition)
 }
 
 func (e *Engine) readStationaryStartupState(

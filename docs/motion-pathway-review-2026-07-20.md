@@ -230,6 +230,31 @@ stroke endpoints, and its calibrated full-travel bounds remain the safety gate.
 Media synchronization also returns that redacted motion error instead of an
 opaque generic 502 when startup state is genuinely unusable.
 
+A later live trace exposed a sequencing defect in that verification. The
+engine waited only for the scheduled HSP duration, issued Stop, and then read
+the slider. The Cloud-controlled device was still physically catching up, so
+Stop froze it short of the target; each user retry moved it another fraction
+of the same distance. Startup now polls physical arrival while the final
+lead-in target remains active, bounded to six cancelable observations. It Stops
+only after stationary in-window arrival, then performs a second post-Stop read.
+Persistent lag, malformed geometry, post-Stop drift, and Emergency Stop all
+prevent main playback and leave the transport stopped. Automated tests pin the
+command/read order, bounded exhaustion, post-Stop guard, and cancellation.
+
+That rerun reached the calibrated 0% target (5.00 mm) but reported 4.67 mm at
+zero speed, or -0.34% after endpoint extrapolation. Target arrival already
+allowed 1% calibration tolerance while the separate final-window comparison
+incorrectly required an exact boundary. Both checks now use the same 1%
+tolerance; the commanded window itself is not widened. Automated coverage pins
+the finite endpoint case. The repeated capped Cloud run then measured 92.00 mm
+(88.93%), led to the 5.00 mm endpoint at a 10% setting, observed 4.67 mm with
+zero reported speed while the lead-in remained active, issued Stop, and
+verified the same position again before main Play. The start returned HTTP 200
+and the final safety Stop returned HTTP 200. During the complete startup, all
+128 concurrent `/api/state` probes succeeded in 1-5 ms. This rules out a motion
+startup lock in the state handler; a visible Core-offline banner during process
+replacement remains transient and recovered polling must clear it.
+
 This evidence and correction apply to Cloud REST. Browser Bluetooth does not
 currently perform a slider-state read because that probe has destabilized live
 GATT sessions, and Intiface has no actuator-position feedback even though its

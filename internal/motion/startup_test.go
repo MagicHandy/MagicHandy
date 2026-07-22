@@ -3,6 +3,8 @@ package motion
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -52,8 +54,77 @@ func TestEngineAnchorsCloudStyleStartupToMeasuredPosition(t *testing.T) {
 		t.Fatalf("commands = %+v, want one lead-in Play and one main Play", commands)
 	}
 	if !hasTraceReason(traces.Rows(), "start_startup_state_stroke") ||
-		!hasTraceReason(traces.Rows(), "start_startup_verify_stroke") {
+		!hasTraceReason(traces.Rows(), "start_startup_arrival_stroke") ||
+		!hasTraceReason(traces.Rows(), "start_startup_stopped_verify_stroke") {
 		t.Fatalf("startup observations missing from trace: %+v", traces.Rows())
+	}
+}
+
+func TestEngineKeepsLeadInPlayingUntilPhysicalArrival(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{
+			{PositionWithinStrokePercent: 90, PositionAbsolute: 90, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 65, PositionAbsolute: 65, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 40, PositionAbsolute: 40, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 20, PositionAbsolute: 20, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 20, PositionAbsolute: 20, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+		},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(64), time.Hour)
+	engine.startupWait = func(context.Context, time.Duration) error { return nil }
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 20
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+
+	if _, err := engine.Start(context.Background(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	wantEvents := []string{
+		"stop",
+		"read:0",
+		"play:startup",
+		"read:1",
+		"read:2",
+		"read:3",
+		"stop",
+		"read:4",
+		"play:main",
+	}
+	if events := owner.Events(); !slices.Equal(events, wantEvents) {
+		t.Fatalf("startup events = %v, want %v", events, wantEvents)
+	}
+}
+
+func TestEngineFailsStoppedWhenPositionDriftsAfterLeadInStop(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{
+			{PositionWithinStrokePercent: 90, PositionAbsolute: 90, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 20, PositionAbsolute: 20, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 22, PositionAbsolute: 22, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+		},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(64), time.Hour)
+	engine.startupWait = func(context.Context, time.Duration) error { return nil }
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 20
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+
+	_, err := engine.Start(context.Background(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings)
+	if err == nil || !strings.Contains(err.Error(), "stopped 2.00 mm from target") {
+		t.Fatalf("Start error = %v, want post-stop position rejection", err)
+	}
+	commands := owner.Commands()
+	if countCommands(commands, transport.CommandKindStop) != 3 {
+		t.Fatalf("commands = %+v, want initial, lead-in, and fail-safe Stops", commands)
+	}
+	if countCommands(commands, transport.CommandKindPointsPlay) != 1 {
+		t.Fatalf("commands = %+v, want only startup Play", commands)
 	}
 }
 
@@ -111,12 +182,12 @@ func TestEngineUsesLeadInBeforeNarrowingWindowAroundNearbySlider(t *testing.T) {
 	}
 }
 
-func TestEngineRejectsLeadInArrivalOutsideFinalWindow(t *testing.T) {
+func TestEngineAcceptsLeadInArrivalWithinCalibratedBoundaryTolerance(t *testing.T) {
 	owner := &startupStateTransport{
 		Fake: transport.NewFake(),
 		states: []transport.MotionStartupState{
 			{PositionWithinStrokePercent: 0, PositionAbsolute: 0, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
-			{PositionWithinStrokePercent: 19, PositionAbsolute: 19, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 19.5, PositionAbsolute: 19.5, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
 		},
 	}
 	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
@@ -126,13 +197,95 @@ func TestEngineRejectsLeadInArrivalOutsideFinalWindow(t *testing.T) {
 	settings.StrokeMinPercent = 20
 	settings.StrokeMaxPercent = 80
 
+	if _, err := engine.Start(context.Background(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+	if countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 2 {
+		t.Fatalf("commands = %+v, want startup and main Play within 1%% endpoint tolerance", owner.Commands())
+	}
+}
+
+func TestEngineFailsStoppedWhenLeadInNeverArrives(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{
+			{PositionWithinStrokePercent: 90, PositionAbsolute: 90, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 60, PositionAbsolute: 60, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+		},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(64), time.Hour)
+	engine.startupWait = func(context.Context, time.Duration) error { return nil }
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 20
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+
 	_, err := engine.Start(context.Background(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings)
-	if err == nil || !strings.Contains(err.Error(), "outside the requested stroke window") {
-		t.Fatalf("Start error = %v, want fail-closed arrival rejection", err)
+	if err == nil || !strings.Contains(err.Error(), "did not settle 40.00 mm from target") {
+		t.Fatalf("Start error = %v, want bounded arrival failure", err)
+	}
+	commands := owner.Commands()
+	if countCommands(commands, transport.CommandKindStop) != 2 {
+		t.Fatalf("commands = %+v, want initial Stop and fail-stop", commands)
+	}
+	if countCommands(commands, transport.CommandKindPointsPlay) != 1 {
+		t.Fatalf("commands = %+v, want only startup Play", commands)
+	}
+	if owner.ReadCount() != startupArrivalAttempts+1 {
+		t.Fatalf("startup reads = %d, want initial plus %d bounded arrival reads", owner.ReadCount(), startupArrivalAttempts)
+	}
+}
+
+func TestStopCancelsStartupArrivalPollingBeforeMainPlayback(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{
+			{PositionWithinStrokePercent: 90, PositionAbsolute: 90, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+			{PositionWithinStrokePercent: 60, PositionAbsolute: 60, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+		},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(64), time.Hour)
+	polling := make(chan struct{})
+	var waits int
+	engine.startupWait = func(ctx context.Context, _ time.Duration) error {
+		waits++
+		if waits == 1 {
+			return nil
+		}
+		close(polling)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 20
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, err := engine.Start(context.Background(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings)
+		startDone <- err
+	}()
+	select {
+	case <-polling:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not enter its cancellable arrival poll")
+	}
+	if _, err := engine.Stop(context.Background(), "test_stop"); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	select {
+	case err := <-startDone:
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, errRunInvalidated) {
+			t.Fatalf("Start error = %v, want cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Start remained blocked after Stop")
 	}
 	for _, command := range owner.Commands() {
 		if command.PointsPlay != nil && !strings.HasSuffix(command.PointsPlay.StreamID, "-startup") {
-			t.Fatalf("main stream played after rejected startup arrival: %+v", owner.Commands())
+			t.Fatalf("main stream played after arrival-poll cancellation: %+v", owner.Commands())
 		}
 	}
 }
@@ -190,7 +343,7 @@ func TestStopCancelsStartupLeadInBeforeMainPlayback(t *testing.T) {
 	}
 }
 
-func TestStartupLeadInDurationHonorsSpeedAsMaximumTravelRate(t *testing.T) {
+func TestStartupLeadInDurationUsesConservativeStartupRate(t *testing.T) {
 	for _, test := range []struct {
 		delta float64
 		speed int
@@ -288,6 +441,25 @@ type startupStateTransport struct {
 	mu     sync.Mutex
 	states []transport.MotionStartupState
 	reads  int
+	events []string
+}
+
+func (s *startupStateTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {
+	s.mu.Lock()
+	s.events = append(s.events, "stop")
+	s.mu.Unlock()
+	return s.Fake.Stop(ctx, command)
+}
+
+func (s *startupStateTransport) Play(ctx context.Context, command transport.PlayCommand) (transport.CommandResult, error) {
+	event := "play:main"
+	if strings.HasSuffix(command.StreamID, "-startup") {
+		event = "play:startup"
+	}
+	s.mu.Lock()
+	s.events = append(s.events, event)
+	s.mu.Unlock()
+	return s.Fake.Play(ctx, command)
 }
 
 func (s *startupStateTransport) ReadMotionStartupState(context.Context) (
@@ -301,6 +473,7 @@ func (s *startupStateTransport) ReadMotionStartupState(context.Context) (
 		return transport.MotionStartupState{}, transport.MotionStartupStateResults{}, errors.New("no startup state")
 	}
 	index := min(s.reads, len(s.states)-1)
+	s.events = append(s.events, fmt.Sprintf("read:%d", s.reads))
 	s.reads++
 	result := func(kind transport.CommandKind) transport.CommandResult {
 		return transport.CommandResult{Kind: kind, Transport: "startup_fake", OK: true, Status: "recorded"}
@@ -309,6 +482,18 @@ func (s *startupStateTransport) ReadMotionStartupState(context.Context) (
 		Slider: result(transport.CommandKindSliderState),
 		Stroke: result(transport.CommandKindStrokeWindowState),
 	}, nil
+}
+
+func (s *startupStateTransport) Events() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.events)
+}
+
+func (s *startupStateTransport) ReadCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reads
 }
 
 func findAppendForStreamSuffix(t *testing.T, commands []transport.Command, suffix string) transport.AppendPointsCommand {
