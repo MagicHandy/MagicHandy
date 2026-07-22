@@ -418,8 +418,9 @@ func TestLoopCurveKeepsVelocityAcrossMonotonicSeam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if velocity := curve.Velocity(0); math.Abs(velocity-20) > 0.001 {
-		t.Fatalf("seam velocity = %.6f%%/s, want continuous 20%%/s", velocity)
+	wantVelocity := 20.0 / (1 - float64(maximumPatternReversalBlendMillis)/2000)
+	if velocity := curve.Velocity(0); math.Abs(velocity-wantVelocity) > 0.001 {
+		t.Fatalf("seam velocity = %.6f%%/s, want continuous %.6f%%/s", velocity, wantVelocity)
 	}
 	if difference := math.Abs(curve.Velocity(1) - curve.Velocity(2999)); difference > 0.2 {
 		t.Fatalf("velocity jumps %.3f%%/s across monotonic loop seam", difference)
@@ -437,5 +438,34 @@ func TestLoopCurveStopsAtSeamReversal(t *testing.T) {
 	}
 	if velocity := math.Abs(curve.Velocity(0)); velocity > 0.001 {
 		t.Fatalf("reversing seam velocity = %.6f%%/s, want zero", velocity)
+	}
+}
+
+func TestLoopCurveConfinesReversalEasingToApex(t *testing.T) {
+	curve, err := NewCurve([]CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 1000, PositionPercent: 100},
+		{TimeMillis: 2000, PositionPercent: 0},
+	}, 2000, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sample := range []struct {
+		at   int64
+		want float64
+	}{
+		{at: 250, want: 22.973},
+		{at: 750, want: 77.027},
+		{at: 1250, want: 77.027},
+		{at: 1750, want: 22.973},
+	} {
+		if got := curve.Sample(sample.at); math.Abs(got-sample.want) > 0.01 {
+			t.Fatalf("sample at %dms = %.3f, want bounded-ease %.3f away from reversal", sample.at, got, sample.want)
+		}
+	}
+	for _, at := range []int64{0, 1000} {
+		if velocity := math.Abs(curve.Velocity(at)); velocity > 0.001 {
+			t.Fatalf("reversal velocity at %dms = %.6f%%/s, want zero", at, velocity)
+		}
 	}
 }

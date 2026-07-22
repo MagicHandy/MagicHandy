@@ -12,6 +12,7 @@ const (
 	maximumCloudHSPAddPoints = 100
 
 	cloudPathStrokeWindow = "slider/stroke"
+	cloudPathSliderState  = "slider/state"
 	cloudPathHSPSetup     = "hsp/setup"
 	cloudPathHSPAdd       = "hsp/add"
 	cloudPathHSPPlay      = "hsp/play"
@@ -144,6 +145,28 @@ func (b *CloudRESTBuilder) BuildStrokeWindow(command StrokeWindowCommand) (Cloud
 			StrokeWindow: &command,
 		},
 	}, nil
+}
+
+// BuildSliderState shapes a read-only Cloud REST slider-state request.
+func (b *CloudRESTBuilder) BuildSliderState() CloudRequest {
+	return CloudRequest{
+		Transport: cloudRESTName,
+		Operation: string(CommandKindSliderState),
+		Method:    "GET",
+		Path:      cloudPathSliderState,
+		Auth:      b.auth,
+	}
+}
+
+// BuildStrokeWindowState shapes a read-only Cloud REST stroke-window request.
+func (b *CloudRESTBuilder) BuildStrokeWindowState() CloudRequest {
+	return CloudRequest{
+		Transport: cloudRESTName,
+		Operation: string(CommandKindStrokeWindowState),
+		Method:    "GET",
+		Path:      cloudPathStrokeWindow,
+		Auth:      b.auth,
+	}
 }
 
 // BuildHSPSetup shapes a Cloud REST request that prepares an HSP stream.

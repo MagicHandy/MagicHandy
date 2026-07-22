@@ -160,8 +160,8 @@ func TestAdaptiveFrameRejectsPathologicallyDenseEssentialContent(t *testing.T) {
 func TestAdaptiveCatalogFramesReduceSubtleStairStepsWithinErrorBound(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 100
-	var fixedDuplicates, fixedEdges int
-	var adaptiveDuplicates, adaptiveEdges int
+	var fixedStationaryMillis int64
+	var adaptiveStationaryMillis int64
 	for _, definition := range BuiltinPatternDefinitions() {
 		plan := NewMotionPlan("catalog", MotionTarget{
 			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
@@ -183,9 +183,8 @@ func TestAdaptiveCatalogFramesReduceSubtleStairStepsWithinErrorBound(t *testing.
 			if samples[index].TimeMillis <= samples[index-1].TimeMillis {
 				t.Fatalf("%s output times are not strictly increasing", definition.Name)
 			}
-			adaptiveEdges++
 			if math.Round(samples[index].PositionPercent) == math.Round(samples[index-1].PositionPercent) {
-				adaptiveDuplicates++
+				adaptiveStationaryMillis += samples[index].TimeMillis - samples[index-1].TimeMillis
 			}
 		}
 		for at := samples[0].TimeMillis; at <= samples[len(samples)-1].TimeMillis; at += 5 {
@@ -199,17 +198,18 @@ func TestAdaptiveCatalogFramesReduceSubtleStairStepsWithinErrorBound(t *testing.
 		lastFixed := math.Round(plan.SampleAt(0).PositionPercent)
 		for at := defaultSampleInterval.Milliseconds(); at <= samples[len(samples)-1].TimeMillis; at += defaultSampleInterval.Milliseconds() {
 			position := math.Round(plan.SampleAt(at).PositionPercent)
-			fixedEdges++
 			if position == lastFixed {
-				fixedDuplicates++
+				fixedStationaryMillis += defaultSampleInterval.Milliseconds()
 			}
 			lastFixed = position
 		}
 	}
-	adaptiveRatio := float64(adaptiveDuplicates) / float64(adaptiveEdges)
-	fixedRatio := float64(fixedDuplicates) / float64(fixedEdges)
-	if adaptiveRatio >= fixedRatio*0.9 {
-		t.Fatalf("adaptive duplicate ratio %.3f, want at least 10%% below fixed-frame %.3f", adaptiveRatio, fixedRatio)
+	if adaptiveStationaryMillis >= fixedStationaryMillis*9/10 {
+		t.Fatalf(
+			"adaptive rounded stationary time = %dms, want at least 10%% below fixed-frame %dms",
+			adaptiveStationaryMillis,
+			fixedStationaryMillis,
+		)
 	}
 }
 

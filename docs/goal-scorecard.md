@@ -119,6 +119,34 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-22** - Script and pattern continuity follow-up: a retained Cloud
+  trace proved the paired funscript's 1:17 reversals survived parsing, slicing,
+  motion scaling, and HSP framing, while accepted coverage stayed near 2.1
+  seconds. Clock-locked Cloud media now selects a batched 10-second lead with
+  four-second refill headroom and the existing 100-point cap; interactive
+  targets retain the 1.5-second retarget horizon. Loop patterns confine
+  zero-velocity reversal easing to a 75 ms trapezoidal ramp per side, and
+  post-quantization transition cleanup removes newly exposed <=2% chatter.
+  Catalog measurement records 97,191 ms fixed-grid stationary time, 36,633 ms
+  semantic adaptive time, and 14,135 ms Cloud-fitted time with 0.818% worst
+  wire error. Focused motion/transport tests pass; a capped post-fix subjective
+  hardware run remains the acceptance gate.
+
+- **2026-07-22** - Position-aware Cloud startup: the first capped continuity
+  run exposed an unbounded first action because HSP's `t=0` point was treated
+  as if its later segment timing also constrained acquisition from an unknown
+  physical position. Start/Resume now Stop stale HSP, read slider/stroke state,
+  widen rather than narrow around the current position, play a speed-bounded
+  engine-owned HSP lead-in, verify arrival, then apply the requested window and
+  begin the main/media clock. Live firmware then proved its relative position
+  field is scoped to the active stroke window; an absolute-coordinate repeat
+  measured 29.33 mm, led to the 24.57 mm target, verified 24.67 mm at zero
+  speed inside the final 20-80% window, and only then played the main stream.
+  The full capped validation ended with a successful Stop. Automated coverage
+  pins a 90%-to-20% move at a 20% cap to 3.5 seconds and proves Emergency Stop
+  prevents main playback; subjective confirmation of first-action feel remains
+  open.
+
 - **2026-07-22** - Paired-video timeline clarity follow-up: corrected extrema
   bucketing that attached both ends of every sparse segment to the later
   endpoint's screen column, creating false vertical bars. The 88 px

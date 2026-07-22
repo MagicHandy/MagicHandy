@@ -15,6 +15,10 @@ const (
 	CommandKindHSPState CommandKind = "hsp_state"
 	// CommandKindHSPEvents reads Cloud REST HSP state events without moving the device.
 	CommandKindHSPEvents CommandKind = "hsp_events"
+	// CommandKindSliderState reads the current physical slider position without moving the device.
+	CommandKindSliderState CommandKind = "slider_state"
+	// CommandKindStrokeWindowState reads the current physical stroke window without moving the device.
+	CommandKindStrokeWindowState CommandKind = "stroke_window_state"
 	// CommandKindHSPSetup prepares an HSP stream before timed points are sent.
 	CommandKindHSPSetup CommandKind = "hsp_setup"
 	// CommandKindStop stops active transport playback.
@@ -51,6 +55,10 @@ type MotionTimingCapabilities struct {
 	// buffered owner needs ahead of playback. The engine prebuffers to this
 	// duration before Play and maintains it while the stream is active.
 	MinimumBufferedLead time.Duration
+	// MinimumMediaBufferedLead is the longer accepted coverage required for a
+	// clock-locked media stream. Interactive targets retain
+	// MinimumBufferedLead so retargets do not inherit media-sized latency.
+	MinimumMediaBufferedLead time.Duration
 }
 
 // MotionTimingCapabilitiesProvider exposes optional device timing constraints.
@@ -76,6 +84,34 @@ type MotionSamplingCapabilitiesProvider interface {
 // Owners that perform a pre-roll use this to align the shared engine clock.
 type PlaybackStartTimeProvider interface {
 	PlaybackStartTime() time.Time
+}
+
+// MotionStartupState is the physical device state needed to anchor the first
+// timed point without an implicit reposition. Stroke bounds use full physical
+// travel; PositionWithinStrokePercent is relative to those active bounds. The
+// absolute fields share one device coordinate system and are authoritative for
+// reconstructing full-travel position, independent of semantic direction.
+type MotionStartupState struct {
+	PositionWithinStrokePercent float64
+	PositionAbsolute            float64
+	SpeedAbsolute               float64
+	StrokeMinPercent            float64
+	StrokeMaxPercent            float64
+	StrokeMinAbsolute           float64
+	StrokeMaxAbsolute           float64
+}
+
+// MotionStartupStateResults preserves both read outcomes for motion traces.
+type MotionStartupStateResults struct {
+	Slider CommandResult
+	Stroke CommandResult
+}
+
+// MotionStartupStateProvider exposes an optional read-only startup snapshot.
+// The shared engine, not the owner, decides whether and how to create a timed
+// lead-in from this state.
+type MotionStartupStateProvider interface {
+	ReadMotionStartupState(context.Context) (MotionStartupState, MotionStartupStateResults, error)
 }
 
 // TimedPoint is a single transport-neutral timed point. Position is expressed as 0..100.

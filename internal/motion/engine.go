@@ -54,36 +54,38 @@ type Engine struct {
 	sampleInterval   time.Duration
 	streamIDPrefix   string
 
-	running                     bool
-	starting                    bool
-	completing                  bool
-	paused                      bool
-	pausedPhase                 float64
-	frozenPhase                 float64
-	pausedTarget                MotionTarget
-	runMillisAccum              int64
-	generation                  uint64
-	runEpoch                    uint64
-	stopGeneration              uint64
-	stopBarriers                uint64
-	streamID                    string
-	plan                        MotionPlan
-	settings                    config.MotionSettings
-	startedAt                   time.Time
-	nextSampleMillis            int64
-	lastSample                  *MotionSample
-	lastResult                  *transport.CommandResult
-	lastError                   string
-	latencyMillis               []int64
-	transition                  *planTransition
-	preservePlanKnots           bool
-	minimumBufferedLeadMillis   int64
-	positionResolutionPercent   float64
-	resolutionAfterStrokeWindow bool
-	maximumChunkPoints          int
-	runCtx                      context.Context
-	cancel                      context.CancelFunc
-	done                        chan struct{}
+	running                        bool
+	starting                       bool
+	completing                     bool
+	paused                         bool
+	pausedPhase                    float64
+	frozenPhase                    float64
+	pausedTarget                   MotionTarget
+	runMillisAccum                 int64
+	generation                     uint64
+	runEpoch                       uint64
+	stopGeneration                 uint64
+	stopBarriers                   uint64
+	streamID                       string
+	plan                           MotionPlan
+	settings                       config.MotionSettings
+	startedAt                      time.Time
+	nextSampleMillis               int64
+	lastSample                     *MotionSample
+	lastResult                     *transport.CommandResult
+	lastError                      string
+	latencyMillis                  []int64
+	transition                     *planTransition
+	preservePlanKnots              bool
+	minimumBufferedLeadMillis      int64
+	minimumMediaBufferedLeadMillis int64
+	positionResolutionPercent      float64
+	resolutionAfterStrokeWindow    bool
+	maximumChunkPoints             int
+	startupWait                    func(context.Context, time.Duration) error
+	runCtx                         context.Context
+	cancel                         context.CancelFunc
+	done                           chan struct{}
 }
 
 // ActiveMotionState is a safe snapshot of the current motion loop.
@@ -122,6 +124,7 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		streamIDPrefix:     options.StreamIDPrefix,
 		preservePlanKnots:  true,
 		maximumChunkPoints: maximumAdaptiveChunkPoints,
+		startupWait:        waitForMotionStartup,
 	}
 	engine.applyDefaults()
 	if provider, ok := options.Transport.(transport.MotionTimingCapabilitiesProvider); ok {
@@ -138,6 +141,12 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		}
 		if capabilities.MinimumBufferedLead > 0 {
 			engine.minimumBufferedLeadMillis = max(int64(1), capabilities.MinimumBufferedLead.Milliseconds())
+		}
+		if capabilities.MinimumMediaBufferedLead > 0 {
+			engine.minimumMediaBufferedLeadMillis = max(
+				int64(1),
+				capabilities.MinimumMediaBufferedLead.Milliseconds(),
+			)
 		}
 	}
 	if provider, ok := options.Transport.(transport.MotionSamplingCapabilitiesProvider); ok {
@@ -181,8 +190,8 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.setStrokeWindow(loopCtx, runEpoch, "start_stroke_window", false); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "start_stroke_window_failed", err)
+	if err := e.prepareMotionStartup(loopCtx, runEpoch, "start"); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "start_positioning_failed", err)
 		return e.Snapshot(), err
 	}
 	if err := e.dispatchNextChunk(loopCtx, runEpoch, "start_points"); err != nil {
@@ -321,8 +330,8 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.setStrokeWindow(loopCtx, runEpoch, "resume_stroke_window", false); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "resume_stroke_window_failed", err)
+	if err := e.prepareMotionStartup(loopCtx, runEpoch, "resume"); err != nil {
+		e.abortStartup(loopCtx, runEpoch, "resume_positioning_failed", err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
@@ -672,10 +681,15 @@ func (e *Engine) ensureLeadBuffer(ctx context.Context, runEpoch uint64, reason s
 			return err
 		}
 		needsLead := false
+		var requiredTail int64
+		var dispatchTail int64
 		e.mu.Lock()
 		if e.validateRunLocked(runEpoch) == nil {
-			requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
+			requiredTail = e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
 			needsLead = e.bufferedTailMillisLocked() < requiredTail
+			if needsLead && e.plan.Target.Media != nil {
+				dispatchTail = requiredTail
+			}
 		} else {
 			e.mu.Unlock()
 			return errRunInvalidated
@@ -684,7 +698,7 @@ func (e *Engine) ensureLeadBuffer(ctx context.Context, runEpoch uint64, reason s
 		if !needsLead {
 			return nil
 		}
-		if err := e.dispatchNextChunk(ctx, runEpoch, reason); err != nil {
+		if err := e.dispatchThrough(ctx, runEpoch, reason, dispatchTail); err != nil {
 			return err
 		}
 	}
@@ -836,10 +850,17 @@ func (e *Engine) leadMillisLocked() int64 {
 	if lead > maxLeadMillis {
 		lead = maxLeadMillis
 	}
-	if lead < e.minimumBufferedLeadMillis {
-		lead = e.minimumBufferedLeadMillis
+	if minimum := e.selectedMinimumBufferedLeadMillisLocked(); lead < minimum {
+		lead = minimum
 	}
 	return lead
+}
+
+func (e *Engine) selectedMinimumBufferedLeadMillisLocked() int64 {
+	if e.plan.Target.Media != nil && e.minimumMediaBufferedLeadMillis > 0 {
+		return e.minimumMediaBufferedLeadMillis
+	}
+	return e.minimumBufferedLeadMillis
 }
 
 func (e *Engine) bufferedTailMillisLocked() int64 {

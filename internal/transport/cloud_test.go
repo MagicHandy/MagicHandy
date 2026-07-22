@@ -137,6 +137,18 @@ func TestStrokeWindowDoesNotRewriteHSPPoints(t *testing.T) {
 	}
 }
 
+func TestCloudStartupStateRequestsAreReadOnly(t *testing.T) {
+	builder := newCloudBuilder(t, CloudBuildOptions{})
+	slider := builder.BuildSliderState()
+	if slider.Method != "GET" || slider.Path != "slider/state" || slider.Operation != string(CommandKindSliderState) || slider.Body != nil {
+		t.Fatalf("slider state request = %+v", slider)
+	}
+	stroke := builder.BuildStrokeWindowState()
+	if stroke.Method != "GET" || stroke.Path != "slider/stroke" || stroke.Operation != string(CommandKindStrokeWindowState) || stroke.Body != nil {
+		t.Fatalf("stroke state request = %+v", stroke)
+	}
+}
+
 func TestReverseDirectionMapsAtTransportBoundary(t *testing.T) {
 	semantic := AppendPointsCommand{
 		StreamID: "reverse",

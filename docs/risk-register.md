@@ -43,6 +43,36 @@ longer masquerade as accepted points. The device reported
 `DeviceNotConnected` during the follow-up, so a capped post-fix feel/trace run
 remains required.
 
+Status 2026-07-22: the retained paired-video run preserved the reported 1:17
+source reversals exactly, but maintained only about 2.1 seconds of accepted HSP
+coverage while issuing one append per second. Fixed media now uses a batched
+10-second Cloud lead and four-second refill headroom; interactive targets keep
+the 1.5-second retarget horizon. Loop-pattern reversal easing is confined to a
+75 ms trapezoidal velocity ramp instead of the full stroke interval. Automated
+timing, acceleration, wire-error, stationary-time, and chatter gates pass; the
+capped post-fix subjective run remains open.
+
+The first action in that capped follow-up jerked toward the stream's time-zero
+point. The trace proved the old startup had no physical anchor: it applied the
+new stroke window, buffered a semantic endpoint at `t=0`, and played without
+reading slider position. Cloud Start/Resume now stop stale HSP, observe slider
+and stroke state, use a speed-bounded HSP lead-in under a non-narrowing union
+window, verify arrival, and only then begin semantic/media time. State failure
+is fail-stopped and Stop cancels the lead-in. A corrected capped Cloud trace
+then calibrated the window-relative API state through absolute endpoints,
+verified stationary arrival inside the final window before main Play, completed
+the validation sequence, and stopped successfully. R1 remains High pending the
+user's subjective confirmation that the first action no longer feels abrupt.
+
+This correction is intentionally scoped to Cloud REST, the owner used by the
+observed run and the one that exposes usable absolute slider/stroke state.
+Browser Bluetooth currently avoids a state read because it can destabilize the
+GATT session, while Intiface can time an initial `LinearCmd` but cannot observe
+the actuator's starting position. Their unknown-position startup behavior
+remains open under R1; closing it requires either reliable position feedback or
+a conservative owner contract whose first command is bounded for worst-case
+travel by the configured speed.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1033,6 +1063,14 @@ video while arming, labels read-only playback as timeline-only, and leaves
 ordinary video usable when a script is invalid or complete. R25 remains High
 until M3 records capped real-device drift and
 subjective alignment across the intended transport owners.
+
+Review update 2026-07-22: a retained real-device trace for the reported
+paired-script run proved the browser slice and engine points were source-exact,
+but Cloud accepted only about 2.1 seconds ahead. Media now selects a 10-second
+Cloud minimum, prebuffers it in owner-capped batches, and refills in deeper
+bursts without extending interactive retarget lead. This closes the identified
+starvation mechanism in code and tests; R25 remains High until a post-fix
+capped run records drift and subjective continuity.
 
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).
