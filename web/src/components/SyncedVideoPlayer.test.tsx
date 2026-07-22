@@ -121,6 +121,27 @@ describe("SyncedVideoPlayer", () => {
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "playing", event: "seeked" }), 9, expect.any(AbortSignal), false));
   });
 
+  it("ignores a delayed native pause from a playing seek and still re-arms", async () => {
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={10} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    mediaSync.mockClear();
+
+    fireEvent.seeking(player);
+    fireEvent.seeked(player);
+    fireEvent.pause(player);
+
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(
+      expect.objectContaining({ state: "playing", event: "seeked" }),
+      10,
+      expect.any(AbortSignal),
+      false,
+    ));
+    expect(mediaSync.mock.calls.some(([event]) => event.event === "pause")).toBe(false);
+  });
+
   it("cancels an obsolete arm and re-arms at the latest seek timestamp", async () => {
     let initialArmSignal: AbortSignal | undefined;
     mediaSync.mockImplementation((event, _sequence, signal) => {
@@ -200,7 +221,7 @@ describe("SyncedVideoPlayer", () => {
     expect(closeEvent?.event_sequence).toBeGreaterThan(playEvent?.event_sequence ?? 0);
   });
 
-  it("waits for playable media before arming synchronized motion", async () => {
+  it("recovers when readyState advances without another canplay event", async () => {
     mediaReadyState = 2;
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={7} />);
     const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
@@ -212,7 +233,6 @@ describe("SyncedVideoPlayer", () => {
     expect(mediaSync).not.toHaveBeenCalled();
 
     mediaReadyState = 3;
-    fireEvent.canPlay(player);
 
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(
       expect.objectContaining({ state: "playing", event: "play" }),

@@ -22,10 +22,14 @@ const (
 	cloudTraceSource   = "manual_cloud_transport"
 )
 
+var errCloudControlReleased = errors.New("cloud REST control is released; connect before commanding motion")
+
 type cloudRuntime struct {
 	baseURL     string
 	client      *http.Client
+	opMu        sync.Mutex
 	mu          sync.Mutex
+	released    bool
 	diagnostics transport.TransportDiagnostics
 }
 
@@ -47,6 +51,14 @@ type cloudErrorResponse struct {
 	Diagnostics transport.TransportDiagnostics `json:"diagnostics"`
 }
 
+type cloudDisconnectResponse struct {
+	Released    bool                           `json:"released"`
+	Stopped     bool                           `json:"stopped"`
+	Warning     string                         `json:"warning,omitempty"`
+	Result      *transport.CommandResult       `json:"result,omitempty"`
+	Diagnostics transport.TransportDiagnostics `json:"diagnostics"`
+}
+
 func newCloudRuntime(runtime Runtime) cloudRuntime {
 	return cloudRuntime{
 		baseURL:     strings.TrimSpace(runtime.CloudBaseURL),
@@ -60,13 +72,31 @@ func (s *Server) handleCloudDiagnostics(w http.ResponseWriter, _ *http.Request) 
 }
 
 func (s *Server) handleCloudConnectionCheck(w http.ResponseWriter, r *http.Request) {
-	cloud, err := s.newCloudTransport()
+	s.handleCloudConnectionProbe(w, r, false)
+}
+
+func (s *Server) handleCloudConnect(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	s.cloud.opMu.Lock()
+	defer s.cloud.opMu.Unlock()
+	// Explicit Connect is fail-closed: only a successful probe reopens admission.
+	s.setCloudControlReleased(true)
+	s.handleCloudConnectionProbe(w, r, true)
+}
+
+func (s *Server) handleCloudConnectionProbe(w http.ResponseWriter, r *http.Request, acquire bool) {
+	cloud, err := s.newCloudTransportForControl()
 	if err != nil {
 		s.writeCloudSetupError(w, err)
 		return
 	}
 
 	check, err := cloud.CheckConnection(r.Context())
+	if acquire && err == nil && check.OK && check.HSPAvailable {
+		s.setCloudControlReleased(false)
+	}
 	diagnostics := s.saveCloudDiagnostics(cloud.Diagnostics())
 	check.Diagnostics = diagnostics
 	if err != nil && !isHSPUnavailable(err) {
@@ -143,7 +173,7 @@ func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	cloud, err := s.newCloudTransport()
+	cloud, err := s.newCloudTransportForControl()
 	if err != nil {
 		s.writeCloudSetupError(w, err)
 		return
@@ -153,7 +183,89 @@ func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {
 	s.writeCloudCommandResponse(w, string(transport.CommandKindStop), cloud, result, err)
 }
 
+func (s *Server) handleCloudDisconnect(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	s.cloud.opMu.Lock()
+	defer s.cloud.opMu.Unlock()
+
+	settings, _ := s.store.Snapshot()
+	if settings.Device.HSPDispatchOwner != config.DispatchOwnerCloudREST {
+		s.writeCloudSetupError(w, errors.New("cloud REST dispatch owner is not selected"))
+		return
+	}
+
+	// Close admission before transport construction or I/O. Releasing the app
+	// must still succeed when credentials have become invalid; only the physical
+	// Stop confirmation may be unavailable in that case.
+	s.setCloudControlReleased(true)
+	s.stopSequence.Add(1)
+	if s.mediaSync != nil {
+		s.mediaSync.Invalidate("cloud_disconnected")
+	}
+	s.cancelActiveChats()
+	finishModeStop := func() {}
+	if s.modes != nil {
+		finishModeStop = s.modes.BeginUserStop()
+	}
+	defer finishModeStop()
+
+	hadEngine := s.currentMotionEngine() != nil
+	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	stopErr := s.stopAndClearMotionEngine(stopCtx, "cloud_disconnected")
+	stopCancel()
+
+	stopped := hadEngine && stopErr == nil
+	var directCloud *transport.CloudRESTTransport
+	var directResult *transport.CommandResult
+	var directErr error
+	if !hadEngine || stopErr != nil {
+		directCloud, directErr = s.newCloudTransportForControl()
+		if directErr == nil {
+			fallbackCtx, fallbackCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+			result, fallbackErr := directCloud.Stop(fallbackCtx, transport.StopCommand{Reason: "cloud_disconnected"})
+			fallbackCancel()
+			safeResult := transport.SafeCommandResult(result)
+			directResult = &safeResult
+			directErr = fallbackErr
+			stopped = fallbackErr == nil
+			s.traceCloudResult("cloud_disconnect", directCloud.Diagnostics(), result)
+		}
+	}
+
+	diagnostics := s.cloudDiagnostics()
+	if directCloud != nil {
+		diagnostics = s.saveCloudDiagnostics(directCloud.Diagnostics())
+	}
+	payload := cloudDisconnectResponse{
+		Released:    true,
+		Stopped:     stopped,
+		Result:      directResult,
+		Diagnostics: diagnostics,
+	}
+	if !stopped {
+		if directErr != nil {
+			payload.Warning = "MagicHandy released Cloud control, but the device Stop could not be confirmed: " + safeCloudErrorMessage(directErr)
+		} else if stopErr != nil {
+			payload.Warning = "MagicHandy released Cloud control, but the active motion Stop could not be confirmed: " + safeCloudErrorMessage(stopErr)
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
 func (s *Server) newCloudTransport() (*transport.CloudRESTTransport, error) {
+	cloud, err := s.newCloudTransportForControl()
+	if err != nil {
+		return nil, err
+	}
+	if s.cloudControlReleased() {
+		return nil, errCloudControlReleased
+	}
+	return cloud, nil
+}
+
+func (s *Server) newCloudTransportForControl() (*transport.CloudRESTTransport, error) {
 	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerCloudREST {
 		return nil, errors.New("cloud REST dispatch owner is not selected")
@@ -206,8 +318,29 @@ func (s *Server) saveCloudDiagnostics(diagnostics transport.TransportDiagnostics
 	diagnostics = safeCloudDiagnostics(diagnostics)
 	s.cloud.mu.Lock()
 	defer s.cloud.mu.Unlock()
+	if s.cloud.released {
+		diagnostics.Connected = false
+		diagnostics.PlaybackState = "stopped"
+	}
 	s.cloud.diagnostics = diagnostics
 	return diagnostics
+}
+
+func (s *Server) setCloudControlReleased(released bool) transport.TransportDiagnostics {
+	s.cloud.mu.Lock()
+	defer s.cloud.mu.Unlock()
+	s.cloud.released = released
+	if released {
+		s.cloud.diagnostics.Connected = false
+		s.cloud.diagnostics.PlaybackState = "stopped"
+	}
+	return safeCloudDiagnostics(s.cloud.diagnostics)
+}
+
+func (s *Server) cloudControlReleased() bool {
+	s.cloud.mu.Lock()
+	defer s.cloud.mu.Unlock()
+	return s.cloud.released
 }
 
 func (s *Server) cloudDiagnostics() transport.TransportDiagnostics {

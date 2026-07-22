@@ -696,6 +696,13 @@ export interface ConnectionCheckResult {
   message?: string;
 }
 
+export interface CloudDisconnectResponse {
+  released: boolean;
+  stopped: boolean;
+  warning?: string;
+  diagnostics: TransportDiagnostics;
+}
+
 export interface TransportDiagnostics {
   name?: string;
   connected?: boolean;

@@ -291,7 +291,7 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *http.Request) {
-	commandTransport, err := s.newSelectedMotionTransport()
+	commandTransport, err := s.newSelectedStopTransport()
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"available": false,
@@ -313,6 +313,17 @@ func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *ht
 		payload["error"] = s.safeMotionErrorMessage(stopErr)
 	}
 	writeJSON(w, status, payload)
+}
+
+func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
+	if s.motion.transport != nil {
+		return s.motion.transport, nil
+	}
+	settings, _ := s.store.Snapshot()
+	if settings.Device.HSPDispatchOwner == config.DispatchOwnerCloudREST {
+		return s.newCloudTransportForControl()
+	}
+	return s.newSelectedMotionTransport()
 }
 
 // handleMotionPause freezes active motion (phase retained for resume). Unlike

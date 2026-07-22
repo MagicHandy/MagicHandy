@@ -1359,11 +1359,15 @@ coverage.
 
 The shell owns one connection manager on every route. Its compact trigger lives
 at the far right of the top bar and opens a floating panel directly below it.
-The panel renders only the saved dispatch owner's live actions (Cloud check,
-browser Bluetooth, or Intiface connect/discover/select); credentials and
-addresses remain in routed Settings except for a compact, write-only Cloud
-connection-key row. The Cloud surface also identifies the active bundled or
-developer API v3 ID source. Speed and stroke limits moved from Chat into this
+The panel renders only the saved dispatch owner's live actions (Cloud
+Check/Connect/Disconnect, browser Bluetooth, or Intiface
+connect/discover/select); credentials and addresses remain in routed Settings
+except for a compact, write-only Cloud connection-key row. Cloud Check remains
+non-motion and diagnostic-only. Disconnect closes runtime command admission
+before stopping active work, while Connect reopens it only after a successful
+HSP probe. Emergency Stop remains able to reach Cloud after release. The Cloud
+surface also identifies the active bundled or developer API v3 ID source. Speed
+and stroke limits moved from Chat into this
 manager and still use the semantic immediate-apply API. Reverse direction and
 motion style remain in Chat as motion behavior.
 

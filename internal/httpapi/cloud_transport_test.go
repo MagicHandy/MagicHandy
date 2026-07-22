@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -57,6 +58,124 @@ func TestCloudConnectionCheckEndpointReadsState(t *testing.T) {
 	}
 }
 
+func TestCloudDisconnectReleasesControlUntilExplicitConnect(t *testing.T) {
+	requests := make(chan capturedCloudRequest, 4)
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- captureCloudRequest(t, r)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/hsp/stop":
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/hsp/state":
+			_, _ = w.Write([]byte(`{"hsp_available":true,"playback_state":"idle"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer cloudServer.Close()
+
+	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
+	saveCloudSettings(t, server)
+
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/cloud/disconnect", nil))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("disconnect status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var disconnected cloudDisconnectResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &disconnected); err != nil {
+		t.Fatalf("decode disconnect response: %v", err)
+	}
+	if !disconnected.Released || !disconnected.Stopped || disconnected.Diagnostics.Connected {
+		t.Fatalf("disconnect = %+v, want released, stopped, and disconnected", disconnected)
+	}
+	if seen := readCapturedCloudRequest(t, requests); seen.Path != "/hsp/stop" {
+		t.Fatalf("disconnect request = %+v, want Cloud Stop", seen)
+	}
+	if _, err := server.newCloudTransport(); !errors.Is(err, errCloudControlReleased) {
+		t.Fatalf("newCloudTransport error = %v, want released gate", err)
+	}
+
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/transport/cloud/check", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("check status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if seen := readCapturedCloudRequest(t, requests); seen.Path != "/hsp/state" {
+		t.Fatalf("check request = %+v, want state probe", seen)
+	}
+	if _, err := server.newCloudTransport(); !errors.Is(err, errCloudControlReleased) {
+		t.Fatalf("diagnostic check reacquired Cloud control: %v", err)
+	}
+
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("emergency Stop status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if seen := readCapturedCloudRequest(t, requests); seen.Path != "/hsp/stop" {
+		t.Fatalf("emergency Stop request = %+v, want Cloud Stop after release", seen)
+	}
+
+	recorder = httptest.NewRecorder()
+	request = withController(httptest.NewRequest(http.MethodPost, "/api/transport/cloud/connect", nil))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("connect status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if seen := readCapturedCloudRequest(t, requests); seen.Path != "/hsp/state" {
+		t.Fatalf("connect request = %+v, want state probe", seen)
+	}
+	if _, err := server.newCloudTransport(); err != nil {
+		t.Fatalf("newCloudTransport after connect: %v", err)
+	}
+	if diagnostics := server.cloudDiagnostics(); !diagnostics.Connected {
+		t.Fatalf("diagnostics = %+v, want connected after explicit Connect", diagnostics)
+	}
+}
+
+func TestCloudDisconnectRequiresController(t *testing.T) {
+	server := newCloudTestServer(t, Runtime{})
+	saveCloudSettings(t, server)
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/transport/cloud/disconnect", nil))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusConflict, recorder.Body.String())
+	}
+	if server.cloudControlReleased() {
+		t.Fatal("read-only disconnect changed the Cloud control gate")
+	}
+}
+
+func TestCloudDisconnectKeepsControlReleasedWhenStopFails(t *testing.T) {
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "stop unavailable", http.StatusServiceUnavailable)
+	}))
+	defer cloudServer.Close()
+
+	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
+	saveCloudSettings(t, server)
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/cloud/disconnect", nil))
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("disconnect status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var disconnected cloudDisconnectResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &disconnected); err != nil {
+		t.Fatalf("decode disconnect response: %v", err)
+	}
+	if !disconnected.Released || disconnected.Stopped || disconnected.Warning == "" {
+		t.Fatalf("disconnect = %+v, want released with an unconfirmed Stop warning", disconnected)
+	}
+	if _, err := server.newCloudTransport(); !errors.Is(err, errCloudControlReleased) {
+		t.Fatalf("newCloudTransport error = %v, want released gate after Stop failure", err)
+	}
+}
+
 func TestCloudConnectionCheckEndpointExplainsHSPUnavailable(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -79,6 +198,27 @@ func TestCloudConnectionCheckEndpointExplainsHSPUnavailable(t *testing.T) {
 	}
 	if check.OK || check.HSPAvailable || check.Message == "" {
 		t.Fatalf("check = %+v, want unavailable with explanation", check)
+	}
+}
+
+func TestCloudConnectFailureKeepsControlReleased(t *testing.T) {
+	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"hsp_available":false,"playback_state":"unsupported"}`))
+	}))
+	defer cloudServer.Close()
+
+	server := newCloudTestServer(t, Runtime{CloudBaseURL: cloudServer.URL})
+	saveCloudSettings(t, server)
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/transport/cloud/connect", nil))
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("connect status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !server.cloudControlReleased() {
+		t.Fatal("failed Connect left Cloud command admission open")
 	}
 }
 

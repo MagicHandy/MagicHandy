@@ -7,6 +7,7 @@ import { FunscriptTimeline } from "./FunscriptTimeline";
 import { MediaVideoPlayer, type MediaPlaybackEvent } from "./MediaVideoPlayer";
 
 const HEARTBEAT_MILLIS = 1_500;
+const MEDIA_READY_POLL_MILLIS = 100;
 const TIMELINE_HIDDEN_KEY = "magichandy-video-timeline-hidden";
 
 interface Props {
@@ -54,13 +55,61 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const pendingArm = useRef<"play" | "seeked" | "ratechange" | "resync" | null>(null);
   const armAbort = useRef<AbortController | null>(null);
   const armPlaybackRef = useRef<(player: HTMLVideoElement, event: "play" | "seeked" | "ratechange" | "resync") => Promise<void>>(async () => undefined);
+  const mediaReadyTimer = useRef<number>();
+  const mediaReadyGeneration = useRef(0);
+
+  const clearMediaReadyPoll = useCallback(() => {
+    window.clearInterval(mediaReadyTimer.current);
+    mediaReadyTimer.current = undefined;
+  }, []);
+
+  const resumeWhenMediaReady = useCallback((player: HTMLVideoElement, waitGeneration: number) => {
+    if (
+      waitGeneration !== mediaReadyGeneration.current
+      || !mounted.current
+      || !awaitingMedia.current
+      || !desiredPlaying.current
+      || seekInProgress.current
+    ) {
+      if (!awaitingMedia.current || !desiredPlaying.current || !mounted.current) clearMediaReadyPoll();
+      return;
+    }
+    if (!mediaHasFutureData(player)) return;
+
+    clearMediaReadyPoll();
+    const recovery = bufferingStop.current;
+    const event = readyArm.current;
+    void recovery.then(() => {
+      if (
+        waitGeneration !== mediaReadyGeneration.current
+        || !mounted.current
+        || !awaitingMedia.current
+        || !desiredPlaying.current
+        || seekInProgress.current
+        || !mediaHasFutureData(player)
+      ) return;
+      awaitingMedia.current = false;
+      void armPlaybackRef.current(player, event);
+    });
+  }, [clearMediaReadyPoll]);
+
+  const waitForMediaReady = useCallback((player: HTMLVideoElement) => {
+    clearMediaReadyPoll();
+    const waitGeneration = ++mediaReadyGeneration.current;
+    mediaReadyTimer.current = window.setInterval(
+      () => resumeWhenMediaReady(player, waitGeneration),
+      MEDIA_READY_POLL_MILLIS,
+    );
+  }, [clearMediaReadyPoll, resumeWhenMediaReady]);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      mediaReadyGeneration.current += 1;
+      clearMediaReadyPoll();
     };
-  }, []);
+  }, [clearMediaReadyPoll]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -205,6 +254,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         setSyncError("");
         setSync({ active: false, video_id: video.id, state: "seeking", last_event: "waiting", message: "Buffering video before motion starts." });
       }
+      waitForMediaReady(player);
       return;
     }
     awaitingMedia.current = false;
@@ -236,6 +286,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       suppressNext("play");
       try {
         await player.play();
+        resumeAfterSeek.current = false;
       } catch (reason) {
         ignoredPlay.current = false;
         desiredPlaying.current = false;
@@ -256,7 +307,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         window.queueMicrotask(() => void armPlaybackRef.current(player, next));
       }
     }
-  }, [holdVideo, locked, script, showSyncFailure, stopPlaybackMotion, suppressNext, syncEvent, video.id]);
+  }, [holdVideo, locked, script, showSyncFailure, stopPlaybackMotion, suppressNext, syncEvent, video.id, waitForMediaReady]);
   armPlaybackRef.current = armPlayback;
 
   const handlePlaybackEvent = useCallback((event: MediaPlaybackEvent, player: HTMLVideoElement) => {
@@ -294,10 +345,13 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         window.clearTimeout(ignoredPauseTimer.current);
         return;
       }
-      if (seekInProgress.current || player.ended) return;
+      if (seekInProgress.current || player.ended || (resumeAfterSeek.current && desiredPlaying.current)) return;
       desiredPlaying.current = false;
+      resumeAfterSeek.current = false;
       generation.current += 1;
       awaitingMedia.current = false;
+      mediaReadyGeneration.current += 1;
+      clearMediaReadyPoll();
       armAbort.current?.abort();
       void stopPlaybackMotion(player, "paused", "pause");
       return;
@@ -308,6 +362,8 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       resumeAfterSeek.current = desiredPlaying.current || !player.paused;
       awaitingMedia.current = false;
       holdVideo(player);
+      mediaReadyGeneration.current += 1;
+      clearMediaReadyPoll();
       generation.current += 1;
       armAbort.current?.abort();
       seekingStop.current = stopPlaybackMotion(player, "seeking", "seeking");
@@ -341,13 +397,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       return;
     }
     if (event === "canplay") {
-      if (!awaitingMedia.current || !desiredPlaying.current || seekInProgress.current || !mediaHasFutureData(player)) return;
-      const recovery = bufferingStop.current;
-      void recovery.then(() => {
-        if (!awaitingMedia.current || !desiredPlaying.current || seekInProgress.current || !mediaHasFutureData(player)) return;
-        awaitingMedia.current = false;
-        void armPlayback(player, readyArm.current);
-      });
+      resumeWhenMediaReady(player, mediaReadyGeneration.current);
       return;
     }
     if (event === "stalled") return;
@@ -371,6 +421,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         message: "Video is buffering; device motion is stopped.",
       });
       bufferingStop.current = mustStop ? stopPlaybackMotion(player, "paused", "waiting") : Promise.resolve();
+      waitForMediaReady(player);
       return;
     }
     if (event === "error") {
@@ -382,7 +433,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       holdVideo(player);
       void stopPlaybackMotion(player, "paused", "error");
     }
-  }, [armPlayback, holdVideo, locked, script, stopPlaybackMotion, video.id]);
+  }, [armPlayback, clearMediaReadyPoll, holdVideo, locked, resumeWhenMediaReady, script, stopPlaybackMotion, video.id, waitForMediaReady]);
 
   useEffect(() => {
     if (!script || locked) return undefined;

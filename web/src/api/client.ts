@@ -17,6 +17,7 @@ import type {
   ChatMessagesResponse,
   ChatSessionsResponse,
   ConnectionCheckResult,
+  CloudDisconnectResponse,
   PromptSetsPayload,
   PatternInput,
   PatternLibrary,
@@ -248,9 +249,12 @@ export const api = {
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
   resetSettings: () => request<{ settings: PublicSettings }>("POST", "/api/settings/reset", {}),
 
-  // Non-motion connection check for the selected dispatch owner.
+  // Provider checks are diagnostic-only. Cloud Connect/Disconnect own the
+  // controller-gated command lifecycle.
   connectionCheck: (owner: "cloud" | "bluetooth") =>
     request<ConnectionCheckResult>(`POST`, `/api/transport/${owner}/check`, {}),
+  cloudConnect: () => request<ConnectionCheckResult>("POST", "/api/transport/cloud/connect", {}),
+  cloudDisconnect: () => request<CloudDisconnectResponse>("POST", "/api/transport/cloud/disconnect", {}),
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.

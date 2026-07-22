@@ -153,9 +153,12 @@ by the backend rather than inferred from client controls.
   stroke limits.
   Cloud REST includes one compact write-only connection-key row and identifies
   whether the bundled or developer API v3 application ID is active.
-- A non-motion connection check reports the backend's safe HSP explanation when
-  the device responds but is unavailable. Do not replace that distinction with
-  a generic client-side "not ready" message.
+- Cloud REST keeps three actions distinct: the quiet refresh icon performs a
+  non-motion Check, the full-width Connect reacquires control only after a
+  successful HSP probe, and Disconnect closes backend motion admission before
+  stopping active media, chat, modes, and device motion. Check never silently
+  reacquires a released device. A failed physical Stop is reported, but the
+  local release gate remains closed so another app can take control.
 - Artwork is a reference-guided transparent isolation of the reviewed conductor
   hand, rendered directly without a runtime mask or clip. Scale the hand, three
   signal arcs, and the poster's tall capsule, domed body, LED, and square marker

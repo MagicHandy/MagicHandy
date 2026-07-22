@@ -259,6 +259,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
 	mux.HandleFunc("GET /api/transport/cloud/diagnostics", s.handleCloudDiagnostics)
 	mux.HandleFunc("POST /api/transport/cloud/check", s.handleCloudConnectionCheck)
+	mux.HandleFunc("POST /api/transport/cloud/connect", s.handleCloudConnect)
+	mux.HandleFunc("POST /api/transport/cloud/disconnect", s.handleCloudDisconnect)
 	mux.HandleFunc("GET /api/transport/cloud/state", s.handleCloudState)
 	mux.HandleFunc("GET /api/transport/cloud/events", s.handleCloudEvents)
 	mux.HandleFunc("POST /api/transport/cloud/stop", s.handleCloudStop)
