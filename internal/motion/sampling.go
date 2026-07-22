@@ -20,19 +20,29 @@ func (p MotionPlan) knotTimesBetween(startMillis, endMillis int64) []int64 {
 	if endMillis <= startMillis || p.PeriodMillis <= 0 || p.curve.duration <= 0 {
 		return nil
 	}
-	times := make([]int64, 0, len(p.curve.points))
-	for _, point := range p.curve.points {
-		phase := float64(point.TimeMillis) / float64(p.curve.duration)
-		if !p.Loop {
-			if phase < p.PhaseOffset {
-				continue
+	times := make([]int64, 0, min(len(p.curve.points), 32))
+	if !p.Loop {
+		streamTime := func(index int) int64 {
+			phase := float64(p.curve.points[index].TimeMillis) / float64(p.curve.duration)
+			return p.HandoffMillis + int64(math.Round((phase-p.PhaseOffset)*float64(p.PeriodMillis)))
+		}
+		first := sort.Search(len(p.curve.points), func(index int) bool {
+			return streamTime(index) >= startMillis
+		})
+		for index := first; index < len(p.curve.points); index++ {
+			at := streamTime(index)
+			if at >= endMillis {
+				break
 			}
-			at := p.HandoffMillis + int64(math.Round((phase-p.PhaseOffset)*float64(p.PeriodMillis)))
-			if at >= startMillis && at < endMillis {
+			if at >= p.HandoffMillis {
 				times = append(times, at)
 			}
-			continue
 		}
+		return uniqueMillis(times)
+	}
+
+	for _, point := range p.curve.points {
+		phase := float64(point.TimeMillis) / float64(p.curve.duration)
 
 		firstCycle := int64(math.Ceil(
 			float64(startMillis-p.HandoffMillis)/float64(p.PeriodMillis) - phase + p.PhaseOffset,
@@ -68,7 +78,7 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	}
 	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+int64(maximumPoints)-1)/int64(maximumPoints))
 	probeIntervalMillis = max(probeIntervalMillis, minimumBoundedProbe)
-	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+len(e.plan.curve.points))
+	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+min(len(e.plan.curve.points), maximumPoints))
 	for streamMillis := chunkStart; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
 		times = append(times, streamMillis)
 	}

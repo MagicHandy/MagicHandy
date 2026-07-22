@@ -298,6 +298,59 @@ func TestChooseNearestPhaseIncludesFiniteEndpoint(t *testing.T) {
 	}
 }
 
+func TestMediaTimelineKeepsAuthoredClockAndUsesLinearTravel(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 40
+	timeline := MediaTimelineDefinition{
+		ID: "video", Name: "Video", DurationMillis: 1000,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 500, PositionPercent: 100},
+			{TimeMillis: 1000, PositionPercent: 0},
+		},
+	}
+	plan := NewMotionPlan("media", MotionTarget{
+		Label: "Video", Source: TargetSourceMedia, MediaID: timeline.ID, Media: &timeline,
+	}, settings, 0, 0, time.Unix(0, 0))
+
+	if plan.PeriodMillis != 1000 || plan.Loop {
+		t.Fatalf("media plan timing = period %d loop %v", plan.PeriodMillis, plan.Loop)
+	}
+	if plan.Target.SpeedPercent != 40 {
+		t.Fatalf("media motion scale = %d, want configured maximum 40", plan.Target.SpeedPercent)
+	}
+	// Authored position at 125ms is 25. A 40% motion scale contracts that
+	// around center to 40 without stretching the video clock.
+	if got := plan.SampleAt(125).PositionPercent; math.Abs(got-40) > 0.001 {
+		t.Fatalf("linear scaled sample = %.3f, want 40", got)
+	}
+}
+
+func TestMediaTimelineSupportsFeatureLengthPointCounts(t *testing.T) {
+	points := make([]CurvePoint, MaximumMediaTimelinePoints)
+	for index := range points {
+		points[index] = CurvePoint{TimeMillis: int64(index), PositionPercent: float64(index % 101)}
+	}
+	timeline, err := NormalizeMediaTimelineDefinition(MediaTimelineDefinition{
+		ID: "feature", Name: "Feature", DurationMillis: int64(len(points) - 1), Points: points,
+	})
+	if err != nil {
+		t.Fatalf("NormalizeMediaTimelineDefinition: %v", err)
+	}
+	if len(timeline.Points) != MaximumMediaTimelinePoints {
+		t.Fatalf("timeline points = %d", len(timeline.Points))
+	}
+	if _, err := NewCurve(points[:maximumCurvePoints+1], maximumCurvePoints, false); err == nil {
+		t.Fatal("normal motion curve unexpectedly accepted media-sized content")
+	}
+	overLimit := append(points, CurvePoint{TimeMillis: int64(len(points)), PositionPercent: 50})
+	if _, err := NormalizeMediaTimelineDefinition(MediaTimelineDefinition{
+		ID: "too-large", Name: "Too large", DurationMillis: int64(len(overLimit) - 1), Points: overLimit,
+	}); err == nil {
+		t.Fatal("media timeline accepted content over its documented point bound")
+	}
+}
+
 func TestMotionPlanPreservesFractionalSamplePosition(t *testing.T) {
 	curve, err := NewCurve([]CurvePoint{
 		{TimeMillis: 0, PositionPercent: 0},

@@ -135,8 +135,8 @@ independent of everything.
   machinery as models. **Worth scoping *after* curated model downloads** —
   same plumbing, new content type; moderation/licensing burden is the real
   cost. Directly answers "the LLM keeps picking the same two scripts".
-- **Video + funscript sync player.** **M0 implemented; sync planned
-  (2026-07-19)** —
+- **Video + funscript sync player.** **M0-M2 implemented; hardware acceptance
+  planned (2026-07-22)** —
   the earlier non-goal disposition was reversed by explicit direction. The
   concerns behind it survive as guardrails (no transcoding, no media
   management, no new motion pathway); the full design — library locations +

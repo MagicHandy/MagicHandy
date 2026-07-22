@@ -92,6 +92,7 @@ type Server struct {
 	chatLog                *chat.MessageLog
 	patterns               *patterns.Library
 	media                  *media.Catalog
+	mediaSync              *mediaSyncRuntime
 	started                time.Time
 	version                VersionInfo
 	handler                http.Handler
@@ -226,6 +227,7 @@ func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings con
 		s.logger.Info("removed media outside configured locations", "video_count", removed)
 	}
 	s.media = mediaCatalog
+	s.mediaSync = newMediaSyncRuntime(s)
 	return nil
 }
 

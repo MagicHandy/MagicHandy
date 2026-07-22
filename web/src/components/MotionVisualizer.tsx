@@ -36,8 +36,11 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
     ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%`
     : "--";
   const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
+  const resolvedMediaName = engine?.target?.source === "media"
+    ? engine.target.label?.trim() || "Video funscript"
+    : "";
   const patternName = active
-    ? resolvedPatternName || (engine?.target?.program_id ? "Program playback" : "Unknown pattern")
+    ? resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? "Program playback" : "Unknown pattern")
     : "No active pattern";
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";

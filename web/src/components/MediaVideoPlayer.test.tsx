@@ -50,8 +50,9 @@ describe("MediaVideoPlayer", () => {
   });
 
   it("does not rewrite an equivalent browser duration", () => {
-    render(<MediaVideoPlayer video={video("session", 41900)} allowMetadataWrite />);
+    render(<MediaVideoPlayer video={video("session", 41900)} allowMetadataWrite synchronized />);
     const player = screen.getByLabelText("session") as HTMLVideoElement;
+    expect(player.closest(".media-player")).toHaveAttribute("data-synchronized", "true");
     Object.defineProperty(player, "duration", { configurable: true, value: 42 });
 
     fireEvent.loadedMetadata(player);
@@ -61,12 +62,14 @@ describe("MediaVideoPlayer", () => {
 
   it("does not write from read-only playback and offers recovery from decode errors", () => {
     const load = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
-    const result = render(<MediaVideoPlayer video={video("first")} allowMetadataWrite={false} />);
+    const onPlaybackEvent = vi.fn();
+    const result = render(<MediaVideoPlayer video={video("first")} allowMetadataWrite={false} onPlaybackEvent={onPlaybackEvent} />);
     const first = screen.getByLabelText("first") as HTMLVideoElement;
     Object.defineProperty(first, "duration", { configurable: true, value: 12 });
     fireEvent.loadedMetadata(first);
     fireEvent.error(first);
     expect(screen.getByRole("alert")).toHaveTextContent("file still exists");
+    expect(onPlaybackEvent).toHaveBeenCalledWith("error", first);
     expect(saveMediaDuration).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Retry video" }));
     expect(load).toHaveBeenCalledOnce();

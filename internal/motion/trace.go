@@ -178,6 +178,7 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		ReverseDirection:  settings.ReverseDirection,
 		PatternIdentifier: string(target.PatternID),
 		ProgramIdentifier: target.ProgramID,
+		MediaIdentifier:   target.MediaID,
 	}
 	if target.AreaFocus != nil {
 		trace.AreaMinPercent = target.AreaFocus.MinPercent
@@ -208,6 +209,10 @@ func cloneMotionTarget(target MotionTarget) MotionTarget {
 		definition.Points = append([]CurvePoint(nil), target.Program.Points...)
 		target.Program = &definition
 	}
+	// Media curves can contain 100k points and are never part of the public
+	// snapshot. Keep the stable ID/label while avoiding a multi-megabyte copy on
+	// every motion-state poll.
+	target.Media = nil
 	return target
 }
 

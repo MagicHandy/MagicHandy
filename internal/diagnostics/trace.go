@@ -56,6 +56,7 @@ type MotionTraceTarget struct {
 	ReverseDirection          bool   `json:"reverse_direction,omitempty"`
 	PatternIdentifier         string `json:"pattern_id,omitempty"`
 	ProgramIdentifier         string `json:"program_id,omitempty"`
+	MediaIdentifier           string `json:"media_id,omitempty"`
 	AreaMinPercent            int    `json:"area_min_percent,omitempty"`
 	AreaMaxPercent            int    `json:"area_max_percent,omitempty"`
 	SoftAnchorPositionPercent int    `json:"soft_anchor_position_percent,omitempty"`

@@ -994,7 +994,7 @@ LAN microphone access).
 Level: High
 
 Description:
-Phase 18's future synchronized funscript player will use the browser video as
+Phase 18's synchronized funscript player uses the browser video as
 its clock while device commands cross transports with different buffering and
 wire latency. Poor anchoring, over-eager drift correction, a lost heartbeat, or
 a seek race could make motion visibly late, jump phases, or continue after the
@@ -1007,23 +1007,32 @@ Mitigation:
 - make the video clock authoritative through explicit controller-gated
   play/pause/seek/heartbeat events, one bounded sync session, and generation
   fencing around seeks and replacement
-- use the engine's phase-preserving pause and low-jump reanchor behavior; do not
-  continuously chase sub-threshold drift
-- pause motion after a bounded heartbeat loss, preserve unconditional Stop,
-  and expose drift/reanchor reasons in `motion_trace.v3`
+- fence every mounted player with a random session id and monotonic event
+  sequence so late close/arm requests cannot cross session ownership
+- Stop and explicitly re-arm on play, seek completion, rate change, or
+  over-threshold drift; never phase-jump an already buffered transport queue
+- stop immediately on media waiting/stall/decode failure and after a bounded
+  heartbeat loss, preserve unconditional Stop, and expose
+  anchor/drift/re-arm reasons in `motion_trace.v3`
 - require fake-transport integration tests before device use, followed by a
   capped real-device alignment session across the supported owners
 
 Exit evidence:
 
-- M2 tests cover play, seek, pause, resume, ended, stale events, heartbeat loss,
-  Stop, and controller loss with one engine play path and no goroutine leaks;
+- M2 tests cover play, seek, pause, resume, media stalls, ended, stale and
+  reordered session events, heartbeat loss, Stop, and controller loss with one
+  engine play path and no goroutine leaks;
   M3 records trace-derived drift and subjective alignment on real hardware
 
-Status 2026-07-19: M0 adds only an explicit local catalog, Range streaming,
-plain browser playback, and an import preview. It cannot load a script into the
-engine or emit sync events, so this risk is not yet activated. M2 and M3 retain
-the implementation and hardware gates above.
+Status 2026-07-22: M1-M2 are implemented. Exact-name scripts share one bounded
+loader between the timeline and engine. The fake-transport path covers explicit
+play, passive heartbeat, seek Stop/re-arm, pause, resume, media-stall Stop, end,
+heartbeat loss, Emergency Stop generation fencing, closed-player request
+reordering, and controller gates. Heartbeats cannot start motion. The UI holds
+video while arming, labels read-only playback as timeline-only, and leaves
+ordinary video usable when a script is invalid or complete. R25 remains High
+until M3 records capped real-device drift and
+subjective alignment across the intended transport owners.
 
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).

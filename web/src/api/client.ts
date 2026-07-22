@@ -28,6 +28,9 @@ import type {
   LLMProviderStatus,
   ManagedLlamaRuntimeBuild,
   MediaScanState,
+  MediaFunscript,
+  MediaSyncEvent,
+  MediaSyncStatus,
   MediaVideo,
   OllamaModelInfo,
   OllamaModelScan,
@@ -40,6 +43,7 @@ import type {
 } from "./types";
 
 const CLIENT_ID_KEY = "magichandy-client-id";
+const STOP_SEQUENCE_HEADER = "X-MagicHandy-Stop-Sequence";
 
 export const clientId: string = (() => {
   try {
@@ -56,14 +60,22 @@ export const clientId: string = (() => {
 
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 
-async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json", [CLIENT_HEADER]: clientId };
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
+  keepalive = false,
+): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", [CLIENT_HEADER]: clientId, ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
+    keepalive,
   });
   const text = await res.text();
   let parsed: unknown = null;
@@ -179,6 +191,17 @@ export const api = {
   saveMediaDuration: (id: string, duration_ms: number) =>
     request<{ status: string }>("POST", "/api/media/duration", { id, duration_ms }),
   mediaStreamURL: (id: string) => `/api/media/videos/${encodeURIComponent(id)}/stream`,
+  mediaFunscript: (id: string, signal?: AbortSignal) =>
+    request<{ funscript: MediaFunscript }>("GET", `/api/media/videos/${encodeURIComponent(id)}/funscript`, undefined, signal),
+  mediaSync: (event: MediaSyncEvent, stopSequence?: number, signal?: AbortSignal, keepalive = false) =>
+    request<{ sync: MediaSyncStatus }>(
+      "POST",
+      "/api/media/sync",
+      event,
+      signal,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) },
+      keepalive,
+    ),
 
   // Memory.
   getMemory: () => request<MemoryState>("GET", "/api/memory"),

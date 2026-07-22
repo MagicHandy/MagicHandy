@@ -1,8 +1,8 @@
 # Video Library And Synced Funscript Playback — Design
 
-Status: **M0 implemented (2026-07-19); M1-M3 remain planned**. M0 is the
-catalog and plain-playback foundation only: it does not load a funscript for
-playback and cannot command motion.
+Status: **M0-M2 implemented (2026-07-22); M3 remains planned**. Exact-name
+funscripts now render below the video and play through the shared motion
+engine. Real-device alignment and transport-specific tuning remain M3 work.
 
 ## Decision note — this supersedes a recorded non-goal
 
@@ -41,6 +41,18 @@ The implementation borrows proven interaction ideas, not whole architectures:
   that spatial relationship while retaining the existing bounded parser and
   trim controls; it does not become a second authoring or device-control path.
 
+- [ScriptPlayer](https://github.com/FredTungsten/ScriptPlayer) separates the
+  media time source from synchronized and action-based devices, resets script
+  indexing on discontinuities, and resynchronizes devices from the media
+  clock. MagicHandy adopts the clock ownership and discontinuity rules, not
+  ScriptPlayer's device dispatch layer: every sample still belongs to the one
+  Go motion engine.
+- [c4l-funscript](https://github.com/c4llv07e/c4l_funscript) resets its script
+  cursor on play/seek and stops devices on pause. Its polling loop is too
+  coarse and its browser-to-device path would violate MagicHandy's transport
+  boundary, but the explicit reset/stop behavior is the correct minimum for a
+  media-clock player.
+
 The resulting reusable unit is the native-video component used by both the
 dedicated Videos page and the optional funscript-import preview. It accepts an opaque
 catalog entry and playback callbacks, and knows nothing about motion.
@@ -56,30 +68,27 @@ catalog entry and playback callbacks, and knows nothing about motion.
 4. **Settings where library locations can be added and scanned** for library
    entries.
 
-M0 fulfills requirements 1 and 4 for plain playback and records the pairing
-metadata needed by requirement 2. Automatic funscript playback and the OSD in
-requirements 2-3 remain M1-M2 work.
+M0 fulfills requirements 1 and 4. M1-M2 fulfill requirements 2-3 with one
+bounded script document shared by the canvas and backend timeline loader.
 
 ## Architecture overview
 
 ```text
-web (`#/videos`: grid, search, player, OSD strip)
-   │  /api/media/*  (edge only)
-internal/httpapi ──────────► internal/media (NEW)
-   │                           • locations scan (explicit, bounded)
-   │                           • video/funscript pairing (exact basename)
-   │                           • SQLite catalog (schema v11)
-   │                           • funscript timeline loader (media bounds)
-   │                           • sync session (browser clock → anchor)
-   └───────► internal/motion  • engine plays the paired timeline as an
-                                anchored finite curve; transport unchanged
+web (`#/videos`: grid, search, player, timeline)
+   │  /api/media/* (edge only)
+internal/httpapi ──────────► internal/media
+   │  sync lifecycle           • explicit bounded scan + SQLite catalog
+   │  controller/Stop fence    • exact-basename jailed funscript loader
+   │                           • linear finite media timeline
+   └───────► internal/motion   • one engine samples the finite timeline;
+                                 every transport remains unchanged
 ```
 
-Boundary rules (enforced by the existing `internal/architecture` tests, with
-`media` added to the semantic-client rule): `media` never imports `transport`
-or `httpapi`; `motion` never imports `media`. The sync session hands the
-engine *semantic* anchored targets; the transport keeps owning stroke-window
-projection, speed caps, quantization, and Stop.
+Boundary rules (enforced by the existing `internal/architecture` tests):
+`media` may construct motion-semantic finite timelines but never imports
+`transport` or `httpapi`; `motion` never imports `media`. HTTP owns the browser
+session lifecycle and hands only semantic targets to the engine. The transport
+keeps owning stroke-window projection, quantization, buffering, and Stop.
 
 ## Data model
 
@@ -148,7 +157,7 @@ also enables an optional client-captured poster frame in a later slice.
   and every intermediate component are not symlinks. The final open uses Go's
   rooted filesystem handle and verifies file identity, closing the path-swap
   race without depending on platform-wide ancestor resolution.
-- In M1, `GET /api/media/videos/{id}/funscript` serves the paired script (bounded
+- `GET /api/media/videos/{id}/funscript` serves the paired script (bounded
   read, `MaxMediaFunscriptBytes` 16 MiB) for the OSD strip; the same loader
   feeds the sync session server-side, so the strip and the device always
   render the same data.
@@ -156,52 +165,62 @@ also enables an optional client-captured poster frame in a later slice.
   and therefore not controller-gated, but every motion-affecting endpoint
   below is.
 
-## Sync design — planned for M2
+## Sync design (M2 implemented)
 
 **The video element is the clock master.** The browser owns play/pause/seek;
 the backend anchors motion to the reported media clock:
 
-- The player posts `POST /api/media/sync` events: `{video_id, state:
-  playing|paused|seeking|ended, media_time_ms, client_time_ms, playback_rate}`
-  on play/pause/seek/rate-change plus a heartbeat every 2 s while playing.
-- `internal/media` keeps one **sync session** (single-operator app): an
-  anchor `(media_time_ms, server_wall_time, rate)` from which media time is
-  extrapolated between events.
-- The funscript loads through `motion.NewCurve(points, duration, loop=false)`
-  — the existing PCHIP sampler is already time-parameterized, so the engine
-  samples `Curve.Sample(mediaTimeNow + lead)` where `lead` is the transport's
-  latency-aware lead the engine already computes. **Media playback has its
-  own bounds** (≤ 100,000 actions / 16 MiB) and never passes through the
-  pattern-library import caps — a feature-length script is not library
-  content.
-- Engine integration: a new target shape `MediaTimeline` (label, video id,
-  curve) started via the normal engine `Start`, plus one new engine
-  capability — **`Reanchor(offsetMillis)`** — that phase-jumps a running
-  finite curve to a new offset using the same low-jump handoff as retargets.
-  Play → Start at offset; seek → Reanchor; pause → engine Pause (existing,
-  phase-preserving); resume → Resume + Reanchor to the current media time;
-  ended → engine Stop with reason `media_ended`.
-- **Drift correction**: each heartbeat compares extrapolated media time with
-  the engine's playback position; drift beyond 250 ms → Reanchor; smaller
-  drift is left alone (constant re-anchoring feels worse than 100 ms of
-  offset — the STGPT-RV morph-thrash lesson applied to sync).
-- **Heartbeat loss** (tab closed, browser crashed) for > 5 s → engine
-  **Pause** with a trace note (not Stop: the user may reopen; Stop remains
-  the user's explicit act and the Stop button/Esc still works from any tab).
+- The player posts controller-gated `{video_id, session_id, event_sequence,
+  state, event, media_time_ms, client_time_ms, playback_rate}` events on play,
+  pause, seek, rate change, buffering/decode failure, end, and close, plus a
+  heartbeat every 1.5 seconds while following.
+- `internal/httpapi` owns one serialized sync runtime. It anchors the media
+  time to server wall time only after the shared engine has successfully
+  started. `internal/media` only opens, validates, and slices the paired
+  script.
+- Media playback has separate bounds (at most 100,000 actions and 16 MiB) and
+  never passes through pattern-import caps. Funscript segments use **linear
+  interpolation**, matching the authored format; pattern curves keep PCHIP.
+- Play, resume, seek completion, and rate change each start a fresh finite
+  timeline at the exact browser media time. Pause, seek start, waiting/stalled
+  playback, decode failure, end, close, and heartbeat loss call engine
+  **Stop**, not Pause. Replacement stops the previous source before reading
+  the next script, so a slow or invalid file cannot leave old motion running.
+- This deliberately does **not** add `Reanchor`. Buffered transports can
+  already hold future points, and changing an engine phase cannot retract that
+  queue. Stop/re-arm is the only honest discontinuity operation until every
+  transport exposes a proven queue-flush contract.
+- Each heartbeat compares browser time with the current anchor. Drift beyond
+  250 ms or a rate mismatch stops motion and returns `requires_reanchor`; the
+  browser then holds the video and explicitly re-arms. Sub-threshold drift is
+  observed but not chased. A heartbeat can validate or stop a run, **never
+  start one**.
+- Heartbeat loss for more than five seconds stops the engine. A closed,
+  crashed, suspended, or controller-lost player therefore cannot leave a
+  resumable media target behind.
+- Every arm carries the current Emergency Stop sequence. A concurrent Stop
+  invalidates work before and after engine startup, and stale heartbeats are
+  rejected. The global Stop path also invalidates sync status before stopping
+  the engine.
+- Every mounted player also has a random session id and increasing event
+  sequence. The backend retains a bounded set of closed-session fences, so a
+  delayed arm cannot restart an unmounted player and a delayed close cannot
+  stop a newer session for the same video. Unmount cancels an in-flight arm
+  and sends a keepalive close for any session that reached admission.
 - Cloud REST expectation: wire latency means the device tracks the video
-  with the transport's measured lead; the trace gains `media_sync` rows
-  (anchor, drift, reanchor reason) so hardware sessions can measure real
-  alignment before any tuning. Bluetooth/Intiface ride the same anchor.
+  through the engine's existing transport-aware buffer. Trace rows record
+  anchors, drift, and stop/re-arm reasons so M3 can tune real alignment without
+  creating a transport-specific media path.
 
-Safety inheritance (nothing new to invent): positions are relative 0–100 and
-are projected into the user's stroke window at the transport; user speed
-caps clamp over-fast scripts exactly as they clamp any content; Emergency
-Stop and the controller lease behave identically to every other motion
-source; read-only tabs can watch video but their sync events are ignored for
-motion (they get a visible "read-only — motion stays with the controller"
-note).
+Safety inheritance: authored timestamps stay locked to the video. The user's
+configured maximum speed percentage contracts semantic position excursions
+around the 50% midpoint before the normal stroke-window projection; it reduces
+authored velocity without slowing the video, but is not a calibrated physical
+velocity guarantee. Emergency Stop and the controller lease behave like every
+other motion source. Read-only tabs can watch video and inspect the timeline,
+but are visibly labeled visualization-only and emit no motion events.
 
-## OSD funscript strip — planned for M1
+## Funscript timeline (M1 implemented)
 
 A hideable strip rendered under the video (canvas, not SVG — feature-length
 scripts have 10⁴–10⁵ actions; the import timeline's min/max bucket
@@ -210,9 +229,9 @@ downsampling is reused at canvas resolution):
 - **Intensity coloring** per bucket from local speed (|Δposition| / Δt,
   %/s), using a design-system-compliant ramp instead of the traditional
   rainbow: `--line-strong` (idle) → `--accent` (slow–moderate) → `--warn`
-  (fast) → `--danger` (very fast). Thresholds start at 0 / 50 / 200 / 400 %/s
-  as constants and get tuned against real scripts; the ramp reuses the
-  existing status semantics (red = intense) without introducing new hues.
+  (fast) → `--text` (very fast). Thresholds start at 0 / 50 / 200 / 400 %/s
+  as constants and get tuned against real scripts; red remains reserved for
+  Emergency Stop.
 - A playhead line tracks `currentTime`; **click/drag seeks the video** (the
   strip never commands the device directly — seeking the video drives the
   sync session, one clock).
@@ -238,8 +257,9 @@ downsampling is reused at canvas resolution):
 - **Player view** (replaces the grid within the route; back button returns): M0
   ships `<video>` with native controls and browser-reported duration backfill.
   Leaving the Videos route unmounts the player so hidden audio never continues.
-  M1 adds the OSD strip; M2 adds the compact sync/device/drift status. The
-  persistent Stop button stays global as on every route.
+  Paired videos load the M1 canvas timeline before controls become available;
+  M2 adds compact sync/device/drift status. The persistent Stop button stays
+  global as on every route.
 - Settings > **Library locations** (new Settings section): list of
   registered paths with per-path entry counts, Add via the existing
   controller-gated `POST /api/host/path-picker`, Remove (after confirmation,
@@ -281,6 +301,32 @@ downsampling is reused at canvas resolution):
   this follow-up. OSD is M1 and motion is M2; neither may add a second media or
   motion pathway.
 
+### M1-M2 implementation review (2026-07-22)
+
+- **One document, two consumers:** the opaque video id resolves the same
+  bounded exact-name script for the browser canvas and the backend timeline.
+  Neither API returns a filesystem path.
+- **Timeline legibility:** min/max buckets preserve dense extrema at canvas
+  resolution; segment intensity uses the established neutral/azure/amber/white
+  tokens while red remains Stop-only; a separate playhead canvas avoids rebuilding the feature-length
+  curve on each `timeupdate`.
+- **Honest control:** play holds the video while the backend arms; pause, seek,
+  rate change, buffering/decode failure, end, close, drift, and heartbeat loss
+  have explicit status.
+  Read-only tabs retain ordinary video and timeline access without pretending
+  to control motion.
+- **Buffered-owner safety:** discontinuities Stop and re-arm rather than phase
+  jumping a queue whose future points cannot be retracted. An Emergency Stop
+  sequence fences stale starts and heartbeats.
+- **Failure isolation:** malformed, oversized, missing, or changed scripts
+  leave ordinary video playback available with a visible no-motion warning.
+  A script that ends before its video stops motion and allows the remaining
+  video to continue. A likely script/video duration mismatch is visible beside
+  the paired-script metadata without disabling playback.
+- **Accepted deferrals:** poster frames, resume position, fullscreen timeline,
+  and transport-specific alignment tuning remain M3. M1-M2 make no hardware
+  alignment claim.
+
 ## API surface
 
 | Endpoint | Gate | Slice | Purpose |
@@ -290,7 +336,7 @@ downsampling is reused at canvas resolution):
 | `POST /api/media/scan` / `GET /api/media/scan` / `DELETE /api/media/scan` | controller / read / controller | M0 | start, poll, or cancel an explicit scan |
 | `PUT /api/settings` (`media.library_paths`) | controller | M0 | manage locations |
 | `POST /api/media/duration` | controller | M0 | browser-reported `duration_ms` backfill |
-| `GET /api/media/videos/{id}/funscript` | read | M1 | paired script for the OSD |
+| `GET /api/media/videos/{id}/funscript` | read | M1 | bounded paired script for the timeline |
 | `POST /api/media/sync` | controller | M2 | play/pause/seek/heartbeat anchor events |
 
 ## Slices (each is one reviewable PR with its own validation)
@@ -310,16 +356,16 @@ downsampling is reused at canvas resolution):
   with a 1,495,040-byte peak RSS increase; a tail Range returned 206 and the
   requested 648 bytes. These close M0's multi-root and constant-memory manual
   checks before M1.
-- **M1 — paired-script reading + OSD**: bounded funscript endpoint, canvas
-  strip with intensity ramp + playhead + click-seek + hide toggle.
-  Still no motion. *Gate: strip matches the script for feature-length files;
-  rendering stays smooth at 10⁵ actions; hide state persists.*
-- **M2 — synced motion**: media timeline loader + engine `Reanchor`, sync
-  session (anchor/drift/heartbeat), pause/seek/ended/heartbeat-loss
-  semantics, Stop/controller/read-only integration, `media_sync` trace rows.
-  *Gate: Go integration tests drive the real engine over the fake transport
-  through play → seek → pause → resume → ended with exactly one play command
-  and bounded drift after seeks; goleak/race clean.*
+- **M1 — paired-script reading + timeline (implemented)**: one jailed,
+  16 MiB/100,000-action loader feeds the read endpoint and backend; the canvas
+  uses min/max buckets, an intensity ramp, a separate playhead, click/drag and
+  keyboard seeking, and a persisted hide toggle.
+- **M2 — synchronized motion (implemented)**: the serialized browser-clock
+  session starts finite linear media targets through the shared engine and
+  Stop/re-arms at discontinuities. Integration tests cover play, heartbeat,
+  seek, pause, resume, media stalls, end, timeout, stale Stop generations,
+  closed-session ordering, controller gates, one transport Play per explicit
+  arm, and no heartbeat-triggered restart.
 - **M3 — hardware acceptance + polish**: real-device alignment measurement
   via the trace rows, drift-threshold tuning, client-captured poster frames,
   resume-from-last-position, fullscreen strip overlay decision.
@@ -328,7 +374,7 @@ downsampling is reused at canvas resolution):
 
 ## Risks and budgets
 
-- **New risk R25 (media sync)** for the register: browser-clock anchoring
+- **Risk R25 (media sync)** remains open: browser-clock anchoring
   over a ~wire-latency transport may feel misaligned on hardware; mitigation
   is the M2 trace evidence + M3 acceptance gate before the feature is called
   done; fallback is honest labeling ("device follows with ~Xms lead").
@@ -338,9 +384,9 @@ downsampling is reused at canvas resolution):
   over); watch-list item 4 still applies to any imagery.
 - RSS: streaming is constant-memory; an M0 scan holds bounded discovery
   metadata for at most 10,000 encountered files per root while it runs. The
-  loaded sync curve is the one
-  meaningful allocation (≤ ~3 MB for 100k points) and is released when the
-  player closes in M2.
+  loaded sync curve is the one meaningful allocation (roughly 3 MB retained
+  for 100k validated actions, with bounded temporary parse copies) and is
+  released or replaced when the player ends, closes, or selects another video.
 - The `.mkv` exclusion, no-transcoding stance, and localhost-only serving are
   deliberate scope walls; revisiting any of them is a new decision, not
   scope drift.

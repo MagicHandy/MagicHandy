@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode, type SyntheticEvent } from "react";
 import { api } from "../api/client";
 import type { MediaVideo } from "../api/types";
 
@@ -9,7 +9,12 @@ interface Props {
   onDuration?: (durationMillis: number) => void;
   onTimeChange?: (timeMillis: number) => void;
   onVideoUpdate?: (video: MediaVideo) => void;
+  playerRef?: MutableRefObject<HTMLVideoElement | null>;
+  onPlaybackEvent?: (event: MediaPlaybackEvent, player: HTMLVideoElement) => void;
+  synchronized?: boolean;
 }
+
+export type MediaPlaybackEvent = "play" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "error";
 
 export function MediaVideoPlayer({
   video,
@@ -18,10 +23,17 @@ export function MediaVideoPlayer({
   onDuration,
   onTimeChange,
   onVideoUpdate,
+  playerRef,
+  onPlaybackEvent,
+  synchronized = false,
 }: Props) {
   const [playbackError, setPlaybackError] = useState("");
   const reported = useRef("");
-  const playerRef = useRef<HTMLVideoElement>(null);
+  const internalPlayerRef = useRef<HTMLVideoElement | null>(null);
+  const setPlayerRef = useCallback((node: HTMLVideoElement | null) => {
+    internalPlayerRef.current = node;
+    if (playerRef) playerRef.current = node;
+  }, [playerRef]);
 
   useEffect(() => {
     setPlaybackError("");
@@ -48,14 +60,14 @@ export function MediaVideoPlayer({
 
   function retryPlayback() {
     setPlaybackError("");
-    playerRef.current?.load();
+    internalPlayerRef.current?.load();
   }
 
   return (
-    <div className="media-player" aria-label={`Video player for ${video.display_name}`}>
+    <div className="media-player" data-synchronized={synchronized || undefined} aria-label={`Video player for ${video.display_name}`}>
       <div className="media-video-frame">
         <video
-          ref={playerRef}
+          ref={setPlayerRef}
           key={video.id}
           controls
           playsInline
@@ -64,9 +76,22 @@ export function MediaVideoPlayer({
           aria-label={video.display_name}
           onLoadedMetadata={(event) => void loadedMetadata(event)}
           onTimeUpdate={(event) => onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000))}
-          onSeeking={(event) => onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000))}
+          onPlay={(event) => onPlaybackEvent?.("play", event.currentTarget)}
+          onPause={(event) => onPlaybackEvent?.("pause", event.currentTarget)}
+          onSeeking={(event) => {
+            onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000));
+            onPlaybackEvent?.("seeking", event.currentTarget);
+          }}
+          onSeeked={(event) => onPlaybackEvent?.("seeked", event.currentTarget)}
+          onEnded={(event) => onPlaybackEvent?.("ended", event.currentTarget)}
+          onRateChange={(event) => onPlaybackEvent?.("ratechange", event.currentTarget)}
+          onWaiting={(event) => onPlaybackEvent?.("waiting", event.currentTarget)}
+          onStalled={(event) => onPlaybackEvent?.("stalled", event.currentTarget)}
           onCanPlay={() => setPlaybackError("")}
-          onError={() => setPlaybackError("This video could not be loaded. Verify that the file still exists and uses a browser-supported codec.")}
+          onError={(event) => {
+            onPlaybackEvent?.("error", event.currentTarget);
+            setPlaybackError("This video could not be loaded. Verify that the file still exists and uses a browser-supported codec.");
+          }}
         />
       </div>
       {playbackError && <div className="form-status media-playback-error media-playback-error-row" role="alert"><span>{playbackError}</span><button type="button" className="btn btn-secondary compact-command" onClick={retryPlayback}>Retry video</button></div>}

@@ -98,7 +98,7 @@ status column and in "Known Gaps Carried Forward" below.
 | Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; interactive managed llama.cpp + Ollama model matrix passed; long-session, cadence, and richer-arrangement acceptance open** | #101, #106 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
-| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0 implemented; M1-M3 planned** | #104 |
+| 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0-M2 implemented; M3 planned** | #104 |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -1583,7 +1583,9 @@ freeze, or backport/abandon.
 
 ## Suggested `/goal`
 
-`/goal Implement MagicHandy Phase 18 slice M0 from docs/video-playback.md: media library locations in settings, the bounded explicit scanner with catalog schema v11, the dedicated Videos page with search, and Range-capable video streaming — no motion integration yet.`
+`/goal Complete MagicHandy Phase 18 M3 from docs/video-playback.md: measure paired-video alignment on the real Handy at a capped speed, tune only from trace evidence, and finish the accepted playback polish.`
+
+Status: **M0-M2 implemented; M3 pending (2026-07-22).**
 
 ## Objective
 
@@ -1596,16 +1598,18 @@ locations are added and scanned from Settings.
 
 Designed in full in [docs/video-playback.md](docs/video-playback.md),
 including the architecture (`internal/media`, media never imports transport,
-engine `Reanchor` as the only engine addition), the schema v11 catalog, the
+the shared engine's finite linear media target), the schema v11 catalog, the
 explicit bounded scanner, the video-clock-master sync session with drift
-correction and heartbeat-loss pause, the design-system intensity ramp, and
-the safety inheritance (stroke window/speed caps at the transport, Stop
+detection and heartbeat-loss Stop, the design-system intensity ramp, and the
+safety inheritance (exact media timestamps, configured motion scaling,
+buffer/decode-failure Stop, monotonic per-player session fencing, Stop
 unconditional, controller lease, read-only spectators). Implementation is
-sliced M0 (catalog foundation, implemented) → M1 (paired-script OSD) → M2
-(synced motion) → M3 (hardware acceptance + polish); each slice's gate is in
-the design doc. M0 also reuses the plain video player in an optional funscript
-import modal, directly above the existing shared trim timeline; it has no
-motion integration.
+sliced M0 (catalog foundation, implemented) → M1 (paired-script timeline,
+implemented) → M2 (synchronized motion, implemented) → M3 (hardware
+acceptance + polish). Buffered queues are stopped and re-armed at every media
+discontinuity; no phase jump or second motion path was added. M0 also reuses
+the plain video player in an optional funscript import modal, directly above
+the existing shared trim timeline; that preview remains motion-free.
 
 This phase supersedes the feature-ideas "video sync player" non-goal by
 explicit direction (2026-07-19); the non-goal's concerns are carried as
@@ -1613,9 +1617,12 @@ guardrails (no transcoding, no media management, no new motion pathway).
 
 ## Done Criteria
 
-- M2's integration gate (real engine over the fake transport through
-  play/seek/pause/resume/ended with one play command) and M3's real-device
-  alignment evidence both recorded.
+- M2's integration gate is green: the real engine over the fake transport
+  covers play/heartbeat/seek/pause/resume/stall/end/timeout/Stop fencing and
+  closed-session request reordering with one transport Play per explicit arm
+  and no heartbeat restart.
+- M3 records real-device alignment and capped-speed trace evidence before the
+  phase is complete.
 
 ## Out Of Scope
 

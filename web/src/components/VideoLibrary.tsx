@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaScanState, MediaVideo } from "../api/types";
 import { ArrowLeftIcon, CloseIcon, PlayIcon, RefreshIcon, VideoIcon } from "../shell/icons";
-import { MediaVideoPlayer } from "./MediaVideoPlayer";
+import { SyncedVideoPlayer } from "./SyncedVideoPlayer";
 
 interface Props {
   locked: boolean;
+  stopSequence?: number;
 }
 
-export function VideoLibrary({ locked }: Props) {
+export function VideoLibrary({ locked, stopSequence }: Props) {
   const [videos, setVideos] = useState<MediaVideo[]>([]);
   const [selectedID, setSelectedID] = useState("");
   const [query, setQuery] = useState("");
@@ -155,7 +156,7 @@ export function VideoLibrary({ locked }: Props) {
           <button type="button" className="btn btn-secondary compact-command" onClick={() => setSelectedID("")}><ArrowLeftIcon />Videos</button>
           <div><h2>{selected.display_name}</h2><span>{formatFileSize(selected.size_bytes)} / {formatLocation(selected.location_path)}{selected.has_funscript ? " / script found" : ""}</span></div>
         </div>
-        <MediaVideoPlayer video={selected} allowMetadataWrite={!locked} onVideoUpdate={updateVideo} />
+        <SyncedVideoPlayer video={selected} locked={locked} stopSequence={stopSequence} onVideoUpdate={updateVideo} />
       </section>
     );
   }
