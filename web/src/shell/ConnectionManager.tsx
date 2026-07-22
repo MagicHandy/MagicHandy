@@ -6,7 +6,7 @@ import { BluetoothBridge, type BluetoothBridgeState } from "../components/Blueto
 import { IntifacePanel, type IntifaceActivity } from "../components/IntifacePanel";
 import { QuickSettings } from "../components/QuickSettings";
 import { useAppState, useToast } from "../state/app-state";
-import { ChevronUpIcon, CloseIcon, SettingsIcon, WirelessIcon } from "./icons";
+import { ChevronUpIcon, CloseIcon, RefreshIcon, SettingsIcon, WirelessIcon } from "./icons";
 
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error" | "initializing";
 
@@ -45,7 +45,8 @@ export function ConnectionManager() {
   const { backendOnline, readOnly, refresh, state } = useAppState();
   const { show } = useToast();
   const [open, setOpen] = useState(false);
-  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudAction, setCloudAction] = useState<"check" | "connect" | "disconnect" | null>(null);
+  const cloudBusy = cloudAction !== null;
   const [cloudAttemptFailed, setCloudAttemptFailed] = useState(false);
   const [cloudKeyBusy, setCloudKeyBusy] = useState(false);
   const [cloudKey, setCloudKey] = useState("");
@@ -89,7 +90,7 @@ export function ConnectionManager() {
   const deviceName = owner === "browser_bluetooth"
     ? bluetooth.deviceName || "The Handy"
     : selectedIntifaceDevice?.device_name || "The Handy";
-  const connecting = cloudBusy || (owner === "browser_bluetooth" && bluetooth.connecting) || (owner === "intiface" && (intifaceActivity === "connecting" || intifaceActivity === "scanning" || intiface.status.scanning));
+  const connecting = cloudAction === "check" || cloudAction === "connect" || (owner === "browser_bluetooth" && bluetooth.connecting) || (owner === "intiface" && (intifaceActivity === "connecting" || intifaceActivity === "scanning" || intiface.status.scanning));
   const connected = owner === "cloud_rest"
     ? Boolean(state?.cloud_transport?.connected)
     : owner === "browser_bluetooth" ? bluetooth.connected : owner === "intiface"
@@ -111,11 +112,11 @@ export function ConnectionManager() {
     phase,
   });
 
-  async function checkCloud() {
-    setCloudBusy(true);
+  async function probeCloud(action: "check" | "connect") {
+    setCloudAction(action);
     setCloudAttemptFailed(false);
     try {
-      const result = await api.connectionCheck("cloud");
+      const result = action === "connect" ? await api.cloudConnect() : await api.connectionCheck("cloud");
       setCloudAttemptFailed(!result.ok);
       show(
         result.ok
@@ -125,9 +126,24 @@ export function ConnectionManager() {
       );
     } catch (error) {
       setCloudAttemptFailed(true);
-      show(error instanceof Error ? error.message : "Connection check failed.", "error");
+      show(error instanceof Error ? error.message : `Connection ${action === "connect" ? "attempt" : "check"} failed.`, "error");
     } finally {
-      setCloudBusy(false);
+      setCloudAction(null);
+      refresh();
+    }
+  }
+
+  async function disconnectCloud() {
+    setCloudAction("disconnect");
+    setCloudAttemptFailed(false);
+    try {
+      const result = await api.cloudDisconnect();
+      if (result.warning) show(result.warning, "error");
+      else show("MagicHandy released control of The Handy. It can now be used by another app.");
+    } catch (error) {
+      show(error instanceof Error ? error.message : "The Handy could not be disconnected.", "error");
+    } finally {
+      setCloudAction(null);
       refresh();
     }
   }
@@ -171,6 +187,18 @@ export function ConnectionManager() {
             <strong>{deviceName}</strong>
             <small>{statusText}</small>
           </span>
+          {owner === "cloud_rest" && (
+            <button
+              type="button"
+              className="icon-button connection-current-check"
+              aria-label="Check Cloud connection"
+              title="Check connection"
+              disabled={locked || cloudBusy || !keySet}
+              onClick={() => void probeCloud("check")}
+            >
+              <RefreshIcon size={17} />
+            </button>
+          )}
         </div>
 
         <div className="connection-provider-actions">
@@ -197,9 +225,14 @@ export function ConnectionManager() {
                   </button>
                 </div>
               </form>
-              <button type="button" className="btn btn-secondary" disabled={locked || cloudBusy || !keySet} onClick={() => void checkCloud()}>
+              <button
+                type="button"
+                className={`btn ${connected ? "btn-secondary" : "btn-primary"}`}
+                disabled={locked || cloudBusy || !keySet}
+                onClick={() => void (connected ? disconnectCloud() : probeCloud("connect"))}
+              >
                 <WirelessIcon />
-                {cloudBusy ? "Checking" : connected ? "Check again" : "Check connection"}
+                {cloudAction === "disconnect" ? "Disconnecting" : cloudAction === "connect" ? "Connecting" : connected ? "Disconnect" : "Connect"}
               </button>
             </>
           )}
@@ -315,7 +348,7 @@ function connectionStatusText(input: {
   if (input.phase === "error" && input.owner === "intiface") return "Intiface connection failed";
   if (input.owner === "cloud_rest") {
     if (!input.keySet) return "Connection key required";
-    return input.cloudVerified ? "Cloud connection ready" : "Not checked";
+    return input.cloudVerified ? "Cloud connection ready" : "Cloud disconnected";
   }
   if (input.owner === "browser_bluetooth") {
     return input.bluetooth.connected ? "Bluetooth connected" : input.bluetooth.status === "error" ? "Bluetooth error" : "Bluetooth disconnected";

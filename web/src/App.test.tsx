@@ -168,6 +168,16 @@ function installFetch(opts: InstallFetchOptions = {}) {
         text: async () => JSON.stringify(opts.stopError ? { error: opts.stopError } : {}),
       } as Response;
     }
+    if (u.includes("/api/transport/cloud/connect")) {
+      await opts.connectionCheckGate;
+      const check = opts.connectionCheckResult ?? { ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 };
+      state.cloud_transport = { connected: check.ok };
+      return jsonRes(check);
+    }
+    if (u.includes("/api/transport/cloud/disconnect")) {
+      state.cloud_transport = { connected: false, playback_state: "stopped" };
+      return jsonRes({ released: true, stopped: true, diagnostics: state.cloud_transport });
+    }
     if (u.includes("/api/transport/cloud/check")) {
       await opts.connectionCheckGate;
       const check = opts.connectionCheckResult ?? { ok: true, status: "http_200", hsp_available: true, playback_state: "idle", latency_ms: 42 };
@@ -446,7 +456,7 @@ describe("app shell safety invariants", () => {
     });
   });
 
-  it("keeps Cloud REST status backend-authoritative and offers a connection check", async () => {
+  it("keeps Cloud REST status backend-authoritative and separates Check from Disconnect", async () => {
     const fetchMock = installFetch({
       state: {
         ...baseState,
@@ -457,13 +467,40 @@ describe("app shell safety invariants", () => {
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy cloud connection ready/i }));
     const manager = screen.getByRole("region", { name: /connection manager/i });
-    fireEvent.click(within(manager).getByRole("button", { name: /check again/i }));
+    const checkButton = within(manager).getByRole("button", { name: /check cloud connection/i });
+    const current = manager.querySelector<HTMLElement>(".connection-current");
+    const copy = manager.querySelector<HTMLElement>(".connection-current-copy");
+    expect(current).not.toBeNull();
+    expect(copy).not.toBeNull();
+    expect(current).toContainElement(checkButton);
+    expect(copy).not.toContainElement(checkButton);
+    fireEvent.click(checkButton);
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/transport/cloud/check"));
       expect(call).toBeDefined();
     });
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/transport/cloud/stop"))).toBe(false);
-    expect(within(manager).getByRole("button", { name: /check again/i })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/transport/cloud/disconnect"))).toBe(false);
+    expect(within(manager).getByRole("button", { name: /^disconnect$/i })).toBeInTheDocument();
+  });
+
+  it("releases Cloud control and changes the primary action back to Connect", async () => {
+    const fetchMock = installFetch({
+      state: {
+        ...baseState,
+        settings: { ...baseState.settings, device: { ...baseState.settings.device, connection_key_set: true } },
+        cloud_transport: { connected: true },
+      },
+    });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud connection ready/i }));
+    const manager = screen.getByRole("region", { name: /connection manager/i });
+    fireEvent.click(within(manager).getByRole("button", { name: /^disconnect$/i }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(
+      ([input]) => String(input).endsWith("/api/transport/cloud/disconnect"),
+    )).toBe(true));
+    await waitFor(() => expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeInTheDocument());
+    expect(within(manager).getByText("Cloud disconnected")).toBeInTheDocument();
   });
 
   it("shows the wireless wave state while checking The Handy", async () => {
@@ -477,8 +514,8 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy not checked/i }));
-    fireEvent.click(screen.getByRole("button", { name: /check connection/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud disconnected/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
     expect(screen.getByRole("img", { name: /in progress/i })).toHaveAttribute("data-phase", "connecting");
     await act(async () => release());
     await waitFor(() => expect(screen.getByRole("img", { name: /the handy wireless connection$/i })).toHaveAttribute("data-phase", "connected"));
@@ -503,8 +540,8 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy not checked/i }));
-    fireEvent.click(screen.getByRole("button", { name: /check connection/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud disconnected/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
     expect(await screen.findByText("HSP is unavailable for this device/API state")).toBeInTheDocument();
   });
 
@@ -1103,11 +1140,12 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/device");
     expect(await screen.findByRole("button", { name: /save settings/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /the handy not checked/i }));
+    fireEvent.click(screen.getByRole("button", { name: /the handy cloud disconnected/i }));
     const manager = screen.getByRole("region", { name: /connection manager/i });
     expect(within(manager).getByLabelText(/handy connection key/i)).toBeDisabled();
     expect(within(manager).getByRole("button", { name: /save key/i })).toBeDisabled();
-    expect(within(manager).getByRole("button", { name: /check connection/i })).toBeDisabled();
+    expect(within(manager).getByRole("button", { name: /check cloud connection/i })).toBeDisabled();
+    expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeDisabled();
     go("#/settings/prompts");
     expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
     expect(await screen.findByRole("button", { name: /add memory/i })).toBeDisabled();

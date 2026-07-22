@@ -186,10 +186,13 @@ the backend anchors motion to the reported media clock:
   timeline at the exact browser media time. The browser does not arm motion
   until the player has future data (`readyState >= 3`). Pause, seek start,
   actual `waiting`, decode failure, end, close, and heartbeat loss call engine
-  **Stop**, not Pause. A later `canplay` explicitly re-arms when playback is
-  still desired. The advisory `stalled` event alone does not stop a player that
-  still has buffered data. Replacement stops the previous source before reading
-  the next script, so a slow or invalid file cannot leave old motion running.
+  **Stop**, not Pause. A later `canplay` or the player's 100 ms readiness
+  watcher explicitly re-arms when playback is still desired. The watcher covers
+  browsers that advance `readyState` without emitting another `canplay`; a
+  generation token prevents stale buffering work from rearming after a newer
+  seek. The advisory `stalled` event alone does not stop a player that still has
+  buffered data. Replacement stops the previous source before reading the next
+  script, so a slow or invalid file cannot leave old motion running.
 - This deliberately does **not** add `Reanchor`. Buffered transports can
   already hold future points, and changing an engine phase cannot retract that
   queue. Stop/re-arm is the only honest discontinuity operation until every
@@ -374,6 +377,10 @@ downsampling is reused at canvas resolution):
 - **Scrub admission:** the overview playhead previews pointer movement locally
   and commits one video seek on release. It no longer creates a Stop/re-arm pair
   for every pointer-move event. Native video-control seeks retain their browser
+- **Browser event ordering:** a playing seek remains the desired operation even
+  when the browser reports its native `pause` after `seeked`. That delayed
+  pause is ignored only while the seek replacement is arming; an ordinary user
+  pause still cancels readiness polling and stops motion.
   event semantics.
 - **Failure visibility:** sync error responses include the backend status and
   its transport-safe cause. The player can distinguish failed physical arrival

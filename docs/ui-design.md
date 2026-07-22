@@ -308,10 +308,13 @@ hoc per-widget colors) are not.
 
 - Connection/transport state is always visible in the floating manager trigger.
   Expanding it exposes actions for only the saved dispatch owner: Cloud REST
-  check, browser-owned Bluetooth session, or Intiface connect/discovery/select.
-  Cloud REST also exposes a compact write-only connection-key field and the
-  active API v3 ID source; owner choice, key clearing, developer ID override,
-  and server addresses remain in Settings.
+  Check plus Connect/Disconnect, browser-owned Bluetooth session, or Intiface
+  connect/discovery/select. Cloud Check is a compact icon beside device status;
+  it does not reacquire a released session. The full-width Cloud action
+  explicitly connects or releases backend command admission. Cloud REST also
+  exposes a compact write-only connection-key field and the active API v3 ID
+  source; owner choice, key clearing, developer ID override, and server addresses
+  remain in Settings.
 - The connection artwork uses a transparent hand isolation derived from the
   reviewed conductor reference. It renders at its intrinsic square ratio with
   no runtime mask or clip. The scaled frame contains the hand, three

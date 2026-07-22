@@ -313,6 +313,17 @@
   min-height: 44px;
   padding: 6px 12px;
 }
+.connection-current .connection-current-check {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.connection-current .connection-current-check:hover:not(:disabled) {
+  background: var(--surface-2);
+}
 .connection-current-copy {
   min-width: 0;
   flex: 1 1 auto;
