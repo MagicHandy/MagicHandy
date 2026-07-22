@@ -207,11 +207,15 @@ rejects an absolute position outside calibrated travel. If the physical
 position differs from the plan's first point by more than one percentage point,
 the engine widens the stroke window only to the union needed to contain the
 current position and target, then plays a separate two-point HSP lead-in. Its
-duration treats semantic speed as a maximum full-travel rate: at 20%, a full
-physical stroke takes at least five seconds. After the lead-in is stopped, the
-engine verifies stationary physical arrival inside the final window before
-applying that window and starting the real stream. Media time remains zero
-throughout positioning.
+duration treats semantic speed as a conservative full-travel rate: at 20%, a
+full physical stroke is scheduled for at least five seconds. Cloud device
+motion can lag that HSP schedule, so the engine keeps the final lead-in target
+active while it performs a bounded series of physical arrival reads. Only
+after the slider is stationary at the target and inside the final window under
+the same calibrated 1% tolerance does the engine Stop the lead-in and verify
+those conditions again before applying that window and starting the real
+stream. This accommodates finite endpoint measurement error without widening
+the commanded window. Media time remains zero throughout positioning.
 
 This is not an HDSP fallback or a transport-owned motion loop. The lead-in is
 an engine-owned semantic timed-point stream behind the same run epoch, command
@@ -225,6 +229,9 @@ Test expectation:
   at least 3.5 seconds, not a time-zero displacement
 - a narrowing stroke window is applied only after the slider is verified
   inside it
+- lagging physical arrival is observed while the lead-in remains active; it is
+  not frozen by a premature Stop
+- persistent lag and post-Stop drift fail stopped without main playback
 - Stop during the lead-in prevents the main stream from playing
 - a device already within one percentage point of the first point does not
   receive an unnecessary lead-in

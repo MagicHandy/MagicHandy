@@ -68,6 +68,18 @@ accepted while absolute calibrated travel remains fail-closed. R1 remains High
 pending the user's subjective confirmation that the first action no longer
 feels abrupt.
 
+A subsequent trace showed that scheduled HSP completion and physical arrival
+are not equivalent: Stop was issued before the lagging slider reached the
+target, freezing it short and making retries advance only incrementally. The
+engine now observes arrival while the final lead-in target remains active,
+with six cancelable reads, then Stops and verifies again. Exhaustion or drift
+fails stopped without main playback. A capped 10% repeat covered an 88.93%-to-0%
+lead-in, verified the stationary endpoint before main Play, and completed with
+a successful safety Stop. All 128 concurrent state probes returned in 1-5 ms,
+so the startup path did not block the core. R1 remains open for subjective
+first-action and low-speed reversal feel rather than this objective startup
+failure.
+
 This correction is intentionally scoped to Cloud REST, the owner used by the
 observed run and the one that exposes usable absolute slider/stroke state.
 Browser Bluetooth currently avoids a state read because it can destabilize the
