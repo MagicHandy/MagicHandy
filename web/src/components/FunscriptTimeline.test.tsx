@@ -58,7 +58,12 @@ describe("FunscriptTimeline", () => {
     });
     expect(canvas).toHaveAttribute("height", "60");
     fireEvent.pointerDown(timeline, { button: 0, clientX: 110, pointerId: 1 });
-    expect(onSeek).toHaveBeenLastCalledWith(5_000);
+    expect(onSeek).not.toHaveBeenCalled();
+    fireEvent.pointerMove(timeline, { clientX: 160, pointerId: 1 });
+    expect(onSeek).not.toHaveBeenCalled();
+    fireEvent.pointerUp(timeline, { clientX: 160, pointerId: 1 });
+    expect(onSeek).toHaveBeenCalledTimes(1);
+    expect(onSeek).toHaveBeenLastCalledWith(7_500);
 
     fireEvent.keyDown(timeline, { key: "ArrowRight" });
     expect(onSeek).toHaveBeenLastCalledWith(7_000);

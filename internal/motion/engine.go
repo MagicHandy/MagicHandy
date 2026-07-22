@@ -182,28 +182,39 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 	// loopCtx, so a concurrent Stop/Pause cancels not just the future loop but
 	// the in-flight setup: Stop's cancel() aborts a blocked setStrokeWindow/
 	// dispatchNextChunk and makes a not-yet-sent play() fail instead of
-	// starting motion the user just stopped. The loop must outlive the request,
-	// so loopCtx drops the request's cancellation while keeping its values.
+	// starting motion the user just stopped. startupCtx also follows request
+	// cancellation until startup completes. The loop itself must outlive the
+	// completed request, so loopCtx drops request cancellation but keeps values.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	startupCtx, cancelStartup := context.WithCancel(loopCtx)
+	stopRequestCancellation := context.AfterFunc(ctx, cancelStartup)
+	defer func() {
+		stopRequestCancellation()
+		cancelStartup()
+	}()
 	runEpoch, err := e.begin(ctx, loopCtx, target, settings, cancel, admission)
 	if err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.prepareMotionStartup(loopCtx, runEpoch, "start"); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "start_positioning_failed", err)
+	if err := e.prepareMotionStartup(startupCtx, runEpoch, "start"); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("start", "start_positioning_failed", err), err)
 		return e.Snapshot(), err
 	}
-	if err := e.dispatchNextChunk(loopCtx, runEpoch, "start_points"); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "start_points_failed", err)
+	if err := e.dispatchNextChunk(startupCtx, runEpoch, "start_points"); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("start", "start_points_failed", err), err)
 		return e.Snapshot(), err
 	}
-	if err := e.prebufferBeforePlay(loopCtx, runEpoch, "start_prebuffer_points"); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "start_prebuffer_failed", err)
+	if err := e.prebufferBeforePlay(startupCtx, runEpoch, "start_prebuffer_points"); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("start", "start_prebuffer_failed", err), err)
 		return e.Snapshot(), err
 	}
-	if err := e.play(loopCtx, runEpoch); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "start_play_failed", err)
+	if err := e.play(startupCtx, runEpoch); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("start", "start_play_failed", err), err)
+		return e.Snapshot(), err
+	}
+	if err := ctx.Err(); err != nil {
+		e.abortStartup(startupCtx, runEpoch, "start_request_cancelled", err)
 		return e.Snapshot(), err
 	}
 	e.alignPlaybackStart(runEpoch)
@@ -322,31 +333,47 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 	if reason == "" {
 		reason = "resume"
 	}
-	// Startup commands run on loopCtx so a concurrent Stop cancels in-flight
-	// resume setup, same as Start.
+	// Resume uses the same split startup/run contexts as Start: request and Stop
+	// cancellation both abort setup, while a completed request does not kill the
+	// active dispatch loop.
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	startupCtx, cancelStartup := context.WithCancel(loopCtx)
+	stopRequestCancellation := context.AfterFunc(ctx, cancelStartup)
+	defer func() {
+		stopRequestCancellation()
+		cancelStartup()
+	}()
+	if err := ctx.Err(); err != nil {
+		cancel()
+		return e.Snapshot(), err
+	}
 	runEpoch, resumeAdmission, err := e.beginResume(loopCtx, reason, cancel)
 	if err != nil {
 		cancel()
 		return e.Snapshot(), err
 	}
-	if err := e.prepareMotionStartup(loopCtx, runEpoch, "resume"); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "resume_positioning_failed", err)
+	if err := e.prepareMotionStartup(startupCtx, runEpoch, "resume"); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("resume", "resume_positioning_failed", err), err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	if err := e.dispatchNextChunk(loopCtx, runEpoch, "resume_points"); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "resume_points_failed", err)
+	if err := e.dispatchNextChunk(startupCtx, runEpoch, "resume_points"); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("resume", "resume_points_failed", err), err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	if err := e.prebufferBeforePlay(loopCtx, runEpoch, "resume_prebuffer_points"); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "resume_prebuffer_failed", err)
+	if err := e.prebufferBeforePlay(startupCtx, runEpoch, "resume_prebuffer_points"); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("resume", "resume_prebuffer_failed", err), err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
-	if err := e.play(loopCtx, runEpoch); err != nil {
-		e.abortStartup(loopCtx, runEpoch, "resume_play_failed", err)
+	if err := e.play(startupCtx, runEpoch); err != nil {
+		e.abortStartup(startupCtx, runEpoch, startupAbortReason("resume", "resume_play_failed", err), err)
+		e.restorePaused(runEpoch, resumeAdmission)
+		return e.Snapshot(), err
+	}
+	if err := ctx.Err(); err != nil {
+		e.abortStartup(startupCtx, runEpoch, "resume_request_cancelled", err)
 		e.restorePaused(runEpoch, resumeAdmission)
 		return e.Snapshot(), err
 	}
@@ -356,6 +383,13 @@ func (e *Engine) Resume(ctx context.Context, reason string) (ActiveMotionState, 
 		return e.Snapshot(), errRunInvalidated
 	}
 	return e.Snapshot(), nil
+}
+
+func startupAbortReason(prefix, fallback string, cause error) string {
+	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		return prefix + "_request_cancelled"
+	}
+	return fallback
 }
 
 func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel context.CancelFunc) (uint64, uint64, error) {

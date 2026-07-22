@@ -327,10 +327,14 @@ func (e *Engine) abortStartup(ctx context.Context, runEpoch uint64, reason strin
 	stopCommand := transport.StopCommand{Reason: reason}
 	result, stopErr := e.transport.Stop(stopCtx, stopCommand)
 	stopCancel()
+	annotation := "startup_failure=true"
+	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		annotation = "startup_cancelled=true"
+	}
 	e.recordTransportResultWithAnnotation(reason, nil, transport.Command{
 		Kind: transport.CommandKindStop,
 		Stop: &stopCommand,
-	}, result, stopErr, "startup_failure=true")
+	}, result, stopErr, annotation)
 	e.finishStopped(result, stopErr)
 	e.mu.Lock()
 	if stopErr != nil {

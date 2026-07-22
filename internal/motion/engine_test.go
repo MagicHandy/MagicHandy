@@ -53,6 +53,26 @@ func TestEngineContinuousFakePlaybackAndStop(t *testing.T) {
 	}
 }
 
+func TestCompletedStartOutlivesRequestCancellation(t *testing.T) {
+	fake := transport.NewFake()
+	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(64), 5*time.Millisecond)
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	if _, err := engine.Start(requestCtx, testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	cancelRequest()
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	commandsBefore := len(fake.Commands())
+	time.Sleep(20 * time.Millisecond)
+	if state := engine.Snapshot(); !state.Running || state.LastError != "" {
+		t.Fatalf("completed Start followed request cancellation: %+v", state)
+	}
+	if commandsAfter := len(fake.Commands()); commandsAfter <= commandsBefore {
+		t.Fatalf("dispatch loop stopped with request context: commands %d -> %d", commandsBefore, commandsAfter)
+	}
+}
+
 func TestEngineHonorsTransportTimingFloor(t *testing.T) {
 	commandTransport := &timingCapabilityTransport{
 		Fake:            transport.NewFake(),

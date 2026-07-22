@@ -240,6 +240,31 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 	}
 	engineState := engine.Snapshot()
 	if !engineState.Running || engineState.Target.Source != motion.TargetSourceMedia || engineState.Target.MediaID != event.VideoID {
+		m.mu.Lock()
+		activeScript := m.script
+		m.mu.Unlock()
+		if !engineState.Running && engineState.Target.Source == motion.TargetSourceMedia &&
+			engineState.Target.MediaID == event.VideoID && activeScript != nil &&
+			engineState.Phase >= 1 && engineState.LastError == "" {
+			// The engine can finish a fraction before the browser reports the
+			// final media millisecond because transport Play is acknowledged
+			// before the held video resumes. A completed engine phase is the
+			// authoritative signal; requiring exact browser time would turn that
+			// harmless clock skew into a false competing-motion interruption.
+			status = mediaSyncStatus{
+				VideoID:         event.VideoID,
+				State:           "completed",
+				LastEvent:       event.Event,
+				MediaTimeMillis: event.MediaTimeMillis,
+				PlaybackRate:    event.PlaybackRate,
+				MotionScale:     engineState.Target.SpeedPercent,
+				Message:         "The paired script has ended; video playback can continue without motion.",
+				UpdatedAt:       now.Format(time.RFC3339Nano),
+			}
+			m.setStatus(status)
+			m.trace("media_script_completed", event, 0, false)
+			return status, nil
+		}
 		status = m.interrupted(event, "Another motion source took control; pause and play the video to re-arm it.")
 		return status, errMediaMotionInterrupted
 	}
@@ -397,17 +422,28 @@ func (m *mediaSyncRuntime) interrupted(event mediaSyncEvent, message string) med
 }
 
 func (m *mediaSyncRuntime) setError(event mediaSyncEvent, err error) mediaSyncStatus {
+	message := "Paired-script motion could not be synchronized."
+	switch {
+	case errors.Is(err, media.ErrVideoNotFound), errors.Is(err, media.ErrFunscriptNotFound),
+		errors.Is(err, media.ErrFunscriptUnavailable):
+		message = "Paired funscript is unavailable."
+	case errors.Is(err, media.ErrFunscriptInvalid), errors.Is(err, media.ErrFunscriptTooLarge):
+		message = err.Error()
+	case errors.Is(err, context.Canceled):
+		message = "The previous synchronization request was replaced."
+	default:
+		if safeMessage := m.server.safeMotionErrorMessage(err); safeMessage != "" {
+			message = safeMessage
+		}
+	}
 	status := mediaSyncStatus{
 		VideoID:         event.VideoID,
 		State:           "error",
 		LastEvent:       event.Event,
 		MediaTimeMillis: event.MediaTimeMillis,
 		PlaybackRate:    event.PlaybackRate,
-		Message:         "Paired-script motion could not be synchronized.",
+		Message:         message,
 		UpdatedAt:       m.now().Format(time.RFC3339Nano),
-	}
-	if errors.Is(err, media.ErrFunscriptInvalid) || errors.Is(err, media.ErrFunscriptTooLarge) {
-		status.Message = err.Error()
 	}
 	m.setStatus(status)
 	return status

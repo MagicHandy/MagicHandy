@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { MediaFunscript, MediaFunscriptAction } from "../api/types";
 import { formatTimelineTime } from "./ImportTimeline";
 
@@ -20,8 +20,11 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
   const baseRef = useRef<HTMLCanvasElement>(null);
   const playheadRef = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
+  const previewTimeRef = useRef<number | null>(null);
+  const [previewTime, setPreviewTime] = useState<number | null>(null);
   const duration = Math.max(1, script.duration_ms);
-  const progress = Math.max(0, Math.min(1, currentTime / duration));
+  const displayedTime = previewTime ?? currentTime;
+  const progress = Math.max(0, Math.min(1, displayedTime / duration));
 
   useEffect(() => {
     if (hidden) return undefined;
@@ -64,27 +67,50 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
     context.fillRect(x - 1.5, 0, 3, 3);
   }, [currentTime, hidden, progress]);
 
-  function seekAtClientX(clientX: number) {
+  function timeAtClientX(clientX: number): number | null {
     const bounds = baseRef.current?.getBoundingClientRect();
-    if (!bounds || bounds.width <= 0) return;
+    if (!bounds || bounds.width <= 0) return null;
     const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
-    onSeek(Math.round(ratio * duration));
+    return Math.round(ratio * duration);
+  }
+
+  function previewAtClientX(clientX: number) {
+    const next = timeAtClientX(clientX);
+    if (next === null) return;
+    previewTimeRef.current = next;
+    setPreviewTime(next);
   }
 
   function startSeek(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button > 0) return;
     dragging.current = true;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    seekAtClientX(event.clientX);
+    previewAtClientX(event.clientX);
     event.preventDefault();
   }
 
   function moveSeek(event: ReactPointerEvent<HTMLDivElement>) {
-    if (dragging.current) seekAtClientX(event.clientX);
+    if (dragging.current) previewAtClientX(event.clientX);
   }
 
   function finishSeek(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    previewAtClientX(event.clientX);
     dragging.current = false;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const next = previewTimeRef.current;
+    previewTimeRef.current = null;
+    setPreviewTime(null);
+    if (next !== null) onSeek(next);
+  }
+
+  function cancelSeek(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return;
+    dragging.current = false;
+    previewTimeRef.current = null;
+    setPreviewTime(null);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -131,14 +157,14 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
       aria-label={`Funscript timeline, ${script.action_count.toLocaleString()} actions`}
       aria-valuemin={0}
       aria-valuemax={duration}
-      aria-valuenow={Math.round(currentTime)}
-      aria-valuetext={`${formatTimelineTime(currentTime)} of ${formatTimelineTime(duration)}`}
+      aria-valuenow={Math.round(displayedTime)}
+      aria-valuetext={`${formatTimelineTime(displayedTime)} of ${formatTimelineTime(duration)}`}
       title="Click or drag to seek; arrow keys move five seconds"
       onPointerDown={startSeek}
       onPointerMove={moveSeek}
       onPointerUp={finishSeek}
-      onPointerCancel={finishSeek}
-      onLostPointerCapture={finishSeek}
+      onPointerCancel={cancelSeek}
+      onLostPointerCapture={cancelSeek}
       onKeyDown={keyboardSeek}
     >
       <canvas ref={baseRef} className="media-timeline-canvas" aria-hidden="true" />

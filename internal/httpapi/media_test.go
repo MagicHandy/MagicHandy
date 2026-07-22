@@ -170,6 +170,16 @@ func TestMediaSyncReturnsSafeMotionStartupError(t *testing.T) {
 	if play.Code != http.StatusBadGateway || !strings.Contains(play.Body.String(), "startup state unavailable") {
 		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
 	}
+	var payload struct {
+		Sync  mediaSyncStatus `json:"sync"`
+		Error string          `json:"error"`
+	}
+	if err := json.Unmarshal(play.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode play failure: %v", err)
+	}
+	if payload.Sync.State != "error" || payload.Sync.Message != "startup state unavailable" || payload.Error != "startup state unavailable" {
+		t.Fatalf("play failure = %+v, want the same safe startup cause in status and error", payload)
+	}
 }
 
 type mediaStartupFailureTransport struct {
@@ -227,6 +237,39 @@ func TestMediaSyncHeartbeatCannotRestartAfterEmergencyStopAndTimeoutStops(t *tes
 	}
 	if got := countTransportCommands(fake.Commands(), transport.CommandKindPointsPlay); got != playsBeforeStop {
 		t.Fatalf("stale heartbeat restarted motion: plays %d -> %d", playsBeforeStop, got)
+	}
+}
+
+func TestMediaSyncHeartbeatReportsNaturalScriptCompletionWithoutStoppingVideo(t *testing.T) {
+	server := newTestServer(t)
+	root := t.TempDir()
+	writeMediaPair(t, root, "Short", `{"actions":[{"at":0,"pos":20},{"at":100,"pos":80}]}`)
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+	sequence := server.stopSequence.Load()
+	if play := postMediaSync(t, server, sequence, video.ID, "playing", "play", 0, 1); play.Code != http.StatusOK {
+		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for server.currentMotionEngine().Snapshot().Running && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if server.currentMotionEngine().Snapshot().Running {
+		t.Fatal("finite media timeline did not complete")
+	}
+	// The engine may finish just before the held browser resumes and reaches
+	// the exact final media millisecond. That transport/browser skew must still
+	// be reported as natural completion rather than competing motion.
+	heartbeat := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 90, 1)
+	if heartbeat.Code != http.StatusOK || !strings.Contains(heartbeat.Body.String(), `"state":"completed"`) {
+		t.Fatalf("completion heartbeat = %d: %s", heartbeat.Code, heartbeat.Body.String())
+	}
+	if server.currentMotionEngine().Snapshot().Running {
+		t.Fatal("completion heartbeat restarted media motion")
 	}
 }
 

@@ -342,6 +342,60 @@ downsampling is reused at canvas resolution):
   and transport-specific alignment tuning remain M3. M1-M2 make no hardware
   alignment claim.
 
+### Seek and startup reliability review (2026-07-22)
+
+- **Arbitrary timestamps:** every fresh arm still slices the authored linear
+  funscript at the exact browser time. Tests cover an action timestamp, a time
+  between actions, playback-rate scaling, and the final millisecond before the
+  script ends; seeking does not snap to the next authored action.
+- **Buffered physical arrival:** the startup stream now includes a stationary
+  target tail after its timed lead-in. This keeps HSP from pausing on starvation
+  before the physical slider reaches the script's first position. Arrival is
+  measured while that target remains active, then the shared engine issues Stop
+  before starting media time. The tail adds buffer coverage, not another stroke.
+- **Replacement cancellation:** the engine's startup phase follows request
+  cancellation, so a newer seek can cancel obsolete positioning even while the
+  backend sync lifecycle is serialized. After startup succeeds, the normal
+  detached dispatch loop still outlives the completed HTTP request.
+- **Scrub admission:** the overview playhead previews pointer movement locally
+  and commits one video seek on release. It no longer creates a Stop/re-arm pair
+  for every pointer-move event. Native video-control seeks retain their browser
+  event semantics.
+- **Failure visibility:** sync error responses include the backend status and
+  its transport-safe cause. The player can distinguish failed physical arrival
+  from a missing script or unavailable transport without exposing paths or
+  credentials.
+- **Natural completion:** when a shorter paired script reaches its finite end,
+  the next heartbeat trusts the shared engine's completed phase, tolerates the
+  small transport/browser start-clock offset, and leaves the remaining video
+  playing without motion. It is not reported as competing motion.
+- **Reference boundary:** the Handy v3 HSP contract documents explicit
+  paused/starving states and a finite point buffer. Syncopathy maintains future
+  buffered coverage and reboots when the playhead leaves it; ScriptPlayer resets
+  its action cursor when time moves backward. MagicHandy adopts those lifecycle
+  lessons while retaining one shared engine and fresh Stop/re-arm streams rather
+  than copying either application's transport-specific motion loop.
+
+Live Cloud HSP validation used the paired `Kishiri106 By Mouth` catalog entry
+with the saved maximum speed temporarily capped from 53% to 30%:
+
+- Direct arms at 01:20 and 01:17 reached `following` on their first request in
+  6.08 s and 5.69 s. No arrival-tolerance retry was needed. Those direct API
+  probes intentionally omitted heartbeats, and the watchdog stopped each run
+  after its expected 5 s timeout.
+- A browser-equivalent seek canceled an in-flight 01:20 startup after 3.00 s.
+  The serialized seek Stop completed in 377 ms, the replacement 01:17 arm
+  reached `following` in 5.75 s, and its next heartbeat remained `following`.
+- During that cancellation/re-arm interval, 34 `/api/state` polls all returned
+  HTTP 200; maximum and p95 handler time were both 2 ms. Long motion setup did
+  not block the core snapshot path.
+- Cleanup paused the media session, issued Emergency Stop, verified Cloud HSP
+  `stopped`, restored the saved 53% maximum, and issued a final Stop.
+- The shared 125 ms sampler, linear funscript interpolation, 5 s heartbeat
+  watchdog, transport boundary mapping, and no-fallback Cloud owner policy were
+  intentionally left unchanged. The safe trace export is retained only as
+  ignored local QA output, not repository content.
+
 ## API surface
 
 | Endpoint | Gate | Slice | Purpose |

@@ -40,14 +40,17 @@ func TestEngineAnchorsCloudStyleStartupToMeasuredPosition(t *testing.T) {
 
 	commands := owner.Commands()
 	startupAdd := findAppendForStreamSuffix(t, commands, "-startup")
-	if len(startupAdd.Points) != 2 {
-		t.Fatalf("startup points = %+v, want measured anchor and target", startupAdd.Points)
+	if len(startupAdd.Points) != 3 {
+		t.Fatalf("startup points = %+v, want measured anchor, target, and stationary buffer tail", startupAdd.Points)
 	}
 	if startupAdd.Points[0].PositionPercent != 90 || startupAdd.Points[0].TimeMillis != 0 {
 		t.Fatalf("startup anchor = %+v, want measured 90%% at t=0", startupAdd.Points[0])
 	}
 	if startupAdd.Points[1].PositionPercent != 20 || startupAdd.Points[1].TimeMillis != 3500 {
 		t.Fatalf("startup target = %+v, want 20%% reached over 3500ms at the 20%% cap", startupAdd.Points[1])
+	}
+	if startupAdd.Points[2].PositionPercent != 20 || startupAdd.Points[2].TimeMillis != 13_500 {
+		t.Fatalf("startup hold = %+v, want stationary target coverage through arrival polling", startupAdd.Points[2])
 	}
 	assertStartupCommandOrder(t, commands)
 	if countCommands(commands, transport.CommandKindPointsPlay) != 2 {
@@ -71,7 +74,8 @@ func TestEngineKeepsLeadInPlayingUntilPhysicalArrival(t *testing.T) {
 			{PositionWithinStrokePercent: 20, PositionAbsolute: 20, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
 		},
 	}
-	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(64), time.Hour)
+	traces := diagnostics.NewTraceRing(64)
+	engine := newTestEngine(t, owner, traces, time.Hour)
 	engine.startupWait = func(context.Context, time.Duration) error { return nil }
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 20
@@ -341,6 +345,63 @@ func TestStopCancelsStartupLeadInBeforeMainPlayback(t *testing.T) {
 	if mainPlays != 0 {
 		t.Fatalf("main stream played after startup cancellation: %+v", owner.Commands())
 	}
+}
+
+func TestRequestCancellationCancelsStartupLeadInBeforeMainPlayback(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{
+			{PositionWithinStrokePercent: 90, PositionAbsolute: 90, StrokeMinPercent: 0, StrokeMaxPercent: 100, StrokeMinAbsolute: 0, StrokeMaxAbsolute: 100},
+		},
+	}
+	traces := diagnostics.NewTraceRing(64)
+	engine := newTestEngine(t, owner, traces, time.Hour)
+	waiting := make(chan struct{})
+	var once sync.Once
+	engine.startupWait = func(ctx context.Context, _ time.Duration) error {
+		once.Do(func() { close(waiting) })
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 20
+	settings.StrokeMinPercent = 20
+	settings.StrokeMaxPercent = 80
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, err := engine.Start(requestCtx, MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings)
+		startDone <- err
+	}()
+	select {
+	case <-waiting:
+	case <-time.After(time.Second):
+		t.Fatal("startup did not enter its request-cancellable lead-in wait")
+	}
+	cancelRequest()
+	select {
+	case err := <-startDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Start error = %v, want request cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Start remained blocked after its request was cancelled")
+	}
+	for _, command := range owner.Commands() {
+		if command.PointsPlay != nil && !strings.HasSuffix(command.PointsPlay.StreamID, "-startup") {
+			t.Fatalf("main stream played after request cancellation: %+v", owner.Commands())
+		}
+	}
+	for _, row := range traces.Rows() {
+		if row.Reason == "start_positioning_failed" {
+			t.Fatalf("request cancellation was mislabeled as a positioning failure: %+v", row)
+		}
+		if row.Reason == "start_request_cancelled" && row.Annotation == "startup_cancelled=true" {
+			return
+		}
+	}
+	t.Fatal("request cancellation did not produce a distinct cancellation trace")
 }
 
 func TestStartupLeadInDurationUsesConservativeStartupRate(t *testing.T) {

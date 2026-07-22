@@ -70,22 +70,29 @@ func (s *Server) handleMediaSync(w http.ResponseWriter, r *http.Request) {
 	}
 	status, err := s.mediaSync.Handle(r.Context(), event, stopSequence)
 	if err != nil {
+		writeSyncError := func(statusCode int, message string) {
+			responseStatus := status
+			if responseStatus.Message == "" {
+				responseStatus.Message = message
+			}
+			writeJSON(w, statusCode, map[string]any{"sync": responseStatus, "error": message})
+		}
 		switch {
 		case errors.Is(err, errMediaMotionInterrupted):
-			writeJSON(w, http.StatusConflict, map[string]any{"sync": status, "error": err.Error()})
+			writeSyncError(http.StatusConflict, err.Error())
 		case errors.Is(err, media.ErrVideoNotFound), errors.Is(err, media.ErrFunscriptNotFound),
 			errors.Is(err, media.ErrFunscriptUnavailable):
-			writeError(w, http.StatusNotFound, errors.New("paired funscript is unavailable"))
+			writeSyncError(http.StatusNotFound, "paired funscript is unavailable")
 		case errors.Is(err, media.ErrFunscriptTooLarge):
-			writeError(w, http.StatusRequestEntityTooLarge, err)
+			writeSyncError(http.StatusRequestEntityTooLarge, err.Error())
 		case errors.Is(err, media.ErrFunscriptInvalid):
-			writeError(w, http.StatusUnprocessableEntity, err)
+			writeSyncError(http.StatusUnprocessableEntity, err.Error())
 		case errors.Is(err, errMotionUnavailable), errors.Is(err, errServerQuiescing):
-			writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
+			writeSyncError(http.StatusServiceUnavailable, s.safeMotionErrorMessage(err))
 		default:
 			safeError := s.safeMotionErrorMessage(err)
 			s.logger.Warn("media synchronization failed", "video_id", event.VideoID, "event", event.Event, "error", safeError)
-			writeError(w, http.StatusBadGateway, errors.New(safeError))
+			writeSyncError(http.StatusBadGateway, safeError)
 		}
 		return
 	}
