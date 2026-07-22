@@ -422,7 +422,54 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		}
 		return errors.Join(runtimeErr, stopErr)
 	}
+	if stopped, stopErr := s.stopMediaForSpeedPolicyChange(ctx, previous.Motion, next.Motion); stopped {
+		return errors.Join(runtimeErr, stopErr)
+	}
 	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.Motion))
+}
+func (s *Server) stopMediaForSpeedPolicyChange(
+	ctx context.Context,
+	previous config.MotionSettings,
+	next config.MotionSettings,
+) (bool, error) {
+	if !mediaSpeedPolicyChanged(previous, next) {
+		return false, nil
+	}
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		return false, nil
+	}
+	state := engine.Snapshot()
+	if state.Target.Source != motion.TargetSourceMedia || !motionStateActive(state) {
+		return false, nil
+	}
+	if s.mediaSync != nil {
+		s.mediaSync.Invalidate("media_speed_policy_changed")
+	}
+	return true, s.stopAndClearActiveMediaEngine(ctx, "media_speed_policy_changed")
+}
+
+func mediaSpeedPolicyChanged(previous, next config.MotionSettings) bool {
+	return previous.ApplyVideoSpeedLimit != next.ApplyVideoSpeedLimit ||
+		(next.ApplyVideoSpeedLimit && previous.SpeedMaxPercent != next.SpeedMaxPercent)
+}
+
+func motionStateActive(state motion.ActiveMotionState) bool {
+	return state.Running || state.Starting || state.Paused || state.Completing
+}
+
+func (s *Server) stopAndClearActiveMediaEngine(ctx context.Context, reason string) error {
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		return nil
+	}
+	state := engine.Snapshot()
+	if state.Target.Source != motion.TargetSourceMedia || !motionStateActive(state) {
+		return nil
+	}
+	return s.stopAndClearMotionEngineLocked(ctx, reason)
 }
 
 func (s *Server) stopAndClearMotionEngine(ctx context.Context, reason string) error {

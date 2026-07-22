@@ -14,10 +14,13 @@ import (
 )
 
 const (
-	mediaHeartbeatTimeout = 5 * time.Second
-	mediaHeartbeatTick    = 500 * time.Millisecond
-	mediaDriftLimitMillis = int64(250)
-	maxMediaSessionFences = 64
+	mediaHeartbeatTimeout      = 5 * time.Second
+	mediaHeartbeatTick         = 500 * time.Millisecond
+	mediaDriftLimitMillis      = int64(250)
+	mediaDriftHardLimitMillis  = int64(750)
+	mediaDriftConfirmations    = 2
+	mediaClientRequestAgeLimit = 2 * time.Second
+	maxMediaSessionFences      = 64
 )
 
 var errMediaMotionInterrupted = errors.New("media motion was interrupted")
@@ -46,10 +49,25 @@ type mediaSyncStatus struct {
 	MediaTimeMillis  int64   `json:"media_time_ms,omitempty"`
 	DriftMillis      int64   `json:"drift_ms,omitempty"`
 	PlaybackRate     float64 `json:"playback_rate,omitempty"`
-	MotionScale      int     `json:"motion_scale_percent,omitempty"`
+	MotionSpeedLimit int     `json:"motion_speed_limit_percent,omitempty"`
 	RequiresReanchor bool    `json:"requires_reanchor,omitempty"`
 	Message          string  `json:"message,omitempty"`
 	UpdatedAt        string  `json:"updated_at,omitempty"`
+}
+
+func mediaMotionSpeedLimit(target motion.MotionTarget) int {
+	if !target.MediaSpeedLimitEnabled {
+		return 0
+	}
+	return target.SpeedPercent
+}
+
+type mediaHeartbeatTiming struct {
+	driftMillis  int64
+	breachCount  int
+	calibrated   bool
+	exceeded     bool
+	requiresStop bool
 }
 
 // mediaSyncRuntime serializes one browser-clock session. It owns no device
@@ -58,16 +76,18 @@ type mediaSyncRuntime struct {
 	server *Server
 	now    func() time.Time
 
-	lifecycleMu sync.Mutex
-	mu          sync.Mutex
-	status      mediaSyncStatus
-	script      *media.Funscript
-	anchorMedia int64
-	anchorAt    time.Time
-	lastSignal  time.Time
-	sessionID   string
-	fences      map[string]mediaSessionFence
-	fenceOrder  []string
+	lifecycleMu   sync.Mutex
+	mu            sync.Mutex
+	status        mediaSyncStatus
+	script        *media.Funscript
+	anchorMedia   int64
+	anchorAt      time.Time
+	lastSignal    time.Time
+	heartbeatSeen bool
+	driftBreaches int
+	sessionID     string
+	fences        map[string]mediaSessionFence
+	fenceOrder    []string
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -202,21 +222,23 @@ func (m *mediaSyncRuntime) arm(ctx context.Context, event mediaSyncEvent, stopSe
 
 	now := m.now()
 	status := mediaSyncStatus{
-		Active:          true,
-		VideoID:         event.VideoID,
-		State:           "following",
-		LastEvent:       event.Event,
-		MediaTimeMillis: event.MediaTimeMillis,
-		PlaybackRate:    event.PlaybackRate,
-		MotionScale:     state.Target.SpeedPercent,
-		Message:         "Device motion is synchronized to the paired script.",
-		UpdatedAt:       now.Format(time.RFC3339Nano),
+		Active:           true,
+		VideoID:          event.VideoID,
+		State:            "following",
+		LastEvent:        event.Event,
+		MediaTimeMillis:  event.MediaTimeMillis,
+		PlaybackRate:     event.PlaybackRate,
+		MotionSpeedLimit: mediaMotionSpeedLimit(state.Target),
+		Message:          "Device motion is synchronized to the paired script.",
+		UpdatedAt:        now.Format(time.RFC3339Nano),
 	}
 	m.mu.Lock()
 	m.anchorMedia = event.MediaTimeMillis
 	m.anchorAt = now
 	m.lastSignal = now
 	m.status = status
+	m.heartbeatSeen = false
+	m.driftBreaches = 0
 	m.mu.Unlock()
 	m.trace("media_sync_armed", event, 0, false)
 	return status, nil
@@ -226,8 +248,6 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 	now := m.now()
 	m.mu.Lock()
 	status := m.status
-	anchorAt := m.anchorAt
-	anchorMedia := m.anchorMedia
 	sessionID := m.sessionID
 	m.mu.Unlock()
 	if !status.Active || status.VideoID != event.VideoID || sessionID != event.SessionID {
@@ -252,14 +272,14 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 			// authoritative signal; requiring exact browser time would turn that
 			// harmless clock skew into a false competing-motion interruption.
 			status = mediaSyncStatus{
-				VideoID:         event.VideoID,
-				State:           "completed",
-				LastEvent:       event.Event,
-				MediaTimeMillis: event.MediaTimeMillis,
-				PlaybackRate:    event.PlaybackRate,
-				MotionScale:     engineState.Target.SpeedPercent,
-				Message:         "The paired script has ended; video playback can continue without motion.",
-				UpdatedAt:       now.Format(time.RFC3339Nano),
+				VideoID:          event.VideoID,
+				State:            "completed",
+				LastEvent:        event.Event,
+				MediaTimeMillis:  event.MediaTimeMillis,
+				PlaybackRate:     event.PlaybackRate,
+				MotionSpeedLimit: mediaMotionSpeedLimit(engineState.Target),
+				Message:          "The paired script has ended; video playback can continue without motion.",
+				UpdatedAt:        now.Format(time.RFC3339Nano),
 			}
 			m.setStatus(status)
 			m.trace("media_script_completed", event, 0, false)
@@ -269,10 +289,23 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 		return status, errMediaMotionInterrupted
 	}
 
-	expected := anchorMedia + int64(math.Round(float64(now.Sub(anchorAt).Milliseconds())*status.PlaybackRate))
-	drift := event.MediaTimeMillis - expected
-	rateChanged := math.Abs(event.PlaybackRate-status.PlaybackRate) > 0.001
-	if absInt64(drift) > mediaDriftLimitMillis || rateChanged {
+	timing := m.observeHeartbeatTiming(event, now, status)
+	if timing.calibrated {
+		status.DriftMillis = 0
+		status.MediaTimeMillis = event.MediaTimeMillis
+		status.LastEvent = event.Event
+		status.Message = "Device motion is synchronized to the paired script."
+		status.UpdatedAt = now.Format(time.RFC3339Nano)
+		m.mu.Lock()
+		m.status = status
+		m.mu.Unlock()
+		return status, nil
+	}
+
+	drift := timing.driftMillis
+	exceeded := timing.exceeded
+	breaches := timing.breachCount
+	if timing.requiresStop {
 		if _, err := engine.Stop(ctx, "media_drift"); err != nil {
 			return m.setError(event, err), err
 		}
@@ -283,7 +316,7 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 			MediaTimeMillis:  event.MediaTimeMillis,
 			DriftMillis:      drift,
 			PlaybackRate:     event.PlaybackRate,
-			MotionScale:      engineState.Target.SpeedPercent,
+			MotionSpeedLimit: mediaMotionSpeedLimit(engineState.Target),
 			RequiresReanchor: true,
 			Message:          "Playback timing changed; motion stopped while the video re-arms.",
 			UpdatedAt:        now.Format(time.RFC3339Nano),
@@ -297,11 +330,63 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 	status.MediaTimeMillis = event.MediaTimeMillis
 	status.LastEvent = event.Event
 	status.UpdatedAt = now.Format(time.RFC3339Nano)
+	if exceeded {
+		status.Message = "Device motion is synchronized; a timing variance is being confirmed."
+		if breaches == 1 {
+			m.trace("media_sync_drift_observed", event, drift, false)
+		}
+	} else {
+		status.Message = "Device motion is synchronized to the paired script."
+	}
 	m.mu.Lock()
-	m.lastSignal = now
 	m.status = status
 	m.mu.Unlock()
 	return status, nil
+}
+
+func (m *mediaSyncRuntime) observeHeartbeatTiming(
+	event mediaSyncEvent,
+	now time.Time,
+	status mediaSyncStatus,
+) mediaHeartbeatTiming {
+	m.mu.Lock()
+	anchorAt := m.anchorAt
+	anchorMedia := m.anchorMedia
+	heartbeatSeen := m.heartbeatSeen
+	m.mu.Unlock()
+
+	observedMedia := mediaTimeAtReceipt(event, now)
+	expected := anchorMedia + int64(math.Round(float64(now.Sub(anchorAt).Milliseconds())*status.PlaybackRate))
+	drift := observedMedia - expected
+	rateChanged := math.Abs(event.PlaybackRate-status.PlaybackRate) > 0.001
+	if !heartbeatSeen && !rateChanged && absInt64(drift) < mediaDriftHardLimitMillis {
+		m.mu.Lock()
+		m.anchorMedia = observedMedia
+		m.anchorAt = now
+		m.lastSignal = now
+		m.heartbeatSeen = true
+		m.driftBreaches = 0
+		m.mu.Unlock()
+		return mediaHeartbeatTiming{calibrated: true}
+	}
+
+	exceeded := absInt64(drift) > mediaDriftLimitMillis
+	m.mu.Lock()
+	if exceeded {
+		m.driftBreaches++
+	} else {
+		m.driftBreaches = 0
+	}
+	breaches := m.driftBreaches
+	m.lastSignal = now
+	m.mu.Unlock()
+	return mediaHeartbeatTiming{
+		driftMillis: drift,
+		breachCount: breaches,
+		exceeded:    exceeded,
+		requiresStop: rateChanged || absInt64(drift) >= mediaDriftHardLimitMillis ||
+			breaches >= mediaDriftConfirmations,
+	}
 }
 
 func (m *mediaSyncRuntime) stopForEvent(ctx context.Context, event mediaSyncEvent, reason, state string, releaseScript bool) (mediaSyncStatus, error) {
@@ -338,6 +423,8 @@ func (m *mediaSyncRuntime) stopForEvent(ctx context.Context, event mediaSyncEven
 	m.anchorAt = time.Time{}
 	m.anchorMedia = 0
 	m.lastSignal = time.Time{}
+	m.heartbeatSeen = false
+	m.driftBreaches = 0
 	if releaseScript {
 		m.script = nil
 	}
@@ -456,6 +543,8 @@ func (m *mediaSyncRuntime) setStatus(status mediaSyncStatus) {
 		m.anchorAt = time.Time{}
 		m.anchorMedia = 0
 		m.lastSignal = time.Time{}
+		m.heartbeatSeen = false
+		m.driftBreaches = 0
 	}
 	m.mu.Unlock()
 }
@@ -547,6 +636,18 @@ func mediaSyncMessage(state string) string {
 	default:
 		return "Paired-script motion is idle."
 	}
+}
+
+func mediaTimeAtReceipt(event mediaSyncEvent, now time.Time) int64 {
+	observed := event.MediaTimeMillis
+	if event.ClientTimeMillis <= 0 || event.PlaybackRate <= 0 || math.IsNaN(event.PlaybackRate) || math.IsInf(event.PlaybackRate, 0) {
+		return observed
+	}
+	requestAgeMillis := now.UnixMilli() - event.ClientTimeMillis
+	if requestAgeMillis < 0 || requestAgeMillis > mediaClientRequestAgeLimit.Milliseconds() {
+		return observed
+	}
+	return observed + int64(math.Round(float64(requestAgeMillis)*event.PlaybackRate))
 }
 
 func absInt64(value int64) int64 {

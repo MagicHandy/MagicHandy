@@ -201,11 +201,18 @@ func (e *Engine) nextChunkThrough(
 		return "", nil, nil, err
 	}
 
-	samples, err := e.nextMotionSamplesLocked()
+	linearMedia := e.plan.Target.Media != nil && e.transition == nil && e.preservePlanKnots
+	var samples []MotionSample
+	var err error
+	if linearMedia {
+		samples, err = e.nextLinearMediaSamplesLocked(targetTailMillis)
+	} else {
+		samples, err = e.nextMotionSamplesLocked()
+	}
 	if err != nil {
 		return "", nil, nil, err
 	}
-	for samples[len(samples)-1].TimeMillis < targetTailMillis {
+	for !linearMedia && samples[len(samples)-1].TimeMillis < targetTailMillis {
 		previousNextSampleMillis := e.nextSampleMillis
 		previousLastSample := cloneMotionSample(e.lastSample)
 		additional, additionalErr := e.nextMotionSamplesLocked()

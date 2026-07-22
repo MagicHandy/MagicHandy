@@ -7,11 +7,20 @@ import { HostPathField } from "./HostPathField";
 interface Props {
   locations: string[];
   savedLocations: string[];
+  limitVideoScriptSpeed: boolean;
+  onLimitVideoScriptSpeedChange: (enabled: boolean) => void;
   locked: boolean;
   onChange: (locations: string[]) => void;
 }
 
-export function MediaSettingsPanel({ locations, savedLocations, locked, onChange }: Props) {
+export function MediaSettingsPanel({
+  locations,
+  savedLocations,
+  limitVideoScriptSpeed,
+  onLimitVideoScriptSpeedChange,
+  locked,
+  onChange,
+}: Props) {
   const [draft, setDraft] = useState("");
   const [videos, setVideos] = useState<MediaVideo[]>([]);
   const [scan, setScan] = useState<MediaScanState | null>(null);
@@ -101,6 +110,23 @@ export function MediaSettingsPanel({ locations, savedLocations, locked, onChange
   const summary = scan?.summary;
   return (
     <div className="media-settings">
+      <h2 className="section-title">Video script playback</h2>
+      <label className="toggle-line">
+        <span className="toggle">
+          <input
+            type="checkbox"
+            checked={limitVideoScriptSpeed}
+            disabled={locked}
+            onChange={(event) => onLimitVideoScriptSpeedChange(event.target.checked)}
+          />
+          <span className="track" aria-hidden="true" />
+        </span>
+        <span>
+          Apply motion speed limit to video scripts
+          <small>Off preserves paired funscript timing and movement. On caps only over-limit segments. A change during playback requires Play again.</small>
+        </span>
+      </label>
+      <div className="divider" />
       <h2 className="section-title">Library locations</h2>
       <div className="media-location-list" aria-label="Video library locations">
         {locations.length === 0 && <p className="form-status">No locations configured.</p>}

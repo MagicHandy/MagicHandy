@@ -181,12 +181,13 @@ const (
 
 // MotionSettings contains transport-neutral motion control defaults.
 type MotionSettings struct {
-	SpeedMinPercent  int    `json:"speed_min_percent"`
-	SpeedMaxPercent  int    `json:"speed_max_percent"`
-	StrokeMinPercent int    `json:"stroke_min_percent"`
-	StrokeMaxPercent int    `json:"stroke_max_percent"`
-	ReverseDirection bool   `json:"reverse_direction"`
-	Style            string `json:"style"`
+	SpeedMinPercent      int    `json:"speed_min_percent"`
+	SpeedMaxPercent      int    `json:"speed_max_percent"`
+	StrokeMinPercent     int    `json:"stroke_min_percent"`
+	StrokeMaxPercent     int    `json:"stroke_max_percent"`
+	ReverseDirection     bool   `json:"reverse_direction"`
+	ApplyVideoSpeedLimit bool   `json:"apply_video_speed_limit"`
+	Style                string `json:"style"`
 }
 
 // LLMSettings contains local model provider settings.

@@ -1055,38 +1055,48 @@ Mitigation:
   fencing around seeks and replacement
 - fence every mounted player with a random session id and monotonic event
   sequence so late close/arm requests cannot cross session ownership
-- Stop and explicitly re-arm on play, seek completion, rate change, or
-  over-threshold drift; never phase-jump an already buffered transport queue
-- stop immediately on media waiting/stall/decode failure and after a bounded
-  heartbeat loss, preserve unconditional Stop, and expose
-  anchor/drift/re-arm reasons in `motion_trace.v3`
+- Stop and explicitly re-arm on seek completion, rate change, confirmed/hard
+  drift, or an effective video-speed-policy change; never phase-jump or rewrite
+  an already buffered transport queue
+- require future browser data before arming; actual `waiting` and decode failure
+  Stop motion, while an advisory `stalled` event alone does not stop a player
+  that still has buffered data
+- stop after bounded heartbeat loss, preserve unconditional Stop, and expose
+  anchor/drift/re-arm and media-speed-policy state in `motion_trace.v3`
 - require fake-transport integration tests before device use, followed by a
   capped real-device alignment session across the supported owners
 
 Exit evidence:
 
-- M2 tests cover play, seek, pause, resume, media stalls, ended, stale and
-  reordered session events, heartbeat loss, Stop, and controller loss with one
-  engine play path and no goroutine leaks;
-  M3 records trace-derived drift and subjective alignment on real hardware
+- M2 tests cover play readiness, seek, pause, resume, waiting/recovery, decode
+  failure, ended, stale/reordered session events, calibrated/confirmed/hard
+  drift, heartbeat loss, Stop, media speed-policy changes, and controller loss
+  with one engine play path and no goroutine leaks
+- M3 records trace-derived drift and subjective alignment on real hardware
 
 Status 2026-07-22: M1-M2 are implemented. Exact-name scripts share one bounded
 loader between the timeline and engine. The fake-transport path covers explicit
-play, passive heartbeat, seek Stop/re-arm, pause, resume, media-stall Stop, end,
-heartbeat loss, Emergency Stop generation fencing, closed-player request
-reordering, and controller gates. Heartbeats cannot start motion. The UI holds
-video while arming, labels read-only playback as timeline-only, and leaves
-ordinary video usable when a script is invalid or complete. R25 remains High
-until M3 records capped real-device drift and
-subjective alignment across the intended transport owners.
+play after browser readiness, passive heartbeat, seek Stop/re-arm, pause,
+waiting/canplay recovery, decode failure, end, heartbeat loss, Emergency Stop
+generation fencing, closed-player request reordering, controller gates, and
+clean invalidation when the effective video speed policy changes. Heartbeats
+cannot start motion. The UI holds video while arming, labels read-only playback
+as timeline-only, and leaves ordinary video usable when a script is invalid or
+complete. R25 remains High until subjective alignment and supported-owner
+evidence satisfy M3.
 
-Review update 2026-07-22: a retained real-device trace for the reported
-paired-script run proved the browser slice and engine points were source-exact,
-but Cloud accepted only about 2.1 seconds ahead. Media now selects a 10-second
-Cloud minimum, prebuffers it in owner-capped batches, and refills in deeper
-bursts without extending interactive retarget lead. This closes the identified
-starvation mechanism in code and tests; R25 remains High until a post-fix
-capped run records drift and subjective continuity.
+Review update 2026-07-22: the retained failing trace exposed both shallow Cloud
+coverage and a later center-amplitude transform that was incorrectly labeled a
+speed limit. Media now selects a 10-second Cloud minimum, prebuffers in
+owner-capped batches, emits exact authored knots across engine chunks, and
+preserves authored positions by default. The optional cap is a causal semantic
+slew limit and an active policy change requires Stop/re-arm.
+
+A capped post-fix Cloud run at 01:17 kept sixteen heartbeats `following` with
+1 ms calibrated drift, 327-364 ms successful append latency, source-exact
+reversals, and no starvation. A separate 01:16 to 01:30 seek re-armed once and
+stayed healthy. R25 remains High for subjective continuity confirmation and
+matched Browser Bluetooth/Intiface evidence.
 
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).

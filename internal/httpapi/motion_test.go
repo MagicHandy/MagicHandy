@@ -571,6 +571,40 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 	}
 }
 
+func TestMediaSpeedPolicyChanged(t *testing.T) {
+	base := config.DefaultSettings().Motion
+	base.SpeedMaxPercent = 60
+	enabled := base
+	enabled.ApplyVideoSpeedLimit = true
+	maxChangedOff := base
+	maxChangedOff.SpeedMaxPercent = 40
+	maxChangedOn := enabled
+	maxChangedOn.SpeedMaxPercent = 40
+	minimumChangedOn := enabled
+	minimumChangedOn.SpeedMinPercent++
+
+	testCases := []struct {
+		name     string
+		previous config.MotionSettings
+		next     config.MotionSettings
+		want     bool
+	}{
+		{name: "unchanged", previous: base, next: base},
+		{name: "maximum changes while disabled", previous: base, next: maxChangedOff},
+		{name: "enabled", previous: base, next: enabled, want: true},
+		{name: "disabled", previous: enabled, next: base, want: true},
+		{name: "maximum changes while enabled", previous: enabled, next: maxChangedOn, want: true},
+		{name: "minimum changes while enabled", previous: enabled, next: minimumChangedOn},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := mediaSpeedPolicyChanged(testCase.previous, testCase.next); got != testCase.want {
+				t.Fatalf("mediaSpeedPolicyChanged() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestMotionRefreshAppliesToActiveLoopImmediately(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)

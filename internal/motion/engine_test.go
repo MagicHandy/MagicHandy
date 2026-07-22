@@ -205,8 +205,8 @@ func TestEngineBatchesMediaPrebufferBeforePlay(t *testing.T) {
 	if !playSeen || addsBeforePlay > 3 {
 		t.Fatalf("commands = %+v, want media prebuffered in at most three adds before Play", commandTransport.Commands())
 	}
-	if largestBatch <= defaultChunkSize {
-		t.Fatalf("largest prebuffer batch = %d points, want multiple sampler windows combined", largestBatch)
+	if largestBatch != 2 {
+		t.Fatalf("largest prebuffer batch = %d points, want only the two authored linear endpoints", largestBatch)
 	}
 	if bufferedThrough < 10_000 {
 		t.Fatalf("prebuffer tail = %dms, want at least 10000ms", bufferedThrough)

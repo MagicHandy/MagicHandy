@@ -11,6 +11,7 @@ export interface MotionSettings {
   stroke_min_percent: number;
   stroke_max_percent: number;
   reverse_direction: boolean;
+  apply_video_speed_limit: boolean;
   style: string;
 }
 
@@ -292,7 +293,7 @@ export interface MediaSyncStatus {
   media_time_ms?: number;
   drift_ms?: number;
   playback_rate?: number;
-  motion_scale_percent?: number;
+  motion_speed_limit_percent?: number;
   requires_reanchor?: boolean;
   message?: string;
   updated_at?: string;

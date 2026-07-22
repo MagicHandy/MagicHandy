@@ -24,7 +24,7 @@ const baseState = {
     version: 1,
     server: { port: 49717 },
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
-    motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, style: "balanced" },
+    motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, apply_video_speed_limit: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
     voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, neutts_sampling_mode: "fixed", neutts_sampler_seed: 3, elevenlabs_key_set: false },
     chat: { startup_behavior: "previous", keep_unsaved_on_exit: false },

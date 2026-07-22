@@ -18,6 +18,8 @@ vi.mock("../api/client", () => ({
     exportTrace: vi.fn(),
     startManualTest: vi.fn(),
     stopMotion: vi.fn(),
+    mediaVideos: vi.fn(() => Promise.resolve({ videos: [] })),
+    mediaScan: vi.fn(() => Promise.resolve({ scan: { running: false, cancellable: false, cancelled: false, files_visited: 0, videos_found: 0 } })),
   },
 }));
 
@@ -55,6 +57,7 @@ function settings(verbosity: string): PublicSettings {
       stroke_min_percent: 20,
       stroke_max_percent: 80,
       reverse_direction: false,
+      apply_video_speed_limit: false,
       style: "balanced",
     },
     llm: {
@@ -208,5 +211,18 @@ describe("SettingsRoute", () => {
       startup_behavior: "new",
       keep_unsaved_on_exit: false,
     });
+  });
+
+  it("persists the opt-in video script speed limit", async () => {
+    app.hash = "#/settings/media";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const toggle = await screen.findByRole("checkbox", { name: /Apply motion speed limit to video scripts/ });
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].motion.apply_video_speed_limit).toBe(true);
   });
 });

@@ -142,6 +142,72 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	return samples, nil
 }
 
+// nextLinearMediaSamplesLocked emits the media curve's authored knots instead
+// of ending every internal sampler window with an unrelated collinear point.
+// Buffered HSP owners interpolate linearly between these points; extra window
+// boundaries can make firmware restart an otherwise constant-velocity segment
+// and become perceptible as a recurring micro-stop.
+func (e *Engine) nextLinearMediaSamplesLocked(targetTailMillis int64) ([]MotionSample, error) {
+	intervalMillis := e.sampleInterval.Milliseconds()
+	chunkStart := e.nextSampleMillis
+	desiredTail := max(
+		targetTailMillis,
+		chunkStart+int64(e.chunkSize)*intervalMillis,
+	)
+	maximumPoints := e.maximumChunkPoints
+	if maximumPoints < 2 {
+		maximumPoints = maximumAdaptiveChunkPoints
+	}
+
+	times := e.plan.finiteKnotTimesThrough(chunkStart, desiredTail, maximumPoints)
+	if len(times) == 0 || times[len(times)-1] < desiredTail {
+		// Once the final authored action has been reached, one stationary tail
+		// lets a buffered owner satisfy its startup lead requirement. The engine
+		// still stops at the finite plan duration.
+		if len(times) < maximumPoints {
+			times = append(times, desiredTail)
+		}
+	}
+	if len(times) == 0 {
+		return nil, errors.New("media sampler produced an empty output window")
+	}
+
+	samples := make([]MotionSample, len(times))
+	for index, streamMillis := range times {
+		samples[index] = e.plan.SampleAt(streamMillis)
+	}
+	e.nextSampleMillis = samples[len(samples)-1].TimeMillis + 1
+	lastSample := samples[len(samples)-1]
+	e.lastSample = &lastSample
+	return samples, nil
+}
+
+func (p MotionPlan) finiteKnotTimesThrough(startMillis, tailMillis int64, maximumPoints int) []int64 {
+	if p.Loop || p.PeriodMillis <= 0 || p.curve.duration <= 0 || maximumPoints <= 0 {
+		return nil
+	}
+	knots := p.curve.authoredKnots
+	streamTime := func(index int) int64 {
+		phase := float64(knots[index].TimeMillis) / float64(p.curve.duration)
+		return p.HandoffMillis + int64(math.Round((phase-p.PhaseOffset)*float64(p.PeriodMillis)))
+	}
+	first := sort.Search(len(knots), func(index int) bool {
+		return streamTime(index) >= startMillis
+	})
+	times := make([]int64, 0, min(maximumPoints, len(knots)-first))
+	for index := first; index < len(knots) && len(times) < maximumPoints; index++ {
+		at := streamTime(index)
+		if at < p.HandoffMillis || (len(times) > 0 && at == times[len(times)-1]) {
+			continue
+		}
+		times = append(times, at)
+		if at >= tailMillis {
+			break
+		}
+	}
+	return times
+}
+
 func (e *Engine) effectivePositionResolutionPercentLocked() float64 {
 	resolution := e.positionResolutionPercent
 	if resolution <= 0 || !e.resolutionAfterStrokeWindow {

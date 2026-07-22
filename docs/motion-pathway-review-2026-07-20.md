@@ -154,10 +154,15 @@ stroke window can contain more than roughly eleven distinct Cloud positions.
 The reported paired-script failure was reproduced from the retained Cloud
 trace and the source actions around video time 1:17. The source sequence is
 strictly increasing and alternates cleanly: `76157/46 -> 77134/81 -> 78088/41`.
-Starting at 61,863 ms, the engine emitted those actions at relative times
-14,294, 15,271, and 16,225 ms with the configured motion-scale projection. No
-duplicate timestamp, plateau, cubic interpolation, or synthetic return was
-introduced by parsing or media slicing.
+Parsing and media slicing preserved those actions. The later media sampler did
+not: it treated the configured maximum as an amplitude multiplier around 50%.
+At a 30% maximum, for example, `81 -> 41 -> 66` became approximately
+`59.3 -> 47.3 -> 54.8`. That was not a speed limit. It collapsed ordinary
+subtle strokes toward the device's resolution floor and made each true
+zero-velocity reversal feel like a dwell. The center-amplitude transform is
+removed. A video now follows authored positions by default; an explicit
+Settings > Media option can instead apply a causal semantic rate cap without
+changing timestamps.
 
 The same trace exposed only about 2.1 seconds of accepted Cloud coverage and
 one `/hsp/add` request per second. Every observed request returned HTTP 200,
@@ -181,13 +186,37 @@ use backend-only trapezoidal velocity guides capped at 75 ms per side. The
 stroke body remains constant-speed, authored extrema and the exact
 zero-velocity instant remain intact, and internal guides are not forced onto
 the wire. Quantized retarget frames receive the same final <=2% chatter cleanup
-as semantic frames. Finite programs and linear media timelines are unchanged.
+as semantic frames.
 
-Automated tests now pin the reported 1:17 action sequence, media-only lead
-selection, batched prebuffering and owner point caps, reversal profile,
-acceleration/no-overshoot limits, approximation error, whole-percent stationary
-time, and post-quantization retarget chatter. A capped post-fix hardware run is
-still required before calling either subjective issue closed.
+The speed audit found no second multiplier at a transport boundary. Loop
+patterns and finite programs interpret speed by stretching their content
+timeline; they do not contract amplitude. Cloud and Browser Bluetooth encode
+the engine's timed semantic points, while Intiface derives segment duration
+from the same frame. Startup acquisition is the separate exception: it remains
+bounded by the configured maximum before any media clock starts.
+
+Finite linear media now uses an exact-knot sampler. It emits authored actions
+rather than an unrelated probe grid, does not insert a synthetic point at each
+nominal one-second engine chunk, and adds a stationary tail only after the final
+action. The optional video cap is a forward semantic slew limiter applied while
+constructing the plan. Switching it, or changing the maximum while it is
+enabled, Stops and invalidates active synchronized media so buffered old-policy
+points cannot mix with new-policy points. Pattern motion still refreshes speed
+without stopping.
+
+Automated tests pin the reported 1:17 sequence, exact finite knot dispatch,
+media-only lead selection, batched prebuffering and owner point caps, reversal
+profile, acceleration/no-overshoot limits, approximation error, whole-percent
+stationary time, post-quantization retarget chatter, default-off and opt-in
+video speed policies, and policy-change re-arm behavior.
+
+A post-fix Cloud run at 01:17 kept sixteen 750 ms heartbeats in `following`
+with 1 ms calibrated drift. The trace retained `81 -> 41 -> 66 -> 37 -> 67 ->
+35 -> 70`, append requests completed in 327-364 ms with about ten seconds
+accepted ahead, and a separate 01:16 to 01:30 seek re-armed once and remained
+healthy. A capped pattern trace had no duplicate positions or explicit holds.
+Subjective comparison after removing media amplitude contraction, plus matched
+Browser Bluetooth and Intiface evidence, remains open.
 
 The first capped run also exposed a separate startup defect before those
 continuity checks could be judged: the very first action moved abruptly toward

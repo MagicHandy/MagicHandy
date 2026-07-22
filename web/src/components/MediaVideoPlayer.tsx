@@ -14,7 +14,7 @@ interface Props {
   synchronized?: boolean;
 }
 
-export type MediaPlaybackEvent = "play" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "error";
+export type MediaPlaybackEvent = "play" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "canplay" | "error";
 
 export function MediaVideoPlayer({
   video,
@@ -71,7 +71,7 @@ export function MediaVideoPlayer({
           key={video.id}
           controls
           playsInline
-          preload="metadata"
+          preload={synchronized ? "auto" : "metadata"}
           src={api.mediaStreamURL(video.id)}
           aria-label={video.display_name}
           onLoadedMetadata={(event) => void loadedMetadata(event)}
@@ -87,7 +87,10 @@ export function MediaVideoPlayer({
           onRateChange={(event) => onPlaybackEvent?.("ratechange", event.currentTarget)}
           onWaiting={(event) => onPlaybackEvent?.("waiting", event.currentTarget)}
           onStalled={(event) => onPlaybackEvent?.("stalled", event.currentTarget)}
-          onCanPlay={() => setPlaybackError("")}
+          onCanPlay={(event) => {
+            setPlaybackError("");
+            onPlaybackEvent?.("canplay", event.currentTarget);
+          }}
           onError={(event) => {
             onPlaybackEvent?.("error", event.currentTarget);
             setPlaybackError("This video could not be loaded. Verify that the file still exists and uses a browser-supported codec.");
