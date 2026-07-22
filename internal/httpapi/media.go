@@ -83,8 +83,9 @@ func (s *Server) handleMediaSync(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, errMotionUnavailable), errors.Is(err, errServerQuiescing):
 			writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
 		default:
-			s.logger.Warn("media synchronization failed", "video_id", event.VideoID, "event", event.Event, "error", err)
-			writeError(w, http.StatusBadGateway, errors.New("paired-script motion could not be synchronized"))
+			safeError := s.safeMotionErrorMessage(err)
+			s.logger.Warn("media synchronization failed", "video_id", event.VideoID, "event", event.Event, "error", safeError)
+			writeError(w, http.StatusBadGateway, errors.New(safeError))
 		}
 		return
 	}

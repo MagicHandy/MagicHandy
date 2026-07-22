@@ -401,7 +401,7 @@ func validateStartupState(state transport.MotionStartupState) error {
 			return errors.New("motion startup state contained a non-finite value")
 		}
 	}
-	if state.PositionWithinStrokePercent < 0 || state.PositionWithinStrokePercent > 100 || state.SpeedAbsolute < 0 {
+	if state.SpeedAbsolute < 0 {
 		return errors.New("motion startup state contained an invalid slider value")
 	}
 	if state.StrokeMinPercent < 0 || state.StrokeMaxPercent > 100 || state.StrokeMinPercent >= state.StrokeMaxPercent {

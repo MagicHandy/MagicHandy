@@ -199,9 +199,11 @@ physical slider is outside the new window.
 
 Before Cloud HSP Start or Resume, the shared engine stops stale HSP playback
 and reads both `/slider/state` and the current `/slider/stroke`. Live firmware
-reports `position` relative to the active stroke window, so the engine derives
-full-travel position from the shared absolute position/endpoints instead of
-mistaking the window-relative value for physical travel. If the physical
+reports `position` relative to the active stroke window and extrapolates it
+below zero or above one when the physical slider is parked outside that window.
+The owner therefore accepts any finite relative value, while the engine derives
+full-travel position from the shared absolute position/endpoints and still
+rejects an absolute position outside calibrated travel. If the physical
 position differs from the plan's first point by more than one percentage point,
 the engine widens the stroke window only to the union needed to contain the
 current position and target, then plays a separate two-point HSP lead-in. Its

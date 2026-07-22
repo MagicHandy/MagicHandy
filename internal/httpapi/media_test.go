@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -151,6 +153,40 @@ func TestMediaSyncDrivesPairedTimelineThroughSharedEngine(t *testing.T) {
 	if ended.Code != http.StatusOK || server.currentMotionEngine().Snapshot().Running {
 		t.Fatalf("ended status = %d engine=%+v", ended.Code, server.currentMotionEngine().Snapshot())
 	}
+}
+
+func TestMediaSyncReturnsSafeMotionStartupError(t *testing.T) {
+	owner := &mediaStartupFailureTransport{Fake: transport.NewFake()}
+	server := newTestServerWithRuntime(t, Runtime{Transport: owner, MotionTransport: owner})
+	root := t.TempDir()
+	writeMediaPair(t, root, "Unavailable", `{"actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`)
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+
+	play := postMediaSync(t, server, server.stopSequence.Load(), video.ID, "playing", "play", 0, 1)
+	if play.Code != http.StatusBadGateway || !strings.Contains(play.Body.String(), "startup state unavailable") {
+		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
+	}
+}
+
+type mediaStartupFailureTransport struct {
+	*transport.Fake
+}
+
+func (m *mediaStartupFailureTransport) ReadMotionStartupState(context.Context) (
+	transport.MotionStartupState,
+	transport.MotionStartupStateResults,
+	error,
+) {
+	result := transport.CommandResult{
+		Kind:      transport.CommandKindSliderState,
+		Transport: "startup_failure",
+		Status:    "failed",
+	}
+	return transport.MotionStartupState{}, transport.MotionStartupStateResults{Slider: result}, errors.New("startup state unavailable")
 }
 
 func TestMediaSyncHeartbeatCannotRestartAfterEmergencyStopAndTimeoutStops(t *testing.T) {

@@ -495,7 +495,9 @@ func parseCloudSliderState(body []byte) (float64, float64, float64, error) {
 	position := *envelope.Result.Position
 	positionAbsolute := *envelope.Result.PositionAbsolute
 	speed := *envelope.Result.SpeedAbsolute
-	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 1 {
+	// API v3 extrapolates this window-relative value when the slider is parked
+	// outside the active stroke window. The engine validates absolute geometry.
+	if math.IsNaN(position) || math.IsInf(position, 0) {
 		return 0, 0, 0, errors.New("cloud REST slider state returned an invalid position")
 	}
 	if math.IsNaN(positionAbsolute) || math.IsInf(positionAbsolute, 0) {

@@ -61,8 +61,12 @@ window, verify arrival, and only then begin semantic/media time. State failure
 is fail-stopped and Stop cancels the lead-in. A corrected capped Cloud trace
 then calibrated the window-relative API state through absolute endpoints,
 verified stationary arrival inside the final window before main Play, completed
-the validation sequence, and stopped successfully. R1 remains High pending the
-user's subjective confirmation that the first action no longer feels abrupt.
+the validation sequence, and stopped successfully. A later replay showed that
+API v3 extrapolates its relative `position` below zero when the stopped slider
+is physically outside the active stroke window; finite extrapolation is now
+accepted while absolute calibrated travel remains fail-closed. R1 remains High
+pending the user's subjective confirmation that the first action no longer
+feels abrupt.
 
 This correction is intentionally scoped to Cloud REST, the owner used by the
 observed run and the one that exposes usable absolute slider/stroke state.
