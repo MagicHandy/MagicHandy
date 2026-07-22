@@ -23,6 +23,13 @@ const current = (messageCount = 0, saved = false) => ({
   sessions: [{ id: "chat-test", title: "Current chat", saved, active: true, message_count: messageCount, latest_seq: messageCount, created_at: "now", updated_at: "now" }],
 });
 
+async function openNewChatDialog() {
+  const button = await screen.findByRole("button", { name: "Start a new chat" });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  return screen.findByRole("dialog", { name: "Start a new chat?" });
+}
+
 vi.mock("../components/AutopilotControl", () => ({
   AutopilotControl: () => <div>Autopilot control</div>,
 }));
@@ -82,21 +89,21 @@ describe("ChatRoute", () => {
     mocks.getChatSessions.mockResolvedValueOnce(current(2, false));
     render(<ChatRoute />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start a new chat" }));
-    expect(screen.getByRole("dialog", { name: "Start a new chat?" })).toBeInTheDocument();
+    expect(await openNewChatDialog()).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save and start" }));
 
-    await waitFor(() => expect(mocks.saveChatSession).toHaveBeenCalledWith("chat-test"));
-    expect(mocks.createChatSession).toHaveBeenCalledWith(false);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mocks.saveChatSession).toHaveBeenCalledWith("chat-test");
+      expect(mocks.createChatSession).toHaveBeenCalledWith(false);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 
   it("confirms replacing an empty active chat", async () => {
     mocks.getChatSessions.mockResolvedValueOnce(current(0, false));
     render(<ChatRoute />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start a new chat" }));
-    expect(screen.getByRole("dialog", { name: "Start a new chat?" })).toHaveTextContent("current chat is empty");
+    expect(await openNewChatDialog()).toHaveTextContent("current chat is empty");
     expect(mocks.createChatSession).not.toHaveBeenCalled();
   });
 
