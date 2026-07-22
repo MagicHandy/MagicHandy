@@ -12,6 +12,8 @@ vi.mock("../api/client", () => ({
     cancelMediaScan: vi.fn(),
     saveMediaDuration: vi.fn(),
     mediaStreamURL: (id: string) => `/stream/${id}`,
+    mediaFunscript: vi.fn(),
+    mediaSync: vi.fn(),
   },
 }));
 
@@ -19,6 +21,8 @@ const mediaVideos = vi.mocked(api.mediaVideos);
 const mediaScan = vi.mocked(api.mediaScan);
 const startMediaScan = vi.mocked(api.startMediaScan);
 const cancelMediaScan = vi.mocked(api.cancelMediaScan);
+const mediaFunscript = vi.mocked(api.mediaFunscript);
+const mediaSync = vi.mocked(api.mediaSync);
 
 const idleScan: MediaScanState = {
   running: false,
@@ -49,14 +53,22 @@ describe("VideoLibrary", () => {
     mediaScan.mockResolvedValue({ scan: idleScan });
     startMediaScan.mockResolvedValue({ scan: { ...idleScan, running: true, cancellable: true } });
     cancelMediaScan.mockResolvedValue({ scan: { ...idleScan, running: true, cancellable: false } });
+    mediaFunscript.mockResolvedValue({ funscript: {
+      video_id: "alpha",
+      name: "Alpha session",
+      duration_ms: 65_000,
+      action_count: 2,
+      actions: [{ at: 0, pos: 20 }, { at: 65_000, pos: 80 }],
+    } });
+    mediaSync.mockResolvedValue({ sync: { active: false, state: "idle" } });
   });
 
-  it("searches the catalog and opens plain video playback without starting motion", async () => {
+  it("searches the catalog and opens paired video playback with its timeline", async () => {
     mediaVideos.mockResolvedValue({ videos: [
       video("zeta", "Zeta session", "2026-07-18T12:00:00Z"),
       video("alpha", "Alpha session", "2026-07-19T12:00:00Z", true),
     ] });
-    render(<VideoLibrary locked={false} />);
+    render(<VideoLibrary locked={false} stopSequence={7} />);
 
     const grid = await screen.findByRole("button", { name: "Play Alpha session" });
     expect(grid).toBeInTheDocument();
@@ -67,8 +79,9 @@ describe("VideoLibrary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Play Alpha session" }));
     const playerView = screen.getByRole("region", { name: "Video playback" });
     expect(within(playerView).getByRole("heading", { name: "Alpha session" })).toBeInTheDocument();
-    expect(within(playerView).getByLabelText("Alpha session")).toHaveAttribute("src", "/stream/alpha");
-    expect(screen.queryByText(/device following/i)).not.toBeInTheDocument();
+    expect(await within(playerView).findByLabelText("Alpha session")).toHaveAttribute("src", "/stream/alpha");
+    expect(within(playerView).getByRole("slider", { name: /funscript timeline/i })).toBeInTheDocument();
+    expect(within(playerView).getByText("Ready to synchronize on play")).toBeInTheDocument();
 
     fireEvent.click(within(playerView).getByRole("button", { name: "Videos" }));
     expect(await screen.findByRole("button", { name: "Play Alpha session" })).toBeInTheDocument();

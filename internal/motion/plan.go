@@ -16,6 +16,7 @@ type MotionPlan struct {
 	Target         MotionTarget `json:"target"`
 	PatternID      PatternID    `json:"pattern_id,omitempty"`
 	ProgramID      string       `json:"program_id,omitempty"`
+	MediaID        string       `json:"media_id,omitempty"`
 	PeriodMillis   int64        `json:"period_ms"`
 	HandoffMillis  int64        `json:"handoff_ms"`
 	PhaseOffset    float64      `json:"phase_offset"`
@@ -33,6 +34,7 @@ type MotionSample struct {
 	PlanID          string    `json:"plan_id"`
 	PatternID       PatternID `json:"pattern_id,omitempty"`
 	ProgramID       string    `json:"program_id,omitempty"`
+	MediaID         string    `json:"media_id,omitempty"`
 	PositionPercent float64   `json:"position_percent"`
 	TimeMillis      int64     `json:"time_ms"`
 	Phase           float64   `json:"phase"`
@@ -53,12 +55,17 @@ func NewMotionPlan(
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
+	periodMillis := periodForContent(baseDuration, target.SpeedPercent, loop, patternKind(target))
+	if target.Media != nil {
+		periodMillis = baseDuration
+	}
 	return MotionPlan{
 		ID:            id,
 		Target:        target,
 		PatternID:     target.PatternID,
 		ProgramID:     target.ProgramID,
-		PeriodMillis:  periodForContent(baseDuration, target.SpeedPercent, loop, patternKind(target)),
+		MediaID:       target.MediaID,
+		PeriodMillis:  periodMillis,
 		HandoffMillis: handoffMillis,
 		PhaseOffset:   phaseForContent(phaseOffset, loop),
 		Loop:          loop,
@@ -72,11 +79,16 @@ func (p MotionPlan) SampleAt(streamMillis int64) MotionSample {
 	phase := p.PhaseAt(streamMillis)
 	curveMillis := int64(math.Round(phase * float64(p.curve.duration)))
 	value := p.curve.Sample(curveMillis)
+	if p.Target.Media != nil {
+		scale := float64(p.Target.SpeedPercent) / 100
+		value = 50 + (value-50)*scale
+	}
 	position := applyTargetFocus(value/100, p.Target)
 	return MotionSample{
 		PlanID:          p.ID,
 		PatternID:       p.PatternID,
 		ProgramID:       p.ProgramID,
+		MediaID:         p.MediaID,
 		PositionPercent: math.Max(0, math.Min(100, position)),
 		TimeMillis:      streamMillis,
 		Phase:           phase,
@@ -157,6 +169,19 @@ func (p MotionPlan) DirectionAt(streamMillis int64) int {
 }
 
 func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) {
+	if target.Media != nil {
+		if definition, err := NormalizeMediaTimelineDefinition(*target.Media); err == nil {
+			curve, _ := newCurve(definition.Points, definition.DurationMillis, false, true, MaximumMediaTimelinePoints)
+			target.Media = &definition
+			target.MediaID = definition.ID
+			target.PatternID = ""
+			target.PatternName = ""
+			target.ProgramID = ""
+			return target, curve, false, definition.DurationMillis
+		}
+		target.Media = nil
+		target.MediaID = ""
+	}
 	if target.Program != nil {
 		if definition, err := NormalizeProgramDefinition(*target.Program); err == nil {
 			curve, _ := NewCurve(definition.Points, definition.DurationMillis, false)
@@ -164,6 +189,7 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 			target.ProgramID = definition.ID
 			target.PatternID = ""
 			target.PatternName = ""
+			target.MediaID = ""
 			return target, curve, false, definition.DurationMillis
 		}
 		target.Program = nil
@@ -176,6 +202,7 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 			target.PatternID = definition.ID
 			target.PatternName = definition.Name
 			target.ProgramID = ""
+			target.MediaID = ""
 			return target, curve, true, definition.CycleMillis
 		}
 	}
@@ -188,6 +215,7 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 	target.Pattern = &definition
 	target.PatternName = definition.Name
 	target.ProgramID = ""
+	target.MediaID = ""
 	return target, curve, true, definition.CycleMillis
 }
 
@@ -212,6 +240,9 @@ func patternKind(target MotionTarget) string {
 }
 
 func motionContentID(target MotionTarget) string {
+	if target.MediaID != "" {
+		return "media:" + target.MediaID
+	}
 	if target.ProgramID != "" {
 		return "program:" + target.ProgramID
 	}

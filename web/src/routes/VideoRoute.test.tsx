@@ -2,14 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VideoRoute } from "./VideoRoute";
 
-const app = vi.hoisted(() => ({ backendOnline: true, readOnly: false }));
+const app = vi.hoisted(() => ({ backendOnline: true, readOnly: false, state: { stop_sequence: 7 } }));
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => app,
 }));
 
 vi.mock("../components/VideoLibrary", () => ({
-  VideoLibrary: ({ locked }: { locked: boolean }) => <div data-testid="video-catalog" data-locked={locked}>Catalog</div>,
+  VideoLibrary: ({ locked, stopSequence }: { locked: boolean; stopSequence?: number }) => <div data-testid="video-catalog" data-locked={locked} data-stop-sequence={stopSequence}>Catalog</div>,
 }));
 
 describe("VideoRoute", () => {
@@ -23,6 +23,7 @@ describe("VideoRoute", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Videos" })).toHaveFocus();
     expect(screen.getByTestId("video-catalog")).toHaveAttribute("data-locked", "false");
+    expect(screen.getByTestId("video-catalog")).toHaveAttribute("data-stop-sequence", "7");
     expect(screen.getByTestId("video-catalog").parentElement).toHaveClass("video-page");
   });
 

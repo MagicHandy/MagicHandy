@@ -19,11 +19,13 @@ const (
 	// routine cycle floor.
 	PatternKindBurst = "burst"
 
-	minimumBurstCycleMillis int64 = 500
-	maximumCurvePoints            = 4096
-	catalogSampleMillis     int64 = 25
-	catalogMinReversalGap   int64 = 450
-	catalogMaxAcceleration        = 3000.0
+	minimumBurstCycleMillis = 500
+	maximumCurvePoints      = 4096
+	// MaximumMediaTimelinePoints keeps feature-length funscripts bounded while
+	// leaving normal pattern and program authoring on the smaller content cap.
+	MaximumMediaTimelinePoints = 100_000
+	catalogMinReversalGap      = 450
+	catalogMaxAcceleration     = 3000.0
 
 	// TagExperimental marks catalog content that is fully playable in the
 	// library but exposed to the model only behind the user's
@@ -32,6 +34,8 @@ const (
 	// TagCurated marks exact user-tested curves promoted into the built-in catalog.
 	TagCurated = "curated"
 )
+
+const catalogSampleMillis int64 = 25
 
 // CurvePoint is one relative 0..100 motion sample at wall-clock time.
 type CurvePoint struct {
@@ -59,18 +63,31 @@ type ProgramDefinition struct {
 	Points         []CurvePoint `json:"points"`
 }
 
+// MediaTimelineDefinition is finite, clock-locked motion authored against a
+// media file. It is deliberately separate from ProgramDefinition: feature-
+// length funscripts need a larger bound and linear interpolation, and they are
+// never persisted in the pattern library.
+type MediaTimelineDefinition struct {
+	ID             string       `json:"id"`
+	Name           string       `json:"name"`
+	DurationMillis int64        `json:"duration_ms"`
+	Points         []CurvePoint `json:"points"`
+}
+
 // CurveMetrics exposes generator budget measurements for tests and diagnostics.
 type CurveMetrics struct {
 	MaxAccelerationPercentPerSecond2 float64 `json:"max_acceleration_percent_per_second2"`
 	MinReversalGapMillis             int64   `json:"min_reversal_gap_ms"`
 }
 
-// Curve is a validated time-parameterized monotone cubic sampler.
+// Curve is a validated time-parameterized sampler. Pattern curves use
+// monotone cubic interpolation; media timelines preserve linear segments.
 type Curve struct {
 	points   []CurvePoint
 	slopes   []float64
 	duration int64
 	loop     bool
+	linear   bool
 }
 
 var builtinPatternCatalog = buildBuiltinPatternCatalog()
@@ -88,22 +105,25 @@ func buildBuiltinPatternCatalog() []PatternDefinition {
 
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
 func NewCurve(points []CurvePoint, durationMillis int64, loop bool) (Curve, error) {
+	return newCurve(points, durationMillis, loop, false, maximumCurvePoints)
+}
+
+func newCurve(points []CurvePoint, durationMillis int64, loop bool, linear bool, maximumPoints int) (Curve, error) {
 	if len(points) < 2 {
 		return Curve{}, errors.New("a motion curve requires at least two points")
 	}
-	if len(points) > maximumCurvePoints {
-		return Curve{}, fmt.Errorf("a motion curve supports at most %d points", maximumCurvePoints)
+	if len(points) > maximumPoints {
+		return Curve{}, fmt.Errorf("a motion curve supports at most %d points", maximumPoints)
 	}
 	copyPoints := append([]CurvePoint(nil), points...)
 	if err := validateCurvePoints(copyPoints, durationMillis); err != nil {
 		return Curve{}, err
 	}
-	return Curve{
-		points:   copyPoints,
-		slopes:   monotoneSlopes(copyPoints, loop),
-		duration: durationMillis,
-		loop:     loop,
-	}, nil
+	curve := Curve{points: copyPoints, duration: durationMillis, loop: loop, linear: linear}
+	if !linear {
+		curve.slopes = monotoneSlopes(copyPoints, loop)
+	}
+	return curve, nil
 }
 
 // Sample returns the shape-preserving interpolated relative position.
@@ -205,6 +225,31 @@ func NormalizeProgramDefinition(definition ProgramDefinition) (ProgramDefinition
 	return definition, nil
 }
 
+// NormalizeMediaTimelineDefinition validates a bounded feature-length media
+// curve without applying pattern-library normalization or loop closure.
+func NormalizeMediaTimelineDefinition(definition MediaTimelineDefinition) (MediaTimelineDefinition, error) {
+	definition.ID = strings.TrimSpace(definition.ID)
+	definition.Name = strings.TrimSpace(definition.Name)
+	if definition.ID == "" || definition.Name == "" {
+		return MediaTimelineDefinition{}, errors.New("media timeline id and name are required")
+	}
+	points, duration, err := normalizePointsWithLimit(
+		definition.Points,
+		definition.DurationMillis,
+		false,
+		MaximumMediaTimelinePoints,
+	)
+	if err != nil {
+		return MediaTimelineDefinition{}, err
+	}
+	definition.DurationMillis = duration
+	definition.Points = points
+	if _, err := newCurve(points, duration, false, true, MaximumMediaTimelinePoints); err != nil {
+		return MediaTimelineDefinition{}, err
+	}
+	return definition, nil
+}
+
 // MeasureCurve reports the wall-time acceleration and reversal spacing.
 func MeasureCurve(points []CurvePoint, durationMillis int64, loop bool) (CurveMetrics, error) {
 	curve, err := NewCurve(points, durationMillis, loop)
@@ -250,6 +295,9 @@ func (c Curve) sampleFloat(at float64) float64 {
 	h := float64(c.points[right].TimeMillis - c.points[left].TimeMillis)
 	u := (at - float64(c.points[left].TimeMillis)) / h
 	y0, y1 := c.points[left].PositionPercent, c.points[right].PositionPercent
+	if c.linear {
+		return y0 + (y1-y0)*u
+	}
 	m0, m1 := c.slopes[left], c.slopes[right]
 	h00 := 2*u*u*u - 3*u*u + 1
 	h10 := u*u*u - 2*u*u + u
@@ -261,9 +309,15 @@ func (c Curve) sampleFloat(at float64) float64 {
 func (c Curve) velocityFloat(at float64) float64 {
 	left, right := c.interval(at)
 	if left == right {
+		if c.linear {
+			return 0
+		}
 		return c.slopes[left]
 	}
 	h := float64(c.points[right].TimeMillis - c.points[left].TimeMillis)
+	if c.linear {
+		return (c.points[right].PositionPercent - c.points[left].PositionPercent) / h
+	}
 	u := (at - float64(c.points[left].TimeMillis)) / h
 	y0, y1 := c.points[left].PositionPercent, c.points[right].PositionPercent
 	m0, m1 := c.slopes[left], c.slopes[right]
@@ -351,8 +405,12 @@ func validateCurvePoints(points []CurvePoint, durationMillis int64) error {
 }
 
 func normalizePoints(raw []CurvePoint, requestedDuration int64, closeLoop bool) ([]CurvePoint, int64, error) {
-	if len(raw) < 2 || len(raw) > maximumCurvePoints {
-		return nil, 0, fmt.Errorf("motion content requires 2..%d points", maximumCurvePoints)
+	return normalizePointsWithLimit(raw, requestedDuration, closeLoop, maximumCurvePoints)
+}
+
+func normalizePointsWithLimit(raw []CurvePoint, requestedDuration int64, closeLoop bool, maximumPoints int) ([]CurvePoint, int64, error) {
+	if len(raw) < 2 || len(raw) > maximumPoints {
+		return nil, 0, fmt.Errorf("motion content requires 2..%d points", maximumPoints)
 	}
 	points := append([]CurvePoint(nil), raw...)
 	slices.SortStableFunc(points, func(left, right CurvePoint) int {

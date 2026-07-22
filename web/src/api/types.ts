@@ -27,7 +27,7 @@ export interface EngineSnapshot {
   running_ms?: number;
   phase?: number;
   recent_command_latency_ms?: number;
-  target?: { label?: string; source?: string; speed_percent?: number; pattern_id?: string; pattern_name?: string; program_id?: string };
+  target?: { label?: string; source?: string; speed_percent?: number; pattern_id?: string; pattern_name?: string; program_id?: string; media_id?: string };
   last_sample?: MotionSample;
   settings?: MotionSettings;
   last_error?: string;
@@ -260,6 +260,44 @@ export interface MediaVideo {
   scanned_at: string;
 }
 
+export interface MediaFunscriptAction {
+  at: number;
+  pos: number;
+}
+
+export interface MediaFunscript {
+  video_id: string;
+  name: string;
+  duration_ms: number;
+  action_count: number;
+  actions: MediaFunscriptAction[];
+}
+
+export interface MediaSyncEvent {
+  video_id: string;
+  session_id: string;
+  event_sequence: number;
+  state: "playing" | "paused" | "seeking" | "ended" | "closed";
+  event: "play" | "pause" | "seeking" | "seeked" | "ratechange" | "resync" | "heartbeat" | "waiting" | "stalled" | "error" | "ended" | "closed";
+  media_time_ms: number;
+  client_time_ms: number;
+  playback_rate: number;
+}
+
+export interface MediaSyncStatus {
+  active: boolean;
+  video_id?: string;
+  state: "idle" | "following" | "seeking" | "paused" | "ended" | "completed" | "drifted" | "interrupted" | "timed_out" | "stopped" | "error";
+  last_event?: string;
+  media_time_ms?: number;
+  drift_ms?: number;
+  playback_rate?: number;
+  motion_scale_percent?: number;
+  requires_reanchor?: boolean;
+  message?: string;
+  updated_at?: string;
+}
+
 export interface MediaScanIssue {
   location: string;
   message: string;
@@ -293,6 +331,7 @@ export interface MediaSummary {
   available_count?: number;
   paired_count?: number;
   scan?: MediaScanState;
+  sync?: MediaSyncStatus;
 }
 
 export interface PatternInput {

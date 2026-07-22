@@ -22,6 +22,10 @@ var (
 	ErrVideoNotFound = errors.New("media video not found")
 	// ErrVideoUnavailable reports a catalog row whose file cannot be opened.
 	ErrVideoUnavailable = errors.New("media video is unavailable")
+	// ErrFunscriptNotFound reports a video without a scanned exact-name pair.
+	ErrFunscriptNotFound = errors.New("paired funscript not found")
+	// ErrFunscriptUnavailable reports a paired script that can no longer be opened.
+	ErrFunscriptUnavailable = errors.New("paired funscript is unavailable")
 	// ErrScanBusy reports a second scan or catalog-maintenance overlap.
 	ErrScanBusy = errors.New("media scan is already running")
 	// ErrNoLocations reports an explicit scan with no configured roots.
@@ -316,6 +320,26 @@ func (c *Catalog) OpenVideo(ctx context.Context, id string) (*os.File, Video, er
 	file, err := openInsideRoot(video.LocationPath, video.RelativePath)
 	if err != nil {
 		return nil, video, fmt.Errorf("%w: open catalog file: %w", ErrVideoUnavailable, err)
+	}
+	return file, video, nil
+}
+
+// OpenFunscript revalidates and opens the exact-basename script recorded by
+// the scanner. Like video streaming, callers provide only the opaque video ID.
+func (c *Catalog) OpenFunscript(ctx context.Context, id string) (*os.File, Video, error) {
+	video, err := c.Video(ctx, id)
+	if err != nil {
+		return nil, Video{}, err
+	}
+	if video.Missing || video.FunscriptRelativePath == nil {
+		if video.FunscriptRelativePath == nil {
+			return nil, video, ErrFunscriptNotFound
+		}
+		return nil, video, fmt.Errorf("%w: catalog entry is marked missing", ErrFunscriptUnavailable)
+	}
+	file, err := openInsideRoot(video.LocationPath, *video.FunscriptRelativePath)
+	if err != nil {
+		return nil, video, fmt.Errorf("%w: open catalog file: %w", ErrFunscriptUnavailable, err)
 	}
 	return file, video, nil
 }

@@ -16,10 +16,106 @@ const maxReportedVideoDurationMillis = int64(30 * 24 * 60 * 60 * 1000)
 func (s *Server) mediaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/media/videos", s.handleMediaVideos)
 	mux.HandleFunc("GET /api/media/videos/{id}/stream", s.handleMediaVideoStream)
+	mux.HandleFunc("GET /api/media/videos/{id}/funscript", s.handleMediaVideoFunscript)
+	mux.HandleFunc("POST /api/media/sync", s.handleMediaSync)
 	mux.HandleFunc("POST /api/media/scan", s.handleMediaScanStart)
 	mux.HandleFunc("GET /api/media/scan", s.handleMediaScanState)
 	mux.HandleFunc("DELETE /api/media/scan", s.handleMediaScanCancel)
 	mux.HandleFunc("POST /api/media/duration", s.handleMediaDuration)
+}
+
+func (s *Server) handleMediaVideoFunscript(w http.ResponseWriter, r *http.Request) {
+	videoID := strings.TrimSpace(r.PathValue("id"))
+	script, err := s.media.LoadFunscript(r.Context(), videoID)
+	if err != nil {
+		switch {
+		case errors.Is(err, media.ErrVideoNotFound), errors.Is(err, media.ErrVideoUnavailable),
+			errors.Is(err, media.ErrFunscriptNotFound), errors.Is(err, media.ErrFunscriptUnavailable):
+			writeError(w, http.StatusNotFound, errors.New("paired funscript is unavailable"))
+		case errors.Is(err, media.ErrFunscriptTooLarge):
+			writeError(w, http.StatusRequestEntityTooLarge, err)
+		case errors.Is(err, media.ErrFunscriptInvalid):
+			writeError(w, http.StatusUnprocessableEntity, err)
+		default:
+			s.logger.Error("media funscript load failed", "video_id", videoID, "error", err)
+			writeError(w, http.StatusInternalServerError, errors.New("paired funscript could not be loaded"))
+		}
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"funscript": script})
+}
+
+func (s *Server) handleMediaSync(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	stopSequence, err := s.requestStopSequence(r)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	var event mediaSyncEvent
+	if err := decodeJSON(r, &event); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	event.VideoID = strings.TrimSpace(event.VideoID)
+	event.SessionID = strings.TrimSpace(event.SessionID)
+	event.State = strings.TrimSpace(event.State)
+	event.Event = strings.TrimSpace(event.Event)
+	if err := validateMediaSyncEvent(event); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	status, err := s.mediaSync.Handle(r.Context(), event, stopSequence)
+	if err != nil {
+		switch {
+		case errors.Is(err, errMediaMotionInterrupted):
+			writeJSON(w, http.StatusConflict, map[string]any{"sync": status, "error": err.Error()})
+		case errors.Is(err, media.ErrVideoNotFound), errors.Is(err, media.ErrFunscriptNotFound),
+			errors.Is(err, media.ErrFunscriptUnavailable):
+			writeError(w, http.StatusNotFound, errors.New("paired funscript is unavailable"))
+		case errors.Is(err, media.ErrFunscriptTooLarge):
+			writeError(w, http.StatusRequestEntityTooLarge, err)
+		case errors.Is(err, media.ErrFunscriptInvalid):
+			writeError(w, http.StatusUnprocessableEntity, err)
+		case errors.Is(err, errMotionUnavailable), errors.Is(err, errServerQuiescing):
+			writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
+		default:
+			s.logger.Warn("media synchronization failed", "video_id", event.VideoID, "event", event.Event, "error", err)
+			writeError(w, http.StatusBadGateway, errors.New("paired-script motion could not be synchronized"))
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sync": status})
+}
+
+func validateMediaSyncEvent(event mediaSyncEvent) error {
+	if event.VideoID == "" || event.MediaTimeMillis < 0 || event.MediaTimeMillis > maxReportedVideoDurationMillis {
+		return errors.New("video id and a valid media time are required")
+	}
+	if event.SessionID == "" || cleanControllerClientID(event.SessionID) != event.SessionID || event.EventSequence == 0 {
+		return errors.New("a valid media playback session and event sequence are required")
+	}
+	if event.PlaybackRate < 0.25 || event.PlaybackRate > 4 {
+		return errors.New("video playback rate must be between 0.25 and 4")
+	}
+	switch event.State {
+	case "playing":
+		switch event.Event {
+		case "play", "seeked", "ratechange", "resync", "heartbeat":
+		default:
+			return errors.New("playing media sync requires a valid event")
+		}
+	case "paused", "seeking", "ended", "closed":
+		if strings.TrimSpace(event.Event) == "" {
+			return errors.New("media sync event is required")
+		}
+	default:
+		return errors.New("unsupported media sync state")
+	}
+	return nil
 }
 
 func (s *Server) handleMediaVideos(w http.ResponseWriter, r *http.Request) {
@@ -139,11 +235,15 @@ func (s *Server) mediaState(ctx context.Context) map[string]any {
 	if err != nil {
 		return map[string]any{"available": false, "error": "media catalog unavailable"}
 	}
-	return map[string]any{
+	state := map[string]any{
 		"available":       true,
 		"video_count":     summary.VideoCount,
 		"available_count": summary.AvailableCount,
 		"paired_count":    summary.PairedCount,
 		"scan":            s.media.ScanState(),
 	}
+	if s.mediaSync != nil {
+		state["sync"] = s.mediaSync.Status()
+	}
+	return state
 }

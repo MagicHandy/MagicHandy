@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-20, expanded motion vocabulary and compact live status
+## Snapshot — 2026-07-22, synchronized paired-video playback
 
 ### Goal 1: Maintainability
 
@@ -32,11 +32,11 @@ Scoring key:
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/media/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings: `internal/config/settings.go` 1,258 lines, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 846, `internal/motion/engine_test.go` 866, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,373. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings: `web/src/App.test.tsx` 1,304 lines, `web/src/styles/components.css` 1,444, `web/src/styles/library.css` 1,087, and retired reference-only `web/legacy/app.css` 846. Media behavior is split into focused components despite sharing the established library stylesheet; `web/dist` remains the single shipped build. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings: `web/src/App.test.tsx` 1,304 lines, `web/src/styles/components.css` 1,444, `web/src/styles/library.css` 1,248, and retired reference-only `web/legacy/app.css` 846. Media behavior is split into focused components despite sharing the established library stylesheet; `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,479 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
-| Phase discipline | scoped PRs, tests, docs per phase | **Met** | The pattern-content slice transforms complete reversal phrases from the supplied local libraries into twelve motion-semantic built-ins, keeps filenames and source payloads out of metadata and git, reuses the idempotent catalog seed without a schema migration, and exposes the resolved active name through the existing engine snapshot. |
+| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phase 18 M1-M2 reuse one bounded exact-name funscript document for the canvas and one shared-engine finite media target, keep host paths out of the API, and leave real-device timing claims to the explicit M3 acceptance gate. |
 
 ### Goal 2: Core Memory
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 21,063,680 bytes plain and 14,832,128 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 21,275,648 bytes plain and 14,995,456 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -107,9 +107,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 915,304 raw / 568,156 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 471,068 raw
-   / 130,729 gzip bytes, and the stripped binary is 14,897,664 bytes. These
+   browser payload is 933,876 raw / 573,763 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 489,640 raw
+   / 136,336 gzip bytes, and the stripped binary is 14,995,456 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -118,6 +118,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-22** - Phase 18 M1-M2 paired-video playback: exact-basename
+  funscripts now load through one jailed 16 MiB / 100,000-action parser, render
+  in a hideable intensity timeline below the native video, and run as finite
+  linear targets through the shared motion engine. Play holds the video until
+  admission; pause, seek, rate change, media stall/error, end, close, drift,
+  timeout, and Emergency Stop use explicit Stop/re-arm semantics. Per-player
+  session/sequence fences reject reordered close and arm requests. Rendered
+  fake-transport QA at 1280x720 and 390x844 exercised a 3,536-action script,
+  play/pause/live seek/end, timeline hide/show, responsive layout, and a clean
+  browser console; no real-device alignment claim is made before M3. All 222
+  frontend tests, typecheck/build, `go test ./...`, `go vet ./...`, pinned
+  `golangci-lint` v2.12.2, and the `CGO_ENABLED=0` build pass. The local race
+  build remains unavailable because `gcc` is absent; CI retains the mandatory
+  Ubuntu race gate. HTML/CSS/JS is 489,640 raw / 136,336 gzip bytes; complete
+  embedded output is 933,876 / 573,763 (+17,789 / +5,311 from `main`).
+  Plain/stripped binaries are 21,275,648 / 14,995,456 bytes.
 
 - **2026-07-22** - Browser-style Chat tab compaction: session tabs now prefer
   236px, share available width evenly, and stop at 112px desktop / 104px narrow

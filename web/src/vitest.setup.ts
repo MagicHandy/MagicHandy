@@ -10,7 +10,7 @@ Object.defineProperty(globalThis, "PointerEvent", { value: MouseEvent, configura
 Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
   configurable: true,
   value: () => ({
-    setTransform() {}, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {},
-    fillStyle: "", strokeStyle: "", lineWidth: 1,
+    setTransform() {}, clearRect() {}, fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, arc() {}, fill() {},
+    fillStyle: "", strokeStyle: "", lineWidth: 1, globalAlpha: 1,
   }),
 });

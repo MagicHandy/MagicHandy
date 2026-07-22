@@ -69,4 +69,27 @@ describe("MotionVisualizer", () => {
       "--",
     ]);
   });
+
+  it("shows the active video title instead of an unknown pattern", () => {
+    render(
+      <MotionVisualizer
+        motion={{
+          available: true,
+          engine: {
+            running: true,
+            paused: false,
+            target: {
+              label: "Paired session",
+              media_id: "video-1",
+              source: "media",
+              speed_percent: 40,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Paired session")).toBeInTheDocument();
+    expect(screen.getByText("media")).toBeInTheDocument();
+  });
 });

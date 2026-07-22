@@ -12,6 +12,9 @@ const defaultSpeedPercent = 50
 // manual-test controls. Autonomous modes use their mode identifier as source.
 const TargetSourceManualUI = "manual_ui"
 
+// TargetSourceMedia identifies a clock-locked paired-funscript run.
+const TargetSourceMedia = "media"
+
 // PatternID identifies a repeatable semantic motion pattern.
 type PatternID string
 
@@ -109,14 +112,16 @@ type MotionTarget struct {
 	PatternID    PatternID   `json:"pattern_id,omitempty"`
 	PatternName  string      `json:"pattern_name,omitempty"`
 	ProgramID    string      `json:"program_id,omitempty"`
+	MediaID      string      `json:"media_id,omitempty"`
 	SpeedPercent int         `json:"speed_percent"`
 	AreaFocus    *AreaFocus  `json:"area_focus,omitempty"`
 	SoftAnchor   *SoftAnchor `json:"soft_anchor,omitempty"`
 
 	// Resolved content is backend-owned and never serialized to clients. The
 	// public IDs above remain the authoritative snapshot vocabulary.
-	Pattern *PatternDefinition `json:"-"`
-	Program *ProgramDefinition `json:"-"`
+	Pattern *PatternDefinition       `json:"-"`
+	Program *ProgramDefinition       `json:"-"`
+	Media   *MediaTimelineDefinition `json:"-"`
 }
 
 // NormalizeTarget clamps semantic intent without applying physical stroke settings.
@@ -128,17 +133,32 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 		target.Source = "motion"
 	}
 	target.ProgramID = strings.TrimSpace(target.ProgramID)
+	target.MediaID = strings.TrimSpace(target.MediaID)
+	if target.Media != nil {
+		target.MediaID = strings.TrimSpace(target.Media.ID)
+		target.PatternID = ""
+		target.PatternName = ""
+		target.ProgramID = ""
+		target.Pattern = nil
+		target.Program = nil
+		// Media timestamps remain locked to the video clock. The configured
+		// maximum scales excursions around center instead of stretching time,
+		// which reduces authored velocity without creating audiovisual drift.
+		target.SpeedPercent = settings.SpeedMaxPercent
+	}
 	if target.Program != nil {
 		target.ProgramID = strings.TrimSpace(target.Program.ID)
 		target.PatternID = ""
 		target.PatternName = ""
+		target.MediaID = ""
 	}
 	if target.Pattern != nil {
 		target.PatternID = target.Pattern.ID
 		target.ProgramID = ""
+		target.MediaID = ""
 		target.Program = nil
 	}
-	if target.PatternID == "" && target.ProgramID == "" {
+	if target.PatternID == "" && target.ProgramID == "" && target.MediaID == "" {
 		target.PatternID = PatternStroke
 	}
 	if target.SpeedPercent == 0 {

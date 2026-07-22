@@ -264,6 +264,9 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
 	s.stopSequence.Add(1)
+	if s.mediaSync != nil {
+		s.mediaSync.Invalidate("emergency_stop")
+	}
 	s.cancelActiveChats()
 	pendingASR := s.voice.InvalidateAll(voice.RoleASR)
 	pendingTTS := s.voice.InvalidateAll(voice.RoleTTS)
@@ -448,6 +451,9 @@ func (s *Server) Quiesce() {
 	s.quiescing.Store(true)
 	s.quiesceOnce.Do(func() {
 		s.cancelActiveChats()
+		if s.mediaSync != nil {
+			s.mediaSync.Shutdown()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = s.stopAndClearMotionEngine(ctx, "server_shutdown")
