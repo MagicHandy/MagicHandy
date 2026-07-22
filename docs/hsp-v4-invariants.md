@@ -67,6 +67,9 @@ Test expectation:
 - HSP point timestamps follow the sampled plan timing
 - buffered frames include authored knots and a bounded adaptive approximation,
   rather than relying on an unrelated fixed tick to happen near each reversal
+- clock-locked media keeps a transport-declared deeper accepted buffer than
+  interactive patterns, while append batching remains under the owner's point
+  cap; interactive retargets must not inherit the media-sized horizon
 - speed limits do not flatten HSP point slopes into a fixed direct-position velocity budget
 
 ## Invariant 6: Same-Pattern Updates Preserve Phase
@@ -184,3 +187,42 @@ Test expectation:
 - lead checks compare against the emitted tail and reserve one dispatch tick
 - a 2xx `error` envelope records a failed command and leaves the HSP tail index
   unchanged, so a retry retains first-add flush/index semantics
+
+## Invariant 14: The First Point Is Not An Implicit Reposition
+
+An HSP point at stream time zero declares where playback begins; it does not
+describe a duration for reaching that position. Starting a stream whose first
+point differs from the physical slider position can therefore produce an
+unbounded startup snap even when every later segment respects sampled timing.
+Applying a narrower stroke window first can cause the same defect if the
+physical slider is outside the new window.
+
+Before Cloud HSP Start or Resume, the shared engine stops stale HSP playback
+and reads both `/slider/state` and the current `/slider/stroke`. Live firmware
+reports `position` relative to the active stroke window, so the engine derives
+full-travel position from the shared absolute position/endpoints instead of
+mistaking the window-relative value for physical travel. If the physical
+position differs from the plan's first point by more than one percentage point,
+the engine widens the stroke window only to the union needed to contain the
+current position and target, then plays a separate two-point HSP lead-in. Its
+duration treats semantic speed as a maximum full-travel rate: at 20%, a full
+physical stroke takes at least five seconds. After the lead-in is stopped, the
+engine verifies stationary physical arrival inside the final window before
+applying that window and starting the real stream. Media time remains zero
+throughout positioning.
+
+This is not an HDSP fallback or a transport-owned motion loop. The lead-in is
+an engine-owned semantic timed-point stream behind the same run epoch, command
+serialization, trace, and Stop barrier as ordinary motion. Missing, malformed,
+moving, or unverifiable physical state fails stopped rather than reverting to
+the unsafe time-zero start.
+
+Test expectation:
+
+- a measured 90% position moving to a 20% first point at a 20% speed cap gets
+  at least 3.5 seconds, not a time-zero displacement
+- a narrowing stroke window is applied only after the slider is verified
+  inside it
+- Stop during the lead-in prevents the main stream from playing
+- a device already within one percentage point of the first point does not
+  receive an unnecessary lead-in

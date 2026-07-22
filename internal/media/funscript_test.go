@@ -110,3 +110,49 @@ func TestTimelineFromRejectsCompletedOrInvalidRate(t *testing.T) {
 		t.Fatal("out-of-range playback rate was accepted")
 	}
 }
+
+func TestTimelineFromPreservesReportedReversalsNearOneSeventeen(t *testing.T) {
+	script := Funscript{
+		VideoID: "reported-script", Name: "Reported script", DurationMillis: 83_703,
+		Actions: []FunscriptAction{
+			{AtMillis: 60_000, Position: 60},
+			{AtMillis: 70_017, Position: 52},
+			{AtMillis: 70_905, Position: 84},
+			{AtMillis: 72_218, Position: 46},
+			{AtMillis: 73_152, Position: 84},
+			{AtMillis: 74_286, Position: 43},
+			{AtMillis: 75_011, Position: 73},
+			{AtMillis: 76_157, Position: 46},
+			{AtMillis: 77_134, Position: 81},
+			{AtMillis: 78_088, Position: 41},
+			{AtMillis: 79_012, Position: 66},
+			{AtMillis: 79_988, Position: 37},
+			{AtMillis: 80_980, Position: 67},
+			{AtMillis: 82_095, Position: 35},
+			{AtMillis: 82_786, Position: 70},
+			{AtMillis: 83_703, Position: 41},
+		},
+	}
+	timeline, err := script.TimelineFrom(61_863, 1)
+	if err != nil {
+		t.Fatalf("TimelineFrom: %v", err)
+	}
+
+	want := []FunscriptAction{
+		{AtMillis: 14_294, Position: 46},
+		{AtMillis: 15_271, Position: 81},
+		{AtMillis: 16_225, Position: 41},
+	}
+	for _, action := range want {
+		found := false
+		for _, point := range timeline.Points {
+			if point.TimeMillis == action.AtMillis && point.PositionPercent == float64(action.Position) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("timeline points = %+v, missing reported reversal %+v", timeline.Points, action)
+		}
+	}
+}

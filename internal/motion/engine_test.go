@@ -105,6 +105,94 @@ func TestEnginePrebuffersTransportMinimumLeadBeforePlay(t *testing.T) {
 	}
 }
 
+func TestEngineUsesExtendedBufferedLeadOnlyForMedia(t *testing.T) {
+	commandTransport := &timingCapabilityTransport{
+		Fake:                     transport.NewFake(),
+		minimumBufferedLead:      1500 * time.Millisecond,
+		minimumMediaBufferedLead: 10 * time.Second,
+	}
+	engine, err := NewEngine(EngineOptions{Transport: commandTransport})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	engine.mu.Lock()
+	interactiveLead := engine.leadMillisLocked()
+	engine.plan.Target.Media = &MediaTimelineDefinition{}
+	mediaLead := engine.leadMillisLocked()
+	engine.mu.Unlock()
+
+	if interactiveLead != 1500 {
+		t.Fatalf("interactive lead = %dms, want 1500ms", interactiveLead)
+	}
+	if mediaLead != 10_000 {
+		t.Fatalf("media lead = %dms, want 10000ms", mediaLead)
+	}
+}
+
+func TestEngineBatchesMediaPrebufferBeforePlay(t *testing.T) {
+	commandTransport := &timingCapabilityTransport{
+		Fake:                     transport.NewFake(),
+		minimumBufferedLead:      1500 * time.Millisecond,
+		minimumMediaBufferedLead: 10 * time.Second,
+		maximumPoints:            100,
+	}
+	engine, err := NewEngine(EngineOptions{
+		Transport:        commandTransport,
+		DispatchInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := MotionTarget{
+		Label:        "media",
+		Source:       "video",
+		SpeedPercent: 100,
+		Media: &MediaTimelineDefinition{
+			ID: "media", Name: "Media", DurationMillis: 30_000,
+			Points: []CurvePoint{
+				{TimeMillis: 0, PositionPercent: 10},
+				{TimeMillis: 30_000, PositionPercent: 90},
+			},
+		},
+	}
+	if _, err := engine.Start(context.Background(), target, config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+	playSeen := false
+	addsBeforePlay := 0
+	largestBatch := 0
+	var bufferedThrough int64
+	for _, command := range commandTransport.Commands() {
+		switch command.Kind {
+		case transport.CommandKindPointsAdd:
+			if playSeen {
+				continue
+			}
+			addsBeforePlay++
+			points := command.PointsAdd.Points
+			largestBatch = max(largestBatch, len(points))
+			if len(points) > commandTransport.maximumPoints {
+				t.Fatalf("append contained %d points, owner cap is %d", len(points), commandTransport.maximumPoints)
+			}
+			bufferedThrough = points[len(points)-1].TimeMillis
+		case transport.CommandKindPointsPlay:
+			playSeen = true
+		}
+	}
+	if !playSeen || addsBeforePlay > 3 {
+		t.Fatalf("commands = %+v, want media prebuffered in at most three adds before Play", commandTransport.Commands())
+	}
+	if largestBatch <= defaultChunkSize {
+		t.Fatalf("largest prebuffer batch = %d points, want multiple sampler windows combined", largestBatch)
+	}
+	if bufferedThrough < 10_000 {
+		t.Fatalf("prebuffer tail = %dms, want at least 10000ms", bufferedThrough)
+	}
+}
+
 func TestEngineLeadUsesActualEmittedTail(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(32), time.Hour)
@@ -930,15 +1018,22 @@ type completionBlockingTransport struct {
 
 type timingCapabilityTransport struct {
 	*transport.Fake
-	minimumInterval     time.Duration
-	minimumBufferedLead time.Duration
+	minimumInterval          time.Duration
+	minimumBufferedLead      time.Duration
+	minimumMediaBufferedLead time.Duration
+	maximumPoints            int
 }
 
 func (t *timingCapabilityTransport) MotionTimingCapabilities() transport.MotionTimingCapabilities {
 	return transport.MotionTimingCapabilities{
-		MinimumPointInterval: t.minimumInterval,
-		MinimumBufferedLead:  t.minimumBufferedLead,
+		MinimumPointInterval:     t.minimumInterval,
+		MinimumBufferedLead:      t.minimumBufferedLead,
+		MinimumMediaBufferedLead: t.minimumMediaBufferedLead,
 	}
+}
+
+func (t *timingCapabilityTransport) MotionSamplingCapabilities() transport.MotionSamplingCapabilities {
+	return transport.MotionSamplingCapabilities{MaximumPointsPerAppend: t.maximumPoints}
 }
 
 func (t *completionBlockingTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {

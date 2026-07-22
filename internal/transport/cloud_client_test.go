@@ -85,6 +85,66 @@ func TestCloudRESTTransportDeclaresBufferedLead(t *testing.T) {
 	if capabilities.MinimumBufferedLead != 1500*time.Millisecond {
 		t.Fatalf("minimum buffered lead = %v, want 1.5s", capabilities.MinimumBufferedLead)
 	}
+	if capabilities.MinimumMediaBufferedLead != 10*time.Second {
+		t.Fatalf("minimum media buffered lead = %v, want 10s", capabilities.MinimumMediaBufferedLead)
+	}
+}
+
+func TestCloudRESTTransportReadsMotionStartupState(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/slider/state":
+			_, _ = w.Write([]byte(`{"result":{"position":0.73,"speed_absolute":0,"position_absolute":75,"motor_temp":30,"dir":true,"motor_position":1}}`))
+		case "/slider/stroke":
+			_, _ = w.Write([]byte(`{"result":{"min":0.2,"max":0.8,"min_absolute":20,"max_absolute":80}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	state, results, err := cloud.ReadMotionStartupState(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMotionStartupState: %v", err)
+	}
+	if state.PositionWithinStrokePercent != 73 || state.PositionAbsolute != 75 || state.SpeedAbsolute != 0 ||
+		state.StrokeMinPercent != 20 || state.StrokeMaxPercent != 80 ||
+		state.StrokeMinAbsolute != 20 || state.StrokeMaxAbsolute != 80 {
+		t.Fatalf("startup state = %+v", state)
+	}
+	if !results.Slider.OK || results.Slider.Kind != CommandKindSliderState ||
+		!results.Stroke.OK || results.Stroke.Kind != CommandKindStrokeWindowState {
+		t.Fatalf("startup results = %+v", results)
+	}
+	wantPaths := []string{"GET /slider/state", "GET /slider/stroke"}
+	if len(paths) != len(wantPaths) || paths[0] != wantPaths[0] || paths[1] != wantPaths[1] {
+		t.Fatalf("paths = %v, want %v", paths, wantPaths)
+	}
+}
+
+func TestCloudRESTTransportRejectsIncompleteMotionStartupState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/slider/state" {
+			_, _ = w.Write([]byte(`{"result":{"position":0.5}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	_, results, err := cloud.ReadMotionStartupState(context.Background())
+	if err == nil || results.Slider.OK || results.Stroke.Kind != "" {
+		t.Fatalf("incomplete startup response = %+v, error = %v", results, err)
+	}
+	if strings.Contains(err.Error(), `{"result"`) {
+		t.Fatalf("startup parse error leaked response body: %v", err)
+	}
 }
 
 func TestCloudRESTTransportRejectsHTTP200ErrorWithoutAdvancingTail(t *testing.T) {

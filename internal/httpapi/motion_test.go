@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -518,7 +519,18 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests <- captureCloudRequest(t, r)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"ok":true,"hsp_available":true,"playback_state":"playing"}`))
+		switch {
+		case r.URL.Path == "/slider/state":
+			// The test enables reverse direction. PatternStroke begins at semantic
+			// zero, which maps to the physical top of the full stroke window.
+			_, _ = w.Write([]byte(`{"result":{"position":1,"position_absolute":100,"speed_absolute":0}}`))
+		case r.URL.Path == "/slider/stroke" && r.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`{"result":{"min":0,"max":1,"min_absolute":0,"max_absolute":100}}`))
+		case r.URL.Path == "/servertime":
+			_, _ = fmt.Fprintf(w, `{"server_time":%d}`, time.Now().UnixMilli())
+		default:
+			_, _ = w.Write([]byte(`{"ok":true,"hsp_available":true,"playback_state":"playing"}`))
+		}
 	}))
 	defer cloudServer.Close()
 
@@ -538,6 +550,9 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 		method string
 		path   string
 	}{
+		{method: http.MethodPut, path: "/hsp/stop"},
+		{method: http.MethodGet, path: "/slider/state"},
+		{method: http.MethodGet, path: "/slider/stroke"},
 		{method: http.MethodPut, path: "/slider/stroke"},
 		{method: http.MethodPut, path: "/hsp/setup"},
 		{method: http.MethodPut, path: "/hsp/add"},

@@ -80,14 +80,14 @@ window, where integer output is most vulnerable to stair steps. Stationary time
 is more useful than duplicate ratio alone because it measures how long a
 whole-percent wire path dwells before catching up.
 
-- Fixed 125 ms sampling: 3,385 points, 915 duplicate edges, and 113,001 ms of
+- Fixed 125 ms sampling: 3,413 points, 788 duplicate edges, and 97,191 ms of
   rounded stationary segments.
-- Adaptive 25 ms probe plus 0.3% semantic reduction: 2,294 points, 528 duplicate
-  edges, and 71,232 ms stationary, while preserving every tested semantic curve
+- Adaptive 25 ms probe plus 0.3% semantic reduction: 1,767 points, 438 duplicate
+  edges, and 36,633 ms stationary, while preserving every tested semantic curve
   within 0.35%.
-- Cloud-aware 0.8% bounded fitting: 1,420 points, 151 duplicate edges, and
-  29,717 ms stationary. This cuts rounded stationary time by 74% relative to
-  the old grid; worst measured wire error is 0.843% (`Waves`).
+- Cloud-aware 0.8% bounded fitting: 1,247 points, 106 duplicate edges, and
+  14,135 ms stationary. This cuts rounded stationary time by 85% relative to
+  the old grid; worst measured wire error is 0.818% (`Hard and Regular`).
 - The old fixed grid missed a `Hard and Regular` peak by 3.125%.
 
 ## Follow-Up Review - 2026-07-21
@@ -148,6 +148,84 @@ Emergency Stop. The pre-fix comparison emitted 13 add batches / 125 points.
 Whole-percent Cloud output still has a physical resolution floor. The fix
 removes avoidable aliasing and premature rounding; it does not claim that a 10%
 stroke window can contain more than roughly eleven distinct Cloud positions.
+
+## Follow-Up Review - 2026-07-22
+
+The reported paired-script failure was reproduced from the retained Cloud
+trace and the source actions around video time 1:17. The source sequence is
+strictly increasing and alternates cleanly: `76157/46 -> 77134/81 -> 78088/41`.
+Starting at 61,863 ms, the engine emitted those actions at relative times
+14,294, 15,271, and 16,225 ms with the configured motion-scale projection. No
+duplicate timestamp, plateau, cubic interpolation, or synthetic return was
+introduced by parsing or media slicing.
+
+The same trace exposed only about 2.1 seconds of accepted Cloud coverage and
+one `/hsp/add` request per second. Every observed request returned HTTP 200,
+but `pause_on_starving` makes any downstream delivery jitter visible as a
+physical stop. Clock-locked media now prebuffers and maintains ten seconds,
+batches multiple sampler windows under the owner's 100-point cap, and refills
+with up to four seconds of extra headroom. Interactive targets retain the
+1.5-second horizon because their future queue is also their retarget latency.
+
+[Syncopathy's HSP player](https://github.com/ofs69/syncopathy/blob/main/lib/player/handy_native_hsp_mixin.dart)
+was reviewed as a reference. It keeps up to 30 seconds eager-buffered, groups
+15 actions per buffer, primes multiple buffers before playback, and periodically
+resynchronizes the device clock. MagicHandy adopts the deeper fixed-stream
+buffering lesson, not Syncopathy's separate motion path or
+`pauseOnStarving: false`; starvation remains fail-stopped here.
+
+A separate pattern defect matched the report that slow chat patterns lingered
+at reversals. Zero PCHIP slope at an extremum shaped the entire interval on
+both sides, producing a smooth but prolonged endpoint ease. Loop patterns now
+use backend-only trapezoidal velocity guides capped at 75 ms per side. The
+stroke body remains constant-speed, authored extrema and the exact
+zero-velocity instant remain intact, and internal guides are not forced onto
+the wire. Quantized retarget frames receive the same final <=2% chatter cleanup
+as semantic frames. Finite programs and linear media timelines are unchanged.
+
+Automated tests now pin the reported 1:17 action sequence, media-only lead
+selection, batched prebuffering and owner point caps, reversal profile,
+acceleration/no-overshoot limits, approximation error, whole-percent stationary
+time, and post-quantization retarget chatter. A capped post-fix hardware run is
+still required before calling either subjective issue closed.
+
+The first capped run also exposed a separate startup defect before those
+continuity checks could be judged: the very first action moved abruptly toward
+the pattern's first position. Its trace began with semantic position 0 at
+stream time zero while the physical position was unknown. HSP timing constrains
+segments after that anchor; it cannot constrain acquisition of the anchor
+itself. The old start order also applied the requested 20-80% stroke window
+before any physical observation, which could independently clamp a parked
+slider outside that range.
+
+Cloud startup is now position-aware. It first issues an HSP Stop, reads the
+physical slider and existing stroke window, uses a non-narrowing union window
+for a speed-bounded two-point HSP lead-in when needed, verifies arrival, and
+only then applies the requested window and starts the main stream. At the
+observed 20% cap, full physical travel requires at least five seconds. The
+lead-in is cancelable through the ordinary engine Stop barrier, and media time
+does not begin until it completes. Automated tests cover the observed
+90%-to-20% case, no-op alignment, malformed Cloud state, and Stop during the
+lead-in.
+
+The first corrective hardware run also caught an API-coordinate trap and
+failed stopped before the main stream: live firmware's `position` value was
+relative to its active 17-80% window rather than full travel. Startup now uses
+the absolute slider position and absolute stroke endpoints to reconstruct the
+full-travel coordinate. In the repeat capped run it observed 29.33 mm, issued a
+500 ms bounded lead-in toward the 24.57 mm first target, verified 24.67 mm with
+zero reported speed inside the final 20-80% window, and did not issue the main
+Play until after that verification and final-window application. The remaining
+validation sequence completed and its final emergency Stop returned HTTP 200.
+The objective startup gate therefore passes; subjective confirmation that the
+first action no longer feels abrupt remains open.
+
+This evidence and correction apply to Cloud REST. Browser Bluetooth does not
+currently perform a slider-state read because that probe has destabilized live
+GATT sessions, and Intiface has no actuator-position feedback even though its
+initial `LinearCmd` has a duration. Those owners still need a separately
+validated way to bound worst-case first-point acquisition; the engine keeps
+their existing behavior rather than claiming an unavailable measurement.
 
 ## ScriptPlayer Comparison
 

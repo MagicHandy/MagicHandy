@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	defaultCloudBaseURL      = "https://www.handyfeeling.com/api/handy-rest/v3/"
-	serverTimeSyncTTLSeconds = 300
-	cloudMinimumBufferedLead = 1500 * time.Millisecond
+	defaultCloudBaseURL           = "https://www.handyfeeling.com/api/handy-rest/v3/"
+	serverTimeSyncTTLSeconds      = 300
+	cloudMinimumBufferedLead      = 1500 * time.Millisecond
+	cloudMinimumMediaBufferedLead = 10 * time.Second
 )
 
 // CloudEndpointConfig controls the Cloud REST endpoint paths used by the client.
@@ -72,6 +73,8 @@ type CloudRESTTransport struct {
 	serverTimeSyncedAt     time.Time
 }
 
+var _ MotionStartupStateProvider = (*CloudRESTTransport)(nil)
+
 // MotionSamplingCapabilities reports API v3's whole-percent HSP endpoint
 // resolution. The shared engine uses this only to reduce redundant wire knots;
 // CloudRESTTransport remains a mapping/dispatch owner.
@@ -83,11 +86,14 @@ func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabiliti
 }
 
 // MotionTimingCapabilities reserves enough accepted HSP coverage for Cloud
-// round trips and the engine's dispatch tick. A live trace observed a 958 ms
-// add response; 1.5 seconds keeps a useful margin without making retargets
-// needlessly sluggish.
+// round trips and the engine's dispatch tick. Interactive motion keeps a short
+// horizon for responsive retargets. Clock-locked media uses a deeper horizon
+// because starving HSP playback is user-visible as a stop at a script knot.
 func (*CloudRESTTransport) MotionTimingCapabilities() MotionTimingCapabilities {
-	return MotionTimingCapabilities{MinimumBufferedLead: cloudMinimumBufferedLead}
+	return MotionTimingCapabilities{
+		MinimumBufferedLead:      cloudMinimumBufferedLead,
+		MinimumMediaBufferedLead: cloudMinimumMediaBufferedLead,
+	}
 }
 
 // PlaybackStartTime reports the estimated stream origin at the successful
@@ -97,6 +103,60 @@ func (t *CloudRESTTransport) PlaybackStartTime() time.Time {
 	t.hspMu.Lock()
 	defer t.hspMu.Unlock()
 	return t.playbackStartedAt
+}
+
+// ReadMotionStartupState reads the physical slider position and active stroke
+// window under one transport admission. A concurrent Stop invalidates the read
+// before a later startup command can use stale geometry.
+func (t *CloudRESTTransport) ReadMotionStartupState(ctx context.Context) (MotionStartupState, MotionStartupStateResults, error) {
+	admission, err := t.motionGate.admit()
+	if err != nil {
+		result := t.recordBuildError(CommandKindSliderState, err)
+		return MotionStartupState{}, MotionStartupStateResults{Slider: result}, err
+	}
+
+	t.hspMu.Lock()
+	defer t.hspMu.Unlock()
+	if err := t.motionGate.validate(admission); err != nil {
+		result := t.recordBuildError(CommandKindSliderState, err)
+		return MotionStartupState{}, MotionStartupStateResults{Slider: result}, err
+	}
+
+	sliderResult, sliderBody, err := t.dispatchWithBody(ctx, t.builder.BuildSliderState())
+	results := MotionStartupStateResults{Slider: sliderResult}
+	if err != nil {
+		return MotionStartupState{}, results, err
+	}
+	position, positionAbsolute, speed, err := parseCloudSliderState(sliderBody)
+	if err != nil {
+		results.Slider = t.recordBuildError(CommandKindSliderState, err)
+		return MotionStartupState{}, results, err
+	}
+	if err := t.motionGate.validate(admission); err != nil {
+		results.Stroke = t.recordBuildError(CommandKindStrokeWindowState, err)
+		return MotionStartupState{}, results, err
+	}
+
+	strokeResult, strokeBody, err := t.dispatchWithBody(ctx, t.builder.BuildStrokeWindowState())
+	results.Stroke = strokeResult
+	if err != nil {
+		return MotionStartupState{}, results, err
+	}
+	strokeMin, strokeMax, strokeMinAbsolute, strokeMaxAbsolute, err := parseCloudStrokeWindowState(strokeBody)
+	if err != nil {
+		results.Stroke = t.recordBuildError(CommandKindStrokeWindowState, err)
+		return MotionStartupState{}, results, err
+	}
+
+	return MotionStartupState{
+		PositionWithinStrokePercent: position * 100,
+		PositionAbsolute:            positionAbsolute,
+		SpeedAbsolute:               speed,
+		StrokeMinPercent:            strokeMin * 100,
+		StrokeMaxPercent:            strokeMax * 100,
+		StrokeMinAbsolute:           strokeMinAbsolute,
+		StrokeMaxAbsolute:           strokeMaxAbsolute,
+	}, results, nil
 }
 
 // NewCloudRESTTransport validates prerequisites and creates a live Cloud REST transport.
@@ -416,6 +476,66 @@ func cloudAPIResponseError(operation string, body []byte) error {
 		return fmt.Errorf("cloud REST %s rejected request (%s)", operation, code)
 	}
 	return fmt.Errorf("cloud REST %s rejected request", operation)
+}
+
+func parseCloudSliderState(body []byte) (float64, float64, float64, error) {
+	var envelope struct {
+		Result struct {
+			Position         *float64 `json:"position"`
+			PositionAbsolute *float64 `json:"position_absolute"`
+			SpeedAbsolute    *float64 `json:"speed_absolute"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return 0, 0, 0, errors.New("cloud REST slider state returned malformed JSON")
+	}
+	if envelope.Result.Position == nil || envelope.Result.PositionAbsolute == nil || envelope.Result.SpeedAbsolute == nil {
+		return 0, 0, 0, errors.New("cloud REST slider state omitted required fields")
+	}
+	position := *envelope.Result.Position
+	positionAbsolute := *envelope.Result.PositionAbsolute
+	speed := *envelope.Result.SpeedAbsolute
+	if math.IsNaN(position) || math.IsInf(position, 0) || position < 0 || position > 1 {
+		return 0, 0, 0, errors.New("cloud REST slider state returned an invalid position")
+	}
+	if math.IsNaN(positionAbsolute) || math.IsInf(positionAbsolute, 0) {
+		return 0, 0, 0, errors.New("cloud REST slider state returned an invalid absolute position")
+	}
+	if math.IsNaN(speed) || math.IsInf(speed, 0) || speed < 0 {
+		return 0, 0, 0, errors.New("cloud REST slider state returned an invalid speed")
+	}
+	return position, positionAbsolute, speed, nil
+}
+
+func parseCloudStrokeWindowState(body []byte) (float64, float64, float64, float64, error) {
+	var envelope struct {
+		Result struct {
+			Min         *float64 `json:"min"`
+			Max         *float64 `json:"max"`
+			MinAbsolute *float64 `json:"min_absolute"`
+			MaxAbsolute *float64 `json:"max_absolute"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return 0, 0, 0, 0, errors.New("cloud REST stroke state returned malformed JSON")
+	}
+	if envelope.Result.Min == nil || envelope.Result.Max == nil ||
+		envelope.Result.MinAbsolute == nil || envelope.Result.MaxAbsolute == nil {
+		return 0, 0, 0, 0, errors.New("cloud REST stroke state omitted required fields")
+	}
+	minimum := *envelope.Result.Min
+	maximum := *envelope.Result.Max
+	minimumAbsolute := *envelope.Result.MinAbsolute
+	maximumAbsolute := *envelope.Result.MaxAbsolute
+	if math.IsNaN(minimum) || math.IsInf(minimum, 0) || math.IsNaN(maximum) || math.IsInf(maximum, 0) ||
+		minimum < 0 || maximum > 1 || minimum >= maximum {
+		return 0, 0, 0, 0, errors.New("cloud REST stroke state returned invalid bounds")
+	}
+	if math.IsNaN(minimumAbsolute) || math.IsInf(minimumAbsolute, 0) ||
+		math.IsNaN(maximumAbsolute) || math.IsInf(maximumAbsolute, 0) || minimumAbsolute >= maximumAbsolute {
+		return 0, 0, 0, 0, errors.New("cloud REST stroke state returned invalid absolute bounds")
+	}
+	return minimum, maximum, minimumAbsolute, maximumAbsolute, nil
 }
 
 func cloudAPIErrorCode(raw json.RawMessage) string {

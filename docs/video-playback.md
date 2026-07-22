@@ -208,9 +208,13 @@ the backend anchors motion to the reported media clock:
   stop a newer session for the same video. Unmount cancels an in-flight arm
   and sends a keepalive close for any session that reached admission.
 - Cloud REST expectation: wire latency means the device tracks the video
-  through the engine's existing transport-aware buffer. Trace rows record
-  anchors, drift, and stop/re-arm reasons so M3 can tune real alignment without
-  creating a transport-specific media path.
+  through the engine's transport-aware buffer. Cloud declares a 10-second
+  minimum accepted lead for clock-locked media and the engine batches sampler
+  windows up to the existing 100-point `/hsp/add` cap. Runtime refill adds up
+  to four seconds of headroom per request. Interactive chat motion keeps its
+  1.5-second minimum so a media fix does not turn into multi-second retarget
+  latency. Trace rows record anchors, drift, and stop/re-arm reasons so M3 can
+  validate real alignment without creating a transport-specific media path.
 
 Safety inheritance: authored timestamps stay locked to the video. The user's
 configured maximum speed percentage contracts semantic position excursions

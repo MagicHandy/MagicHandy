@@ -44,10 +44,13 @@ The shared path must:
 - split large depth jumps and protect against oversized single steps
 - smooth turn apexes and direction reversals
 - sample with wall-time-parameterized monotone interpolation (PCHIP /
-  Fritsch-Carlson style) that yields an exact zero-velocity instant at reversal
-  knots and a cyclic derivative through non-reversing loop seams; do not use an
-  index/phase-parameterized Catmull-Rom spline, which reintroduces instantaneous
-  velocity at reversals
+  Fritsch-Carlson style). Loop patterns use backend-only velocity guides to
+  confine acceleration and deceleration to at most 75 ms on each side of a
+  true reversal; the stroke body remains constant-speed, the authored apex is
+  exact with one zero-velocity instant, and non-reversing loop seams retain a
+  cyclic derivative. The guides are not authored knots and are not forced onto
+  the wire. Do not use an index/phase-parameterized Catmull-Rom spline, which
+  can overshoot or carry nonzero velocity through a reversal
 - for buffered owners, merge authored knots with 25 ms probes and simplify the
   emitted frame to at most 0.3 percentage-point vertical error; reject more
   essential points than the owner accepts (100 for one Cloud `/hsp/add`, 128
@@ -72,14 +75,42 @@ stops the run explicitly instead of advancing past the missing chunk.
 A new motion source is added by producing a semantic target/plan for this path,
 never by building a parallel sampler or transport path.
 
+### Position-aware startup
+
+The first point in a buffered stream is an anchor, not a speed-limited move.
+Cloud Start and Resume therefore stop stale HSP playback and observe the
+physical slider position and existing stroke window before changing either the
+window or stream. The live API's relative `position` is window-relative, so
+full-travel position is calibrated from the absolute slider/stroke fields. When
+the first planned position is not already within 1%:
+
+1. Widen the physical window only to the union of the old window, current
+   position, requested window, and first target.
+2. Play an engine-owned two-point HSP lead-in from measured position to target.
+   Duration is at least `physical distance / requested speed`, where speed N is
+   at most N percentage points of full slider travel per second, with a 500 ms
+   floor.
+3. Stop that lead-in and verify the device reached the physical target, is
+   stationary, and is inside the requested final stroke window.
+4. Apply the requested stroke window, build the ordinary lead buffer, and Play
+   the main stream from semantic time zero.
+
+The Start request remains in `starting` state during this sequence, so video
+and finite-program clocks do not advance during positioning. Every read, wait,
+append, Play, and Stop uses the run context; Emergency Stop invalidates the run
+and prevents main playback. A state-capable owner must fail stopped if it
+cannot establish current geometry. It must not silently use the old unanchored
+first point.
+
 ### Phase 14 content semantics
 
 Phase 14 adds two content shapes to the shared path:
 
 - A **pattern** is a repeatable curve authored over a semantic 0–100 relative
-  span. The motion engine samples its wall-clock knots with PCHIP, then the
-  transport maps that semantic result into the configured stroke window exactly
-  once. The library never preprojects points into the physical window.
+  span. The motion engine samples its wall-clock knots with PCHIP and the
+  bounded reversal profile above, then the transport maps that semantic result
+  into the configured stroke window exactly once. The library never
+  preprojects points into the physical window.
 - A **program** is a finite curve that retains its original knot timing and
   relative spacing. The player uniformly scales that timeline through the same
   bounded intensity/speed control used by the engine; it does not rewrite or
@@ -311,7 +342,9 @@ connection key.
   behavior. The experimental Python Bluetooth motion path from ReVibed is not
   treated as a reference implementation because its physical motion was poor.
 - Pattern and program sampling now uses the Phase 14 PCHIP implementation and
-  shared engine path. Automated curve, projection, completion, stop, and
+  shared engine path. Loop patterns additionally bound reversal easing to the
+  apex; finite programs retain their source PCHIP curve and media timelines
+  remain source-linear. Automated curve, projection, completion, stop, and
   lifecycle checks pass. Authored-knot/adaptive-frame checks now cover subtle
   focus windows and loop seams; the 6.6 s routine floor still needs a capped
   real-device feel check because that threshold was hardware-derived.

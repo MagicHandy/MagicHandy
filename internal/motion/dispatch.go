@@ -10,12 +10,21 @@ import (
 )
 
 func (e *Engine) dispatchNextChunk(ctx context.Context, runEpoch uint64, reason string) error {
+	return e.dispatchThrough(ctx, runEpoch, reason, 0)
+}
+
+func (e *Engine) dispatchThrough(
+	ctx context.Context,
+	runEpoch uint64,
+	reason string,
+	targetTailMillis int64,
+) error {
 	if err := e.ensurePlaybackHealthy(ctx, runEpoch, reason); err != nil {
 		return err
 	}
 
 	e.commandMu.Lock()
-	streamID, points, lastSample, err := e.nextChunk(runEpoch)
+	streamID, points, lastSample, err := e.nextChunkThrough(runEpoch, targetTailMillis)
 	if err != nil {
 		e.commandMu.Unlock()
 		return err
@@ -56,10 +65,14 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reas
 		return err
 	}
 	needsLead := false
+	var targetTail int64
 	e.mu.Lock()
 	if e.validateRunLocked(runEpoch) == nil {
 		requiredTail := e.estimatedPlaybackMillisLocked(e.now()) + e.leadMillisLocked()
 		needsLead = e.bufferedTailMillisLocked() < requiredTail
+		if needsLead {
+			targetTail = e.refillTailMillisLocked(requiredTail)
+		}
 	} else {
 		e.mu.Unlock()
 		return errRunInvalidated
@@ -68,7 +81,16 @@ func (e *Engine) dispatchIfLeadNeeded(ctx context.Context, runEpoch uint64, reas
 	if !needsLead {
 		return nil
 	}
-	return e.dispatchNextChunk(ctx, runEpoch, reason)
+	return e.dispatchThrough(ctx, runEpoch, reason, targetTail)
+}
+
+func (e *Engine) refillTailMillisLocked(requiredTail int64) int64 {
+	if e.plan.Target.Media == nil || e.minimumMediaBufferedLeadMillis <= 0 {
+		return 0
+	}
+	// Refill fixed media in fewer, deeper batches. The point cap still bounds
+	// each append, while interactive targets keep their shorter retarget horizon.
+	return requiredTail + min(e.minimumMediaBufferedLeadMillis/2, int64(4000))
 }
 
 // prebufferBeforePlay gives high-latency buffered owners enough accepted
@@ -81,16 +103,20 @@ func (e *Engine) prebufferBeforePlay(ctx context.Context, runEpoch uint64, reaso
 			e.mu.Unlock()
 			return err
 		}
-		requiredLead := e.minimumBufferedLeadMillis
+		requiredLead := e.selectedMinimumBufferedLeadMillisLocked()
 		if requiredLead > 0 {
 			requiredLead = e.leadMillisLocked()
+		}
+		dispatchTail := int64(0)
+		if e.plan.Target.Media != nil {
+			dispatchTail = requiredLead
 		}
 		ready := requiredLead <= 0 || e.bufferedTailMillisLocked() >= requiredLead
 		e.mu.Unlock()
 		if ready {
 			return nil
 		}
-		if err := e.dispatchNextChunk(ctx, runEpoch, reason); err != nil {
+		if err := e.dispatchThrough(ctx, runEpoch, reason, dispatchTail); err != nil {
 			return err
 		}
 	}
@@ -98,21 +124,29 @@ func (e *Engine) prebufferBeforePlay(ctx context.Context, runEpoch uint64, reaso
 }
 
 func (e *Engine) setStrokeWindow(ctx context.Context, runEpoch uint64, reason string, recoverFailure bool) error {
-	e.commandMu.Lock()
 	settings, err := e.motionSettings(runEpoch)
 	if err != nil {
-		e.commandMu.Unlock()
 		return err
 	}
+	return e.setStrokeWindowCommand(ctx, runEpoch, reason, transport.StrokeWindowCommand{
+		MinPercent:       settings.StrokeMinPercent,
+		MaxPercent:       settings.StrokeMaxPercent,
+		ReverseDirection: settings.ReverseDirection,
+	}, recoverFailure)
+}
+
+func (e *Engine) setStrokeWindowCommand(
+	ctx context.Context,
+	runEpoch uint64,
+	reason string,
+	strokeCommand transport.StrokeWindowCommand,
+	recoverFailure bool,
+) error {
+	e.commandMu.Lock()
 	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
 	if err != nil {
 		e.commandMu.Unlock()
 		return err
-	}
-	strokeCommand := transport.StrokeWindowCommand{
-		MinPercent:       settings.StrokeMinPercent,
-		MaxPercent:       settings.StrokeMaxPercent,
-		ReverseDirection: settings.ReverseDirection,
 	}
 	result, err := e.transport.SetStrokeWindow(commandCtx, strokeCommand)
 	cleanup()
@@ -157,7 +191,10 @@ func (e *Engine) play(ctx context.Context, runEpoch uint64) error {
 	return err
 }
 
-func (e *Engine) nextChunk(runEpoch uint64) (string, []transport.TimedPoint, *MotionSample, error) {
+func (e *Engine) nextChunkThrough(
+	runEpoch uint64,
+	targetTailMillis int64,
+) (string, []transport.TimedPoint, *MotionSample, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := e.validateRunLocked(runEpoch); err != nil {
@@ -167,6 +204,20 @@ func (e *Engine) nextChunk(runEpoch uint64) (string, []transport.TimedPoint, *Mo
 	samples, err := e.nextMotionSamplesLocked()
 	if err != nil {
 		return "", nil, nil, err
+	}
+	for samples[len(samples)-1].TimeMillis < targetTailMillis {
+		previousNextSampleMillis := e.nextSampleMillis
+		previousLastSample := cloneMotionSample(e.lastSample)
+		additional, additionalErr := e.nextMotionSamplesLocked()
+		if additionalErr != nil {
+			return "", nil, nil, additionalErr
+		}
+		if len(samples)+len(additional) > e.maximumChunkPoints {
+			e.nextSampleMillis = previousNextSampleMillis
+			e.lastSample = previousLastSample
+			break
+		}
+		samples = append(samples, additional...)
 	}
 	points := make([]transport.TimedPoint, len(samples))
 	for index, sample := range samples {
@@ -181,6 +232,14 @@ func (e *Engine) nextChunk(runEpoch uint64) (string, []transport.TimedPoint, *Mo
 	}
 	lastSample := samples[len(samples)-1]
 	return e.streamID, points, &lastSample, nil
+}
+
+func cloneMotionSample(sample *MotionSample) *MotionSample {
+	if sample == nil {
+		return nil
+	}
+	cloned := *sample
+	return &cloned
 }
 
 func (e *Engine) currentStreamID(runEpoch uint64) (string, error) {

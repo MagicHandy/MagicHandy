@@ -83,11 +83,12 @@ type CurveMetrics struct {
 // Curve is a validated time-parameterized sampler. Pattern curves use
 // monotone cubic interpolation; media timelines preserve linear segments.
 type Curve struct {
-	points   []CurvePoint
-	slopes   []float64
-	duration int64
-	loop     bool
-	linear   bool
+	points        []CurvePoint
+	authoredKnots []CurvePoint
+	slopes        []float64
+	duration      int64
+	loop          bool
+	linear        bool
 }
 
 var builtinPatternCatalog = buildBuiltinPatternCatalog()
@@ -119,9 +120,25 @@ func newCurve(points []CurvePoint, durationMillis int64, loop bool, linear bool,
 	if err := validateCurvePoints(copyPoints, durationMillis); err != nil {
 		return Curve{}, err
 	}
-	curve := Curve{points: copyPoints, duration: durationMillis, loop: loop, linear: linear}
+	curvePoints := copyPoints
+	var guideSlopes map[int64]float64
+	if loop && !linear {
+		curvePoints, guideSlopes = withBoundedLoopReversalGuides(copyPoints)
+	}
+	curve := Curve{
+		points:        curvePoints,
+		authoredKnots: copyPoints,
+		duration:      durationMillis,
+		loop:          loop,
+		linear:        linear,
+	}
 	if !linear {
-		curve.slopes = monotoneSlopes(copyPoints, loop)
+		curve.slopes = monotoneSlopes(curvePoints, loop)
+		for index, point := range curvePoints {
+			if slope, ok := guideSlopes[point.TimeMillis]; ok {
+				curve.slopes[index] = slope
+			}
+		}
 	}
 	return curve, nil
 }

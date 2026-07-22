@@ -74,8 +74,11 @@ curve content remain immutable, so chat and playback keep a stable contract.
 
 ## Sampling And Authoring
 
-- Curves use wall-time PCHIP/Fritsch-Carlson interpolation. Tests require C1
-  continuity, no overshoot, zero velocity at reversal knots, and a continuous
+- Curves use wall-time PCHIP/Fritsch-Carlson interpolation. Loop reversals use
+  a trapezoidal velocity profile with at most 75 ms acceleration/deceleration
+  guides on each side, preventing whole-stroke endpoint easing from feeling
+  like a pause at slow speed. Tests require C1 continuity, no overshoot, exact
+  authored extrema, zero velocity at the reversal instant, and a continuous
   cyclic derivative when a loop crosses its seam without reversing.
 - Generated patterns are time-stretched until they satisfy a 450 ms reversal-
   gap floor and 3000 relative-position/s² acceleration budget. Stretching never
@@ -87,9 +90,11 @@ curve content remain immutable, so chat and playback keep a stable contract.
   saved pattern at 256 points including loop closure.
 - Buffered playback combines authored knot times with 25 ms probes, then emits
   a 0.3%-error-bounded adaptive frame. This prevents fixed-grid aliasing of
-  short reversals. Cloud additionally declares its 1% endpoint resolution so
-  the engine can remove redundant rounded plateaus under a combined 0.8% wire
-  bound; Bluetooth and Intiface retain the finer semantic frame.
+  short reversals. Internal velocity guides shape interpolation but do not
+  masquerade as authored wire knots. Cloud additionally declares its 1%
+  endpoint resolution so the engine can remove redundant rounded plateaus
+  under a combined 0.8% wire bound; Bluetooth and Intiface retain the finer
+  semantic frame.
 - Playback preview samples come from the same backend `motion.Curve` used by
   playback. Compact pattern curves insert the backend-owned saved knots into
   those samples so long cycles cannot visually alias away reversals. React does

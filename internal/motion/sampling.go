@@ -20,16 +20,17 @@ func (p MotionPlan) knotTimesBetween(startMillis, endMillis int64) []int64 {
 	if endMillis <= startMillis || p.PeriodMillis <= 0 || p.curve.duration <= 0 {
 		return nil
 	}
-	times := make([]int64, 0, min(len(p.curve.points), 32))
+	knots := p.curve.authoredKnots
+	times := make([]int64, 0, min(len(knots), 32))
 	if !p.Loop {
 		streamTime := func(index int) int64 {
-			phase := float64(p.curve.points[index].TimeMillis) / float64(p.curve.duration)
+			phase := float64(knots[index].TimeMillis) / float64(p.curve.duration)
 			return p.HandoffMillis + int64(math.Round((phase-p.PhaseOffset)*float64(p.PeriodMillis)))
 		}
-		first := sort.Search(len(p.curve.points), func(index int) bool {
+		first := sort.Search(len(knots), func(index int) bool {
 			return streamTime(index) >= startMillis
 		})
-		for index := first; index < len(p.curve.points); index++ {
+		for index := first; index < len(knots); index++ {
 			at := streamTime(index)
 			if at >= endMillis {
 				break
@@ -41,7 +42,7 @@ func (p MotionPlan) knotTimesBetween(startMillis, endMillis int64) []int64 {
 		return uniqueMillis(times)
 	}
 
-	for _, point := range p.curve.points {
+	for _, point := range knots {
 		phase := float64(point.TimeMillis) / float64(p.curve.duration)
 
 		firstCycle := int64(math.Ceil(
@@ -78,7 +79,7 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	}
 	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+int64(maximumPoints)-1)/int64(maximumPoints))
 	probeIntervalMillis = max(probeIntervalMillis, minimumBoundedProbe)
-	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+min(len(e.plan.curve.points), maximumPoints))
+	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+min(len(e.plan.curve.authoredKnots), maximumPoints))
 	for streamMillis := chunkStart; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
 		times = append(times, streamMillis)
 	}
@@ -118,6 +119,9 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 			wireApproximationTolerance+positionResolution/2,
 			mandatory,
 		)
+		if transitionInChunk {
+			samples = stabilizeTransitionSamples(samples, mandatory)
+		}
 	}
 	if hasPreviousAnchor {
 		samples = samples[1:]
