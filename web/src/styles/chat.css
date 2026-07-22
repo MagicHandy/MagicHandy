@@ -98,7 +98,6 @@
 
 .chat-tabs-scroll {
   display: flex;
-  width: fit-content;
   min-width: 0;
   max-width: calc(100% - 40px);
   flex: 0 1 auto;
@@ -106,10 +105,17 @@
   padding: 5px 2px 0 6px;
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.chat-tabs-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .chat-tabs-list {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex: 0 0 auto;
   align-items: end;
@@ -118,10 +124,10 @@
 
 .chat-tab-wrap {
   display: flex;
-  min-width: 120px;
-  max-width: 230px;
+  min-width: 112px;
+  max-width: 236px;
   height: 37px;
-  flex: 0 0 210px;
+  flex: 1 1 236px;
   align-items: stretch;
   border-radius: 6px 6px 0 0;
   transition: background-color 120ms ease;
@@ -469,8 +475,7 @@ button.chat-avatar:focus-visible {
   }
 
   .chat-tab-wrap {
-    min-width: 108px;
-    flex-basis: 170px;
+    min-width: 104px;
   }
 
   .chat-session-dialog footer {

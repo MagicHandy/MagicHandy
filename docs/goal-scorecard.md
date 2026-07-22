@@ -119,6 +119,20 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-22** - Browser-style Chat tab compaction: session tabs now prefer
+  236px, share available width evenly, and stop at 112px desktop / 104px narrow
+  before horizontal overflow. The native scrollbar is hidden; wheel input,
+  keyboard focus, active-session changes, and strip resizes reveal overflowed
+  tabs while New Chat retains its protected hit area. Rendered 1600x900,
+  1280x720, and live-resized 390x844 checks measured 236 / 193 / 104px tab
+  widths, kept the active tab fully visible, and found no page overflow or New
+  Chat overlap. All 209 frontend tests, typecheck/build, `go test ./...`,
+  `go vet ./...`, `golangci-lint`, and plain/stripped `CGO_ENABLED=0` builds
+  pass. HTML/CSS/JS is 471,851 raw / 131,025 gzip bytes; complete embedded
+  output is 916,087 / 568,452 (+783 / +296). Plain/stripped binaries are
+  21,155,328 / 14,898,176 bytes. The local race build remains unavailable
+  because `gcc` is absent; CI retains the mandatory gate.
+
 - **2026-07-22** - Chat tab visual correction: the protected New Chat slot now
   uses a 32 px borderless-at-rest icon aligned to the tab-label baseline. Active
   tabs use one symmetric top-corner surface and bottom accent without the former
