@@ -20,6 +20,8 @@ vi.mock("../api/client", () => ({
     stopMotion: vi.fn(),
     mediaVideos: vi.fn(() => Promise.resolve({ videos: [] })),
     mediaScan: vi.fn(() => Promise.resolve({ scan: { running: false, cancellable: false, cancelled: false, files_visited: 0, videos_found: 0 } })),
+    getPromptSets: vi.fn(() => Promise.resolve({ prompt_sets: [], selected: "default" })),
+    getMemory: vi.fn(() => Promise.resolve({ enabled: false, items: [] })),
   },
 }));
 
@@ -70,6 +72,7 @@ function settings(verbosity: string): PublicSettings {
       request_timeout_ms: 120000,
       max_output_tokens: 256,
       reasoning_mode: "off",
+      chat_voice: "utility",
     },
     voice: {
       enabled: false,
@@ -99,6 +102,7 @@ function settings(verbosity: string): PublicSettings {
       llama_cpp_modes: ["managed", "external"],
       llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512],
+      llm_chat_voices: ["utility", "warm", "intimate", "explicit"],
       prompt_sets: ["default"],
       tts_providers: ["none"],
       asr_providers: ["none"],
@@ -211,6 +215,20 @@ describe("SettingsRoute", () => {
       startup_behavior: "new",
       keep_unsaved_on_exit: false,
     });
+  });
+
+  it("persists the selected chat voice from the prompts section", async () => {
+    app.hash = "#/settings/prompts";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const voice = await screen.findByRole("combobox", { name: /Chat voice/ });
+    expect(voice).toHaveValue("utility");
+    fireEvent.change(voice, { target: { value: "explicit" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].llm.chat_voice).toBe("explicit");
   });
 
   it("persists the opt-in video script speed limit", async () => {

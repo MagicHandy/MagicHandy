@@ -883,3 +883,52 @@ func TestElevenLabsKeyIsRedactedAndWriteOnly(t *testing.T) {
 		t.Fatalf("key clear left %q", next.Voice.ElevenLabsAPIKey)
 	}
 }
+
+func TestChatVoiceDefaultsPreservesAndValidates(t *testing.T) {
+	// Payloads that predate the field resolve to the utility voice.
+	settings := DefaultSettings()
+	settings.LLM.ChatVoice = ""
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.LLM.ChatVoice != LLMChatVoiceUtility {
+		t.Fatalf("legacy payload voice = %q, want utility", normalized.LLM.ChatVoice)
+	}
+
+	// A saved explicit voice survives an update that omits the field, and an
+	// update that carries the field replaces it.
+	saved := normalized
+	saved.LLM.ChatVoice = LLMChatVoiceExplicit
+	update := SettingsUpdate{
+		Server:      saved.Server,
+		Device:      DeviceUpdate{HSPDispatchOwner: saved.Device.HSPDispatchOwner, FirmwareAPIRequirement: saved.Device.FirmwareAPIRequirement, APIApplicationIDSource: saved.Device.APIApplicationIDSource},
+		Motion:      saved.Motion,
+		LLM:         LLMUpdateFromSettings(saved.LLM),
+		Diagnostics: saved.Diagnostics,
+	}
+	update.LLM.ChatVoice = nil
+	next, err := saved.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate omit: %v", err)
+	}
+	if next.LLM.ChatVoice != LLMChatVoiceExplicit {
+		t.Fatalf("omitted field clobbered saved voice: %q", next.LLM.ChatVoice)
+	}
+	warm := " Warm "
+	update.LLM.ChatVoice = &warm
+	next, err = saved.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate replace: %v", err)
+	}
+	if next.LLM.ChatVoice != LLMChatVoiceWarm {
+		t.Fatalf("voice replace = %q, want normalized warm", next.LLM.ChatVoice)
+	}
+
+	// Unknown values are rejected, not silently coerced.
+	invalid := "spicy"
+	update.LLM.ChatVoice = &invalid
+	if _, err := saved.ApplyUpdate(update); err == nil {
+		t.Fatal("unknown chat voice must be rejected")
+	}
+}

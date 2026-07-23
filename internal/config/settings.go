@@ -76,6 +76,15 @@ const (
 	// PromptSetMagicHandyMotionV1JA is the built-in Japanese prompt set.
 	PromptSetMagicHandyMotionV1JA = "magichandy_motion_v1_ja"
 
+	// LLMChatVoiceUtility keeps the original neutral motion-assistant register.
+	LLMChatVoiceUtility = "utility"
+	// LLMChatVoiceWarm is a flirtatious companion voice, suggestive at most.
+	LLMChatVoiceWarm = "warm"
+	// LLMChatVoiceIntimate is a first-person partner voice with sensual language.
+	LLMChatVoiceIntimate = "intimate"
+	// LLMChatVoiceExplicit permits direct erotic language (STGPT-RV parity).
+	LLMChatVoiceExplicit = "explicit"
+
 	// DefaultLlamaCPPBaseURL is the default llama-server OpenAI-compatible URL.
 	DefaultLlamaCPPBaseURL = "http://127.0.0.1:8080"
 	// DefaultOllamaBaseURL is the default local Ollama daemon URL.
@@ -202,6 +211,10 @@ type LLMSettings struct {
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
 	MaxOutputTokens      int    `json:"max_output_tokens"`
 	ReasoningMode        string `json:"reasoning_mode"`
+	// ChatVoice selects how sexual the model's reply register may be. It only
+	// shapes prompt composition; the motion contract and every safety gate are
+	// identical at every level.
+	ChatVoice string `json:"chat_voice"`
 	// MotionCapabilities gates which motion control methods the model may
 	// use. A nil pointer means "never saved" and resolves to the defaults, so
 	// older payloads keep today's behavior; an explicit all-false is a valid
@@ -400,6 +413,7 @@ type PublicSettingsOptionHints struct {
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
 	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
+	LLMChatVoices           []string `json:"llm_chat_voices"`
 	PromptSets              []string `json:"prompt_sets"`
 	TTSProviders            []string `json:"tts_providers"`
 	ASRProviders            []string `json:"asr_providers"`
@@ -421,6 +435,9 @@ type LLMUpdate struct {
 	RequestTimeoutMillis int     `json:"request_timeout_ms"`
 	MaxOutputTokens      *int    `json:"max_output_tokens,omitempty"`
 	ReasoningMode        *string `json:"reasoning_mode,omitempty"`
+	// ChatVoice replaces the saved voice when present; omitted preserves the
+	// current persisted value (older clients keep working).
+	ChatVoice *string `json:"chat_voice,omitempty"`
 	// MotionCapabilities replaces the saved gates when present; omitted
 	// preserves the current persisted values (older clients keep working).
 	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
@@ -439,6 +456,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		RequestTimeoutMillis: settings.RequestTimeoutMillis,
 		MaxOutputTokens:      &settings.MaxOutputTokens,
 		ReasoningMode:        &settings.ReasoningMode,
+		ChatVoice:            &settings.ChatVoice,
 		MotionCapabilities:   settings.MotionCapabilities,
 	}
 }
@@ -496,6 +514,7 @@ func DefaultSettings() Settings {
 			RequestTimeoutMillis: DefaultLLMRequestTimeoutMillis,
 			MaxOutputTokens:      DefaultLLMMaxOutputTokens,
 			ReasoningMode:        LLMReasoningOff,
+			ChatVoice:            LLMChatVoiceUtility,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -575,6 +594,12 @@ func (s Settings) Public() PublicSettings {
 				LLMReasoningAuto,
 			},
 			LLMMaxOutputTokens: []int{128, 256, 512, 1024},
+			LLMChatVoices: []string{
+				LLMChatVoiceUtility,
+				LLMChatVoiceWarm,
+				LLMChatVoiceIntimate,
+				LLMChatVoiceExplicit,
+			},
 			PromptSets: []string{
 				PromptSetMagicHandyMotionV1,
 				PromptSetMagicHandyMotionV1ES,
@@ -665,6 +690,10 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.LLM.ReasoningMode != nil {
 		reasoningMode = *update.LLM.ReasoningMode
 	}
+	chatVoice := s.LLM.ChatVoice
+	if update.LLM.ChatVoice != nil {
+		chatVoice = *update.LLM.ChatVoice
+	}
 	capabilities := s.LLM.MotionCapabilities
 	if update.LLM.MotionCapabilities != nil {
 		copied := *update.LLM.MotionCapabilities
@@ -681,6 +710,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		RequestTimeoutMillis: update.LLM.RequestTimeoutMillis,
 		MaxOutputTokens:      maxOutputTokens,
 		ReasoningMode:        reasoningMode,
+		ChatVoice:            chatVoice,
 		MotionCapabilities:   capabilities,
 	})
 	next.Voice = applyVoiceUpdate(s.Voice, update.Voice)
@@ -901,33 +931,7 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
-	if settings.LLM.Provider == "" {
-		settings.LLM.Provider = defaults.LLM.Provider
-	}
-	if settings.LLM.LlamaCPPMode == "" {
-		settings.LLM.LlamaCPPMode = defaults.LLM.LlamaCPPMode
-	}
-	if settings.LLM.LlamaCPPBaseURL == "" {
-		settings.LLM.LlamaCPPBaseURL = defaults.LLM.LlamaCPPBaseURL
-	}
-	if settings.LLM.OllamaBaseURL == "" {
-		settings.LLM.OllamaBaseURL = defaults.LLM.OllamaBaseURL
-	}
-	if settings.LLM.Model == "" {
-		settings.LLM.Model = defaults.LLM.Model
-	}
-	if settings.LLM.PromptSet == "" {
-		settings.LLM.PromptSet = defaults.LLM.PromptSet
-	}
-	if settings.LLM.RequestTimeoutMillis == 0 {
-		settings.LLM.RequestTimeoutMillis = defaults.LLM.RequestTimeoutMillis
-	}
-	if settings.LLM.MaxOutputTokens == 0 {
-		settings.LLM.MaxOutputTokens = defaults.LLM.MaxOutputTokens
-	}
-	if settings.LLM.ReasoningMode == "" {
-		settings.LLM.ReasoningMode = defaults.LLM.ReasoningMode
-	}
+	settings.LLM = applyMissingLLMDefaults(settings.LLM, defaults.LLM)
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
 	if settings.Chat.StartupBehavior == "" {
 		settings.Chat.StartupBehavior = defaults.Chat.StartupBehavior
@@ -937,6 +941,40 @@ func applyMissingDefaults(settings Settings) Settings {
 	settings.Voice = normalizeVoiceStrings(settings.Voice)
 	if settings.Diagnostics.Verbosity == "" {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
+	}
+	return settings
+}
+
+func applyMissingLLMDefaults(settings LLMSettings, defaults LLMSettings) LLMSettings {
+	if settings.Provider == "" {
+		settings.Provider = defaults.Provider
+	}
+	if settings.LlamaCPPMode == "" {
+		settings.LlamaCPPMode = defaults.LlamaCPPMode
+	}
+	if settings.LlamaCPPBaseURL == "" {
+		settings.LlamaCPPBaseURL = defaults.LlamaCPPBaseURL
+	}
+	if settings.OllamaBaseURL == "" {
+		settings.OllamaBaseURL = defaults.OllamaBaseURL
+	}
+	if settings.Model == "" {
+		settings.Model = defaults.Model
+	}
+	if settings.PromptSet == "" {
+		settings.PromptSet = defaults.PromptSet
+	}
+	if settings.ChatVoice == "" {
+		settings.ChatVoice = defaults.ChatVoice
+	}
+	if settings.RequestTimeoutMillis == 0 {
+		settings.RequestTimeoutMillis = defaults.RequestTimeoutMillis
+	}
+	if settings.MaxOutputTokens == 0 {
+		settings.MaxOutputTokens = defaults.MaxOutputTokens
+	}
+	if settings.ReasoningMode == "" {
+		settings.ReasoningMode = defaults.ReasoningMode
 	}
 	return settings
 }
@@ -1079,6 +1117,9 @@ func validateLLMSettings(settings LLMSettings) error {
 	}
 	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
 		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
+	}
+	if !oneOf(settings.ChatVoice, LLMChatVoiceUtility, LLMChatVoiceWarm, LLMChatVoiceIntimate, LLMChatVoiceExplicit) {
+		return fmt.Errorf("unknown LLM chat voice %q", settings.ChatVoice)
 	}
 	return nil
 }
@@ -1246,6 +1287,7 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
 	settings.ReasoningMode = strings.TrimSpace(settings.ReasoningMode)
+	settings.ChatVoice = strings.ToLower(strings.TrimSpace(settings.ChatVoice))
 	return settings
 }
 

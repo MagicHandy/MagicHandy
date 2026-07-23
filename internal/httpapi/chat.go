@@ -836,6 +836,20 @@ func chatCapabilities(settings config.LLMSettings) chat.Capabilities {
 		Patterns:             resolved.Patterns,
 		AreaFocus:            resolved.AreaFocus,
 		ExperimentalPatterns: resolved.ExperimentalPatterns,
+		Voice:                chatVoiceLevel(settings.ChatVoice),
+	}
+}
+
+func chatVoiceLevel(voice string) chat.VoiceLevel {
+	switch voice {
+	case config.LLMChatVoiceWarm:
+		return chat.VoiceWarm
+	case config.LLMChatVoiceIntimate:
+		return chat.VoiceIntimate
+	case config.LLMChatVoiceExplicit:
+		return chat.VoiceExplicit
+	default:
+		return chat.VoiceUtility
 	}
 }
 

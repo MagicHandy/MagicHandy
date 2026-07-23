@@ -513,6 +513,7 @@ export interface OptionHints {
   llama_cpp_modes?: string[];
   llm_reasoning_modes?: string[];
   llm_max_output_tokens?: number[];
+  llm_chat_voices?: string[];
   prompt_sets?: string[];
   tts_providers?: string[];
   asr_providers?: string[];
@@ -545,6 +546,7 @@ export interface PublicSettings {
     request_timeout_ms: number;
     max_output_tokens: number;
     reasoning_mode: string;
+    chat_voice?: string;
     motion_capabilities?: LLMMotionCapabilities;
   };
   voice: VoiceSettings;
