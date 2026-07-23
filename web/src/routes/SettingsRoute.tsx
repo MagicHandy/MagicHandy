@@ -18,6 +18,12 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
   ? "Cloud REST requires Handy firmware v4 with API v3 access."
   : value;
+const CHAT_VOICE_LABELS: Record<string, string> = {
+  utility: "Utility (neutral assistant)",
+  warm: "Warm (flirtatious, never explicit)",
+  intimate: "Intimate (sensual partner)",
+  explicit: "Explicit (direct sexual language)",
+};
 const SECTIONS = [
   { id: "device", label: "Device" },
   { id: "media", label: "Media library" },
@@ -347,6 +353,20 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">Prompts &amp; memory</h2>
             <label className="field"><span className="label">Active prompt set <span className="hint-inline">saved with Save settings</span></span>{sel(s.llm.prompt_set, (v) => patchLLM({ prompt_set: v }), opt.prompt_sets)}</label>
+            <label className="field">
+              <span className="label">Chat voice <span className="hint-inline">how sexual the model&apos;s replies may be</span></span>
+              <select value={s.llm.chat_voice ?? "utility"} disabled={locked} onChange={(e) => patchLLM({ chat_voice: e.target.value })}>
+                {(opt.llm_chat_voices?.length ? opt.llm_chat_voices : ["utility"]).map((voice) => (
+                  <option key={voice} value={voice}>{CHAT_VOICE_LABELS[voice] ?? voice}</option>
+                ))}
+              </select>
+            </label>
+            <p className="hint">
+              Utility keeps the neutral assistant register. Warm is flirtatious but never explicit.
+              Intimate speaks as a partner with sensual language. Explicit permits direct sexual
+              language like the legacy app. Voice changes wording only; motion limits, capability
+              gates, and Stop are identical at every level.
+            </p>
             <div className="divider" />
             <PromptSetEditor locked={locked} />
             <div className="divider" />

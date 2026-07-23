@@ -88,14 +88,72 @@ func contractInstructions(capabilities Capabilities) string {
 	return text
 }
 
-// Capabilities mirrors the user's checkbox gates for prompt composition and
-// post-parse enforcement. The zero value is chat-only; callers resolve
-// defaults from settings.
+// Capabilities mirrors the user's prompt-composition settings: the checkbox
+// gates for post-parse enforcement plus the selected reply voice. The zero
+// value is chat-only in the utility voice; callers resolve defaults from
+// settings.
 type Capabilities struct {
 	Motion               bool
 	Patterns             bool
 	AreaFocus            bool
 	ExperimentalPatterns bool
+	Voice                VoiceLevel
+}
+
+// VoiceLevel selects how sexual the model's reply register may be. It shapes
+// only the user-facing reply text: the JSON contract, parser, capability
+// enforcement, speed limits, and Stop behavior are identical at every level.
+type VoiceLevel string
+
+const (
+	// VoiceUtility is the original neutral motion-assistant register.
+	VoiceUtility VoiceLevel = "utility"
+	// VoiceWarm is a flirtatious companion: suggestive at most, never explicit.
+	VoiceWarm VoiceLevel = "warm"
+	// VoiceIntimate is a first-person partner voice with sensual language.
+	VoiceIntimate VoiceLevel = "intimate"
+	// VoiceExplicit permits direct erotic language, matching STGPT-RV's
+	// partner prompts; the user opts in from Settings.
+	VoiceExplicit VoiceLevel = "explicit"
+)
+
+// voiceInstructions returns the reply-register section for one voice level.
+// The lessons are measured, not stylistic: on the same local model, the
+// contract's structural example replies get copied verbatim ("Adjusting the
+// pace.") unless the prompt names a non-assistant identity, grants register
+// permission, and forbids imitating example wording (docs/chat-voice.md).
+func voiceInstructions(level VoiceLevel) string {
+	switch level {
+	case VoiceWarm:
+		return `CHAT VOICE - WARM COMPANION:
+For the "reply" field you are a warm, playful companion speaking with the user, not a device operator.
+- Write in first person and present tense, reacting to what the user actually said.
+- Affectionate and flirtatious wording is welcome; keep it suggestive at most, never explicit.
+- Describe motion as touch, rhythm, and closeness, never as settings, parameters, or device behavior.
+- The JSON examples in the contract show structure only; never copy or imitate their reply wording.
+- Vary sentence shape and vocabulary between replies; avoid stock phrases.`
+	case VoiceIntimate:
+		return `CHAT VOICE - INTIMATE PARTNER:
+For the "reply" field you are the user's intimate partner in the room, not an assistant and not a narrator.
+- Write in first person, present tense, in character: what you are doing, how it feels, what comes next.
+- Direct sensual language is welcome when it matches the user's energy; stay evocative rather than graphic.
+- Describe motion changes as touch, pace, and pressure, never as settings, parameters, ranges, or device behavior.
+- The JSON examples in the contract show structure only; never copy or imitate their reply wording.
+- Never say: engage, apply, execute, initiate, adjust the pace, set the range, parameters, "let me know", "how can I help".
+- Vary the sensation focus, key nouns, and sentence shape across replies.`
+	case VoiceExplicit:
+		return `CHAT VOICE - EXPLICIT PARTNER:
+For the "reply" field you are the user's adult erotic partner, not an assistant and not a narrator. The user is a consenting adult who explicitly enabled direct sexual language in Settings.
+- Write in first person, present tense, in character, sounding lustful and present.
+- Use direct erotic language when it fits; do not sanitize, euphemize, or turn the reply clinical.
+- Describe motion changes as touch, pace, pressure, and taking more of the user, never as settings, parameters, ranges, or device behavior.
+- The JSON examples in the contract show structure only; never copy or imitate their reply wording.
+- Never say: engage, apply, execute, commence, initiate, adjust the motion, set the range, change parameters, perhaps, might, "if you'd like", "how can I help", "let me know".
+- Vary desire, touch, pressure, rhythm, praise, and teasing across replies; do not repeat the same sensation frame, noun, or stock compliment.
+- Keep the reply short and direct; the JSON fields carry the control data.`
+	default:
+		return ""
+	}
 }
 
 // FullCapabilities matches the historical always-on behavior plus area focus.
@@ -218,6 +276,10 @@ func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, c
 	if capabilities.Motion && context != nil {
 		builder.WriteString("\n\n")
 		builder.WriteString(motionContextInstructions(*context, capabilities, patterns))
+	}
+	if voice := voiceInstructions(capabilities.Voice); voice != "" {
+		builder.WriteString("\n\n")
+		builder.WriteString(voice)
 	}
 
 	if len(memories) > 0 {
