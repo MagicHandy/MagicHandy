@@ -774,16 +774,16 @@ func TestMigrationUpgradesV11ToChatSessionsWithoutLosingHistory(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upgraded.Close() })
 	var sessionID, title, content, diagnostics string
-	var saved, cursor int
+	var saved, cursor, committed int
 	if err := upgraded.SQL().QueryRow(`
-		SELECT s.id, s.title, s.saved, m.content, m.diagnostics_json
+		SELECT s.id, s.title, s.saved, m.content, m.diagnostics_json, m.committed
 		FROM chat_sessions s JOIN messages m ON m.session_id = s.id
 		WHERE m.seq = 41
-	`).Scan(&sessionID, &title, &saved, &content, &diagnostics); err != nil {
+	`).Scan(&sessionID, &title, &saved, &content, &diagnostics, &committed); err != nil {
 		t.Fatalf("read migrated conversation: %v", err)
 	}
-	if sessionID == "" || title != "Previous conversation" || saved != 1 || content != "legacy conversation" || diagnostics != "{}" {
-		t.Fatalf("migrated conversation = id:%q title:%q saved:%d content:%q diagnostics:%q", sessionID, title, saved, content, diagnostics)
+	if sessionID == "" || title != "Previous conversation" || saved != 1 || content != "legacy conversation" || diagnostics != "{}" || committed != 1 {
+		t.Fatalf("migrated conversation = id:%q title:%q saved:%d content:%q diagnostics:%q committed:%d", sessionID, title, saved, content, diagnostics, committed)
 	}
 	if err := upgraded.SQL().QueryRow(`
 		SELECT last_seq FROM chat_session_cursors WHERE client_id = 'browser-a' AND session_id = ?

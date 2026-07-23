@@ -89,6 +89,31 @@
   font-weight: 650;
 }
 
+.chat-mood-readout {
+  display: flex;
+  min-width: 0;
+  max-width: 180px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 0;
+  border-right: 1px solid var(--line);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.chat-mood-readout span {
+  color: var(--muted);
+}
+
+.chat-mood-readout strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
 .chat-tabs-track {
   display: flex;
   min-width: 0;
@@ -472,6 +497,11 @@ button.chat-avatar:focus-visible {
   .chat-tabs-title {
     min-width: 58px;
     padding: 0 10px;
+  }
+
+  .chat-mood-readout {
+    max-width: 120px;
+    padding-inline: 8px;
   }
 
   .chat-tab-wrap {

@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 12
+	CurrentSchemaVersion = 13
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -483,6 +483,9 @@ var migrations = [][]string{
 	// consuming another conversation's tail. Run diagnostics are bounded JSON
 	// attached to the visible assistant row, never a prompt or credential dump.
 	{`SELECT 1`},
+	// v12 -> v13: generated assistant rows stay hidden until their Stop barrier
+	// commits. Existing rows are committed by definition.
+	{`SELECT 1`},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -528,6 +531,11 @@ func (db *DB) migrate(ctx context.Context) error {
 					return fmt.Errorf("migrate chat sessions at v%d: %w", next+1, err)
 				}
 			}
+			if next+1 == 13 {
+				if err := migrateCommittedMessages(ctx, tx); err != nil {
+					return fmt.Errorf("migrate committed chat messages at v%d: %w", next+1, err)
+				}
+			}
 			if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", next+1)); err != nil {
 				return fmt.Errorf("record SQLite schema version %d: %w", next+1, err)
 			}
@@ -550,6 +558,18 @@ func migrateChatSessions(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	return migrateChatSessionRows(ctx, tx, activeID)
+}
+
+func migrateCommittedMessages(ctx context.Context, tx *sql.Tx) error {
+	hasCommitted, err := columnExists(ctx, tx, "messages", "committed")
+	if err != nil || hasCommitted {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+		ALTER TABLE messages
+		ADD COLUMN committed INTEGER NOT NULL DEFAULT 1 CHECK (committed IN (0, 1))
+	`)
+	return err
 }
 
 func ensureChatWorkspace(ctx context.Context, tx *sql.Tx) (string, error) {

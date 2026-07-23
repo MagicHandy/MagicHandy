@@ -562,18 +562,25 @@ func (m *Manager) Submit(role Role, request Request) (*PendingRequest, error) {
 	return m.submitAndTrack(role, request, nil)
 }
 
+// submitAndTrack hands the request to its supervisor and then records it.
+// The supervisor call runs outside m.mu on purpose: it takes the supervisor
+// lock, which a concurrent worker start holds across a process spawn. Holding
+// the manager lock across that would make InvalidateAll — and therefore
+// Emergency Stop — wait for a worker process to launch.
 func (m *Manager) submitAndTrack(role Role, request Request, cleanup func()) (*PendingRequest, error) {
 	m.mu.Lock()
-	if m.closed {
-		m.mu.Unlock()
+	closed := m.closed
+	m.mu.Unlock()
+	if closed {
 		if cleanup != nil {
 			cleanup()
 		}
 		return nil, errors.New("voice manager is shut down")
 	}
+	// workers is built once in NewManager and never mutated, so it is safe to
+	// read without the lock (Worker does the same).
 	worker, ok := m.workers[role]
 	if !ok || worker == nil {
-		m.mu.Unlock()
 		if cleanup != nil {
 			cleanup()
 		}
@@ -581,8 +588,15 @@ func (m *Manager) submitAndTrack(role Role, request Request, cleanup func()) (*P
 	}
 	pending, err := worker.submit(request, cleanup)
 	if err != nil {
-		m.mu.Unlock()
 		return nil, err
+	}
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		// Shutdown ran during submission; do not leave an untracked request
+		// queued against a worker that is going away.
+		worker.cancelPending(pending)
+		return nil, errors.New("voice manager is shut down")
 	}
 	m.trackLocked(pending)
 	m.mu.Unlock()

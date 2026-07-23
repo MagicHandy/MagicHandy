@@ -20,7 +20,7 @@ interface AppStateValue {
   motion: MotionInfo | null;
   readOnly: boolean;
   startupError: string;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
@@ -69,7 +69,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return tracked;
   }, []);
 
-  const refresh = useCallback(() => { void performRefresh(); }, [performRefresh]);
+  const refresh = useCallback(async () => {
+    if (inFlight.current) await inFlight.current;
+    await performRefresh();
+  }, [performRefresh]);
 
   useEffect(() => {
     let stopped = false;

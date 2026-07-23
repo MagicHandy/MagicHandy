@@ -85,6 +85,17 @@ const (
 	// LLMChatVoiceExplicit permits direct erotic language (STGPT-RV parity).
 	LLMChatVoiceExplicit = "explicit"
 
+	// LLMUserAnatomyPenis selects penis-specific prompt vocabulary.
+	LLMUserAnatomyPenis = "penis"
+	// LLMUserAnatomyVagina selects vagina/vulva-specific prompt vocabulary.
+	LLMUserAnatomyVagina = "vagina"
+	// LLMUserAnatomyCustom uses the separately saved custom wording.
+	LLMUserAnatomyCustom = "custom"
+	// MaxLLMCustomAnatomyChars matches the reviewed STGPT-RV prompt setting.
+	MaxLLMCustomAnatomyChars = 120
+	// MaxLLMPersonaDescriptionChars bounds user-authored prompt context.
+	MaxLLMPersonaDescriptionChars = 500
+
 	// DefaultLlamaCPPBaseURL is the default llama-server OpenAI-compatible URL.
 	DefaultLlamaCPPBaseURL = "http://127.0.0.1:8080"
 	// DefaultOllamaBaseURL is the default local Ollama daemon URL.
@@ -212,9 +223,15 @@ type LLMSettings struct {
 	MaxOutputTokens      int    `json:"max_output_tokens"`
 	ReasoningMode        string `json:"reasoning_mode"`
 	// ChatVoice selects how sexual the model's reply register may be. It only
-	// shapes prompt composition; the motion contract and every safety gate are
-	// identical at every level.
+	// shapes prompt composition; the motion contract and every motion safety
+	// gate are identical at every level.
 	ChatVoice string `json:"chat_voice"`
+	// UserAnatomy controls code-owned vocabulary independently of the partner
+	// persona. CustomAnatomy and PersonaDescription are quoted as data when
+	// composed into a non-utility chat prompt.
+	UserAnatomy        string `json:"user_anatomy"`
+	CustomAnatomy      string `json:"custom_anatomy"`
+	PersonaDescription string `json:"persona_description"`
 	// MotionCapabilities gates which motion control methods the model may
 	// use. A nil pointer means "never saved" and resolves to the defaults, so
 	// older payloads keep today's behavior; an explicit all-false is a valid
@@ -414,6 +431,7 @@ type PublicSettingsOptionHints struct {
 	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
 	LLMChatVoices           []string `json:"llm_chat_voices"`
+	LLMUserAnatomies        []string `json:"llm_user_anatomies"`
 	PromptSets              []string `json:"prompt_sets"`
 	TTSProviders            []string `json:"tts_providers"`
 	ASRProviders            []string `json:"asr_providers"`
@@ -438,6 +456,11 @@ type LLMUpdate struct {
 	// ChatVoice replaces the saved voice when present; omitted preserves the
 	// current persisted value (older clients keep working).
 	ChatVoice *string `json:"chat_voice,omitempty"`
+	// UserAnatomy, CustomAnatomy, and PersonaDescription preserve saved values
+	// when omitted by an older settings client.
+	UserAnatomy        *string `json:"user_anatomy,omitempty"`
+	CustomAnatomy      *string `json:"custom_anatomy,omitempty"`
+	PersonaDescription *string `json:"persona_description,omitempty"`
 	// MotionCapabilities replaces the saved gates when present; omitted
 	// preserves the current persisted values (older clients keep working).
 	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
@@ -457,6 +480,9 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		MaxOutputTokens:      &settings.MaxOutputTokens,
 		ReasoningMode:        &settings.ReasoningMode,
 		ChatVoice:            &settings.ChatVoice,
+		UserAnatomy:          &settings.UserAnatomy,
+		CustomAnatomy:        &settings.CustomAnatomy,
+		PersonaDescription:   &settings.PersonaDescription,
 		MotionCapabilities:   settings.MotionCapabilities,
 	}
 }
@@ -515,6 +541,7 @@ func DefaultSettings() Settings {
 			MaxOutputTokens:      DefaultLLMMaxOutputTokens,
 			ReasoningMode:        LLMReasoningOff,
 			ChatVoice:            LLMChatVoiceUtility,
+			UserAnatomy:          LLMUserAnatomyPenis,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -599,6 +626,11 @@ func (s Settings) Public() PublicSettings {
 				LLMChatVoiceWarm,
 				LLMChatVoiceIntimate,
 				LLMChatVoiceExplicit,
+			},
+			LLMUserAnatomies: []string{
+				LLMUserAnatomyPenis,
+				LLMUserAnatomyVagina,
+				LLMUserAnatomyCustom,
 			},
 			PromptSets: []string{
 				PromptSetMagicHandyMotionV1,
@@ -694,6 +726,18 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.LLM.ChatVoice != nil {
 		chatVoice = *update.LLM.ChatVoice
 	}
+	userAnatomy := s.LLM.UserAnatomy
+	if update.LLM.UserAnatomy != nil {
+		userAnatomy = *update.LLM.UserAnatomy
+	}
+	customAnatomy := s.LLM.CustomAnatomy
+	if update.LLM.CustomAnatomy != nil {
+		customAnatomy = *update.LLM.CustomAnatomy
+	}
+	personaDescription := s.LLM.PersonaDescription
+	if update.LLM.PersonaDescription != nil {
+		personaDescription = *update.LLM.PersonaDescription
+	}
 	capabilities := s.LLM.MotionCapabilities
 	if update.LLM.MotionCapabilities != nil {
 		copied := *update.LLM.MotionCapabilities
@@ -711,6 +755,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		MaxOutputTokens:      maxOutputTokens,
 		ReasoningMode:        reasoningMode,
 		ChatVoice:            chatVoice,
+		UserAnatomy:          userAnatomy,
+		CustomAnatomy:        customAnatomy,
+		PersonaDescription:   personaDescription,
 		MotionCapabilities:   capabilities,
 	})
 	next.Voice = applyVoiceUpdate(s.Voice, update.Voice)
@@ -837,6 +884,7 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	var header struct {
 		Version int                        `json:"version"`
 		Voice   map[string]json.RawMessage `json:"voice"`
+		LLM     map[string]json.RawMessage `json:"llm"`
 	}
 	if err := json.Unmarshal(data, &header); err != nil {
 		return Settings{}, false, err
@@ -858,6 +906,14 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	}
 	if _, present := header.Voice["parakeet_source"]; !present {
 		settings.Voice.ParakeetSource = ""
+	}
+	// Existing non-utility users must not silently inherit penis-specific
+	// wording merely because their saved document predates anatomy settings.
+	// Custom with empty wording is the supported neutral profile state; fresh
+	// installs still use the reviewed STGPT-RV penis default.
+	if _, present := header.LLM["user_anatomy"]; !present {
+		settings.LLM.UserAnatomy = LLMUserAnatomyCustom
+		settings.LLM.CustomAnatomy = ""
 	}
 
 	return MigrateSettings(settings, header.Version)
@@ -966,6 +1022,9 @@ func applyMissingLLMDefaults(settings LLMSettings, defaults LLMSettings) LLMSett
 	}
 	if settings.ChatVoice == "" {
 		settings.ChatVoice = defaults.ChatVoice
+	}
+	if settings.UserAnatomy == "" {
+		settings.UserAnatomy = defaults.UserAnatomy
 	}
 	if settings.RequestTimeoutMillis == 0 {
 		settings.RequestTimeoutMillis = defaults.RequestTimeoutMillis
@@ -1120,6 +1179,15 @@ func validateLLMSettings(settings LLMSettings) error {
 	}
 	if !oneOf(settings.ChatVoice, LLMChatVoiceUtility, LLMChatVoiceWarm, LLMChatVoiceIntimate, LLMChatVoiceExplicit) {
 		return fmt.Errorf("unknown LLM chat voice %q", settings.ChatVoice)
+	}
+	if !oneOf(settings.UserAnatomy, LLMUserAnatomyPenis, LLMUserAnatomyVagina, LLMUserAnatomyCustom) {
+		return fmt.Errorf("unknown LLM user anatomy %q", settings.UserAnatomy)
+	}
+	if len([]rune(settings.CustomAnatomy)) > MaxLLMCustomAnatomyChars {
+		return fmt.Errorf("custom anatomy wording must be at most %d characters", MaxLLMCustomAnatomyChars)
+	}
+	if len([]rune(settings.PersonaDescription)) > MaxLLMPersonaDescriptionChars {
+		return fmt.Errorf("persona description must be at most %d characters", MaxLLMPersonaDescriptionChars)
 	}
 	return nil
 }
@@ -1288,6 +1356,9 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
 	settings.ReasoningMode = strings.TrimSpace(settings.ReasoningMode)
 	settings.ChatVoice = strings.ToLower(strings.TrimSpace(settings.ChatVoice))
+	settings.UserAnatomy = strings.ToLower(strings.TrimSpace(settings.UserAnatomy))
+	settings.CustomAnatomy = strings.Join(strings.Fields(settings.CustomAnatomy), " ")
+	settings.PersonaDescription = strings.Join(strings.Fields(settings.PersonaDescription), " ")
 	return settings
 }
 

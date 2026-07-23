@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -18,10 +19,14 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
+const interactiveChatHistoryLimit = 12
+
 type chatStreamRequest struct {
-	SessionID string        `json:"session_id,omitempty"`
-	Message   string        `json:"message"`
-	History   []llm.Message `json:"history,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	Message   string `json:"message"`
+	// History remains accepted for client compatibility. The handler ignores
+	// it and rebuilds model history from the selected canonical session.
+	History []llm.Message `json:"history,omitempty"`
 }
 
 type chatMotionDispatch struct {
@@ -31,23 +36,30 @@ type chatMotionDispatch struct {
 	Error   string                   `json:"error,omitempty"`
 }
 
+type interactiveChatPromptContext struct {
+	Capabilities        chat.Capabilities
+	History             []llm.Message
+	ConversationContext *chat.ConversationContext
+	CurrentMood         chat.Mood
+}
+
 type sseEmitter func(string, any) error
 
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
-	var body chatStreamRequest
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	body, ok := decodeChatStreamRequest(w, r)
+	if !ok {
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	// Stop is a global safety action. It must not depend on chat storage, the
+	// selected tab, controller ownership, or an available model.
+	if isChatStopMessage(body.Message) {
+		s.handleChatStopFastPath(w, r, body.SessionID, body.Message, settings.LLM)
 		return
 	}
 	sessionID, err := s.resolveActiveChatSession(body.SessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
-		return
-	}
-
-	settings, _ := s.store.Snapshot()
-	if isChatStopMessage(body.Message) {
-		s.handleChatStopFastPath(w, r, sessionID, body.Message, settings.LLM.Provider, settings.LLM.Model)
 		return
 	}
 	if !s.requireController(w, r) {
@@ -70,22 +82,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	defer finishChat()
 	started := time.Now()
 
-	prompt, ok, err := s.personalization.prompts.Resolve(settings.LLM.PromptSet)
+	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(settings.LLM.PromptSet)
 	if err != nil {
-		s.writePersonalizationStorageError(w, "prompt set", err)
+		s.writePersonalizationStorageError(w, storageDomain, err)
 		return
 	}
-	if !ok {
-		// A deleted or unknown selection falls back to the bundled default so
-		// chat keeps working; the status event reports what actually ran.
-		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
-	}
-	memories, err := s.personalization.memory.PromptTexts()
+	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM)
 	if err != nil {
-		s.writePersonalizationStorageError(w, "memory", err)
+		s.writeChatStorageError(w, err)
 		return
 	}
-	capabilities := chatCapabilities(settings.LLM)
+	capabilities := promptContext.Capabilities
 	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		s.writeLibraryStorageError(w, err)
@@ -97,7 +104,6 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSSEHeaders(w)
 	motionContext := s.chatMotionContext(settings.Motion)
 	service := chat.Service{
 		Provider:              provider,
@@ -109,24 +115,29 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Memories:              memories,
 		Patterns:              patternChoices,
 		MotionContext:         &motionContext,
+		ConversationContext:   promptContext.ConversationContext,
 		Capabilities:          &capabilities,
 	}
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
 	})
 
-	// The user message enters the shared log once streaming actually starts;
-	// its seq rides the status event so the sending client can track what it
-	// has already displayed.
-	userSeq := s.appendChatMessageTo(sessionID, chat.MessageRoleUser, body.Message, clientIDFromRequest(r), nil)
+	// Persist before starting SSE so canonical history failure cannot produce
+	// an untracked model turn. The seq rides the status event for client sync.
+	userSeq, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleUser, body.Message, clientIDFromRequest(r), nil)
+	if err != nil {
+		s.writeChatStorageError(w, err)
+		return
+	}
+	setSSEHeaders(w)
 
-	if err := emitChatStarted(emit, settings.LLM, prompt.ID, sessionID, userSeq); err != nil {
+	if err := emitChatStarted(emit, settings.LLM, prompt.ID, sessionID, userSeq, promptContext.CurrentMood); err != nil {
 		return
 	}
 
 	result, err := service.Complete(chatCtx, chat.Request{
 		Message: body.Message,
-		History: body.History,
+		History: promptContext.History,
 	}, func(event chat.StreamEvent) error {
 		return emitChatStreamEvent(emit, event)
 	})
@@ -135,17 +146,81 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Provider:  settings.LLM.Provider,
 		Model:     settings.LLM.Model,
 		PromptSet: prompt.ID,
-	}, started)
+	}, promptContext.CurrentMood, started)
 }
 
-func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, sessionID string, userSeq int64) error {
+func decodeChatStreamRequest(w http.ResponseWriter, r *http.Request) (chatStreamRequest, bool) {
+	var body chatStreamRequest
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return chatStreamRequest{}, false
+	}
+	message, err := chat.ValidateUserMessage(body.Message)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return chatStreamRequest{}, false
+	}
+	body.Message = message
+	return body, true
+}
+
+func (s *Server) resolveInteractiveChatPersonalization(promptID string) (chat.PromptSet, []string, string, error) {
+	prompt, ok, err := s.personalization.prompts.Resolve(promptID)
+	if err != nil {
+		return chat.PromptSet{}, nil, "prompt set", err
+	}
+	if !ok {
+		// A deleted or unknown selection falls back to the bundled default so
+		// chat keeps working; the status event reports what actually ran.
+		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
+	}
+	memories, err := s.personalization.memory.PromptTexts()
+	if err != nil {
+		return chat.PromptSet{}, nil, "memory", err
+	}
+	return prompt, memories, "", nil
+}
+
+func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings config.LLMSettings) (interactiveChatPromptContext, error) {
+	loggedHistory, err := s.chatLog.RecentSession(sessionID, interactiveChatHistoryLimit)
+	if err != nil {
+		return interactiveChatPromptContext{}, err
+	}
+	result := interactiveChatPromptContext{
+		Capabilities: chatCapabilities(settings),
+		History:      make([]llm.Message, 0, len(loggedHistory)),
+	}
+	for _, message := range loggedHistory {
+		result.History = append(result.History, llm.Message{Role: message.Role, Content: message.Content})
+	}
+	if result.Capabilities.Voice == chat.VoiceUtility {
+		return result, nil
+	}
+	persisted, err := s.chatLog.PromptContext(sessionID)
+	if err != nil {
+		return interactiveChatPromptContext{}, err
+	}
+	result.Capabilities.MoodTracking = true
+	result.CurrentMood = persisted.CurrentMood
+	result.ConversationContext = &chat.ConversationContext{
+		PersonaDescription:     settings.PersonaDescription,
+		UserAnatomy:            settings.UserAnatomy,
+		CustomAnatomy:          settings.CustomAnatomy,
+		CurrentMood:            persisted.CurrentMood,
+		RecentAssistantReplies: persisted.RecentAssistantReplies,
+	}
+	return result, nil
+}
+
+func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, sessionID string, userSeq int64, currentMood chat.Mood) error {
 	return emit("status", map[string]any{
-		"state":      "streaming",
-		"provider":   settings.Provider,
-		"model":      settings.Model,
-		"prompt_set": promptID,
-		"session_id": sessionID,
-		"user_seq":   userSeq,
+		"state":        "streaming",
+		"provider":     settings.Provider,
+		"model":        settings.Model,
+		"prompt_set":   promptID,
+		"session_id":   sessionID,
+		"user_seq":     userSeq,
+		"current_mood": currentMood,
 	})
 }
 
@@ -177,7 +252,7 @@ func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent boo
 	return settings.MaxOutputTokens / 2
 }
 
-func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, started time.Time) {
+func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) {
 	if err != nil {
 		s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})
@@ -185,8 +260,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		return
 	}
 	if s.chatCanceled(ctx, stopSequence) {
-		_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
-		_ = emit("done", map[string]any{"ok": false})
+		emitChatCancellation(emit)
 		return
 	}
 	if result.Malformed {
@@ -206,26 +280,24 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		})
 	}
 
-	// Lockstep delivery ordering (ADR 0003): the reply enters the shared log
-	// (displayed) before any TTS enqueue, so a spoken reply is always also
-	// shown. Error and malformed paths returned above — they never reach the
-	// log or TTS.
-	diagnostics.RequestMillis = time.Since(started).Milliseconds()
-	diagnostics.Repaired = result.Repaired
-	diagnostics.SemanticFallback = result.SemanticFallback
-	diagnostics.InitialMalformed = result.InitialMalformed
-	if result.Response.Motion != nil {
-		diagnostics.MotionAction = result.Response.Motion.Action
-	}
-	replySeq := s.appendChatMessageTo(sessionID, chat.MessageRoleAssistant, result.Response.Reply, "", &diagnostics)
-	if s.chatCanceled(ctx, stopSequence) {
-		if replySeq > 0 && s.chatLog != nil {
-			if err := s.chatLog.Delete(replySeq); err != nil {
-				s.logger.Warn("delete Stop-invalidated chat reply", "seq", replySeq, "error", err)
-			}
-		}
-		_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
+	// Lockstep delivery ordering (ADR 0003): stage the reply before emitting it.
+	// The Stop epoch check linearizes acceptance before the database commit; Stop
+	// itself never waits on SQLite. Other clients cannot observe a staged row.
+	replySeq, currentMood, diagnostics, appendErr := s.persistPendingChatCompletion(sessionID, result, diagnostics, currentMood, started)
+	if appendErr != nil {
+		s.logger.Warn("chat log append failed", "role", chat.MessageRoleAssistant, "error", appendErr)
+		_ = emit("error", map[string]string{"message": "Chat history is unavailable; the reply was not applied."})
 		_ = emit("done", map[string]any{"ok": false})
+		return
+	}
+	replyCommitted := false
+	defer func() {
+		if !replyCommitted {
+			s.deletePendingChatReply(replySeq)
+		}
+	}()
+	if s.chatCanceled(ctx, stopSequence) {
+		emitChatCancellation(emit)
 		return
 	}
 
@@ -235,28 +307,43 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		"semantic_fallback": result.SemanticFallback,
 		"initial_malformed": result.InitialMalformed,
 		"motion":            result.Response.Motion,
+		"new_mood":          result.Response.NewMood,
+		"current_mood":      currentMood,
 		"diagnostics":       diagnostics,
 		"seq":               replySeq,
 	}); err != nil {
 		return
 	}
 
-	speech := s.enqueueSpeech(result.Response.Reply)
+	committed, speech, commitErr := s.commitPendingChatReply(ctx, stopSequence, replySeq, result.Response.Reply)
+	if commitErr != nil {
+		s.logger.Warn("chat log commit failed", "role", chat.MessageRoleAssistant, "error", commitErr)
+		_ = emit("error", map[string]string{"message": "Chat history is unavailable; the reply was not applied."})
+		_ = emit("done", map[string]any{"ok": false})
+		return
+	}
+	if !committed {
+		emitChatCancellation(emit)
+		return
+	}
+	replyCommitted = true
+	dispatch, motionErr := s.dispatchChatMotionAt(ctx, result.Response.Motion, &stopSequence)
 	if s.chatCanceled(ctx, stopSequence) {
 		if speech != nil {
 			s.voice.Worker(voice.RoleTTS).Cancel(speech)
 		}
-		_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
-		_ = emit("done", map[string]any{"ok": false})
+		// The reply is already committed to canonical history, so reporting a
+		// whole-turn cancellation here would contradict what a reload shows.
+		// Only the motion and speech that followed it were canceled.
+		emitChatPostReplyCancellation(emit)
 		return
 	}
-	dispatch, motionErr := s.dispatchChatMotionAt(ctx, result.Response.Motion, &stopSequence)
 	if speech != nil {
 		_ = emit("speech", map[string]any{"request_id": speech.ID})
 	}
 	if motionErr != nil {
-		dispatch.Error = motionErr.Error()
-		s.logger.Warn("chat motion dispatch failed", "action", dispatch.Action, "error", motionErr)
+		dispatch.Error = s.safeMotionErrorMessage(motionErr)
+		s.logger.Warn("chat motion dispatch failed", "action", dispatch.Action, "error", dispatch.Error)
 	}
 	if dispatch.Applied || dispatch.Error != "" {
 		if err := emit("motion", dispatch); err != nil {
@@ -269,6 +356,49 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		"repaired":          result.Repaired,
 		"semantic_fallback": result.SemanticFallback,
 	})
+}
+
+func emitChatCancellation(emit sseEmitter) {
+	_ = emit("error", map[string]string{"message": "Chat canceled by Emergency Stop."})
+	_ = emit("done", map[string]any{"ok": false})
+}
+
+// emitChatPostReplyCancellation reports a Stop that arrived after the reply was
+// committed. The reply itself stands in canonical history; only the motion and
+// speech it requested were canceled.
+func emitChatPostReplyCancellation(emit sseEmitter) {
+	_ = emit("error", map[string]string{
+		"message":        "Emergency Stop canceled this reply's motion and speech.",
+		"reply_retained": "true",
+	})
+	_ = emit("done", map[string]any{"ok": false})
+}
+
+func (s *Server) persistPendingChatCompletion(sessionID string, result chat.Result, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) (int64, chat.Mood, chat.MessageDiagnostics, error) {
+	diagnostics.RequestMillis = time.Since(started).Milliseconds()
+	diagnostics.Repaired = result.Repaired
+	diagnostics.SemanticFallback = result.SemanticFallback
+	diagnostics.InitialMalformed = result.InitialMalformed
+	if result.Response.Motion != nil {
+		diagnostics.MotionAction = result.Response.Motion.Action
+	}
+	if result.Response.NewMood != nil {
+		currentMood = *result.Response.NewMood
+		diagnostics.MoodChanged = true
+	}
+	diagnostics.Mood = currentMood
+	seq, err := s.chatLog.AppendPendingAssistantTo(sessionID, result.Response.Reply, &diagnostics)
+	return seq, currentMood, diagnostics, err
+}
+
+func (s *Server) commitPendingChatReply(ctx context.Context, stopSequence uint64, seq int64, reply string) (bool, *voice.PendingRequest, error) {
+	if s.chatCanceled(ctx, stopSequence) {
+		return false, nil, nil
+	}
+	if err := s.chatLog.CommitPending(seq); err != nil {
+		return false, nil, err
+	}
+	return true, s.enqueueSpeechAt(ctx, stopSequence, reply), nil
 }
 
 func (s *Server) chatCanceled(ctx context.Context, stopSequence uint64) bool {
@@ -287,10 +417,14 @@ func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionC
 		}
 		return chatMotionDispatch{Action: action}, errors.New("chat motion canceled by Emergency Stop")
 	}
-	return s.dispatchChatMotionLocked(ctx, command)
+	return s.dispatchChatMotionLocked(ctx, command, stopSequence)
 }
 
-func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
+// dispatchChatMotionLocked applies one validated command. stopSequence, when
+// supplied, is the epoch the turn was admitted under: start rechecks it after
+// engine admission so a Stop that lands during admission cannot be overtaken
+// by the motion it was meant to prevent.
+func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
 	}
@@ -300,6 +434,9 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 		engine, admission, err := s.motionEngineForStart()
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
+		}
+		if stopSequence != nil && s.stopSequence.Load() != *stopSequence {
+			return chatMotionDispatch{Action: command.Action}, errors.New("chat motion canceled by Emergency Stop")
 		}
 		current := engine.Snapshot()
 		target, err := s.chatMotionTarget(command, current)
@@ -338,9 +475,15 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 			finishModeStop = s.modes.BeginUserStop()
 		}
 		defer finishModeStop()
+		// Keep no-engine transport Stop and engine Stop serialized against new
+		// engine admission. The global Stop epoch was already advanced by the
+		// deterministic fast path before this lock can wait.
+		s.motion.lifecycleMu.Lock()
+		defer s.motion.lifecycleMu.Unlock()
 		engine := s.currentMotionEngine()
 		if engine == nil {
-			return chatMotionDispatch{Applied: true, Action: command.Action}, nil
+			_, err := s.stopSelectedTransport(ctx, "chat_stop_no_engine")
+			return chatMotionDispatch{Applied: true, Action: command.Action}, err
 		}
 		state, err := engine.Stop(ctx, "chat_stop")
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
@@ -428,54 +571,78 @@ func (s *Server) resolveActiveChatSession(requested string) (string, error) {
 	return activeID, nil
 }
 
-func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, sessionID string, message string, provider string, model string) {
-	s.chatLifecycleMu.Lock()
-	activeID, err := s.chatLog.ActiveSessionID()
-	if err != nil || activeID != sessionID {
-		s.chatLifecycleMu.Unlock()
-		writeError(w, http.StatusConflict, errors.New("the selected chat is no longer active; refresh the conversation tabs"))
-		return
-	}
-	userSeq := s.appendChatMessageTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
-	// The deterministic reply is displayed, so it enters the shared log like
-	// any other reply; a stop confirmation is deliberately never spoken —
-	// physical Stop must not wait on TTS.
+func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, requestedSessionID string, message string, settings config.LLMSettings) {
+	finishInvalidation := s.invalidateWorkForStop("chat_stop")
+	defer finishInvalidation()
+	command := &chat.MotionCommand{Action: chat.MotionActionStop}
+	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	dispatch, motionErr := s.dispatchChatMotion(stopCtx, command)
+	stopCancel()
+	reply := chatStopReply(settings.PromptSet)
+	sessionID := ""
+	var userSeq, replySeq int64
 	diagnostics := chat.MessageDiagnostics{
 		Source:       "deterministic_stop",
-		Provider:     provider,
-		Model:        model,
+		Provider:     settings.Provider,
+		Model:        settings.Model,
 		MotionAction: chat.MotionActionStop,
 	}
-	replySeq := s.appendChatMessageTo(sessionID, chat.MessageRoleAssistant, "Stopping motion.", "", &diagnostics)
-	s.chatLifecycleMu.Unlock()
+	func() {
+		s.chatLifecycleMu.Lock()
+		defer s.chatLifecycleMu.Unlock()
+		activeID, err := s.chatLog.ActiveSessionID()
+		if err != nil {
+			s.logger.Warn("deterministic Stop chat session unavailable", "error", err)
+			return
+		}
+		requestedSessionID = strings.TrimSpace(requestedSessionID)
+		if requestedSessionID != "" && requestedSessionID != activeID {
+			s.logger.Warn("deterministic Stop skipped stale chat history", "requested_session", requestedSessionID)
+			return
+		}
+		sessionID = activeID
+		userSeq = s.appendChatMessageTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
+		// The deterministic reply is never spoken, and physical Stop has already
+		// completed or timed out before history is touched.
+		if chatVoiceLevel(settings.ChatVoice) != chat.VoiceUtility {
+			promptContext, contextErr := s.chatLog.PromptContext(sessionID)
+			if contextErr != nil {
+				s.logger.Warn("read deterministic Stop chat mood", "error", contextErr)
+			} else {
+				diagnostics.Mood = promptContext.CurrentMood
+			}
+		}
+		replySeq = s.appendChatMessageTo(sessionID, chat.MessageRoleAssistant, reply, "", &diagnostics)
+	}()
 	setSSEHeaders(w)
 	emit := func(event string, payload any) error {
 		return writeSSE(w, event, payload)
 	}
 	if err := emit("status", map[string]any{
-		"state":      "deterministic_stop",
-		"provider":   provider,
-		"model":      model,
-		"session_id": sessionID,
-		"user_seq":   userSeq,
+		"state":         "deterministic_stop",
+		"provider":      settings.Provider,
+		"model":         settings.Model,
+		"session_id":    sessionID,
+		"user_seq":      userSeq,
+		"current_mood":  diagnostics.Mood,
+		"stop_sequence": s.stopSequence.Load(),
 	}); err != nil {
 		return
 	}
-	command := &chat.MotionCommand{Action: chat.MotionActionStop}
 	if err := emit("message", map[string]any{
-		"reply":             "Stopping motion.",
+		"reply":             reply,
 		"repaired":          false,
 		"initial_malformed": false,
 		"motion":            command,
+		"current_mood":      diagnostics.Mood,
 		"diagnostics":       diagnostics,
 		"seq":               replySeq,
 	}); err != nil {
 		return
 	}
-	dispatch, motionErr := s.dispatchChatMotion(r.Context(), command)
 	if motionErr != nil {
-		dispatch.Error = motionErr.Error()
-		s.logger.Warn("chat deterministic stop failed", "error", motionErr)
+		dispatch.Error = s.safeMotionErrorMessage(motionErr)
+		s.logger.Warn("chat deterministic stop failed", "error", dispatch.Error)
 	}
 	if err := emit("motion", dispatch); err != nil {
 		return
@@ -497,6 +664,15 @@ func (s *Server) appendChatMessageTo(sessionID string, role string, content stri
 	return seq
 }
 
+func (s *Server) deletePendingChatReply(seq int64) {
+	if seq <= 0 || s.chatLog == nil {
+		return
+	}
+	if err := s.chatLog.Delete(seq); err != nil {
+		s.logger.Warn("delete uncommitted chat reply", "seq", seq, "error", err)
+	}
+}
+
 // enqueueSpeech submits the displayed reply to the TTS worker when the
 // speak-replies setting is on. It runs strictly after the log append, and
 // its failures stay in the voice request log — never in chat.
@@ -516,20 +692,55 @@ func (s *Server) enqueueSpeech(reply string) *voice.PendingRequest {
 	return pending
 }
 
+// enqueueSpeechAt orders this submission against Emergency Stop without ever
+// making Stop wait for it. Speech submission reads settings (which can queue
+// behind a settings transaction) and reaches the worker supervisor (which can
+// queue behind a process spawn); holding a shared mutex across either would
+// put database and worker-lifecycle latency in front of the physical Stop.
+//
+// Stop advances its epoch before invalidating speech, so the ordering is
+// closed from this side instead. Either Stop's InvalidateAll observes the
+// tracked request, or the epoch moved during submission and this cancels the
+// request it just created. Both orders end with no speech surviving a Stop.
+func (s *Server) enqueueSpeechAt(ctx context.Context, stopSequence uint64, reply string) *voice.PendingRequest {
+	if s.chatCanceled(ctx, stopSequence) {
+		return nil
+	}
+	pending := s.enqueueSpeech(reply)
+	if pending == nil {
+		return nil
+	}
+	if s.chatCanceled(ctx, stopSequence) {
+		s.voice.Worker(voice.RoleTTS).Cancel(pending)
+		return nil
+	}
+	return pending
+}
+
 // chatState is the /api/state block other tabs poll for continuity.
 func (s *Server) chatState() map[string]any {
 	if s.chatLog == nil {
-		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": ""}
+		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": "", "current_mood": ""}
 	}
+	s.chatLifecycleMu.Lock()
+	defer s.chatLifecycleMu.Unlock()
 	activeID, err := s.chatLog.ActiveSessionID()
 	if err != nil {
-		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": ""}
+		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": "", "current_mood": ""}
 	}
-	latest, err := s.chatLog.LatestSeq()
+	latest, err := s.chatLog.LatestSeqSession(activeID)
 	if err != nil {
-		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": activeID}
+		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": activeID, "current_mood": ""}
 	}
-	return map[string]any{"available": true, "latest_seq": latest, "active_session_id": activeID}
+	settings, _ := s.store.Snapshot()
+	if settings.LLM.ChatVoice == config.LLMChatVoiceUtility {
+		return map[string]any{"available": true, "latest_seq": latest, "active_session_id": activeID, "current_mood": ""}
+	}
+	promptContext, err := s.chatLog.PromptContext(activeID)
+	if err != nil {
+		return map[string]any{"available": false, "latest_seq": latest, "active_session_id": activeID, "current_mood": ""}
+	}
+	return map[string]any{"available": true, "latest_seq": latest, "active_session_id": activeID, "current_mood": promptContext.CurrentMood}
 }
 
 // handleChatMessages reads the shared log non-destructively. Reads never
@@ -855,13 +1066,37 @@ func chatVoiceLevel(voice string) chat.VoiceLevel {
 
 func isChatStopMessage(message string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(message))
-	normalized = strings.Trim(normalized, " \t\r\n.!?")
+	normalized = strings.Join(strings.FieldsFunc(normalized, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r)
+	}), " ")
 	switch normalized {
 	case "stop", "stop motion", "stop the motion", "pause", "pause motion", "pause the motion",
-		"end", "end motion", "end the motion", "emergency stop":
+		"end", "end motion", "end the motion", "emergency stop", "please stop", "stop please",
+		"please stop motion", "please stop the motion", "stop motion please", "stop the motion please", "stop everything",
+		"para", "detén", "deten", "detener", "detén el movimiento", "deten el movimiento", "detener el movimiento", "para el movimiento", "detener todo",
+		"pausa", "pausa el movimiento", "parada de emergencia", "por favor detén el movimiento",
+		"pare", "parar", "pare o movimento", "parar o movimento", "parar tudo", "pause o movimento",
+		"parada de emergência", "por favor pare o movimento",
+		"停止", "停止运动", "全部停止", "停下", "停下运动", "暂停", "暂停运动", "紧急停止", "请停止运动",
+		"止めて", "動きを止めて", "モーションを止めて", "モーションを停止", "停止して", "一時停止", "すべて停止", "緊急停止", "動きを止めてください":
 		return true
 	default:
 		return false
+	}
+}
+
+func chatStopReply(promptSet string) string {
+	switch promptSet {
+	case chat.PromptSetIDSpanish:
+		return "Deteniendo el movimiento."
+	case chat.PromptSetIDPortugueseBrazil:
+		return "Parando o movimento."
+	case chat.PromptSetIDSimplifiedChinese:
+		return "正在停止运动。"
+	case chat.PromptSetIDJapanese:
+		return "モーションを停止します。"
+	default:
+		return "Stopping motion."
 	}
 }
 

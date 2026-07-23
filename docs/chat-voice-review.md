@@ -4,6 +4,11 @@ Status: review of `claude/chat-voice-levels` (commit `67dabe62`), 2026-07-23.
 Companion to [`docs/chat-voice.md`](chat-voice.md) (the implementation report).
 This file is the review, not the spec.
 
+Follow-up status: the later PR update closes the anatomy, dedicated persona,
+model-reported mood, recent-line feedback, localization-catalog, and placement-
+wording gaps identified below. The original dated findings remain unchanged as
+the review record; see "Follow-up closure" at the end.
+
 ## The task this reviews
 
 Given prompt: *"Review and compare STGPT-RV and MagicHandy prompts, determine
@@ -136,3 +141,33 @@ safety gate, defaults to unchanged behavior, and is tested. Treat the
 localization-catalog gap (finding 1) and the one-line doc clarifier (finding 2)
 as same-PR follow-ups; the anatomy-vocabulary parity (the only substantive
 sanitization gap left) is a separate, already-scoped change.
+
+## Follow-up closure
+
+The same PR subsequently implemented the scoped parity work without weakening
+the reviewed safety properties:
+
+- validated `penis` / `vagina` / `custom` anatomy settings and bounded custom
+  wording feed a code-owned non-utility vocabulary rule
+- a bounded, quoted persona description survives prompt-set changes
+- optional `new_mood` is strict-enum metadata persisted per session and exposed
+  as backend state; it has no motion or transport representation
+- the latest three canonical assistant lines, not client-authored history, feed
+  the anti-repetition section
+- positive, action-specific current-turn authorization rejects negation and
+  ordinary conversation even if quoted profile/history data asks for motion;
+  semantic repair cannot recreate a command after authorization removes it
+- chat Stop advances the invalidation barrier, cancels overlapping generations,
+  publishes that barrier before transport latency, ignores stale chat-session
+  selection for safety, blocks replacement-engine admission until physical Stop
+  returns, and uses deterministic Stop phrases and replies for every built-in
+  prompt language
+- generated assistant rows remain hidden and unpruned until their Stop-epoch
+  acceptance point; Stop itself never waits on SQLite, and post-acceptance Stop
+  still fences motion and TTS
+- prompt-only settings changes no longer refresh running motion
+- the wording catalog and implementation report now describe the new surfaces
+  and clarify that the format guard, not the voice section, remains last
+
+No additional live explicit-output transcript was produced; the original
+review's stated live-testing limitation still applies.

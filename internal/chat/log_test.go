@@ -93,6 +93,79 @@ func TestMessageLogPrunesToCap(t *testing.T) {
 	}
 }
 
+func cappedTestSession(t *testing.T) (*MessageLog, string) {
+	t.Helper()
+	log := openTestLog(t)
+	sessionID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	for index := 0; index < MessageLogCap; index++ {
+		if _, err := log.AppendTo(sessionID, MessageRoleUser, fmt.Sprintf("visible %d", index), "client", nil); err != nil {
+			t.Fatalf("seed visible message %d: %v", index, err)
+		}
+	}
+	return log, sessionID
+}
+
+func TestPendingAssistantReplyDoesNotEvictOrAffectSessionContext(t *testing.T) {
+	log, sessionID := cappedTestSession(t)
+	pendingDiagnostics := &MessageDiagnostics{Mood: MoodTeasing, MoodChanged: true}
+	pending, err := log.AppendPendingAssistantTo(sessionID, "pending reply", pendingDiagnostics)
+	if err != nil {
+		t.Fatalf("append pending reply: %v", err)
+	}
+
+	visible, err := log.AfterSession(sessionID, 0, 0)
+	if err != nil {
+		t.Fatalf("read while pending: %v", err)
+	}
+	if len(visible) != MessageLogCap || visible[0].Content != "visible 0" || visible[len(visible)-1].Content != fmt.Sprintf("visible %d", MessageLogCap-1) {
+		t.Fatalf("pending reply changed visible capped history: len=%d first=%q last=%q", len(visible), visible[0].Content, visible[len(visible)-1].Content)
+	}
+	context, err := log.PromptContext(sessionID)
+	if err != nil {
+		t.Fatalf("prompt context while pending: %v", err)
+	}
+	if context.CurrentMood != "" || len(context.RecentAssistantReplies) != 0 {
+		t.Fatalf("pending reply entered prompt context: %+v", context)
+	}
+
+	if err := log.Delete(pending); err != nil {
+		t.Fatalf("roll back pending reply: %v", err)
+	}
+	visible, err = log.AfterSession(sessionID, 0, 0)
+	if err != nil || len(visible) != MessageLogCap || visible[0].Content != "visible 0" {
+		t.Fatalf("pending rollback did not preserve history: len=%d first=%q err=%v", len(visible), visible[0].Content, err)
+	}
+	context, err = log.PromptContext(sessionID)
+	if err != nil || context.CurrentMood != "" {
+		t.Fatalf("pending rollback changed mood context: %+v, err=%v", context, err)
+	}
+}
+
+func TestPendingAssistantCommitAppliesCapAndMoodAtomically(t *testing.T) {
+	log, sessionID := cappedTestSession(t)
+	pending, err := log.AppendPendingAssistantTo(sessionID, "committed reply", &MessageDiagnostics{Mood: MoodTeasing, MoodChanged: true})
+	if err != nil {
+		t.Fatalf("append pending reply: %v", err)
+	}
+	if err := log.CommitPending(pending); err != nil {
+		t.Fatalf("commit pending reply: %v", err)
+	}
+	visible, err := log.AfterSession(sessionID, 0, 0)
+	if err != nil {
+		t.Fatalf("read committed reply: %v", err)
+	}
+	if len(visible) != MessageLogCap || visible[0].Content != "visible 1" || visible[len(visible)-1].Content != "committed reply" {
+		t.Fatalf("committed reply did not apply cap atomically: len=%d first=%q last=%q", len(visible), visible[0].Content, visible[len(visible)-1].Content)
+	}
+	context, err := log.PromptContext(sessionID)
+	if err != nil || context.CurrentMood != MoodTeasing {
+		t.Fatalf("committed mood context = %+v, err=%v", context, err)
+	}
+}
+
 func TestMessageLogRecentReturnsBoundedChronologicalTail(t *testing.T) {
 	log := openTestLog(t)
 	for i := 0; i < 6; i++ {
@@ -107,6 +180,89 @@ func TestMessageLogRecentReturnsBoundedChronologicalTail(t *testing.T) {
 	}
 	if len(recent) != 3 || recent[0].Content != "message 3" || recent[2].Content != "message 5" {
 		t.Fatalf("recent tail = %+v, want messages 3..5 in chronological order", recent)
+	}
+}
+
+func TestMessageLogPromptContextIsSessionScopedBoundedAndChronological(t *testing.T) {
+	log := openTestLog(t)
+	sessionID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	appendAssistant := func(content string, mood Mood) {
+		t.Helper()
+		var diagnostics *MessageDiagnostics
+		if mood != "" {
+			diagnostics = &MessageDiagnostics{Mood: mood}
+		}
+		if _, err := log.AppendTo(sessionID, MessageRoleAssistant, content, "", diagnostics); err != nil {
+			t.Fatalf("append assistant: %v", err)
+		}
+	}
+	appendAssistant("excluded oldest", MoodCurious)
+	if _, err := log.AppendTo(sessionID, MessageRoleUser, "user text must not count", "client", nil); err != nil {
+		t.Fatalf("append user: %v", err)
+	}
+	appendAssistant("second line", "")
+	longLine := strings.Repeat("界", maxRecentAssistantRunes+10)
+	appendAssistant(longLine, MoodTeasing)
+	appendAssistant(" latest\nline\tcollapsed ", "")
+
+	context, err := log.PromptContext(sessionID)
+	if err != nil {
+		t.Fatalf("PromptContext: %v", err)
+	}
+	if context.CurrentMood != MoodTeasing {
+		t.Fatalf("current mood = %q, want %q", context.CurrentMood, MoodTeasing)
+	}
+	if len(context.RecentAssistantReplies) != maxRecentAssistantReplies {
+		t.Fatalf("recent replies = %v", context.RecentAssistantReplies)
+	}
+	if context.RecentAssistantReplies[0] != "second line" || context.RecentAssistantReplies[2] != "latest line collapsed" {
+		t.Fatalf("recent reply order/content = %v", context.RecentAssistantReplies)
+	}
+	if len([]rune(context.RecentAssistantReplies[1])) != maxRecentAssistantRunes {
+		t.Fatalf("bounded reply length = %d", len([]rune(context.RecentAssistantReplies[1])))
+	}
+
+	if _, err := log.SaveSession(sessionID); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+	second, err := log.CreateSession(false)
+	if err != nil {
+		t.Fatalf("create second session: %v", err)
+	}
+	secondContext, err := log.PromptContext(second.ID)
+	if err != nil {
+		t.Fatalf("second PromptContext: %v", err)
+	}
+	if secondContext.CurrentMood != "" || len(secondContext.RecentAssistantReplies) != 0 {
+		t.Fatalf("second session leaked context: %+v", secondContext)
+	}
+}
+
+func TestMessageLogExplicitMoodChangeWinsOverStaleCarriedMood(t *testing.T) {
+	log := openTestLog(t)
+	sessionID, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	appendMood := func(reply string, mood Mood, changed bool) {
+		t.Helper()
+		if _, err := log.AppendTo(sessionID, MessageRoleAssistant, reply, "", &MessageDiagnostics{Mood: mood, MoodChanged: changed}); err != nil {
+			t.Fatalf("append mood: %v", err)
+		}
+	}
+	appendMood("Initial mood.", MoodCurious, true)
+	appendMood("New interactive mood.", MoodTeasing, true)
+	appendMood("Late stale autonomous line.", MoodCurious, false)
+
+	context, err := log.PromptContext(sessionID)
+	if err != nil {
+		t.Fatalf("PromptContext: %v", err)
+	}
+	if context.CurrentMood != MoodTeasing {
+		t.Fatalf("current mood = %q, want latest explicit change %q", context.CurrentMood, MoodTeasing)
 	}
 }
 

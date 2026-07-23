@@ -121,6 +121,14 @@ launch. Starting clean disables unsaved-draft retention; saved sessions are
 always retained. Graceful shutdown applies the policy immediately, while the
 next startup reconciles the same state after a crash or forced exit.
 
+Chat reply commit hardening (2026-07-23) extends the workspace to schema v13:
+generated assistant rows are staged outside canonical reads and cap pruning,
+then accepted only if the Stop epoch still matches. Stop advances that epoch
+without waiting on SQLite; an accepted row commits transactionally while motion
+and TTS remain fenced by any later Stop. Rejected or process-interrupted rows
+cannot evict history or change the session mood. Autonomous announcements use
+the same staged-row rule.
+
 Phase 11 note: Freestyle boundary behavior is proven on the real engine over
 the fake transport (one continuous stream across many segment retargets, one
 HSP play, zero stops). Real-hardware freestyle validation rides the next
@@ -500,7 +508,11 @@ Implement:
 - memory injection into the prompt with a visible on/off switch
 - prompt sets: create/edit/delete/select, persisted; bundled defaults are
   read-only templates that users copy, not editable in place
-- persona/anatomy fields if not already covered by prompt sets
+- dedicated bounded persona and user-anatomy fields, composed as quoted
+  non-utility prompt context independently of prompt sets (**done 2026-07-23**)
+- backend-authoritative reply continuity: strict model-reported mood and three
+  canonical recent assistant lines, with no motion representation (**done
+  2026-07-23**)
 - UI for model/prompt/memory settings as routed views per `docs/ui-design.md`
 - explicit reset-to-defaults for settings (parity baseline item; today only
   corrupt-file auto-recovery exists)
@@ -532,6 +544,8 @@ destroyed.
 
 - Memory is transparent and manageable; chat works with memory off.
 - Prompt sets are editable without modifying code; defaults are protected.
+- Persona/anatomy settings are visible, resettable, and cannot alter motion
+  permissions; current model mood is visible backend state scoped to one chat.
 
 ## Out Of Scope
 

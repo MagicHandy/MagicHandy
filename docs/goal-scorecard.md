@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-22, synchronized paired-video playback
+## Snapshot — 2026-07-23, chat voice continuity parity
 
 ### Goal 1: Maintainability
 
@@ -31,7 +31,7 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 now additionally gates installer syntax, state hygiene, plans, launcher quoting, and updater Git safety. |
 | Import boundaries | chat/llm/media/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings: `internal/config/settings.go` 1,258 lines, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 846, `internal/motion/engine_test.go` 866, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,373. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,363 lines after the bounded chat-profile settings, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 846, `internal/motion/engine_test.go` 866, `internal/transport/intiface.go` 1,194, and `internal/transport/intiface_test.go` 1,373. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
 | Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings: `web/src/App.test.tsx` 1,304 lines, `web/src/styles/components.css` 1,444, `web/src/styles/library.css` 1,248, and retired reference-only `web/legacy/app.css` 846. Media behavior is split into focused components despite sharing the established library stylesheet; `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,479 physical lines. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating updater state or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 21,275,648 bytes plain and 14,995,456 bytes stripped with `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 21,443,584 bytes plain and 15,126,528 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -89,6 +89,9 @@ freehand authoring, and visible/reversible training feedback while keeping one
 backend-authoritative preview and motion path. Interactive LLM motion now also
 reads authoritative current state, preserves steady/pacing-only continuity,
 supports named area focus, and bounds explicit pattern variation.
+Opted-in chat voice now also receives bounded persona/anatomy context, strict
+per-session model mood, and three canonical recent assistant lines while
+utility remains byte-identical and all motion gates remain unchanged.
 
 ## Watch List
 
@@ -107,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 937,161 raw / 574,432 gzip bytes because the isolated
-   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 492,925 raw
-   / 137,035 gzip bytes, and the stripped binary is 15,059,968 bytes. These
+   browser payload is 943,204 raw / 576,236 gzip bytes because the isolated
+   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 498,968 raw
+   / 138,809 gzip bytes, and the stripped binary is 15,173,632 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -118,6 +121,32 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-23** - Chat voice continuity parity: non-utility interactive chat
+  adds bounded, quoted persona and user-anatomy settings, the reviewed strict
+  17-value model mood persisted in existing per-message diagnostics, and three
+  canonical recent assistant lines for anti-repetition. Mood is visible from
+  backend active-session state and has no motion representation. Current-turn
+  authorization strips model motion from chat-only requests and rejects
+  negation/conversation wording. Chat Stop invalidates overlapping generations,
+  publishes its sequence before transport latency, and has deterministic
+  phrases/replies for every built-in language. Schema v13 keeps generated
+  assistant rows outside history, mood, and cap pruning until the Stop barrier
+  commits them. Prompt-only settings no longer refresh active motion, and
+  utility prompt composition remains byte-identical. A follow-up review pass
+  closed the issues its own audits raised: physical Emergency Stop no longer
+  queues behind settings or voice-worker lifecycle locks (the shared chat
+  delivery mutex is gone; speech submission is ordered by the Stop epoch and
+  cancels itself if it raced one, and voice submission no longer holds the
+  manager lock across a worker spawn), a Stop that lands after the reply
+  commits reports only canceled motion/speech instead of contradicting
+  canonical history, non-Emergency stop failures use neutral wording, and the
+  current-turn gate no longer treats safety/permission questions ("is it safe
+  to start moving?") or contracted negatives ("I didn't want you to start
+  moving") as authorization to start the device. The rebuilt four-file browser
+  payload is 943,204 bytes raw / 576,236 gzip; HTML/CSS/JS is 498,968 raw /
+  138,809 gzip. `CGO_ENABLED=0` binaries measure 21,502,976 bytes plain and
+  15,173,632 bytes stripped, both within budget.
 
 - **2026-07-22** - Video and pattern continuity follow-up: the retained failing
   trace proved parsing and slicing were source-exact, but exposed two later

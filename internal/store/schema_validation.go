@@ -54,7 +54,7 @@ var requiredSchemaTables = []schemaTable{
 		"domain:TEXT", "source_path:TEXT", "archived_path:TEXT", "status:TEXT", "message:TEXT", "imported_at:TEXT",
 	), primaryKey: []string{"domain"}},
 	{name: "messages", columns: columns(
-		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT",
+		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT", "committed:INTEGER",
 	), primaryKey: []string{"seq"}},
 	{name: "client_cursors", columns: columns("client_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id"}},
 	{name: "chat_sessions", columns: columns("id:TEXT", "title:TEXT", "saved:INTEGER", "created_at:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},

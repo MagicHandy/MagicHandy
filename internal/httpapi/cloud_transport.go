@@ -200,11 +200,8 @@ func (s *Server) handleCloudDisconnect(w http.ResponseWriter, r *http.Request) {
 	// must still succeed when credentials have become invalid; only the physical
 	// Stop confirmation may be unavailable in that case.
 	s.setCloudControlReleased(true)
-	s.stopSequence.Add(1)
-	if s.mediaSync != nil {
-		s.mediaSync.Invalidate("cloud_disconnected")
-	}
-	s.cancelActiveChats()
+	finishInvalidation := s.invalidateWorkForStop("cloud_disconnected")
+	defer finishInvalidation()
 	finishModeStop := func() {}
 	if s.modes != nil {
 		finishModeStop = s.modes.BeginUserStop()

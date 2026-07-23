@@ -151,7 +151,30 @@ export interface ChatMessageDiagnostics {
   semantic_fallback?: boolean;
   initial_malformed?: boolean;
   motion_action?: string;
+  mood?: AssistantMood;
+  mood_changed?: boolean;
 }
+
+export type AssistantMood =
+  | "Curious"
+  | "Teasing"
+  | "Playful"
+  | "Loving"
+  | "Excited"
+  | "Passionate"
+  | "Seductive"
+  | "Anticipatory"
+  | "Breathless"
+  | "Dominant"
+  | "Submissive"
+  | "Vulnerable"
+  | "Confident"
+  | "Intimate"
+  | "Needy"
+  | "Overwhelmed"
+  | "Afterglow";
+
+export type LLMUserAnatomy = "penis" | "vagina" | "custom";
 
 export interface ChatSession {
   id: string;
@@ -514,6 +537,7 @@ export interface OptionHints {
   llm_reasoning_modes?: string[];
   llm_max_output_tokens?: number[];
   llm_chat_voices?: string[];
+  llm_user_anatomies?: LLMUserAnatomy[];
   prompt_sets?: string[];
   tts_providers?: string[];
   asr_providers?: string[];
@@ -547,6 +571,9 @@ export interface PublicSettings {
     max_output_tokens: number;
     reasoning_mode: string;
     chat_voice?: string;
+    user_anatomy?: LLMUserAnatomy;
+    custom_anatomy?: string;
+    persona_description?: string;
     motion_capabilities?: LLMMotionCapabilities;
   };
   voice: VoiceSettings;
@@ -788,7 +815,7 @@ export interface AppState {
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
-  chat?: { available?: boolean; latest_seq?: number; active_session_id?: string };
+  chat?: { available?: boolean; latest_seq?: number; active_session_id?: string; current_mood?: AssistantMood | "" };
   library?: LibrarySummary;
   media?: MediaSummary;
   transport?: Record<string, unknown>;
@@ -806,9 +833,9 @@ export interface MotionTarget {
 }
 
 export type ChatStreamEvent =
-  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; session_id?: string; user_seq?: number } }
+  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; session_id?: string; user_seq?: number; current_mood?: AssistantMood | ""; stop_sequence?: number } }
   | { event: "delta" | "repair_delta"; data: { phase?: string; text?: string } }
-  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; initial_malformed?: boolean; diagnostics?: ChatMessageDiagnostics; seq?: number } }
+  | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; new_mood?: AssistantMood | null; current_mood?: AssistantMood | ""; initial_malformed?: boolean; diagnostics?: ChatMessageDiagnostics; seq?: number } }
   | { event: "speech"; data: { request_id?: string } }
   | { event: "motion"; data: { applied?: boolean; action?: string; error?: string } }
   | { event: "malformed"; data: { repaired?: boolean; recoverable?: boolean; phase?: string; error?: string } }

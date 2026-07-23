@@ -263,17 +263,8 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
-	s.stopSequence.Add(1)
-	if s.mediaSync != nil {
-		s.mediaSync.Invalidate("emergency_stop")
-	}
-	s.cancelActiveChats()
-	pendingASR := s.voice.InvalidateAll(voice.RoleASR)
-	pendingTTS := s.voice.InvalidateAll(voice.RoleTTS)
-	defer func() {
-		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
-		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
-	}()
+	finishInvalidation := s.invalidateWorkForStop("emergency_stop")
+	defer finishInvalidation()
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -281,6 +272,10 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 		finishModeStop = s.modes.BeginUserStop()
 	}
 	defer finishModeStop()
+	// Advance/invalidation happened above. Holding lifecycleMu only serializes
+	// the final physical Stop against creation of a replacement engine.
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		s.stopSelectedTransportWithoutEngine(w, r)
@@ -313,6 +308,34 @@ func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *ht
 		payload["error"] = s.safeMotionErrorMessage(stopErr)
 	}
 	writeJSON(w, status, payload)
+}
+
+func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (transport.CommandResult, error) {
+	commandTransport, err := s.newSelectedStopTransport()
+	if err != nil {
+		return transport.CommandResult{}, err
+	}
+	return commandTransport.Stop(ctx, transport.StopCommand{Reason: reason})
+}
+
+func (s *Server) invalidateWorkForStop(reason string) func() {
+	s.stopSequence.Add(1)
+	if s.mediaSync != nil {
+		s.mediaSync.Invalidate(reason)
+	}
+	s.cancelActiveChats()
+	// No lock is taken around invalidation: the epoch above is already
+	// published, so a chat turn that submits speech concurrently either lands
+	// before this sweep and is invalidated here, or observes the new epoch and
+	// cancels its own request (enqueueSpeechAt). Waiting on a shared delivery
+	// mutex here would put settings and worker-spawn latency ahead of the
+	// physical Stop below.
+	pendingASR := s.voice.InvalidateAll(voice.RoleASR)
+	pendingTTS := s.voice.InvalidateAll(voice.RoleTTS)
+	return func() {
+		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
+		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
+	}
 }
 
 func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
@@ -433,6 +456,11 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		}
 		return errors.Join(runtimeErr, stopErr)
 	}
+	// Prompt, persona, and other non-motion settings must not emit transport
+	// traffic. Live refresh is only for an actual MotionSettings change.
+	if previous.Motion == next.Motion {
+		return runtimeErr
+	}
 	if stopped, stopErr := s.stopMediaForSpeedPolicyChange(ctx, previous.Motion, next.Motion); stopped {
 		return errors.Join(runtimeErr, stopErr)
 	}
@@ -508,7 +536,8 @@ func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason stri
 func (s *Server) Quiesce() {
 	s.quiescing.Store(true)
 	s.quiesceOnce.Do(func() {
-		s.cancelActiveChats()
+		finishInvalidation := s.invalidateWorkForStop("server_shutdown")
+		defer finishInvalidation()
 		if s.mediaSync != nil {
 			s.mediaSync.Shutdown()
 		}

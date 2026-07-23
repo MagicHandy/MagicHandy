@@ -63,6 +63,7 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 		Memories:              memories,
 		Patterns:              patternChoices,
 		Capabilities:          &capabilities,
+		TrustedMotionInput:    true,
 	}
 
 	message := chat.AutopilotDecisionMessage(chat.AutopilotContext{
@@ -175,14 +176,31 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) {
 		Model:     settings.LLM.Model,
 		PromptSet: settings.LLM.PromptSet,
 	}
-	replySeq := s.appendChatMessageTo(sessionID, chat.MessageRoleAssistant, say, "", diagnostics)
-	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
-		s.deleteAutopilotLine(replySeq)
+	if promptContext, err := s.chatLog.PromptContext(sessionID); err != nil {
+		s.logger.Warn("read Autopilot chat mood", "error", err)
+	} else {
+		diagnostics.Mood = promptContext.CurrentMood
+	}
+	replySeq, err := s.chatLog.AppendPendingAssistantTo(sessionID, say, diagnostics)
+	if err != nil {
+		s.logger.Warn("stage Autopilot chat line", "error", err)
 		return
 	}
-	if replySeq == 0 {
-		// Unlike an interactive SSE reply, an autonomous line has no other
-		// display channel. Never speak text that failed to enter the log.
+	replyCommitted := false
+	defer func() {
+		if !replyCommitted {
+			s.deletePendingChatReply(replySeq)
+		}
+	}()
+	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
+		return
+	}
+	if err := s.chatLog.CommitPending(replySeq); err != nil {
+		s.logger.Warn("commit Autopilot chat line", "error", err)
+		return
+	}
+	replyCommitted = true
+	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
 		return
 	}
 	worker := s.voice.Worker(voice.RoleTTS)
@@ -191,13 +209,12 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) {
 		// existing speech backlog. The next idle line may speak normally.
 		return
 	}
-	speech := s.enqueueSpeech(say)
+	speech := s.enqueueSpeechAt(ctx, stopSequence, say)
 	if speech == nil {
 		return
 	}
 	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
 		worker.Cancel(speech)
-		s.deleteAutopilotLine(replySeq)
 		return
 	}
 	s.rememberAutopilotSpeech(replySeq, speech.ID)
@@ -205,15 +222,6 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) {
 
 func (s *Server) autopilotAnnouncementInvalidated(ctx context.Context, stopSequence uint64) bool {
 	return ctx.Err() != nil || s.stopSequence.Load() != stopSequence
-}
-
-func (s *Server) deleteAutopilotLine(seq int64) {
-	if seq <= 0 || s.chatLog == nil {
-		return
-	}
-	if err := s.chatLog.Delete(seq); err != nil {
-		s.logger.Warn("delete Stop-invalidated autopilot line", "seq", seq, "error", err)
-	}
 }
 
 func autopilotSpeechBacklogged(status voice.WorkerStatus) bool {

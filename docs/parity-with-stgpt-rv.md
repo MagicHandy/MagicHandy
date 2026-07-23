@@ -52,13 +52,16 @@ Same vocabulary as the sweeps, plus one:
 | Motion Pattern Studio (import, draw, crop, preview, save) | **Covered** | Phase 14 authoring |
 | Adaptive **Freestyle** | **Covered** | Phase 11 planner on the shared engine |
 | **Preset modes: Auto / Edge / Milk** | **Rejected (as ports)** | ADR 0006 drops legacy scripted modes; Edge/Milk may return only as continuous-engine planners if wanted, never as `ScriptStep` ports |
-| **LLM stroke-region control (tip/shaft/base)** | **Partial** | Engine `AreaFocus` exists; **not exposed in the chat contract** — see [llm-control-surface.md](llm-control-surface.md) idea A |
+| **LLM stroke-region control (tip/shaft/base)** | **Covered** | Named `area` values compile to bounded engine `AreaFocus`; gated and validated server-side |
 | **LLM program/script selection** | **Partial** | Engine `ProgramID` exists; chat contract exposes only `pattern_id` — idea B |
 | **Soft-anchor loops (tip/upper/mid/lower/base)** | **Partial** | Engine `SoftAnchor` exists; no authoring UI or model access — idea G |
 | **LLM-driven autonomous mode (Autopilot)** | **Initial implementation (PR #101)** | Chat-native control; bounded recent-conversation context; enabled pattern/intensity curation over the shared segment loop; visible deterministic fallback; chat-log/browser-TTS delivery. Live-model, long-session, cadence, and richer-arrangement acceptance remain open; see [llm-control-surface.md](llm-control-surface.md) ideas E/F |
 | Voice output (cloud + local cloning) | **Covered / differs** | ElevenLabs + NeuTTS Air (STGPT-RV used Chatterbox); ADR 0007 |
 | Voice input (ASR) | **Covered / differs** | Managed Parakeet (STGPT-RV also had faster-whisper); ADR 0007 |
-| Persona prompt + memory | **Covered** | Phase 10 prompt sets + inspectable memory |
+| Persona prompt + memory | **Covered** | Phase 10 prompt sets + inspectable memory + dedicated bounded persona description |
+| User anatomy prompt vocabulary | **Covered** | `penis` / `vagina` / bounded custom wording, separate from partner persona and active only for opted-in interactive non-utility voices |
+| Model-reported mood continuity | **Covered** | Strict 17-value `new_mood` enum persisted per chat session and shown as backend-reported status; never inferred or mapped to motion |
+| Recent-line reply variation | **Covered** | Latest three canonical assistant lines, one-line/180-character bounded and quoted as prompt data |
 | User identity / interest selector | **Deferred** | Recorded in the Phase 15 personalization notes |
 | Reset to defaults | **Covered** | Parity row 7 |
 | Stroke-range limit + range test | **Covered** | Live limits + manual-motion test |

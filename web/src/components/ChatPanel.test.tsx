@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../api/client";
+import { api, streamChat } from "../api/client";
 import { ChatPanel } from "./ChatPanel";
 
 const app = vi.hoisted(() => ({
@@ -13,6 +13,7 @@ const app = vi.hoisted(() => ({
   },
   show: vi.fn(),
   queueSpeech: vi.fn(),
+  refresh: vi.fn(),
 }));
 const SESSION_ID = app.sessionId;
 
@@ -29,6 +30,7 @@ vi.mock("../state/app-state", () => ({
     backendOnline: true,
     readOnly: false,
     state: app.state,
+    refresh: app.refresh,
   }),
   useToast: () => ({ show: app.show }),
 }));
@@ -39,6 +41,7 @@ vi.mock("../state/voice-playback", () => ({
 
 const getChatMessages = vi.mocked(api.getChatMessages);
 const advanceChatCursor = vi.mocked(api.advanceChatCursor);
+const streamChatMock = vi.mocked(streamChat);
 
 describe("ChatPanel history", () => {
   beforeEach(() => {
@@ -50,8 +53,11 @@ describe("ChatPanel history", () => {
     };
     app.show.mockReset();
     app.queueSpeech.mockReset();
+    app.refresh.mockReset();
+    app.refresh.mockResolvedValue(undefined);
     getChatMessages.mockReset();
     advanceChatCursor.mockReset();
+    streamChatMock.mockReset();
     advanceChatCursor.mockResolvedValue({ cursor: 0, session_id: SESSION_ID });
   });
 
@@ -173,5 +179,109 @@ describe("ChatPanel history", () => {
     const avatar = screen.getByRole("button", { name: "Show response diagnostics" });
     expect(avatar).toHaveAttribute("title", expect.stringContaining("Model: gemma-3"));
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Run time\s*184 ms/);
+  });
+
+  it("refreshes authoritative state before completing a chat turn", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    streamChatMock.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: "status", data: { state: "deterministic_stop", user_seq: 1, stop_sequence: 0 } });
+      onEvent({ event: "message", data: { reply: "Stopped.", seq: 2 } });
+      onEvent({ event: "done", data: { ok: true } });
+    });
+    let finishRefresh: (() => void) | undefined;
+    app.refresh.mockReturnValue(new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    const onSessionChanged = vi.fn();
+    render(<ChatPanel sessionId={SESSION_ID} onSessionChanged={onSessionChanged} />);
+
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "please stop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(app.refresh).toHaveBeenCalledTimes(1));
+    expect(onSessionChanged).not.toHaveBeenCalled();
+    finishRefresh?.();
+    await waitFor(() => expect(onSessionChanged).toHaveBeenCalledTimes(1));
+  });
+
+  it("surfaces a deterministic Stop transport failure", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    streamChatMock.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: "status", data: { state: "deterministic_stop", stop_sequence: 2 } });
+      onEvent({ event: "message", data: { reply: "Stopping motion.", seq: 2 } });
+      onEvent({ event: "motion", data: { applied: true, action: "stop", error: "transport timed out" } });
+      onEvent({ event: "done", data: { ok: false } });
+    });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "stop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(app.show).toHaveBeenCalledWith(
+      "Device Stop could not be confirmed: transport timed out",
+      "error",
+    ));
+    expect(await screen.findByText("Stopping motion.")).toBeInTheDocument();
+  });
+
+  it("keeps a committed reply visible when Stop cancels only its motion and speech", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    streamChatMock.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: "message", data: { reply: "Easing into it.", seq: 4 } });
+      onEvent({ event: "error", data: {
+        message: "Emergency Stop canceled this reply's motion and speech.",
+        reply_retained: "true",
+      } });
+      onEvent({ event: "done", data: { ok: false } });
+    });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "start slow" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(app.show).toHaveBeenCalledWith(
+      "Emergency Stop canceled this reply's motion and speech.",
+      "error",
+    ));
+    // The reply is already in canonical history; replacing it with the error
+    // would contradict what a reload shows.
+    expect(await screen.findByText("Easing into it.")).toBeInTheDocument();
+    expect(screen.queryByText("Emergency Stop canceled this reply's motion and speech.")).not.toBeInTheDocument();
+  });
+
+  it("still replaces the bubble when the whole turn is canceled before a reply", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    streamChatMock.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: "error", data: { message: "Chat canceled by Emergency Stop." } });
+      onEvent({ event: "done", data: { ok: false } });
+    });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "start slow" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
   });
 });

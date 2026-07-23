@@ -10,6 +10,7 @@ interface Props {
   onNew: () => void;
   onSave: (session: ChatSession) => void;
   onDelete: (session: ChatSession) => void;
+  assistantMood?: string;
 }
 
 interface MenuState {
@@ -29,7 +30,7 @@ function preferredTabStripWidth(tabCount: number) {
     + TAB_STRIP_INLINE_PADDING;
 }
 
-export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSave, onDelete }: Props) {
+export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSave, onDelete, assistantMood }: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
@@ -115,6 +116,12 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
   return (
     <header className="chat-tabs-bar">
       <h1 className="chat-tabs-title">Chat</h1>
+      {assistantMood && (
+        <div className="chat-mood-readout" role="status" aria-label={`Assistant mood: ${assistantMood}`}>
+          <span>Mood</span>
+          <strong>{assistantMood}</strong>
+        </div>
+      )}
       <div className="chat-tabs-track">
         <div
           ref={scrollRef}

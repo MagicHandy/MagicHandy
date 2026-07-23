@@ -64,6 +64,24 @@ describe("ChatTabs", () => {
     expect(screen.getByRole("button", { name: "Start a new chat" })).toBeEnabled();
   });
 
+  it("keeps backend-reported mood outside the Chat heading", () => {
+    render(
+      <ChatTabs
+        sessions={sessions}
+        activeId="one"
+        disabled={false}
+        assistantMood="Teasing"
+        onActivate={vi.fn()}
+        onNew={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Chat", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Assistant mood: Teasing" })).toHaveTextContent("MoodTeasing");
+  });
+
   it("moves keyboard focus across tabs without activating them", () => {
     const activate = vi.fn();
     render(

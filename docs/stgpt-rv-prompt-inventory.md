@@ -365,17 +365,20 @@ NEW CONVERSATION LOG:
 
 ## MagicHandy Follow-Ups
 
-MagicHandy currently ships smaller neutral built-in prompt sets in
+MagicHandy ships smaller neutral built-in prompt sets in
 `internal/chat/prompts.go`, with localized behavior text for each supported
-language and a shared English JSON contract. That is acceptable for early
-phases, but parity work should not forget the adult prompt behavior above.
+language and a shared English JSON contract. Opted-in interactive non-utility voices now add
+the reviewed user-anatomy rules, a bounded dedicated persona, the exact
+17-value mood protocol, and three bounded canonical recent assistant lines.
+These additions remain separate from the motion contract.
 
 Follow-up candidates:
 
 - Add an explicit/adult built-in prompt pack only after its exact product tone is
   decided, keeping the JSON contract code-owned.
-- Add prompt anatomy settings before voice/prompt parity if chat quality depends
-  on anatomy-specific wording.
+- Keep live-model output evidence current for anatomy/persona/mood combinations;
+  the 2026-07-23 implementation is unit/integration verified but does not claim
+  a new explicit-output transcript.
 - Ensure memory/profile import in Phase 15 preserves explicit wording.
 - When localization is wired, translate explicit prompt packs as adult content;
   do not funnel them through the neutral functional UI glossary.

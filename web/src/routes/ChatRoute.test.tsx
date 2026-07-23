@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   appState: { modes: {} } as {
     modes: { mode?: string };
-    chat?: { active_session_id?: string; latest_seq?: number };
+    chat?: { active_session_id?: string; latest_seq?: number; current_mood?: string };
     uptime_seconds?: number;
   },
 }));
@@ -83,6 +83,20 @@ describe("ChatRoute", () => {
     expect(within(conversation).queryByText("Autopilot control")).not.toBeInTheDocument();
     expect(within(controls).getByText("Autopilot control")).toBeInTheDocument();
     expect(screen.queryByText("Manual motion")).not.toBeInTheDocument();
+  });
+
+  it("shows only the backend mood for the active session", async () => {
+    mocks.appState = { modes: {}, chat: { active_session_id: "chat-test", current_mood: "Teasing" } };
+    const view = render(<ChatRoute />);
+
+    expect(await screen.findByRole("status", { name: "Assistant mood: Teasing" })).toHaveTextContent("MoodTeasing");
+    mocks.appState = { modes: {}, chat: { active_session_id: "chat-test", current_mood: "Curious" } };
+    view.rerender(<ChatRoute />);
+    expect(screen.getByRole("status", { name: "Assistant mood: Curious" })).toBeInTheDocument();
+
+    mocks.appState = { modes: {}, chat: { active_session_id: "another-chat", current_mood: "Playful" } };
+    view.rerender(<ChatRoute />);
+    expect(screen.queryByRole("status", { name: /Assistant mood/ })).not.toBeInTheDocument();
   });
 
   it("confirms a new chat and can save the active conversation first", async () => {

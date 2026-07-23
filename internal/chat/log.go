@@ -44,6 +44,15 @@ type MessageDiagnostics struct {
 	SemanticFallback bool   `json:"semantic_fallback,omitempty"`
 	InitialMalformed bool   `json:"initial_malformed,omitempty"`
 	MotionAction     string `json:"motion_action,omitempty"`
+	Mood             Mood   `json:"mood,omitempty"`
+	MoodChanged      bool   `json:"mood_changed,omitempty"`
+}
+
+// SessionPromptContext is the backend-owned per-session continuity snapshot
+// supplied to one model turn.
+type SessionPromptContext struct {
+	CurrentMood            Mood
+	RecentAssistantReplies []string
 }
 
 // LogMessage is one visible row in a chat session.
@@ -83,7 +92,12 @@ func OpenMessageLog(dataDir string) (*MessageLog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open chat message log: %w", err)
 	}
-	return &MessageLog{db: database, ownsDB: true}, nil
+	log := &MessageLog{db: database, ownsDB: true}
+	if err := log.discardPending(); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	return log, nil
 }
 
 // OpenMessageLogWithDatabase opens a chat log over the process datastore.
@@ -91,7 +105,21 @@ func OpenMessageLogWithDatabase(database *dbstore.DB) (*MessageLog, error) {
 	if database == nil {
 		return nil, errors.New("chat message datastore is required")
 	}
-	return &MessageLog{db: database}, nil
+	log := &MessageLog{db: database}
+	if err := log.discardPending(); err != nil {
+		return nil, err
+	}
+	return log, nil
+}
+
+func (l *MessageLog) discardPending() error {
+	if err := l.db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM messages WHERE committed = 0`)
+		return err
+	}); err != nil {
+		return fmt.Errorf("discard interrupted chat replies: %w", err)
+	}
+	return nil
 }
 
 // Close releases the datastore only when the log opened it.
@@ -192,7 +220,7 @@ func (l *MessageLog) Sessions() ([]Session, error) {
 			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
 		FROM chat_sessions s
 		CROSS JOIN chat_workspace w
-		LEFT JOIN messages m ON m.session_id = s.id
+		LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
 		WHERE w.id = 'current'
 		GROUP BY s.id, s.title, s.saved, w.active_session_id, s.created_at, s.updated_at
 		ORDER BY s.created_at ASC, s.id ASC
@@ -221,7 +249,7 @@ func (l *MessageLog) Session(id string) (Session, error) {
 			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
 		FROM chat_sessions s
 		CROSS JOIN chat_workspace w
-		LEFT JOIN messages m ON m.session_id = s.id
+		LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
 		WHERE s.id = ? AND w.id = 'current'
 		GROUP BY s.id, s.title, s.saved, w.active_session_id, s.created_at, s.updated_at
 	`, id).Scan(&session.ID, &session.Title, &session.Saved, &session.Active,
@@ -248,7 +276,7 @@ func (l *MessageLog) CreateSession(discardCurrentUnsaved bool) (Session, error) 
 			SELECT s.id, s.saved, COUNT(m.seq)
 			FROM chat_workspace w
 			JOIN chat_sessions s ON s.id = w.active_session_id
-			LEFT JOIN messages m ON m.session_id = s.id
+			LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
 			WHERE w.id = 'current'
 			GROUP BY s.id, s.saved
 		`).Scan(&currentID, &currentSaved, &currentCount); err != nil {
@@ -290,7 +318,7 @@ func (l *MessageLog) ActivateSession(id string, discardCurrentUnsaved bool) (Ses
 			SELECT s.id, s.saved, COUNT(m.seq)
 			FROM chat_workspace w
 			JOIN chat_sessions s ON s.id = w.active_session_id
-			LEFT JOIN messages m ON m.session_id = s.id
+			LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
 			WHERE w.id = 'current'
 			GROUP BY s.id, s.saved
 		`).Scan(&currentID, &currentSaved, &currentCount); err != nil {
@@ -424,6 +452,16 @@ func (l *MessageLog) Append(role string, content string, clientID string) (int64
 
 // AppendTo adds one visible message to the selected session.
 func (l *MessageLog) AppendTo(sessionID, role, content, clientID string, diagnostics *MessageDiagnostics) (int64, error) {
+	return l.appendTo(sessionID, role, content, clientID, diagnostics, true)
+}
+
+// AppendPendingAssistantTo stages one generated reply. Reads and cap pruning
+// ignore it until CommitPending makes the row visible.
+func (l *MessageLog) AppendPendingAssistantTo(sessionID, content string, diagnostics *MessageDiagnostics) (int64, error) {
+	return l.appendTo(sessionID, MessageRoleAssistant, content, "", diagnostics, false)
+}
+
+func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnostics *MessageDiagnostics, committed bool) (int64, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return 0, fmt.Errorf("chat log rejects empty %s messages", role)
@@ -452,15 +490,18 @@ func (l *MessageLog) AppendTo(sessionID, role, content, clientID string, diagnos
 		}
 		now := nowUTC()
 		result, err := tx.ExecContext(ctx, `
-			INSERT INTO messages(session_id, role, content, client_id, diagnostics_json, created_at)
-			VALUES(?, ?, ?, ?, ?, ?)
-		`, sessionID, role, content, clientID, string(diagnosticsJSON), now)
+			INSERT INTO messages(session_id, role, content, client_id, diagnostics_json, created_at, committed)
+			VALUES(?, ?, ?, ?, ?, ?, ?)
+		`, sessionID, role, content, clientID, string(diagnosticsJSON), now, committed)
 		if err != nil {
 			return err
 		}
 		seq, err = result.LastInsertId()
 		if err != nil {
 			return err
+		}
+		if !committed {
+			return nil
 		}
 		if role == MessageRoleUser {
 			_, err = tx.ExecContext(ctx, `
@@ -474,18 +515,55 @@ func (l *MessageLog) AppendTo(sessionID, role, content, clientID string, diagnos
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `
-			DELETE FROM messages
-			WHERE session_id = ? AND seq NOT IN (
-				SELECT seq FROM messages WHERE session_id = ? ORDER BY seq DESC LIMIT ?
-			)
-		`, sessionID, sessionID, MessageLogCap)
-		return err
+		return pruneCommittedMessages(ctx, tx, sessionID)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("append chat message: %w", err)
 	}
 	return seq, nil
+}
+
+// CommitPending atomically exposes one staged assistant reply and applies the
+// per-session cap. A Stop that wins the caller's commit barrier deletes the
+// staged row instead, so a canceled reply cannot evict visible history.
+func (l *MessageLog) CommitPending(seq int64) error {
+	if seq <= 0 {
+		return errors.New("a pending chat sequence is required")
+	}
+	ctx := context.Background()
+	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var sessionID string
+		if err := tx.QueryRowContext(ctx, `
+			SELECT session_id FROM messages WHERE seq = ? AND committed = 0
+		`, seq).Scan(&sessionID); err != nil {
+			if err == sql.ErrNoRows {
+				return errors.New("pending chat reply not found")
+			}
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE messages SET committed = 1 WHERE seq = ?`, seq); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET updated_at = ? WHERE id = ?`, nowUTC(), sessionID); err != nil {
+			return err
+		}
+		return pruneCommittedMessages(ctx, tx, sessionID)
+	}); err != nil {
+		return fmt.Errorf("commit pending chat reply: %w", err)
+	}
+	return nil
+}
+
+func pruneCommittedMessages(ctx context.Context, tx *sql.Tx, sessionID string) error {
+	_, err := tx.ExecContext(ctx, `
+		DELETE FROM messages
+		WHERE session_id = ? AND committed = 1 AND seq NOT IN (
+			SELECT seq FROM messages
+			WHERE session_id = ? AND committed = 1
+			ORDER BY seq DESC LIMIT ?
+		)
+	`, sessionID, sessionID, MessageLogCap)
+	return err
 }
 
 // Delete removes one message by its process-wide sequence number.
@@ -520,7 +598,7 @@ func (l *MessageLog) AfterSession(sessionID string, after int64, limit int) ([]L
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
 		SELECT seq, role, content, client_id, diagnostics_json, created_at
 		FROM messages
-		WHERE session_id = ? AND seq > ?
+		WHERE session_id = ? AND committed = 1 AND seq > ?
 		ORDER BY seq ASC
 		LIMIT ?
 	`, sessionID, after, limit)
@@ -549,7 +627,7 @@ func (l *MessageLog) RecentSession(sessionID string, limit int) ([]LogMessage, e
 		SELECT seq, role, content, client_id, diagnostics_json, created_at
 		FROM (
 			SELECT seq, role, content, client_id, diagnostics_json, created_at
-			FROM messages WHERE session_id = ? ORDER BY seq DESC LIMIT ?
+			FROM messages WHERE session_id = ? AND committed = 1 ORDER BY seq DESC LIMIT ?
 		) AS recent
 		ORDER BY seq ASC
 	`, sessionID, limit)
@@ -558,6 +636,61 @@ func (l *MessageLog) RecentSession(sessionID string, limit int) ([]LogMessage, e
 	}
 	defer func() { _ = rows.Close() }()
 	return scanLogMessages(rows)
+}
+
+// PromptContext returns the effective mood and latest assistant lines for one
+// session. Values are projected and bounded for prompts; stored replies remain
+// unchanged.
+func (l *MessageLog) PromptContext(sessionID string) (SessionPromptContext, error) {
+	rows, err := l.db.SQL().QueryContext(context.Background(), `
+		SELECT content, diagnostics_json
+		FROM messages
+		WHERE session_id = ? AND role = ? AND committed = 1
+		ORDER BY seq DESC
+		LIMIT ?
+	`, sessionID, MessageRoleAssistant, MessageLogCap)
+	if err != nil {
+		return SessionPromptContext{}, fmt.Errorf("read chat prompt context: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var contextSnapshot SessionPromptContext
+	var fallbackMood Mood
+	for rows.Next() {
+		var content, diagnosticsJSON string
+		if err := rows.Scan(&content, &diagnosticsJSON); err != nil {
+			return SessionPromptContext{}, fmt.Errorf("scan chat prompt context: %w", err)
+		}
+		if len(contextSnapshot.RecentAssistantReplies) < maxRecentAssistantReplies {
+			if line := boundedPromptData(content, maxRecentAssistantRunes); line != "" {
+				contextSnapshot.RecentAssistantReplies = append(contextSnapshot.RecentAssistantReplies, line)
+			}
+		}
+		if contextSnapshot.CurrentMood == "" && diagnosticsJSON != "" && diagnosticsJSON != "{}" {
+			var diagnostics MessageDiagnostics
+			if err := json.Unmarshal([]byte(diagnosticsJSON), &diagnostics); err != nil {
+				return SessionPromptContext{}, fmt.Errorf("decode chat prompt diagnostics: %w", err)
+			}
+			if mood, ok := validMood(diagnostics.Mood); ok {
+				if fallbackMood == "" {
+					fallbackMood = mood
+				}
+				if diagnostics.MoodChanged {
+					contextSnapshot.CurrentMood = mood
+				}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return SessionPromptContext{}, fmt.Errorf("read chat prompt context: %w", err)
+	}
+	if contextSnapshot.CurrentMood == "" {
+		contextSnapshot.CurrentMood = fallbackMood
+	}
+	for left, right := 0, len(contextSnapshot.RecentAssistantReplies)-1; left < right; left, right = left+1, right-1 {
+		contextSnapshot.RecentAssistantReplies[left], contextSnapshot.RecentAssistantReplies[right] = contextSnapshot.RecentAssistantReplies[right], contextSnapshot.RecentAssistantReplies[left]
+	}
+	return contextSnapshot, nil
 }
 
 func scanLogMessages(rows *sql.Rows) ([]LogMessage, error) {
@@ -593,7 +726,7 @@ func (l *MessageLog) LatestSeq() (int64, error) {
 func (l *MessageLog) LatestSeqSession(sessionID string) (int64, error) {
 	var seq sql.NullInt64
 	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT MAX(seq) FROM messages WHERE session_id = ?
+		SELECT MAX(seq) FROM messages WHERE session_id = ? AND committed = 1
 	`, sessionID).Scan(&seq)
 	if err != nil {
 		return 0, fmt.Errorf("read chat session head: %w", err)
@@ -649,7 +782,7 @@ func (l *MessageLog) AdvanceCursorSession(clientID, sessionID string, seq int64)
 	var stored int64
 	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var latest sql.NullInt64
-		if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM messages WHERE session_id = ?`, sessionID).Scan(&latest); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM messages WHERE session_id = ? AND committed = 1`, sessionID).Scan(&latest); err != nil {
 			return err
 		}
 		if seq > latest.Int64 {

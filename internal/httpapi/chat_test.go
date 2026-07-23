@@ -28,6 +28,18 @@ type blockingLLMProvider struct {
 	started chan struct{}
 }
 
+type stubbornLLMProvider struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+type blockingStopTransport struct {
+	*transport.Fake
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
 func (p *blockingLLMProvider) StreamChat(ctx context.Context, _ llm.ChatRequest, _ func(string) error) (string, error) {
 	close(p.started)
 	<-ctx.Done()
@@ -36,6 +48,26 @@ func (p *blockingLLMProvider) StreamChat(ctx context.Context, _ llm.ChatRequest,
 
 func (p *blockingLLMProvider) Status(context.Context) llm.ProviderStatus {
 	return llm.ProviderStatus{Provider: "blocking", Available: true}
+}
+
+func (p *stubbornLLMProvider) StreamChat(_ context.Context, _ llm.ChatRequest, _ func(string) error) (string, error) {
+	close(p.started)
+	<-p.release
+	return `{"reply":"Late start.","motion":{"action":"start","speed_percent":30}}`, nil
+}
+
+func (p *stubbornLLMProvider) Status(context.Context) llm.ProviderStatus {
+	return llm.ProviderStatus{Provider: "stubborn", Available: true}
+}
+
+func (t *blockingStopTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {
+	t.once.Do(func() { close(t.started) })
+	select {
+	case <-t.release:
+		return t.Fake.Stop(ctx, command)
+	case <-ctx.Done():
+		return transport.CommandResult{}, ctx.Err()
+	}
 }
 
 func (p *scriptedLLMProvider) StreamChat(_ context.Context, request llm.ChatRequest, onDelta func(string) error) (string, error) {
@@ -184,6 +216,204 @@ func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	commands := fake.Commands()
 	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
 		t.Fatalf("last command = %+v, want stop", commands)
+	}
+}
+
+func TestChatStopMatcherCoversBuiltInPromptLanguages(t *testing.T) {
+	for _, message := range []string{
+		"Please stop the motion.",
+		"Por favor, detén el movimiento.",
+		"Por favor, pare o movimento.",
+		"请停止运动。",
+		"動きを止めてください。",
+	} {
+		if !isChatStopMessage(message) {
+			t.Errorf("clear Stop request %q did not use the deterministic path", message)
+		}
+	}
+	for promptSet, want := range map[string]string{
+		chat.DefaultPromptSetID:           "Stopping motion.",
+		chat.PromptSetIDSpanish:           "Deteniendo el movimiento.",
+		chat.PromptSetIDPortugueseBrazil:  "Parando o movimento.",
+		chat.PromptSetIDSimplifiedChinese: "正在停止运动。",
+		chat.PromptSetIDJapanese:          "モーションを停止します。",
+	} {
+		if got := chatStopReply(promptSet); got != want {
+			t.Errorf("Stop reply for %q = %q, want %q", promptSet, got, want)
+		}
+	}
+	for _, message := range []string{
+		"Do not stop the story.",
+		"Explica la parada de emergencia.",
+		"Conte uma história sobre movimento.",
+		"解释停止运动的含义。",
+		"停止について説明して。",
+	} {
+		if isChatStopMessage(message) {
+			t.Errorf("conversation %q was mistaken for a deterministic Stop", message)
+		}
+	}
+}
+
+func TestChatStopPublishesSequenceWhileTransportIsBlocked(t *testing.T) {
+	blocking := &blockingStopTransport{
+		Fake:    transport.NewFake(),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	server := newTestServerWithRuntime(t, Runtime{Transport: blocking, MotionTransport: blocking})
+	t.Cleanup(server.Close)
+
+	stopRequest := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"stop"}`)))
+	stopRequest.Header.Set("Content-Type", "application/json")
+	stopRecorder := httptest.NewRecorder()
+	stopDone := make(chan struct{})
+	go func() {
+		server.Handler().ServeHTTP(stopRecorder, stopRequest)
+		close(stopDone)
+	}()
+	select {
+	case <-blocking.started:
+	case <-time.After(2 * time.Second):
+		close(blocking.release)
+		t.Fatal("chat Stop did not reach the transport")
+	}
+
+	stateRecorder := httptest.NewRecorder()
+	stateDone := make(chan struct{})
+	go func() {
+		server.Handler().ServeHTTP(stateRecorder, httptest.NewRequest(http.MethodGet, "/api/state", nil))
+		close(stateDone)
+	}()
+	select {
+	case <-stateDone:
+	case <-time.After(2 * time.Second):
+		close(blocking.release)
+		t.Fatal("state publication blocked behind transport Stop")
+	}
+	if stateRecorder.Code != http.StatusOK || !strings.Contains(stateRecorder.Body.String(), `"stop_sequence":1`) {
+		close(blocking.release)
+		t.Fatalf("state did not publish the Chat Stop sequence: %d %s", stateRecorder.Code, stateRecorder.Body.String())
+	}
+	admissionDone := make(chan error, 1)
+	go func() {
+		_, _, err := server.motionEngineForStart()
+		admissionDone <- err
+	}()
+	select {
+	case err := <-admissionDone:
+		close(blocking.release)
+		t.Fatalf("new engine admission completed before physical Stop: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(blocking.release)
+	select {
+	case <-stopDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("chat Stop did not finish after transport release")
+	}
+	select {
+	case err := <-admissionDone:
+		if err != nil {
+			t.Fatalf("engine admission after Stop: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("engine admission remained blocked after Stop")
+	}
+	if !strings.Contains(stopRecorder.Body.String(), `"stop_sequence":1`) {
+		t.Fatalf("chat Stop stream omitted its sequence:\n%s", stopRecorder.Body.String())
+	}
+}
+
+func TestChatStopIgnoresStaleSessionForSafety(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	t.Cleanup(server.Close)
+
+	body := postChatStream(t, server, `{"session_id":"stale-session","message":"stop"}`)
+	if !strings.Contains(body, `"state":"deterministic_stop"`) || !strings.Contains(body, `"user_seq":0`) {
+		t.Fatalf("stale-session Stop response = %s", body)
+	}
+	commands := fake.Commands()
+	if len(commands) != 1 || commands[0].Kind != transport.CommandKindStop {
+		t.Fatalf("stale-session Stop commands = %+v", commands)
+	}
+}
+
+func TestChatStopInvalidatesOverlappingGenerationBeforeItCanRestartMotion(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &stubbornLLMProvider{started: make(chan struct{}), release: make(chan struct{})}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"start moving"}`)))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(stopSequenceHeader, "0")
+	recorder := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		server.Handler().ServeHTTP(recorder, request)
+		close(done)
+	}()
+	select {
+	case <-provider.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("chat provider did not start")
+	}
+
+	stopBody := postChatStream(t, server, `{"message":"stop"}`)
+	if !strings.Contains(stopBody, `"reply":"Stopping motion."`) {
+		t.Fatalf("chat stop response missing deterministic reply:\n%s", stopBody)
+	}
+	close(provider.release)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("invalidated chat did not finish")
+	}
+	for _, command := range fake.Commands() {
+		if command.Kind != transport.CommandKindStop {
+			t.Fatalf("overlapping generation issued post-Stop motion: %+v", fake.Commands())
+		}
+	}
+}
+
+func TestChatStartRechecksStopAfterWaitingForEngineAdmission(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	t.Cleanup(server.Close)
+	stopSequence := server.stopSequence.Load()
+	server.motion.lifecycleMu.Lock()
+
+	type dispatchResult struct {
+		dispatch chatMotionDispatch
+		err      error
+	}
+	result := make(chan dispatchResult, 1)
+	go func() {
+		dispatch, err := server.dispatchChatMotionAt(t.Context(), &chat.MotionCommand{Action: chat.MotionActionStart}, &stopSequence)
+		result <- dispatchResult{dispatch: dispatch, err: err}
+	}()
+	time.Sleep(20 * time.Millisecond)
+	finishInvalidation := server.invalidateWorkForStop("test_stop")
+	server.motion.lifecycleMu.Unlock()
+	defer finishInvalidation()
+
+	select {
+	case got := <-result:
+		if got.err == nil || got.dispatch.Applied {
+			t.Fatalf("stale chat start after admission wait = %+v, %v", got.dispatch, got.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("stale chat start remained blocked")
+	}
+	if commands := fake.Commands(); len(commands) != 0 {
+		t.Fatalf("stale chat start reached transport: %+v", commands)
 	}
 }
 

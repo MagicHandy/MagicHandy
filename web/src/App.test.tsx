@@ -1321,7 +1321,7 @@ describe("app shell safety invariants", () => {
 describe("chat stream API", () => {
   it("throws JSON error responses before trying to read an SSE body", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ error: "read-only client" }) } as Response)));
-    await expect(streamChat("chat-test", "hello", [], () => undefined)).rejects.toThrow("read-only client");
+    await expect(streamChat("chat-test", "hello", () => undefined)).rejects.toThrow("read-only client");
   });
 
   it("parses final message events", async () => {
@@ -1331,13 +1331,16 @@ describe("chat stream API", () => {
         controller.close();
       },
     });
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, status: 200, body } as Response));
+    vi.stubGlobal("fetch", fetchMock);
     const events: Array<{ event: string }> = [];
-    await streamChat("chat-test", "hello", [], (event) => events.push(event));
+    await streamChat("chat-test", "hello", (event) => events.push(event));
     expect(events).toEqual([
       expect.objectContaining({ event: "message" }),
       expect.objectContaining({ event: "done" }),
     ]);
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(JSON.parse(String(request?.body))).toEqual({ session_id: "chat-test", message: "hello" });
   });
 
   it("parses CRLF frames split across network chunks and flushes the final frame", async () => {
@@ -1353,7 +1356,7 @@ describe("chat stream API", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
     const events: Array<{ event: string; data: unknown }> = [];
 
-    await streamChat("chat-test", "hello", [], (event) => events.push(event));
+    await streamChat("chat-test", "hello", (event) => events.push(event));
 
     expect(events).toEqual([
       { event: "delta", data: { text: "Hello" } },
@@ -1370,7 +1373,7 @@ describe("chat stream API", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
 
-    await expect(streamChat("chat-test", "hello", [], () => undefined)).rejects.toThrow("malformed JSON");
+    await expect(streamChat("chat-test", "hello", () => undefined)).rejects.toThrow("malformed JSON");
   });
 
   it("rejects a stream that closes before its terminal event", async () => {
@@ -1382,6 +1385,6 @@ describe("chat stream API", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, body } as Response)));
 
-    await expect(streamChat("chat-test", "hello", [], () => undefined)).rejects.toThrow("before completion");
+    await expect(streamChat("chat-test", "hello", () => undefined)).rejects.toThrow("before completion");
   });
 });
