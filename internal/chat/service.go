@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
@@ -48,6 +49,7 @@ type Service struct {
 	Prompt               PromptSet
 	Model                string
 	Memories             []string
+	UserProfile          config.UserProfileSettings
 	MotionGenerationMode string
 }
 
@@ -69,18 +71,35 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
 	systemPrompt := ComposeSystemForMode(prompt, s.Memories, s.MotionGenerationMode)
+	systemPrompt = AppendUserProfile(systemPrompt, s.UserProfile, prompt.ID)
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
+	chatRequest := llm.ChatRequest{
 		Messages:    messages,
 		Model:       s.Model,
 		Temperature: 0.2,
 		MaxTokens:   256,
-	}, func(text string) error {
+	}
+	synsualMode := IsSynsualMotionMode(s.MotionGenerationMode)
+	if synsualMode {
+		chatRequest.Temperature = 0.75
+		chatRequest.MaxTokens = 512
+	}
+	if !synsualMode && normalizeMotionGenerationMode(s.MotionGenerationMode) == config.MotionGenerationModeProcedural {
+		chatRequest.ResponseFormat = SceneDirectorResponseFormat()
+	}
+	raw, err := s.Provider.StreamChat(ctx, chatRequest, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
 	if err != nil {
 		return Result{}, err
+	}
+
+	if synsualMode {
+		response, parseErr := ParseSynsualAssistantResponse(raw)
+		if parseErr == nil {
+			return Result{Response: response, Raw: raw}, nil
+		}
 	}
 
 	response, parseErr := ParseAssistantResponseForMode(raw, s.MotionGenerationMode)
@@ -91,11 +110,24 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return Result{Response: wrapped, Raw: raw}, nil
 	}
 
+	malformedError := parseErr.Error()
+	if synsualMode {
+		if _, synsualErr := ParseSynsualAssistantResponse(raw); synsualErr != nil {
+			malformedError = synsualErr.Error()
+		}
+	}
+
 	result := Result{
 		Raw:              raw,
 		InitialMalformed: true,
 		Malformed:        true,
-		MalformedError:   parseErr.Error(),
+		MalformedError:   malformedError,
+	}
+	if synsualMode {
+		if err := emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: malformedError}); err != nil {
+			return result, err
+		}
+		return result, nil
 	}
 	if err := emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: parseErr.Error()}); err != nil {
 		return result, err
@@ -105,12 +137,16 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: RepairPrompt(prompt, raw, parseErr.Error())},
 	}
-	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
+	repairRequest := llm.ChatRequest{
 		Messages:    repairMessages,
 		Model:       s.Model,
 		Temperature: 0,
 		MaxTokens:   256,
-	}, func(text string) error {
+	}
+	if !synsualMode && normalizeMotionGenerationMode(s.MotionGenerationMode) == config.MotionGenerationModeProcedural {
+		repairRequest.ResponseFormat = SceneDirectorResponseFormat()
+	}
+	repairRaw, repairErr := s.Provider.StreamChat(ctx, repairRequest, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "repair_delta", Phase: "repair", Text: text})
 	})
 	result.RepairRaw = repairRaw
@@ -164,6 +200,13 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 }
 
 func assistantHistoryContent(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return `{"reply":"Previous assistant reply omitted.","motion":{"action":"none"}}`
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		return trimmed
+	}
 	if _, err := ParseAssistantResponse(content); err == nil {
 		return content
 	}

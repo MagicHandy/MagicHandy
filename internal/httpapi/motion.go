@@ -389,15 +389,40 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 	return transport.NewRecordingTransport(inner, s.outgoingSchedule()), nil
 }
 
+func (s *Server) wrapMotionCommandTransport(recording transport.Transport, source string) transport.Transport {
+	settings, _ := s.store.Snapshot()
+	if !settings.Diagnostics.ShouldLogHandyMotion() {
+		return recording
+	}
+	return newDeviceMotionDebugTransport(recording, s, source, settings.Diagnostics.VerboseHandyMotion())
+}
+
 // newMotionCommandTransport drives procedural/manual-queue players. When the
 // configured device is not connected it falls back to an in-memory transport so
 // the live visualizer still mirrors outgoing HSP.
 func (s *Server) newMotionCommandTransport() (transport.Transport, error) {
 	settings, _ := s.store.Snapshot()
 	if !s.deviceMotionReady(settings) {
-		return transport.NewRecordingTransport(transport.NewFake(), s.outgoingSchedule()), nil
+		if s.motion.transport != nil {
+			return s.wrapMotionCommandTransport(
+				transport.NewRecordingTransport(s.motion.transport, s.outgoingSchedule()),
+				"chat_auto",
+			), nil
+		}
+		selected, err := s.newSelectedMotionTransport()
+		if err == nil {
+			return s.wrapMotionCommandTransport(selected, "chat_auto"), nil
+		}
+		return s.wrapMotionCommandTransport(
+			transport.NewRecordingTransport(transport.NewFake(), s.outgoingSchedule()),
+			"chat_auto",
+		), nil
 	}
-	return s.newSelectedMotionTransport()
+	selected, err := s.newSelectedMotionTransport()
+	if err != nil {
+		return nil, err
+	}
+	return s.wrapMotionCommandTransport(selected, "chat_auto"), nil
 }
 
 func (s *Server) deviceMotionReady(settings config.Settings) bool {

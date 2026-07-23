@@ -1,4 +1,11 @@
 // Package chat orchestrates local LLM turns into app-level semantic actions.
+//
+// Motion dispatch uses two stacks (see docs/procedural-chat-motion-analysis.md):
+//   - Library / semantic retarget: motion.Engine via httpapi.dispatchChatMotion
+//   - Procedural physics: manualqueue.Player + HSP via httpapi.dispatchChatChaoticMotionAsync
+//
+// MotionCommand is shared JSON; procedural fields feed the organic stroke generator.
+// MotionTargetFromCommand maps engine-oriented metadata for library mode and diagnostics.
 package chat
 
 import (
@@ -14,11 +21,11 @@ import (
 const (
 	// MotionActionNone leaves motion unchanged.
 	MotionActionNone = "none"
-	// MotionActionStart starts motion through the motion engine.
+	// MotionActionStart starts motion (engine or procedural player depending on mode).
 	MotionActionStart = "start"
-	// MotionActionTarget retargets already running motion through the motion engine.
+	// MotionActionTarget retargets running motion.
 	MotionActionTarget = "target"
-	// MotionActionStop stops motion through the motion engine.
+	// MotionActionStop stops motion.
 	MotionActionStop = "stop"
 )
 
@@ -40,12 +47,18 @@ type MotionCommand struct {
 	// IntensidadeLegacy preserves the older semantic string contract during repair.
 	IntensidadeLegacy string `json:"-"`
 
+	// PhysicalAction carries director semantic action (oral, riding, deepthroat, …).
+	// Distinct from Action (start/target/stop dispatch control).
+	PhysicalAction string `json:"physical_action,omitempty"`
+
 	// Chaotic procedural physics (procedural mode).
 	Velocidade  int    `json:"velocidade,omitempty"`
 	Intensidade int    `json:"intensidade,omitempty"`
 	Regiao      string `json:"regiao,omitempty"`
 	TipoBatida  string `json:"tipo_batida,omitempty"`
 	AtrasoMS    int    `json:"atraso_ms,omitempty"`
+	// StrokeRange carries scene-director normalized bounds [0..1, 0..1].
+	StrokeRange []float64 `json:"stroke_range,omitempty"`
 }
 
 // UnmarshalJSON accepts the new integer intensidade physics field and the
@@ -106,6 +119,11 @@ func ParseAssistantResponseForMode(raw string, motionGenerationMode string) (Ass
 	decoder.DisallowUnknownFields()
 	var response AssistantResponse
 	if err := decoder.Decode(&response); err != nil {
+		if normalizeMotionGenerationMode(motionGenerationMode) == config.MotionGenerationModeProcedural {
+			if director, derr := ParseSceneDirectorResponse(raw); derr == nil {
+				return director.ToAssistantResponse(false), nil
+			}
+		}
 		return AssistantResponse{}, fmt.Errorf("assistant response must be strict JSON: %w", err)
 	}
 	var extra struct{}
@@ -145,6 +163,8 @@ func validateAssistantResponse(response *AssistantResponse, motionGenerationMode
 	switch mode {
 	case config.MotionGenerationModeLibrary:
 		return validateLibraryMotion(response.Motion)
+	case config.MotionGenerationModeSynsual:
+		return validateProceduralMotion(response.Motion)
 	default:
 		return validateProceduralMotion(response.Motion)
 	}

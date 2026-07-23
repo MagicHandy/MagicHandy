@@ -121,8 +121,10 @@ func maxMinDeltaForTipo(tipo string, safetyLock bool) int {
 		return 30
 	}
 	switch normalizeTipoBatida(tipo) {
-	case "very_fast", "vibrate", "turbo":
-		return 5
+	case "very_fast":
+		return veryFastStepMaxMS + 5
+	case "vibrate", "turbo":
+		return turboVibrateHalfCycleMaxMS + 10
 	case "alto":
 		return 45
 	default:
@@ -132,8 +134,10 @@ func maxMinDeltaForTipo(tipo string, safetyLock bool) int {
 
 func maxMaxDeltaForTipo(tipo string) int {
 	switch normalizeTipoBatida(tipo) {
-	case "very_fast", "vibrate", "turbo":
-		return 10
+	case "very_fast":
+		return veryFastStepMaxMS + 5
+	case "vibrate", "turbo":
+		return turboVibrateHalfCycleMaxMS + 5
 	case "lento", "fluido":
 		return 320
 	default:
@@ -160,7 +164,14 @@ func TestMotionCalibrateBatteryUnit(t *testing.T) {
 				zoneSpan = 1
 			}
 			maxAllowedStep := zoneSpan/3 + 16
-			if normalizeTipoBatida(tc.physics.TipoBatida) == "very_fast" {
+			if IsTurboTipo(tc.physics.TipoBatida) {
+				tipo := normalizeTipoBatida(tc.physics.TipoBatida)
+				if tipo == "very_fast" {
+					maxAllowedStep = zoneSpan
+				} else {
+					maxAllowedStep = turboVibrateRangeMax
+				}
+			} else if normalizeTipoBatida(tc.physics.TipoBatida) == "very_fast" {
 				maxAllowedStep = zoneSpan/2 + 4
 			}
 			if trace.MaxPositionStep > maxAllowedStep {

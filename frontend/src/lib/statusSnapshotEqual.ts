@@ -34,7 +34,6 @@ const VOLATILE_KEYS: (keyof StatusSnapshot)[] = [
   "handy_connected",
   "llm_connected",
   "footer_status",
-  "autospeak_scheduled",
   "sync_offset_ms",
   "measured_rtt_ms",
   "persona_id",
@@ -78,6 +77,7 @@ function chatAutoEqual(
     a.active === b.active &&
     a.stamina === b.stamina &&
     a.humor === b.humor &&
+    a.spice_level === b.spice_level &&
     a.mood_progress === b.mood_progress &&
     a.posicao === b.posicao &&
     a.motion?.velocidade === b.motion?.velocidade &&

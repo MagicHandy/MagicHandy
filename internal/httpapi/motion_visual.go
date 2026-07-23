@@ -34,6 +34,45 @@ func (s *Server) registerMotionVisualRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/motion/sync-offset", s.handleMotionSyncOffset)
 	mux.HandleFunc("POST /api/motion/auto-sync", s.handleMotionAutoSync)
 	mux.HandleFunc("GET /api/motion/direct/status", s.handleDirectStatus)
+	mux.HandleFunc("GET /api/motion/visual/stream", s.handleMotionVisualStream)
+}
+
+func (s *Server) handleMotionVisualStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, errors.New("streaming responses are unavailable"))
+		return
+	}
+	setSSEHeaders(w)
+	w.WriteHeader(http.StatusOK)
+
+	emit := func() bool {
+		s.visual.mu.Lock()
+		offsetMS := s.visual.syncPrefs.OffsetMS
+		s.visual.mu.Unlock()
+		payload := s.outgoingSchedule().VisualStreamSnapshot(time.Now(), offsetMS)
+		if err := writeSSE(w, "visual", payload); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !emit() {
+		return
+	}
+
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if !emit() {
+				return
+			}
+		}
+	}
 }
 
 func (s *Server) handleMotionSyncOffset(w http.ResponseWriter, r *http.Request) {

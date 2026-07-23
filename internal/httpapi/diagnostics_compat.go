@@ -6,8 +6,11 @@ import (
 
 func (s *Server) handleDiagnosticsCompat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"service": serviceName,
-		"llm":     s.llmState(r.Context()),
+		"service":           serviceName,
+		"llm":               s.llmState(r.Context()),
+		"handy_log_recent":  diagnosticsHandyLogRecent(s),
+		"handy_log_path":    s.handyLogPath(),
+		"handy_log_enabled": s.handyMotionLogEnabled(),
 	})
 }
 

@@ -1,61 +1,54 @@
 package chat
 
-import "testing"
+import (
+	"testing"
 
-func TestNormalizeChaoticPhysicsDefaults(t *testing.T) {
+	"github.com/mapledaemon/MagicHandy/internal/motion"
+)
+
+func TestChaoticPhysicsFromCommandMapsPhysicalAction(t *testing.T) {
 	command := &MotionCommand{
-		Velocidade:  0,
-		Intensidade: 0,
-		Regiao:      "  INVALIDO ",
-		TipoBatida:  "foo",
+		Action:         MotionActionStart,
+		PhysicalAction: "deepthroat",
+		Velocidade:     70,
+		Intensidade:    60,
+		Regiao:         "cabeca",
+		TipoBatida:     "fluido",
+		AtrasoMS:       120,
+		StrokeRange:    []float64{0.7, 1.0},
 	}
-	NormalizeChaoticPhysics(command)
 
-	if command.Regiao != defaultChaoticRegiao {
-		t.Fatalf("regiao = %q", command.Regiao)
+	physics := ChaoticPhysicsFromCommand(command)
+	if physics.Action != "deepthroat" {
+		t.Fatalf("action = %q, want deepthroat", physics.Action)
 	}
-	if command.TipoBatida != defaultChaoticTipoBatida {
-		t.Fatalf("tipo_batida = %q", command.TipoBatida)
+	if !physics.StrokeProfile.HasBottomBounce {
+		t.Fatal("expected deepthroat bottom bounce profile")
 	}
-	if command.Velocidade != defaultChaoticVelocity {
-		t.Fatalf("velocidade = %d", command.Velocidade)
-	}
-	if command.Intensidade != defaultChaoticIntensity {
-		t.Fatalf("intensidade = %d", command.Intensidade)
+	if physics.StrokeRangeMin != 0.7 || physics.StrokeRangeMax != 1.0 {
+		t.Fatalf("stroke range = %.2f..%.2f", physics.StrokeRangeMin, physics.StrokeRangeMax)
 	}
 }
 
-func TestDecodeMotionIntensidadeInteger(t *testing.T) {
-	physics, legacy, err := decodeMotionIntensidade([]byte(`60`))
-	if err != nil {
-		t.Fatalf("decode int: %v", err)
+func TestChaoticPhysicsFromCommandRidingAsymmetry(t *testing.T) {
+	command := &MotionCommand{
+		Action:         MotionActionTarget,
+		PhysicalAction: "riding",
+		Velocidade:     55,
+		Intensidade:    50,
+		Regiao:         "meio",
+		TipoBatida:     "fluido",
 	}
-	if physics != 60 || legacy != "" {
-		t.Fatalf("physics=%d legacy=%q", physics, legacy)
-	}
-}
-
-func TestDecodeMotionIntensidadeLegacyString(t *testing.T) {
-	physics, legacy, err := decodeMotionIntensidade([]byte(`"media"`))
-	if err != nil {
-		t.Fatalf("decode string: %v", err)
-	}
-	if physics != 0 || legacy != "media" {
-		t.Fatalf("physics=%d legacy=%q", physics, legacy)
+	physics := ChaoticPhysicsFromCommand(command)
+	if physics.StrokeProfile.DownstrokeRatio >= physics.StrokeProfile.UpstrokeRatio {
+		t.Fatalf("riding profile = down %.2f up %.2f, want down < up",
+			physics.StrokeProfile.DownstrokeRatio, physics.StrokeProfile.UpstrokeRatio)
 	}
 }
 
-func TestNormalizeChaoticRegiaoAliases(t *testing.T) {
-	cases := map[string]string{
-		"cabeça": "cabeca",
-		"HEAD":   "cabeca",
-		"topo":   "cabeca",
-		"shaft":  "meio",
-		"fundo":  "base",
-	}
-	for input, want := range cases {
-		if got := normalizeChaoticRegiao(input); got != want {
-			t.Fatalf("%q => %q, want %q", input, got, want)
-		}
+func TestChaoticPhysicsFromCommandNilSafe(t *testing.T) {
+	physics := ChaoticPhysicsFromCommand(nil)
+	if physics != (motion.ChaoticPhysics{}) {
+		t.Fatalf("nil command = %+v, want zero value", physics)
 	}
 }

@@ -12,28 +12,33 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/chatauto"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	diagnosticspkg "github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/manualqueue"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 const (
-	chatAutoPrefetchLead      = 15 * time.Second
-	chatAutoQueueTargetDepth  = 2
-	chatAutoLoopBridgeSeconds = 15
-	chatAutoTickInterval      = 250 * time.Millisecond
-	chatAutoMinBoundaryWait   = 1 * time.Second
-	chatAutoMaxTokens         = 160
-	chatAutoTemperature       = 0.5
+	chatAutoQueueTargetDepth   = 2
+	chatAutoLoopBridgeSeconds  = 30
+	chatAutoLoopBridgeLeadMS   = 10000
+	chatAutoTickInterval       = 250 * time.Millisecond
+	chatAutoMinBoundaryWait    = 1 * time.Second
+	chatAutoMaxTokens          = 160
+	chatAutoTemperature        = 0.62
 )
 
 type chatAutoPreparedSegment struct {
-	response chatauto.Response
-	session  manualqueue.Session
-	stamina  float64
-	intent   chatauto.Intent
-	mapped   chatauto.MappedSegment
-	err      error
-	llmMs    int64
+	response    chatauto.Response
+	llmIntent   chatauto.Intent
+	session     manualqueue.Session
+	stamina     float64
+	intent      chatauto.Intent
+	mapped      chatauto.MappedSegment
+	roteiro     chatauto.Roteiro
+	fromRoteiro bool
+	err             error
+	llmMs       int64
 }
 
 type chatAutoQueuedSegment struct {
@@ -54,15 +59,27 @@ type chatAutoRuntime struct {
 	playbackQueue    []chatAutoQueuedSegment
 	pendingUserTexts []string
 	prefetchActive   bool
-	lastBridgeAt     time.Time
+	activePlan             chatauto.ScenePlan
+	activeRoteiro          chatauto.Roteiro
+	pendingRoteiro         chatauto.Roteiro
+	hasActiveRoteiro       bool
+	hasPendingRoteiro      bool
+	pendingMotionEnqueued  bool
+	roteiroPrefetchActive  bool
+	chatPrefetchActive     bool
+	lastBridgeAt           time.Time
+	lastStaminaTick        time.Time
+	lastAutoReplyPublished time.Time
+	lastMotionDrainAt      time.Time
+	lastDrainTimelineEndMS int
 }
 
 func (s *Server) chatAutoStateSnapshot() chatauto.State {
 	s.chatAuto.mu.Lock()
 	defer s.chatAuto.mu.Unlock()
 	state := s.chatAuto.state
+	settings, _ := s.store.Snapshot()
 	if !s.chatAuto.sessionStartedAt.IsZero() {
-		settings, _ := s.store.Snapshot()
 		elapsed := time.Since(s.chatAuto.sessionStartedAt)
 		progress, humor := chatauto.MoodAtElapsed(
 			elapsed,
@@ -72,7 +89,18 @@ func (s *Server) chatAutoStateSnapshot() chatauto.State {
 		state.MoodProgress = progress
 		state.Humor = chatauto.EffectiveHumor(state.Humor, humor, settings.AutoDom.AllowDominatrix)
 	}
-	if !s.chatAuto.segmentEndsAt.IsZero() {
+	state.SpiceLevel = chatauto.ResolveSpiceLevel(
+		state.Humor,
+		state.MoodProgress,
+		settings.AutoDom.AllowDominatrix,
+	)
+	if player := s.chatAuto.player; player != nil && player.Running() {
+		snap := player.Snapshot()
+		remaining := player.TimelineEndMS() - snap.PlayheadMS
+		if remaining > 0 {
+			state.SegmentEndsInMS = int64(remaining)
+		}
+	} else if !s.chatAuto.segmentEndsAt.IsZero() {
 		remaining := time.Until(s.chatAuto.segmentEndsAt).Milliseconds()
 		if remaining > 0 {
 			state.SegmentEndsInMS = remaining
@@ -87,8 +115,10 @@ func (s *Server) chatAutoPublicState() map[string]any {
 		"active":             state.Active,
 		"stamina":            state.Stamina,
 		"humor":              state.Humor,
+		"spice_level":        state.SpiceLevel,
 		"mood_progress":      state.MoodProgress,
 		"posicao":            string(state.Posicao),
+		"scene_intensidade":  state.SceneIntensidade,
 		"motion": map[string]any{
 			"action":      state.Motion.Action,
 			"velocidade":  state.Motion.Velocidade,
@@ -110,6 +140,73 @@ func (s *Server) chatAutoQueueDepth() int {
 	s.chatAuto.mu.Lock()
 	defer s.chatAuto.mu.Unlock()
 	return len(s.chatAuto.playbackQueue)
+}
+
+func (s *Server) chatAutoProjectedStamina() float64 {
+	s.chatAuto.mu.Lock()
+	defer s.chatAuto.mu.Unlock()
+	stamina := s.chatAuto.state.Stamina
+	for _, item := range s.chatAuto.playbackQueue {
+		intent := item.prepared.intent
+		if intent == (chatauto.Intent{}) {
+			intent = item.prepared.response.AutoDom
+		}
+		before := stamina
+		after := chatauto.ApplyProceduralStamina(stamina, intent, float64(intent.DuracaoSegundos))
+		if chatauto.ProceduralCycleCompleted(before, after, intent) {
+			stamina = 100
+		} else {
+			stamina = after
+		}
+	}
+	return stamina
+}
+
+func (s *Server) commitChatAutoSegmentState(prepared *chatAutoPreparedSegment, useRecover bool) {
+	s.chatAuto.mu.Lock()
+	s.commitChatAutoSegmentStateLocked(prepared, useRecover)
+	s.chatAuto.mu.Unlock()
+}
+
+func (s *Server) commitChatAutoSegmentStateLocked(prepared *chatAutoPreparedSegment, useRecover bool) {
+	var stamina float64
+	var intent chatauto.Intent
+	if prepared.intent != (chatauto.Intent{}) {
+		intent = prepared.intent
+		if useRecover {
+			stamina = prepared.stamina
+		} else {
+			// Bridge filler: keep live stamina and roteiro pose; only extend motion.
+			stamina = s.chatAuto.state.Stamina
+			intent.Posicao = s.chatAuto.state.Posicao
+			intent.Humor = s.chatAuto.state.Humor
+			if scene := s.chatAuto.state.SceneIntensidade; scene > 0 {
+				intent.Intensidade = scene
+			}
+		}
+	} else {
+		staminaBefore := s.chatAuto.state.Stamina
+		currentPose := s.chatAuto.state.Posicao
+		llmIntent := prepared.llmIntent
+		if llmIntent == (chatauto.Intent{}) {
+			llmIntent = prepared.response.AutoDom
+		}
+		if useRecover {
+			stamina, intent = chatauto.ApplyStaminaCommit(staminaBefore, currentPose, llmIntent)
+		} else {
+			stamina, intent = chatauto.ApplyStaminaForBridge(staminaBefore, currentPose, llmIntent)
+		}
+	}
+	prepared.response.AutoDom = intent
+	prepared.stamina = stamina
+	prepared.intent = intent
+	if prepared.fromRoteiro {
+		s.chatAuto.activePlan = chatauto.PlanFromRoteiro(prepared.roteiro)
+		s.chatAuto.lastStaminaTick = time.Now()
+	} else if useRecover {
+		s.chatAuto.activePlan = chatauto.PlanFromIntent(intent)
+	}
+	s.applyChatAutoMotionStateLocked(prepared.response, stamina, prepared.mapped, intent)
 }
 
 func (s *Server) chatAutoActive() bool {
@@ -164,6 +261,11 @@ func (s *Server) stopChatAutoLoop(ctx context.Context) {
 	s.chatAuto.playbackQueue = nil
 	s.chatAuto.pendingUserTexts = nil
 	s.chatAuto.prefetchActive = false
+	s.chatAuto.hasActiveRoteiro = false
+	s.chatAuto.hasPendingRoteiro = false
+	s.chatAuto.pendingMotionEnqueued = false
+	s.chatAuto.roteiroPrefetchActive = false
+	s.chatAuto.chatPrefetchActive = false
 	s.chatAuto.mu.Unlock()
 
 	if cancel != nil {
@@ -193,11 +295,15 @@ func (s *Server) runChatAutoLoop(ctx context.Context, generation uint64) {
 	}()
 
 	settings, _ := s.store.Snapshot()
-	if err := s.runChatAutoFirstTurn(ctx, generation, settings); err != nil {
+	if s.chatAutoShouldDeferAutonomousStart(settings) {
+		go s.runChatAutoRoteiroPrefetchLoop(ctx, generation, settings)
+		go s.runChatAutoChatPrefetchLoop(ctx, generation, settings)
+	} else if err := s.runChatAutoFirstTurn(ctx, generation, settings); err != nil {
 		return
+	} else {
+		go s.runChatAutoRoteiroPrefetchLoop(ctx, generation, settings)
+		go s.runChatAutoChatPrefetchLoop(ctx, generation, settings)
 	}
-
-	go s.runChatAutoPrefetchLoop(ctx, generation, settings)
 
 	ticker := time.NewTicker(chatAutoTickInterval)
 	defer ticker.Stop()
@@ -215,8 +321,12 @@ func (s *Server) runChatAutoLoop(ctx context.Context, generation uint64) {
 					return
 				}
 			}
+			s.chatAuto.mu.Lock()
+			s.syncChatAutoSegmentEndLocked()
+			s.chatAuto.mu.Unlock()
 			s.chatAutoDrainPlaybackQueue(ctx, generation, settings)
 			s.chatAutoMaybeLoopBridge(ctx, generation, settings)
+			s.chatAutoTickPlaybackStamina(settings)
 		}
 	}
 }
@@ -265,18 +375,23 @@ func (s *Server) runChatAutoPrefetchLoop(ctx context.Context, generation uint64,
 				time.Sleep(time.Second)
 				continue
 			}
-			session, stamina, intent, mapped, buildErr := s.buildChatAutoSession(settings, fallback)
+			fallbackLLM := fallback.AutoDom
+			session, stamina, intent, mapped, buildErr := s.buildChatAutoSession(
+				settings, fallback, chatauto.PlanFromIntent(fallback.AutoDom),
+				s.chatAutoProceduralBlockSec(settings), s.chatAutoProjectedStamina(), true, false,
+			)
 			if buildErr != nil {
 				time.Sleep(time.Second)
 				continue
 			}
 			fallback.AutoDom = intent
 			prepared = chatAutoPreparedSegment{
-				response: fallback,
-				session:  session,
-				stamina:  stamina,
-				intent:   intent,
-				mapped:   mapped,
+				response:  fallback,
+				llmIntent: fallbackLLM,
+				session:   session,
+				stamina:   stamina,
+				intent:    intent,
+				mapped:    mapped,
 			}
 		}
 		prepared.llmMs = time.Since(prefetchStart).Milliseconds()
@@ -298,7 +413,58 @@ func (s *Server) runChatAutoPrefetchLoop(ctx context.Context, generation uint64,
 	}
 }
 
+func (s *Server) chatAutoSegmentBounds(settings config.Settings) chatauto.SegmentDurationBounds {
+	minSec, maxSec := settings.AutoDom.SegmentDurationBounds()
+	return chatauto.SegmentDurationBounds{MinSec: minSec, MaxSec: maxSec}
+}
+
+func (s *Server) chatAutoProceduralBlockSec(settings config.Settings) int {
+	return s.chatAutoSegmentBounds(settings).MaxSec
+}
+
+func (s *Server) chatAutoActivePlan() chatauto.ScenePlan {
+	s.chatAuto.mu.Lock()
+	defer s.chatAuto.mu.Unlock()
+	if s.chatAuto.activePlan.Posicao != "" {
+		return s.chatAuto.activePlan
+	}
+	return chatauto.PlanFromState(s.chatAuto.state)
+}
+
+func (s *Server) chatAutoPrefetchLead(settings config.Settings) time.Duration {
+	return settings.AutoDom.PrefetchLead()
+}
+
+func (s *Server) chatAutoShouldDeferAutonomousStart(settings config.Settings) bool {
+	if !settings.AutoDom.ShouldWaitForUserMessage() {
+		return false
+	}
+	return !s.chatAutoHasUserEngagement()
+}
+
+func (s *Server) chatAutoHasUserEngagement() bool {
+	s.chatAuto.mu.Lock()
+	pending := len(s.chatAuto.pendingUserTexts)
+	s.chatAuto.mu.Unlock()
+	if pending > 0 {
+		return true
+	}
+	s.lsoCompat.mu.RLock()
+	defer s.lsoCompat.mu.RUnlock()
+	for _, msg := range s.lsoCompat.messages {
+		if strings.EqualFold(strings.TrimSpace(msg.Role), "user") && strings.TrimSpace(msg.Content) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) chatAutoShouldThrottlePrefetch() bool {
+	settings, _ := s.store.Snapshot()
+	if s.chatAutoShouldDeferAutonomousStart(settings) {
+		return true
+	}
+
 	s.chatAuto.mu.Lock()
 	prefetching := s.chatAuto.prefetchActive
 	depth := len(s.chatAuto.playbackQueue)
@@ -314,7 +480,12 @@ func (s *Server) chatAutoShouldThrottlePrefetch() bool {
 	if depth >= chatAutoQueueTargetDepth {
 		return true
 	}
-	untilPrefetch := time.Until(s.chatAutoSegmentEnd()) - chatAutoPrefetchLead
+	leadMS := int(s.chatAutoPrefetchLead(settings).Milliseconds())
+	if s.chatAutoTimelineRemainingMS() > leadMS {
+		return true
+	}
+	prefetchLead := s.chatAutoPrefetchLead(settings)
+	untilPrefetch := time.Until(s.chatAutoSegmentEnd()) - prefetchLead
 	return untilPrefetch > 0
 }
 
@@ -377,8 +548,24 @@ func (s *Server) chatAutoDrainPlaybackQueue(ctx context.Context, generation uint
 	}
 
 	remainingMS := s.chatAutoTimelineRemainingMS()
-	leadMS := int(chatAutoPrefetchLead.Milliseconds())
+	leadMS := int(s.chatAutoPrefetchLead(settings).Milliseconds())
 	if remainingMS > leadMS && !front.fromUser {
+		return
+	}
+
+	s.chatAuto.mu.Lock()
+	player := s.chatAuto.player
+	timelineEnd := 0
+	if player != nil {
+		timelineEnd = player.TimelineEndMS()
+	}
+	lastDrainEnd := s.chatAuto.lastDrainTimelineEndMS
+	lastDrainAt := s.chatAuto.lastMotionDrainAt
+	s.chatAuto.mu.Unlock()
+	if !front.fromUser && remainingMS <= leadMS && timelineEnd > 0 && timelineEnd <= lastDrainEnd {
+		return
+	}
+	if !front.fromUser && remainingMS <= 0 && !lastDrainAt.IsZero() && time.Since(lastDrainAt) < 5*time.Second {
 		return
 	}
 
@@ -401,10 +588,17 @@ func (s *Server) chatAutoDrainPlaybackQueue(ctx context.Context, generation uint
 	}
 
 	s.applyChatAutoUI(item.prepared.response)
-	s.publishChatAutoReply(item.prepared.response)
+	if s.shouldPublishChatAutoReply(item, remainingMS) {
+		s.publishChatAutoReply(item.prepared.response)
+	}
+	s.commitChatAutoSegmentState(&item.prepared, true)
 
 	s.chatAuto.mu.Lock()
 	staminaAfter := s.chatAuto.state.Stamina
+	if player := s.chatAuto.player; player != nil {
+		s.chatAuto.lastDrainTimelineEndMS = player.TimelineEndMS()
+	}
+	s.chatAuto.lastMotionDrainAt = time.Now()
 	s.chatAuto.mu.Unlock()
 	// #region agent log
 	agentDebugLog("CA7", "chat_auto.go:chatAutoDrainPlaybackQueue", "motion_continued", map[string]any{
@@ -419,7 +613,7 @@ func (s *Server) chatAutoDrainPlaybackQueue(ctx context.Context, generation uint
 
 func (s *Server) chatAutoMaybeLoopBridge(ctx context.Context, generation uint64, settings config.Settings) {
 	remainingMS := s.chatAutoTimelineRemainingMS()
-	if remainingMS > 5000 {
+	if remainingMS > chatAutoLoopBridgeLeadMS {
 		return
 	}
 
@@ -435,28 +629,37 @@ func (s *Server) chatAutoMaybeLoopBridge(ctx context.Context, generation uint64,
 	if prefetching && remainingMS > 3000 {
 		return
 	}
-	if !lastBridge.IsZero() && time.Since(lastBridge) < 8*time.Second {
-		return
-	}
-	if !s.chatAutoPlayerRunning() {
+	if !lastBridge.IsZero() && time.Since(lastBridge) < 5*time.Second {
 		return
 	}
 
 	prepared, err := s.buildChatAutoLoopBridge(settings)
 	if err != nil {
+		agentDebugLog("CA9", "chat_auto.go:chatAutoMaybeLoopBridge", "bridge_build_failed", map[string]any{
+			"err": err.Error(),
+		})
 		return
 	}
-	if err := s.appendChatAutoSegmentPrepared(ctx, generation, prepared); err != nil {
+	mode, err := s.appendOrRestartChatAutoMotion(ctx, generation, settings, prepared)
+	if err != nil {
+		agentDebugLog("CA9", "chat_auto.go:chatAutoMaybeLoopBridge", "bridge_append_failed", map[string]any{
+			"err": err.Error(), "mode": mode,
+		})
 		return
 	}
+	s.commitChatAutoSegmentState(&prepared, false)
 
 	s.chatAuto.mu.Lock()
+	staminaAfter := s.chatAuto.state.Stamina
+	posicao := s.chatAuto.state.Posicao
 	s.chatAuto.lastBridgeAt = time.Now()
 	s.chatAuto.mu.Unlock()
 
 	// #region agent log
 	agentDebugLog("CA9", "chat_auto.go:chatAutoMaybeLoopBridge", "loop_bridge_appended", map[string]any{
 		"remainingMs": remainingMS, "points": len(prepared.session.Points),
+		"staminaAfter": staminaAfter, "posicao": posicao, "blockSec": chatAutoLoopBridgeSeconds,
+		"intMin": prepared.intent.IntensidadeMin, "intMax": prepared.intent.IntensidadeMax,
 	})
 	// #endregion
 }
@@ -471,55 +674,146 @@ func (s *Server) prepareChatAutoSegment(
 	if err != nil {
 		return chatAutoPreparedSegment{err: err, llmMs: time.Since(start).Milliseconds()}, err
 	}
-	session, stamina, intent, mapped, err := s.buildChatAutoSession(settings, response)
+	llmIntent := response.AutoDom
+	state := s.chatAutoStateSnapshot()
+	llmIntent.Posicao = chatauto.ResolvePose(state.Posicao, llmIntent.Posicao)
+	response.AutoDom = llmIntent
+	plan := chatauto.PlanFromIntent(llmIntent)
+	blockSec := s.chatAutoProceduralBlockSec(settings)
+	session, stamina, intent, mapped, err := s.buildChatAutoSession(
+		settings, response, plan, blockSec, s.chatAutoProjectedStamina(), true, false,
+	)
 	if err != nil {
 		return chatAutoPreparedSegment{err: err, llmMs: time.Since(start).Milliseconds()}, err
 	}
 	response.AutoDom = intent
 	return chatAutoPreparedSegment{
-		response: response,
-		session:  session,
-		stamina:  stamina,
-		intent:   intent,
-		mapped:   mapped,
-		llmMs:    time.Since(start).Milliseconds(),
+		response:  response,
+		llmIntent: llmIntent,
+		session:   session,
+		stamina:   stamina,
+		intent:    intent,
+		mapped:    mapped,
+		llmMs:     time.Since(start).Milliseconds(),
 	}, nil
 }
 
 func (s *Server) buildChatAutoLoopBridge(settings config.Settings) (chatAutoPreparedSegment, error) {
 	state := s.chatAutoStateSnapshot()
-	intent := chatauto.Intent{
-		Humor:           state.Humor,
-		Posicao:         state.Posicao,
-		Intensidade:     4,
-		DuracaoSegundos: chatAutoLoopBridgeSeconds,
-	}
-	if intent.Humor == "" {
-		intent.Humor = chatauto.HumorDesejando
-	}
-	if intent.Posicao == "" {
-		intent.Posicao = chatauto.PoseHandjob
-	}
-	if state.Motion.Intensidade > 0 {
-		intent.Intensidade = max(2, min(8, state.Motion.Intensidade/10))
-	}
-	intent, _ = chatauto.ValidateIntent(intent)
-	response := chatauto.Response{
-		Reply:   "",
-		AutoDom: intent,
-	}
-	session, stamina, intent, mapped, err := s.buildChatAutoSession(settings, response)
+	plan := s.chatAutoActivePlan()
+	plan.Posicao = state.Posicao
+	staminaBefore := state.Stamina
+	blockIntent := chatauto.PlanToIntent(plan, staminaBefore, chatAutoLoopBridgeSeconds)
+	response := chatauto.Response{Reply: "", AutoDom: blockIntent}
+	llmIntent := blockIntent
+	session, stamina, intent, mapped, err := s.buildChatAutoSession(
+		settings, response, plan, chatAutoLoopBridgeSeconds, staminaBefore, false, false,
+	)
 	if err != nil {
 		return chatAutoPreparedSegment{}, err
 	}
 	response.AutoDom = intent
 	return chatAutoPreparedSegment{
-		response: response,
-		session:  session,
-		stamina:  stamina,
-		intent:   intent,
-		mapped:   mapped,
+		response:  response,
+		llmIntent: llmIntent,
+		session:   session,
+		stamina:   stamina,
+		intent:    intent,
+		mapped:    mapped,
 	}, nil
+}
+
+func (s *Server) chatAutoTickPlaybackStamina(settings config.Settings) {
+	if !s.chatAutoPlayerRunning() {
+		// #region agent log
+		s.chatAuto.mu.Lock()
+		playerNil := s.chatAuto.player == nil
+		s.chatAuto.mu.Unlock()
+		agentDebugLog("CA10", "chat_auto.go:chatAutoTickPlaybackStamina", "stamina_tick_skipped", map[string]any{
+			"hypothesisId": "H12",
+			"player_nil":   playerNil,
+			"active":       s.chatAutoActive(),
+		})
+		// #endregion
+		return
+	}
+	s.chatAuto.mu.Lock()
+	last := s.chatAuto.lastStaminaTick
+	player := s.chatAuto.player
+	hasRoteiro := s.chatAuto.hasActiveRoteiro
+	roteiro := s.chatAuto.activeRoteiro
+	s.chatAuto.mu.Unlock()
+	if player == nil || !player.Running() {
+		return
+	}
+
+	now := time.Now()
+	if last.IsZero() {
+		s.chatAuto.mu.Lock()
+		s.chatAuto.lastStaminaTick = now
+		s.chatAuto.mu.Unlock()
+		return
+	}
+	elapsed := now.Sub(last).Seconds()
+	if elapsed < 0.2 {
+		return
+	}
+
+	intent := s.chatAutoPlaybackIntent(hasRoteiro, roteiro)
+	s.chatAuto.mu.Lock()
+	before := s.chatAuto.state.Stamina
+	after := chatauto.ApplyProceduralStamina(before, intent, elapsed)
+	s.chatAuto.state.Stamina = after
+	s.chatAuto.lastStaminaTick = now
+	cycleDone := chatauto.ProceduralCycleCompleted(before, after, intent)
+	if cycleDone {
+		s.chatAuto.state.Stamina = 100
+		s.chatAutoActivatePendingRoteiroLocked()
+	}
+	s.chatAuto.mu.Unlock()
+
+	// #region agent log
+	agentDebugLog("CA10", "chat_auto.go:chatAutoTickPlaybackStamina", "playback_stamina_tick", map[string]any{
+		"before": before, "after": after, "elapsedSec": elapsed,
+		"rate": chatauto.StaminaNetRatePerSecond(intent, before), "recovering": chatauto.IsRecoveringIntent(intent),
+		"intensidade": intent.Intensidade, "cycleDone": cycleDone,
+	})
+	// #endregion
+}
+
+func (s *Server) chatAutoPlaybackIntent(hasRoteiro bool, roteiro chatauto.Roteiro) chatauto.Intent {
+	if hasRoteiro {
+		return chatauto.RoteiroToIntent(roteiro, 1)
+	}
+	state := s.chatAutoStateSnapshot()
+	intensity := state.SceneIntensidade
+	if intensity <= 0 {
+		intensity = 4
+	}
+	return chatauto.Intent{
+		Humor:       state.Humor,
+		Posicao:     state.Posicao,
+		Intensidade: intensity,
+	}
+}
+
+func (s *Server) shouldPublishChatAutoReply(item chatAutoQueuedSegment, remainingBeforeMS int) bool {
+	if item.fromUser {
+		return strings.TrimSpace(item.prepared.response.Reply) != ""
+	}
+	if strings.TrimSpace(item.prepared.response.Reply) == "" {
+		return false
+	}
+	if remainingBeforeMS <= 500 {
+		return false
+	}
+	s.chatAuto.mu.Lock()
+	lastAt := s.chatAuto.lastAutoReplyPublished
+	s.chatAuto.mu.Unlock()
+	if !lastAt.IsZero() && time.Since(lastAt) < 42*time.Second {
+		return false
+	}
+	return true
 }
 
 func (s *Server) publishChatAutoReply(response chatauto.Response) {
@@ -527,59 +821,90 @@ func (s *Server) publishChatAutoReply(response chatauto.Response) {
 	if reply == "" {
 		return
 	}
+	s.chatAuto.mu.Lock()
+	s.chatAuto.lastAutoReplyPublished = time.Now()
+	s.chatAuto.mu.Unlock()
 	s.appendChatMessage("assistant", reply)
 }
 
 func (s *Server) runChatAutoFirstTurn(ctx context.Context, generation uint64, settings config.Settings) error {
 	loopStart := time.Now()
 	// #region agent log
-	agentDebugLog("CA2", "chat_auto.go:runChatAutoLoop", "turn_start", map[string]any{
+	agentDebugLog("CA2", "chat_auto.go:runChatAutoFirstTurn", "turn_start", map[string]any{
 		"generation": generation, "stamina": s.chatAutoStateSnapshot().Stamina,
-		"posicao": s.chatAutoStateSnapshot().Posicao, "chatChaosActive": s.chatChaosActive(),
-		"playerRunning": s.chatAutoPlayerRunning(),
 	})
 	// #endregion
 
-	response, err := s.fetchChatAutoTurn(ctx, settings, "")
-	llmMs := time.Since(loopStart).Milliseconds()
+	roteiro, err := s.fetchChatAutoRoteiro(ctx, settings, false)
+	roteiroMs := time.Since(loopStart).Milliseconds()
 	if err != nil {
-		// #region agent log
-		agentDebugLog("CA1", "chat_auto.go:runChatAutoLoop", "fetch_failed_fallback", map[string]any{
-			"err": err.Error(), "llmMs": llmMs,
-		})
-		// #endregion
-		s.setChatAutoError(err.Error())
-		response, err = s.fallbackChatAutoResponse()
-		if err != nil {
-			return err
-		}
+		roteiro = s.fallbackChatAutoRoteiro()
 	}
-	// #region agent log
-	agentDebugLog("CA1", "chat_auto.go:runChatAutoLoop", "fetch_ok", map[string]any{
-		"llmMs": llmMs, "reply": truncateForLog(response.Reply, 120),
-		"humor": response.AutoDom.Humor, "posicao": response.AutoDom.Posicao,
-		"intensidade": response.AutoDom.Intensidade, "duracao": response.AutoDom.DuracaoSegundos,
-	})
-	// #endregion
+	s.chatAuto.mu.Lock()
+	s.chatAuto.activeRoteiro = roteiro
+	s.chatAuto.hasActiveRoteiro = true
+	s.chatAuto.activePlan = chatauto.PlanFromRoteiro(roteiro)
+	s.chatAuto.mu.Unlock()
+
+	prepared, err := s.prepareChatAutoMotionFromRoteiro(settings, roteiro, s.chatAutoStateSnapshot().Stamina, true)
+	if err != nil {
+		return err
+	}
 
 	segStart := time.Now()
-	segErr := s.startChatAutoSegment(ctx, generation, settings, response)
+	segErr := s.startChatAutoPreparedSegment(ctx, generation, prepared)
 	if segErr != nil {
-		// #region agent log
-		agentDebugLog("CA6", "chat_auto.go:runChatAutoLoop", "segment_failed", map[string]any{
-			"segPath": "start", "err": segErr.Error(),
-		})
-		// #endregion
 		return segErr
 	}
-	s.applyChatAutoUI(response)
-	s.publishChatAutoReply(response)
+	s.commitChatAutoSegmentState(&prepared, true)
+
+	go func() {
+		reply, replyErr := s.fetchChatAutoReply(ctx, settings, roteiro, "")
+		if replyErr == nil && strings.TrimSpace(reply) != "" {
+			s.publishChatAutoReply(chatauto.Response{Reply: reply})
+		}
+	}()
+
 	// #region agent log
-	agentDebugLog("CA2", "chat_auto.go:runChatAutoLoop", "segment_scheduled", map[string]any{
-		"segPath": "start", "segSetupMs": time.Since(segStart).Milliseconds(),
-		"duracaoSec": response.AutoDom.DuracaoSegundos, "llmMs": llmMs, "staminaAfter": s.chatAutoStateSnapshot().Stamina,
+	agentDebugLog("CA2", "chat_auto.go:runChatAutoFirstTurn", "segment_scheduled", map[string]any{
+		"segSetupMs": time.Since(segStart).Milliseconds(),
+		"roteiroMs": roteiroMs, "duracaoSec": prepared.intent.DuracaoSegundos,
+		"posicao": roteiro.Posicao, "staminaAfter": s.chatAutoStateSnapshot().Stamina,
 	})
 	// #endregion
+	return nil
+}
+
+func (s *Server) startChatAutoPreparedSegment(ctx context.Context, generation uint64, prepared chatAutoPreparedSegment) error {
+	commandTransport, err := s.newMotionCommandTransport()
+	if err != nil {
+		return err
+	}
+	s.stopAndClearMotionEngine(ctx, "chat_auto_prepare")
+	s.stopManualQueuePlayer(ctx)
+	s.cancelChatChaosMotion(ctx)
+	s.stopFreestyleChaosPlayer(ctx)
+	s.stopChatAutoPlayer(ctx)
+
+	player := manualqueue.NewPlayer(commandTransport)
+	s.configureChatAutoPlayer(player)
+	player.SetOnFinished(func() {
+		s.chatAutoPlayerFinished(player)
+	})
+	if err := player.Start(ctx, prepared.session, 0); err != nil {
+		return err
+	}
+
+	s.chatAuto.mu.Lock()
+	defer s.chatAuto.mu.Unlock()
+	if generation != s.chatAuto.generation {
+		player.Stop(ctx)
+		return errors.New("chat auto generation changed during start")
+	}
+	s.chatAuto.player = player
+	s.syncChatAutoSegmentEndLocked()
+	s.chatAuto.state.SegmentEndsInMS = 0
+	s.chatAuto.segmentEndsAt = time.Now().Add(time.Duration(prepared.intent.DuracaoSegundos) * time.Second)
 	return nil
 }
 
@@ -592,11 +917,66 @@ func (s *Server) chatAutoSegmentEnd() time.Time {
 		if remaining > 0 {
 			return time.Now().Add(time.Duration(remaining) * time.Millisecond)
 		}
+		return time.Now()
 	}
-	if !s.chatAuto.segmentEndsAt.IsZero() {
-		return s.chatAuto.segmentEndsAt
-	}
+	// Player idle — never throttle prefetch on a stale wall-clock deadline.
 	return time.Now()
+}
+
+func (s *Server) syncChatAutoSegmentEndLocked() {
+	player := s.chatAuto.player
+	if player == nil || !player.Running() {
+		return
+	}
+	snap := player.Snapshot()
+	remaining := player.TimelineEndMS() - snap.PlayheadMS
+	if remaining < 0 {
+		remaining = 0
+	}
+	s.chatAuto.segmentEndsAt = time.Now().Add(time.Duration(remaining) * time.Millisecond)
+}
+
+func (s *Server) chatAutoPlayerFinished(player *manualqueue.Player) {
+	s.chatAuto.mu.Lock()
+	if s.chatAuto.player != player {
+		s.chatAuto.mu.Unlock()
+		return
+	}
+	generation := s.chatAuto.generation
+	recover := s.chatAuto.cancel != nil
+	s.chatAuto.player = nil
+	s.chatAuto.segmentEndsAt = time.Now()
+	s.chatAuto.mu.Unlock()
+	// #region agent log
+	agentDebugLog("H6", "chat_auto.go:chatAutoPlayerFinished", "segment_end_reset", map[string]any{
+		"reason":  "player_finished",
+		"recover": recover,
+	})
+	// #endregion
+	if !recover || !s.chatAutoGenerationCurrent(generation) {
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	go func() {
+		prepared, err := s.buildChatAutoLoopBridge(settings)
+		if err != nil {
+			agentDebugLog("H11", "chat_auto.go:chatAutoPlayerFinished", "recover_bridge_failed", map[string]any{
+				"err": err.Error(),
+			})
+			return
+		}
+		mode, err := s.appendOrRestartChatAutoMotion(context.Background(), generation, settings, prepared)
+		agentDebugLog("H11", "chat_auto.go:chatAutoPlayerFinished", "recover_motion", map[string]any{
+			"mode": mode, "err": errString(err),
+		})
+	}()
+}
+
+func (s *Server) chatAutoRegionChanged(nextRegiao string) bool {
+	s.chatAuto.mu.Lock()
+	lastRegiao := s.chatAuto.state.Motion.Regiao
+	s.chatAuto.mu.Unlock()
+	return lastRegiao != "" && lastRegiao != nextRegiao
 }
 
 func (s *Server) appendOrRestartChatAutoMotion(
@@ -614,20 +994,23 @@ func (s *Server) appendOrRestartChatAutoMotion(
 	s.chatAuto.mu.Unlock()
 
 	if player != nil && player.Running() {
-		if err := s.appendChatAutoSegmentPrepared(ctx, generation, prepared); err == nil {
-			return "append", nil
-		} else {
-			timelineEnd := 0
-			if player != nil {
-				timelineEnd = player.TimelineEndMS()
+		regionChanged := s.chatAutoRegionChanged(prepared.mapped.Physics.Regiao)
+		if !regionChanged {
+			if err := s.appendChatAutoSegmentPrepared(ctx, generation, prepared); err == nil {
+				return "append", nil
+			} else {
+				timelineEnd := 0
+				if player != nil {
+					timelineEnd = player.TimelineEndMS()
+				}
+				// #region agent log
+				agentDebugLog("CA8", "chat_auto.go:appendOrRestartChatAutoMotion", "append_skipped", map[string]any{
+					"err": err.Error(), "playerNil": player == nil,
+					"playerRunning": player != nil && player.Running(),
+					"timelineEndMs": timelineEnd,
+				})
+				// #endregion
 			}
-			// #region agent log
-			agentDebugLog("CA8", "chat_auto.go:appendOrRestartChatAutoMotion", "append_skipped", map[string]any{
-				"err": err.Error(), "playerNil": player == nil,
-				"playerRunning": player != nil && player.Running(),
-				"timelineEndMs": timelineEnd,
-			})
-			// #endregion
 		}
 	} else {
 		// #region agent log
@@ -670,12 +1053,7 @@ func (s *Server) appendChatAutoSegmentPrepared(
 	if generation != s.chatAuto.generation {
 		return errors.New("chat auto generation changed during append")
 	}
-	s.applyChatAutoMotionStateLocked(prepared.response, prepared.stamina, prepared.mapped)
-	remaining := time.Until(s.chatAuto.segmentEndsAt)
-	if remaining < 0 {
-		remaining = 0
-	}
-	s.chatAuto.segmentEndsAt = time.Now().Add(remaining + time.Duration(prepared.response.AutoDom.DuracaoSegundos)*time.Second)
+	s.syncChatAutoSegmentEndLocked()
 	return nil
 }
 
@@ -702,12 +1080,9 @@ func (s *Server) restartChatAutoPlayer(
 	s.stopChatAutoPlayer(ctx)
 
 	player := manualqueue.NewPlayer(commandTransport)
+	s.configureChatAutoPlayer(player)
 	player.SetOnFinished(func() {
-		s.chatAuto.mu.Lock()
-		if s.chatAuto.player == player {
-			s.chatAuto.player = nil
-		}
-		s.chatAuto.mu.Unlock()
+		s.chatAutoPlayerFinished(player)
 	})
 	if err := player.Start(ctx, prepared.session, 0); err != nil {
 		// #region agent log
@@ -725,15 +1100,18 @@ func (s *Server) restartChatAutoPlayer(
 		return errors.New("chat auto generation changed during restart")
 	}
 	s.chatAuto.player = player
-	s.applyChatAutoMotionStateLocked(prepared.response, prepared.stamina, prepared.mapped)
+	s.syncChatAutoSegmentEndLocked()
 	s.chatAuto.state.SegmentEndsInMS = 0
 	s.chatAuto.segmentEndsAt = time.Now().Add(time.Duration(prepared.response.AutoDom.DuracaoSegundos) * time.Second)
 	return nil
 }
 
 func (s *Server) fetchChatAutoTurn(ctx context.Context, settings config.Settings, userText string) (chatauto.Response, error) {
-	s.setChatAutoLLMBusy(true, "")
-	defer s.setChatAutoLLMBusy(false, "")
+	userInitiated := strings.TrimSpace(userText) != ""
+	if userInitiated {
+		s.setChatAutoLLMBusy(true, "")
+		defer s.setChatAutoLLMBusy(false, "")
+	}
 
 	provider, err := s.ensureLLMReady(ctx)
 	if err != nil {
@@ -742,10 +1120,13 @@ func (s *Server) fetchChatAutoTurn(ctx context.Context, settings config.Settings
 
 	state := s.chatAutoStateSnapshot()
 	transcript := s.chatAutoTranscript()
+	recentAssistant := s.chatAutoRecentAssistantReplies(4)
 	prompt, _ := chat.BuiltinPromptSetByID(config.PromptSetAutoDomV1PTBR)
-	systemPrompt := strings.TrimSpace(prompt.System) + "\n\n" + chatauto.AutoSessionContract
+	bounds := s.chatAutoSegmentBounds(settings)
+	systemPrompt := strings.TrimSpace(prompt.System) + "\n\n" + chatauto.FormatSpiceSystemBlock() + "\n\n" + chatauto.FormatAutoSessionContract(bounds)
+	systemPrompt = chat.AppendUserProfile(systemPrompt, settings.UserProfile, config.PromptSetAutoDomV1PTBR)
 
-	userPrompt := chatauto.FormatUserTurn(state, transcript)
+	userPrompt := chatauto.FormatUserTurn(state, transcript, recentAssistant, settings.AutoDom.AllowDominatrix)
 	if trimmed := strings.TrimSpace(userText); trimmed != "" {
 		userPrompt = trimmed + "\n\n" + userPrompt
 	}
@@ -767,7 +1148,7 @@ func (s *Server) fetchChatAutoTurn(ctx context.Context, settings config.Settings
 		"rawLen": len(raw), "rawPreview": truncateForLog(raw, 300),
 	})
 	// #endregion
-	response, err := chatauto.ParseResponse(raw)
+	response, err := chatauto.ParseResponseWithBounds(raw, bounds)
 	if err != nil {
 		// #region agent log
 		agentDebugLog("CA1", "chat_auto.go:fetchChatAutoTurn", "parse_failed", map[string]any{
@@ -776,17 +1157,34 @@ func (s *Server) fetchChatAutoTurn(ctx context.Context, settings config.Settings
 		// #endregion
 		return chatauto.Response{}, err
 	}
+	llmPose := response.AutoDom.Posicao
 	s.applyChatAutoRamp(&response)
+	if s.handyMotionLogEnabled() {
+		logChatAutoPoseDecision(
+			s,
+			"fetch_turn",
+			string(llmPose),
+			string(llmPose),
+			string(response.AutoDom.Posicao),
+			s.chatAutoStateSnapshot().Stamina,
+			s.chatAutoStateSnapshot().Stamina,
+		)
+	}
 	return response, nil
 }
 
 func (s *Server) fallbackChatAutoResponse() (chatauto.Response, error) {
 	state := s.chatAutoStateSnapshot()
+	settings, _ := s.store.Snapshot()
+	minSec, maxSec := settings.AutoDom.SegmentDurationBounds()
+	bounds := chatauto.SegmentDurationBounds{MinSec: minSec, MaxSec: maxSec}
+	prefer := minSec + (maxSec-minSec)/2
 	intent := chatauto.Intent{
-		Humor:           chatauto.HumorDesejando,
-		Posicao:         chatauto.PoseHandjob,
-		Intensidade:     3,
-		DuracaoSegundos: 50,
+		Humor:          chatauto.HumorDesejando,
+		Posicao:        chatauto.PoseHandjob,
+		IntensidadeMin: 2,
+		IntensidadeMax: 4,
+		DuracaoSegundos: prefer,
 	}
 	if state.Humor != "" {
 		intent.Humor = state.Humor
@@ -794,12 +1192,17 @@ func (s *Server) fallbackChatAutoResponse() (chatauto.Response, error) {
 	if state.Posicao != "" {
 		intent.Posicao = state.Posicao
 	}
-	intent, err := chatauto.ValidateIntent(intent)
+	intent, err := chatauto.ValidateIntentWithBounds(intent, bounds)
 	if err != nil {
 		return chatauto.Response{}, err
 	}
+	spice := chatauto.ResolveSpiceLevel(
+		intent.Humor,
+		state.MoodProgress,
+		settings.AutoDom.AllowDominatrix,
+	)
 	response := chatauto.Response{
-		Reply:   "Continuo no ritmo com você.",
+		Reply:   chatauto.FallbackReply(spice),
 		AutoDom: intent,
 	}
 	s.applyChatAutoRamp(&response)
@@ -824,7 +1227,12 @@ func (s *Server) applyChatAutoRamp(response *chatauto.Response) {
 		humor,
 		settings.AutoDom.AllowDominatrix,
 	)
-	response.AutoDom.Intensidade = chatauto.BoostIntensity(response.AutoDom.Intensidade, progress)
+	response.AutoDom.IntensidadeMin = chatauto.BoostIntensity(response.AutoDom.IntensidadeMin, progress)
+	response.AutoDom.IntensidadeMax = chatauto.BoostIntensity(response.AutoDom.IntensidadeMax, progress)
+	if response.AutoDom.IntensidadeMax < response.AutoDom.IntensidadeMin {
+		response.AutoDom.IntensidadeMax = response.AutoDom.IntensidadeMin
+	}
+	response.AutoDom.Intensidade = (response.AutoDom.IntensidadeMin + response.AutoDom.IntensidadeMax) / 2
 }
 
 func (s *Server) chatAutoPlayerRunning() bool {
@@ -877,7 +1285,14 @@ func (s *Server) startChatAutoSegment(
 	settings config.Settings,
 	response chatauto.Response,
 ) error {
-	session, stamina, intent, mapped, err := s.buildChatAutoSession(settings, response)
+	llmIntent := response.AutoDom
+	s.chatAuto.mu.Lock()
+	staminaBefore := s.chatAuto.state.Stamina
+	s.chatAuto.mu.Unlock()
+	session, _, intent, mapped, err := s.buildChatAutoSession(
+		settings, response, chatauto.PlanFromIntent(response.AutoDom),
+		s.chatAutoProceduralBlockSec(settings), staminaBefore, true, false,
+	)
 	if err != nil {
 		return err
 	}
@@ -899,12 +1314,9 @@ func (s *Server) startChatAutoSegment(
 	s.stopChatAutoPlayer(ctx)
 
 	player := manualqueue.NewPlayer(commandTransport)
+	s.configureChatAutoPlayer(player)
 	player.SetOnFinished(func() {
-		s.chatAuto.mu.Lock()
-		if s.chatAuto.player == player {
-			s.chatAuto.player = nil
-		}
-		s.chatAuto.mu.Unlock()
+		s.chatAutoPlayerFinished(player)
 	})
 	if err := player.Start(ctx, session, 0); err != nil {
 		// #region agent log
@@ -922,9 +1334,17 @@ func (s *Server) startChatAutoSegment(
 		return errors.New("chat auto generation changed during start")
 	}
 	s.chatAuto.player = player
-	s.applyChatAutoMotionStateLocked(response, stamina, mapped)
+	s.syncChatAutoSegmentEndLocked()
 	s.chatAuto.state.SegmentEndsInMS = 0
 	s.chatAuto.segmentEndsAt = time.Now().Add(time.Duration(response.AutoDom.DuracaoSegundos) * time.Second)
+	prepared := chatAutoPreparedSegment{
+		response:  response,
+		llmIntent: llmIntent,
+		session:   session,
+		intent:    intent,
+		mapped:    mapped,
+	}
+	s.commitChatAutoSegmentStateLocked(&prepared, true)
 	s.chatAuto.mu.Unlock()
 	return nil
 }
@@ -935,7 +1355,11 @@ func (s *Server) appendChatAutoSegment(
 	settings config.Settings,
 	response chatauto.Response,
 ) error {
-	session, stamina, intent, mapped, err := s.buildChatAutoSession(settings, response)
+	llmIntent := response.AutoDom
+	session, _, intent, mapped, err := s.buildChatAutoSession(
+		settings, response, chatauto.PlanFromIntent(response.AutoDom),
+		s.chatAutoProceduralBlockSec(settings), s.chatAutoProjectedStamina(), true, false,
+	)
 	if err != nil {
 		return err
 	}
@@ -959,12 +1383,15 @@ func (s *Server) appendChatAutoSegment(
 		s.chatAuto.mu.Unlock()
 		return errors.New("chat auto generation changed during append")
 	}
-	s.applyChatAutoMotionStateLocked(response, stamina, mapped)
-	remaining := time.Until(s.chatAuto.segmentEndsAt)
-	if remaining < 0 {
-		remaining = 0
+	prepared := chatAutoPreparedSegment{
+		response:  response,
+		llmIntent: llmIntent,
+		session:   session,
+		intent:    intent,
+		mapped:    mapped,
 	}
-	s.chatAuto.segmentEndsAt = time.Now().Add(remaining + time.Duration(response.AutoDom.DuracaoSegundos)*time.Second)
+	s.commitChatAutoSegmentStateLocked(&prepared, true)
+	s.syncChatAutoSegmentEndLocked()
 	s.chatAuto.mu.Unlock()
 	return nil
 }
@@ -972,44 +1399,127 @@ func (s *Server) appendChatAutoSegment(
 func (s *Server) buildChatAutoSession(
 	settings config.Settings,
 	response chatauto.Response,
+	plan chatauto.ScenePlan,
+	blockDurationSec int,
+	staminaBefore float64,
+	useRecover bool,
+	fromRoteiro bool,
 ) (manualqueue.Session, float64, chatauto.Intent, chatauto.MappedSegment, error) {
+	if blockDurationSec < 1 {
+		blockDurationSec = s.chatAutoProceduralBlockSec(settings)
+	}
 	s.chatAuto.mu.Lock()
-	staminaBefore := s.chatAuto.state.Stamina
-	intent := response.AutoDom
-	stamina, intent := chatauto.ApplyStamina(staminaBefore, intent)
-	staminaBeforeLog := staminaBefore
+	currentPose := s.chatAuto.state.Posicao
 	s.chatAuto.mu.Unlock()
+
+	blockIntent := chatauto.PlanToIntent(plan, staminaBefore, blockDurationSec)
+	var stamina float64
+	var intent chatauto.Intent
+	if fromRoteiro && useRecover {
+		stamina, intent = chatauto.ApplyRoteiroStaminaCommit(staminaBefore, currentPose, blockIntent)
+	} else if useRecover {
+		stamina, intent = chatauto.ApplyStaminaCommit(staminaBefore, currentPose, blockIntent)
+	} else if !fromRoteiro {
+		// Loop bridge filler: pose and stamina are owned by the active roteiro + playback ticks.
+		stamina = staminaBefore
+		intent = blockIntent
+		intent.Posicao = currentPose
+	} else {
+		stamina, intent = chatauto.ApplyStaminaForBridge(staminaBefore, currentPose, blockIntent)
+	}
+	staminaBeforeLog := staminaBefore
+
+	logChatAutoPoseDecision(
+		s,
+		"build_session",
+		string(plan.Posicao),
+		string(intent.Posicao),
+		string(intent.Posicao),
+		staminaBeforeLog,
+		stamina,
+	)
 
 	// #region agent log
 	agentDebugLog("CA5", "chat_auto.go:buildChatAutoSession", "stamina_drain", map[string]any{
 		"before": staminaBeforeLog, "after": stamina, "intensidade": intent.Intensidade,
+		"intMin": intent.IntensidadeMin, "intMax": intent.IntensidadeMax,
+		"netRate": chatauto.StaminaNetRatePerSecond(intent, staminaBeforeLog), "recovering": chatauto.IsRecoveringIntent(intent),
 		"duracao": intent.DuracaoSegundos, "posicao": intent.Posicao,
-		"poseRotated": staminaBeforeLog > 0 && stamina == 100 && intent.Posicao != response.AutoDom.Posicao,
+		"useRecover": useRecover, "fromRoteiro": fromRoteiro,
 	})
 	// #endregion
 
 	mapped := chatauto.MapIntent(intent, stamina)
+	var blendFrom *motion.MotionBlendState
 	continueFrom := -1
 	s.chatAuto.mu.Lock()
+	lastRegiao := s.chatAuto.state.Motion.Regiao
 	if existing := s.chatAuto.player; existing != nil {
 		if snap := existing.Snapshot(); snap.Running {
-			continueFrom = int(math.Round(snap.PositionPct))
+			regionChanged := lastRegiao != "" && lastRegiao != mapped.Physics.Regiao
+			if regionChanged && motion.IsTurboTipo(mapped.Physics.TipoBatida) {
+				continueFrom = -1
+			} else if !regionChanged {
+				state := estimateBlendStateFromPlayer(existing)
+				blendFrom = &state
+				continueFrom = int(math.Round(state.Position))
+			} else {
+				state := estimateBlendStateFromPlayer(existing)
+				continueFrom = int(math.Round(state.Position))
+			}
 		}
 	}
 	s.chatAuto.mu.Unlock()
 
 	// #nosec G404 -- procedural auto segments need non-deterministic micro-variance.
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	session := buildChaosSessionForDurationFromPosition(
-		mapped.Physics,
-		settings.Motion,
-		settings.Motion.HardwareSafetyLock,
-		rng,
-		mapped.DurationMillis,
-		continueFrom,
-	)
+	var session manualqueue.Session
+	if blendFrom != nil {
+		session = buildChaosSessionForDurationFromBlend(
+			mapped.Physics,
+			settings.Motion,
+			settings.Motion.HardwareSafetyLock,
+			rng,
+			mapped.DurationMillis,
+			*blendFrom,
+		)
+	} else {
+		session = buildChaosSessionForDurationFromPosition(
+			mapped.Physics,
+			settings.Motion,
+			settings.Motion.HardwareSafetyLock,
+			rng,
+			mapped.DurationMillis,
+			continueFrom,
+		)
+	}
 	if len(session.Points) == 0 {
 		return manualqueue.Session{}, 0, intent, mapped, errors.New("chat auto session has no points")
+	}
+	session.Continuous = true
+	if s.handyMotionLogEnabled() {
+		first := session.Points[0]
+		last := session.Points[len(session.Points)-1]
+		durationMS := int(last.TimeMillis)
+		s.recordHandyMotionLog("chat_auto_segment_built", "chat_auto", diagnosticspkg.HandyLogEntry{
+			DurationMS: &durationMS,
+			Details: map[string]any{
+				"posicao":          intent.Posicao,
+				"humor":            intent.Humor,
+				"intensidade":      intent.Intensidade,
+				"duracao_segundos": intent.DuracaoSegundos,
+				"points":           len(session.Points),
+				"continue_from":    continueFrom,
+				"first_time_ms":    first.TimeMillis,
+				"last_time_ms":     last.TimeMillis,
+				"first_pos":        first.PositionPercent,
+				"last_pos":         last.PositionPercent,
+				"regiao":           mapped.Physics.Regiao,
+				"tipo_batida":      mapped.Physics.TipoBatida,
+				"velocidade":       mapped.Physics.Velocidade,
+				"atraso_ms":        mapped.Physics.AtrasoMS,
+			},
+		})
 	}
 	// #region agent log
 	agentDebugLog("CA4", "chat_auto.go:buildChatAutoSession", "session_built", map[string]any{
@@ -1044,7 +1554,7 @@ func (s *Server) stopChatAutoPlayer(ctx context.Context) {
 	}
 }
 
-func (s *Server) applyChatAutoMotionStateLocked(response chatauto.Response, stamina float64, mapped chatauto.MappedSegment) {
+func (s *Server) applyChatAutoMotionStateLocked(response chatauto.Response, stamina float64, mapped chatauto.MappedSegment, intent chatauto.Intent) {
 	if !s.chatAuto.sessionStartedAt.IsZero() {
 		settings, _ := s.store.Snapshot()
 		progress, _ := chatauto.MoodAtElapsed(
@@ -1055,8 +1565,9 @@ func (s *Server) applyChatAutoMotionStateLocked(response chatauto.Response, stam
 		s.chatAuto.state.MoodProgress = progress
 	}
 	s.chatAuto.state.Stamina = stamina
-	s.chatAuto.state.Humor = response.AutoDom.Humor
-	s.chatAuto.state.Posicao = response.AutoDom.Posicao
+	s.chatAuto.state.Humor = intent.Humor
+	s.chatAuto.state.Posicao = intent.Posicao
+	s.chatAuto.state.SceneIntensidade = intent.Intensidade
 	s.chatAuto.state.Motion = chatauto.MotionFromMapped(mapped)
 	s.chatAuto.state.Error = ""
 }
@@ -1105,4 +1616,55 @@ func (s *Server) chatAutoTranscript() []string {
 		out = out[len(out)-12:]
 	}
 	return out
+}
+
+func (s *Server) chatAutoRecentAssistantReplies(limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	s.lsoCompat.mu.RLock()
+	defer s.lsoCompat.mu.RUnlock()
+	out := make([]string, 0, limit)
+	for i := len(s.lsoCompat.messages) - 1; i >= 0 && len(out) < limit; i-- {
+		msg := s.lsoCompat.messages[i]
+		if msg.Role != "assistant" {
+			continue
+		}
+		trimmed := strings.TrimSpace(msg.Content)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+func (s *Server) configureChatAutoPlayer(player *manualqueue.Player) {
+	if player == nil || !s.handyMotionLogEnabled() {
+		return
+	}
+	player.SetDispatchDebug(func(event string, data map[string]any) {
+		entry := diagnosticspkg.HandyLogEntry{Details: data}
+		if raw, ok := data["buffer_ahead_ms"]; ok {
+			switch value := raw.(type) {
+			case int64:
+				entry.BufferAheadMS = &value
+			case int:
+				converted := int64(value)
+				entry.BufferAheadMS = &converted
+			}
+		}
+		if starvation, ok := data["starvation_risk"].(bool); ok && starvation {
+			s.recordHandyMotionLog("player_starvation_risk", "chat_auto", entry)
+			agentDebugLog("H1", "chat_auto.go:configureChatAutoPlayer", "player_starvation_risk", data)
+			return
+		}
+		if event == "player_finish_triggered" {
+			agentDebugLog("H4", "chat_auto.go:configureChatAutoPlayer", "player_finish_triggered", data)
+		}
+		s.recordHandyMotionLog(event, "chat_auto", entry)
+	})
 }

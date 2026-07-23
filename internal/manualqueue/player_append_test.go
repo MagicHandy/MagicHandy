@@ -107,3 +107,95 @@ func TestPlayerAppendExtensionAfterCompact(t *testing.T) {
 
 	cancel()
 }
+
+func TestAppendExtensionOffsetsBeyondLocalPlayhead(t *testing.T) {
+	fake := transport.NewFake()
+	player := NewPlayer(fake)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	first := Session{
+		Actions: []Action{{At: 0, Pos: 10}, {At: 100, Pos: 90}},
+		Points: []transport.TimedPoint{
+			{TimeMillis: 0, PositionPercent: 10},
+			{TimeMillis: 100, PositionPercent: 90},
+		},
+		DurationMS: 100,
+	}
+	if err := player.Start(ctx, first, 0); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	player.mu.Lock()
+	player.baseMS = 50000
+	player.startedAt = time.Now().Add(-10 * time.Second)
+	player.mu.Unlock()
+
+	extension := Session{
+		Actions: []Action{{At: 0, Pos: 20}, {At: 50, Pos: 80}},
+		Points: []transport.TimedPoint{
+			{TimeMillis: 0, PositionPercent: 20},
+			{TimeMillis: 50, PositionPercent: 80},
+		},
+		DurationMS: 50,
+	}
+	if err := player.AppendExtension(extension); err != nil {
+		t.Fatalf("AppendExtension: %v", err)
+	}
+
+	player.mu.Lock()
+	last := player.session.Points[len(player.session.Points)-1].TimeMillis
+	localPlayhead := player.localPlayheadMSLocked()
+	player.mu.Unlock()
+
+	if last < int64(localPlayhead+playerLeadMS) {
+		t.Fatalf("last point %d should be beyond local playhead %d + lead", last, localPlayhead)
+	}
+
+	cancel()
+}
+
+func TestPlayerContinuousDoesNotAutoFinish(t *testing.T) {
+	fake := transport.NewFake()
+	player := NewPlayer(fake)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	session := Session{
+		Actions: []Action{{At: 0, Pos: 10}, {At: 500, Pos: 90}},
+		Points: []transport.TimedPoint{
+			{TimeMillis: 0, PositionPercent: 10},
+			{TimeMillis: 500, PositionPercent: 90},
+		},
+		DurationMS: 500,
+		Continuous: true,
+	}
+	if err := player.Start(ctx, session, 0); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	time.Sleep(2 * time.Second)
+	if !player.Running() {
+		t.Fatal("continuous player should stay running after timeline end")
+	}
+
+	cancel()
+}
+
+func TestTimelineEndMSUsesLastPointBeyondDurationMS(t *testing.T) {
+	player := NewPlayer(transport.NewFake())
+	player.mu.Lock()
+	player.session = Session{
+		DurationMS: 30,
+		Points: []transport.TimedPoint{
+			{TimeMillis: 0, PositionPercent: 50},
+			{TimeMillis: 55000, PositionPercent: 60},
+		},
+	}
+	player.mu.Unlock()
+	if end := player.TimelineEndMS(); end != 55000 {
+		t.Fatalf("TimelineEndMS = %d, want 55000", end)
+	}
+}

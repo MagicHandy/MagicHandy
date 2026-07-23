@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 const (
@@ -76,6 +78,36 @@ func NormalizeChaoticPhysics(command *MotionCommand) {
 	if command.AtrasoMS > 500 {
 		command.AtrasoMS = 500
 	}
+	command.PhysicalAction = normalizePhysicalAction(command.PhysicalAction)
+}
+
+// ChaoticPhysicsFromCommand maps a normalized MotionCommand into procedural physics.
+// PhysicalAction (riding, deepthroat, …) flows into ChaoticPhysics.Action for stroke profiles.
+func ChaoticPhysicsFromCommand(command *MotionCommand) motion.ChaoticPhysics {
+	if command == nil {
+		return motion.ChaoticPhysics{}
+	}
+	NormalizeChaoticPhysics(command)
+	physics := motion.ChaoticPhysics{
+		Velocidade:  command.Velocidade,
+		Intensidade: command.Intensidade,
+		Regiao:      command.Regiao,
+		TipoBatida:  command.TipoBatida,
+		AtrasoMS:    command.AtrasoMS,
+		Action:      command.PhysicalAction,
+	}
+	if len(command.StrokeRange) == 2 {
+		physics.StrokeRangeMin = command.StrokeRange[0]
+		physics.StrokeRangeMax = command.StrokeRange[1]
+	}
+	if physics.Action != "" {
+		physics.StrokeProfile = motion.StrokeProfileFromAction(physics.Action)
+	}
+	return physics
+}
+
+func normalizePhysicalAction(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 // HasChaoticPhysicsIntent reports whether a motion command carries procedural physics.

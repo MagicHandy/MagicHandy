@@ -17,6 +17,22 @@ const (
 	playerFinishTailMS  = 500
 )
 
+// hspAbsoluteBatch maps compacted session points onto the monotonic HSP stream timeline.
+func hspAbsoluteBatch(baseMS int, batch []transport.TimedPoint) []transport.TimedPoint {
+	if baseMS == 0 || len(batch) == 0 {
+		return batch
+	}
+	out := make([]transport.TimedPoint, len(batch))
+	offset := int64(baseMS)
+	for index, point := range batch {
+		out[index] = transport.TimedPoint{
+			PositionPercent: point.PositionPercent,
+			TimeMillis:      point.TimeMillis + offset,
+		}
+	}
+	return out
+}
+
 // Session is the prepared script payload for playback.
 type Session struct {
 	Actions       []Action
@@ -24,6 +40,7 @@ type Session struct {
 	DurationMS    int
 	SegmentStarts []int
 	Autoloop      bool
+	Continuous    bool // streaming append mode; do not auto-finish when timeline ends
 	StrokeMin     int
 	StrokeMax     int
 }
@@ -58,6 +75,7 @@ type Player struct {
 	done   chan struct{}
 
 	nextIndex int
+	dispatchDebug func(event string, data map[string]any)
 
 	onFinished func()
 }
@@ -71,6 +89,13 @@ func NewPlayer(commandTransport transport.Transport) *Player {
 func (p *Player) SetOnFinished(fn func()) {
 	p.mu.Lock()
 	p.onFinished = fn
+	p.mu.Unlock()
+}
+
+// SetDispatchDebug registers a callback for player dispatch diagnostics.
+func (p *Player) SetDispatchDebug(fn func(event string, data map[string]any)) {
+	p.mu.Lock()
+	p.dispatchDebug = fn
 	p.mu.Unlock()
 }
 
@@ -214,7 +239,7 @@ func (p *Player) Snapshot() Snapshot {
 		Autoloop:   p.session.Autoloop,
 	}
 	if p.running && !p.paused {
-		snap.PlayheadMS = p.elapsedMSLocked()
+		snap.PlayheadMS = p.localPlayheadMSLocked()
 	}
 	if len(p.session.Actions) > 0 {
 		snap.PositionPct = PositionAt(p.session.Actions, snap.PlayheadMS)
@@ -243,6 +268,11 @@ func (p *Player) AppendExtension(extension Session) error {
 			offset = tail
 		}
 	}
+	localPlayhead := p.localPlayheadMSLocked()
+	minOffset := int64(localPlayhead + playerLeadMS)
+	if offset < minOffset {
+		offset = minOffset
+	}
 	newPoints := make([]transport.TimedPoint, len(extension.Points))
 	for index, point := range extension.Points {
 		newPoints[index] = transport.TimedPoint{
@@ -268,6 +298,80 @@ func (p *Player) AppendExtension(extension Session) error {
 		p.session.SegmentStarts = append(p.session.SegmentStarts, int(offset))
 	}
 	p.session.DurationMS += extension.DurationMS
+	return nil
+}
+
+// SpliceExtensionAtPlayhead drops queued points after playhead+leadMS and splices new motion there.
+// Used when chat chaos retargets zone/tempo without waiting for bridge filler to drain.
+func (p *Player) SpliceExtensionAtPlayhead(extension Session, leadMS int) error {
+	if len(extension.Points) == 0 {
+		return fmt.Errorf("extension has no points")
+	}
+	if leadMS < 0 {
+		leadMS = 0
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.running || p.paused {
+		return fmt.Errorf("manual queue player is not running")
+	}
+
+	localPlayhead := p.localPlayheadMSLocked()
+	spliceAt := localPlayhead + leadMS
+
+	cutIdx := len(p.session.Points)
+	for index, point := range p.session.Points {
+		if int(point.TimeMillis) > spliceAt {
+			cutIdx = index
+			break
+		}
+	}
+	p.session.Points = append([]transport.TimedPoint(nil), p.session.Points[:cutIdx]...)
+
+	trimmedActions := make([]Action, 0, len(p.session.Actions))
+	for _, action := range p.session.Actions {
+		if action.At <= spliceAt {
+			trimmedActions = append(trimmedActions, action)
+		}
+	}
+	p.session.Actions = trimmedActions
+
+	if len(p.session.Points) > 0 {
+		p.session.DurationMS = int(p.session.Points[len(p.session.Points)-1].TimeMillis)
+	} else {
+		p.session.DurationMS = spliceAt
+	}
+	if p.nextIndex > cutIdx {
+		p.nextIndex = cutIdx
+	}
+
+	offset := int64(spliceAt)
+	if len(p.session.Points) > 0 {
+		if tail := p.session.Points[len(p.session.Points)-1].TimeMillis + 1; tail > offset {
+			offset = tail
+		}
+	}
+
+	newPoints := make([]transport.TimedPoint, len(extension.Points))
+	for index, point := range extension.Points {
+		newPoints[index] = transport.TimedPoint{
+			TimeMillis:      point.TimeMillis + offset,
+			PositionPercent: point.PositionPercent,
+		}
+	}
+	newActions := make([]Action, len(extension.Actions))
+	for index, action := range extension.Actions {
+		newActions[index] = Action{
+			At:  action.At + int(offset),
+			Pos: action.Pos,
+		}
+	}
+
+	p.session.Points = append(p.session.Points, newPoints...)
+	p.session.Actions = append(p.session.Actions, newActions...)
+	if len(p.session.Points) > 0 {
+		p.session.DurationMS = int(p.session.Points[len(p.session.Points)-1].TimeMillis)
+	}
 	return nil
 }
 
@@ -309,6 +413,11 @@ func (p *Player) compactTimelineLocked() {
 	} else {
 		p.session.DurationMS = 0
 	}
+	if n := len(p.session.Points); n > 0 {
+		if last := int(p.session.Points[n-1].TimeMillis); last > p.session.DurationMS {
+			p.session.DurationMS = last
+		}
+	}
 	p.baseMS += int(shift)
 	p.nextIndex = keepMargin
 }
@@ -320,14 +429,24 @@ func (p *Player) Running() bool {
 	return p.running && !p.paused
 }
 
+func (p *Player) localPlayheadMSLocked() int {
+	return p.elapsedMSLocked() - p.baseMS
+}
+
 // TimelineEndMS returns the current session duration in milliseconds.
 func (p *Player) TimelineEndMS() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.session.DurationMS > 0 {
-		return p.session.DurationMS
+	timelineEnd := p.session.DurationMS
+	if timelineEnd <= 0 {
+		timelineEnd = DurationMS(p.session.Actions)
 	}
-	return DurationMS(p.session.Actions)
+	if n := len(p.session.Points); n > 0 {
+		if last := int(p.session.Points[n-1].TimeMillis); last > timelineEnd {
+			timelineEnd = last
+		}
+	}
+	return timelineEnd
 }
 
 // Actions returns the active script actions for UI curves.
@@ -350,7 +469,6 @@ func (p *Player) runLoop(ctx context.Context) {
 	p.mu.Lock()
 	session := p.session
 	streamID := p.streamID
-	baseMS := p.baseMS
 	autoloop := p.session.Autoloop
 	p.mu.Unlock()
 
@@ -367,6 +485,7 @@ func (p *Player) runLoop(ctx context.Context) {
 	startAt := time.Now()
 	ticker := time.NewTicker(playerDispatchTick)
 	defer ticker.Stop()
+	tickCount := 0
 
 	for {
 		select {
@@ -381,16 +500,42 @@ func (p *Player) runLoop(ctx context.Context) {
 			p.finish(false)
 			return
 		case <-ticker.C:
+			tickCount++
 			p.mu.Lock()
 			session = p.session
 			elapsed := p.elapsedMSLocked()
-			p.playheadMS = elapsed
+			hspBaseMS := p.baseMS
+			localElapsed := elapsed - hspBaseMS
+			p.playheadMS = localElapsed
 			nextIndex := p.nextIndex
+			debugFn := p.dispatchDebug
 			p.mu.Unlock()
+
+			bufferAheadMS := int64(0)
+			if nextIndex < len(session.Points) {
+				bufferAheadMS = session.Points[nextIndex].TimeMillis - int64(localElapsed)
+				if bufferAheadMS < 0 {
+					bufferAheadMS = 0
+				}
+			}
+			if debugFn != nil && (tickCount%5 == 0 || (!played && tickCount > 3) || bufferAheadMS < int64(playerLeadMS)) {
+				debugFn("player_dispatch", map[string]any{
+					"elapsed_ms":       elapsed,
+					"local_elapsed_ms": localElapsed,
+					"hsp_base_ms":      hspBaseMS,
+					"next_index":       nextIndex,
+					"total_points":     len(session.Points),
+					"buffer_ahead_ms":  bufferAheadMS,
+					"played":           played,
+					"duration_ms":      session.DurationMS,
+					"stream_id":        streamID,
+					"starvation_risk":  played && bufferAheadMS < int64(playerLeadMS),
+				})
+			}
 
 			for nextIndex < len(session.Points) {
 				pointMS := int(session.Points[nextIndex].TimeMillis)
-				if pointMS > elapsed+playerLeadMS {
+				if pointMS > localElapsed+playerLeadMS {
 					break
 				}
 				end := nextIndex + playerChunkSize
@@ -398,9 +543,26 @@ func (p *Player) runLoop(ctx context.Context) {
 					end = len(session.Points)
 				}
 				batch := session.Points[nextIndex:end]
+				hspBatch := hspAbsoluteBatch(hspBaseMS, batch)
+				// #region agent log
+				if debugFn != nil {
+					localMin, localMax := batch[0].TimeMillis, batch[len(batch)-1].TimeMillis
+					hspMin, hspMax := hspBatch[0].TimeMillis, hspBatch[len(hspBatch)-1].TimeMillis
+					debugFn("hsp_dispatch_absolute", map[string]any{
+						"hypothesisId":     "H8",
+						"hsp_base_ms":      hspBaseMS,
+						"elapsed_ms":       elapsed,
+						"local_elapsed_ms": localElapsed,
+						"local_time_min":   localMin,
+						"local_time_max":   localMax,
+						"hsp_time_min":     hspMin,
+						"hsp_time_max":     hspMax,
+					})
+				}
+				// #endregion
 				if _, err := p.transport.AddHSP(ctx, transport.HSPAddCommand{
 					StreamID: streamID,
-					Points:   batch,
+					Points:   hspBatch,
 				}); err != nil {
 					p.finish(false)
 					return
@@ -408,11 +570,11 @@ func (p *Player) runLoop(ctx context.Context) {
 				nextIndex = end
 
 				if !played {
-					startTime := int64(baseMS)
-					if len(batch) > 0 && batch[0].TimeMillis > startTime {
+					startTime := int64(hspBaseMS)
+					if len(hspBatch) > 0 && hspBatch[0].TimeMillis > startTime {
 						// Align play start with the first buffered point so
 						// pause_on_starving does not stall before chat chaos lead.
-						startTime = batch[0].TimeMillis
+						startTime = hspBatch[0].TimeMillis
 					}
 					if _, err := p.transport.PlayHSP(ctx, transport.HSPPlayCommand{
 						StreamID:        streamID,
@@ -442,17 +604,31 @@ func (p *Player) runLoop(ctx context.Context) {
 				}
 			}
 			// Use p.session.Points — a stale local copy misses AppendExtension reallocations.
-			shouldFinish := played && nextIndex >= len(p.session.Points) && elapsed > timelineEndMS+playerFinishTailMS
+			localElapsed = p.localPlayheadMSLocked()
+			continuous := p.session.Continuous
+			shouldFinish := !continuous && played && nextIndex >= len(p.session.Points) && localElapsed > timelineEndMS+playerFinishTailMS
 			p.mu.Unlock()
 
 			if shouldFinish {
+				// #region agent log
+				if p.dispatchDebug != nil {
+					p.dispatchDebug("player_finish_triggered", map[string]any{
+						"elapsed_ms":      elapsed,
+						"local_elapsed_ms": localElapsed,
+						"next_index":      nextIndex,
+						"total_points":    len(p.session.Points),
+						"timeline_end_ms": timelineEndMS,
+						"continuous":      continuous,
+						"autoloop":        autoloop,
+					})
+				}
+				// #endregion
 				if autoloop {
 					_, _ = p.transport.Stop(ctx, transport.StopCommand{Reason: "manual_queue_loop"})
 					p.mu.Lock()
 					p.nextIndex = 0
 					p.mu.Unlock()
 					played = false
-					baseMS = 0
 					startAt = time.Now()
 					streamID = fmt.Sprintf("%s-%d", playerStreamPrefix, time.Now().UnixNano())
 					p.mu.Lock()

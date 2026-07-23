@@ -50,15 +50,17 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSSEHeaders(w)
 	prompt := s.chatPromptForRequest(settings)
 	service := chat.Service{
 		Provider:             provider,
 		Prompt:               prompt,
 		Model:                settings.LLM.Model,
 		Memories:             s.personalization.memory.PromptTexts(),
+		UserProfile:          settings.UserProfile,
 		MotionGenerationMode: settings.Motion.MotionGenerationMode,
 	}
+
+	setSSEHeaders(w)
 	emit := sseEmitter(func(event string, payload any) error {
 		return writeSSE(w, event, payload)
 	})
@@ -69,6 +71,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		"model":      settings.LLM.Model,
 		"prompt_set": prompt.ID,
 	}); err != nil {
+		return
+	}
+
+	if s.shouldUseDirectorChatMode(settings) {
+		s.handleChatStreamDirector(w, r, body, settings, provider, emit)
 		return
 	}
 

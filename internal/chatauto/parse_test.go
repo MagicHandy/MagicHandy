@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseResponse(t *testing.T) {
-	raw := `{"autodom":{"humor":"tesao","posicao":"oral","intensidade":5,"duracao_segundos":20},"reply":"Vem mais perto."}`
+	raw := `{"autodom":{"humor":"tesao","posicao":"oral","intensidade_min":3,"intensidade_max":8},"reply":"Vem mais perto."}`
 	response, err := chatauto.ParseResponse(raw)
 	if err != nil {
 		t.Fatalf("ParseResponse: %v", err)
@@ -18,7 +18,10 @@ func TestParseResponse(t *testing.T) {
 	if response.AutoDom.Humor != chatauto.HumorTesao {
 		t.Fatalf("humor = %q", response.AutoDom.Humor)
 	}
-	if response.AutoDom.DuracaoSegundos != 45 {
-		t.Fatalf("duracao = %d", response.AutoDom.DuracaoSegundos)
+	if response.AutoDom.IntensidadeMin != 3 || response.AutoDom.IntensidadeMax != 8 {
+		t.Fatalf("intensidade range = %d-%d", response.AutoDom.IntensidadeMin, response.AutoDom.IntensidadeMax)
+	}
+	if response.AutoDom.DuracaoSegundos != 60 {
+		t.Fatalf("duracao = %d, want procedural max 60", response.AutoDom.DuracaoSegundos)
 	}
 }

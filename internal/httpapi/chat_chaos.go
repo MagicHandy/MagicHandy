@@ -22,10 +22,15 @@ type chatChaosRuntime struct {
 	player           *manualqueue.Player
 	generation       uint64
 	lastDispatchTime time.Time
+	lastPhysics      motion.ChaoticPhysics
+	hasLastPhysics   bool
+	lastBridgeAt     time.Time
+	dispatchInFlight bool
+	bridgeCancel     context.CancelFunc
 }
 
 func (s *Server) shouldUseChaoticChatMotion(command *chat.MotionCommand, settings config.Settings) bool {
-	if settings.Motion.MotionGenerationMode != config.MotionGenerationModeProcedural {
+	if !config.UsesProceduralMotionGeneration(settings.Motion.MotionGenerationMode) {
 		return false
 	}
 	if command == nil {
@@ -120,6 +125,15 @@ func (s *Server) playChatChaoticMotion(
 	settings config.Settings,
 	generation uint64,
 ) error {
+	s.chatChaos.mu.Lock()
+	s.chatChaos.dispatchInFlight = true
+	s.chatChaos.mu.Unlock()
+	defer func() {
+		s.chatChaos.mu.Lock()
+		s.chatChaos.dispatchInFlight = false
+		s.chatChaos.mu.Unlock()
+	}()
+
 	if !s.chatChaosGenerationCurrent(generation) {
 		return nil
 	}
@@ -132,39 +146,93 @@ func (s *Server) playChatChaoticMotion(
 	// #nosec G404 -- chaotic motion requires non-deterministic micro-variance.
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	continueFrom := -1
+	var appendToExisting bool
+	var blendState motion.MotionBlendState
+	var existingPlayer *manualqueue.Player
+	var regionChanged bool
+
 	s.chatChaos.mu.Lock()
 	if existing := s.chatChaos.player; existing != nil {
 		if snap := existing.Snapshot(); snap.Running {
-			continueFrom = int(math.Round(snap.PositionPct))
+			appendToExisting = true
+			existingPlayer = existing
+			blendState = estimateBlendStateFromPlayer(existing)
 		}
+	}
+	if s.chatChaos.hasLastPhysics {
+		regionChanged = s.chatChaos.lastPhysics.Regiao != command.Regiao
 	}
 	s.chatChaos.mu.Unlock()
 
-	physics := motion.ChaoticPhysics{
-		Velocidade:  command.Velocidade,
-		Intensidade: command.Intensidade,
-		Regiao:      command.Regiao,
-		TipoBatida:  command.TipoBatida,
-		AtrasoMS:    command.AtrasoMS,
+	physics := chat.ChaoticPhysicsFromCommand(command)
+	if command.Action == chat.MotionActionStart && appendToExisting {
+		command.Action = chat.MotionActionTarget
 	}
 	durationMS := int64(motion.EstimateChatMotionDurationMS(physics))
-	session := buildChaosSessionForDurationFromPosition(
-		physics,
-		settings.Motion,
-		settings.Motion.HardwareSafetyLock,
-		rng,
-		durationMS,
-		continueFrom,
-	)
+
+	var session manualqueue.Session
+	var forcePlayerRestart bool
+	if appendToExisting && !regionChanged {
+		if motion.IsTurboTipo(physics.TipoBatida) {
+			continueFrom := int(math.Round(blendState.Position))
+			session = buildChaosSessionForDurationFromPosition(
+				physics,
+				settings.Motion,
+				settings.Motion.HardwareSafetyLock,
+				rng,
+				durationMS,
+				continueFrom,
+			)
+		} else {
+			session = buildChaosSessionForDurationFromBlend(
+				physics,
+				settings.Motion,
+				settings.Motion.HardwareSafetyLock,
+				rng,
+				durationMS,
+				blendState,
+			)
+		}
+	} else if appendToExisting && regionChanged {
+		// Splicing leaves pre-cut meio points in the HSP buffer; restart with a
+		// fresh timeline so the device actually moves in the new regiao envelope.
+		continueFrom := int(math.Round(blendState.Position))
+		if motion.IsTurboTipo(physics.TipoBatida) {
+			continueFrom = -1
+		}
+		session = buildChaosSessionForDurationFromPosition(
+			physics,
+			settings.Motion,
+			settings.Motion.HardwareSafetyLock,
+			rng,
+			durationMS,
+			continueFrom,
+		)
+		forcePlayerRestart = true
+	} else {
+		session = buildChaosSessionForDurationFromPosition(
+			physics,
+			settings.Motion,
+			settings.Motion.HardwareSafetyLock,
+			rng,
+			durationMS,
+			-1,
+		)
+	}
 	if len(session.Points) == 0 {
 		return nil
 	}
+	s.rememberChatChaosPhysics(physics)
+	s.resetChatChaosBridgeDebounce()
 	// #region agent log
 	if len(session.Points) > 0 {
 		last := session.Points[len(session.Points)-1]
 		agentDebugLog("M2", "chat_chaos.go:playChatChaoticMotion", "session built", map[string]any{
-			"continue_from": continueFrom,
+			"append":            appendToExisting,
+			"force_restart":     forcePlayerRestart,
+			"region_changed":    regionChanged,
+			"blend_pos":         blendState.Position,
+			"blend_vel":     blendState.Velocity,
 			"point_count":   len(session.Points),
 			"duration_ms":   session.DurationMS,
 			"target_ms":     durationMS,
@@ -180,6 +248,32 @@ func (s *Server) playChatChaoticMotion(
 
 	s.stopAndClearMotionEngine(ctx, "chat_chaos_prepare")
 	s.stopManualQueuePlayer(ctx)
+
+	if appendToExisting && existingPlayer != nil && !forcePlayerRestart {
+		if !s.chatChaosGenerationCurrent(generation) {
+			return nil
+		}
+		appended := false
+		if err := existingPlayer.SpliceExtensionAtPlayhead(session, int(chaosChainLeadMillis)); err == nil {
+			appended = true
+		} else {
+			s.logger.Warn("chat chaos splice failed, falling back to append", "error", err)
+			if err := existingPlayer.AppendExtension(session); err == nil {
+				appended = true
+			} else {
+				s.logger.Warn("chat chaos append failed, restarting with crossfade", "error", err)
+				appendToExisting = false
+			}
+		}
+		if appended {
+			if s.modes != nil {
+				s.modes.NotifyChatStop()
+			}
+			s.startChatChaosBridgeWatcher(ctx, generation, settings)
+			return nil
+		}
+	}
+
 	s.stopChatChaosPlayer(ctx)
 
 	if !s.chatChaosGenerationCurrent(generation) {
@@ -209,6 +303,8 @@ func (s *Server) playChatChaoticMotion(
 	s.chatChaos.player = player
 	s.chatChaos.mu.Unlock()
 
+	s.startChatChaosBridgeWatcher(ctx, generation, settings)
+
 	if s.modes != nil {
 		s.modes.NotifyChatStop()
 	}
@@ -216,6 +312,7 @@ func (s *Server) playChatChaoticMotion(
 }
 
 func (s *Server) stopChatChaosPlayer(ctx context.Context) {
+	s.stopChatChaosBridgeWatcher()
 	s.chatChaos.mu.Lock()
 	player := s.chatChaos.player
 	s.chatChaos.player = nil
@@ -227,10 +324,12 @@ func (s *Server) stopChatChaosPlayer(ctx context.Context) {
 }
 
 func (s *Server) cancelChatChaosMotion(ctx context.Context) {
+	s.stopChatChaosBridgeWatcher()
 	s.chatChaos.mu.Lock()
 	s.chatChaos.generation++
 	player := s.chatChaos.player
 	s.chatChaos.player = nil
+	s.chatChaos.hasLastPhysics = false
 	s.chatChaos.mu.Unlock()
 
 	if player != nil {

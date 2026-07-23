@@ -24,7 +24,7 @@ const (
 	DBFileName = DatabaseFileName
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 7
+	CurrentSchemaVersion = 8
 	// SchemaVersion is a Rockfire-era alias kept for tests.
 	SchemaVersion = CurrentSchemaVersion
 
@@ -304,6 +304,10 @@ func (db *DB) migrate(ctx context.Context) error {
 				if err := migrateV7(ctx, tx); err != nil {
 					return err
 				}
+			case 8:
+				if err := migrateV8(ctx, tx); err != nil {
+					return err
+				}
 			default:
 				return fmt.Errorf("unknown migration version %d", next)
 			}
@@ -571,6 +575,13 @@ func migrateV7(ctx context.Context, tx *sql.Tx) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("apply SQLite migration v7: %w", err)
+	}
+	return nil
+}
+
+func migrateV8(ctx context.Context, tx *sql.Tx) error {
+	if err := SeedClarissaSynsualPersona(ctx, tx); err != nil {
+		return fmt.Errorf("apply SQLite migration v8: %w", err)
 	}
 	return nil
 }

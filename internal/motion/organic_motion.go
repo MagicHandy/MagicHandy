@@ -118,6 +118,9 @@ func jitteredTimeDelta(
 	hardwareSafetyLock bool,
 	rng *rand.Rand,
 ) int {
+	if baseMS <= 1 {
+		return clampDelta(1, hardwareSafetyLock)
+	}
 	factor := easingShrinkFactor(progress, intensidade)
 	if rng != nil && rng.Float64() < 0.45 {
 		factor = 0.72 + 0.28*factor

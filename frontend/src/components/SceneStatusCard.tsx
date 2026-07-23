@@ -56,16 +56,8 @@ export function SceneStatusCard({
             {snap.phase_ready_to_advance && (
               <StatusChip label={t("session.scene.advance")} variant="success" pulse />
             )}
-            {snap.autospeak_enabled && (
-              <StatusChip
-                label={
-                  snap.autospeak_scheduled
-                    ? t("layout.topbar.autospeakScheduled")
-                    : t("layout.topbar.autospeak")
-                }
-                variant="muted"
-                pulse={snap.autospeak_scheduled}
-              />
+            {snap.auto_running && (
+              <StatusChip label={t("layout.topbar.chatAuto")} variant="accent" pulse />
             )}
           </div>
         )}

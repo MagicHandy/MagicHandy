@@ -10,8 +10,6 @@ import {
   IconPlayer,
   IconSettings,
 } from "./icons/NavIcons";
-import { PositionVisualizer } from "./PositionVisualizer";
-
 export function Sidebar({
   snap,
   error,
@@ -60,10 +58,6 @@ export function Sidebar({
         <NavGroup label={t("nav.group.library")} items={navLibrary} snap={snap} t={t} />
         <NavGroup label={t("nav.group.system")} items={navSystem} snap={snap} t={t} />
       </nav>
-
-      <div className="sidebar-motion">
-        <PositionVisualizer variant="sidebar" />
-      </div>
 
       {error && (
         <div className="sidebar-offline-card">

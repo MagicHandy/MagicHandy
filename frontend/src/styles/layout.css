@@ -62,6 +62,12 @@ body {
 .autodom-workspace > .workspace-main,
 .control-room .session-workspace > .chat-panel {
   min-height: 0;
+  height: 100%;
+}
+
+.control-room .session-workspace > .chat-auto-rail {
+  min-height: 0;
+  height: 100%;
 }
 
 /* Control room fills viewport */

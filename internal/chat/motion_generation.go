@@ -22,6 +22,8 @@ func normalizeMotionGenerationMode(mode string) string {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case config.MotionGenerationModeLibrary:
 		return config.MotionGenerationModeLibrary
+	case config.MotionGenerationModeSynsual:
+		return config.MotionGenerationModeSynsual
 	default:
 		return config.MotionGenerationModeProcedural
 	}
@@ -37,50 +39,34 @@ func motionInstructionsForMode(mode string) string {
 }
 
 func proceduralMotionInstructions() string {
-	return strings.TrimSpace(`Instrução de Movimento (Física Procedural):
-No objeto JSON de "motion", defina a física da cena usando estas chaves:
-- "velocidade" (int: 0 a 100): Velocidade geral da ação.
-- "intensidade" (int: 0 a 100): Quanto a curva acelera no fim do golpe.
-- "regiao" (string): Zona do stroke. Aceita:
-  - "cabeca" (70–100%) — prefira para cenas ativas, oral, ritmo intenso no topo
-  - "meio" (30–69%)
-  - "base" (0–29%) — use só quando a cena pedir explicitamente fundo/base
-  - "full" ou "cabeca_base" (0–100%, stroke completo — use com moderação)
-  - "meio_cabeca" (30–100%) — ótimo padrão, mistura meio e cabeça
-  - "meio_base" (0–69%)
-  - "aleatoria"
-- "tipo_batida" (string): Perfil do movimento. Aceita:
-  - "fluido" (curvas longas na zona — padrão natural)
-  - "lento" (micro-stroke lento na zona — use para pausa/respiração na cena, NÃO pare o device)
-  - "simples" (um golpe direto na zona)
-  - "leve", "moderado", "alto" (intensidade crescente dentro da zona)
-  - "very_fast" ou "vibrate" (turbo/vibração rápida na zona)
-- "atraso_ms" (int, opcional): Suavização entre pontos da curva, como no mouse tracker.
-  - 160 = fluido (recomendado para sessões naturais)
-  - 80–120 = moderado
-  - 1 = turbo/vibração (somente com tipo_batida very_fast/vibrate)
+	return strings.TrimSpace(`Você é o Diretor de Cena. NÃO calcule posições, waypoints, arrays de movimento nem comandos de device.
+Retorne APENAS um objeto JSON com a física semântica da cena. O backend Go gera todo o movimento orgânico.
 
-JSON contract (procedural):
+JSON contract (strict):
 {
-  "reply": "short user-facing reply",
-  "motion": {
-    "action": "none|start|target|stop",
-    "velocidade": 50,
-    "intensidade": 60,
-    "regiao": "meio_cabeca",
-    "tipo_batida": "fluido",
-    "atraso_ms": 160
-  }
+  "action": "ride|tease|pause|stop|none",
+  "intensity": 1-10,
+  "stroke_range": [0.1, 0.9],
+  "dialogue": "short in-character reply"
 }
 
+Fields:
+- "action":
+  - "ride" — movimento contínuo principal (iniciar ou ajustar cena ativa)
+  - "tease" — provocação leve, curto alcance
+  - "pause" — desacelerar / respirar (NÃO use stop)
+  - "stop" — parar de verdade quando o usuário pedir
+  - "none" — só diálogo, sem mudar movimento
+- "intensity" (1–10): energia da cena. 1 = muito suave, 10 = intenso.
+- "stroke_range": [min, max] frações normalizadas 0..1 do eixo do device.
+  Ex.: [0.1, 0.9] = stroke longo; [0.7, 0.95] = foco na cabeça.
+- "dialogue": resposta curta para o usuário.
+
 Rules:
-- Omit "motion" or set {"action":"none"} when the user is only chatting.
-- Use "start" only when the user asks to begin motion.
-- Use "target" to change ritmo/zona/perfil durante a cena.
-- Use "stop" ONLY quando o usuário pedir para parar de verdade. Pausa, descanso ou respiração = "target" com "tipo_batida":"lento" ou "fluido" e "atraso_ms":160.
-- Golpes devem usar a zona inteira (ex: cabeca = 70→100→70), nunca micromovimentos no meio da zona.
-- Varie "regiao" entre targets: alterne cabeca, meio_cabeca e meio. Evite ficar preso em base ou full por muito tempo.
-- Use only the physics keys above for start/target; never invent device commands or transport details.`)
+- NEVER output position arrays, timestamps, velocidade, regiao, tipo_batida, or motion blocks.
+- NEVER output legacy {"reply","motion"} shape.
+- Rest/pause in narrative = "pause", not "stop".
+- Prefer stroke_range changes over stop/start when shifting mood mid-scene.`)
 }
 
 func libraryMotionInstructions() string {

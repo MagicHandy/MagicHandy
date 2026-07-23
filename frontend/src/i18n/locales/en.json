@@ -88,8 +88,7 @@
       "intensityTitle": "Session intensity (0–100%). Controls how strong blocks the AI enqueues.",
       "phaseLocked": "locked",
       "advancePhase": "advance phase",
-      "autospeak": "autospeak",
-      "autospeakScheduled": "autospeak ·",
+      "chatAuto": "Chat Auto",
       "ollama": "Ollama",
       "llamaCpp": "llama.cpp",
       "localLlm": "Local LLM",
@@ -169,45 +168,39 @@
       "saveSettings": "Save settings",
       "saveBarHint": "Changes apply after you save — some options need a backend restart.",
       "session": {
-        "autospeak": {
-          "title": "Autospeak",
-          "hint": "Like StrokeGPT-ReVibed: the persona chooses when to speak again (autospeak_seconds in JSON). With Autospeak on, the fixed interval below is only a fallback when Autospeak is off.",
-          "enabled": "Autospeak enabled",
-          "minSeconds": "Minimum between speeches (s)",
-          "maxSeconds": "Maximum between speeches (s)",
-          "motionAutonomy": "Motion autonomy (between speeches)",
-          "chatOnly": "Speech only",
-          "styleLight": "Light (intensity/phase)",
-          "fullMotion": "Full motion"
-        },
-        "appLegacy": {
-          "title": "App / Auto (legacy)",
-          "waitFirstMsg": "Wait for my 1st message before persona speaks (auto mode)",
-          "waitHint": "Unchecked: the AI can speak and enqueue motion as soon as Auto starts.",
-          "fixedInterval": "Fixed interval between speeches (s) — only without Autospeak"
+        "userProfile": {
+          "title": "About me",
+          "hint": "The AI uses this when talking about you — pronouns, orientation, and personal context.",
+          "gender": "Gender",
+          "genderMale": "Man",
+          "genderFemale": "Woman",
+          "genderOther": "Other / non-binary",
+          "genderUnspecified": "Prefer not to say",
+          "orientation": "Sexual orientation",
+          "orientationHeterosexual": "Heterosexual",
+          "orientationHomosexual": "Homosexual",
+          "orientationBisexual": "Bisexual",
+          "orientationPansexual": "Pansexual",
+          "orientationAsexual": "Asexual",
+          "orientationOther": "Other",
+          "orientationUnspecified": "Prefer not to say",
+          "aboutMe": "About me",
+          "aboutMePlaceholder": "E.g. what you like, boundaries, how you want to be addressed…",
+          "aboutMeHint": "Optional. Maximum 500 characters."
         },
         "chatAuto": {
           "title": "Chat Auto",
-          "hint": "Mood ramps progressively toward dominatrix over the session.",
+          "hint": "Automatic mode: the AI plans continuous motion segments and speaks while the Handy keeps playing.",
+          "waitFirstMsg": "Wait for my first message before starting",
+          "waitHint": "On: Auto only starts after you send a chat message. Off: starts as soon as Auto mode is enabled.",
+          "segmentMin": "Minimum segment duration (s)",
+          "segmentMax": "Maximum segment duration (s)",
+          "segmentHint": "Each motion block lasts within this range. The AI picks a value inside it.",
+          "prefetchLead": "Next-segment prefetch lead (s)",
+          "prefetchHint": "How many seconds before the current block ends the AI starts planning the next one.",
           "allowDominatrix": "Allow dominatrix stage",
           "rampMinutes": "Time to dominatrix (min)",
           "rampHint": "Maximum 10 minutes. Mood and pace rise throughout the session."
-        },
-        "scene": {
-          "title": "Scene — AI controls pacing",
-          "aiPacing": "AI chooses scene (pose), phase, and duration (min–max below)",
-          "aiPacingHint": "On: persona plans how long to stay in each phase and only advances when time runs out (or user skips). Off: legacy auto-escalation per turn.",
-          "advanceLegacy": "Escalate phase each reply (legacy — only if AI pacing is off)",
-          "phaseMinMax": "Min / max per phase (seconds)"
-        },
-        "phases": {
-          "intro": "Intro",
-          "warmup": "Warmup",
-          "build_up": "Build-up",
-          "active": "Active",
-          "peak": "Peak",
-          "recovery": "Recovery",
-          "cooldown": "Cooldown"
         }
       },
       "motion": {
@@ -589,6 +582,7 @@
     "stamina": "Stamina",
     "humor": "Mood",
     "posicao": "Position",
+    "sceneIntensity": "Intensity {{value}}/10",
     "thinking": "AI thinking…",
     "imageSoon": "Image coming soon",
     "idleHint": "Auto mode: the AI keeps talking and generating motion after your message.",
@@ -597,6 +591,13 @@
       "tesao": "Aroused",
       "intensa": "Intense",
       "dominatrix": "Dominatrix"
+    },
+    "spiceLevels": {
+      "biquinho": "Biquinho",
+      "dedo_de_moca": "Dedo de Moça",
+      "jalapeno": "Jalapeño",
+      "malagueta": "Malagueta",
+      "carolina_reaper": "Carolina Reaper"
     },
     "poses": {
       "handjob": "Handjob",
@@ -608,7 +609,14 @@
       "title": "AI motion",
       "speed": "Speed",
       "intensity": "Intensity",
-      "delay": "Delay"
+      "delay": "Delay",
+      "idle": "Syncing motion…",
+      "actions": {
+        "start": "Start",
+        "target": "Adjust",
+        "stop": "Stop",
+        "none": "—"
+      }
     },
     "regions": {
       "cabeca": "Tip",

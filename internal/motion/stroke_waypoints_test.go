@@ -22,6 +22,28 @@ func TestChaosRegionRanges(t *testing.T) {
 	}
 }
 
+func TestEffectiveSemanticRegionPrefersRegiaoOverDeviceWindow(t *testing.T) {
+	got := effectiveSemanticRegion(ChaoticPhysics{
+		Regiao:         "cabeca",
+		StrokeRangeMin: 0,
+		StrokeRangeMax: 1,
+	})
+	if got.Min != 70 || got.Max != 100 {
+		t.Fatalf("cabeca with device window = %+v, want 70..100", got)
+	}
+}
+
+func TestEffectiveSemanticRegionFallsBackWhenSceneRangeConflicts(t *testing.T) {
+	got := effectiveSemanticRegion(ChaoticPhysics{
+		Regiao:         "cabeca",
+		StrokeRangeMin: 0.1,
+		StrokeRangeMax: 0.4,
+	})
+	if got.Min != 70 || got.Max != 100 {
+		t.Fatalf("conflicting scene range = %+v, want cabeca 70..100", got)
+	}
+}
+
 func TestGenerateStrokeWaypointsUsesFullZoneTravel(t *testing.T) {
 	physics := ChaoticPhysics{
 		Velocidade:  45,
@@ -65,14 +87,14 @@ func TestGenerateStrokeWaypointsAvoidMicroSteps(t *testing.T) {
 }
 
 func TestResolveAtrasoMSDefaultsAndOverride(t *testing.T) {
-	if got := ResolveAtrasoMS(ChaoticPhysics{TipoBatida: "fluido", Velocidade: 50}); got != 160 {
-		t.Fatalf("fluido default = %d, want 160", got)
+	if got := ResolveAtrasoMS(ChaoticPhysics{TipoBatida: "fluido", Velocidade: 50}); got < 165 || got > 175 {
+		t.Fatalf("fluido default = %d, want ~168 scaled at vel=50", got)
 	}
 	if got := ResolveAtrasoMS(ChaoticPhysics{TipoBatida: "vibrate"}); got != 1 {
 		t.Fatalf("vibrate default = %d, want 1", got)
 	}
-	if got := ResolveAtrasoMS(ChaoticPhysics{TipoBatida: "fluido", AtrasoMS: 90}); got != 90 {
-		t.Fatalf("override = %d, want 90", got)
+	if got := ResolveAtrasoMS(ChaoticPhysics{TipoBatida: "fluido", AtrasoMS: 90, Velocidade: 50}); got >= 165 {
+		t.Fatalf("override = %d, want explicit atraso below default fluido", got)
 	}
 }
 

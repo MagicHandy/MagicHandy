@@ -334,7 +334,12 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		if !s.requireController(w, r) {
 			return
 		}
+		if s.modes != nil {
+			s.modes.NotifyChatStop()
+			s.modes.NotifyUserStop()
+		}
 		s.stopChatAutoLoop(r.Context())
+		s.cancelChatChaosMotion(r.Context())
 		s.stopAndClearMotionEngine(r.Context(), "chat_stop")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "stopped": true})
 		return
@@ -351,6 +356,7 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 			s.enqueueChatAutoUserText(text)
 		} else {
 			s.startChatAutoLoop(r.Context())
+			s.enqueueChatAutoUserText(text)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":      true,
@@ -380,6 +386,7 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		Prompt:               prompt,
 		Model:                settings.LLM.Model,
 		Memories:             s.personalization.memory.PromptTexts(),
+		UserProfile:          settings.UserProfile,
 		MotionGenerationMode: settings.Motion.MotionGenerationMode,
 	}
 
@@ -434,7 +441,7 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	agentDebugLog("C", "lso_compat.go:handleChatSend", "motion dispatch", map[string]any{
 		"clientID": clientID, "controllerActive": controllerActive,
 		"action": motionActionName(result.Response.Motion), "applied": motionDispatch.Applied,
-		"motionErr": errString(motionErr), "procedural": settings.Motion.MotionGenerationMode == config.MotionGenerationModeProcedural,
+		"motionErr": errString(motionErr), "procedural": config.UsesProceduralMotionGeneration(settings.Motion.MotionGenerationMode),
 	})
 	// #endregion
 	response := map[string]any{

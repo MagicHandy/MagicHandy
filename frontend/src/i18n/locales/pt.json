@@ -88,8 +88,7 @@
       "intensityTitle": "Intensidade da sessão (0–100%). Controla o quão forte os blocos que a IA enfileira ficam.",
       "phaseLocked": "travada",
       "advancePhase": "trocar fase",
-      "autospeak": "autospeak",
-      "autospeakScheduled": "autospeak ·",
+      "chatAuto": "Chat Auto",
       "ollama": "Ollama",
       "llamaCpp": "llama.cpp",
       "localLlm": "LLM local",
@@ -169,45 +168,39 @@
       "saveSettings": "Salvar configuração",
       "saveBarHint": "Mudanças aplicam depois de salvar — algumas opções precisam reiniciar o backend.",
       "session": {
-        "autospeak": {
-          "title": "Autospeak",
-          "hint": "Igual ao StrokeGPT-ReVibed: a persona escolhe quando falar de novo (autospeak_seconds no JSON). Com Autospeak ligado, o intervalo fixo abaixo só vale como fallback quando Autospeak está desligado.",
-          "enabled": "Autospeak ligado",
-          "minSeconds": "Mínimo entre falas (s)",
-          "maxSeconds": "Máximo entre falas (s)",
-          "motionAutonomy": "Autonomia de movimento (entre falas)",
-          "chatOnly": "Só fala",
-          "styleLight": "Leve (intensidade/fase)",
-          "fullMotion": "Movimento completo"
-        },
-        "appLegacy": {
-          "title": "App / Auto (legado)",
-          "waitFirstMsg": "Esperar minha 1ª mensagem antes da persona falar (modo auto)",
-          "waitHint": "Desmarcado: a IA pode falar e enfileirar movimento logo ao ligar o Auto.",
-          "fixedInterval": "Intervalo fixo entre falas (s) — só sem Autospeak"
+        "userProfile": {
+          "title": "Sobre mim",
+          "hint": "A IA usa esses dados ao falar sobre você — pronomes, orientação e contexto pessoal.",
+          "gender": "Gênero",
+          "genderMale": "Homem",
+          "genderFemale": "Mulher",
+          "genderOther": "Outro / não-binário",
+          "genderUnspecified": "Prefiro não dizer",
+          "orientation": "Orientação sexual",
+          "orientationHeterosexual": "Heterossexual",
+          "orientationHomosexual": "Homossexual",
+          "orientationBisexual": "Bissexual",
+          "orientationPansexual": "Pansexual",
+          "orientationAsexual": "Assexual",
+          "orientationOther": "Outra",
+          "orientationUnspecified": "Prefiro não dizer",
+          "aboutMe": "Sobre mim",
+          "aboutMePlaceholder": "Ex.: o que você gosta, limites, como quer ser chamado…",
+          "aboutMeHint": "Opcional. Máximo 500 caracteres."
         },
         "chatAuto": {
           "title": "Chat Auto",
-          "hint": "O humor sobe progressivamente até dominatrix conforme o tempo da sessão.",
+          "hint": "Modo automático: a IA planeja segmentos contínuos de movimento e fala enquanto o Handy toca sem parar.",
+          "waitFirstMsg": "Esperar minha 1ª mensagem antes de começar",
+          "waitHint": "Ligado: o Auto só inicia depois que você mandar algo no chat. Desligado: começa assim que o modo Auto liga.",
+          "segmentMin": "Duração mínima do segmento (s)",
+          "segmentMax": "Duração máxima do segmento (s)",
+          "segmentHint": "Cada bloco de movimento dura entre esses valores. A IA escolhe dentro da faixa.",
+          "prefetchLead": "Antecipação do próximo segmento (s)",
+          "prefetchHint": "Quantos segundos antes do fim do bloco atual a IA começa a planejar o próximo.",
           "allowDominatrix": "Permitir estágio dominatrix",
           "rampMinutes": "Tempo até dominatrix (min)",
           "rampHint": "Máximo 10 minutos. O humor e o ritmo sobem ao longo da sessão."
-        },
-        "scene": {
-          "title": "Cena — IA controla ritmo",
-          "aiPacing": "IA escolhe cena (pose), fase e duração (min–max abaixo)",
-          "aiPacingHint": "Ligado: a persona planeja quanto tempo fica em cada fase e só troca quando o tempo acaba (ou o usuário pede para pular). Desligado: comportamento legado com escalada automática por turno.",
-          "advanceLegacy": "Escalar fase a cada resposta (legado — só se IA controla ritmo estiver off)",
-          "phaseMinMax": "Min / max por fase (segundos)"
-        },
-        "phases": {
-          "intro": "Introdução",
-          "warmup": "Aquecimento",
-          "build_up": "Intensificação",
-          "active": "Ativo",
-          "peak": "Pico",
-          "recovery": "Recuperação",
-          "cooldown": "Desaceleração"
         }
       },
       "motion": {
@@ -589,6 +582,7 @@
     "stamina": "Stamina",
     "humor": "Humor",
     "posicao": "Posição",
+    "sceneIntensity": "Intensidade {{value}}/10",
     "thinking": "IA pensando…",
     "imageSoon": "Imagem em breve",
     "idleHint": "Modo Auto: a IA continua falando e gerando movimento após sua mensagem.",
@@ -597,6 +591,13 @@
       "tesao": "Tesão",
       "intensa": "Intensa",
       "dominatrix": "Dominatrix"
+    },
+    "spiceLevels": {
+      "biquinho": "Biquinho",
+      "dedo_de_moca": "Dedo de Moça",
+      "jalapeno": "Jalapeño",
+      "malagueta": "Malagueta",
+      "carolina_reaper": "Carolina Reaper"
     },
     "poses": {
       "handjob": "Handjob",
@@ -608,7 +609,14 @@
       "title": "Movimento IA",
       "speed": "Velocidade",
       "intensity": "Intensidade",
-      "delay": "Atraso"
+      "delay": "Atraso",
+      "idle": "Sincronizando movimento…",
+      "actions": {
+        "start": "Início",
+        "target": "Ajuste",
+        "stop": "Parar",
+        "none": "—"
+      }
     },
     "regions": {
       "cabeca": "Cabeça",

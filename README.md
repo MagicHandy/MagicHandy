@@ -160,16 +160,34 @@ MinGW/GCC installed.
 `golangci-lint run` is part of CI. Local developers can install
 `golangci-lint` to run the same static checks before pushing.
 
+## Motion paths
+
+Chat and mode planners emit semantic `MotionCommand` JSON. Dispatch follows
+`motion_generation_mode`:
+
+| Mode | Path | Player |
+|------|------|--------|
+| `library` | `motion.Engine` retargeting | Engine → transport |
+| `procedural` | Organic stroke waypoints + HSP | `manualqueue.Player` → transport |
+
+Deep dive: [procedural chat motion analysis](docs/procedural-chat-motion-analysis.md).
+
 ## Planning Docs
 
+- [AI-GUIDELINE](AI-GUIDELINE.md) — index for AI-assisted development
+- [Project context](docs/context.md)
+- [Task tracker](docs/tasks/TRACKER.md)
+- [ADRs index](docs/adrs/README.md)
+- [Code guidelines](docs/code_guidelines/README.md)
+- [Domain rules](docs/domain_rules/README.md) — **Rule 04: real device + sync testing**
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
 - [Goals and guardrails](docs/goals-and-guardrails.md)
 - [Goal scorecard](docs/goal-scorecard.md)
-- [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md)
-- [Frontend strategy](docs/decisions/0004-frontend-strategy.md)
-- [React frontend migration](docs/decisions/0009-react-frontend.md)
+- [Motion and transport contract](docs/adrs/0002-motion-transport-contract.md)
+- [Frontend strategy](docs/adrs/0004-frontend-strategy.md)
+- [React frontend migration](docs/adrs/0009-react-frontend.md)
 - [React UI implementation handoff](docs/react-ui-implementation-handoff.md)
-- [SQLite persistence (ADR 0008)](docs/decisions/0008-sqlite-persistence.md)
+- [SQLite persistence (ADR 0008)](docs/adrs/0008-sqlite-persistence.md)
 - [UI design](docs/ui-design.md)
 - [UI navigation redesign (sidebar shell)](docs/ui-navigation-redesign.md)
 - [UI design guidelines](docs/ui-design-guidelines.md)

@@ -21,10 +21,19 @@ func MapIntent(intent Intent, stamina float64) MappedSegment {
 	}
 
 	velocidade := 25 + intensity*7
+	if intent.Velocidade > 0 {
+		velocidade = 15 + intent.Velocidade*8
+	}
 	physicsIntensity := 30 + intensity*6
 	regiao := "meio_cabeca"
 	tipo := "fluido"
-	atraso := 160
+	atraso := 150 - intensity*4
+	if atraso < 95 {
+		atraso = 95
+	}
+	if atraso > 210 {
+		atraso = 210
+	}
 
 	switch intent.Posicao {
 	case PoseOral, PoseDeepthroat:
@@ -39,19 +48,24 @@ func MapIntent(intent Intent, stamina float64) MappedSegment {
 	case HumorDesejando:
 		tipo = "lento"
 		velocidade = max(20, velocidade-15)
-		atraso = 180
+		atraso = min(280, atraso+50)
+	case HumorTesao:
+		tipo = "fluido"
+		atraso = min(220, atraso+20)
 	case HumorIntensa:
 		tipo = "moderado"
 		velocidade = min(100, velocidade+10)
+		atraso = max(100, atraso-25)
 	case HumorDominatrix:
 		tipo = "alto"
 		velocidade = min(100, velocidade+25)
 		physicsIntensity = min(100, physicsIntensity+20)
-		atraso = 120
+		atraso = max(70, atraso-45)
 	}
 
 	if intent.Intensidade >= 8 {
 		tipo = "alto"
+		atraso = max(55, atraso-30)
 	}
 
 	return MappedSegment{

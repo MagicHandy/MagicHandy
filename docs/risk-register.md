@@ -226,7 +226,7 @@ maintainability debt across and defeats the goal for half the codebase.
 
 Mitigation:
 
-- follow `docs/decisions/0004-frontend-strategy.md`: rebuild fresh, minimal-first,
+- follow `docs/adrs/0004-frontend-strategy.md`: rebuild fresh, minimal-first,
   backend-state-driven; old JS is reference, not base
 - apply the size/no-god-module norms to `web/`
 - defer the heavy authoring UI rather than porting it early

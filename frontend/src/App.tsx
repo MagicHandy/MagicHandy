@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { StatusProvider } from "./contexts/StatusContext";
+import { PositionVisualProvider } from "./contexts/PositionVisualContext";
 import { Layout } from "./components/Layout";
 import { ConfigHub } from "./pages/ConfigHub";
 import { ControlRoom } from "./pages/ControlRoom";
@@ -35,7 +36,9 @@ export default function App() {
         <Route
           element={
             <StatusProvider intervalMs={1500}>
-              <Layout />
+              <PositionVisualProvider>
+                <Layout />
+              </PositionVisualProvider>
             </StatusProvider>
           }
         >

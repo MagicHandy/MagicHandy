@@ -14,16 +14,6 @@ type SettingsSection = Extract<
   "session" | "motion" | "connections" | "voice" | "logs"
 >;
 
-const PHASE_IDS = [
-  "intro",
-  "warmup",
-  "build_up",
-  "active",
-  "peak",
-  "recovery",
-  "cooldown",
-] as const;
-
 const PLANNER_WEIGHT_KEYS = [
   "tag_match",
   "intensity_fit",
@@ -51,8 +41,6 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
   const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
   const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
 
-  const app = (settings.app ?? {}) as Record<string, unknown>;
-  const autospeak = (settings.autospeak ?? {}) as Record<string, unknown>;
   const motion = (settings.motion ?? {}) as Record<string, unknown>;
   const planner = (settings.planner ?? {}) as Record<string, unknown>;
   const plannerWeights = (planner.block_selector_weights ?? {}) as Record<string, number>;
@@ -70,9 +58,8 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
   const handy = (settings.handy ?? {}) as Record<string, string>;
   const voice = (settings.voice ?? {}) as Record<string, unknown>;
   const diagnostics = (settings.diagnostics ?? {}) as Record<string, unknown>;
-  const scene = (settings.scene ?? {}) as Record<string, unknown>;
-  const scenePhases = (scene.phases ?? {}) as Record<string, Record<string, unknown>>;
   const autodom = (settings.autodom ?? {}) as Record<string, unknown>;
+  const userProfile = (settings.user_profile ?? {}) as Record<string, unknown>;
 
   const updateSection = (key: keyof AppSettings, patch: Record<string, unknown>) => {
     setSettings({
@@ -87,16 +74,17 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
         motion: settings.motion,
         safety: settings.safety,
         queue: settings.queue,
-        scene: settings.scene,
         ollama: settings.ollama,
+        llm: settings.llm,
         intiface: settings.intiface,
         handy: settings.handy,
         app: settings.app,
         planner: settings.planner,
         sync: settings.sync,
         voice: settings.voice,
-        autospeak: settings.autospeak,
+        diagnostics: settings.diagnostics,
         autodom: settings.autodom,
+        user_profile: settings.user_profile,
       });
       notify(t("config.settings.saved"), "ok");
     } catch (e) {
@@ -114,60 +102,139 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
       {section === "session" && (
         <>
           <section className="glass settings-card">
-            <h3>{t("config.settings.session.autospeak.title")}</h3>
-            <p className="hint">{t("config.settings.session.autospeak.hint")}</p>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={autospeak.enabled === true}
-                onChange={(e) => updateSection("autospeak", { enabled: e.target.checked })}
-              />
-              {t("config.settings.session.autospeak.enabled")}
-            </label>
+            <h3>{t("config.settings.session.userProfile.title")}</h3>
+            <p className="hint">{t("config.settings.session.userProfile.hint")}</p>
             <label className="field">
-              <span>{t("config.settings.session.autospeak.minSeconds")}</span>
-              <input
-                type="number"
-                min={0}
-                max={300}
-                step={1}
-                value={num(autospeak.min_seconds as number, 12)}
-                onChange={(e) =>
-                  updateSection("autospeak", { min_seconds: Number(e.target.value) })
-                }
-              />
-            </label>
-            <label className="field">
-              <span>{t("config.settings.session.autospeak.maxSeconds")}</span>
-              <input
-                type="number"
-                min={0}
-                max={300}
-                step={1}
-                value={num(autospeak.max_seconds as number, 45)}
-                onChange={(e) =>
-                  updateSection("autospeak", { max_seconds: Number(e.target.value) })
-                }
-              />
-            </label>
-            <label className="field">
-              <span>{t("config.settings.session.autospeak.motionAutonomy")}</span>
+              <span>{t("config.settings.session.userProfile.gender")}</span>
               <select
-                value={str(autospeak.motion_autonomy as string, "full")}
+                value={str(userProfile.gender as string, "unspecified")}
                 onChange={(e) =>
-                  updateSection("autospeak", { motion_autonomy: e.target.value })
+                  updateSection("user_profile", { gender: e.target.value })
                 }
               >
-                <option value="chat_only">{t("config.settings.session.autospeak.chatOnly")}</option>
-                <option value="style">{t("config.settings.session.autospeak.styleLight")}</option>
-                <option value="full">{t("config.settings.session.autospeak.fullMotion")}</option>
+                <option value="unspecified">
+                  {t("config.settings.session.userProfile.genderUnspecified")}
+                </option>
+                <option value="male">
+                  {t("config.settings.session.userProfile.genderMale")}
+                </option>
+                <option value="female">
+                  {t("config.settings.session.userProfile.genderFemale")}
+                </option>
+                <option value="other">
+                  {t("config.settings.session.userProfile.genderOther")}
+                </option>
               </select>
             </label>
+            <label className="field">
+              <span>{t("config.settings.session.userProfile.orientation")}</span>
+              <select
+                value={str(userProfile.sexual_orientation as string, "unspecified")}
+                onChange={(e) =>
+                  updateSection("user_profile", { sexual_orientation: e.target.value })
+                }
+              >
+                <option value="unspecified">
+                  {t("config.settings.session.userProfile.orientationUnspecified")}
+                </option>
+                <option value="heterosexual">
+                  {t("config.settings.session.userProfile.orientationHeterosexual")}
+                </option>
+                <option value="homosexual">
+                  {t("config.settings.session.userProfile.orientationHomosexual")}
+                </option>
+                <option value="bisexual">
+                  {t("config.settings.session.userProfile.orientationBisexual")}
+                </option>
+                <option value="pansexual">
+                  {t("config.settings.session.userProfile.orientationPansexual")}
+                </option>
+                <option value="asexual">
+                  {t("config.settings.session.userProfile.orientationAsexual")}
+                </option>
+                <option value="other">
+                  {t("config.settings.session.userProfile.orientationOther")}
+                </option>
+              </select>
+            </label>
+            <label className="field">
+              <span>{t("config.settings.session.userProfile.aboutMe")}</span>
+              <textarea
+                rows={4}
+                maxLength={500}
+                value={str(userProfile.about_me as string, "")}
+                placeholder={t("config.settings.session.userProfile.aboutMePlaceholder")}
+                onChange={(e) =>
+                  updateSection("user_profile", { about_me: e.target.value })
+                }
+              />
+            </label>
+            <p className="hint">{t("config.settings.session.userProfile.aboutMeHint")}</p>
           </section>
 
           <section className="glass settings-card">
             <h3>{t("config.settings.session.chatAuto.title")}</h3>
             <p className="hint">{t("config.settings.session.chatAuto.hint")}</p>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={bool(autodom.wait_for_user_message, true)}
+                onChange={(e) =>
+                  updateSection("autodom", { wait_for_user_message: e.target.checked })
+                }
+              />
+              {t("config.settings.session.chatAuto.waitFirstMsg")}
+            </label>
+            <p className="hint">{t("config.settings.session.chatAuto.waitHint")}</p>
+            <div className="form-grid two">
+              <label className="field">
+                <span>{t("config.settings.session.chatAuto.segmentMin")}</span>
+                <input
+                  type="number"
+                  min={30}
+                  max={120}
+                  step={1}
+                  value={num(autodom.segment_duration_min_sec as number, 45)}
+                  onChange={(e) =>
+                    updateSection("autodom", {
+                      segment_duration_min_sec: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>{t("config.settings.session.chatAuto.segmentMax")}</span>
+                <input
+                  type="number"
+                  min={30}
+                  max={120}
+                  step={1}
+                  value={num(autodom.segment_duration_max_sec as number, 60)}
+                  onChange={(e) =>
+                    updateSection("autodom", {
+                      segment_duration_max_sec: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <p className="hint">{t("config.settings.session.chatAuto.segmentHint")}</p>
+            <label className="field">
+              <span>{t("config.settings.session.chatAuto.prefetchLead")}</span>
+              <input
+                type="number"
+                min={5}
+                max={30}
+                step={1}
+                value={num(autodom.prefetch_lead_seconds as number, 15)}
+                onChange={(e) =>
+                  updateSection("autodom", {
+                    prefetch_lead_seconds: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <p className="hint">{t("config.settings.session.chatAuto.prefetchHint")}</p>
             <label className="check-label">
               <input
                 type="checkbox"
@@ -196,100 +263,6 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
             <p className="hint">{t("config.settings.session.chatAuto.rampHint")}</p>
           </section>
 
-          <section className="glass settings-card">
-            <h3>{t("config.settings.session.appLegacy.title")}</h3>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={app.wait_for_user_message_before_auto_speech !== false}
-                onChange={(e) =>
-                  updateSection("app", {
-                    wait_for_user_message_before_auto_speech: e.target.checked,
-                  })
-                }
-              />
-              {t("config.settings.session.appLegacy.waitFirstMsg")}
-            </label>
-            <p className="hint">{t("config.settings.session.appLegacy.waitHint")}</p>
-            <label className="field">
-              <span>{t("config.settings.session.appLegacy.fixedInterval")}</span>
-              <input
-                type="number"
-                min={8}
-                value={num(app.auto_message_interval_sec as number, 32)}
-                onChange={(e) =>
-                  updateSection("app", {
-                    auto_message_interval_sec: Number(e.target.value),
-                  })
-                }
-              />
-            </label>
-          </section>
-
-          <section className="glass settings-card">
-            <h3>{t("config.settings.session.scene.title")}</h3>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={scene.ai_controls_pacing !== false}
-                onChange={(e) =>
-                  updateSection("scene", { ai_controls_pacing: e.target.checked })
-                }
-              />
-              {t("config.settings.session.scene.aiPacing")}
-            </label>
-            <p className="hint">{t("config.settings.session.scene.aiPacingHint")}</p>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={scene.advance_on_assistant_turn === true}
-                onChange={(e) =>
-                  updateSection("scene", {
-                    advance_on_assistant_turn: e.target.checked,
-                  })
-                }
-              />
-              {t("config.settings.session.scene.advanceLegacy")}
-            </label>
-            <p className="hint section-label">{t("config.settings.session.scene.phaseMinMax")}</p>
-            <div className="form-grid two">
-              {PHASE_IDS.map((phaseId) => (
-                <label key={phaseId} className="field">
-                  <span>{t(`config.settings.session.phases.${phaseId}`)}</span>
-                  <div className="inline-range">
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder={t("common.min")}
-                      value={num(scenePhases[phaseId]?.min_sec as number, 0)}
-                      onChange={(e) => {
-                        const phases = { ...scenePhases };
-                        phases[phaseId] = {
-                          ...(phases[phaseId] ?? {}),
-                          min_sec: Number(e.target.value),
-                        };
-                        updateSection("scene", { ...scene, phases });
-                      }}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder={t("common.max")}
-                      value={num(scenePhases[phaseId]?.max_sec as number, 0)}
-                      onChange={(e) => {
-                        const phases = { ...scenePhases };
-                        phases[phaseId] = {
-                          ...(phases[phaseId] ?? {}),
-                          max_sec: Number(e.target.value),
-                        };
-                        updateSection("scene", { ...scene, phases });
-                      }}
-                    />
-                  </div>
-                </label>
-              ))}
-            </div>
-          </section>
           <MemoryManager locked={readOnly} />
         </>
       )}

@@ -32,6 +32,8 @@ const (
 	PromptSetIDJapanese = "magichandy_motion_v1_ja"
 	// PromptSetIDAutoDomV1PTBR is the built-in AutoDom behavior profile.
 	PromptSetIDAutoDomV1PTBR = "autodom_v1_pt_br"
+	// PromptSetIDClarissaSynsualV1 is the Synsual-style Clarissa bratty submissive persona.
+	PromptSetIDClarissaSynsualV1 = "clarissa_synsual_v1"
 )
 
 // ContractInstructions is the response contract appended to every system
@@ -113,10 +115,18 @@ Use o estado e a transcrição enviados na mensagem do usuário para decidir o p
 - stamina < 30: humor desejando ou oral lento; intensidade 1–3; duracao 45–55s
 - stamina 30–70: alterne tesao/intensa conforme progresso
 - stamina > 70: pode intensa ou dominatrix (se permitido)
-REPLY: no máximo 2 frases curtas (~40 palavras). Sem explicações, sem markdown.
+REPLY: 1–2 frases no nível spice_level do turno (escala Biquinho → Carolina Reaper no bloco seguinte).
+Proibido: frases genéricas, "continuo/continuando", repetir a mesma estrutura da frase anterior.
+Varie verbos e ângulo a cada turno (sussurro, comando, provocação, elogio físico).
 Para movimento orgânico contínuo: pense no segmento ATUAL (ainda tocando) e no PRÓXIMO (fila HSP). Inicie o planejamento ~15s antes do fim do bloco. use duracao_segundos entre 45 e 60 (prefira 50–60).
 Mantenha as chaves JSON e os valores de enumeração exatamente como definidos pelo contrato que segue.
 Saída: somente o JSON definido no contrato que segue.`),
+	},
+	{
+		ID:      PromptSetIDClarissaSynsualV1,
+		Name:    "Clarissa (Synsual-style)",
+		Builtin: true,
+		System:  ClarissaSynsualSystem,
 	},
 }
 
@@ -158,12 +168,19 @@ func ComposeSystemForMode(set PromptSet, memories []string, motionGenerationMode
 		behavior = fallback.System
 	}
 	builder.WriteString(behavior)
-	if strings.HasPrefix(strings.TrimSpace(set.ID), "persona:") {
+
+	mode := normalizeMotionGenerationMode(motionGenerationMode)
+	if mode == config.MotionGenerationModeSynsual {
 		builder.WriteString("\n\n")
-		builder.WriteString(PersonaMotionBridge)
+		builder.WriteString(SynsualCommandInstructions)
+	} else {
+		if strings.HasPrefix(strings.TrimSpace(set.ID), "persona:") {
+			builder.WriteString("\n\n")
+			builder.WriteString(PersonaMotionBridge)
+		}
+		builder.WriteString("\n\n")
+		builder.WriteString(motionInstructionsForMode(motionGenerationMode))
 	}
-	builder.WriteString("\n\n")
-	builder.WriteString(motionInstructionsForMode(motionGenerationMode))
 
 	if len(memories) > 0 {
 		builder.WriteString("\n\n")

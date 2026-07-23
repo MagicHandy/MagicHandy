@@ -161,8 +161,10 @@ export interface ChatAutoState {
   active?: boolean;
   stamina?: number;
   humor?: string;
+  spice_level?: string;
   mood_progress?: number;
   posicao?: string;
+  scene_intensidade?: number;
   motion?: ChatAutoMotion;
   last_reply?: string;
   reply_partial?: string;
@@ -381,6 +383,20 @@ export interface MotionVisual {
   live_sample_mono?: number;
   schedule_active?: boolean;
   stream_elapsed_ms?: number;
+}
+
+export interface MotionVisualStreamPoint {
+  t_ms: number;
+  pos_pct: number;
+}
+
+export interface MotionVisualStream {
+  active: boolean;
+  stream_elapsed_ms: number;
+  server_sent_ms: number;
+  offset_ms: number;
+  duration_ms: number;
+  points: MotionVisualStreamPoint[];
 }
 
 export interface ImportBlockSummary {

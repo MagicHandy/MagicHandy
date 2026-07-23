@@ -135,6 +135,41 @@ func (s *OutgoingSchedule) RecordDirectMove(positionPct float64, durationMS int)
 	s.active = true
 }
 
+// BufferMetrics summarizes committed playback vs buffered timeline.
+type BufferMetrics struct {
+	Active          bool
+	StreamID        string
+	TotalPoints     int
+	StreamElapsedMS int64
+	LastPointMS     int64
+	BufferAheadMS   int64
+	PositionNow     float64
+}
+
+// BufferMetrics returns schedule timing for device starvation diagnostics.
+func (s *OutgoingSchedule) BufferMetrics() BufferMetrics {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	metrics := BufferMetrics{
+		Active:      s.active && len(s.points) > 0 && !s.playWall.IsZero(),
+		StreamID:    s.streamID,
+		TotalPoints: len(s.points),
+	}
+	if !metrics.Active {
+		return metrics
+	}
+	metrics.StreamElapsedMS = s.startTimeMS + now.Sub(s.playWall).Milliseconds()
+	last := s.points[len(s.points)-1]
+	metrics.LastPointMS = last.TimeMillis
+	metrics.BufferAheadMS = metrics.LastPointMS - metrics.StreamElapsedMS
+	if metrics.BufferAheadMS < 0 {
+		metrics.BufferAheadMS = 0
+	}
+	metrics.PositionNow = interpolateTimedPoints(s.points, metrics.StreamElapsedMS)
+	return metrics
+}
+
 // Active reports whether the schedule has committed playback.
 func (s *OutgoingSchedule) Active() bool {
 	s.mu.Lock()
@@ -161,6 +196,48 @@ func (s *OutgoingSchedule) StreamElapsedMS(now time.Time) (int64, bool) {
 		return 0, false
 	}
 	return s.startTimeMS + now.Sub(s.playWall).Milliseconds(), true
+}
+
+// VisualStreamPayload is the zero-latency canvas feed for the React visualizer.
+type VisualStreamPayload struct {
+	Active          bool              `json:"active"`
+	StreamElapsedMS int64             `json:"stream_elapsed_ms"`
+	ServerSentMS    int64             `json:"server_sent_ms"`
+	OffsetMS        int               `json:"offset_ms"`
+	DurationMS      int64             `json:"duration_ms"`
+	Points          []VisualStreamPoint `json:"points"`
+}
+
+// VisualStreamPoint is one scheduled position sample on the HSP timeline.
+type VisualStreamPoint struct {
+	TMS    int64 `json:"t_ms"`
+	PosPct int   `json:"pos_pct"`
+}
+
+// VisualStreamSnapshot exports timed points for SSE canvas interpolation.
+func (s *OutgoingSchedule) VisualStreamSnapshot(now time.Time, offsetMS int) VisualStreamPayload {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.active || len(s.points) == 0 || s.playWall.IsZero() {
+		return VisualStreamPayload{Active: false, OffsetMS: offsetMS}
+	}
+	streamMS := s.startTimeMS + now.Sub(s.playWall).Milliseconds()
+	curve := scheduleCurveLocked(s.points, streamMS+int64(offsetMS), scheduleSparkWindowMS)
+	points := make([]VisualStreamPoint, len(curve))
+	for i, point := range curve {
+		points[i] = VisualStreamPoint{
+			TMS:    point.TimeMillis,
+			PosPct: point.PositionPercent,
+		}
+	}
+	return VisualStreamPayload{
+		Active:          true,
+		StreamElapsedMS: streamMS,
+		ServerSentMS:    now.UnixMilli(),
+		OffsetMS:        offsetMS,
+		DurationMS:      scheduleDurationLocked(s.points),
+		Points:          points,
+	}
 }
 
 // VisualSnapshot is the schedule view exposed to HTTP visual clients.

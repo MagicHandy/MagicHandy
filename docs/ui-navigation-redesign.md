@@ -4,7 +4,7 @@
 
 Proposed 2026-07-06. Design target for the next UI phase (see "Migration",
 below). The shell is now expected to be implemented during the React migration
-accepted in [ADR 0009](decisions/0009-react-frontend.md). This document
+accepted in [ADR 0009](adrs/0009-react-frontend.md). This document
 specifies the **shell and information architecture**; it does not restate the
 safety, accessibility, and parity rules in [ui-design.md](ui-design.md), which
 stay in force unchanged. Where the two overlap on layout, this document is the

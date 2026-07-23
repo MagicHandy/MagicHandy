@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const agentDebugLogPath = `c:\dev\git\Handy\debug-324442.log`
+const agentDebugLogPath = `c:\dev\git\MyProjects\Handy\debug-324442.log`
 
 // #region agent log
 func agentDebugLog(hypothesisID, location, message string, data map[string]any) {

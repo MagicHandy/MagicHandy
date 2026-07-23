@@ -12,6 +12,7 @@ import {
 import { HandyConnectionMenu } from "./HandyConnectionMenu";
 import { SessionControls } from "./SessionControls";
 import { StatusChip } from "./StatusChip";
+import { SyncOffsetMenu } from "./SyncOffsetMenu";
 import { TopbarMenu } from "./TopbarMenu";
 
 export function ShellTopbar({
@@ -67,16 +68,8 @@ export function ShellTopbar({
         {snap.phase_ready_to_advance && (
           <StatusChip label={t("layout.topbar.advancePhase")} variant="success" pulse />
         )}
-        {snap.autospeak_enabled && (
-          <StatusChip
-            label={
-              snap.autospeak_scheduled
-                ? t("layout.topbar.autospeakScheduled")
-                : t("layout.topbar.autospeak")
-            }
-            variant="muted"
-            pulse={snap.autospeak_scheduled}
-          />
+        {snap.auto_running && (
+          <StatusChip label={t("layout.topbar.chatAuto")} variant="accent" pulse />
         )}
       </div>
 
@@ -93,6 +86,7 @@ export function ShellTopbar({
           <span className="topbar-kpi-label">{t("layout.topbar.intensity")}</span>
           <span className="topbar-kpi-value mono">{Math.round(snap.intensity)}%</span>
         </div>
+        <SyncOffsetMenu />
       </div>
 
       <div className="topbar-zone topbar-zone--actions">

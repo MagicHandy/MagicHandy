@@ -20,12 +20,15 @@ const (
 	PoseDeepthroat  Pose = "deepthroat"
 )
 
-// Intent is one autonomous scene segment from the model.
+// Intent is the AI roteiro for one autonomous scene beat.
 type Intent struct {
-	Humor           Humor `json:"humor"`
-	Posicao         Pose  `json:"posicao"`
-	Intensidade     int   `json:"intensidade"`
-	DuracaoSegundos int   `json:"duracao_segundos"`
+	Humor            Humor `json:"humor"`
+	Posicao          Pose  `json:"posicao"`
+	Intensidade      int   `json:"intensidade"`
+	IntensidadeMin   int   `json:"intensidade_min,omitempty"`
+	IntensidadeMax   int   `json:"intensidade_max,omitempty"`
+	Velocidade       int   `json:"velocidade,omitempty"`
+	DuracaoSegundos  int   `json:"duracao_segundos,omitempty"`
 }
 
 // Response is the strict JSON shape for one auto turn.
@@ -49,7 +52,9 @@ type State struct {
 	Active          bool         `json:"active"`
 	Stamina         float64      `json:"stamina"`
 	Humor           Humor        `json:"humor"`
+	SpiceLevel      SpiceLevel   `json:"spice_level,omitempty"`
 	Posicao         Pose         `json:"posicao"`
+	SceneIntensidade int         `json:"scene_intensidade,omitempty"`
 	MoodProgress    float64      `json:"mood_progress"`
 	Motion          MotionChoice `json:"motion"`
 	LastReply       string       `json:"last_reply,omitempty"`

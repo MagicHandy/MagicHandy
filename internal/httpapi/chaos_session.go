@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"math"
 	"math/rand"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -83,6 +84,49 @@ func buildChaosSessionForDurationFromPosition(
 	}
 	logMotionSessionTrace("buildChaosSessionForDurationFromPosition", physics, waypoints, lead, continueFrom, motionSettings)
 	return chaosSessionFromWaypoints(waypoints, motionSettings, lead)
+}
+
+// buildChaosSessionForDurationFromBlend appends a Hermite crossfade from live device state.
+func buildChaosSessionForDurationFromBlend(
+	physics motion.ChaoticPhysics,
+	motionSettings config.MotionSettings,
+	hardwareSafetyLock bool,
+	rng *rand.Rand,
+	targetDurationMillis int64,
+	from motion.MotionBlendState,
+) manualqueue.Session {
+	waypoints := motion.GenerateProceduralStreamFromBlend(
+		physics,
+		targetDurationMillis,
+		hardwareSafetyLock,
+		rng,
+		from,
+	)
+	logMotionSessionTrace("buildChaosSessionForDurationFromBlend", physics, waypoints, 0, int(math.Round(from.Position)), motionSettings)
+	session := chaosSessionFromWaypoints(waypoints, motionSettings, 0)
+	session.Continuous = true
+	return session
+}
+
+func estimateBlendStateFromPlayer(player *manualqueue.Player) motion.MotionBlendState {
+	snap := player.Snapshot()
+	actions := player.Actions()
+	playhead := snap.PlayheadMS
+	pos := manualqueue.PositionAt(actions, playhead)
+	lookback := playhead - 80
+	if lookback < 0 {
+		lookback = 0
+	}
+	posBefore := manualqueue.PositionAt(actions, lookback)
+	elapsed := float64(playhead-lookback) / 1000.0
+	vel := 0.0
+	if elapsed > 0 {
+		vel = (pos - posBefore) / elapsed
+	}
+	return motion.MotionBlendState{
+		Position: pos,
+		Velocity: vel,
+	}
 }
 
 func logMotionSessionTrace(

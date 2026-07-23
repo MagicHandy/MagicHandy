@@ -381,7 +381,11 @@
   }
 
   .shell.shell--v12 .session-rail {
-    max-height: 38vh;
+    max-height: min(42vh, 420px);
     height: auto;
+  }
+
+  .shell.shell--v12 .chat-auto-rail {
+    max-height: min(42vh, 420px);
   }
 }

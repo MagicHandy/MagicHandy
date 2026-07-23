@@ -3,10 +3,23 @@ package chat
 import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
+	"github.com/mapledaemon/MagicHandy/internal/motion/semantic"
 )
 
-// MotionTargetFromCommand maps a validated motion command to an engine target.
+// MotionTargetFromCommand maps a validated motion command to semantic engine metadata.
+// Procedural chat motion is dispatched via manualqueue.Player; this target is used for
+// library mode engine retargeting and diagnostics (traces, UI) when procedural fields are present.
 func MotionTargetFromCommand(command *MotionCommand, current motion.ActiveMotionState, generationMode string) motion.MotionTarget {
+	return MotionTargetFromCommandWithPreferences(command, current, generationMode, semantic.DefaultMotionPreferences())
+}
+
+// MotionTargetFromCommandWithPreferences maps procedural bounds via user motion preferences.
+func MotionTargetFromCommandWithPreferences(
+	command *MotionCommand,
+	current motion.ActiveMotionState,
+	generationMode string,
+	prefs semantic.MotionPreferences,
+) motion.MotionTarget {
 	if command == nil {
 		return motion.MotionTarget{Label: "Chat", Source: "chat"}
 	}
@@ -20,22 +33,29 @@ func MotionTargetFromCommand(command *MotionCommand, current motion.ActiveMotion
 			SpeedPercent: libraryTagToSpeed(command.PadraoID),
 		}
 	default:
-		return proceduralMotionTarget(command, current)
+		return proceduralMotionTarget(command, current, prefs)
 	}
 }
 
-func proceduralMotionTarget(command *MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
-	patternID := motion.PatternID(command.PatternID)
-	speedPercent := 0
-	if command.SpeedPercent != nil {
+func proceduralMotionTarget(command *MotionCommand, current motion.ActiveMotionState, prefs semantic.MotionPreferences) motion.MotionTarget {
+	target := motion.MotionTarget{
+		Label:  "Chat",
+		Source: "chat",
+	}
+
+	speedPercent := command.Velocidade
+	if speedPercent == 0 && command.SpeedPercent != nil {
 		speedPercent = *command.SpeedPercent
 	}
-	if command.IntensidadeLegacy != "" {
+	if speedPercent == 0 && command.IntensidadeLegacy != "" {
 		speedPercent = intensidadeToSpeed(command.IntensidadeLegacy)
 	}
+
+	patternID := motion.PatternID(command.PatternID)
 	if command.Estilo != "" {
 		patternID = estiloToPatternID(command.Estilo)
 	}
+
 	if current.Running {
 		if patternID == "" {
 			patternID = current.Target.PatternID
@@ -44,12 +64,39 @@ func proceduralMotionTarget(command *MotionCommand, current motion.ActiveMotionS
 			speedPercent = current.Target.SpeedPercent
 		}
 	}
-	return motion.MotionTarget{
-		Label:        "Chat",
-		Source:       "chat",
-		PatternID:    patternID,
-		SpeedPercent: speedPercent,
+
+	target.PatternID = patternID
+	target.SpeedPercent = speedPercent
+	target.AreaFocus = proceduralAreaFocus(command, prefs)
+	return target
+}
+
+func proceduralAreaFocus(command *MotionCommand, prefs semantic.MotionPreferences) *motion.AreaFocus {
+	if command == nil {
+		return nil
 	}
+	if len(command.StrokeRange) == 2 {
+		minPct := int(command.StrokeRange[0] * 100)
+		maxPct := int(command.StrokeRange[1] * 100)
+		if minPct > maxPct {
+			minPct, maxPct = maxPct, minPct
+		}
+		return &motion.AreaFocus{MinPercent: minPct, MaxPercent: maxPct}
+	}
+	if command.Regiao == "" {
+		return nil
+	}
+	if min, max, ok := semantic.BoundsFromRegiao(command.Regiao, prefs); ok {
+		return &motion.AreaFocus{
+			MinPercent: int(min * 100),
+			MaxPercent: int(max * 100),
+		}
+	}
+	minPct, maxPct, ok := motion.RegionBounds(command.Regiao)
+	if !ok {
+		return nil
+	}
+	return &motion.AreaFocus{MinPercent: minPct, MaxPercent: maxPct}
 }
 
 func intensidadeToSpeed(value string) int {

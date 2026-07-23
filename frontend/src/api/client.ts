@@ -212,15 +212,6 @@ export const api = {
 
   startAuto: () => request<{ ok: boolean }>("/auto/start", { method: "POST" }),
   stopAuto: () => request<{ ok: boolean }>("/auto/stop", { method: "POST" }),
-  toggleAutospeak: (enabled: boolean) =>
-    request<{
-      ok: boolean;
-      autospeak_enabled: boolean;
-      autospeak_scheduled?: boolean;
-    }>("/autospeak/toggle", {
-      method: "POST",
-      body: JSON.stringify({ enabled }),
-    }),
 
   startHandsFree: () =>
     request<{ ok: boolean; intensity?: number }>("/hands-free/start", {

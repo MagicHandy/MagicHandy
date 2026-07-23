@@ -14,7 +14,7 @@ Phase 11B waiver against the original <40 MB idle budget, not a budget change.
 
 The default voice stack is non-Python: Parakeet (ASR), NeuTTS Air (local cloning TTS), and ElevenLabs (cloud TTS) — see ADR 0007. Python may still be added later behind optional worker boundaries for Chatterbox, CosyVoice, or other ML-heavy features, but it never defines the core app install path.
 
-Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway. See `docs/decisions/0005-local-llm-runtime.md` and `docs/model-management.md`.
+Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway. See `docs/adrs/0005-local-llm-runtime.md` and `docs/model-management.md`.
 
 ## Status
 
@@ -100,7 +100,7 @@ single-control-sidebar + settings-window shell to a **permanent left navigation
 sidebar that switches pages** (Chat / Preset Modes / Pattern Library /
 Settings), with Stop pinned to the sidebar footer on every page. Framework
 decision and handoff:
-[docs/decisions/0009-react-frontend.md](docs/decisions/0009-react-frontend.md)
+[docs/adrs/0009-react-frontend.md](docs/adrs/0009-react-frontend.md)
 and [docs/react-ui-implementation-handoff.md](docs/react-ui-implementation-handoff.md).
 Full shell spec: [docs/ui-navigation-redesign.md](docs/ui-navigation-redesign.md).
 It ships in steps that never drop a safety control mid-migration:

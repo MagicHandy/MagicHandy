@@ -11,7 +11,7 @@ The target is the sidebar-navigation shell from:
 - `docs/ui-design-guidelines.md`
 - `docs/ui-design.md`
 
-The architecture decision is `docs/decisions/0009-react-frontend.md`.
+The architecture decision is `docs/adrs/0009-react-frontend.md`.
 
 ## Non-Negotiables
 
@@ -166,7 +166,7 @@ The PR is not done until all are true:
 ```text
 Implement the React UI migration for MagicHandy.
 
-Read these first: docs/decisions/0009-react-frontend.md,
+Read these first: docs/adrs/0009-react-frontend.md,
 docs/react-ui-implementation-handoff.md, docs/ui-navigation-redesign.md,
 docs/ui-design-guidelines.md, docs/ui-design.md, and web/assets_test.go.
 

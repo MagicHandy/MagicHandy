@@ -1,10 +1,14 @@
 package chatauto
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 const (
 	DefaultDominatrixRampMinutes = 10
 	MaxDominatrixRampMinutes     = 10
+	moodEaseExponent             = 0.82
 )
 
 var moodStageOrder = []Humor{
@@ -28,7 +32,8 @@ func MoodAtElapsed(elapsed time.Duration, rampMinutes int, allowDominatrix bool)
 	if ratio > 1 {
 		ratio = 1
 	}
-	progress = ratio * 100
+	eased := math.Pow(ratio, moodEaseExponent)
+	progress = eased * 100
 	return progress, HumorFromProgress(progress, allowDominatrix)
 }
 
@@ -44,12 +49,23 @@ func HumorFromProgress(progress float64, allowDominatrix bool) Humor {
 	if len(stages) == 0 {
 		return HumorDesejando
 	}
-	segment := 100 / float64(len(stages))
-	idx := int(progress / segment)
-	if idx >= len(stages) {
-		idx = len(stages) - 1
+	thresholds := moodThresholds(allowDominatrix)
+	for i := len(thresholds) - 2; i >= 0; i-- {
+		if progress >= thresholds[i] {
+			if i >= len(stages) {
+				return stages[len(stages)-1]
+			}
+			return stages[i]
+		}
 	}
-	return stages[idx]
+	return stages[0]
+}
+
+func moodThresholds(allowDominatrix bool) []float64 {
+	if allowDominatrix {
+		return []float64{0, 28, 54, 78, 100}
+	}
+	return []float64{0, 30, 58, 100}
 }
 
 // EffectiveHumor returns the higher of two mood stages on the ramp ladder.
@@ -68,7 +84,7 @@ func BoostIntensity(base int, progress float64) int {
 	if base < 1 {
 		base = 1
 	}
-	boost := int(progress / 25)
+	boost := int(progress / 38)
 	next := base + boost
 	if next > 10 {
 		return 10

@@ -52,6 +52,7 @@ type Server struct {
 	logger          *slog.Logger
 	store           *config.Store
 	traces          *diagnostics.TraceRing
+	handyLog        *diagnostics.HandyLogRing
 	transport       transport.DiagnosticsProvider
 	cloud           cloudRuntime
 	bluetooth       bluetoothRuntime
@@ -109,6 +110,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		logger:          logger,
 		store:           store,
 		traces:          runtime.Traces,
+		handyLog:        diagnostics.NewHandyLogRing(512),
 		transport:       runtime.Transport,
 		cloud:           newCloudRuntime(runtime),
 		bluetooth:       newBluetoothRuntime(runtime),
@@ -177,6 +179,7 @@ func (s *Server) routes(mux *http.ServeMux) { //nolint:funlen // route table is 
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
 	mux.HandleFunc("GET /api/diagnostics", s.handleDiagnosticsCompat)
+	mux.HandleFunc("GET /api/diagnostics/handy-log", s.handleHandyLog)
 	mux.HandleFunc("POST /api/diagnostics/ping-ollama", s.handlePingOllamaCompat)
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	mux.HandleFunc("GET /api/chat/messages", s.handleChatMessages)

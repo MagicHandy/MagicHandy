@@ -32,8 +32,8 @@ export function SessionControls({ snap }: SessionControlsProps) {
     api
       .getSettings()
       .then((s) => {
-        const app = (s.app ?? {}) as Record<string, unknown>;
-        setWaitFirstMsg(app.wait_for_user_message_before_auto_speech !== false);
+        const autodom = (s.autodom ?? {}) as Record<string, unknown>;
+        setWaitFirstMsg(autodom.wait_for_user_message !== false);
       })
       .catch(() => {});
   }, []);
@@ -227,11 +227,11 @@ export function SessionControls({ snap }: SessionControlsProps) {
               setWaitFirstMsg(on);
               try {
                 const s = await api.getSettings();
-                const app = (s.app ?? {}) as Record<string, unknown>;
+                const autodom = (s.autodom ?? {}) as Record<string, unknown>;
                 await api.saveSettings({
-                  app: {
-                    ...app,
-                    wait_for_user_message_before_auto_speech: on,
+                  autodom: {
+                    ...autodom,
+                    wait_for_user_message: on,
                   },
                 });
                 notify(

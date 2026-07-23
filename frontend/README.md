@@ -7,7 +7,7 @@ Frontend em **React 18 + TypeScript + Vite**.
 Terminal 1 — API Python:
 
 ```powershell
-cd c:\dev\git\Handy\local-stroke-orchestrator
+cd c:\dev\git\MyProjects\Handy\local-stroke-orchestrator
 pip install -e ".[dev]"
 $env:PYTHONPATH="."
 python -m app.main

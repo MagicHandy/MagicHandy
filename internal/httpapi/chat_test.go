@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
@@ -107,6 +108,44 @@ func TestChatStreamStartsChaoticMotionThroughManualQueue(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("manual queue HSP dispatch missing: %+v", fake.Commands())
+}
+
+func TestChatStreamDirectorModeEventOrder(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"action":"riding","location":"tip","intensity":6}`,
+		`Keep riding with me.`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.LLM.DirectorMode = true
+		settings.Motion.MotionGenerationMode = config.MotionGenerationModeProcedural
+		return settings
+	})
+
+	body := postChatStream(t, server, `{"message":"faster on the tip"}`)
+	intentIdx := strings.Index(body, "event: intent")
+	motionIdx := strings.Index(body, "event: motion")
+	deltaIdx := strings.Index(body, "event: delta")
+	messageIdx := strings.Index(body, "event: message")
+	if intentIdx < 0 || motionIdx < 0 || deltaIdx < 0 || messageIdx < 0 {
+		t.Fatalf("missing SSE events:\n%s", body)
+	}
+	if !(intentIdx < deltaIdx && deltaIdx < messageIdx) {
+		t.Fatalf("expected intent before delta before message:\n%s", body)
+	}
+	if !(intentIdx < motionIdx) {
+		t.Fatalf("expected intent before motion:\n%s", body)
+	}
+	if !strings.Contains(body, `"action":"riding"`) {
+		t.Fatalf("intent payload missing:\n%s", body)
+	}
 }
 
 func hasManualQueueHSPDispatch(commands []transport.Command) bool {

@@ -20,11 +20,11 @@ func TestComposeSystemForLibraryMode(t *testing.T) {
 	}
 }
 
-func TestComposeSystemForProceduralModeIncludesChaoticPhysics(t *testing.T) {
+func TestComposeSystemForProceduralModeIncludesSceneDirector(t *testing.T) {
 	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	composed := ComposeSystemForMode(set, nil, config.MotionGenerationModeProcedural)
 
-	for _, key := range []string{"velocidade", "intensidade", "regiao", "tipo_batida"} {
+	for _, key := range []string{"stroke_range", "intensity", "dialogue", "Diretor de Cena"} {
 		if !strings.Contains(composed, key) {
 			t.Fatalf("procedural instructions missing %q:\n%s", key, composed)
 		}

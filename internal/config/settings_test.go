@@ -216,6 +216,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatal("missing LLM settings were not defaulted")
 	}
+	if len(settings.Motion.MotionPreferences) == 0 {
+		t.Fatal("missing motion_preferences were not defaulted")
+	}
 }
 
 func TestSettingsLoaderAcceptsUTF8BOM(t *testing.T) {

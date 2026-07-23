@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const motionDebugLogPath = `c:\dev\git\Handy\debug-d9c091.log`
+const motionDebugLogPath = `c:\dev\git\MyProjects\Handy\debug-d9c091.log`
 
 // MotionTraceSummary compares AI physics intent with generated waypoint stats.
 type MotionTraceSummary struct {

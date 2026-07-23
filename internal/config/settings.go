@@ -79,6 +79,8 @@ const (
 
 	// PromptSetAutoDomV1PTBR is the built-in AutoDom behavior profile.
 	PromptSetAutoDomV1PTBR = "autodom_v1_pt_br"
+	// PromptSetClarissaSynsualV1 is the Synsual-style Clarissa persona.
+	PromptSetClarissaSynsualV1 = "clarissa_synsual_v1"
 	// DefaultAutoDomRequestTimeoutMillis caps one AutoDom LLM turn.
 	DefaultAutoDomRequestTimeoutMillis = 35000
 	// DefaultDominatrixRampMinutes is the default time to reach peak mood.
@@ -89,13 +91,15 @@ const (
 
 // Settings is the versioned on-disk application settings schema.
 type Settings struct {
-	Version     int                 `json:"version"`
-	Server      ServerSettings      `json:"server"`
-	Device      DeviceSettings      `json:"device"`
-	Motion      MotionSettings      `json:"motion"`
-	LLM         LLMSettings         `json:"llm"`
-	AutoDom     AutoDomSettings     `json:"autodom"`
-	Diagnostics DiagnosticsSettings `json:"diagnostics"`
+	Version     int                            `json:"version"`
+	Server      ServerSettings                 `json:"server"`
+	Device      DeviceSettings                 `json:"device"`
+	Motion      MotionSettings                 `json:"motion"`
+	LLM         LLMSettings                    `json:"llm"`
+	AutoDom     AutoDomSettings                `json:"autodom"`
+	UserProfile UserProfileSettings            `json:"user_profile"`
+	Diagnostics DiagnosticsSettings            `json:"diagnostics"`
+	UISections  map[string]json.RawMessage     `json:"ui_sections,omitempty"`
 }
 
 // ServerSettings contains local HTTP server settings.
@@ -127,21 +131,34 @@ const (
 	MotionGenerationModeProcedural = "procedural"
 	// MotionGenerationModeLibrary selects imported pattern blocks by physical tag.
 	MotionGenerationModeLibrary = "library"
+	// MotionGenerationModeSynsual parses free-text replies with command() suffixes (Synsual-style).
+	MotionGenerationModeSynsual = "synsual"
 )
+
+// UsesProceduralMotionGeneration reports whether chat motion should use the procedural/HSP pipeline.
+func UsesProceduralMotionGeneration(mode string) bool {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case MotionGenerationModeProcedural, MotionGenerationModeSynsual:
+		return true
+	default:
+		return false
+	}
+}
+
+// defaultMotionPreferencesJSON mirrors semantic.DefaultMotionPreferences without an import cycle.
+const defaultMotionPreferencesJSON = `{"zones":{"base":{"min":0,"max":0.3},"shaft":{"min":0.3,"max":0.7},"tip":{"min":0.7,"max":1},"full":{"min":0,"max":1}},"action_overrides":{"oral":"full","deepthroat":"full"}}`
 
 // MotionSettings contains transport-neutral motion control defaults.
 type MotionSettings struct {
-	SpeedMinPercent      int    `json:"speed_min_percent"`
-	SpeedMaxPercent      int    `json:"speed_max_percent"`
-	StrokeMinPercent     int    `json:"stroke_min_percent"`
-	StrokeMaxPercent     int    `json:"stroke_max_percent"`
-	ReverseDirection     bool   `json:"reverse_direction"`
-	Style                string `json:"style"`
-	MotionGenerationMode string `json:"motion_generation_mode"`
-	// HardwareSafetyLock clamps chaotic timing to protect device/connection
-	// stability. When enabled, the chaotic generator enforces a minimum
-	// timestamp delta of 30ms.
-	HardwareSafetyLock bool `json:"hardware_safety_lock"`
+	SpeedMinPercent      int             `json:"speed_min_percent"`
+	SpeedMaxPercent      int             `json:"speed_max_percent"`
+	StrokeMinPercent     int             `json:"stroke_min_percent"`
+	StrokeMaxPercent     int             `json:"stroke_max_percent"`
+	ReverseDirection     bool            `json:"reverse_direction"`
+	Style                string          `json:"style"`
+	MotionGenerationMode string          `json:"motion_generation_mode"`
+	HardwareSafetyLock   bool            `json:"hardware_safety_lock"`
+	MotionPreferences    json.RawMessage `json:"motion_preferences,omitempty"`
 }
 
 // LLMSettings contains local model provider settings.
@@ -155,6 +172,7 @@ type LLMSettings struct {
 	Model                string `json:"model"`
 	PromptSet            string `json:"prompt_set"`
 	RequestTimeoutMillis int    `json:"request_timeout_ms"`
+	DirectorMode         bool   `json:"director_mode"`
 }
 
 // AutoDomSettings contains autonomous AutoDom session preferences.
@@ -163,11 +181,30 @@ type AutoDomSettings struct {
 	AllowDominatrix         bool   `json:"allow_dominatrix"`
 	DominatrixRampMinutes   int    `json:"dominatrix_ramp_minutes"`
 	RequestTimeoutMillis    int    `json:"request_timeout_ms"`
+	WaitForUserMessage      *bool `json:"wait_for_user_message,omitempty"`
+	SegmentDurationMinSec   int    `json:"segment_duration_min_sec"`
+	SegmentDurationMaxSec   int    `json:"segment_duration_max_sec"`
+	PrefetchLeadSeconds     int    `json:"prefetch_lead_seconds"`
 }
 
 // DiagnosticsSettings contains logging and diagnostics verbosity settings.
 type DiagnosticsSettings struct {
-	Verbosity string `json:"verbosity"`
+	Verbosity             string `json:"verbosity"`
+	LogHandyMotion        *bool  `json:"log_handy_motion,omitempty"`
+	LogHandyMotionVerbose *bool  `json:"log_handy_motion_verbose,omitempty"`
+}
+
+// ShouldLogHandyMotion reports whether device motion logging is enabled.
+func (d DiagnosticsSettings) ShouldLogHandyMotion() bool {
+	if d.LogHandyMotion == nil {
+		return true
+	}
+	return *d.LogHandyMotion
+}
+
+// VerboseHandyMotion reports whether verbose device motion logging is enabled.
+func (d DiagnosticsSettings) VerboseHandyMotion() bool {
+	return d.LogHandyMotionVerbose != nil && *d.LogHandyMotionVerbose
 }
 
 // PublicSettings is the API-safe settings view. It intentionally omits secrets.
@@ -178,6 +215,7 @@ type PublicSettings struct {
 	Motion      MotionSettings            `json:"motion"`
 	LLM         LLMSettings               `json:"llm"`
 	AutoDom     AutoDomSettings           `json:"autodom"`
+	UserProfile UserProfileSettings       `json:"user_profile"`
 	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
 	Options     PublicSettingsOptionHints `json:"options"`
 }
@@ -211,6 +249,7 @@ type SettingsUpdate struct {
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMSettings         `json:"llm"`
 	AutoDom            AutoDomSettings     `json:"autodom"`
+	UserProfile        UserProfileSettings `json:"user_profile"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
@@ -260,6 +299,14 @@ func DefaultSettings() Settings {
 			AllowDominatrix:        true,
 			DominatrixRampMinutes:  DefaultDominatrixRampMinutes,
 			RequestTimeoutMillis:   DefaultAutoDomRequestTimeoutMillis,
+			WaitForUserMessage:     boolPtr(true),
+			SegmentDurationMinSec:  DefaultSegmentDurationMinSec,
+			SegmentDurationMaxSec:  DefaultSegmentDurationMaxSec,
+			PrefetchLeadSeconds:    DefaultPrefetchLeadSeconds,
+		},
+		UserProfile: UserProfileSettings{
+			Gender:            UserGenderUnspecified,
+			SexualOrientation: UserOrientationUnspecified,
 		},
 		Diagnostics: DiagnosticsSettings{
 			Verbosity: DiagnosticsVerbosityNormal,
@@ -283,6 +330,7 @@ func (s Settings) Public() PublicSettings {
 		Motion:      s.Motion,
 		LLM:         s.LLM,
 		AutoDom:     s.AutoDom,
+		UserProfile: s.UserProfile,
 		Diagnostics: s.Diagnostics,
 		Options: PublicSettingsOptionHints{
 			HSPDispatchOwners: []string{
@@ -302,6 +350,7 @@ func (s Settings) Public() PublicSettings {
 			MotionGenerationModes: []string{
 				MotionGenerationModeProcedural,
 				MotionGenerationModeLibrary,
+				MotionGenerationModeSynsual,
 			},
 			DiagnosticsVerbosities: []string{
 				DiagnosticsVerbosityNormal,
@@ -323,6 +372,7 @@ func (s Settings) Public() PublicSettings {
 				PromptSetMagicHandyMotionV1ZHHans,
 				PromptSetMagicHandyMotionV1JA,
 				PromptSetAutoDomV1PTBR,
+				PromptSetClarissaSynsualV1,
 			},
 		},
 	}
@@ -340,6 +390,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Motion = update.Motion
 	next.LLM = normalizeLLMStrings(update.LLM)
 	next.AutoDom = normalizeAutoDomSettings(update.AutoDom)
+	next.UserProfile = normalizeUserProfileSettings(update.UserProfile)
 	next.Diagnostics = update.Diagnostics
 
 	if update.ClearConnectionKey {
@@ -431,7 +482,10 @@ func validateSettings(settings Settings) error {
 	if err := validateLLMSettings(settings.LLM); err != nil {
 		return err
 	}
-	return validateAutoDomSettings(settings.AutoDom)
+	if err := validateAutoDomSettings(settings.AutoDom); err != nil {
+		return err
+	}
+	return validateUserProfileSettings(settings.UserProfile)
 }
 
 func applyMissingDefaults(settings Settings) Settings {
@@ -468,6 +522,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
+	if len(settings.Motion.MotionPreferences) == 0 {
+		settings.Motion.MotionPreferences = json.RawMessage(defaultMotionPreferencesJSON)
+	}
 	if settings.LLM.Provider == "" {
 		settings.LLM.Provider = defaults.LLM.Provider
 	}
@@ -497,6 +554,7 @@ func applyMissingDefaults(settings Settings) Settings {
 		settings.AutoDom.RequestTimeoutMillis = defaults.AutoDom.RequestTimeoutMillis
 	}
 	settings.AutoDom = normalizeAutoDomSettings(settings.AutoDom)
+	settings.UserProfile = normalizeUserProfileSettings(settings.UserProfile)
 	settings.LLM = normalizeLLMStrings(settings.LLM)
 	if settings.Diagnostics.Verbosity == "" {
 		settings.Diagnostics.Verbosity = defaults.Diagnostics.Verbosity
@@ -520,7 +578,7 @@ func validateMotionSettings(settings MotionSettings) error {
 	if !oneOf(settings.Style, MotionStyleGentle, MotionStyleBalanced, MotionStyleIntense) {
 		return fmt.Errorf("unknown motion style %q", settings.Style)
 	}
-	if !oneOf(settings.MotionGenerationMode, MotionGenerationModeProcedural, MotionGenerationModeLibrary) {
+	if !oneOf(settings.MotionGenerationMode, MotionGenerationModeProcedural, MotionGenerationModeLibrary, MotionGenerationModeSynsual) {
 		return fmt.Errorf("unknown motion generation mode %q", settings.MotionGenerationMode)
 	}
 	return nil
@@ -592,7 +650,7 @@ func normalizeAutoDomSettings(settings AutoDomSettings) AutoDomSettings {
 	if settings.DominatrixRampMinutes > MaxDominatrixRampMinutes {
 		settings.DominatrixRampMinutes = MaxDominatrixRampMinutes
 	}
-	return settings
+	return normalizeAutoDomChatFields(settings)
 }
 
 func validateAutoDomSettings(settings AutoDomSettings) error {
@@ -605,7 +663,7 @@ func validateAutoDomSettings(settings AutoDomSettings) error {
 	if settings.DominatrixRampMinutes < 1 || settings.DominatrixRampMinutes > MaxDominatrixRampMinutes {
 		return fmt.Errorf("autodom dominatrix ramp must be between 1 and %d minutes", MaxDominatrixRampMinutes)
 	}
-	return nil
+	return validateAutoDomChatFields(settings)
 }
 
 func oneOf(value string, allowed ...string) bool {
