@@ -215,7 +215,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   // not mistaken for a user seek that must stop motion.
   const alignPlayerToEngineClock = useCallback((player: HTMLVideoElement) => {
     const clock = engineClock.current;
-    if (!clock || !activeSync.current || seekInProgress.current) return;
+    if (!clock || !activeSync.current || seekInProgress.current || player.seeking) return;
     const projectedMs = clock.mediaMs + (performance.now() - clock.atMs) * clock.rate;
     const deltaMs = projectedMs - mediaTimeMillis(player);
     if (!Number.isFinite(deltaMs) || Math.abs(deltaMs) < CLOCK_ALIGN_THRESHOLD_MILLIS) return;
@@ -459,6 +459,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     }
     if (event === "stalled") return;
     if (event === "waiting") {
+      // A clock-alignment nudge transiently drops readyState and fires
+      // `waiting` even inside a fully buffered range. Treating that dip as
+      // starvation would stop motion, re-arm, nudge again on the next arm,
+      // and loop forever; the nudge's own seeked/canplay completes the seek.
+      if (alignSeekActive.current) return;
       if (!desiredPlaying.current && !activeSync.current && !arming.current) return;
       const mustStop = activeSync.current || arming.current;
       desiredPlaying.current = true;

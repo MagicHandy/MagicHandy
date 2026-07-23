@@ -223,6 +223,50 @@ describe("SyncedVideoPlayer", () => {
     expect(screen.getByText("Device following video")).toBeInTheDocument();
   });
 
+  it("does not treat the correction seek's buffering dip as starvation", async () => {
+    mediaSync.mockImplementation(async (event) => ({
+      sync: event.state === "playing"
+        ? { ...following, last_event: event.event, expected_media_time_ms: 5_000, playback_rate: 1 }
+        : {
+            active: false,
+            video_id: event.video_id,
+            state: event.state === "closed" ? "idle" : event.state,
+            last_event: event.event,
+          },
+    }));
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={15} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    let currentTime = 0;
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+      set: (value: number) => { currentTime = value; },
+    });
+
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    expect(currentTime).toBeCloseTo(5, 1);
+
+    // The nudge's own seeking/waiting/seeked sequence — Chrome drops
+    // readyState during any programmatic seek, even inside a buffered range —
+    // must not stop motion and enter a stop/re-arm/nudge loop.
+    mediaSync.mockClear();
+    fireEvent.seeking(player);
+    fireEvent.waiting(player);
+    fireEvent.seeked(player);
+    await Promise.resolve();
+    expect(mediaSync).not.toHaveBeenCalled();
+    expect(screen.getByText("Device following video")).toBeInTheDocument();
+
+    // Genuine starvation after the correction completes still tears down.
+    mediaReadyState = 2;
+    fireEvent.waiting(player);
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
+      state: "paused",
+      event: "waiting",
+    }), 15, undefined, false));
+  });
+
   it("cancels an obsolete arm and re-arms at the latest seek timestamp", async () => {
     let initialArmSignal: AbortSignal | undefined;
     mediaSync.mockImplementation((event, _sequence, signal) => {
