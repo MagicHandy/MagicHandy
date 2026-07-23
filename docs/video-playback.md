@@ -168,8 +168,16 @@ also enables an optional client-captured poster frame in a later slice.
 
 ## Sync design (M2 implemented)
 
-**The video element is the clock master.** The browser owns play/pause/seek;
-the backend anchors motion to the reported media clock:
+**The browser owns intent; the engine owns the running clock.** Play, pause,
+and seek are always browser decisions. But once a run is armed, the buffered
+device stream cannot be cheaply re-timed, so the engine's transport-aligned
+playback clock becomes the reference and the video follows it: the sync status
+reports `expected_media_time_ms` (armed anchor + engine running time × rate)
+and the browser nudges the video's `currentTime` onto it — at arm, before the
+held video resumes, and on any heartbeat that deviates past 150 ms. Those
+correction seeks are internally suppressed so they never read as user seeks.
+A discontinuity (user seek, rate change, hard drift) still stops and re-arms;
+drift never re-times the device:
 
 - The player posts controller-gated `{video_id, session_id, event_sequence,
   state, event, media_time_ms, client_time_ms, playback_rate}` events on play,
@@ -197,13 +205,21 @@ the backend anchors motion to the reported media clock:
   already hold future points, and changing an engine phase cannot retract that
   queue. Stop/re-arm is the only honest discontinuity operation until every
   transport exposes a proven queue-flush contract.
-- Each heartbeat compares browser time with the current anchor after projecting
-  a bounded request age. The first valid heartbeat calibrates command/HTTP delay
-  unless it already shows hard drift. Two consecutive observations beyond 250 ms
-  stop motion; drift at or beyond 750 ms and playback-rate changes stop
-  immediately and return `requires_reanchor`. The browser then holds the video
-  and explicitly re-arms. Sub-threshold drift is observed but not chased. A
-  heartbeat can validate or stop a run, **never start one**.
+- Each heartbeat compares browser time (projected over a bounded request age)
+  with the engine's transport-aligned clock, never a synthetic wall-clock
+  anchor: a wall anchor read near-zero drift while the script ran visibly
+  offset, because it measured the server against itself. Drift beyond 250 ms is
+  a soft breach: the response carries `expected_media_time_ms` and the browser
+  re-aligns the video, keeping motion running. Three consecutive breaches —
+  a correction that failed to take twice — stop motion; drift at or beyond
+  750 ms and playback-rate changes stop immediately and return
+  `requires_reanchor`, after which the browser holds the video and explicitly
+  re-arms. A heartbeat can validate or stop a run, **never start one**.
+- A seek gesture may reach the page as `pause` before `seeking`. The pause
+  still stops motion immediately, but playback intent survives a pause that a
+  seek follows within 400 ms, so the seek re-arms motion and resumes the video
+  instead of leaving it paused. A video paused outside that window stays
+  paused when scrubbed later.
 - Heartbeat loss for more than five seconds stops the engine. A closed,
   crashed, suspended, or controller-lost player therefore cannot leave a
   resumable media target behind.
@@ -420,7 +436,11 @@ with the saved maximum speed temporarily capped from 53% to 30%:
 A later continuity run at 01:17 used the same Cloud owner with playback speed
 limiting disabled and the saved maximum temporarily at 30% for startup safety:
 
-- Sixteen 750 ms heartbeats remained `following`; calibrated drift was 1 ms.
+- Sixteen 750 ms heartbeats remained `following`; self-calibrated drift read
+  1 ms. (That number predates the engine-clock drift reference: the old
+  wall-clock anchor re-based itself on the first heartbeat, so it measured
+  heartbeat cadence stability, not video/device alignment. M3 alignment
+  evidence must be re-recorded against `expected_media_time_ms`.)
 - The trace retained authored linear reversals (`81 -> 41 -> 66 -> 37 -> 67 ->
   35 -> 70`) instead of contracting them around center.
 - About ten seconds of accepted coverage stayed queued. Append requests returned
@@ -465,15 +485,16 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
   16 MiB/100,000-action loader feeds the read endpoint and backend; the canvas
   uses min/max buckets, an intensity ramp, a separate playhead, click/drag and
   keyboard seeking, and a persisted hide toggle.
-- **M2 — synchronized motion (implemented)**: the serialized browser-clock
-  session starts finite linear media targets through the shared engine and
+- **M2 — synchronized motion (implemented)**: the serialized sync session
+  starts finite linear media targets through the shared engine and
   Stop/re-arms at discontinuities. Exact media knots survive engine chunking;
   no synthetic point is inserted at each nominal chunk boundary. Integration
-  tests cover play readiness, heartbeat calibration, confirmed/hard drift, seek,
-  pause, resume, waiting/recovery, decode failure, end, timeout, stale Stop
-  generations, closed-session ordering, controller gates, one transport Play per
-  explicit arm, no heartbeat-triggered restart, and clean re-arm after a video
-  speed-policy change.
+  tests cover play readiness, engine-clock drift (soft breach with video
+  re-alignment, breach reset, confirmed and hard stops), seek, pause-before-
+  seek auto-resume, pause, resume, waiting/recovery, decode failure, end,
+  timeout, stale Stop generations, closed-session ordering, controller gates,
+  one transport Play per explicit arm, no heartbeat-triggered restart, and
+  clean re-arm after a video speed-policy change.
 - **M3 — hardware acceptance + polish**: real-device alignment measurement
   is in progress. Cloud has objective startup, buffering, heartbeat, drift, and
   seek/re-arm evidence. Remaining work is subjective continuity confirmation,

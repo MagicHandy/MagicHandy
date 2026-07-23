@@ -326,10 +326,10 @@ func TestMediaSyncHeartbeatReportsNaturalScriptCompletionWithoutStoppingVideo(t 
 	}
 }
 
-func TestMediaSyncConfirmsModerateDriftBeforeStopping(t *testing.T) {
+func TestMediaSyncSoftDriftAsksVideoToReAlignBeforeStoppingMotion(t *testing.T) {
 	server := newTestServer(t)
 	root := t.TempDir()
-	writeMediaPair(t, root, "Confirmed drift", `{"actions":[{"at":0,"pos":0},{"at":10000,"pos":100}]}`)
+	writeMediaPair(t, root, "Confirmed drift", `{"actions":[{"at":0,"pos":0},{"at":60000,"pos":100}]}`)
 	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
 		settings.Media.LibraryPaths = []string{root}
 		return settings
@@ -340,31 +340,68 @@ func TestMediaSyncConfirmsModerateDriftBeforeStopping(t *testing.T) {
 	waitForMediaScan(t, server)
 	video := mustSingleMediaVideo(t, server)
 	sequence := server.stopSequence.Load()
-	if got := postMediaSync(t, server, sequence, video.ID, "playing", "play", 0, 1); got.Code != http.StatusOK {
-		t.Fatalf("play status = %d: %s", got.Code, got.Body.String())
+	arm := postMediaSync(t, server, sequence, video.ID, "playing", "play", 0, 1)
+	if arm.Code != http.StatusOK {
+		t.Fatalf("play status = %d: %s", arm.Code, arm.Body.String())
 	}
-	if got := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1); got.Code != http.StatusOK {
-		t.Fatalf("clock calibration status = %d: %s", got.Code, got.Body.String())
+	armStatus := mediaSyncStatusOf(t, arm)
+	if !armStatus.Active || armStatus.ExpectedMediaTimeMillis < 0 {
+		t.Fatalf("arm did not expose the engine clock: %+v", armStatus)
 	}
 
-	server.mediaSync.mu.Lock()
-	server.mediaSync.anchorAt = server.mediaSync.anchorAt.Add(-400 * time.Millisecond)
-	server.mediaSync.mu.Unlock()
-	first := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1)
-	if first.Code != http.StatusOK || strings.Contains(first.Body.String(), `"requires_reanchor":true`) {
-		t.Fatalf("first variance status = %d: %s", first.Code, first.Body.String())
+	// A browser running ahead of the engine clock is a soft breach: the status
+	// carries the engine clock so the video re-aligns, and motion keeps running.
+	first := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", armStatus.ExpectedMediaTimeMillis+600, 1)
+	if first.Code != http.StatusOK {
+		t.Fatalf("soft breach status = %d: %s", first.Code, first.Body.String())
+	}
+	firstStatus := mediaSyncStatusOf(t, first)
+	if firstStatus.RequiresReanchor || firstStatus.DriftMillis <= mediaDriftLimitMillis {
+		t.Fatalf("soft breach = %+v, want drift beyond %d without reanchor", firstStatus, mediaDriftLimitMillis)
 	}
 	if !server.currentMotionEngine().Snapshot().Running || server.mediaSync.Status().State != "following" {
-		t.Fatalf("first variance stopped motion: sync=%+v engine=%+v", server.mediaSync.Status(), server.currentMotionEngine().Snapshot())
+		t.Fatalf("soft breach stopped motion: sync=%+v engine=%+v", server.mediaSync.Status(), server.currentMotionEngine().Snapshot())
 	}
 
-	second := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1)
-	if second.Code != http.StatusOK || !strings.Contains(second.Body.String(), `"requires_reanchor":true`) {
-		t.Fatalf("confirmed drift status = %d: %s", second.Code, second.Body.String())
+	// A corrected browser lands back on the engine clock and resets the count.
+	aligned := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", firstStatus.ExpectedMediaTimeMillis, 1)
+	if aligned.Code != http.StatusOK {
+		t.Fatalf("aligned status = %d: %s", aligned.Code, aligned.Body.String())
+	}
+	status := mediaSyncStatusOf(t, aligned)
+	if status.RequiresReanchor || absInt64(status.DriftMillis) > mediaDriftLimitMillis {
+		t.Fatalf("aligned heartbeat = %+v, want drift back inside %d", status, mediaDriftLimitMillis)
+	}
+
+	// A breach the correction never fixes stops motion after the full
+	// confirmation window, not on the first observation.
+	for breach := 1; breach <= mediaDriftConfirmations; breach++ {
+		response := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", status.ExpectedMediaTimeMillis+600, 1)
+		if response.Code != http.StatusOK {
+			t.Fatalf("breach %d status = %d: %s", breach, response.Code, response.Body.String())
+		}
+		status = mediaSyncStatusOf(t, response)
+		if breach < mediaDriftConfirmations && status.RequiresReanchor {
+			t.Fatalf("breach %d stopped motion before the confirmation window: %+v", breach, status)
+		}
+	}
+	if !status.RequiresReanchor || status.State != "drifted" {
+		t.Fatalf("persistent drift = %+v, want a drifted stop that requires re-arm", status)
 	}
 	if server.currentMotionEngine().Snapshot().Running {
 		t.Fatal("confirmed drift left media motion running")
 	}
+}
+
+func mediaSyncStatusOf(t *testing.T, recorder *httptest.ResponseRecorder) mediaSyncStatus {
+	t.Helper()
+	var payload struct {
+		Sync mediaSyncStatus `json:"sync"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode media sync response: %v: %s", err, recorder.Body.String())
+	}
+	return payload.Sync
 }
 
 func TestMediaTimeAtReceiptCompensatesBoundedRequestAge(t *testing.T) {
@@ -403,10 +440,9 @@ func TestMediaSyncHardDriftStopsAndRequiresExplicitRearm(t *testing.T) {
 		t.Fatalf("play status = %d: %s", got.Code, got.Body.String())
 	}
 
-	server.mediaSync.mu.Lock()
-	server.mediaSync.anchorAt = server.mediaSync.anchorAt.Add(-time.Second)
-	server.mediaSync.mu.Unlock()
-	drift := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 0, 1)
+	// A browser clock seconds away from the engine clock is a hard breach:
+	// motion stops immediately and playback must explicitly re-arm.
+	drift := postMediaSync(t, server, sequence, video.ID, "playing", "heartbeat", 5000, 1)
 	if drift.Code != http.StatusOK || !strings.Contains(drift.Body.String(), `"requires_reanchor":true`) {
 		t.Fatalf("drift status = %d: %s", drift.Code, drift.Body.String())
 	}

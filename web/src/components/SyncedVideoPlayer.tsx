@@ -8,6 +8,14 @@ import { MediaVideoPlayer, type MediaPlaybackEvent } from "./MediaVideoPlayer";
 
 const HEARTBEAT_MILLIS = 1_500;
 const MEDIA_READY_POLL_MILLIS = 100;
+// Browsers may emit `pause` before `seeking` for one scrubber gesture. A pause
+// this close to a seek is part of the gesture, so playback intent survives it
+// and the video auto-resumes after the seek instead of staying paused.
+const SEEK_GESTURE_PAUSE_MILLIS = 400;
+// The video is the follower clock: when it deviates from the engine's
+// transport-aligned clock by more than this, the video is nudged. Below it,
+// a correction would be more visible than the offset.
+const CLOCK_ALIGN_THRESHOLD_MILLIS = 150;
 const TIMELINE_HIDDEN_KEY = "magichandy-video-timeline-hidden";
 
 interface Props {
@@ -52,6 +60,10 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const ignoredPauseTimer = useRef<number>();
   const latestStopSequence = useRef(stopSequence);
   const capturedStopSequence = useRef<number>();
+  const playIntentLostAt = useRef(0);
+  const alignSeekActive = useRef(false);
+  const alignSeekTimer = useRef<number>();
+  const engineClock = useRef<{ mediaMs: number; atMs: number; rate: number } | null>(null);
   const pendingArm = useRef<"play" | "seeked" | "ratechange" | "resync" | null>(null);
   const armAbort = useRef<AbortController | null>(null);
   const armPlaybackRef = useRef<(player: HTMLVideoElement, event: "play" | "seeked" | "ratechange" | "resync") => Promise<void>>(async () => undefined);
@@ -126,6 +138,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     bufferingStop.current = Promise.resolve();
     readyArm.current = "play";
     capturedStopSequence.current = undefined;
+    playIntentLostAt.current = 0;
+    alignSeekActive.current = false;
+    engineClock.current = null;
     setLoadingScript(video.has_funscript);
     if (!video.has_funscript) return () => controller.abort();
 
@@ -167,6 +182,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     if (previous === undefined || stopSequence === undefined || previous === stopSequence || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
     desiredPlaying.current = false;
     awaitingMedia.current = false;
+    playIntentLostAt.current = 0;
     pendingArm.current = null;
     bufferingStop.current = Promise.resolve();
     generation.current += 1;
@@ -180,8 +196,35 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const updateSync = useCallback((status: MediaSyncStatus) => {
     if (!mounted.current) return;
     activeSync.current = status.active;
+    if (status.active && typeof status.expected_media_time_ms === "number") {
+      engineClock.current = {
+        mediaMs: status.expected_media_time_ms,
+        atMs: performance.now(),
+        rate: status.playback_rate && status.playback_rate > 0 ? status.playback_rate : 1,
+      };
+    } else if (!status.active) {
+      engineClock.current = null;
+    }
     setSync(status);
     setSyncError("");
+  }, []);
+
+  // The engine's buffered device stream cannot be cheaply re-timed, so once
+  // armed the engine clock owns synchronization and the video follows it.
+  // Corrections raise alignSeekActive so the resulting seeking/seeked pair is
+  // not mistaken for a user seek that must stop motion.
+  const alignPlayerToEngineClock = useCallback((player: HTMLVideoElement) => {
+    const clock = engineClock.current;
+    if (!clock || !activeSync.current || seekInProgress.current) return;
+    const projectedMs = clock.mediaMs + (performance.now() - clock.atMs) * clock.rate;
+    const deltaMs = projectedMs - mediaTimeMillis(player);
+    if (!Number.isFinite(deltaMs) || Math.abs(deltaMs) < CLOCK_ALIGN_THRESHOLD_MILLIS) return;
+    alignSeekActive.current = true;
+    window.clearTimeout(alignSeekTimer.current);
+    alignSeekTimer.current = window.setTimeout(() => {
+      alignSeekActive.current = false;
+    }, 1_000);
+    player.currentTime = Math.max(0, projectedMs) / 1000;
   }, []);
 
   const showSyncFailure = useCallback((reason: unknown, fallback: string) => {
@@ -285,8 +328,12 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       }
       suppressNext("play");
       try {
+        // The engine clock has been running since transport play; move the
+        // still-held video onto it so playback resumes already in sync.
+        alignPlayerToEngineClock(player);
         await player.play();
         resumeAfterSeek.current = false;
+        playIntentLostAt.current = 0;
       } catch (reason) {
         ignoredPlay.current = false;
         desiredPlaying.current = false;
@@ -307,7 +354,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         window.queueMicrotask(() => void armPlaybackRef.current(player, next));
       }
     }
-  }, [holdVideo, locked, script, showSyncFailure, stopPlaybackMotion, suppressNext, syncEvent, video.id, waitForMediaReady]);
+  }, [alignPlayerToEngineClock, holdVideo, locked, script, showSyncFailure, stopPlaybackMotion, suppressNext, syncEvent, video.id, waitForMediaReady]);
   armPlaybackRef.current = armPlayback;
 
   const handlePlaybackEvent = useCallback((event: MediaPlaybackEvent, player: HTMLVideoElement) => {
@@ -346,6 +393,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         return;
       }
       if (seekInProgress.current || player.ended || (resumeAfterSeek.current && desiredPlaying.current)) return;
+      if (desiredPlaying.current) playIntentLostAt.current = performance.now();
       desiredPlaying.current = false;
       resumeAfterSeek.current = false;
       generation.current += 1;
@@ -357,9 +405,13 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       return;
     }
     if (event === "seeking") {
+      if (alignSeekActive.current) return;
       if (seekInProgress.current) return;
       seekInProgress.current = true;
-      resumeAfterSeek.current = desiredPlaying.current || !player.paused;
+      resumeAfterSeek.current = desiredPlaying.current
+        || !player.paused
+        || (playIntentLostAt.current > 0 && performance.now() - playIntentLostAt.current < SEEK_GESTURE_PAUSE_MILLIS);
+      playIntentLostAt.current = 0;
       awaitingMedia.current = false;
       holdVideo(player);
       mediaReadyGeneration.current += 1;
@@ -370,6 +422,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       return;
     }
     if (event === "seeked") {
+      if (alignSeekActive.current) {
+        alignSeekActive.current = false;
+        window.clearTimeout(alignSeekTimer.current);
+        return;
+      }
       const shouldResume = resumeAfterSeek.current;
       seekInProgress.current = false;
       if (shouldResume) {
@@ -446,7 +503,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       void syncEvent(player, "playing", "heartbeat", sequence).then((status) => {
         if (status.requires_reanchor && desiredPlaying.current) {
           void armPlayback(player, "resync");
+          return;
         }
+        if (status.active) alignPlayerToEngineClock(player);
       }).catch((reason) => {
         desiredPlaying.current = false;
         holdVideo(player);
@@ -456,11 +515,12 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       });
     }, HEARTBEAT_MILLIS);
     return () => window.clearInterval(timer);
-  }, [armPlayback, holdVideo, locked, script, showSyncFailure, syncEvent]);
+  }, [alignPlayerToEngineClock, armPlayback, holdVideo, locked, script, showSyncFailure, syncEvent]);
 
   useEffect(() => {
     if (!locked || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
     desiredPlaying.current = false;
+    playIntentLostAt.current = 0;
     generation.current += 1;
     armAbort.current?.abort();
     awaitingMedia.current = false;
@@ -481,6 +541,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       awaitingMedia.current = false;
       window.clearTimeout(ignoredPlayTimer.current);
       window.clearTimeout(ignoredPauseTimer.current);
+      window.clearTimeout(alignSeekTimer.current);
       const player = playerRef.current ?? lastPlayer.current;
       const sequence = closingSession.stopSequence;
       if (shouldClose && player && sequence !== undefined) {

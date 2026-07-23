@@ -295,6 +295,7 @@ export interface MediaSyncStatus {
   playback_rate?: number;
   motion_speed_limit_percent?: number;
   requires_reanchor?: boolean;
+  expected_media_time_ms?: number;
   message?: string;
   updated_at?: string;
 }

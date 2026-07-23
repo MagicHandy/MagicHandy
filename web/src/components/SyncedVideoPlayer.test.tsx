@@ -142,6 +142,87 @@ describe("SyncedVideoPlayer", () => {
     expect(mediaSync.mock.calls.some(([event]) => event.event === "pause")).toBe(false);
   });
 
+  it("auto-resumes a seek even when the browser emits pause before seeking", async () => {
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={12} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    expect(play).toHaveBeenCalledOnce();
+
+    // Some browsers pause first for one scrubber gesture. The pause still
+    // stops motion immediately, but playback intent survives into the seek.
+    fireEvent.pause(player);
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 12, undefined, false));
+    Object.defineProperty(player, "currentTime", { configurable: true, writable: true, value: 4.5 });
+    fireEvent.seeking(player);
+    fireEvent.seeked(player);
+
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
+      state: "playing",
+      event: "seeked",
+      media_time_ms: 4_500,
+    }), 12, expect.any(AbortSignal), false));
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Device following video")).toBeInTheDocument();
+  });
+
+  it("keeps a long-paused video paused when a later seek arrives", async () => {
+    const nowSpy = vi.spyOn(performance, "now");
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={13} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    nowSpy.mockReturnValue(10_000);
+    fireEvent.pause(player);
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 13, undefined, false));
+
+    nowSpy.mockReturnValue(20_000);
+    fireEvent.seeking(player);
+    fireEvent.seeked(player);
+
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "seeked" }), 13, undefined, false));
+    expect(play).toHaveBeenCalledOnce();
+    nowSpy.mockRestore();
+  });
+
+  it("locks the held video onto the engine clock before resuming playback", async () => {
+    mediaSync.mockImplementation(async (event) => ({
+      sync: event.state === "playing"
+        ? { ...following, last_event: event.event, expected_media_time_ms: 5_000, playback_rate: 1 }
+        : {
+            active: false,
+            video_id: event.video_id,
+            state: event.state === "closed" ? "idle" : event.state,
+            last_event: event.event,
+          },
+    }));
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={14} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    let currentTime = 0;
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+      set: (value: number) => { currentTime = value; },
+    });
+
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+
+    // The engine clock started at transport play; the video is moved onto it.
+    expect(currentTime).toBeCloseTo(5, 1);
+
+    // The correction's own seeking/seeked pair must not read as a user seek
+    // that stops motion and re-arms.
+    mediaSync.mockClear();
+    fireEvent.seeking(player);
+    fireEvent.seeked(player);
+    await Promise.resolve();
+    expect(mediaSync.mock.calls.some(([event]) => event.state === "seeking" || event.event === "seeked")).toBe(false);
+    expect(screen.getByText("Device following video")).toBeInTheDocument();
+  });
+
   it("cancels an obsolete arm and re-arms at the latest seek timestamp", async () => {
     let initialArmSignal: AbortSignal | undefined;
     mediaSync.mockImplementation((event, _sequence, signal) => {
