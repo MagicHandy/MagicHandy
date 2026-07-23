@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
@@ -50,6 +51,19 @@ var (
 	errMotionSpeedBand       = errors.New("motion speed is outside the explicitly requested speed band")
 )
 
+// ValidateUserMessage normalizes one user turn before either persistence or
+// model generation so both paths enforce the same byte limit.
+func ValidateUserMessage(message string) (string, error) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "", errors.New("chat message is required")
+	}
+	if len(message) > maxUserMessageBytes {
+		return "", fmt.Errorf("chat message must be at most %d bytes", maxUserMessageBytes)
+	}
+	return message, nil
+}
+
 // Service runs chat prompts, strict validation, and repair over an LLM provider.
 // Prompt is the resolved behavior profile; Memories are the enabled memory
 // texts (empty when the memory switch is off; chat must work without them).
@@ -65,9 +79,15 @@ type Service struct {
 	// MotionContext is the authoritative semantic snapshot for this turn.
 	// Nil is retained for non-interactive callers such as legacy tests.
 	MotionContext *MotionContext
+	// ConversationContext is backend-derived profile and continuity data. It
+	// remains separate from request text and semantic motion validation.
+	ConversationContext *ConversationContext
 	// Capabilities gates which control methods the prompt advertises and the
 	// result may carry. Nil preserves the historical full-capability behavior.
 	Capabilities *Capabilities
+	// TrustedMotionInput is reserved for backend-generated Autopilot decision
+	// messages. Interactive user chat must leave this false.
+	TrustedMotionInput bool
 }
 
 func (s Service) capabilities() Capabilities {
@@ -81,6 +101,9 @@ func (s Service) capabilities() Capabilities {
 // response instead of failing the turn: the prompt never advertised them, so
 // a stray field is model noise, not a contract violation worth a repair loop.
 func enforceCapabilities(response *AssistantResponse, capabilities Capabilities) {
+	if !capabilities.MoodTracking {
+		response.NewMood = nil
+	}
 	if response.Motion == nil {
 		return
 	}
@@ -105,12 +128,9 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if s.Provider == nil {
 		return Result{}, errors.New("LLM provider is required")
 	}
-	userMessage := strings.TrimSpace(request.Message)
-	if userMessage == "" {
-		return Result{}, errors.New("chat message is required")
-	}
-	if len(userMessage) > maxUserMessageBytes {
-		return Result{}, fmt.Errorf("chat message must be at most %d bytes", maxUserMessageBytes)
+	userMessage, err := ValidateUserMessage(request.Message)
+	if err != nil {
+		return Result{}, err
 	}
 
 	prompt := s.Prompt
@@ -118,10 +138,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
 	capabilities := s.capabilities()
-	systemPrompt := ComposeSystemWithCapabilities(prompt, s.Memories, s.Patterns, capabilities)
-	if s.MotionContext != nil {
-		systemPrompt = ComposeSystemWithMotionContext(prompt, s.Memories, s.Patterns, capabilities, *s.MotionContext)
-	}
+	systemPrompt := composeSystem(prompt, s.Memories, s.Patterns, capabilities, s.MotionContext, s.ConversationContext)
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
@@ -210,6 +227,9 @@ func (s Service) recoverSemanticRepair(response AssistantResponse, capabilities 
 	if !requestsPatternVariation(userMessage) || !isSemanticMotionError(repairErr) {
 		return AssistantResponse{}, false
 	}
+	if !s.TrustedMotionInput && !userAuthorizesMotion(userMessage, MotionActionTarget) {
+		return AssistantResponse{}, false
+	}
 	return s.semanticPatternFallback(response, capabilities, userMessage)
 }
 
@@ -218,10 +238,207 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 	if err != nil {
 		return AssistantResponse{}, err
 	}
+	if response.Motion != nil && !s.TrustedMotionInput && !userAuthorizesMotion(userMessage, response.Motion.Action) {
+		response.Motion = nil
+		// An unauthorized model command is inert output. Return before semantic
+		// variation repair can synthesize a replacement command.
+		return response, nil
+	}
+	if response.Motion == nil && (!capabilities.Motion || (!s.TrustedMotionInput && !userAuthorizesMotion(userMessage, MotionActionTarget))) {
+		return response, nil
+	}
 	if err := validateMotionChange(response, s.MotionContext, userMessage, s.Patterns); err != nil {
 		return response, err
 	}
 	return response, nil
+}
+
+func userAuthorizesMotion(message, action string) bool {
+	switch action {
+	case MotionActionNone, MotionActionStop:
+		return true
+	case MotionActionStart, MotionActionTarget:
+	default:
+		return false
+	}
+
+	normalized := normalizeMotionIntent(message)
+	if normalized == "" || motionIntentIsNegated(normalized) || motionIntentIsConversation(normalized) {
+		return false
+	}
+	if action == MotionActionStart {
+		return authorizesMotionStart(normalized)
+	}
+	return authorizesMotionTarget(normalized)
+}
+
+func normalizeMotionIntent(message string) string {
+	message = strings.ToLower(strings.ReplaceAll(message, "’", "'"))
+	return strings.Join(strings.FieldsFunc(message, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r) && r != '\''
+	}), " ")
+}
+
+func motionIntentIsNegated(message string) bool {
+	if hasIntentPhrase(message,
+		"no", "not", "never", "don't", "dont", "do not", "without",
+		// Contracted negatives carry the same refusal as "do not" and must not
+		// leave an authorizing verb ("start moving") exposed behind them.
+		"didn't", "didnt", "doesn't", "doesnt", "won't", "wouldn't", "wouldnt",
+		"shouldn't", "shouldnt", "can't", "cant", "cannot", "isn't", "isnt",
+		"aren't", "arent", "stop", "stopped",
+		"nunca", "sin", "evita", "evitar", "não", "nao", "sem",
+		"tampoco", "pare", "para de", "deja de", "parar de",
+	) {
+		return true
+	}
+	return containsAny(message,
+		"不要", "别", "別", "不想", "不能", "不再", "停止", "停下",
+		"動かさない", "動かないで", "しないで", "ないで", "止め", "やめ",
+	)
+}
+
+func motionIntentIsConversation(message string) bool {
+	if motionIntentIsPermissionQuestion(message) {
+		return true
+	}
+	if hasIntentPhrase(message,
+		"tell me", "talk about", "think about", "explain", "describe", "story", "joke", "thought",
+		"what is", "what are", "what does", "how does", "how do", "why is", "why does", "definition of",
+		"why", "when", "where", "who",
+		"wording", "reply", "speak", "say", "cuéntame", "explica", "historia", "chiste",
+		"qué es", "que es", "cómo funciona", "como funciona",
+		"conte me", "conta me", "explique", "história", "piada", "o que é", "o que e", "como funciona",
+	) {
+		return true
+	}
+	return containsAny(message, "告诉我", "解釋", "解释", "故事", "笑话", "笑話", "什么是", "什麼是", "教えて", "説明", "物語", "冗談", "について", "とは")
+}
+
+// motionIntentIsPermissionQuestion recognizes questions *about* moving — is it
+// safe, what would happen, should I — which contain the same verbs as a real
+// request. Asking whether motion is a good idea is not asking for it, and the
+// safe failure here is a turn that only talks.
+func motionIntentIsPermissionQuestion(message string) bool {
+	if hasIntentPhrase(message,
+		"is it safe", "is that safe", "is this safe", "how safe", "is it ok", "is it okay",
+		"what happens", "what would happen", "what will happen",
+		"should i", "should we", "may i", "do i need", "would it be", "is it a good idea",
+		"es seguro", "es peligroso", "qué pasa si", "que pasa si", "debería", "deberia",
+		"é seguro", "e seguro", "o que acontece", "devo", "deveria",
+	) {
+		return true
+	}
+	return containsAny(message, "安全ですか", "大丈夫ですか", "安全吗", "会怎么样", "应该吗")
+}
+
+func authorizesMotionStart(message string) bool {
+	if containsAnyExact(message,
+		"start", "begin", "move", "please start", "start please", "please begin", "begin please",
+		"start slowly", "start gently", "please start slowly", "please start gently",
+		"empieza", "comienza", "inicia", "por favor empieza", "por favor inicia",
+		"começa", "comece", "inicia", "por favor comece", "por favor inicia",
+		"开始", "请开始", "開始", "始めて",
+	) {
+		return true
+	}
+	if hasIntentPhrase(message, "start", "begin") && hasIntentPhrase(message,
+		"move", "moving", "motion", "movement", "stroke", "strokes", "stroking", "device", "pattern", "pulse",
+	) {
+		return true
+	}
+	if hasIntentPhrase(message, "empieza", "comienza", "inicia", "iniciar", "empezar", "comenzar") &&
+		hasIntentPhrase(message, "mover", "moviendo", "movimiento", "dispositivo", "patrón", "patron", "pulsar") {
+		return true
+	}
+	if hasIntentPhrase(message, "começa", "comece", "inicia", "iniciar", "começar") &&
+		hasIntentPhrase(message, "mover", "movendo", "movimento", "dispositivo", "padrão", "padrao", "pulsar") {
+		return true
+	}
+	chineseStart := containsAny(message, "开始", "启动") && containsAny(message, "运动", "移动", "动起来", "模式")
+	japaneseStart := containsAny(message, "始め", "開始") && containsAny(message, "動か", "動き", "モーション", "パターン")
+	return chineseStart || japaneseStart
+}
+
+func authorizesMotionTarget(message string) bool {
+	if containsAnyExact(message,
+		"faster", "slower", "quicker", "gentler", "harder", "deeper", "shallower",
+		"go faster", "go slower", "a little faster", "a little slower", "move faster", "move slower",
+		"please go faster", "please go slower", "please go a little faster", "please go a little slower",
+		"faster please", "slower please", "more gently",
+		"más rápido", "más rápida", "más despacio", "más lento", "más lenta", "un poco más rápido", "un poco más despacio", "más rápido por favor", "más despacio por favor",
+		"mais rápido", "mais rápida", "mais devagar", "mais lento", "mais lenta", "um pouco mais rápido", "um pouco mais devagar", "mais rápido por favor", "mais devagar por favor",
+		"快一点", "慢一点", "请快一点", "请慢一点", "加快速度", "放慢速度",
+		"もっと速く", "もっと遅く", "もっとゆっくり", "少し速く", "少し遅く", "ゆっくりして",
+	) {
+		return true
+	}
+	if hasIntentPrefix(message,
+		"a little faster ", "a little slower ", "more gently ",
+		"un poco más rápido ", "un poco más despacio ",
+		"um pouco mais rápido ", "um pouco mais devagar ",
+	) {
+		return true
+	}
+	directive := motionIntentIsDirective(message)
+	if hasIntentPhrase(message,
+		"motion", "movement", "stroke", "strokes", "speed", "pace", "pattern", "rhythm", "intensity", "range",
+		"movimiento", "velocidad", "ritmo", "patrón", "patron",
+		"movimento", "velocidade", "ritmo", "padrão", "padrao",
+	) && directive && hasIntentPhrase(message,
+		"change", "switch", "different", "new", "another", "faster", "slower", "quicker", "gentler", "harder", "deeper", "shallower", "shorter", "longer", "focus", "vary", "mix",
+		"cambia", "cambiar", "otro", "diferente", "rápido", "rápida", "despacio", "lento", "lenta", "profundo", "profunda", "corto", "corta", "largo", "larga", "enfoca",
+		"muda", "mudar", "outro", "diferente", "rápido", "rápida", "devagar", "lento", "lenta", "profundo", "profunda", "curto", "curta", "longo", "longa", "foque",
+	) {
+		return true
+	}
+	if directive && hasIntentPhrase(message,
+		"focus on the tip", "focus on the shaft", "focus on the base", "use the full range", "use full range",
+		"enfócate en la punta", "enfócate en el eje", "enfócate en la base",
+		"foque na ponta", "foque na haste", "foque na base",
+	) {
+		return true
+	}
+	chineseTarget := containsAny(message, "运动", "移动", "速度", "节奏", "模式", "尖端", "根部") &&
+		containsAny(message, "加快", "减慢", "放慢", "改变", "更换", "聚焦", "快一点", "慢一点", "深入", "变浅", "缩短", "加长")
+	japaneseTarget := containsAny(message, "動き", "モーション", "速度", "リズム", "パターン", "先端", "シャフト", "根元") &&
+		containsAny(message, "速く", "遅く", "ゆっくり", "変え", "変更", "集中", "深く", "浅く", "短く", "長く")
+	return chineseTarget || japaneseTarget || (directive && requestsPatternVariation(message))
+}
+
+func motionIntentIsDirective(message string) bool {
+	if containsAnyExact(message,
+		"mix it up", "mix it up again", "change it up", "change it up again",
+		"change things up", "change things up again", "something different", "something else",
+		"surprise me", "surprise me again", "switch it up", "switch it up again",
+		"variation", "more variation", "add variety", "vary it",
+	) {
+		return true
+	}
+	return hasIntentPrefix(message,
+		"please ", "change ", "switch ", "mix ", "use ", "try ", "give me ", "make it ", "go ", "move ", "focus ", "surprise me", "add ",
+		"por favor ", "cambia ", "cambiar ", "usa ", "prueba ", "dame ", "enfócate ",
+		"muda ", "mudar ", "use ", "tente ", "foque ",
+	)
+}
+
+func hasIntentPrefix(message string, prefixes ...string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(message, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasIntentPhrase(message string, phrases ...string) bool {
+	padded := " " + message + " "
+	for _, phrase := range phrases {
+		if strings.Contains(padded, " "+phrase+" ") {
+			return true
+		}
+	}
+	return false
 }
 
 func validateMotionChange(response AssistantResponse, context *MotionContext, userMessage string, patterns []PatternChoice) error {
@@ -355,7 +572,10 @@ func isSemanticMotionError(err error) bool {
 }
 
 func requestsPatternVariation(message string) bool {
-	message = strings.ToLower(strings.TrimSpace(message))
+	message = normalizeMotionIntent(message)
+	if motionIntentIsNegated(message) || motionIntentIsConversation(message) {
+		return false
+	}
 	if containsAny(message, "do not change the pattern", "don't change the pattern", "keep the same pattern", "keep this pattern", "same pattern") {
 		return false
 	}

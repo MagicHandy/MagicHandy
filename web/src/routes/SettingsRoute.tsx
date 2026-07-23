@@ -24,6 +24,14 @@ const CHAT_VOICE_LABELS: Record<string, string> = {
   intimate: "Intimate (sensual partner)",
   explicit: "Explicit (direct sexual language)",
 };
+const USER_ANATOMY_LABELS: Record<string, string> = {
+  penis: "Penis",
+  vagina: "Vagina / vulva",
+  custom: "Custom wording",
+};
+const MAX_CUSTOM_ANATOMY_CHARS = 120;
+const MAX_PERSONA_DESCRIPTION_CHARS = 500;
+const clampCharacters = (value: string, limit: number) => Array.from(value).slice(0, limit).join("");
 const SECTIONS = [
   { id: "device", label: "Device" },
   { id: "media", label: "Media library" },
@@ -219,6 +227,8 @@ export function SettingsRoute() {
     llama_cpp_modes: [],
     llm_reasoning_modes: [],
     llm_max_output_tokens: [],
+    llm_chat_voices: [],
+    llm_user_anatomies: [],
     prompt_sets: [],
     tts_providers: [],
     asr_providers: [],
@@ -366,6 +376,48 @@ export function SettingsRoute() {
               Intimate speaks as a partner with sensual language. Explicit permits direct sexual
               language like the legacy app. Voice changes wording only; motion limits, capability
               gates, and Stop are identical at every level.
+            </p>
+            <label className="field">
+              <span className="label">User anatomy <span className="hint-inline">separate from partner persona</span></span>
+              <select
+                value={s.llm.user_anatomy ?? "penis"}
+                disabled={locked}
+                onChange={(event) => patchLLM({ user_anatomy: event.target.value as PublicSettings["llm"]["user_anatomy"] })}
+              >
+                {(opt.llm_user_anatomies?.length ? opt.llm_user_anatomies : ["penis", "vagina", "custom"]).map((anatomy) => (
+                  <option key={anatomy} value={anatomy}>{USER_ANATOMY_LABELS[anatomy] ?? anatomy}</option>
+                ))}
+              </select>
+            </label>
+            {(s.llm.user_anatomy ?? "penis") === "custom" && (
+              <label className="field">
+                <span className="label">
+                  Custom anatomy wording
+                  <span className="hint-inline">{Array.from(s.llm.custom_anatomy ?? "").length} / {MAX_CUSTOM_ANATOMY_CHARS}</span>
+                </span>
+                <input
+                  type="text"
+                  value={s.llm.custom_anatomy ?? ""}
+                  disabled={locked}
+                  autoComplete="off"
+                  onChange={(event) => patchLLM({ custom_anatomy: clampCharacters(event.target.value, MAX_CUSTOM_ANATOMY_CHARS) })}
+                />
+              </label>
+            )}
+            <label className="field">
+              <span className="label">
+                Persona description <span className="hint-inline">optional · {Array.from(s.llm.persona_description ?? "").length} / {MAX_PERSONA_DESCRIPTION_CHARS}</span>
+              </span>
+              <textarea
+                rows={3}
+                value={s.llm.persona_description ?? ""}
+                disabled={locked}
+                onChange={(event) => patchLLM({ persona_description: clampCharacters(event.target.value, MAX_PERSONA_DESCRIPTION_CHARS) })}
+              />
+            </label>
+            <p className="hint">
+              Anatomy vocabulary and persona apply to interactive Warm, Intimate, and Explicit replies only.
+              They are bounded prompt context and cannot change motion permissions or limits.
             </p>
             <div className="divider" />
             <PromptSetEditor locked={locked} />

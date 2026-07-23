@@ -692,6 +692,28 @@ func TestCloudCredentialChangeStopsAndClearsExistingMotionEngine(t *testing.T) {
 	}
 }
 
+func TestPromptOnlySettingsTransitionDoesNotRefreshActiveMotion(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	defer server.Close()
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("motion did not start")
+	}
+	previous, _ := server.store.Snapshot()
+	next := previous
+	next.LLM.ChatVoice = config.LLMChatVoiceIntimate
+	next.LLM.UserAnatomy = config.LLMUserAnatomyCustom
+	next.LLM.CustomAnatomy = "chosen wording"
+	next.LLM.PersonaDescription = "An energetic partner"
+	before := len(fake.Commands())
+	if err := server.applySettingsRuntimeTransition(context.Background(), previous, next); err != nil {
+		t.Fatalf("applySettingsRuntimeTransition: %v", err)
+	}
+	if after := len(fake.Commands()); after != before {
+		t.Fatalf("prompt-only settings emitted transport commands: before=%d after=%d commands=%+v", before, after, fake.Commands())
+	}
+}
+
 func TestMotionStateExposedInAggregateState(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)

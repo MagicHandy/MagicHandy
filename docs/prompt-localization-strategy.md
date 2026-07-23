@@ -12,7 +12,7 @@ Use hybrid localized prompts for local models:
   English.
 - Do not translate protocol tokens such as `reply`, `motion`, `action`,
   `pattern_id`, `speed_percent`, `none`, `start`, `target`, `stop`, `stroke`,
-  `pulse`, or `tease`.
+  `pulse`, `tease`, `new_mood`, or any accepted mood value.
 
 This is the rule for both neutral prompt packs and future explicit/adult prompt
 packs. Adult/persona/anatomy prose should be translated at the same tone and
@@ -46,13 +46,32 @@ The composed prompt should have this shape:
 
 <code-owned English JSON contract>
 
+<code-owned authoritative motion context, when enabled>
+<code-owned voice/profile/anatomy/mood context, for interactive non-utility chat>
+<quoted latest three canonical assistant lines, when present>
+
 <localized saved-memory header, if memories are present>
 - <user-authored memory text, verbatim>
+
+<code-owned final output guard; always last>
 ```
 
 The prompt contract remains appended by code, not stored inside prompt sets. That
 keeps editable/user-imported prompts from weakening the parser contract while
 still letting built-in and custom prompt sets control persona and language.
+
+Current implementation note: built-in behavior text and memory headers have
+native translations. The newer code-owned voice, anatomy, quoted-profile,
+mood-state, and recent-line instructions remain English pending a native-speaker
+pass. This does not change the selected `reply` language, and it is preferable
+to silently weakening or sanitizing the adult-language rule. The profile values
+and recent lines themselves remain user/model-authored data and are never
+translated by prompt composition.
+
+`new_mood` is optional only for interactive non-utility chat. Its 17 accepted
+values are stable English protocol tokens documented in
+`docs/localization-wording.md`; localized display text must map from those
+values rather than changing the wire enum.
 
 ## Current Built-In Prompt Sets
 
@@ -91,6 +110,7 @@ requires all of the following:
 - The response parses as one JSON object with no markdown or extra keys.
 - The `reply` value is in the selected language.
 - JSON keys and enum values remain exact English protocol tokens.
+- Optional `new_mood`, when present, is one of the 17 exact protocol values.
 - Motion requests use only permitted `action`, `pattern_id`, and
   `speed_percent` values.
 - User-authored memories are referenced naturally and are not silently sanitized

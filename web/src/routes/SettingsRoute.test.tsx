@@ -73,6 +73,9 @@ function settings(verbosity: string): PublicSettings {
       max_output_tokens: 256,
       reasoning_mode: "off",
       chat_voice: "utility",
+      user_anatomy: "penis",
+      custom_anatomy: "",
+      persona_description: "",
     },
     voice: {
       enabled: false,
@@ -103,6 +106,7 @@ function settings(verbosity: string): PublicSettings {
       llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512],
       llm_chat_voices: ["utility", "warm", "intimate", "explicit"],
+      llm_user_anatomies: ["penis", "vagina", "custom"],
       prompt_sets: ["default"],
       tts_providers: ["none"],
       asr_providers: ["none"],
@@ -229,6 +233,32 @@ describe("SettingsRoute", () => {
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].llm.chat_voice).toBe("explicit");
+  });
+
+  it("persists anatomy and persona prompt context", async () => {
+    app.hash = "#/settings/prompts";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const anatomy = await screen.findByRole("combobox", { name: /User anatomy/ });
+    expect(screen.queryByRole("textbox", { name: /Custom anatomy wording/ })).not.toBeInTheDocument();
+    fireEvent.change(anatomy, { target: { value: "custom" } });
+    const custom = screen.getByRole("textbox", { name: /Custom anatomy wording/ });
+    const persona = screen.getByRole("textbox", { name: /Persona description/ });
+    fireEvent.change(custom, { target: { value: "😀".repeat(121) } });
+    fireEvent.change(persona, { target: { value: "😀".repeat(501) } });
+    expect(custom).toHaveValue("😀".repeat(120));
+    expect(persona).toHaveValue("😀".repeat(500));
+    fireEvent.change(custom, { target: { value: "chosen wording" } });
+    fireEvent.change(persona, { target: { value: "An energetic partner" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].llm).toMatchObject({
+      user_anatomy: "custom",
+      custom_anatomy: "chosen wording",
+      persona_description: "An energetic partner",
+    });
   });
 
   it("persists the opt-in video script speed limit", async () => {

@@ -34,8 +34,14 @@ independent of every generation, upload, and playback latency.
 
 ## What the LLM can emit today
 
-`internal/chat/contract.go` — `MotionCommand`, the only motion shape the parser
-accepts:
+`internal/chat/contract.go` accepts exactly one `AssistantResponse`: required
+user-facing `reply`, optional semantic `motion`, and optional `new_mood` for
+interactive non-utility chat. `new_mood` is a strict 17-value reply-register
+enum. It is persisted as session diagnostics and shown as backend-reported Chat
+state, but it has no representation in `MotionCommand`, `MotionContext`,
+`MotionTarget`, or transport dispatch.
+
+`MotionCommand`, the only model-authored motion shape the parser accepts:
 
 | Field | Values | Meaning |
 | --- | --- | --- |
@@ -54,12 +60,39 @@ are rejected, and an all-disabled library keeps the deterministic speed-only
 contract. This is real curation — the model selects from author-owned content —
 but it is still narrower than the engine.
 
+After parsing, deterministic current-turn authorization strips `start` or
+`target` unless the current user message contains a positive, action-specific
+motion request in one of the supported prompt languages. Negation and common
+conversation objects are rejected before matching; broad standalone topic
+words such as `different`, `continue`, or `pattern` do not authorize motion.
+An unauthorized command returns as inert reply text before semantic repair, so
+fallback cannot recreate it. Autopilot is the sole exception to the user-turn
+matcher: its decision message is generated inside the mode manager and carries
+that existing autonomous-mode authority, while still passing capability,
+semantic, enabled-pattern, mode-lifecycle, engine, and transport gates.
+Authorization never widens capabilities: an allowed command still passes every
+existing combination, state, speed-band, engine, and transport check. `stop`
+remains unconditionally safe, and conservative exact Chat Stop phrases bypass
+the model in every built-in prompt language.
+
 Each interactive turn also receives one authoritative runtime snapshot:
 stopped/running/paused state, current pattern or program, current speed and
 area, the persisted speed envelope split into low/middle/high bands, and up to
 four recent chat-selected pattern ids. This state is prompt data, not a second
 frontend motion model. It is derived from the engine snapshot and bounded trace
 ring, so it is deliberately runtime-only and requires no database migration.
+
+Opted-in interactive non-utility chat receives a separate backend-owned conversation
+snapshot: bounded persona/anatomy settings, the effective session mood, and the
+latest three canonical assistant lines (one line and 180 Unicode characters
+each). User-authored profile values and prior replies are JSON-quoted as data.
+This snapshot never enters the user message or semantic motion validator. Mood
+is stored in the existing `diagnostics_json`, so it also needs no schema
+migration. The broader 12-message history is likewise rebuilt from the selected
+server-side session rather than trusted from the request. Utility prompts remain
+byte-identical, do not update mood, and suppress its readout; Autopilot motion
+decisions deliberately exclude profile context so quoted persona data cannot
+steer an autonomous motion decision.
 
 Continuity and variation are separate intents. Ordinary conversation,
 "continue", and steady/hold requests preserve motion; pacing-only requests
@@ -171,15 +204,19 @@ compounded. Keep it single-clamp and visible.
   live providers cover that path. Raw model-authored delta fields and
   stroke-depth deltas are still intentionally absent.
 
-### D. Style / mood bias as visible state (parity; low risk)
+### D. Style / mood bias as visible state (parity; low risk) — **partially shipped**
 
 The model already biases Freestyle indirectly; make the **Motion Style**
 (gentle/balanced/intense) a visible, model-readable, model-settable field rather
 than hidden prompt drift, surfaced in diagnostics. Reference ROADMAP #4 reached
 the same conclusion ("steer model behavior without hidden prompt drift").
 
-- Disposition: aligns with the project's "provider choice is visible state"
-  stance; low risk because deterministic scoring already consumes style.
+- Current state: model-reported reply mood is now a strict, visible,
+  backend-authoritative per-session state. It is deliberately inert metadata,
+  not inferred sentiment and not a motion-style shortcut.
+- Remaining disposition: making **Motion Style** model-settable remains a
+  separate idea. It must be an explicit semantic field consumed by deterministic
+  scoring, never hidden prompt drift or an interpretation of `new_mood`.
 
 ### E. LLM-requested motion arrangement (net-new; moderate risk)
 

@@ -50,6 +50,10 @@ export function ChatRoute() {
 
   const sessions = workspace?.sessions ?? [];
   const active = sessions.find((session) => session.id === workspace?.active_session_id);
+  const backendChat = state?.chat;
+  const assistantMood = active && backendChat?.active_session_id === active.id
+    ? backendChat.current_mood?.trim() ?? ""
+    : "";
   const autopilotActive = state?.modes?.mode === "autopilot" || state?.modes?.active_mode === "autopilot";
   const locked = !backendOnline || readOnly || loading || operation || streaming;
 
@@ -137,6 +141,7 @@ export function ChatRoute() {
             onNew={requestNew}
             onSave={saveSession}
             onDelete={deleteSession}
+            assistantMood={assistantMood}
           />
           {loadError ? (
             <div className="chat-session-state" role="alert">

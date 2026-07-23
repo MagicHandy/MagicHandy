@@ -13,7 +13,6 @@ import type {
   BluetoothCommandsResponse,
   BluetoothStatusResponse,
   IntifaceTransportSnapshot,
-  ChatHistoryMessage,
   ChatMessagesResponse,
   ChatSessionsResponse,
   ConnectionCheckResult,
@@ -411,7 +410,6 @@ async function requestWithSignal<T>(method: string, path: string, signal?: Abort
 export async function streamChat(
   sessionId: string,
   message: string,
-  history: ChatHistoryMessage[],
   onEvent: (e: ChatStreamEvent) => void,
   signal?: AbortSignal,
   stopSequence?: number,
@@ -421,7 +419,7 @@ export async function streamChat(
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers,
-    body: JSON.stringify({ session_id: sessionId, message, history }),
+    body: JSON.stringify({ session_id: sessionId, message }),
     signal,
   });
   if (!res.ok) {

@@ -20,10 +20,49 @@ const (
 	MotionActionStop = "stop"
 )
 
+// Mood is model-reported reply-register state. It is inert metadata and never
+// enters MotionCommand, MotionContext, or transport dispatch.
+type Mood string
+
+// Moods match the reviewed STGPT-RV register and remain stable JSON protocol
+// values even when surrounding prompt prose is localized.
+const (
+	MoodCurious      Mood = "Curious"
+	MoodTeasing      Mood = "Teasing"
+	MoodPlayful      Mood = "Playful"
+	MoodLoving       Mood = "Loving"
+	MoodExcited      Mood = "Excited"
+	MoodPassionate   Mood = "Passionate"
+	MoodSeductive    Mood = "Seductive"
+	MoodAnticipatory Mood = "Anticipatory"
+	MoodBreathless   Mood = "Breathless"
+	MoodDominant     Mood = "Dominant"
+	MoodSubmissive   Mood = "Submissive"
+	MoodVulnerable   Mood = "Vulnerable"
+	MoodConfident    Mood = "Confident"
+	MoodIntimate     Mood = "Intimate"
+	MoodNeedy        Mood = "Needy"
+	MoodOverwhelmed  Mood = "Overwhelmed"
+	MoodAfterglow    Mood = "Afterglow"
+)
+
+var moodValues = []Mood{
+	MoodCurious, MoodTeasing, MoodPlayful, MoodLoving, MoodExcited,
+	MoodPassionate, MoodSeductive, MoodAnticipatory, MoodBreathless,
+	MoodDominant, MoodSubmissive, MoodVulnerable, MoodConfident,
+	MoodIntimate, MoodNeedy, MoodOverwhelmed, MoodAfterglow,
+}
+
+// Moods returns the accepted mood values in prompt order.
+func Moods() []Mood {
+	return append([]Mood(nil), moodValues...)
+}
+
 // AssistantResponse is the only model output shape accepted by MagicHandy.
 type AssistantResponse struct {
-	Reply  string         `json:"reply"`
-	Motion *MotionCommand `json:"motion,omitempty"`
+	Reply   string         `json:"reply"`
+	NewMood *Mood          `json:"new_mood,omitempty"`
+	Motion  *MotionCommand `json:"motion,omitempty"`
 }
 
 // MotionCommand is semantic motion intent, not a transport command.
@@ -76,7 +115,12 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 	if err != nil {
 		return AssistantResponse{}, err
 	}
+	// Fields the active prompt did not advertise are inert model noise. Strip
+	// them before validation so utility chat does not repair an unused mood.
 	enforceCapabilities(&response, capabilities)
+	if err := validateAssistantMood(&response); err != nil {
+		return AssistantResponse{}, err
+	}
 	patternsEnabled := capabilities.Motion && capabilities.Patterns
 	var currentSpeed *int
 	if patternsEnabled && context != nil && context.Running && context.SpeedPercent >= 1 && context.SpeedPercent <= 100 {
@@ -134,6 +178,9 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	if response.Reply == "" {
 		return errors.New("assistant response reply is required")
 	}
+	if err := validateAssistantMood(response); err != nil {
+		return err
+	}
 	if response.Motion == nil {
 		return nil
 	}
@@ -156,6 +203,25 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 		return err
 	}
 	return validateMotionCombination(*response.Motion, curation)
+}
+
+func validateAssistantMood(response *AssistantResponse) error {
+	if response.NewMood == nil {
+		return nil
+	}
+	if _, ok := validMood(*response.NewMood); !ok {
+		return fmt.Errorf("unknown assistant mood %q", *response.NewMood)
+	}
+	return nil
+}
+
+func validMood(value Mood) (Mood, bool) {
+	for _, allowed := range moodValues {
+		if value == allowed {
+			return allowed, true
+		}
+	}
+	return "", false
 }
 
 func validateMotionRanges(command MotionCommand) error {

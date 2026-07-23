@@ -70,12 +70,14 @@ Ordered by measured impact:
 5. **No variation pressure.** STGPT-RV requires varying sentence shape,
    sensation focus, and vocabulary, and feeds back recent assistant lines to
    avoid repeating. *Effect: MagicHandy replies repeat the same stock
-   frames.*
-6. **Supporting systems.** STGPT-RV also carries a persona description, a
-   17-mood register tracker, user-anatomy vocabulary rules, and a
-   memory-consolidation prompt that forbids sanitizing the user's own
-   wording. MagicHandy has none of these. *Effect: smaller than 1-4, but
-   they give the voice identity and continuity.*
+   frames.* The follow-up now supplies the latest three canonical assistant
+   lines, bounded to 180 characters each.
+6. **Supporting systems.** The first review found no dedicated persona,
+   user-anatomy vocabulary, or model-reported mood state. The follow-up adds
+   all three as backend-authoritative, bounded context for interactive
+   non-utility voices.
+   Memory consolidation still does not rewrite or summarize memories with a
+   model, so STGPT-RV's consolidation-specific wording rule remains inapplicable.
 
 MagicHandy's contract-first design is deliberately kept: the JSON contract,
 capability gates, speed bands, and repair pass are strictly better than
@@ -108,11 +110,23 @@ Properties:
   that omit the field.
 - **Orthogonal**: it composes with any prompt set (including the localized
   builtins and user sets) and with any capability-gate combination. Voice
-  changes the `reply` register only — the contract, parser, capability
-  enforcement, speed limits, and Stop are identical at every level.
+  changes the `reply` register only — the motion contract, capability
+  enforcement, speed limits, and Stop behavior are identical at every level.
+  Non-utility interactive chat additionally permits inert `new_mood` metadata.
 - **Default is `utility`.** Shipping behavior does not change until the user
   opts in. If the product default should be `warm` or `intimate`, that is a
   one-constant change for the maintainer to decide.
+- **Utility remains byte-identical.** Persona, anatomy, mood, and recent-line
+  context are composed only for interactive `warm`, `intimate`, and `explicit`;
+  utility does not advertise or update mood and suppresses the mood readout.
+  Switching back restores that session's last model-reported mood.
+- **Profile data cannot bypass control gates.** Persona/custom-anatomy values are
+  whitespace-normalized, length-bounded, JSON-quoted, and labeled as data, not
+  instructions. They never enter the user message or motion context. A model
+  command is also stripped unless the current user turn contains a positive,
+  action-specific motion request. Negated requests and ordinary conversation
+  objects are rejected; authorized commands still pass the unchanged
+  capability, semantic, range, engine, and transport gates.
 
 ## Live results at each level
 
@@ -128,26 +142,66 @@ band-appropriate in every run:
   moving slowly over you right now; it feels like soft strokes tracing every
   curve." / "The rhythm is picking up, pulling us closer."
 - `explicit` — erotic partner register, present tense and embodied: "I'm
-  sinking into you slowly... feeling the heat build under my touch." Direct
-  register is restored, but wording stays less anatomically explicit than
-  the STGPT-RV baseline because MagicHandy has no user-anatomy vocabulary
-  rule yet — that follow-up (below) is what closes the last gap.
+  sinking into you slowly... feeling the heat build under my touch." These
+  transcripts predate the anatomy/persona/mood follow-up below; no new live
+  transcript is claimed for that follow-up.
 
 (Full transcripts live in local QA output only; they are not repository
 content.)
 
-## Follow-ups (not in this change)
+## Parity follow-up
 
-- **User anatomy vocabulary** (STGPT-RV `user_genitalia` + custom wording):
-  a settings field feeding a code-owned vocabulary rule into non-utility
-  voices. Without it, models guess.
-- **Persona description**: prompt sets can carry personas today, but a
-  dedicated field (like STGPT-RV `persona_desc`) composed into the voice
-  section would survive prompt-set switching.
-- **Mood tracking** (STGPT-RV `new_mood`): a contract extension; needs its
-  own design pass.
-- **Recent-line anti-repetition feedback** (STGPT-RV quotes the last three
-  assistant lines): pairs well with the existing motion-context injection.
+The same PR now closes the four concrete continuity gaps identified above:
+
+- **User anatomy vocabulary**: `llm.user_anatomy` accepts `penis`, `vagina`,
+  or `custom`; `llm.custom_anatomy` is whitespace-normalized and capped at 120
+  Unicode characters. The code-owned rule keeps user anatomy separate from
+  partner persona and is composed only for interactive non-utility voices.
+  Fresh settings use the reviewed STGPT-RV `penis` default; saved documents
+  that predate the field load as empty `custom` (neutral) so an existing user is
+  never silently assigned anatomy-specific wording.
+- **Persona description**: `llm.persona_description` is an optional dedicated
+  field, capped at 500 Unicode characters, that survives prompt-set switching.
+- **Mood tracking**: interactive non-utility responses may report optional
+  `new_mood` from the reviewed STGPT-RV 17-value register: `Curious`, `Teasing`,
+  `Playful`, `Loving`, `Excited`, `Passionate`, `Seductive`, `Anticipatory`,
+  `Breathless`, `Dominant`, `Submissive`, `Vulnerable`, `Confident`, `Intimate`,
+  `Needy`, `Overwhelmed`, `Afterglow`. The strict parser validates it before
+  persistence; effective mood lives in per-message diagnostics, is scoped to
+  the chat session, appears in `/api/state`, and is a read-only Chat header
+  status. Explicit transitions carry `mood_changed`; later deterministic or
+  autonomous lines may carry the effective value but cannot overwrite a newer
+  transition with a stale snapshot. Generated replies remain invisible and do
+  not prune capped history until they pass the Stop-epoch acceptance point, so
+  a rejected transition cannot become the fallback mood. Stop publishes its
+  epoch without waiting on SQLite; a reply accepted first may finish its
+  transaction after a later Stop, but that Stop still fences motion and TTS. It
+  is inert metadata, not motion style or sentiment inference.
+- **Recent-line anti-repetition feedback**: the backend queries the latest
+  three assistant rows from the selected session's canonical SQLite log,
+  collapses each to one line, caps each at 180 Unicode characters, quotes them
+  as data, and presents them oldest-to-newest. Client-supplied history cannot
+  alter this anti-repetition section. The broader 12-message model history is
+  also rebuilt from the selected backend session; the legacy request field is
+  accepted for compatibility but ignored, and the first-party client no longer
+  sends it.
+
+The final output guard is still the last prompt section. For non-utility
+interactive chat its shape permits optional `new_mood`; every motion rule,
+capability gate, speed band, and repair pass remains unchanged. Deterministic
+current-turn authorization prevents profile/history text from creating motion
+on a chat-only request, including semantic repair fallback. Chat Stop now
+advances the same invalidation barrier as the mounted Stop regardless of chat
+storage or stale session selection, cancels overlapping generations, publishes
+the new sequence without waiting for transport I/O, and reaches the transport
+before attempting history or SSE delivery. New engine admission remains closed
+until that physical Stop returns. Conservative exact Stop phrases and
+deterministic replies cover every built-in prompt language, and transport Stop
+failure is visible in Chat. Prompt-only settings updates also
+no longer refresh active motion or emit transport traffic.
+
+Remaining follow-ups:
+
 - **Memory wording rule**: when memories are consolidated by the model,
   preserve the user's own wording at non-utility voices (STGPT-RV: "do not
   sanitize sexual language" in profile consolidation).

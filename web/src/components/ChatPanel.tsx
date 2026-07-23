@@ -7,7 +7,7 @@
 // on, the controller tab (the audio-lease owner) plays completed TTS clips.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, streamChat } from "../api/client";
-import type { ChatHistoryMessage, ChatLogMessage, ChatMessageDiagnostics } from "../api/types";
+import type { ChatMessageDiagnostics } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { useVoicePlayback } from "../state/voice-playback";
 import { VoiceComposerControls } from "./VoiceComposerControls";
@@ -28,17 +28,10 @@ interface Props {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const MAX_HISTORY = 12;
 const message = (error: unknown) => error instanceof Error ? error.message : "Conversation history request failed.";
 
-// The LLM context convention wraps assistant turns as the JSON contract body.
-function toLlmHistory(message: ChatLogMessage): ChatHistoryMessage {
-  if (message.role === "user") return { role: "user", content: message.content };
-  return { role: "assistant", content: JSON.stringify({ reply: message.content, motion: { action: "none" } }) };
-}
-
 export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) {
-  const { backendOnline, readOnly, state } = useAppState();
+  const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -48,7 +41,6 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
   const [showJump, setShowJump] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const history = useRef<ChatHistoryMessage[]>([]);
   const lastSeq = useRef(0);
   const seeded = useRef(false);
   const mounted = useRef(false);
@@ -69,7 +61,6 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
         if (!mounted.current) return;
         seeded.current = true;
         setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content, diagnostics: m.diagnostics })));
-        history.current = res.messages.slice(-MAX_HISTORY).map(toLlmHistory);
         lastSeq.current = res.latest_seq;
         setHistoryError("");
         if (res.latest_seq > res.cursor) void api.advanceChatCursor(sessionId, res.latest_seq).catch(() => undefined);
@@ -107,7 +98,6 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             if (message.speech_request_id) queueSpeech(message.speech_request_id);
           }
         }
-        history.current = [...history.current, ...fresh.map(toLlmHistory)].slice(-MAX_HISTORY);
         lastSeq.current = Math.max(lastSeq.current, res.latest_seq);
         setTailError("");
         void api.advanceChatCursor(sessionId, res.latest_seq).catch(() => undefined);
@@ -188,14 +178,14 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
     onBusyChange?.(true);
     let raw = "";
     let repairRaw = "";
-    let finalReply = "";
-    let finalMotion: Record<string, unknown> = { action: "none" };
+    let mustRefreshStopState = false;
     try {
-      await streamChat(sessionId, text, history.current, (ev) => {
+      await streamChat(sessionId, text, (ev) => {
         if (ev.event === "status") {
-          const status = ev.data as { provider?: string; model?: string; prompt_set?: string; user_seq?: number };
+          const status = ev.data as { state?: string; provider?: string; model?: string; prompt_set?: string; user_seq?: number; stop_sequence?: number };
           const userSeq = Number(status.user_seq ?? 0);
           if (userSeq > lastSeq.current) lastSeq.current = userSeq;
+          if (status.state === "deterministic_stop") mustRefreshStopState = true;
           const statusDiagnostics: ChatMessageDiagnostics = {
             source: "interactive",
             provider: status.provider,
@@ -214,8 +204,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
           const draftReply = extractReplyDraft(ev.event === "repair_delta" ? repairRaw : raw);
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: draftReply || x.text || "..." } : x)));
         } else if (ev.event === "message") {
-          finalReply = String(ev.data.reply ?? "");
-          finalMotion = (ev.data.motion ?? { action: "none" }) as Record<string, unknown>;
+          const finalReply = String(ev.data.reply ?? "");
           const replySeq = Number((ev.data as { seq?: number }).seq ?? 0);
           if (replySeq > lastSeq.current) lastSeq.current = replySeq;
           setMessages((m) => m.map((x) => (x.id === assistantId ? {
@@ -226,28 +215,39 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
           } : x)));
         } else if (ev.event === "malformed") {
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, warning: true } : x)));
+        } else if (ev.event === "motion") {
+          const motionError = String(ev.data.error ?? "").trim();
+          if (motionError) {
+            // A model-requested stop is not the global Emergency Stop, and a
+            // rejected stop may still have reached the device, so the wording
+            // stays neutral about both.
+            const prefix = ev.data.action === "stop" ? "Device Stop could not be confirmed" : "Motion command failed";
+            show(`${prefix}: ${motionError}`, "error");
+            setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, warning: true } : x)));
+          }
         } else if (ev.event === "error") {
           const message = String((ev.data as { message?: string }).message ?? "Chat error");
+          // A reply the backend already committed stays visible: replacing it
+          // with the error would contradict the history a reload shows.
+          const replyRetained = String((ev.data as { reply_retained?: string }).reply_retained ?? "") === "true";
           show(message, "error");
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
-        } else if (ev.event === "done" && ev.data.ok === false && !finalReply) {
+          setMessages((m) => m.map((x) => (x.id === assistantId
+            ? { ...x, text: replyRetained ? x.text : message, warning: true }
+            : x)));
+        } else if (ev.event === "done" && ev.data.ok === false) {
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || "Malformed model response.", warning: true } : x)));
         }
       }, undefined, stopSequence);
-      if (finalReply) {
-        const nextHistory: ChatHistoryMessage[] = [
-          ...history.current,
-          { role: "user", content: text },
-          { role: "assistant", content: JSON.stringify({ reply: finalReply, motion: finalMotion }) },
-        ];
-        history.current = nextHistory.slice(-MAX_HISTORY);
-      }
       if (lastSeq.current > 0) void api.advanceChatCursor(sessionId, lastSeq.current).catch(() => undefined);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Chat failed.";
       show(message, "error");
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
     } finally {
+      // A deterministic Chat Stop advances the backend invalidation sequence.
+      // Keep composition locked until the authoritative snapshot catches up.
+      if (mustRefreshStopState) await refresh();
+      else void refresh();
       busyRef.current = false;
       setBusy(false);
       onBusyChange?.(false);

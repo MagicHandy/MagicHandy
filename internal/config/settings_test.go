@@ -932,3 +932,102 @@ func TestChatVoiceDefaultsPreservesAndValidates(t *testing.T) {
 		t.Fatal("unknown chat voice must be rejected")
 	}
 }
+
+func TestLLMChatProfileSettingsNormalizePreserveAndValidate(t *testing.T) {
+	settings := DefaultSettings()
+	settings.LLM.UserAnatomy = ""
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.LLM.UserAnatomy != LLMUserAnatomyPenis {
+		t.Fatalf("legacy anatomy = %q, want %q", normalized.LLM.UserAnatomy, LLMUserAnatomyPenis)
+	}
+
+	saved := normalized
+	saved.LLM.UserAnatomy = LLMUserAnatomyVagina
+	saved.LLM.CustomAnatomy = "saved wording"
+	saved.LLM.PersonaDescription = "saved persona"
+	update := SettingsUpdate{
+		Server:      saved.Server,
+		Device:      DeviceUpdate{HSPDispatchOwner: saved.Device.HSPDispatchOwner, FirmwareAPIRequirement: saved.Device.FirmwareAPIRequirement, APIApplicationIDSource: saved.Device.APIApplicationIDSource},
+		Motion:      saved.Motion,
+		LLM:         LLMUpdateFromSettings(saved.LLM),
+		Diagnostics: saved.Diagnostics,
+	}
+	update.LLM.UserAnatomy = nil
+	update.LLM.CustomAnatomy = nil
+	update.LLM.PersonaDescription = nil
+	next, err := saved.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate omitted profile: %v", err)
+	}
+	if next.LLM.UserAnatomy != LLMUserAnatomyVagina || next.LLM.CustomAnatomy != "saved wording" || next.LLM.PersonaDescription != "saved persona" {
+		t.Fatalf("omitted profile fields were not preserved: %+v", next.LLM)
+	}
+
+	custom := " Custom "
+	customWording := "  my\n custom\twording  "
+	persona := "  An energetic\n and passionate partner  "
+	update.LLM.UserAnatomy = &custom
+	update.LLM.CustomAnatomy = &customWording
+	update.LLM.PersonaDescription = &persona
+	next, err = saved.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate profile: %v", err)
+	}
+	if next.LLM.UserAnatomy != LLMUserAnatomyCustom || next.LLM.CustomAnatomy != "my custom wording" || next.LLM.PersonaDescription != "An energetic and passionate partner" {
+		t.Fatalf("normalized profile = %+v", next.LLM)
+	}
+
+	unknown := "other"
+	update.LLM.UserAnatomy = &unknown
+	if _, err := saved.ApplyUpdate(update); err == nil {
+		t.Fatal("unknown user anatomy must be rejected")
+	}
+	update.LLM.UserAnatomy = &custom
+	tooLong := strings.Repeat("界", MaxLLMCustomAnatomyChars+1)
+	update.LLM.CustomAnatomy = &tooLong
+	if _, err := saved.ApplyUpdate(update); err == nil {
+		t.Fatal("overlong custom anatomy must be rejected by character count")
+	}
+	validCustom := "wording"
+	tooLong = strings.Repeat("p", MaxLLMPersonaDescriptionChars+1)
+	update.LLM.CustomAnatomy = &validCustom
+	update.LLM.PersonaDescription = &tooLong
+	if _, err := saved.ApplyUpdate(update); err == nil {
+		t.Fatal("overlong persona must be rejected")
+	}
+
+	options := DefaultSettings().Public().Options.LLMUserAnatomies
+	if len(options) != 3 || options[0] != LLMUserAnatomyPenis || options[2] != LLMUserAnatomyCustom {
+		t.Fatalf("user anatomy options = %v", options)
+	}
+}
+
+func TestLegacySettingsWithoutAnatomyLoadNeutral(t *testing.T) {
+	encoded, err := json.Marshal(DefaultSettings())
+	if err != nil {
+		t.Fatalf("marshal defaults: %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatalf("decode defaults: %v", err)
+	}
+	llmSettings := document["llm"].(map[string]any)
+	delete(llmSettings, "user_anatomy")
+	delete(llmSettings, "custom_anatomy")
+	delete(llmSettings, "persona_description")
+	encoded, err = json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal legacy settings: %v", err)
+	}
+
+	loaded, _, err := loadSettingsFromBytes(encoded)
+	if err != nil {
+		t.Fatalf("load legacy settings: %v", err)
+	}
+	if loaded.LLM.UserAnatomy != LLMUserAnatomyCustom || loaded.LLM.CustomAnatomy != "" {
+		t.Fatalf("legacy anatomy = %q/%q, want neutral custom state", loaded.LLM.UserAnatomy, loaded.LLM.CustomAnatomy)
+	}
+}

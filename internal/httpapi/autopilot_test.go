@@ -12,6 +12,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
@@ -186,6 +187,26 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	}
 }
 
+func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Changing pace.","motion":{"action":"target","pattern_id":"stroke","intensity":45}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	decision, err := server.autopilotDecide(t.Context(), modes.DecisionInput{
+		Style:           config.MotionStyleBalanced,
+		SpeedMinPercent: 20,
+		SpeedMaxPercent: 80,
+	})
+	if err != nil {
+		t.Fatalf("autopilotDecide: %v", err)
+	}
+	if decision.Hold || decision.Pattern == nil || decision.Segment.PatternID != motion.PatternStroke || decision.Segment.SpeedPercent != 45 {
+		t.Fatalf("Autopilot target was stripped: %+v", decision)
+	}
+}
+
 func TestAutopilotAnnouncementIsDiscoverableByChatPlayback(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
@@ -203,6 +224,25 @@ func TestAutopilotAnnouncementIsDiscoverableByChatPlayback(t *testing.T) {
 	pending, ok := server.voice.Request(requestID)
 	if !ok || pending.Text() != messages[0].Content {
 		t.Fatalf("speech request %q does not match displayed message", requestID)
+	}
+}
+
+func TestAutopilotAnnouncementCarriesSessionMood(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	sessionID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := server.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, "Prior reply.", "", &chat.MessageDiagnostics{Mood: chat.MoodLoving}); err != nil {
+		t.Fatalf("seed mood: %v", err)
+	}
+
+	server.autopilotAnnounce(t.Context(), "Autonomous follow-up.")
+	messages, _, _ := getChatMessages(t, server, "")
+	last := messages[len(messages)-1]
+	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodLoving {
+		t.Fatalf("autopilot diagnostics = %+v, want carried mood", last.Diagnostics)
 	}
 }
 

@@ -47,6 +47,78 @@ func TestParseAssistantResponseRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestParseAssistantResponseValidatesAndNormalizesMood(t *testing.T) {
+	expected := []Mood{
+		MoodCurious, MoodTeasing, MoodPlayful, MoodLoving, MoodExcited, MoodPassionate,
+		MoodSeductive, MoodAnticipatory, MoodBreathless, MoodDominant, MoodSubmissive,
+		MoodVulnerable, MoodConfident, MoodIntimate, MoodNeedy, MoodOverwhelmed, MoodAfterglow,
+	}
+	got := Moods()
+	if len(got) != len(expected) {
+		t.Fatalf("mood enum length = %d, want %d: %v", len(got), len(expected), got)
+	}
+	for index, want := range expected {
+		if got[index] != want {
+			t.Fatalf("mood enum[%d] = %q, want %q", index, got[index], want)
+		}
+		raw := `{"reply":"ok","new_mood":"` + string(want) + `"}`
+		response, err := ParseAssistantResponse(raw)
+		if err != nil {
+			t.Fatalf("mood %q: %v", want, err)
+		}
+		if response.NewMood == nil || *response.NewMood != want {
+			t.Fatalf("mood %q normalized to %v", want, response.NewMood)
+		}
+	}
+	for _, raw := range []string{
+		`{"reply":"ok"}`,
+		`{"reply":"ok","new_mood":null}`,
+	} {
+		response, err := ParseAssistantResponse(raw)
+		if err != nil || response.NewMood != nil {
+			t.Fatalf("optional mood response = %+v, %v", response, err)
+		}
+	}
+	for _, raw := range []string{
+		`{"reply":"ok","new_mood":""}`,
+		`{"reply":"ok","new_mood":"teasing"}`,
+		`{"reply":"ok","new_mood":"Furious"}`,
+		`{"reply":"ok","new_mood":42}`,
+	} {
+		if _, err := ParseAssistantResponse(raw); err == nil {
+			t.Fatalf("invalid mood was accepted: %s", raw)
+		}
+	}
+}
+
+func TestServiceRepairsInvalidMoodAndStripsMoodWhenDisabled(t *testing.T) {
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"First.","new_mood":"Furious"}`,
+		`{"reply":"Fixed.","new_mood":"Teasing"}`,
+	}}
+	capabilities := FullCapabilities()
+	capabilities.MoodTracking = true
+	service := Service{Provider: provider, Model: "local-model", MaxTokens: 256, Capabilities: &capabilities}
+	result, err := service.Complete(t.Context(), Request{Message: "hello"}, nil)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if !result.Repaired || result.Response.NewMood == nil || *result.Response.NewMood != MoodTeasing {
+		t.Fatalf("repaired mood result = %+v", result)
+	}
+
+	provider = &scriptedProvider{responses: []string{`{"reply":"Utility.","new_mood":"Furious"}`}}
+	capabilities.MoodTracking = false
+	service = Service{Provider: provider, Model: "local-model", MaxTokens: 256, Capabilities: &capabilities}
+	result, err = service.Complete(t.Context(), Request{Message: "hello"}, nil)
+	if err != nil || result.Response.NewMood != nil {
+		t.Fatalf("disabled mood result = %+v, %v", result, err)
+	}
+	if len(provider.requests) != 1 || result.Repaired {
+		t.Fatalf("disabled invalid mood triggered repair: requests=%d result=%+v", len(provider.requests), result)
+	}
+}
+
 func TestParseAssistantResponseNormalizesMotion(t *testing.T) {
 	speed := 35
 	response, err := ParseAssistantResponse(`{"reply":"Starting.","motion":{"action":"START","pattern_id":"PULSE","speed_percent":35}}`)

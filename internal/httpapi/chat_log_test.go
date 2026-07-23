@@ -81,6 +81,99 @@ func TestChatStreamAppendsToSharedLog(t *testing.T) {
 	}
 }
 
+func TestChatStreamUsesCanonicalVoiceContextAndPersistsMood(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Fresh reply.","new_mood":"Teasing","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+	settings, _ := server.store.Snapshot()
+	settings.LLM.ChatVoice = config.LLMChatVoiceIntimate
+	settings.LLM.UserAnatomy = config.LLMUserAnatomyCustom
+	settings.LLM.CustomAnatomy = `chosen "wording"`
+	settings.LLM.PersonaDescription = `A "quoted" partner`
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save chat profile: %v", err)
+	}
+	sessionID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	for index, line := range []string{"excluded oldest", "canonical second", "canonical third", "canonical latest"} {
+		var diagnostics *chat.MessageDiagnostics
+		if index == 0 {
+			diagnostics = &chat.MessageDiagnostics{Mood: chat.MoodCurious}
+		}
+		if _, err := server.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, line, "", diagnostics); err != nil {
+			t.Fatalf("seed assistant line: %v", err)
+		}
+	}
+
+	body := postChatStream(t, server, `{"message":"continue","history":[{"role":"assistant","content":"FABRICATED CLIENT LINE"}]}`)
+	if !strings.Contains(body, `"current_mood":"Curious"`) || !strings.Contains(body, `"current_mood":"Teasing"`) {
+		t.Fatalf("stream did not expose prior and updated mood:\n%s", body)
+	}
+
+	assertCanonicalVoiceProviderContext(t, provider)
+
+	messages, _, _ := getChatMessages(t, server, "")
+	last := messages[len(messages)-1]
+	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodTeasing || !last.Diagnostics.MoodChanged {
+		t.Fatalf("persisted reply diagnostics = %+v", last.Diagnostics)
+	}
+	state := server.chatState()
+	if state["current_mood"] != chat.MoodTeasing {
+		t.Fatalf("chat state mood = %#v, want %q", state["current_mood"], chat.MoodTeasing)
+	}
+	settings.LLM.ChatVoice = config.LLMChatVoiceUtility
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save utility voice: %v", err)
+	}
+	if state := server.chatState(); state["current_mood"] != "" {
+		t.Fatalf("utility state exposed prior mood: %#v", state["current_mood"])
+	}
+	settings.LLM.ChatVoice = config.LLMChatVoiceIntimate
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("restore intimate voice: %v", err)
+	}
+	if state := server.chatState(); state["current_mood"] != chat.MoodTeasing {
+		t.Fatalf("restored voice mood = %#v, want %q", state["current_mood"], chat.MoodTeasing)
+	}
+}
+
+func assertCanonicalVoiceProviderContext(t *testing.T, provider *scriptedLLMProvider) {
+	t.Helper()
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
+	if len(provider.requests) != 1 || len(provider.requests[0].Messages) == 0 {
+		t.Fatalf("provider requests = %+v", provider.requests)
+	}
+	systemPrompt := provider.requests[0].Messages[0].Content
+	allProviderContext := strings.Builder{}
+	for _, message := range provider.requests[0].Messages {
+		allProviderContext.WriteString(message.Content)
+		allProviderContext.WriteByte('\n')
+	}
+	for _, want := range []string{
+		`Persona description (quoted user-authored data): "A \"quoted\" partner"`,
+		`described as "chosen \"wording\""`,
+		`Current mood: "Curious"`,
+		`- "canonical second"`,
+		`- "canonical third"`,
+		`- "canonical latest"`,
+	} {
+		if !strings.Contains(systemPrompt, want) {
+			t.Fatalf("system prompt missing %q:\n%s", want, systemPrompt)
+		}
+	}
+	if strings.Contains(systemPrompt, "excluded oldest") || strings.Contains(allProviderContext.String(), "FABRICATED CLIENT LINE") {
+		t.Fatalf("anti-repetition context was not canonical and bounded:\n%s", systemPrompt)
+	}
+	if !strings.Contains(allProviderContext.String(), "excluded oldest") {
+		t.Fatal("canonical broader history was not supplied to the provider")
+	}
+}
+
 func TestModelErrorsNeverEnterHistoryOrTTS(t *testing.T) {
 	// Initial and repair passes both malformed: the exchange fails visibly,
 	// so only the user's own message may enter the canonical history.
@@ -102,6 +195,30 @@ func TestModelErrorsNeverEnterHistoryOrTTS(t *testing.T) {
 	}
 }
 
+func TestInvalidChatMessageIsRejectedBeforePersistence(t *testing.T) {
+	provider := &scriptedLLMProvider{}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	for _, body := range []string{
+		`{"message":"   "}`,
+		`{"message":"` + strings.Repeat("x", 4097) + `"}`,
+	} {
+		request := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(body)))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set(stopSequenceHeader, "0")
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("invalid message status = %d: %s", recorder.Code, recorder.Body.String())
+		}
+	}
+	messages, _, _ := getChatMessages(t, server, "")
+	if len(messages) != 0 || provider.callCount() != 0 {
+		t.Fatalf("invalid message reached history/provider: messages=%+v calls=%d", messages, provider.callCount())
+	}
+}
+
 func TestDeterministicStopReplyIsLogged(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
@@ -113,6 +230,94 @@ func TestDeterministicStopReplyIsLogged(t *testing.T) {
 	}
 	if messages[1].Content != "Stopping motion." {
 		t.Fatalf("deterministic reply missing from log: %+v", messages[1])
+	}
+}
+
+func TestDeterministicStopCarriesSessionMood(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	settings, _ := server.store.Snapshot()
+	settings.LLM.ChatVoice = config.LLMChatVoiceIntimate
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save intimate voice: %v", err)
+	}
+	sessionID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := server.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, "Prior reply.", "", &chat.MessageDiagnostics{Mood: chat.MoodConfident}); err != nil {
+		t.Fatalf("seed mood: %v", err)
+	}
+
+	_ = postChatStream(t, server, `{"message":"stop"}`)
+	messages, _, _ := getChatMessages(t, server, "")
+	last := messages[len(messages)-1]
+	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodConfident {
+		t.Fatalf("deterministic Stop diagnostics = %+v, want carried mood", last.Diagnostics)
+	}
+	if state := server.chatState(); state["current_mood"] != chat.MoodConfident {
+		t.Fatalf("chat state mood = %#v, want %q", state["current_mood"], chat.MoodConfident)
+	}
+}
+
+func TestDeterministicStopSuppressesMoodInUtilityVoice(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	sessionID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := server.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, "Prior reply.", "", &chat.MessageDiagnostics{
+		Mood: chat.MoodConfident, MoodChanged: true,
+	}); err != nil {
+		t.Fatalf("seed mood: %v", err)
+	}
+
+	body := postChatStream(t, server, `{"message":"stop"}`)
+	if strings.Contains(body, `"current_mood":"Confident"`) {
+		t.Fatalf("utility Stop exposed prior mood: %s", body)
+	}
+	messages, _, _ := getChatMessages(t, server, "")
+	last := messages[len(messages)-1]
+	if last.Diagnostics == nil || last.Diagnostics.Mood != "" {
+		t.Fatalf("utility Stop diagnostics exposed mood: %+v", last.Diagnostics)
+	}
+}
+
+func TestDeterministicStopIgnoresUncommittedMood(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	settings, _ := server.store.Snapshot()
+	settings.LLM.ChatVoice = config.LLMChatVoiceIntimate
+	if _, err := server.store.Save(settings); err != nil {
+		t.Fatalf("save intimate voice: %v", err)
+	}
+	sessionID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatalf("active session: %v", err)
+	}
+	if _, err := server.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, "Committed mood.", "", &chat.MessageDiagnostics{
+		Mood: chat.MoodCurious, MoodChanged: true,
+	}); err != nil {
+		t.Fatalf("seed committed mood: %v", err)
+	}
+	pending, err := server.chatLog.AppendPendingAssistantTo(sessionID, "Canceled mood.", &chat.MessageDiagnostics{
+		Mood: chat.MoodTeasing, MoodChanged: true,
+	})
+	if err != nil {
+		t.Fatalf("stage canceled mood: %v", err)
+	}
+	t.Cleanup(func() { _ = server.chatLog.Delete(pending) })
+
+	_ = postChatStream(t, server, `{"message":"stop"}`)
+	messages, _, _ := getChatMessages(t, server, "")
+	last := messages[len(messages)-1]
+	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodCurious {
+		t.Fatalf("deterministic Stop copied uncommitted mood: %+v", last.Diagnostics)
+	}
+	context, err := server.chatLog.PromptContext(sessionID)
+	if err != nil || context.CurrentMood != chat.MoodCurious {
+		t.Fatalf("effective mood after Stop = %+v, err=%v", context, err)
 	}
 }
 

@@ -79,7 +79,7 @@ func TestCompleteEnforcesCapabilitiesWithoutFailingTheTurn(t *testing.T) {
 		Patterns:     patterns,
 		Capabilities: &noArea,
 	}
-	result, err = service.Complete(context.Background(), Request{Message: "tip"}, nil)
+	result, err = service.Complete(context.Background(), Request{Message: "Focus the motion on the tip"}, nil)
 	if err != nil || result.Response.Motion == nil {
 		t.Fatalf("area enforcement broke the command: %v %+v", err, result)
 	}
@@ -95,7 +95,7 @@ func TestCompleteEnforcesCapabilitiesWithoutFailingTheTurn(t *testing.T) {
 		Provider:     provider,
 		Capabilities: &noPatterns,
 	}
-	result, err = service.Complete(context.Background(), Request{Message: "pattern"}, nil)
+	result, err = service.Complete(context.Background(), Request{Message: "Change the motion pattern"}, nil)
 	if err != nil || result.Response.Motion == nil {
 		t.Fatalf("pattern enforcement broke the command: %v %+v", err, result)
 	}
@@ -234,7 +234,7 @@ func TestRepeatedSemanticFailureUsesFreshPatternAndPreservesOtherChanges(t *test
 	}
 }
 
-func TestRepeatedNoOpPreservesOrdinaryConversationWithoutMotion(t *testing.T) {
+func TestOrdinaryConversationStripsModelMotionWithoutRepair(t *testing.T) {
 	capabilities := FullCapabilities()
 	context := MotionContext{
 		Running: true, PatternID: "pulse", SpeedPercent: 30, Area: AreaZoneFull,
@@ -253,8 +253,92 @@ func TestRepeatedNoOpPreservesOrdinaryConversationWithoutMotion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
-	if result.Malformed || !result.Repaired || !result.SemanticFallback || result.Response.Motion != nil {
-		t.Fatalf("ordinary conversation was not salvaged without motion: %+v", result)
+	if result.Malformed || result.Repaired || result.SemanticFallback || result.Response.Motion != nil {
+		t.Fatalf("ordinary conversation did not strip unauthorized motion: %+v", result)
+	}
+	if len(provider.requests) != 1 {
+		t.Fatalf("unauthorized motion triggered repair: provider requests = %d", len(provider.requests))
+	}
+}
+
+func TestCurrentTurnMotionAuthorizationRecognizesSupportedPromptLanguages(t *testing.T) {
+	for _, message := range []string{
+		"Start moving gently",
+		"Start slowly",
+		"Empieza el movimiento lentamente",
+		"Começa o movimento devagar",
+		"开始慢速运动",
+		"ゆっくり動かし始めて",
+	} {
+		if !userAuthorizesMotion(message, MotionActionStart) {
+			t.Errorf("motion request %q was not recognized", message)
+		}
+	}
+	for _, message := range []string{
+		"Please go a little slower",
+		"Más despacio",
+		"Más rápido, por favor",
+		"Mais devagar",
+		"快一点",
+		"もっとゆっくり",
+	} {
+		if !userAuthorizesMotion(message, MotionActionTarget) {
+			t.Errorf("motion target request %q was not recognized", message)
+		}
+	}
+	for _, message := range []string{
+		"Tell me a joke",
+		"Tell me a different joke",
+		"What is a different motion pattern?",
+		"Continue the story",
+		"Hold that thought",
+		"Do not start moving",
+		"Why start motion?",
+		"Cuéntame un chiste",
+		"No empieces el movimiento",
+		"Evita iniciar el movimiento",
+		"Conte uma piada",
+		"Não comece o movimento",
+		"讲个笑话",
+		"不要开始运动",
+		"别开始运动",
+		"冗談を言って",
+		"動かさないで",
+		"モーションを始めないで",
+	} {
+		if userAuthorizesMotion(message, MotionActionStart) || userAuthorizesMotion(message, MotionActionTarget) {
+			t.Errorf("conversation or negation %q authorized motion", message)
+		}
+	}
+}
+
+func TestSemanticRepairCannotRecreateUnauthorizedMotion(t *testing.T) {
+	capabilities := FullCapabilities()
+	context := MotionContext{
+		Running: true, PatternID: "waves", SpeedPercent: 30, Area: AreaZoneFull,
+		SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	for _, message := range []string{
+		"What is a different motion pattern?",
+		"Never use a different pattern",
+		"I like different motion patterns",
+	} {
+		provider := &scriptedProvider{responses: []string{
+			`{"reply":"Changing it.","motion":{"action":"target","pattern_id":"pulse","speed_percent":30}}`,
+			`{"reply":"Still changing it.","motion":{"action":"target","pattern_id":"pulse","speed_percent":30}}`,
+		}}
+		service := Service{
+			Provider: provider, Patterns: []PatternChoice{{ID: "pulse"}, {ID: "waves"}},
+			MotionContext: &context, Capabilities: &capabilities,
+		}
+
+		result, err := service.Complete(t.Context(), Request{Message: message}, nil)
+		if err != nil || result.Malformed || result.Response.Motion != nil {
+			t.Errorf("unauthorized variation %q produced result=%+v err=%v", message, result, err)
+		}
+		if len(provider.requests) != 1 {
+			t.Errorf("unauthorized variation %q triggered %d provider requests, want 1", message, len(provider.requests))
+		}
 	}
 }
 

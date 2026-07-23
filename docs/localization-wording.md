@@ -203,6 +203,10 @@ Motion pattern names (mild, kept short):
 | Transcription upload timed out. | Se agotó el tiempo para subir la transcripción. | O envio da transcrição expirou. | 转写上传超时。 | 文字起こしのアップロードがタイムアウトしました。 |
 | The selected microphone became unavailable. | El micrófono seleccionado dejó de estar disponible. | O microfone selecionado ficou indisponível. | 所选麦克风不可用。 | 選択したマイクが利用できなくなりました。 |
 | Chat canceled by Emergency Stop. | Chat cancelado por la parada de emergencia. | Chat cancelado pela parada de emergência. | 聊天已被紧急停止取消。 | 緊急停止によりチャットをキャンセルしました。 |
+| Emergency Stop canceled this reply's motion and speech. | La parada de emergencia canceló el movimiento y la voz de esta respuesta. | A parada de emergência cancelou o movimento e a fala desta resposta. | 紧急停止已取消此回复的运动与语音。 | 緊急停止によりこの返信のモーションと音声をキャンセルしました。 |
+| Device Stop could not be confirmed | No se pudo confirmar la detención del dispositivo | Não foi possível confirmar a parada do dispositivo | 无法确认设备停止 | デバイスの停止を確認できませんでした |
+| Motion command failed | Falló el comando de movimiento | O comando de movimento falhou | 运动指令失败 | モーションコマンドが失敗しました |
+| Chat history is unavailable; the reply was not applied. | El historial del chat no está disponible; la respuesta no se aplicó. | O histórico do chat está indisponível; a resposta não foi aplicada. | 聊天历史不可用；该回复未生效。 | チャット履歴が利用できないため、返信は適用されませんでした。 |
 
 ## Pattern Library — Import
 
@@ -357,22 +361,38 @@ Motion pattern names (mild, kept short):
 | Confirm: delete every memory | Confirmar: eliminar todas las memorias | Confirmar: excluir todas as memórias | 确认：删除所有记忆 | 確認：すべてのメモリを削除 |
 | All memories removed. | Todas las memorias eliminadas. | Todas as memórias removidas. | 已删除所有记忆。 | すべてのメモリを削除しました。 |
 
-## Settings — Prompt Anatomy (Legacy Parity)
+## Settings — Chat Voice, Persona, and User Anatomy
 
-StrokeGPT-ReVibed exposed these strings in Settings > Persona. MagicHandy does
-not yet have this exact surface, but future prompt/anatomy localization should
-preserve the distinction between the user's anatomy and the persona's gender.
+MagicHandy exposes these current strings in Settings > Prompts & memory. User
+anatomy describes what the device is being used on and remains separate from
+the partner persona. The compact Chat mood value is backend-reported state, not
+frontend sentiment analysis.
 
 | en | es | pt-BR | zh-Hans | ja |
 | --- | --- | --- | --- | --- |
-| Prompt Anatomy | Anatomia del prompt | Anatomia do prompt | 提示词解剖设置 | プロンプトの身体設定 |
-| User anatomy for prompts | Anatomia del usuario para prompts | Anatomia do usuário para prompts | 提示词中的用户身体 | プロンプト用のユーザー身体 |
-| Penis | Pene | Penis | 阴茎 | ペニス |
-| Vagina | Vagina | Vagina | 阴道 | 膣 |
-| Custom | Personalizado | Personalizado | 自定义 | カスタム |
+| Chat voice | Voz del chat | Voz do chat | 聊天语气 | チャットの話し方 |
+| how sexual the model's replies may be | grado de contenido sexual permitido en las respuestas del modelo | nível de conteúdo sexual permitido nas respostas do modelo | 模型回复可包含的性内容程度 | モデルの返答で許可する性的表現の度合い |
+| Utility (neutral assistant) | Utilitaria (asistente neutral) | Utilitária (assistente neutro) | 实用（中性助手） | 実用（中立的なアシスタント） |
+| Warm (flirtatious, never explicit) | Cálida (coqueta, nunca explícita) | Calorosa (paqueradora, nunca explícita) | 温暖（调情，但不露骨） | ウォーム（親密だが露骨ではない） |
+| Intimate (sensual partner) | Íntima (pareja sensual) | Íntima (parceiro sensual) | 亲密（感性的伴侣） | インティメート（官能的なパートナー） |
+| Explicit (direct sexual language) | Explícita (lenguaje sexual directo) | Explícita (linguagem sexual direta) | 露骨（直接的性语言） | 露骨（直接的な性的表現） |
+| Utility keeps the neutral assistant register. | Utilitaria mantiene el registro de asistente neutral. | Utilitária mantém o registro de assistente neutro. | 实用模式保持中性助手语气。 | 実用は中立的なアシスタント口調を保ちます。 |
+| Warm is flirtatious but never explicit. | Cálida es coqueta, pero nunca explícita. | Calorosa é paqueradora, mas nunca explícita. | 温暖模式可以调情，但绝不露骨。 | ウォームは親密ですが、露骨にはなりません。 |
+| Intimate speaks as a partner with sensual language. | Íntima habla como una pareja con lenguaje sensual. | Íntima fala como um parceiro com linguagem sensual. | 亲密模式以伴侣身份使用感性语言。 | インティメートは官能的な言葉でパートナーとして話します。 |
+| Explicit permits direct sexual language like the legacy app. | Explícita permite lenguaje sexual directo como la aplicación anterior. | Explícita permite linguagem sexual direta como o aplicativo legado. | 露骨模式允许像旧版应用一样使用直接的性语言。 | 露骨は旧アプリと同様に直接的な性的表現を許可します。 |
+| Voice changes wording only; motion limits, capability gates, and Stop are identical at every level. | La voz solo cambia la redacción; los límites de movimiento, los permisos y Stop son idénticos en todos los niveles. | A voz altera apenas a redação; limites de movimento, permissões e Stop são idênticos em todos os níveis. | 语气只改变措辞；所有级别的运动限制、能力权限和停止功能完全相同。 | 話し方は文面だけを変えます。モーション制限、権限、停止はすべてのレベルで同一です。 |
+| User anatomy | Anatomía del usuario | Anatomia do usuário | 用户身体部位 | ユーザーの身体部位 |
+| separate from partner persona | separado de la persona de la pareja | separado da persona do parceiro | 与伴侣角色分开 | パートナーのペルソナとは別 |
+| Penis | Pene | Pênis | 阴茎 | ペニス |
+| Vagina / vulva | Vagina / vulva | Vagina / vulva | 阴道 / 外阴 | 膣 / 外陰部 |
+| Custom wording | Texto personalizado | Texto personalizado | 自定义称呼 | カスタム表現 |
 | Custom anatomy wording | Texto personalizado para la anatomía | Texto personalizado da anatomia | 自定义身体称呼 | カスタム身体表現 |
-| Save Anatomy | Guardar anatomía | Salvar anatomia | 保存身体设置 | 身体設定を保存 |
-| This tells the prompt what the device is being used on, separate from persona gender. | Esto le dice al prompt en qué anatomía se usa el dispositivo, separado del género de la persona. | Isso informa ao prompt em qual anatomia o dispositivo está sendo usado, separado do gênero da persona. | 这会告诉提示词设备正用于哪种身体部位，并与角色性别分开处理。 | これは、ペルソナの性別とは別に、デバイスがどの身体に使われているかをプロンプトへ伝えます。 |
+| Persona description | Descripción de la persona | Descrição da persona | 角色描述 | ペルソナの説明 |
+| optional | opcional | opcional | 可选 | 任意 |
+| Anatomy vocabulary and persona apply to interactive Warm, Intimate, and Explicit replies only. | El vocabulario anatómico y la persona solo se aplican a las respuestas interactivas Cálida, Íntima y Explícita. | O vocabulário anatômico e a persona se aplicam apenas às respostas interativas Calorosa, Íntima e Explícita. | 身体词汇和角色仅适用于交互式温暖、亲密和露骨回复。 | 身体表現とペルソナは、対話形式のウォーム、インティメート、露骨の返答にのみ適用されます。 |
+| They are bounded prompt context and cannot change motion permissions or limits. | Son contexto acotado del prompt y no pueden cambiar los permisos ni los límites de movimiento. | São contexto limitado do prompt e não podem alterar permissões nem limites de movimento. | 它们是有界的提示上下文，无法更改运动权限或限制。 | これらは長さを制限したプロンプト文脈であり、モーションの権限や制限を変更できません。 |
+| Mood | Estado | Humor | 状态 | ムード |
+| Assistant mood: {mood} | Estado del asistente: {mood} | Humor do assistente: {mood} | 助手状态：{mood} | アシスタントのムード: {mood} |
 
 ## Settings — Diagnostics
 
@@ -406,11 +426,14 @@ preserve the distinction between the user's anatomy and the persona's gender.
 ## LLM-Facing Wording (prompt sets & personas)
 
 These are sent to the local model, not shown as ordinary UI. MagicHandy's
-built-in prompt sets use a hybrid localization strategy: behavior/persona prose
-and memory headers are localized, but the machine JSON contract appended by
+built-in prompt sets use a hybrid localization strategy: behavior text and
+memory headers are localized, while the machine JSON contract appended by
 `internal/chat/prompts.go` stays code-owned and English so JSON keys and enum
-values remain stable. See `docs/prompt-localization-strategy.md` for the
-rationale.
+values remain stable. The current voice, anatomy, profile-data, mood-state, and
+recent-line instructions are also code-owned English pending the native-speaker
+pass recorded in `docs/chat-voice.md`; every built-in still explicitly sets the
+`reply` language. See `docs/prompt-localization-strategy.md` for the rationale
+and current composition order.
 
 StrokeGPT-ReVibed's default `revibed` prompt was explicitly adult; future
 MagicHandy prompt packs may be explicit and should be translated at the same
@@ -485,6 +508,33 @@ Japanese (`magichandy_motion_v1_ja`):
 | pt-BR | Memórias salvas do usuário (use-as com naturalidade quando forem relevantes; nunca recite a lista): |
 | zh-Hans | 已保存的用户记忆（相关时自然引用；不要逐条背诵列表）： |
 | ja | 保存済みのユーザーメモリ（関連する場合だけ自然に参照し、一覧を読み上げないこと）: |
+
+**Mood protocol values** (`new_mood`) stay exact English tokens in every
+language, like motion enums: `Curious`, `Teasing`, `Playful`, `Loving`,
+`Excited`, `Passionate`, `Seductive`, `Anticipatory`, `Breathless`, `Dominant`,
+`Submissive`, `Vulnerable`, `Confident`, `Intimate`, `Needy`, `Overwhelmed`,
+`Afterglow`. A future localized UI may translate the displayed label, but the
+wire value and strict parser enum do not change.
+
+| protocol / en display | es display | pt-BR display | zh-Hans display | ja display |
+| --- | --- | --- | --- | --- |
+| Curious | Curioso/a | Curioso/a | 好奇 | 好奇 |
+| Teasing | Provocador/a | Provocante | 挑逗 | じらす |
+| Playful | Juguetón/a | Brincalhão/ona | 调皮 | 遊び心 |
+| Loving | Cariñoso/a | Carinhoso/a | 深情 | 愛情深い |
+| Excited | Excitado/a | Excitado/a | 兴奋 | 興奮 |
+| Passionate | Apasionado/a | Apaixonado/a | 热情 | 情熱的 |
+| Seductive | Seductor/a | Sedutor/a | 诱惑 | 誘惑的 |
+| Anticipatory | Expectante | Em expectativa | 期待 | 期待 |
+| Breathless | Sin aliento | Sem fôlego | 喘息 | 息を切らした |
+| Dominant | Dominante | Dominante | 支配 | 支配的 |
+| Submissive | Sumiso/a | Submisso/a | 顺从 | 従順 |
+| Vulnerable | Vulnerable | Vulnerável | 脆弱 | 無防備 |
+| Confident | Seguro/a | Confiante | 自信 | 自信 |
+| Intimate | Íntimo/a | Íntimo/a | 亲密 | 親密 |
+| Needy | Necesitado/a | Carente | 渴求 | 求めている |
+| Overwhelmed | Abrumado/a | Sobrecarregado/a | 不知所措 | 圧倒された |
+| Afterglow | Plenitud | Relaxamento | 余韵 | 余韻 |
 
 **Persona presets** (mild starter tier, mirroring StrokeGPT-ReVibed's
 `DEFAULT_PERSONA_PROMPTS`). These are not the full legacy chat prompt; they are

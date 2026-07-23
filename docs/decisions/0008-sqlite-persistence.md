@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for the rewrite plan. Implemented in Phase 11B; extended through
-schema v12 by the backend-owned chat workspace.
+schema v13 by atomic chat-reply visibility.
 
 ## Context
 
@@ -68,7 +68,9 @@ only their durability substrate moves from JSON files to DB tables.
     `messages` shared chat log and `client_cursors` per-client cursors (ADR
     0003); schema v12 scopes messages and cursors to `chat_sessions`, adds the
     singleton `chat_workspace` active-session record, and retains bounded,
-    non-secret response provenance in `diagnostics_json`.
+    non-secret response provenance in `diagnostics_json`. Schema v13 adds a
+    commit marker so canceled generated replies never become visible or consume
+    the per-session history cap.
   - (landed in Phase 14, schema v3) `patterns`, `programs`, and
     `pattern_feedback`. Pattern points and tags are JSON payloads inside
     relational catalog rows; finite programs stay in a separate table so a
@@ -174,11 +176,24 @@ is off; startup repeats that reconciliation because crashes and forced shutdowns
 cannot run an exit hook. Starting with a new chat always discards the prior
 unsaved draft, so that policy cannot be combined with unsaved-draft retention.
 
+Schema v13 adds `messages.committed`. User and deterministic rows are committed
+when inserted. Interactive and autonomous generated assistant rows are staged
+with `committed=0`, which excludes them from history, cursors, session
+summaries, prompt mood/context, and cap pruning. Immediately before the commit,
+the delivery path compares the request's Stop epoch with the current atomic
+epoch. That comparison is the acceptance point: if Stop already won, the row is
+deleted; if completion won, the row commits and prunes in one transaction even
+if a later Stop begins while SQLite finishes. The later Stop still fences motion
+and TTS. Stop publishes its epoch without taking the database path or waiting on
+SQLite; only the bounded in-memory TTS submission shares a mutex with voice
+invalidation. Startup removes any staged row left by a process interruption.
+Existing rows migrate as committed.
+
 `messages.diagnostics_json` stores only bounded run provenance needed by the
-assistant-avatar tooltip: source, provider/model identifiers, prompt-set ID,
-elapsed time, parser/fallback flags, and semantic motion action. Prompt text,
-memories, raw model output, request bodies, user text beyond the message itself,
-and credentials are excluded.
+assistant-avatar tooltip and continuity: source, provider/model identifiers,
+prompt-set ID, elapsed time, parser/fallback flags, semantic motion action, and
+strict mood metadata. Prompt text, memories, raw model output, request bodies,
+user text beyond the message itself, and credentials are excluded.
 
 Opening a current schema validates the expected tables, columns, indexes,
 foreign-key enforcement, and `foreign_key_check`. Negative and newer-than-
