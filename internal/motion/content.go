@@ -89,6 +89,11 @@ type Curve struct {
 	duration      int64
 	loop          bool
 	linear        bool
+	// minPosition and maxPosition bound the authored span. Shape-preserving
+	// interpolation never overshoots a knot, so the authored extremes are the
+	// curve's extremes.
+	minPosition float64
+	maxPosition float64
 }
 
 var builtinPatternCatalog = buildBuiltinPatternCatalog()
@@ -105,11 +110,20 @@ func buildBuiltinPatternCatalog() []PatternDefinition {
 }
 
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
+// Authoring, preview, and budget measurement use unscaled playback; only the
+// engine plan knows the speed and focus a curve will actually be played at.
 func NewCurve(points []CurvePoint, durationMillis int64, loop bool) (Curve, error) {
-	return newCurve(points, durationMillis, loop, false, maximumCurvePoints)
+	return newCurve(points, durationMillis, loop, false, maximumCurvePoints, neutralPlaybackScale())
 }
 
-func newCurve(points []CurvePoint, durationMillis int64, loop bool, linear bool, maximumPoints int) (Curve, error) {
+func newCurve(
+	points []CurvePoint,
+	durationMillis int64,
+	loop bool,
+	linear bool,
+	maximumPoints int,
+	scale playbackScale,
+) (Curve, error) {
 	if len(points) < 2 {
 		return Curve{}, errors.New("a motion curve requires at least two points")
 	}
@@ -123,14 +137,17 @@ func newCurve(points []CurvePoint, durationMillis int64, loop bool, linear bool,
 	curvePoints := copyPoints
 	var guideSlopes map[int64]float64
 	if loop && !linear {
-		curvePoints, guideSlopes = withBoundedLoopReversalGuides(copyPoints)
+		curvePoints, guideSlopes = withBoundedLoopReversalGuides(copyPoints, scale)
 	}
+	minimum, maximum := curvePointBounds(copyPoints)
 	curve := Curve{
 		points:        curvePoints,
 		authoredKnots: copyPoints,
 		duration:      durationMillis,
 		loop:          loop,
 		linear:        linear,
+		minPosition:   minimum,
+		maxPosition:   maximum,
 	}
 	if !linear {
 		curve.slopes = monotoneSlopes(curvePoints, loop)
@@ -261,7 +278,7 @@ func NormalizeMediaTimelineDefinition(definition MediaTimelineDefinition) (Media
 	}
 	definition.DurationMillis = duration
 	definition.Points = points
-	if _, err := newCurve(points, duration, false, true, MaximumMediaTimelinePoints); err != nil {
+	if _, err := newCurve(points, duration, false, true, MaximumMediaTimelinePoints, neutralPlaybackScale()); err != nil {
 		return MediaTimelineDefinition{}, err
 	}
 	return definition, nil
@@ -282,6 +299,16 @@ func MeasureCurve(points []CurvePoint, durationMillis int64, loop bool) (CurveMe
 		previousVelocity = velocity
 	}
 	return metrics, nil
+}
+
+func curvePointBounds(points []CurvePoint) (float64, float64) {
+	minimum := points[0].PositionPercent
+	maximum := points[0].PositionPercent
+	for _, point := range points[1:] {
+		minimum = math.Min(minimum, point.PositionPercent)
+		maximum = math.Max(maximum, point.PositionPercent)
+	}
+	return minimum, maximum
 }
 
 func (c Curve) normalizeTime(timeMillis int64) int64 {

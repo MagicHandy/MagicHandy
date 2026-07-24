@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 943,204 raw / 576,236 gzip bytes because the isolated
-   connection artwork contributes 437,427 gzip bytes. HTML/CSS/JS is 498,968 raw
-   / 138,809 gzip bytes, and the stripped binary is 15,173,632 bytes. These
+   browser payload is 943,580 raw / 575,567 gzip bytes because the isolated
+   connection artwork contributes 437,021 gzip bytes. HTML/CSS/JS is 499,344 raw
+   / 138,546 gzip bytes, and the stripped binary is 15,190,528 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -147,6 +147,21 @@ Ranked by threat to the stated goals:
   payload is 943,204 bytes raw / 576,236 gzip; HTML/CSS/JS is 498,968 raw /
   138,809 gzip. `CGO_ENABLED=0` binaries measure 21,502,976 bytes plain and
   15,173,632 bytes stripped, both within budget.
+
+- **2026-07-24** - Motion focus and reversal follow-up. Two reports shared one
+  cause: the reversal ramp was a fixed 75 ms of authored curve time, so it did
+  not shrink when playback slowed or a focus window compressed the stroke, and a
+  focused pattern shrank twice because the window scaled the whole semantic
+  range rather than the pattern's own span. The ramp is now an acceleration
+  budget, a confined loop pattern fills its window, focus windows below 20
+  points are refused rather than delivered as a hold, and the user has a live
+  **Focus** range that chat zones subdivide instead of escaping. Measured over
+  the catalog at 20% speed with whole-percent output, rounded stationary time
+  fell from 11,910 ms to 1,048 ms with fewer wire points, at a cost of 0.05
+  percentage points of peak wire error. The rebuilt browser payload is 943,580
+  bytes raw / 575,567 gzip; HTML/CSS/JS is 499,344 raw / 138,546 gzip.
+  `CGO_ENABLED=0` binaries measure 21,522,944 bytes plain and 15,190,528
+  stripped, both within budget. Hardware feel is not verified here.
 
 - **2026-07-22** - Video and pattern continuity follow-up: the retained failing
   trace proved parsing and slicing were source-exact, but exposed two later

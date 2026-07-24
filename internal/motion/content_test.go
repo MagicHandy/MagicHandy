@@ -450,7 +450,11 @@ func TestLoopCurveKeepsVelocityAcrossMonotonicSeam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantVelocity := 20.0 / (1 - float64(maximumPatternReversalBlendMillis)/2000)
+	// The ramp is an acceleration budget, not a constant: a 20% leg over
+	// 1000ms only needs b*(1000-b) = 20/0.002, so b rounds up to 11ms and the
+	// cruise body keeps almost the whole leg.
+	const wantBlendMillis = 11
+	wantVelocity := 20.0 / (1 - wantBlendMillis/2000.0)
 	if velocity := curve.Velocity(0); math.Abs(velocity-wantVelocity) > 0.001 {
 		t.Fatalf("seam velocity = %.6f%%/s, want continuous %.6f%%/s", velocity, wantVelocity)
 	}
@@ -482,14 +486,17 @@ func TestLoopCurveConfinesReversalEasingToApex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A full 0-100 leg over 1000ms needs b*(1000-b) = 100/0.002, so both ramps
+	// are 53ms and the 947ms cruise runs at 100/947 %/ms. A quarter-cycle
+	// therefore sits at 53*(100/947)/2 + 197*(100/947) = 23.601%.
 	for _, sample := range []struct {
 		at   int64
 		want float64
 	}{
-		{at: 250, want: 22.973},
-		{at: 750, want: 77.027},
-		{at: 1250, want: 77.027},
-		{at: 1750, want: 22.973},
+		{at: 250, want: 23.601},
+		{at: 750, want: 76.399},
+		{at: 1250, want: 76.399},
+		{at: 1750, want: 23.601},
 	} {
 		if got := curve.Sample(sample.at); math.Abs(got-sample.want) > 0.01 {
 			t.Fatalf("sample at %dms = %.3f, want bounded-ease %.3f away from reversal", sample.at, got, sample.want)

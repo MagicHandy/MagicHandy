@@ -49,7 +49,7 @@ state, but it has no representation in `MotionCommand`, `MotionContext`,
 | `pattern_id` | an **enabled** library id | curate one enabled pattern (rejected if disabled/unknown) |
 | `intensity` | 1–100 | playback intensity for the chosen pattern (maps to speed within limits) |
 | `speed_percent` | 1–100 | absolute semantic speed, clamped again by the user's limits |
-| `area` | `tip` / `shaft` / `base` / `full` | select a named stroke zone; `full` clears an active focus |
+| `area` | `tip` / `shaft` / `base` / `full` | select a named stroke zone inside the configured Focus range; `full` returns to that whole range |
 
 Validation enforces the safe combinations: intensity requires a pattern,
 intensity and speed are mutually exclusive, and `none`/`stop` carry no target
@@ -176,6 +176,19 @@ patterns) — disabled methods are never described to the model and are stripped
 if emitted, without failing the turn. Live-verified against a local Ollama 3B:
 `{"action":"target","area":"tip","speed_percent":25}` for "focus on the tip,
 keep it gentle".
+
+Revised 2026-07-24 after a report that area requests were unreliable and too
+subtle. Three changes, measured in
+[the motion pathway review](motion-pathway-review-2026-07-20.md#follow-up-review---2026-07-24):
+
+- A zone request is authorized by a zone name plus a placement word, not by the
+  single literal phrase `focus on the tip` behind a directive prefix. That
+  branch reaches only `target`; starting motion is unchanged.
+- A pattern confined to a zone re-expands its own span to fill it, so a
+  narrow-amplitude pattern is not squashed twice.
+- Zones are placed inside the user's configured **Focus** range
+  (`motion.focus_min_percent` / `focus_max_percent`, a live quick control) and
+  cannot escape it. `full` returns to that range, not to the whole stroke.
 
 ### B. Program / script selection (parity; low–moderate risk)
 

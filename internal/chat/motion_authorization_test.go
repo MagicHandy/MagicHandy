@@ -56,3 +56,59 @@ func TestPlainRequestsStillAuthorizeMotion(t *testing.T) {
 		}
 	}
 }
+
+// Area requests only ever re-aim motion that is already running, and being
+// refused is indistinguishable from being ignored. Before this list, only the
+// exact phrase "focus on the tip" behind a directive prefix was recognized, so
+// every other way of saying the same thing was silently dropped.
+func TestAreaRequestsAuthorizeATargetChange(t *testing.T) {
+	for _, message := range []string{
+		"focus on the tip",
+		"focus on my tip",
+		"just the tip",
+		"only the tip please",
+		"stay near the top",
+		"keep it shallow",
+		"work the base",
+		"concentrate on the shaft",
+		"stick to the middle",
+		"move to the base",
+		"back to the full range",
+		"use the whole stroke again",
+		"enfócate en la punta",
+		"solo la punta",
+		"foque na ponta",
+		"só a ponta",
+		"集中在尖端",
+		"先端だけ",
+	} {
+		if !userAuthorizesMotion(message, MotionActionTarget) {
+			t.Errorf("area request was refused: %q", message)
+		}
+	}
+}
+
+// Naming a zone is not the same as asking for it, and it must never be a way
+// around the start gate.
+func TestAreaWordsDoNotStartMotionOrSurviveARefusal(t *testing.T) {
+	for _, message := range []string{
+		"just the tip",
+		"focus on the tip",
+		"stay near the top",
+	} {
+		if userAuthorizesMotion(message, MotionActionStart) {
+			t.Errorf("area wording started motion: %q", message)
+		}
+	}
+	for _, message := range []string{
+		"don't focus on the tip",
+		"is it safe to focus on the tip?",
+		"what happens if you focus on the tip?",
+		"tell me about the tip",
+		"stop focusing on the tip",
+	} {
+		if userAuthorizesMotion(message, MotionActionTarget) {
+			t.Errorf("refused or conversational area wording authorized a target: %q", message)
+		}
+	}
+}

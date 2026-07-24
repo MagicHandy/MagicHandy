@@ -31,6 +31,7 @@ type MotionPlan struct {
 	CreatedAt      string       `json:"created_at"`
 
 	curve Curve
+	focus focusProjection
 }
 
 // MotionSample is one transport-neutral semantic sample.
@@ -57,14 +58,15 @@ func NewMotionPlan(
 ) MotionPlan {
 	settings = normalizeMotionSettings(settings)
 	target = NormalizeTarget(target, settings)
-	target, curve, loop, baseDuration := resolveTargetCurve(target)
+	target, content := resolveTargetContent(target)
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
-	periodMillis := periodForContent(baseDuration, target.SpeedPercent, loop, patternKind(target))
+	periodMillis := periodForContent(content.duration, target.SpeedPercent, content.loop, patternKind(target))
 	if target.Media != nil {
-		periodMillis = baseDuration
+		periodMillis = content.duration
 	}
+	focus := newFocusProjection(target, content, settings)
 	return MotionPlan{
 		ID:            id,
 		Target:        target,
@@ -73,10 +75,11 @@ func NewMotionPlan(
 		MediaID:       target.MediaID,
 		PeriodMillis:  periodMillis,
 		HandoffMillis: handoffMillis,
-		PhaseOffset:   phaseForContent(phaseOffset, loop),
-		Loop:          loop,
+		PhaseOffset:   phaseForContent(phaseOffset, content.loop),
+		Loop:          content.loop,
 		CreatedAt:     createdAt.UTC().Format(time.RFC3339Nano),
-		curve:         curve,
+		curve:         content.buildCurve(content.playbackScale(focus, periodMillis)),
+		focus:         focus,
 	}
 }
 
@@ -84,8 +87,7 @@ func NewMotionPlan(
 func (p MotionPlan) SampleAt(streamMillis int64) MotionSample {
 	phase := p.PhaseAt(streamMillis)
 	curveMillis := int64(math.Round(phase * float64(p.curve.duration)))
-	value := p.curve.Sample(curveMillis)
-	position := applyTargetFocus(value/100, p.Target)
+	position := p.focus.apply(p.curve.Sample(curveMillis))
 	return MotionSample{
 		PlanID:          p.ID,
 		PatternID:       p.PatternID,
@@ -170,45 +172,74 @@ func (p MotionPlan) DirectionAt(streamMillis int64) int {
 	}
 }
 
-func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) {
+// resolvedContent is validated motion content whose curve is not built yet.
+// The reversal ramp depends on the speed and focus the content will be played
+// at, and the period is only known after the content duration is, so the curve
+// is the last thing the plan constructs.
+type resolvedContent struct {
+	points        []CurvePoint
+	duration      int64
+	loop          bool
+	linear        bool
+	maximumPoints int
+}
+
+func (c resolvedContent) buildCurve(scale playbackScale) Curve {
+	curve, _ := newCurve(c.points, c.duration, c.loop, c.linear, c.maximumPoints, scale)
+	return curve
+}
+
+func (c resolvedContent) playbackScale(focus focusProjection, periodMillis int64) playbackScale {
+	scale := neutralPlaybackScale()
+	if c.duration > 0 && periodMillis > 0 {
+		scale.timeFactor = float64(periodMillis) / float64(c.duration)
+	}
+	scale.amplitudeFactor = focus.gain()
+	return scale
+}
+
+func resolveTargetContent(target MotionTarget) (MotionTarget, resolvedContent) {
 	if target.Media != nil {
 		if definition, err := NormalizeMediaTimelineDefinition(*target.Media); err == nil {
 			if target.MediaSpeedLimitEnabled {
 				definition.Points = limitMediaTimelineRate(definition.Points, target.SpeedPercent)
 			}
-			curve, _ := newCurve(definition.Points, definition.DurationMillis, false, true, MaximumMediaTimelinePoints)
 			target.Media = &definition
 			target.MediaID = definition.ID
 			target.PatternID = ""
 			target.PatternName = ""
 			target.ProgramID = ""
-			return target, curve, false, definition.DurationMillis
+			return target, resolvedContent{
+				points: definition.Points, duration: definition.DurationMillis,
+				linear: true, maximumPoints: MaximumMediaTimelinePoints,
+			}
 		}
 		target.Media = nil
 		target.MediaID = ""
 	}
 	if target.Program != nil {
 		if definition, err := NormalizeProgramDefinition(*target.Program); err == nil {
-			curve, _ := NewCurve(definition.Points, definition.DurationMillis, false)
 			target.Program = &definition
 			target.ProgramID = definition.ID
 			target.PatternID = ""
 			target.PatternName = ""
 			target.MediaID = ""
-			return target, curve, false, definition.DurationMillis
+			return target, resolvedContent{
+				points: definition.Points, duration: definition.DurationMillis,
+				maximumPoints: maximumCurvePoints,
+			}
 		}
 		target.Program = nil
 		target.ProgramID = ""
 	}
 	if target.Pattern != nil {
 		if definition, err := NormalizePatternDefinition(*target.Pattern); err == nil {
-			curve, _ := NewCurve(definition.Points, definition.CycleMillis, true)
 			target.Pattern = &definition
 			target.PatternID = definition.ID
 			target.PatternName = definition.Name
 			target.ProgramID = ""
 			target.MediaID = ""
-			return target, curve, true, definition.CycleMillis
+			return target, patternContent(definition)
 		}
 	}
 	definition, ok := BuiltinPatternDefinition(target.PatternID)
@@ -216,12 +247,18 @@ func resolveTargetCurve(target MotionTarget) (MotionTarget, Curve, bool, int64) 
 		definition, _ = BuiltinPatternDefinition(PatternStroke)
 		target.PatternID = PatternStroke
 	}
-	curve, _ := NewCurve(definition.Points, definition.CycleMillis, true)
 	target.Pattern = &definition
 	target.PatternName = definition.Name
 	target.ProgramID = ""
 	target.MediaID = ""
-	return target, curve, true, definition.CycleMillis
+	return target, patternContent(definition)
+}
+
+func patternContent(definition PatternDefinition) resolvedContent {
+	return resolvedContent{
+		points: definition.Points, duration: definition.CycleMillis,
+		loop: true, maximumPoints: maximumCurvePoints,
+	}
 }
 
 // limitMediaTimelineRate keeps the video clock and every point timestamp
@@ -278,17 +315,70 @@ func motionContentID(target MotionTarget) string {
 	return "pattern:" + string(target.PatternID)
 }
 
-func applyTargetFocus(value float64, target MotionTarget) float64 {
-	minimum := 0.0
-	maximum := 100.0
-	if target.AreaFocus != nil {
-		minimum = float64(target.AreaFocus.MinPercent)
-		maximum = float64(target.AreaFocus.MaxPercent)
+// minimumFocusSourceSpan is the smallest authored span worth re-expanding.
+// Below it the shape is closer to noise than to a stroke, and stretching it to
+// fill a window would amplify that noise (docs/motion-pathway-review, import
+// noise amplification).
+const minimumFocusSourceSpan = 5.0
+
+// focusProjection maps an authored position onto the region motion is confined
+// to. Confining a loop pattern re-expands its own span to fill the window, so
+// asking for a smaller region changes where the stroke happens without also
+// making the shape too subtle to feel. Finite programs and clock-locked media
+// keep authored amplitude.
+type focusProjection struct {
+	sourceMin  float64
+	sourceSpan float64
+	targetMin  float64
+	targetSpan float64
+	anchor     *SoftAnchor
+}
+
+func newFocusProjection(
+	target MotionTarget,
+	content resolvedContent,
+	settings config.MotionSettings,
+) focusProjection {
+	projection := focusProjection{
+		sourceMin: 0, sourceSpan: 100,
+		targetMin: 0, targetSpan: 100,
+		anchor: target.SoftAnchor,
 	}
-	position := minimum + (maximum-minimum)*value
-	if target.SoftAnchor != nil {
-		weight := float64(target.SoftAnchor.WeightPercent) / 100.0
-		position = position*(1-weight) + float64(target.SoftAnchor.PositionPercent)*weight
+	focus := effectiveAreaFocus(target, settings)
+	if focus == nil {
+		return projection
+	}
+	projection.targetMin = float64(focus.MinPercent)
+	projection.targetSpan = float64(focus.MaxPercent) - projection.targetMin
+	if !content.loop || len(content.points) == 0 {
+		return projection
+	}
+	minimum, maximum := curvePointBounds(content.points)
+	if maximum-minimum < minimumFocusSourceSpan {
+		return projection
+	}
+	projection.sourceMin = minimum
+	projection.sourceSpan = maximum - minimum
+	return projection
+}
+
+// gain reports played percent per authored percent, which is what compresses
+// the reversal acceleration budget.
+func (f focusProjection) gain() float64 {
+	if f.sourceSpan <= 0 {
+		return 1
+	}
+	return f.targetSpan / f.sourceSpan
+}
+
+func (f focusProjection) apply(percent float64) float64 {
+	position := percent
+	if f.sourceSpan > 0 {
+		position = f.targetMin + f.targetSpan*(percent-f.sourceMin)/f.sourceSpan
+	}
+	if f.anchor != nil {
+		weight := float64(f.anchor.WeightPercent) / 100.0
+		position = position*(1-weight) + float64(f.anchor.PositionPercent)*weight
 	}
 	return position
 }

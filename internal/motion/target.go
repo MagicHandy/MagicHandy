@@ -1,6 +1,7 @@
 package motion
 
 import (
+	"math"
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -168,23 +169,70 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 		target.SpeedPercent = defaultSpeedPercent
 	}
 	target.SpeedPercent = clamp(target.SpeedPercent, settings.SpeedMinPercent, settings.SpeedMaxPercent)
-	target.AreaFocus = normalizeAreaFocus(target.AreaFocus)
+	target.AreaFocus = resolveAreaFocus(target)
 	target.SoftAnchor = normalizeSoftAnchor(target.SoftAnchor)
 	return target
 }
 
-func normalizeAreaFocus(focus *AreaFocus) *AreaFocus {
+// resolveAreaFocus keeps a requested zone in full-stroke coordinates so that
+// normalizing a target twice is the same as normalizing it once. The user's
+// configured range is composed in later, when the plan builds its projection.
+// Clock-locked media is never focused — a video follows authored positions.
+func resolveAreaFocus(target MotionTarget) *AreaFocus {
+	if target.Media != nil {
+		return nil
+	}
+	return normalizeAreaFocus(target.AreaFocus, 0, 100)
+}
+
+// effectiveAreaFocus places any requested zone inside the user's configured
+// focus range. The configured range is the working range: a zone request
+// subdivides it instead of escaping it, so nothing the model asks for can move
+// motion outside the region the user chose.
+func effectiveAreaFocus(target MotionTarget, settings config.MotionSettings) *AreaFocus {
+	if target.Media != nil {
+		return nil
+	}
+	outerMin, outerMax, configured := settings.FocusRange()
+	if !configured {
+		return normalizeAreaFocus(target.AreaFocus, 0, 100)
+	}
+	focus := target.AreaFocus
+	if focus == nil {
+		focus = &AreaFocus{MinPercent: 0, MaxPercent: 100}
+	}
+	span := float64(outerMax - outerMin)
+	placed := AreaFocus{
+		MinPercent: outerMin + int(math.Round(span*float64(clamp(focus.MinPercent, 0, 100))/100)),
+		MaxPercent: outerMin + int(math.Round(span*float64(clamp(focus.MaxPercent, 0, 100))/100)),
+	}
+	return normalizeAreaFocus(&placed, outerMin, outerMax)
+}
+
+func normalizeAreaFocus(focus *AreaFocus, outerMin, outerMax int) *AreaFocus {
 	if focus == nil {
 		return nil
 	}
+	outerMin = clamp(outerMin, 0, 100)
+	outerMax = clamp(outerMax, outerMin, 100)
 	normalized := AreaFocus{
-		MinPercent: clamp(focus.MinPercent, 0, 100),
-		MaxPercent: clamp(focus.MaxPercent, 0, 100),
+		MinPercent: clamp(focus.MinPercent, outerMin, outerMax),
+		MaxPercent: clamp(focus.MaxPercent, outerMin, outerMax),
 	}
-	if normalized.MinPercent >= normalized.MaxPercent {
-		center := clamp((normalized.MinPercent+normalized.MaxPercent)/2, 0, 100)
-		normalized.MinPercent = clamp(center-5, 0, 99)
-		normalized.MaxPercent = clamp(center+5, normalized.MinPercent+1, 100)
+	if normalized.MaxPercent < normalized.MinPercent {
+		normalized.MinPercent, normalized.MaxPercent = normalized.MaxPercent, normalized.MinPercent
+	}
+	// A window covering the whole stroke is not a focus. Saying so here keeps
+	// one rule true everywhere: unfocused content keeps its authored amplitude,
+	// and only a deliberately narrowed region re-expands to fill itself.
+	if normalized.MinPercent <= 0 && normalized.MaxPercent >= 100 {
+		return nil
+	}
+	width := min(config.MinimumFocusWidthPercent, outerMax-outerMin)
+	if normalized.MaxPercent-normalized.MinPercent < width {
+		center := (normalized.MinPercent + normalized.MaxPercent) / 2
+		normalized.MinPercent = clamp(center-width/2, outerMin, outerMax-width)
+		normalized.MaxPercent = normalized.MinPercent + width
 	}
 	return &normalized
 }

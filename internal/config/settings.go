@@ -199,15 +199,40 @@ const (
 	MotionStyleIntense = "intense"
 )
 
+// MinimumFocusWidthPercent keeps a focus window wide enough to still be
+// motion. Measured across the whole built-in catalog at slow speed with
+// whole-percent device output, a 20-point window is stationary for 0.2% of
+// playback; 10 points reaches 1.0% with 643 ms stalls, and 5 points reaches a
+// four-second dead stop. Narrower than this, "move here" becomes "stop moving".
+const MinimumFocusWidthPercent = 20
+
 // MotionSettings contains transport-neutral motion control defaults.
 type MotionSettings struct {
-	SpeedMinPercent      int    `json:"speed_min_percent"`
-	SpeedMaxPercent      int    `json:"speed_max_percent"`
-	StrokeMinPercent     int    `json:"stroke_min_percent"`
-	StrokeMaxPercent     int    `json:"stroke_max_percent"`
+	SpeedMinPercent  int `json:"speed_min_percent"`
+	SpeedMaxPercent  int `json:"speed_max_percent"`
+	StrokeMinPercent int `json:"stroke_min_percent"`
+	StrokeMaxPercent int `json:"stroke_max_percent"`
+	// FocusMinPercent and FocusMaxPercent confine repeating patterns to part of
+	// the stroke. This is deliberately not the stroke window: the stroke window
+	// is the physical envelope every source obeys, including video and startup
+	// positioning, while the focus range is where a pattern's shape plays and
+	// is subdivided further by a chat zone request. The full 0-100 range means
+	// no focus, and a pattern confined to a narrower range re-expands to fill
+	// it rather than shrinking with it.
+	FocusMinPercent      int    `json:"focus_min_percent"`
+	FocusMaxPercent      int    `json:"focus_max_percent"`
 	ReverseDirection     bool   `json:"reverse_direction"`
 	ApplyVideoSpeedLimit bool   `json:"apply_video_speed_limit"`
 	Style                string `json:"style"`
+}
+
+// FocusRange reports the configured pattern focus window, or nil when the
+// configured range covers everything.
+func (m MotionSettings) FocusRange() (int, int, bool) {
+	if m.FocusMinPercent <= 0 && (m.FocusMaxPercent >= 100 || m.FocusMaxPercent == 0) {
+		return 0, 100, false
+	}
+	return m.FocusMinPercent, m.FocusMaxPercent, true
 }
 
 // LLMSettings contains local model provider settings.
@@ -528,6 +553,8 @@ func DefaultSettings() Settings {
 			SpeedMaxPercent:  80,
 			StrokeMinPercent: 0,
 			StrokeMaxPercent: 100,
+			FocusMinPercent:  0,
+			FocusMaxPercent:  100,
 			Style:            MotionStyleBalanced,
 		},
 		LLM: LLMSettings{
@@ -987,6 +1014,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
+	if settings.Motion.FocusMaxPercent == 0 {
+		settings.Motion.FocusMaxPercent = defaults.Motion.FocusMaxPercent
+	}
 	settings.LLM = applyMissingLLMDefaults(settings.LLM, defaults.LLM)
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
 	if settings.Chat.StartupBehavior == "" {
@@ -1110,6 +1140,12 @@ func validateMotionSettings(settings MotionSettings) error {
 	}
 	if settings.StrokeMinPercent >= settings.StrokeMaxPercent {
 		return errors.New("stroke minimum must be lower than maximum")
+	}
+	if settings.FocusMinPercent < 0 || settings.FocusMaxPercent > 100 {
+		return errors.New("focus bounds must be between 0 and 100")
+	}
+	if settings.FocusMaxPercent-settings.FocusMinPercent < MinimumFocusWidthPercent {
+		return fmt.Errorf("focus range must span at least %d percent", MinimumFocusWidthPercent)
 	}
 	if !oneOf(settings.Style, MotionStyleGentle, MotionStyleBalanced, MotionStyleIntense) {
 		return fmt.Errorf("unknown motion style %q", settings.Style)

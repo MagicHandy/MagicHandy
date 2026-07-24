@@ -777,3 +777,58 @@ func TestMotionEventsStreamsMotionState(t *testing.T) {
 		t.Fatalf("SSE block = %q, want motion availability event", block.String())
 	}
 }
+
+// The focus range is a live quick control: changing it while motion runs must
+// apply to the running plan rather than waiting for a stop/start.
+func TestQuickFocusRangeAppliesToRunningMotion(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("motion did not start")
+	}
+
+	request := withController(httptest.NewRequest(
+		http.MethodPost, "/api/motion/quick",
+		strings.NewReader(`{"focus_min_percent":60,"focus_max_percent":90}`),
+	))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
+	}
+
+	settings, _ := server.store.Snapshot()
+	if settings.Motion.FocusMinPercent != 60 || settings.Motion.FocusMaxPercent != 90 {
+		t.Fatalf("saved focus = %d-%d, want 60-90",
+			settings.Motion.FocusMinPercent, settings.Motion.FocusMaxPercent)
+	}
+	engine := server.currentMotionEngine()
+	if engine == nil || !engine.Snapshot().Running {
+		t.Fatal("motion stopped applying a focus range")
+	}
+	if got := engine.Snapshot().Settings.FocusMaxPercent; got != 90 {
+		t.Fatalf("running engine focus maximum = %d, want 90", got)
+	}
+}
+
+// A window too narrow to move must be refused rather than silently saved as a
+// hold at one position.
+func TestQuickFocusRangeRejectsAWindowTooNarrowToMove(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+
+	request := withController(httptest.NewRequest(
+		http.MethodPost, "/api/motion/quick",
+		strings.NewReader(`{"focus_min_percent":48,"focus_max_percent":53}`),
+	))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+	}
+	settings, _ := server.store.Snapshot()
+	if settings.Motion.FocusMinPercent != 0 || settings.Motion.FocusMaxPercent != 100 {
+		t.Fatalf("rejected focus was saved: %d-%d",
+			settings.Motion.FocusMinPercent, settings.Motion.FocusMaxPercent)
+	}
+}
