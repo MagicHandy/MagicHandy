@@ -116,10 +116,15 @@ independent of everything.
   (WebView2 decision, Phase 16) — and Stop's guarantee must never *depend* on
   it.
 - **Authoring by demonstration ("record a jog").** Record a manually scrubbed
-  on-screen slider (or live-limit wiggles) for N seconds into an editable
-  pattern draft. **Worth scoping** — the authoring pipeline (knots,
-  simplification, preview) already exists; this is just a new input source
-  for it.
+  on-screen slider, live-limit wiggles, or mouse motion over a playing video for
+  N seconds into an editable pattern draft. **Worth scoping** — the authoring
+  pipeline (knots, simplification, preview) already exists; this is just a new
+  input source for it. Design note: scope this as **record-then-play**. Driving
+  the device from a live input source is a separate, unmeasured problem whose
+  per-owner behavior should be expected to differ
+  ([motion pathway review](motion-pathway-review-2026-07-20.md#open-question-live-input-over-hsp-unmeasured)),
+  so live pass-through needs its own evidence rather than riding along with the
+  authoring feature.
 - **A/B audition in Training.** Play two candidate patterns back-to-back on
   the device and record which won as normal feedback. **Worth scoping,
   small** — pure UI over existing playback + feedback.

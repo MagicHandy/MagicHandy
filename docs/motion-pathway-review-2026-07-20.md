@@ -413,6 +413,26 @@ Not verified on hardware: this review is measurement and automated tests only.
 Reversal feel at 20-40% speed, and a focused pattern at the 20-point minimum,
 still want one Cloud REST pass and one Browser Bluetooth pass.
 
+### Open question: live input over HSP (unmeasured)
+
+Driving the device from a **live input source** — a mouse or slider moved in
+real time, rather than a recorded script — is not something MagicHandy does
+today, and its per-owner behavior has never been measured here.
+
+It is written down because it constrains a feature already on the ideas list
+(authoring by demonstration / mouse-tracked authoring). There is reason to
+expect the two owners to differ, from what is already documented above: HSP is a
+buffered protocol, MagicHandy prebuffers 1.5 s for interactive targets and about
+10 s for clock-locked media, and `pause_on_starving` makes any delivery jitter a
+physical stop. A live source wants the opposite of a deep buffer, so the
+buffering that protects scripted playback is exactly what would add latency to
+live pass-through. Intiface's immediate-mode `LinearCmd` pacing has no such
+queue.
+
+That is an expectation, not a result. Until one instrumented capture per owner
+exists, record-then-play is the safe default for any authoring-by-demonstration
+work, and live pass-through needs its own evidence before it is designed.
+
 ## ScriptPlayer Comparison
 
 Useful ideas retained from
