@@ -46,36 +46,38 @@ being relaxed to fit the features.
 
 The phase table in [../IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) tracks
 depth and [feature-ideas.md](feature-ideas.md) catalogs possibilities. Neither
-answers "what should I pick up today", which is the question that actually comes
-up between two maintainers working different hours. This is that list. It is a
+answers "what is worth picking up next", which is the question that comes up
+between maintainers working different hours. This is that list. It is a
 **snapshot and it goes stale** — trust the linked docs over it whenever they
 disagree.
 
-**Just landed, so don't rebuild it:** the chat voice/persona/anatomy/mood axes
-(#126, #127) and the motion focus range plus acceleration-budget reversal ramp
-(#128). If you were about to start on "make the replies in character" or "the
-motion pauses at the turn", read [chat-voice.md](chat-voice.md) and the
+**Recently landed, so it does not need rebuilding:** the chat
+voice/persona/anatomy/mood axes (#126, #127) and the motion focus range plus
+acceleration-budget reversal ramp (#128). Anything starting from "make the
+replies feel in character" or "motion pauses at the turn" should read
+[chat-voice.md](chat-voice.md) and the
 [2026-07-24 motion review](motion-pathway-review-2026-07-20.md#follow-up-review---2026-07-24)
 first.
 
-### Best done from the LSO side
+### Content and frontend
 
-- **Reaction-style axis** (submissive / dominant / playful / teasing). Claimed
-  on 2026-07-23. Build it as an enum axis composed in code beside `chat_voice`,
-  not as a second personalization system — the shape and the reasoning are in
+- **Reaction-style axis** (submissive / dominant / playful / teasing) — the one
+  personalization dimension the shipped axes do not cover. Build it as an enum
+  axis composed in code beside `chat_voice`, not as a second personalization
+  system; the shape and the reasoning are in
   [lso-merge-alternatives.md](lso-merge-alternatives.md), Decision 3.
 - **Replace the weak built-in patterns.** Most of the catalog is generated from
-  parameter specs; only two entries are promoted from curves someone actually
-  used and accepted (`internal/motion/content_curated.go`). Which generated ones
-  are worth replacing is a judgment call best made by whoever has a large
+  parameter specs; only two entries are promoted from curves that were used and
+  accepted in practice (`internal/motion/content_curated.go`). Which generated
+  ones are worth replacing is a judgment call best made by whoever has a large
   funscript collection to draw from. Content work, no architecture risk;
   [pattern-library.md](pattern-library.md) covers import and promotion.
-- **Enter-to-send in chat.** Claimed on 2026-07-23; still Ctrl+Enter in
+- **Enter-to-send in chat** — still Ctrl+Enter in
   `web/src/components/ChatPanel.tsx`. Keep a modifier for newline.
 - **Mouse-tracked authoring**, scoped as record-then-play. See the design note
-  and the HSP field report in [feature-ideas.md](feature-ideas.md) §C.
+  in [feature-ideas.md](feature-ideas.md) §C.
 
-### Best done on the Go core side
+### Motion core and backend
 
 - **Hardware acceptance backlog.** Several changes are correct by test and
   unverified by hand: reversal feel at 20-40% speed and a focused pattern at the
@@ -83,6 +85,9 @@ first.
   Phase 18 M3 media alignment re-recorded against `expected_media_time_ms`, and
   Browser Bluetooth endurance beyond short sessions. This is the largest honest
   gap in the project and it cannot be closed by more code.
+- **Live-input behavior per dispatch owner** — one instrumented capture each,
+  which the authoring-by-demonstration work depends on
+  ([motion pathway review](motion-pathway-review-2026-07-20.md#open-question-live-input-over-hsp-unmeasured)).
 - **Autopilot cadence and autonomy level** — the STGPT-RV autospeak shape,
   still unexposed (`llm-control-surface.md` ideas E/F).
 - **Live motion log and in-chat feedback buttons** — both are "strong
@@ -90,14 +95,14 @@ first.
 
 ### Waiting on a decision, not on work
 
-- **Offline pre-transcode for `.mkv`** — raised 2026-07-22, open questions
-  recorded in [video-playback.md](video-playback.md).
+- **Offline pre-transcode** — open questions recorded in
+  [video-playback.md](video-playback.md).
 - **Merge Decisions 1, 3, 4, 5, 6** below. Decision 3 now has shipped code
   under it, so it is the one most likely to be decided by accident if someone
   starts building.
-- **Whether to use GitHub issues.** Asked 2026-07-14, never answered. The
-  practical cost of not using them is visible right here: this section exists
-  because there is nowhere else for a small claimed item to live.
+- **Whether to adopt an issue tracker.** This section exists partly because
+  small claimed items and open questions have nowhere else to live between
+  planning-doc revisions.
 
 ## Workstreams
 
@@ -148,7 +153,7 @@ LSO's persona system (persona-driven chat plus motion bias).
 - Decision needed: merge personas with MagicHandy's prompt sets + long-term
   memory into one personalization model, or keep both. Overlapping systems drift;
   prefer one. See alternatives, Decision 3.
-- Since 2026-07-23 the Go core composes prompts from independent code-owned axes
+- As of #126/#127 the Go core composes prompts from independent code-owned axes
   (prompt set, reply register, partner identity, user anatomy, model-reported
   mood). That is most of the recommended option already built, and it narrows
   the remaining gap to a **reaction-style axis** plus saveable presets. Decision

@@ -119,13 +119,12 @@ independent of everything.
   on-screen slider, live-limit wiggles, or mouse motion over a playing video for
   N seconds into an editable pattern draft. **Worth scoping** — the authoring
   pipeline (knots, simplification, preview) already exists; this is just a new
-  input source for it. An LSO prototype already does the mouse-over-video form,
-  which makes this the most likely near-term merge candidate. Design note: a
-  2026-07-23 collaborator report found live pass-through worse over HSP than
-  over Intiface and recording-against-video fine
-  ([motion pathway review](motion-pathway-review-2026-07-20.md#open-field-report-live-input-over-hsp-unverified-here)),
-  so scope this as **record-then-play** and treat live pass-through as a
-  separate, evidence-gated feature.
+  input source for it. Design note: scope this as **record-then-play**. Driving
+  the device from a live input source is a separate, unmeasured problem whose
+  per-owner behavior should be expected to differ
+  ([motion pathway review](motion-pathway-review-2026-07-20.md#open-question-live-input-over-hsp-unmeasured)),
+  so live pass-through needs its own evidence rather than riding along with the
+  authoring feature.
 - **A/B audition in Training.** Play two candidate patterns back-to-back on
   the device and record which won as normal feedback. **Worth scoping,
   small** — pure UI over existing playback + feedback.

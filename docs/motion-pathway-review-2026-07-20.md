@@ -413,30 +413,25 @@ Not verified on hardware: this review is measurement and automated tests only.
 Reversal feel at 20-40% speed, and a focused pattern at the 20-point minimum,
 still want one Cloud REST pass and one Browser Bluetooth pass.
 
-### Open field report: live input over HSP (unverified here)
+### Open question: live input over HSP (unmeasured)
 
-A collaborator report from 2026-07-23, recorded so it is not rediscovered: when
-driving the device from **live mouse tracking**, Intiface felt better than HSP,
-and HSP appeared to show delay or dropped points. The same report judged
-*recording* points against a video to be fine — the problem was described as
-reproducing them in the live moment.
+Driving the device from a **live input source** — a mouse or slider moved in
+real time, rather than a recorded script — is not something MagicHandy does
+today, and its per-owner behavior has never been measured here.
 
-This is a second-hand observation against an external prototype, not a
-measurement taken here, and MagicHandy has no live-input path today, so nothing
-in this repo is known to be affected. It is written down because it constrains a
-feature already on the ideas list ("authoring by demonstration" /
-mouse-tracked authoring): if that lands, record-then-play is the safe default on
-every owner, and live pass-through would need its own owner-by-owner evidence
-first.
+It is written down because it constrains a feature already on the ideas list
+(authoring by demonstration / mouse-tracked authoring). There is reason to
+expect the two owners to differ, from what is already documented above: HSP is a
+buffered protocol, MagicHandy prebuffers 1.5 s for interactive targets and about
+10 s for clock-locked media, and `pause_on_starving` makes any delivery jitter a
+physical stop. A live source wants the opposite of a deep buffer, so the
+buffering that protects scripted playback is exactly what would add latency to
+live pass-through. Intiface's immediate-mode `LinearCmd` pacing has no such
+queue.
 
-The mechanism is at least plausible from what is already documented here. HSP is
-a buffered protocol: MagicHandy prebuffers 1.5 s for interactive targets and
-about 10 s for clock-locked media, and `pause_on_starving` makes any delivery
-jitter a physical stop. A live input source wants the opposite of a deep buffer,
-so the buffer that protects scripted playback is exactly what would add latency
-to live pass-through. Intiface's immediate-mode `LinearCmd` pacing has no such
-queue. Confirming that costs one instrumented capture per owner and should
-precede any design.
+That is an expectation, not a result. Until one instrumented capture per owner
+exists, record-then-play is the safe default for any authoring-by-demonstration
+work, and live pass-through needs its own evidence before it is designed.
 
 ## ScriptPlayer Comparison
 

@@ -522,18 +522,17 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
   deliberate scope walls; revisiting any of them is a new decision, not
   scope drift.
 
-### Open decision: offline pre-transcode for unsupported containers
+### Open decision: offline pre-transcode
 
-Raised 2026-07-22 and unresolved. The wall above rules out transcoding
-*during playback*; it does not by itself answer whether the app may help a user
-convert a file **once, ahead of time**, so their `.mkv` library becomes
-playable. The proposal on the table is an explicitly consented, user-triggered
-step that uses a user-provided or downloaded FFmpeg build to produce a
-browser-playable file, with the original untouched.
+The wall above rules out transcoding *during playback*. It does not by itself
+answer a different question: whether the app may help a user convert a file
+**once, ahead of time**, into something the browser can play. One shape for that
+is an explicitly consented, user-triggered step using a user-provided or
+downloaded FFmpeg build, leaving the original untouched.
 
-That is a genuinely different shape from real-time conversion, so it deserves a
-decision rather than being either silently adopted or blocked by a wall that was
-written about a different thing. What has to be settled before any code:
+That is a different shape from real-time conversion, so it deserves a decision
+rather than being either silently adopted or blocked by a wall written about
+something else. What has to be settled before any code:
 
 - **Binary and dependency stance.** FFmpeg is not bundled and must not become an
   implicit requirement. Download would need the same checksum/consent/licensing
@@ -543,10 +542,10 @@ written about a different thing. What has to be settled before any code:
   directory, or into a chosen folder are three different promises about disk use
   and cleanup. Never overwrite a source file.
 - **Whether it is worth it at all** versus telling the user to convert with the
-  tool they already have. The honest baseline is that `.mkv` is excluded and
-  documented; this feature buys convenience, not capability.
+  tool they already have. Unsupported containers are excluded and documented
+  today; this would buy convenience, not capability.
 - **Scope discipline.** "Convert one file on request" must not grow into media
-  management, batch pipelines, or format detection heuristics.
+  management, batch pipelines, or format-detection heuristics.
 
 Until that is decided, the no-transcoding stance stands as written.
 

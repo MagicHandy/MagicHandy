@@ -94,7 +94,7 @@ prompt sets plus inspectable long-term memory.
   cannot be edited out of a prompt/persona (Phase 10 rule); personalization stays
   inspectable and resettable.
 
-### What already shipped (2026-07-23/24) — read before building a persona system
+### What already shipped (#126, #127) — read before building a persona system
 
 Option A is now partly built, which changes what a merge has to do. MagicHandy
 composes its system prompt from **independent code-owned axes**, not from one
