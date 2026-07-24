@@ -30,6 +30,8 @@ const initialMotion: MotionSettings = {
   speed_max_percent: 40,
   stroke_min_percent: 20,
   stroke_max_percent: 80,
+  focus_min_percent: 0,
+  focus_max_percent: 100,
   reverse_direction: false,
   apply_video_speed_limit: false,
   style: "balanced",
@@ -82,6 +84,20 @@ describe("QuickSettings", () => {
     app.motion = { ...initialMotion, speed_min_percent: 25 };
     result.rerender(<QuickSettings section="limits" />);
     expect(screen.getByRole("slider", { name: "Speed minimum" })).toHaveValue("25");
+  });
+
+  it("keeps a focus window wide enough to still be motion", async () => {
+    applyQuick.mockResolvedValue(undefined);
+    render(<QuickSettings section="limits" />);
+    const minimum = screen.getByRole("slider", { name: "Focus minimum" });
+
+    // Dragging the low bound past the ceiling minus the minimum width must
+    // stop at that width instead of collapsing the window to a hold.
+    fireEvent.change(minimum, { target: { value: "95" } });
+
+    expect(screen.getByRole("slider", { name: "Focus minimum" })).toHaveValue("80");
+    await act(async () => vi.advanceTimersByTimeAsync(180));
+    expect(applyQuick).toHaveBeenCalledWith({ focus_min_percent: 80 });
   });
 
   it("reverts the latest optimistic value when the patch fails", async () => {

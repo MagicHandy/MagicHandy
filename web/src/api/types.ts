@@ -10,6 +10,8 @@ export interface MotionSettings {
   speed_max_percent: number;
   stroke_min_percent: number;
   stroke_max_percent: number;
+  focus_min_percent: number;
+  focus_max_percent: number;
   reverse_direction: boolean;
   apply_video_speed_limit: boolean;
   style: string;

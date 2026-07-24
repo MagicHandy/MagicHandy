@@ -1031,3 +1031,41 @@ func TestLegacySettingsWithoutAnatomyLoadNeutral(t *testing.T) {
 		t.Fatalf("legacy anatomy = %q/%q, want neutral custom state", loaded.LLM.UserAnatomy, loaded.LLM.CustomAnatomy)
 	}
 }
+
+// Settings files written before the focus range existed decode with zeroes.
+// Zero-to-zero is not a valid window, so the defaults pass has to read it as
+// "no focus" rather than as a request to hold at position zero.
+func TestFocusRangeDefaultsAndValidation(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Motion.FocusMinPercent = 0
+	settings.Motion.FocusMaxPercent = 0
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Motion.FocusMinPercent != 0 || normalized.Motion.FocusMaxPercent != 100 {
+		t.Fatalf("legacy focus = %d-%d, want the full 0-100 range",
+			normalized.Motion.FocusMinPercent, normalized.Motion.FocusMaxPercent)
+	}
+	if _, _, configured := normalized.Motion.FocusRange(); configured {
+		t.Fatal("a full range reported itself as a configured focus")
+	}
+
+	narrowed := normalized
+	narrowed.Motion.FocusMinPercent = 40
+	narrowed.Motion.FocusMaxPercent = 70
+	if _, err := NormalizeSettings(narrowed); err != nil {
+		t.Fatalf("usable focus range rejected: %v", err)
+	}
+	minimum, maximum, configured := narrowed.Motion.FocusRange()
+	if !configured || minimum != 40 || maximum != 70 {
+		t.Fatalf("focus range = %d-%d configured=%v, want 40-70 configured", minimum, maximum, configured)
+	}
+
+	tooNarrow := normalized
+	tooNarrow.Motion.FocusMinPercent = 48
+	tooNarrow.Motion.FocusMaxPercent = 53
+	if _, err := NormalizeSettings(tooNarrow); err == nil {
+		t.Fatal("a focus window too narrow to move was accepted")
+	}
+}

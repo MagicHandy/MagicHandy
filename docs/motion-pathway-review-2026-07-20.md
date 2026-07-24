@@ -137,6 +137,10 @@ focus. Very narrow 5-10% focus can intentionally collapse a pattern to only a
 few physical steps; it was not replaced with ScriptPlayer's fixed 10-unit
 deadband because that would make the requested subtle motion static.
 
+*Superseded on 2026-07-24.* The width sweep below shows a 5-point window is a
+four-second stop rather than subtle motion. 20 points is now the enforced
+minimum.
+
 Two capped 20% Cradle clock runs and one full 30%-maximum retarget checklist
 were completed over Cloud REST. Before alignment, sampled engine/device clocks
 were about 1.4-1.5 seconds apart. After alignment they were 120-160 ms apart
@@ -185,7 +189,9 @@ both sides, producing a smooth but prolonged endpoint ease. Loop patterns now
 use backend-only trapezoidal velocity guides capped at 75 ms per side. The
 stroke body remains constant-speed, authored extrema and the exact
 zero-velocity instant remain intact, and internal guides are not forced onto
-the wire. Quantized retarget frames receive the same final <=2% chatter cleanup
+the wire. *Partly superseded on 2026-07-24:* the guides remain, but 75 ms is
+now only the cap. A fixed length did not shrink with playback speed or focus
+width, so the report recurred; the length is an acceleration budget. Quantized retarget frames receive the same final <=2% chatter cleanup
 as semantic frames.
 
 The speed audit found no second multiplier at a transport boundary. Loop
@@ -290,6 +296,122 @@ GATT sessions, and Intiface has no actuator-position feedback even though its
 initial `LinearCmd` has a duration. Those owners still need a separately
 validated way to bound worst-case first-point acquisition; the engine keeps
 their existing behavior rather than claiming an unavailable measurement.
+
+## Follow-Up Review - 2026-07-24
+
+Two reports were investigated together and turned out to share one cause:
+requesting motion on a specific area was unreliable and too subtle, and slow
+repeating patterns still stopped at every reversal.
+
+### The reversal ramp was a constant, not a budget
+
+The 2026-07-22 fix gave loop reversals a trapezoidal velocity ramp capped at
+75 ms per side. That cap was a fixed length in authored curve time, so it did
+not shrink when playback slowed or when a focus window compressed the stroke.
+The time a stroke spends within one whole-percent wire step of its extremum is
+proportional to `sqrt(ramp / velocity)`, and slowing playback both lengthens
+the ramp and lowers the velocity, so the near-stationary window grew roughly in
+proportion to the speed factor. Confining the same pattern to a zone lowered
+the velocity again without shrinking the ramp.
+
+Measured on `Waves` at 20% speed inside the `tip` zone, one complete up-stroke
+reached the device as four points:
+
+```
+t=   0ms  wire=76
+t= 975ms  wire=84
+t=1250ms  wire=84   <- 275ms commanded to hold
+t=1975ms  wire=76
+```
+
+The ramp is now an acceleration budget. For an authored leg of `delta` over
+`d`, the shortest ramp inside the budget is the smaller root of
+`b*(d-b) = delta/a`, evaluated in played coordinates so the speed factor and
+the focus amplitude both enter it. The budget is two thirds of the catalog
+acceleration ceiling, which leaves the rest of the curve its own headroom and
+keeps a full-span full-speed stroke leg on the existing 75 ms cap - so the fast
+full-range feel that constant was tuned for is unchanged. A short floor
+remains: with no guide at all, the zero PCHIP slope at an extremum eases the
+whole leg, which is the original defect and worse than any ramp.
+
+### A confined pattern shrank twice
+
+`applyTargetFocus` mapped the semantic 0-100 range onto the focus window, so a
+pattern that did not itself use the whole stroke shrank once by its own
+authored span and again by the window. `Cradle` spans 24-76; inside the 34-point
+`tip` zone it occupied 17.7 points, and behind a 20-80 stroke window that is
+about 10% of physical travel. A loop pattern confined to a window now re-expands
+its own span to fill that window, so asking for a smaller region changes where
+the stroke happens without also making the shape too subtle to feel. Finite
+programs and clock-locked media keep authored amplitude, and an unfocused
+pattern is unchanged - a window covering the whole stroke is normalized to "no
+focus" so that rule has no exception.
+
+### Narrow windows are refused rather than delivered as a hold
+
+With the ramp and amplitude fixed, focus width was swept across the whole
+catalog at 20% speed with whole-percent output over two cycles each:
+
+| focus width | stationary | runs over 150 ms | worst run |
+| --- | --- | --- | --- |
+| full (100) | 0.4% | 8 | 250 ms |
+| tip (34) | 0.4% | 8 | 275 ms |
+| 20 | 0.2% | 2 | 203 ms |
+| 10 | 1.0% | 19 | 643 ms |
+| 5 | 5.2% | 47 | 4,000 ms |
+
+The line between usable and unusable falls sharply between 10 and 20, so 20 is
+the minimum window width (`config.MinimumFocusWidthPercent`). Narrower requests
+are widened around their own center, the settings validator rejects them, and
+the slider will not offer them. This replaces the 2026-07-21 position that a
+5-10% window "can intentionally collapse a pattern to only a few physical
+steps": the sweep shows that is not subtle motion, it is a four-second stop.
+
+Every remaining run over 150 ms at full and `tip` width belongs to
+`playful jerk`, whose authored curve contains deliberate pauses. No unintended
+hold remains in the catalog at slow speed.
+
+### Net effect
+
+The whole-percent catalog fit, same test and same 40-60 window before and after:
+
+| | before | after |
+| --- | --- | --- |
+| adaptive points / duplicate edges / stationary | 2,452 / 619 / 39,565 ms | 1,669 / 160 / 5,325 ms |
+| whole-percent fitted | 1,549 / 136 / 11,910 ms | 1,318 / 21 / 1,048 ms |
+| worst wire error | 0.844% | 0.894% |
+
+Rounded stationary time falls 91% with fewer points on the wire. The cost is
+0.05 percentage points of peak wire error: sharper ramps concentrate curvature
+near the apex. The bound is now one full wire step, because a whole-percent
+owner cannot assert sub-step fidelity in the first place.
+
+### The user's own focus range
+
+`Settings > Limits > Focus` is a live quick control, separate from the stroke
+window on purpose. The stroke window is the physical envelope every source
+obeys, including video and startup positioning; the focus range is where a
+pattern's shape plays. A chat zone request subdivides the configured range
+rather than replacing it, so nothing the model asks for moves motion outside
+the region the user chose. Requested zones stay in full-stroke coordinates on
+the target and are composed with the configured range when the plan builds its
+projection, so re-normalizing a running target - which happens on every
+retarget and settings refresh - cannot walk the window inward.
+
+### Area requests in chat
+
+The lexical gate recognized exactly one phrasing: `focus on the tip` (or shaft
+or base) behind a directive prefix. `just the tip`, `stay near the top`,
+`work the base`, `keep it shallow`, and `concentrate on the shaft` were all
+refused, which is indistinguishable from being ignored. A zone name plus a
+placement word now authorizes an area change without the directive prefix.
+That branch reaches only `target`, which re-aims motion already running;
+starting motion still requires `authorizesMotionStart`, and the negation,
+conversation, and permission-question gates run first and are unchanged.
+
+Not verified on hardware: this review is measurement and automated tests only.
+Reversal feel at 20-40% speed, and a focused pattern at the 20-point minimum,
+still want one Cloud REST pass and one Browser Bluetooth pass.
 
 ## ScriptPlayer Comparison
 

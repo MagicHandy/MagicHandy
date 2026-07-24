@@ -327,7 +327,11 @@ func TestWholePercentSamplingReducesRoundedPlateausWithinWireErrorBound(t *testi
 				maximumWireError = delta
 				worstPattern = definition.Name
 			}
-			if delta > wireApproximationTolerance+0.55 {
+			// A whole-percent owner cannot assert sub-step fidelity, so the
+			// bound is one full wire step. Sharper reversal ramps concentrate
+			// curvature near the apex and cost a fraction of a step there;
+			// they remove most of the rounded stationary time in exchange.
+			if delta > wireApproximationTolerance+0.7 {
 				t.Fatalf("%s whole-percent wire error at %d = %.3f%%", definition.Name, at, delta)
 			}
 		}

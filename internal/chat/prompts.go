@@ -70,7 +70,9 @@ const contractPatternSection = `- Pattern selection is enabled. Prefer an enable
 
 const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", "area":"shaft", or "area":"base" to a start or target; use "area":"full" to clear an active focus.
 - Zone focus example: {"reply":"Focusing there.","motion":{"action":"target","area":"tip","speed_percent":30}}
-- Use a zone when the user names a place or asks to concentrate somewhere; return to "full" when they ask for everything again.`
+- The zones are positions along the stroke: "tip" is the shallow end, "base" is the deep end, and "shaft" is the middle.
+- Use a zone whenever the user names a place or asks to stay somewhere, however they word it — "just the tip", "stay near the top", "work the base", and "keep it shallow" are all zone requests.
+- Return to "full" when they ask for the whole range again. A zone request is a change on its own: send it even when speed and pattern stay the same.`
 
 const contractChatOnly = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
 Always return an object with exactly one string field named "reply".

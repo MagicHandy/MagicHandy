@@ -392,11 +392,7 @@ func authorizesMotionTarget(message string) bool {
 	) {
 		return true
 	}
-	if directive && hasIntentPhrase(message,
-		"focus on the tip", "focus on the shaft", "focus on the base", "use the full range", "use full range",
-		"enfócate en la punta", "enfócate en el eje", "enfócate en la base",
-		"foque na ponta", "foque na haste", "foque na base",
-	) {
+	if authorizesAreaFocus(message) {
 		return true
 	}
 	chineseTarget := containsAny(message, "运动", "移动", "速度", "节奏", "模式", "尖端", "根部") &&
@@ -404,6 +400,45 @@ func authorizesMotionTarget(message string) bool {
 	japaneseTarget := containsAny(message, "動き", "モーション", "速度", "リズム", "パターン", "先端", "シャフト", "根元") &&
 		containsAny(message, "速く", "遅く", "ゆっくり", "変え", "変更", "集中", "深く", "浅く", "短く", "長く")
 	return chineseTarget || japaneseTarget || (directive && requestsPatternVariation(message))
+}
+
+// authorizesAreaFocus recognizes a request to move motion to part of the
+// stroke. It deliberately does not require the directive prefix the other
+// target branches do: "just the tip" and "stay near the top" are unambiguous
+// requests, and this branch can only ever re-aim motion that is already
+// running. Refusing one of these silently ignores the user, while accepting a
+// false one moves an existing stroke — so the naming plus a placement word is
+// enough evidence here. Starting motion still needs authorizesMotionStart.
+func authorizesAreaFocus(message string) bool {
+	return namesMotionZone(message) && placesMotion(message)
+}
+
+func namesMotionZone(message string) bool {
+	if hasIntentPhrase(message,
+		"tip", "head", "top", "bottom", "base", "shaft", "middle", "mid",
+		"upper", "lower", "shallow", "shallowly", "deep", "deeply",
+		"full range", "whole range", "entire range", "whole stroke", "full stroke", "full strokes",
+		"punta", "cabeza", "eje", "medio", "arriba", "abajo", "profundo", "rango completo",
+		"ponta", "cabeça", "cabeca", "haste", "meio", "cima", "baixo", "fundo", "alcance total",
+	) {
+		return true
+	}
+	return containsAny(message, "尖端", "根部", "中间", "全程", "先端", "根元", "シャフト", "全体")
+}
+
+func placesMotion(message string) bool {
+	if hasIntentPhrase(message,
+		"focus", "focused", "focusing", "concentrate", "concentrating", "center", "centre",
+		"stay", "stays", "staying", "keep", "keeping", "work", "working", "stick",
+		"just", "only", "near", "around", "toward", "towards", "back to", "return to",
+		"use", "switch to", "move to", "go to", "more", "all",
+		"enfócate", "enfocate", "enfoca", "concéntrate", "concentrate", "quédate", "quedate",
+		"solo", "sólo", "cerca", "vuelve", "usa",
+		"foque", "concentre", "fique", "só", "so", "apenas", "perto", "volte", "use",
+	) {
+		return true
+	}
+	return containsAny(message, "集中", "聚焦", "回到", "だけ", "付近", "戻し", "戻して")
 }
 
 func motionIntentIsDirective(message string) bool {
