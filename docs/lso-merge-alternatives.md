@@ -94,6 +94,41 @@ prompt sets plus inspectable long-term memory.
   cannot be edited out of a prompt/persona (Phase 10 rule); personalization stays
   inspectable and resettable.
 
+### What already shipped (2026-07-23/24) — read before building a persona system
+
+Option A is now partly built, which changes what a merge has to do. MagicHandy
+composes its system prompt from **independent code-owned axes**, not from one
+free-text persona blob:
+
+| Axis | Setting | What it controls |
+| --- | --- | --- |
+| Behavior profile | `llm.prompt_set` | The editable base instructions |
+| Reply register | `llm.chat_voice` | utility / warm / intimate / explicit |
+| Partner identity | `llm.persona_description` | Bounded free text, quoted as data |
+| User anatomy | `llm.user_anatomy` (+ custom) | Code-owned vocabulary |
+| Mood | model-reported `new_mood` | 17-value enum, per session, no motion effect |
+
+Each axis is validated server-side and composed in code; none can weaken the
+motion contract. See [chat-voice.md](chat-voice.md) for the measurements that
+produced this shape.
+
+**The gap a "persona" feature should fill is a reaction-style axis** — the
+submissive / dominant / playful / teasing dimension, which is orthogonal to how
+explicit the language is and is not expressible today. The cheapest correct
+shape is another enum axis alongside `chat_voice`, composed the same way, rather
+than a second personalization system that also carries voice, anatomy, and
+memory. Concretely:
+
+- A style enum plus the existing bounded `persona_description`, not free-form
+  prompt injection.
+- Composed in code after the contract, like `voiceInstructions`, so a style can
+  never authorize motion or restate the JSON contract.
+- Presets (saveable named combinations of the axes above) are the useful part of
+  LSO's persona model and can be added later without changing this composition.
+
+An LSO persona row then imports as *values across these axes* plus a preset
+name, which is a mapping job rather than an architecture merge.
+
 ---
 
 ## Decision 4 — Motion content (LSO blocks vs Pattern Library + arrangement)

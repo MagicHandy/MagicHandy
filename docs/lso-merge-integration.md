@@ -2,7 +2,7 @@
 
 ## Status
 
-Active, updated 2026-07-14. This plan describes combining **MagicHandy** and
+Active, updated 2026-07-24. This plan describes combining **MagicHandy** and
 **LSO (Local Stroke Orchestrator)** into one project. It is a living document;
 the open decisions in the last section are tracked in
 [lso-merge-alternatives.md](lso-merge-alternatives.md) and become ADRs as they
@@ -41,6 +41,63 @@ being relaxed to fit the features.
 - CI is the shared, impartial gate. It should grow to cover both stacks (Go core
   and the frontend), and its checks are strengthened, not weakened, as the
   surface grows (see `AGENTS.md` §6).
+
+## Current next steps (snapshot, 2026-07-24)
+
+The phase table in [../IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) tracks
+depth and [feature-ideas.md](feature-ideas.md) catalogs possibilities. Neither
+answers "what should I pick up today", which is the question that actually comes
+up between two maintainers working different hours. This is that list. It is a
+**snapshot and it goes stale** — trust the linked docs over it whenever they
+disagree.
+
+**Just landed, so don't rebuild it:** the chat voice/persona/anatomy/mood axes
+(#126, #127) and the motion focus range plus acceleration-budget reversal ramp
+(#128). If you were about to start on "make the replies in character" or "the
+motion pauses at the turn", read [chat-voice.md](chat-voice.md) and the
+[2026-07-24 motion review](motion-pathway-review-2026-07-20.md#follow-up-review---2026-07-24)
+first.
+
+### Best done from the LSO side
+
+- **Reaction-style axis** (submissive / dominant / playful / teasing). Claimed
+  on 2026-07-23. Build it as an enum axis composed in code beside `chat_voice`,
+  not as a second personalization system — the shape and the reasoning are in
+  [lso-merge-alternatives.md](lso-merge-alternatives.md), Decision 3.
+- **Replace the weak built-in patterns.** Most of the catalog is generated from
+  parameter specs; only two entries are promoted from curves someone actually
+  used and accepted (`internal/motion/content_curated.go`). Which generated ones
+  are worth replacing is a judgment call best made by whoever has a large
+  funscript collection to draw from. Content work, no architecture risk;
+  [pattern-library.md](pattern-library.md) covers import and promotion.
+- **Enter-to-send in chat.** Claimed on 2026-07-23; still Ctrl+Enter in
+  `web/src/components/ChatPanel.tsx`. Keep a modifier for newline.
+- **Mouse-tracked authoring**, scoped as record-then-play. See the design note
+  and the HSP field report in [feature-ideas.md](feature-ideas.md) §C.
+
+### Best done on the Go core side
+
+- **Hardware acceptance backlog.** Several changes are correct by test and
+  unverified by hand: reversal feel at 20-40% speed and a focused pattern at the
+  20-point minimum (#128), Stop during a chat turn with TTS speaking (#127),
+  Phase 18 M3 media alignment re-recorded against `expected_media_time_ms`, and
+  Browser Bluetooth endurance beyond short sessions. This is the largest honest
+  gap in the project and it cannot be closed by more code.
+- **Autopilot cadence and autonomy level** — the STGPT-RV autospeak shape,
+  still unexposed (`llm-control-surface.md` ideas E/F).
+- **Live motion log and in-chat feedback buttons** — both are "strong
+  candidate" in the ideas catalog and both are small.
+
+### Waiting on a decision, not on work
+
+- **Offline pre-transcode for `.mkv`** — raised 2026-07-22, open questions
+  recorded in [video-playback.md](video-playback.md).
+- **Merge Decisions 1, 3, 4, 5, 6** below. Decision 3 now has shipped code
+  under it, so it is the one most likely to be decided by accident if someone
+  starts building.
+- **Whether to use GitHub issues.** Asked 2026-07-14, never answered. The
+  practical cost of not using them is visible right here: this section exists
+  because there is nowhere else for a small claimed item to live.
 
 ## Workstreams
 
@@ -91,6 +148,12 @@ LSO's persona system (persona-driven chat plus motion bias).
 - Decision needed: merge personas with MagicHandy's prompt sets + long-term
   memory into one personalization model, or keep both. Overlapping systems drift;
   prefer one. See alternatives, Decision 3.
+- Since 2026-07-23 the Go core composes prompts from independent code-owned axes
+  (prompt set, reply register, partner identity, user anatomy, model-reported
+  mood). That is most of the recommended option already built, and it narrows
+  the remaining gap to a **reaction-style axis** plus saveable presets. Decision
+  3 in the alternatives doc carries the table and the composition rule; read it
+  before adding a persona surface, or the two systems will duplicate.
 
 ### 4. LSO data import and compatibility
 

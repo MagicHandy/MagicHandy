@@ -52,7 +52,7 @@ Same vocabulary as the sweeps, plus one:
 | Motion Pattern Studio (import, draw, crop, preview, save) | **Covered** | Phase 14 authoring |
 | Adaptive **Freestyle** | **Covered** | Phase 11 planner on the shared engine |
 | **Preset modes: Auto / Edge / Milk** | **Rejected (as ports)** | ADR 0006 drops legacy scripted modes; Edge/Milk may return only as continuous-engine planners if wanted, never as `ScriptStep` ports |
-| **LLM stroke-region control (tip/shaft/base)** | **Covered** | Named `area` values compile to bounded engine `AreaFocus`; gated and validated server-side |
+| **LLM stroke-region control (tip/shaft/base)** | **Exceeds** | Named `area` values compile to bounded engine `AreaFocus`; gated and validated server-side. Since 2026-07-24 a confined pattern re-expands to fill its window, a user-set live **Focus** range bounds every zone request, and windows too narrow to move are refused |
 | **LLM program/script selection** | **Partial** | Engine `ProgramID` exists; chat contract exposes only `pattern_id` — idea B |
 | **Soft-anchor loops (tip/upper/mid/lower/base)** | **Partial** | Engine `SoftAnchor` exists; no authoring UI or model access — idea G |
 | **LLM-driven autonomous mode (Autopilot)** | **Initial implementation (PR #101)** | Chat-native control; bounded recent-conversation context; enabled pattern/intensity curation over the shared segment loop; visible deterministic fallback; chat-log/browser-TTS delivery. Live-model, long-session, cadence, and richer-arrangement acceptance remain open; see [llm-control-surface.md](llm-control-surface.md) ideas E/F |

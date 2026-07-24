@@ -522,6 +522,34 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
   deliberate scope walls; revisiting any of them is a new decision, not
   scope drift.
 
+### Open decision: offline pre-transcode for unsupported containers
+
+Raised 2026-07-22 and unresolved. The wall above rules out transcoding
+*during playback*; it does not by itself answer whether the app may help a user
+convert a file **once, ahead of time**, so their `.mkv` library becomes
+playable. The proposal on the table is an explicitly consented, user-triggered
+step that uses a user-provided or downloaded FFmpeg build to produce a
+browser-playable file, with the original untouched.
+
+That is a genuinely different shape from real-time conversion, so it deserves a
+decision rather than being either silently adopted or blocked by a wall that was
+written about a different thing. What has to be settled before any code:
+
+- **Binary and dependency stance.** FFmpeg is not bundled and must not become an
+  implicit requirement. Download would need the same checksum/consent/licensing
+  machinery as models (Phase 16), and a missing FFmpeg must degrade to today's
+  behavior, not to an error state.
+- **Where output goes.** Writing next to a user's media, into the data
+  directory, or into a chosen folder are three different promises about disk use
+  and cleanup. Never overwrite a source file.
+- **Whether it is worth it at all** versus telling the user to convert with the
+  tool they already have. The honest baseline is that `.mkv` is excluded and
+  documented; this feature buys convenience, not capability.
+- **Scope discipline.** "Convert one file on request" must not grow into media
+  management, batch pipelines, or format detection heuristics.
+
+Until that is decided, the no-transcoding stance stands as written.
+
 ## Cross-references
 
 - [feature-ideas.md](feature-ideas.md) — the reversed non-goal row.
