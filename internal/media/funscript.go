@@ -144,16 +144,22 @@ func deduplicateFunscriptActions(actions []FunscriptAction) []FunscriptAction {
 
 // TimelineFrom slices and rate-scales the authored timeline at a video-clock
 // anchor. The first point is linearly interpolated at the exact media time.
-func (f Funscript) TimelineFrom(mediaTimeMillis int64, playbackRate float64) (motion.MediaTimelineDefinition, error) {
+// Filters are applied after slicing so they act on what will actually play,
+// and their measured effect is returned rather than estimated.
+func (f Funscript) TimelineFrom(
+	mediaTimeMillis int64,
+	playbackRate float64,
+	filters Filters,
+) (motion.MediaTimelineDefinition, Effect, error) {
 	if len(f.Actions) < 2 {
-		return motion.MediaTimelineDefinition{}, ErrFunscriptInvalid
+		return motion.MediaTimelineDefinition{}, Effect{}, ErrFunscriptInvalid
 	}
 	if playbackRate < minimumPlaybackRate || playbackRate > maximumPlaybackRate || math.IsNaN(playbackRate) || math.IsInf(playbackRate, 0) {
-		return motion.MediaTimelineDefinition{}, errors.New("video playback rate must be between 0.25 and 4")
+		return motion.MediaTimelineDefinition{}, Effect{}, errors.New("video playback rate must be between 0.25 and 4")
 	}
 	mediaTimeMillis = max(int64(0), mediaTimeMillis)
 	if mediaTimeMillis >= f.DurationMillis {
-		return motion.MediaTimelineDefinition{}, ErrFunscriptComplete
+		return motion.MediaTimelineDefinition{}, Effect{}, ErrFunscriptComplete
 	}
 
 	points := make([]motion.CurvePoint, 0, len(f.Actions))
@@ -170,14 +176,19 @@ func (f Funscript) TimelineFrom(mediaTimeMillis int64, playbackRate float64) (mo
 		points = append(points, motion.CurvePoint{TimeMillis: at, PositionPercent: float64(action.Position)})
 	}
 	if len(points) < 2 || points[len(points)-1].TimeMillis <= 0 {
-		return motion.MediaTimelineDefinition{}, ErrFunscriptComplete
+		return motion.MediaTimelineDefinition{}, Effect{}, ErrFunscriptComplete
 	}
-	return motion.NormalizeMediaTimelineDefinition(motion.MediaTimelineDefinition{
+	points, effect := filters.apply(points, MaxMediaFunscriptActions)
+	definition, err := motion.NormalizeMediaTimelineDefinition(motion.MediaTimelineDefinition{
 		ID:             f.VideoID,
 		Name:           f.Name,
 		DurationMillis: points[len(points)-1].TimeMillis,
 		Points:         points,
 	})
+	if err != nil {
+		return motion.MediaTimelineDefinition{}, Effect{}, err
+	}
+	return definition, effect, nil
 }
 
 func (f Funscript) positionAt(at int64) float64 {

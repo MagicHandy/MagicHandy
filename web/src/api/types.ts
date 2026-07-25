@@ -284,6 +284,7 @@ export interface MediaVideo {
   has_funscript: boolean;
   missing: boolean;
   scanned_at: string;
+  script_offset_ms?: number;
 }
 
 export interface MediaFunscriptAction {
@@ -321,6 +322,8 @@ export interface MediaSyncStatus {
   motion_speed_limit_percent?: number;
   requires_reanchor?: boolean;
   expected_media_time_ms?: number;
+  script_offset_ms?: number;
+  filter_effect?: { actions_removed?: number; peak_reduction_percent?: number };
   message?: string;
   updated_at?: string;
 }
@@ -551,7 +554,7 @@ export interface OptionHints {
 export interface PublicSettings {
   version: number;
   server: { port: number };
-  media?: { library_paths: string[]; script_offset_ms?: number };
+  media?: { library_paths: string[]; script_offset_ms?: number; script_smoothing_percent?: number; peak_rounding_ms?: number };
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;
@@ -702,7 +705,7 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
-  media: { library_paths: string[]; script_offset_ms?: number };
+  media: { library_paths: string[]; script_offset_ms?: number; script_smoothing_percent?: number; peak_rounding_ms?: number };
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;

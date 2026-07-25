@@ -483,9 +483,12 @@ func (s *Server) stopMediaForPolicyChange(
 	previous config.Settings,
 	next config.Settings,
 ) (bool, error) {
+	// The script offset is deliberately absent: it moves the clock the video
+	// follows rather than the points the device holds, so it applies live.
 	switch {
-	case previous.Media.ScriptOffsetMillis != next.Media.ScriptOffsetMillis:
-		return s.stopActiveMedia(ctx, "media_script_offset_changed")
+	case previous.Media.ScriptSmoothingPercent != next.Media.ScriptSmoothingPercent,
+		previous.Media.PeakRoundingMillis != next.Media.PeakRoundingMillis:
+		return s.stopActiveMedia(ctx, "media_script_filters_changed")
 	case mediaSpeedPolicyChanged(previous.Motion, next.Motion):
 		return s.stopActiveMedia(ctx, "media_speed_policy_changed")
 	default:

@@ -258,3 +258,45 @@ func insertDiscoveredVideo(t *testing.T, catalog *Catalog, video discoveredVideo
 		t.Fatalf("insert catalog row: %v", err)
 	}
 }
+
+// A calibration is a fact about a pairing, so a rescan of the same file must
+// not discard it. The upsert deliberately leaves the column alone.
+func TestRescanPreservesAVideoScriptOffset(t *testing.T) {
+	catalog := openTestCatalog(t)
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Session.mp4"), "video-one")
+	runTestScan(t, catalog, root)
+	videos := listTestVideos(t, catalog)
+	if len(videos) == 0 {
+		t.Fatal("scan found no video")
+	}
+	id := videos[0].ID
+	if err := catalog.SetScriptOffset(context.Background(), id, -120); err != nil {
+		t.Fatalf("SetScriptOffset: %v", err)
+	}
+
+	runTestScan(t, catalog, root)
+	video, err := catalog.Video(context.Background(), id)
+	if err != nil {
+		t.Fatalf("Video: %v", err)
+	}
+	if video.ScriptOffsetMillis != -120 {
+		t.Fatalf("script offset after rescan = %d, want the saved -120", video.ScriptOffsetMillis)
+	}
+}
+
+// The catalog refuses a value it could not have produced rather than storing a
+// calibration the engine would clamp later.
+func TestSetScriptOffsetRejectsOutOfRange(t *testing.T) {
+	catalog := openTestCatalog(t)
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Session.mp4"), "video-one")
+	runTestScan(t, catalog, root)
+	videos := listTestVideos(t, catalog)
+	if len(videos) == 0 {
+		t.Fatal("scan found no video")
+	}
+	if err := catalog.SetScriptOffset(context.Background(), videos[0].ID, 9_999); err == nil {
+		t.Fatal("an out-of-range offset was accepted")
+	}
+}

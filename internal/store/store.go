@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 13
+	CurrentSchemaVersion = 14
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -486,6 +486,13 @@ var migrations = [][]string{
 	// v12 -> v13: generated assistant rows stay hidden until their Stop barrier
 	// commits. Existing rows are committed by definition.
 	{`SELECT 1`},
+	// v13 -> v14: per-video paired-script calibration. The offset a script needs
+	// is a property of that pairing, not of the app: display latency and device
+	// lag are the same for every video, but an author's sense of the beat is
+	// not. Bounded metadata on a row that already holds bounded metadata.
+	// SQLite has no conditional ADD COLUMN, and every other step here is safe to
+	// re-run, so the column is added by a guarded Go step instead.
+	{`SELECT 1`},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -521,20 +528,8 @@ func (db *DB) migrate(ctx context.Context) error {
 					return fmt.Errorf("apply SQLite migration to v%d: %w", next+1, err)
 				}
 			}
-			if next+1 == 8 {
-				if err := reconcileRockfireSchema(ctx, tx); err != nil {
-					return fmt.Errorf("reconcile SQLite schema at v%d: %w", next+1, err)
-				}
-			}
-			if next+1 == 12 {
-				if err := migrateChatSessions(ctx, tx); err != nil {
-					return fmt.Errorf("migrate chat sessions at v%d: %w", next+1, err)
-				}
-			}
-			if next+1 == 13 {
-				if err := migrateCommittedMessages(ctx, tx); err != nil {
-					return fmt.Errorf("migrate committed chat messages at v%d: %w", next+1, err)
-				}
+			if err := runMigrationHook(ctx, tx, next+1); err != nil {
+				return err
 			}
 			if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", next+1)); err != nil {
 				return fmt.Errorf("record SQLite schema version %d: %w", next+1, err)
@@ -749,6 +744,41 @@ func reconcileRockfireSchema(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+// runMigrationHook applies the Go half of a migration step. Some versions need
+// data reshaping or a guarded probe that plain SQL statements cannot express.
+func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
+	var err error
+	switch version {
+	case 8:
+		err = reconcileRockfireSchema(ctx, tx)
+	case 12:
+		err = migrateChatSessions(ctx, tx)
+	case 13:
+		err = migrateCommittedMessages(ctx, tx)
+	case 14:
+		err = migrateVideoScriptOffset(ctx, tx)
+	default:
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("apply SQLite migration hook at v%d: %w", version, err)
+	}
+	return nil
+}
+
+// migrateVideoScriptOffset adds the per-video calibration column when it is
+// absent. Re-running a migration over an already-current database is a normal
+// recovery path here, so the step has to be idempotent.
+func migrateVideoScriptOffset(ctx context.Context, tx *sql.Tx) error {
+	exists, err := columnExists(ctx, tx, "media_videos", "script_offset_ms")
+	if err != nil || exists {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`ALTER TABLE media_videos ADD COLUMN script_offset_ms INTEGER NOT NULL DEFAULT 0`)
+	return err
 }
 
 func columnHasType(ctx context.Context, tx *sql.Tx, table, column, columnType string) (bool, error) {

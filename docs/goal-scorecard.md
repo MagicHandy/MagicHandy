@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 945,025 raw / 575,933 gzip bytes because the isolated
-   connection artwork contributes 437,021 gzip bytes. HTML/CSS/JS is 500,789 raw
-   / 138,912 gzip bytes, and the stripped binary is 15,197,184 bytes. These
+   browser payload is 953,185 raw / 577,833 gzip bytes because the isolated
+   connection artwork contributes 437,021 gzip bytes. HTML/CSS/JS is 508,949 raw
+   / 140,812 gzip bytes, and the stripped binary is 15,235,584 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -147,6 +147,23 @@ Ranked by threat to the stated goals:
   payload is 943,204 bytes raw / 576,236 gzip; HTML/CSS/JS is 498,968 raw /
   138,809 gzip. `CGO_ENABLED=0` binaries measure 21,502,976 bytes plain and
   15,173,632 bytes stripped, both within budget.
+
+- **2026-07-25** - Floating playback panel. The paired-script calibration moved
+  to where it is used: a compact overlay on the Videos workspace (288x321 px)
+  holding a per-video sync offset and three script filters, reachable without
+  leaving the picture. The offset is now per video added to a setup-wide value,
+  stored in schema v14 on `media_videos`, and applied by shifting the sync
+  runtime's anchor rather than the slice point — so adjusting it during playback
+  moves the video without stopping the device. Filters are smoothing (reusing
+  the existing reversal stabilizer) and peak rounding (a bounded quadratic
+  fillet that moves a hand-authored triangle toward a sine); both re-arm the run
+  because they change accepted points, both report their measured effect, and
+  the zero value is authored-exact. Peak rounding is pinned by tests that it
+  never raises peak velocity, that its reduction is bounded and grows with the
+  window, that each corner is capped by its own leg, and that a script too dense
+  for the fillets plays unrounded rather than thinned. Payload is 953,185 raw /
+  577,833 gzip; HTML/CSS/JS 508,949 / 140,812; binaries 21,577,728 plain and
+  15,235,584 stripped. Filter feel is not verified on hardware.
 
 - **2026-07-24** - Paired-script timing pass. A report that motion ran slightly
   ahead of the video resolved into three causes: the HSP play timestamp was
