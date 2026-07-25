@@ -31,17 +31,54 @@ once and never think about it again.
 connection manager already owns those and is reachable on this route), anything
 that is not observable while a video plays.
 
-The panel is per-session UI, not per-video state: values are the global media
-settings. Per-video overrides are a plausible later step — some scripts need
-their own offset — but they need a storage decision (a `media_videos` column vs
-a settings map) that should not be made implicitly by building the panel first.
+The offset is **per-video**, because that is how it is actually used. Filters
+stay global for now; if per-video filters turn out to be the normal case too,
+they follow the offset into the same row.
 
 ## Contents
 
-### 1. Sync offset — live
+### 1. Sync offset — per-video, live
 
 A slider over ±2000 ms with a numeric readout, matching
 `config.MaxScriptOffsetMillis`. Positive delays the device against the picture.
+
+#### Two offsets, added, because they have two different causes
+
+The total offset a setup needs comes from two independent sources, and they
+change on different schedules:
+
+- **Your setup** — display presentation latency and device actuation lag. Constant
+  across every video, and it changes when you change hardware.
+- **This script** — the author's sense of where the beat sits. Different for
+  every file, and the reason the offset is normally adjusted per video.
+
+So the effective offset is `setup + this video`, not one overriding the other.
+Collapsing them into a single per-video number would mean re-calibrating every
+video in the library after changing a monitor. Keeping them separate means the
+setup value is measured once and the per-video value stays small and honest —
+it is the script's bias and nothing else.
+
+The panel shows both and the sum, so a surprising total is explainable:
+
+```
+This video   −70 ms          [────●─────────]
+Setup        −150 ms                 Effective −220 ms
+```
+
+The panel's slider adjusts **this video**. The setup value is displayed as
+context with a link to `Settings > Media`, where it belongs: it is a property of
+the room, not of the file.
+
+#### Storage
+
+A `script_offset_ms INTEGER NOT NULL DEFAULT 0` column on `media_videos`, added
+as schema v14 (currently 13). It is bounded metadata about a catalog row, which
+is what that table already holds — no new table, and a video that has never been
+calibrated reads 0 and simply inherits the setup value.
+
+Rows survive rescans the way the rest of the row does; a video that goes missing
+and returns keeps its calibration. Removing the video removes the offset, which
+is correct — it was a fact about that pairing.
 
 **This should become a live control, which today it is not.** The shipped
 implementation applies the offset by moving the slice point in
@@ -110,37 +147,64 @@ it at a fixed 2.0; the panel exposes the threshold over a small range (roughly
 The honest framing in the UI is "removes jitter smaller than N%", because that
 is precisely what it does.
 
-#### Soften direction changes
+#### Round peaks
 
 Media curves are linear by design — funscript segments interpolate linearly,
-matching the authored format. Every reversal is therefore a perfect corner
-demanding infinite acceleration, and what the device does with that is its own
-business rather than something the script specified.
+matching the authored format. Every reversal is therefore a perfect corner.
 
-The pattern engine already solved this shape: `withBoundedLoopReversalGuides`
-replaces a corner with a bounded trapezoid whose ramp length comes from an
-acceleration budget (see the 2026-07-24 review). It is gated to `loop && !linear`
-so media never sees it, and it should stay that way — media should get the same
-*shape* emitted as real knots, keeping linear interpolation intact:
+That is right for a script tracking real motion on screen, where the corners are
+what actually happened. It is often wrong for a script that is really a *pattern*
+— a hand-written sawtooth or triangle, which reverses instantly at every peak in
+a way no body does. This filter is for those: it rounds the vertex so the stroke
+approaches its extreme and turns, moving a triangle toward a sine.
+
+A slider sets the rounding window in milliseconds — how much time either side of
+each direction change is smoothed. Small values barely soften the tip; large
+values make the whole stroke sinusoidal. Each corner is capped at a fraction of
+its shorter adjacent leg, so dense fast sections round proportionally less than
+sparse slow ones without the user managing that.
+
+The vertex is replaced by a quadratic fillet, emitted as ordinary knots so
+linear interpolation stays intact:
 
 ```
-   authored:  A ─────────────────→ B(peak) ─────────────→ C
-   softened:  A ──→ M1 ═══════════→ M2 ──→ B(peak) ──→ M3 ═══...
-                    (ramp)  (faster cruise)   (ramp)
+   authored:  A ────────→ B(peak) ────────→ C     corner, instant reversal
+   rounded:   A ──────→ ⌒⌒⌒⌒⌒⌒⌒ ──────→ C        peak approached and turned
+                        └─ r ─┘
 ```
 
-Non-negotiable properties, each of which is a way this can go wrong:
+Properties, and the ways this one can go wrong:
 
-- **The peak is preserved exactly.** Clipping it would be the amplitude bug
-  again, wearing a different name.
 - **Timestamps are unchanged.** Only knots are inserted between them.
-- **The ramp is bounded and cannot eat the stroke body.** A short leg gets a
-  proportionally shorter ramp or none.
-- **Cruise velocity rises.** The area under the velocity curve is fixed by the
-  endpoints, so slowing at the ends means going faster in the middle. On fast
-  scripts this can exceed what the device can physically do, which makes the
-  interaction with the speed cap below the main thing to measure. If it cannot
-  be bounded safely, this filter does not ship.
+- **Peak velocity does not increase.** The straight body keeps its authored
+  slope and the fillet only reduces speed toward the turn, so the fastest
+  moment of the stroke is no faster than before and acceleration becomes finite
+  where it was unbounded. This filter asks *less* of the device, not more.
+- **Peak position is reduced, and that is the real cost.** A corner cannot be
+  rounded without cutting it; the fillet's apex sits short of the authored
+  extreme by an amount proportional to the window and the approach slope. Bound
+  it, and show it: the readout states the largest reduction the current setting
+  produces, in percentage points. This is *not* the removed 2026-07-22 amplitude
+  defect — that contracted every position toward the centre and flattened subtle
+  strokes everywhere; this touches only the neighbourhood of a direction change
+  and leaves the body of the stroke exact — but it is adjacent enough that the
+  cost has to be visible rather than argued.
+- **Point count grows.** Each rounded corner costs several knots instead of one.
+  Bounded against `MaximumMediaTimelinePoints`; a script dense enough to exceed
+  it gets fewer knots per corner, or the filter declines with a clear reason
+  rather than silently degrading.
+- **It makes tracked-motion scripts mushy.** Applying it where the corners were
+  real is exactly the wrong use. Off by default, and the timeline overlay is how
+  someone sees that before feeling it.
+
+An earlier draft of this section proposed the opposite mechanism: the bounded
+trapezoid `withBoundedLoopReversalGuides` uses for loop patterns, which
+*preserves* the peak exactly and pays for it with faster mid-stroke travel. That
+is the right tool for a pattern whose amplitude is the point, and the wrong one
+here — it keeps the harshness the user is trying to remove, and it raises
+velocity on exactly the fast scripts where that is least affordable. Recorded so
+the two do not get confused: patterns ramp velocity to keep their reach; media
+rounds position to lose the corner.
 
 #### Limit speed to the motion maximum
 
@@ -192,7 +256,9 @@ obvious next step once the numbers exist.
 - **Amplitude or range scaling.** The stroke window already does this correctly
   at the device envelope, for every source. A media-side amplitude transform is
   the removed 2026-07-22 defect.
-- **Per-video filter profiles**, until the storage decision above is made.
+- **Per-video filter profiles.** The offset is per-video because its dominant
+  term is per-script; a filter choice is closer to a taste setting. Revisit if
+  use says otherwise.
 - **Anything that edits the file.** Filters are playback transforms; the paired
   script on disk is never rewritten.
 
@@ -200,20 +266,22 @@ obvious next step once the numbers exist.
 
 Each is one reviewable PR.
 
-1. **Panel shell.** Trigger, floating panel, focus/dismiss behavior, read-only
-   gating, and the offset slider bound to the existing settings field with
-   today's re-arm behavior. Ships something usable and proves the shell.
+1. **Panel shell and the per-video offset.** Trigger, floating panel,
+   focus/dismiss behavior, read-only gating, schema v14 column, and the slider
+   over `setup + this video` with today's re-arm behavior. Ships something
+   usable and proves both the shell and the storage.
 2. **Live offset.** Move the offset from the slice point to the engine-clock
    projection and the drift baseline; make the slider live. Regression test that
    drift stays near zero with a non-zero offset.
 3. **Smoothing.** Wire `StabilizePatternReversals` into media timeline
    construction behind the setting, plus the effect readout.
-4. **Direction-change softening**, only if the velocity bound above can be
-   demonstrated — with a catalog-style measurement over real scripts, not a
-   plausibility argument.
+4. **Peak rounding.** The fillet, its per-corner cap, the point-count bound, and
+   the peak-reduction readout. Wants a measurement over real scripts — the
+   largest peak reduction and the point growth at each end of the slider — but
+   that is characterisation, not a gate it can fail.
 
-Slices 1–3 are independently valuable; 4 is the one that can fail its own
-evidence gate and should be the last thing built.
+All four are independently valuable. Slice 2 is what makes the panel worth
+opening; slice 4 is the one whose cost has to stay visible in the UI.
 
 ## Open questions
 
@@ -221,5 +289,10 @@ evidence gate and should be the last thing built.
   the group need an explicit Apply?
 - Should the offset readout show the *measured* residual drift beside the
   configured value, so calibration has feedback rather than only a setting?
-- Is per-video offset the common case? If most scripts from one source share a
-  bias, a per-source default would beat both global and per-video.
+- Should a script's offset be guessable? If most files from one source share a
+  bias, offering the last-used value as the default for new videos from the same
+  folder would save calibrating each one from zero.
+- Does peak rounding want a shape control as well as an amount — how *much* of
+  the corner is round versus how far the rounding reaches? One slider is the
+  right starting point; a second only earns its place if the first cannot reach
+  a setting people want.
