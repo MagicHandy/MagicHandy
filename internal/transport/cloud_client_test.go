@@ -538,3 +538,97 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
 }
+
+// The device is told, in server_time, when the client believes the play
+// request is happening. If that timestamp is stale, a device that honors it
+// concludes the client's clock is slow and compensates by playing further into
+// the stream — the paired script then runs ahead of the video.
+//
+// The offset refresh is a full network round trip, and it happens on the first
+// play of a session and again whenever the sync TTL expires, which is why the
+// symptom is intermittent rather than constant.
+func TestPlayServerTimeIsNotStaleAcrossAnOffsetRefresh(t *testing.T) {
+	const leg = 120 * time.Millisecond
+	var sentServerTime int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Both legs are modeled so the request is observed at its own midpoint,
+		// the way a real server sees it. A slow sync is the interesting case:
+		// its duration must not end up inside the play timestamp.
+		time.Sleep(leg)
+		switch r.URL.Path {
+		case "/servertime":
+			_, _ = fmt.Fprintf(w, `{"server_time":%d}`, time.Now().UnixMilli())
+		case "/hsp/play":
+			var body struct {
+				ServerTimeMillis int64 `json:"server_time"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			sentServerTime = body.ServerTimeMillis
+			_, _ = w.Write([]byte(`{"result":{"play_state":1}}`))
+		default:
+			http.NotFound(w, r)
+		}
+		time.Sleep(leg)
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	if _, err := cloud.Play(context.Background(), PlayCommand{StreamID: "clock"}); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
+	if sentServerTime == 0 {
+		t.Fatal("play request carried no server_time")
+	}
+
+	// The local test server shares this process clock, so the estimated offset
+	// is ~0 and the sent value is directly comparable to the engine's origin.
+	origin := cloud.PlaybackStartTime()
+	if origin.IsZero() {
+		t.Fatal("play did not report a stream origin")
+	}
+	skew := sentServerTime - origin.UnixMilli()
+	t.Logf("server_time minus modeled origin = %dms", skew)
+	if skew < -int64(leg/time.Millisecond) || skew > int64(leg/time.Millisecond) {
+		t.Fatalf(
+			"server_time is %dms from the modeled stream origin; the device and the engine would disagree by that much",
+			skew,
+		)
+	}
+}
+
+// Without a measured offset the local wall clock is not a usable stand-in for
+// Handy server time: a machine whose clock is skewed would hand the device that
+// skew directly, and HSP would place the stream by it. Omitting the field lets
+// the device fall back to its own clock.
+func TestPlayOmitsServerTimeWhenTheOffsetIsUnknown(t *testing.T) {
+	playBody := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/servertime":
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		case "/hsp/play":
+			body, _ := io.ReadAll(r.Body)
+			playBody = string(body)
+			_, _ = w.Write([]byte(`{"result":{"play_state":1}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	if _, err := cloud.Play(context.Background(), PlayCommand{StreamID: "no-sync"}); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
+	if playBody == "" {
+		t.Fatal("play request was not observed")
+	}
+	if strings.Contains(playBody, "server_time") {
+		t.Fatalf("play body = %s, want no server_time without a measured offset", playBody)
+	}
+	if cloud.PlaybackStartTime().IsZero() {
+		t.Fatal("play must still report a stream origin so the engine clock runs")
+	}
+}

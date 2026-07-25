@@ -176,6 +176,13 @@ type ServerSettings struct {
 // Paths are not secrets, but the scanner never accepts them from media routes.
 type MediaSettings struct {
 	LibraryPaths []string `json:"library_paths"`
+	// ScriptOffsetMillis shifts a paired script against its video. Positive
+	// delays the script, negative advances it. Some offset is not a defect the
+	// app can remove: scripts are authored against a particular sense of "on
+	// the beat", displays add their own presentation latency, and the device
+	// takes real time to move. This is the calibration control for that
+	// remainder, not a substitute for correct clock alignment.
+	ScriptOffsetMillis int `json:"script_offset_ms"`
 }
 
 // DeviceSettings contains device transport configuration.
@@ -198,6 +205,11 @@ const (
 	// MotionStyleIntense favors pulse patterns, higher speeds, faster changes.
 	MotionStyleIntense = "intense"
 )
+
+// MaxScriptOffsetMillis bounds the paired-script calibration offset. Two
+// seconds covers authoring bias, display presentation latency, and device
+// actuation lag together; beyond that the pairing itself is wrong.
+const MaxScriptOffsetMillis = 2000
 
 // MinimumFocusWidthPercent keeps a focus window wide enough to still be
 // motion. Measured across the whole built-in catalog at slow speed with
@@ -600,7 +612,8 @@ func (s Settings) Public() PublicSettings {
 		Version: s.Version,
 		Server:  s.Server,
 		Media: MediaSettings{
-			LibraryPaths: append([]string{}, s.Media.LibraryPaths...),
+			ScriptOffsetMillis: s.Media.ScriptOffsetMillis,
+			LibraryPaths:       append([]string{}, s.Media.LibraryPaths...),
 		},
 		Device: PublicDeviceSettings{
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
@@ -1359,10 +1372,28 @@ func normalizeMediaSettings(settings MediaSettings) MediaSettings {
 		}
 	}
 	settings.LibraryPaths = paths
+	settings.ScriptOffsetMillis = clampInt(
+		settings.ScriptOffsetMillis,
+		-MaxScriptOffsetMillis,
+		MaxScriptOffsetMillis,
+	)
 	return settings
 }
 
+func clampInt(value, minimum, maximum int) int {
+	if value < minimum {
+		return minimum
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
+}
+
 func validateMediaSettings(settings MediaSettings) error {
+	// The script offset is clamped in normalizeMediaSettings rather than
+	// rejected here: it is a calibration dial, and a hand-edited settings file
+	// should still load with a usable value instead of failing to open.
 	const maxLibraryPaths = 32
 	if len(settings.LibraryPaths) > maxLibraryPaths {
 		return fmt.Errorf("media library supports at most %d locations", maxLibraryPaths)

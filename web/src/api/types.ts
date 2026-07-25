@@ -551,7 +551,7 @@ export interface OptionHints {
 export interface PublicSettings {
   version: number;
   server: { port: number };
-  media?: { library_paths: string[] };
+  media?: { library_paths: string[]; script_offset_ms?: number };
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;
@@ -702,7 +702,7 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
-  media: { library_paths: string[] };
+  media: { library_paths: string[]; script_offset_ms?: number };
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;

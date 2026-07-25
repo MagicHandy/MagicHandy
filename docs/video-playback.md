@@ -522,6 +522,63 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
   deliberate scope walls; revisiting any of them is a new decision, not
   scope drift.
 
+### Timing pass (2026-07-24): script running ahead of the picture
+
+A report that paired motion sometimes ran slightly ahead of the video resolved
+into three separate causes, plus one control for what code cannot fix.
+
+**The play timestamp described an instant already in the past.** HSP `/hsp/play`
+carries `server_time`: the client telling the device when it believes the
+request is happening, so the device can place the stream on its own clock. Two
+things made that value wrong.
+
+The Handy server-time offset is refreshed on a 5-minute TTL, and the refresh is
+itself a network round trip — but the local instant was captured *before* it and
+returned afterwards unchanged. On the first play of a session, and again at
+every TTL expiry, the device was handed a timestamp a full round trip stale. A
+device that honors the field reads that as a slow client clock and compensates
+by playing further into the stream, which is exactly a script running early. The
+intermittency in the original report matches the TTL: most plays reuse a cached
+offset and only carry the smaller error below.
+
+Separately, the value described the pre-dispatch instant while
+`PlaybackStartTime` — the origin the engine's clock and therefore
+`expected_media_time_ms` are built on — models the request *midpoint*. Those are
+different instants for the same event, and they cannot both be right. The
+timestamp now includes half the measured sync round trip, describing the moment
+the device receives the request. That is the same instant the engine models, so
+the two agree whether or not the firmware honors the field.
+
+A regression test drives both legs of a simulated network and measures the
+distance between the timestamp sent and the origin modeled: **361 ms before,
+1 ms after**.
+
+An unmeasured offset now omits `server_time` rather than sending a raw local
+wall clock. A machine whose clock is skewed from the Handy server would
+otherwise hand the device that skew directly.
+
+**Resuming was always aligned a moment too early.** The pre-play alignment reads
+the engine clock, then seeks and restarts the decoder — and the clock runs
+through both. The video therefore begins behind the device by the cost of
+resuming, always in that direction. Anything under the 150 ms steady-state
+threshold then persists for the whole run, because that band exists to avoid
+visible mid-playback corrections. One tighter pass (40 ms) once the media clock
+is actually advancing removes it; a correction that small, immediately after the
+repositioning that just happened, is not perceptible.
+
+**Settings > Media > Script offset** is the calibration dial for the remainder,
+which is not a defect the app can remove: scripts are authored against a
+particular sense of timing, displays add presentation latency between
+`currentTime` and the photons, and the device takes real time to move. Positive
+delays the device against the picture, negative advances it, bounded at ±2 s and
+applied by moving the slice point in `TimelineFrom` — never by moving the video
+clock, which is locked to the engine. Changing it stops an active run the same
+way a speed-policy change does, because buffered points cannot be rewritten.
+
+Not verified on hardware: the numbers above are from simulated timing and unit
+tests. Which of these dominates in practice, and what offset a real setup wants,
+needs one paired-playback session with a device.
+
 ### Open decision: offline pre-transcode
 
 The wall above rules out transcoding *during playback*. It does not by itself

@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 943,580 raw / 575,567 gzip bytes because the isolated
-   connection artwork contributes 437,021 gzip bytes. HTML/CSS/JS is 499,344 raw
-   / 138,546 gzip bytes, and the stripped binary is 15,190,528 bytes. These
+   browser payload is 945,025 raw / 575,933 gzip bytes because the isolated
+   connection artwork contributes 437,021 gzip bytes. HTML/CSS/JS is 500,789 raw
+   / 138,912 gzip bytes, and the stripped binary is 15,197,184 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -147,6 +147,23 @@ Ranked by threat to the stated goals:
   payload is 943,204 bytes raw / 576,236 gzip; HTML/CSS/JS is 498,968 raw /
   138,809 gzip. `CGO_ENABLED=0` binaries measure 21,502,976 bytes plain and
   15,173,632 bytes stripped, both within budget.
+
+- **2026-07-24** - Paired-script timing pass. A report that motion ran slightly
+  ahead of the video resolved into three causes: the HSP play timestamp was
+  captured before a network round trip that refreshes the Handy clock offset and
+  returned stale (worst at the first play of a session and at every 5-minute TTL
+  expiry, which explains the intermittency); that timestamp described a
+  different instant than the origin the engine clock is built on; and resuming
+  aligned the video a moment before the seek and decoder restart it then paid
+  for, leaving a one-directional offset inside the tolerated band. A simulated
+  two-leg network measures the timestamp/origin distance at 361 ms before and
+  1 ms after. Settings > Media gains a bounded script offset for authoring bias,
+  display latency, and device lag, which code cannot remove. A defect found in
+  live verification and not by the unit tests is pinned separately: the public
+  settings projection built MediaSettings field by field, so the new value saved
+  and every read returned zero. Payload is 945,025 raw / 575,933 gzip;
+  HTML/CSS/JS 500,789 / 138,912; binaries 21,530,112 plain and 15,197,184
+  stripped. Hardware timing is not verified here.
 
 - **2026-07-24** - Motion focus and reversal follow-up. Two reports shared one
   cause: the reversal ramp was a fixed 75 ms of authored curve time, so it did

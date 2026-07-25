@@ -71,6 +71,9 @@ type CloudRESTTransport struct {
 	playbackStartedAt      time.Time
 	serverTimeOffsetMillis int64
 	serverTimeSyncedAt     time.Time
+	// serverTimeOneWayMillis is half of the measured sync round trip, used to
+	// describe the play timestamp at the instant the device receives it.
+	serverTimeOneWayMillis int64
 }
 
 var _ MotionStartupStateProvider = (*CloudRESTTransport)(nil)
@@ -292,7 +295,11 @@ func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (Com
 		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
 
-	command.ServerTimeMillis = t.estimatedServerTimeMillisLocked(ctx)
+	// Resolve the offset before timestamping: the refresh is a round trip, and
+	// anything measured before it would describe an instant already in the past.
+	if serverTime, ok := t.estimatedServerTimeMillisLocked(ctx); ok {
+		command.ServerTimeMillis = serverTime
+	}
 	request, err := t.builder.BuildHSPPlay(command)
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
@@ -625,15 +632,34 @@ func (t *CloudRESTTransport) nextSetupStreamIDLocked() uint32 {
 	return t.nextHSPStreamID
 }
 
-func (t *CloudRESTTransport) estimatedServerTimeMillisLocked(ctx context.Context) int64 {
+// estimatedServerTimeMillisLocked reports Handy server time at the moment the
+// device is expected to receive the request being built, or false when no
+// offset has been measured.
+//
+// Two corrections matter here, because HSP uses this value to place the stream
+// on the device's clock. Refreshing the offset is itself a network round trip,
+// so the local instant must be re-read after it — carrying the pre-refresh
+// instant made the timestamp a full round trip stale on the first play of a
+// session and again at every TTL expiry, which a device that honors the field
+// reads as a slow client clock and compensates for by playing further into the
+// stream. And the value describes an instant the device has not reached yet, so
+// half the measured round trip is added: the device then anchors the stream at
+// receipt, which is the same instant PlaybackStartTime models, whether or not
+// the firmware honors the field at all.
+//
+// An unmeasured offset returns false rather than a raw local wall clock. A
+// machine whose clock is skewed from the Handy server would otherwise hand the
+// device that skew directly; omitting the field lets the device use its own.
+func (t *CloudRESTTransport) estimatedServerTimeMillisLocked(ctx context.Context) (int64, bool) {
 	now := time.Now().UTC()
 	if t.serverTimeSyncedAt.IsZero() || now.Sub(t.serverTimeSyncedAt) > serverTimeSyncTTLSeconds*time.Second {
 		_ = t.refreshServerTimeOffsetLocked(ctx, now)
+		now = time.Now().UTC()
 	}
 	if t.serverTimeSyncedAt.IsZero() {
-		return unixMillis(now)
+		return 0, false
 	}
-	return unixMillis(now) + t.serverTimeOffsetMillis
+	return unixMillis(now) + t.serverTimeOffsetMillis + t.serverTimeOneWayMillis, true
 }
 
 func (t *CloudRESTTransport) refreshServerTimeOffsetLocked(ctx context.Context, started time.Time) error {
@@ -664,6 +690,7 @@ func (t *CloudRESTTransport) refreshServerTimeOffsetLocked(ctx context.Context, 
 	ended := time.Now().UTC()
 	localMidpoint := (unixMillis(started) + unixMillis(ended)) / 2
 	t.serverTimeOffsetMillis = serverTimeMillis - localMidpoint
+	t.serverTimeOneWayMillis = max(int64(0), (unixMillis(ended)-unixMillis(started))/2)
 	t.serverTimeSyncedAt = ended
 	return nil
 }

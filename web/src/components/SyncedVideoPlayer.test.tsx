@@ -223,6 +223,48 @@ describe("SyncedVideoPlayer", () => {
     expect(screen.getByText("Device following video")).toBeInTheDocument();
   });
 
+  it("re-checks the engine clock once playback is really advancing", async () => {
+    mediaSync.mockImplementation(async (event) => ({
+      sync: event.state === "playing"
+        ? { ...following, last_event: event.event, expected_media_time_ms: 5_000, playback_rate: 1 }
+        : {
+            active: false,
+            video_id: event.video_id,
+            state: event.state === "closed" ? "idle" : event.state,
+            last_event: event.event,
+          },
+    }));
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={14} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    let currentTime = 0;
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+      set: (value: number) => { currentTime = value; },
+    });
+    Object.defineProperty(player, "paused", { configurable: true, get: () => false });
+
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    expect(currentTime).toBeCloseTo(5, 1);
+
+    // Seeking and restarting the decoder cost real time that the pre-play
+    // reading could not include, so the video starts behind the device. Left
+    // alone this sits under the steady-state threshold forever and reads as a
+    // script running slightly ahead of the picture.
+    currentTime = 4.93;
+    fireEvent.timeUpdate(player);
+    await Promise.resolve();
+    expect(currentTime).toBeCloseTo(5, 1);
+
+    // Only once: a later small deviation is steady-state drift, which the
+    // 150ms band deliberately tolerates rather than correcting visibly.
+    currentTime = 4.93;
+    fireEvent.timeUpdate(player);
+    await Promise.resolve();
+    expect(currentTime).toBeCloseTo(4.93, 2);
+  });
+
   it("does not treat the correction seek's buffering dip as starvation", async () => {
     mediaSync.mockImplementation(async (event) => ({
       sync: event.state === "playing"

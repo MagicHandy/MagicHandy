@@ -199,3 +199,47 @@ func TestTimelineFromPreservesReportedReversalsNearOneSeventeen(t *testing.T) {
 		}
 	}
 }
+
+// A calibration offset shifts which authored moment plays at the anchor. It is
+// applied by moving the slice point, never by moving the video clock: the video
+// is locked to the engine's transport-aligned clock, and shifting it there
+// would fight that alignment on the next heartbeat.
+func TestTimelineFromShiftsTheAuthoredMomentAtTheAnchor(t *testing.T) {
+	script := Funscript{
+		VideoID: "clip", Name: "Clip", DurationMillis: 4000,
+		Actions: []FunscriptAction{
+			{AtMillis: 0, Position: 0},
+			{AtMillis: 2000, Position: 100},
+			{AtMillis: 4000, Position: 0},
+		},
+	}
+
+	plain, err := script.TimelineFrom(2000, 1)
+	if err != nil {
+		t.Fatalf("TimelineFrom: %v", err)
+	}
+	if got := plain.Points[0].PositionPercent; got != 100 {
+		t.Fatalf("unshifted start = %.1f, want the authored peak 100", got)
+	}
+
+	// Delaying the script by 500ms starts it from the authored 1500ms moment,
+	// which on the way up to the peak is 75%.
+	delayed, err := script.TimelineFrom(2000-500, 1)
+	if err != nil {
+		t.Fatalf("TimelineFrom delayed: %v", err)
+	}
+	if got := delayed.Points[0].PositionPercent; got != 75 {
+		t.Fatalf("delayed start = %.1f, want the authored 1500ms position 75", got)
+	}
+	// Advancing it reaches past the peak by the same amount.
+	advanced, err := script.TimelineFrom(2000+500, 1)
+	if err != nil {
+		t.Fatalf("TimelineFrom advanced: %v", err)
+	}
+	if got := advanced.Points[0].PositionPercent; got != 75 {
+		t.Fatalf("advanced start = %.1f, want the authored 2500ms position 75", got)
+	}
+	if delayed.DurationMillis <= plain.DurationMillis {
+		t.Fatal("delaying the script must leave more of it to play, not less")
+	}
+}
