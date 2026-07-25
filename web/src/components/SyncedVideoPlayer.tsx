@@ -16,6 +16,15 @@ const SEEK_GESTURE_PAUSE_MILLIS = 400;
 // transport-aligned clock by more than this, the video is nudged. Below it,
 // a correction would be more visible than the offset.
 const CLOCK_ALIGN_THRESHOLD_MILLIS = 150;
+// Resuming is not instant: the pre-play alignment targets the engine clock as
+// it reads *before* the seek and decoder restart, and the clock keeps running
+// through both. That start cost lands entirely in one direction — the video
+// begins behind the device — and anything under the steady-state threshold
+// would then persist for the whole run, which is exactly what a script running
+// slightly ahead of the picture feels like. One tighter pass once the media
+// clock is actually advancing removes it; a correction this small is
+// imperceptible next to the repositioning that just happened.
+const RESUME_ALIGN_THRESHOLD_MILLIS = 40;
 const TIMELINE_HIDDEN_KEY = "magichandy-video-timeline-hidden";
 
 interface Props {
@@ -63,6 +72,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const playIntentLostAt = useRef(0);
   const alignSeekActive = useRef(false);
   const alignSeekTimer = useRef<number>();
+  const resumeAlignPending = useRef(false);
   const engineClock = useRef<{ mediaMs: number; atMs: number; rate: number } | null>(null);
   const pendingArm = useRef<"play" | "seeked" | "ratechange" | "resync" | null>(null);
   const armAbort = useRef<AbortController | null>(null);
@@ -171,6 +181,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   }, []);
 
   const holdVideo = useCallback((player: HTMLVideoElement) => {
+    // Any hold ends the resume this alignment belonged to; the next arm sets it
+    // again. Leaving it armed would fire a correction against a stale clock.
+    resumeAlignPending.current = false;
     if (player.paused) return;
     suppressNext("pause");
     player.pause();
@@ -213,12 +226,15 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   // armed the engine clock owns synchronization and the video follows it.
   // Corrections raise alignSeekActive so the resulting seeking/seeked pair is
   // not mistaken for a user seek that must stop motion.
-  const alignPlayerToEngineClock = useCallback((player: HTMLVideoElement) => {
+  const alignPlayerToEngineClock = useCallback((
+    player: HTMLVideoElement,
+    thresholdMillis = CLOCK_ALIGN_THRESHOLD_MILLIS,
+  ) => {
     const clock = engineClock.current;
     if (!clock || !activeSync.current || seekInProgress.current || player.seeking) return;
     const projectedMs = clock.mediaMs + (performance.now() - clock.atMs) * clock.rate;
     const deltaMs = projectedMs - mediaTimeMillis(player);
-    if (!Number.isFinite(deltaMs) || Math.abs(deltaMs) < CLOCK_ALIGN_THRESHOLD_MILLIS) return;
+    if (!Number.isFinite(deltaMs) || Math.abs(deltaMs) < thresholdMillis) return;
     alignSeekActive.current = true;
     window.clearTimeout(alignSeekTimer.current);
     alignSeekTimer.current = window.setTimeout(() => {
@@ -332,6 +348,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
         // still-held video onto it so playback resumes already in sync.
         alignPlayerToEngineClock(player);
         await player.play();
+        // Seek and decoder restart both happened after that reading, so re-check
+        // once the media clock is actually advancing.
+        resumeAlignPending.current = true;
         resumeAfterSeek.current = false;
         playIntentLostAt.current = 0;
       } catch (reason) {
@@ -356,6 +375,17 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     }
   }, [alignPlayerToEngineClock, holdVideo, locked, script, showSyncFailure, stopPlaybackMotion, suppressNext, syncEvent, video.id, waitForMediaReady]);
   armPlaybackRef.current = armPlayback;
+
+  // The media clock advancing is the first honest evidence that playback really
+  // resumed, so it is where the tighter post-resume alignment belongs.
+  const handleTimeChange = useCallback((timeMillis: number) => {
+    setCurrentTime(timeMillis);
+    if (!resumeAlignPending.current) return;
+    const player = playerRef.current ?? lastPlayer.current;
+    if (!player || player.paused || arming.current || seekInProgress.current || !activeSync.current) return;
+    resumeAlignPending.current = false;
+    alignPlayerToEngineClock(player, RESUME_ALIGN_THRESHOLD_MILLIS);
+  }, [alignPlayerToEngineClock]);
 
   const handlePlaybackEvent = useCallback((event: MediaPlaybackEvent, player: HTMLVideoElement) => {
     lastPlayer.current = player;
@@ -599,7 +629,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       video={video}
       allowMetadataWrite={!locked}
       onVideoUpdate={onVideoUpdate}
-      onTimeChange={setCurrentTime}
+      onTimeChange={handleTimeChange}
       playerRef={playerRef}
       onPlaybackEvent={handlePlaybackEvent}
       synchronized

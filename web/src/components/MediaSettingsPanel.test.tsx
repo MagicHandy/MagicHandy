@@ -19,6 +19,8 @@ const mediaScan = vi.mocked(api.mediaScan);
 const startMediaScan = vi.mocked(api.startMediaScan);
 const speedLimitProps = {
   limitVideoScriptSpeed: false,
+  scriptOffsetMillis: 0,
+  onScriptOffsetChange: vi.fn(),
   onLimitVideoScriptSpeedChange: vi.fn(),
 };
 
@@ -52,6 +54,32 @@ describe("MediaSettingsPanel", () => {
   });
 
   afterEach(() => vi.unstubAllGlobals());
+
+  it("reports a bounded script offset to the settings form", async () => {
+    const onScriptOffsetChange = vi.fn();
+    render(
+      <MediaSettingsPanel
+        {...speedLimitProps}
+        scriptOffsetMillis={-150}
+        onScriptOffsetChange={onScriptOffsetChange}
+        locations={[]}
+        savedLocations={[]}
+        locked={false}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const field = await screen.findByRole("spinbutton", { name: /Script offset/ });
+    expect(field).toHaveValue(-150);
+
+    fireEvent.change(field, { target: { value: "250" } });
+    expect(onScriptOffsetChange).toHaveBeenLastCalledWith(250);
+
+    // Beyond the bound the dial stops being calibration, so the field clamps
+    // instead of forwarding a value the backend would silently reduce.
+    fireEvent.change(field, { target: { value: "99999" } });
+    expect(onScriptOffsetChange).toHaveBeenLastCalledWith(2000);
+  });
 
   it("shows catalog counts, requires saving path edits, and starts only an explicit scan", async () => {
     const onChange = vi.fn();

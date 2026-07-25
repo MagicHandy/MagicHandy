@@ -4,11 +4,21 @@ import type { MediaScanState, MediaVideo } from "../api/types";
 import { RefreshIcon, TrashIcon } from "../shell/icons";
 import { HostPathField } from "./HostPathField";
 
+// Mirrors config.MaxScriptOffsetMillis.
+const MAX_SCRIPT_OFFSET_MILLIS = 2000;
+
+function clampOffset(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-MAX_SCRIPT_OFFSET_MILLIS, Math.min(MAX_SCRIPT_OFFSET_MILLIS, Math.round(value)));
+}
+
 interface Props {
   locations: string[];
   savedLocations: string[];
   limitVideoScriptSpeed: boolean;
   onLimitVideoScriptSpeedChange: (enabled: boolean) => void;
+  scriptOffsetMillis: number;
+  onScriptOffsetChange: (millis: number) => void;
   locked: boolean;
   onChange: (locations: string[]) => void;
 }
@@ -18,6 +28,8 @@ export function MediaSettingsPanel({
   savedLocations,
   limitVideoScriptSpeed,
   onLimitVideoScriptSpeedChange,
+  scriptOffsetMillis,
+  onScriptOffsetChange,
   locked,
   onChange,
 }: Props) {
@@ -125,6 +137,27 @@ export function MediaSettingsPanel({
           Apply motion speed limit to video scripts
           <small>Off preserves paired funscript timing and movement. On caps only over-limit segments. A change during playback requires Play again.</small>
         </span>
+      </label>
+      <label className="field">
+        <span className="label">
+          Script offset <span className="hint-inline">milliseconds</span>
+        </span>
+        <input
+          type="number"
+          min={-MAX_SCRIPT_OFFSET_MILLIS}
+          max={MAX_SCRIPT_OFFSET_MILLIS}
+          step={10}
+          value={scriptOffsetMillis}
+          disabled={locked}
+          onChange={(event) => onScriptOffsetChange(clampOffset(Number(event.target.value)))}
+        />
+        <small>
+          Positive delays the device against the picture, negative advances it. Some offset is
+          normal and is not a fault in the video or the script: scripts are authored to a
+          particular sense of timing, screens add their own display delay, and the device takes
+          real time to move. Start at 0, and adjust only if motion consistently feels early or
+          late. A change during playback requires Play again.
+        </small>
       </label>
       <div className="divider" />
       <h2 className="section-title">Library locations</h2>

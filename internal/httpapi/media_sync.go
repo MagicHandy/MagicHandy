@@ -181,7 +181,12 @@ func (m *mediaSyncRuntime) arm(ctx context.Context, event mediaSyncEvent, stopSe
 	if err != nil {
 		return m.setError(event, err), err
 	}
-	timeline, err := script.TimelineFrom(event.MediaTimeMillis, event.PlaybackRate)
+	armSettings, _ := m.server.store.Snapshot()
+	scriptOffset := armSettings.Media.ScriptOffsetMillis
+	// A positive offset delays the script, so the run starts from an earlier
+	// authored moment. The video clock is never moved: shifting it would fight
+	// the engine-clock alignment that owns synchronization.
+	timeline, err := script.TimelineFrom(event.MediaTimeMillis-int64(scriptOffset), event.PlaybackRate)
 	if errors.Is(err, media.ErrFunscriptComplete) {
 		status, stopErr := m.stopForEvent(ctx, event, "media_script_completed", "completed", false)
 		if stopErr != nil {

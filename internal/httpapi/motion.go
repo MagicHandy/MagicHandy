@@ -464,24 +464,39 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		}
 		return errors.Join(runtimeErr, stopErr)
 	}
+	if stopped, stopErr := s.stopMediaForPolicyChange(ctx, previous, next); stopped {
+		return errors.Join(runtimeErr, stopErr)
+	}
 	// Prompt, persona, and other non-motion settings must not emit transport
 	// traffic. Live refresh is only for an actual MotionSettings change.
 	if previous.Motion == next.Motion {
 		return runtimeErr
 	}
-	if stopped, stopErr := s.stopMediaForSpeedPolicyChange(ctx, previous.Motion, next.Motion); stopped {
-		return errors.Join(runtimeErr, stopErr)
-	}
 	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.Motion))
 }
-func (s *Server) stopMediaForSpeedPolicyChange(
+
+// stopMediaForPolicyChange ends an active clock-locked run when a setting it
+// baked into its buffered points changed. Neither the script offset nor the
+// speed cap can be applied to points the device has already accepted.
+func (s *Server) stopMediaForPolicyChange(
 	ctx context.Context,
-	previous config.MotionSettings,
-	next config.MotionSettings,
+	previous config.Settings,
+	next config.Settings,
 ) (bool, error) {
-	if !mediaSpeedPolicyChanged(previous, next) {
+	switch {
+	case previous.Media.ScriptOffsetMillis != next.Media.ScriptOffsetMillis:
+		return s.stopActiveMedia(ctx, "media_script_offset_changed")
+	case mediaSpeedPolicyChanged(previous.Motion, next.Motion):
+		return s.stopActiveMedia(ctx, "media_speed_policy_changed")
+	default:
 		return false, nil
 	}
+}
+
+// stopActiveMedia ends a clock-locked run whose buffered points were built
+// under a policy that no longer applies. Already-accepted HSP points cannot be
+// rewritten, so the honest response is to stop and let playback re-arm.
+func (s *Server) stopActiveMedia(ctx context.Context, reason string) (bool, error) {
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return false, nil
@@ -491,9 +506,9 @@ func (s *Server) stopMediaForSpeedPolicyChange(
 		return false, nil
 	}
 	if s.mediaSync != nil {
-		s.mediaSync.Invalidate("media_speed_policy_changed")
+		s.mediaSync.Invalidate(reason)
 	}
-	return true, s.stopAndClearActiveMediaEngine(ctx, "media_speed_policy_changed")
+	return true, s.stopAndClearActiveMediaEngine(ctx, reason)
 }
 
 func mediaSpeedPolicyChanged(previous, next config.MotionSettings) bool {

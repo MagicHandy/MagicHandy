@@ -96,7 +96,14 @@ export function SettingsRoute() {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
   }
   function patchMedia(libraryPaths: string[]) {
-    setS((cur) => (cur ? { ...cur, media: { library_paths: libraryPaths } } : cur));
+    setS((cur) => (cur
+      ? { ...cur, media: { library_paths: libraryPaths, script_offset_ms: cur.media?.script_offset_ms ?? 0 } }
+      : cur));
+  }
+  function patchScriptOffset(millis: number) {
+    setS((cur) => (cur
+      ? { ...cur, media: { library_paths: cur.media?.library_paths ?? [], script_offset_ms: millis } }
+      : cur));
   }
   function patchMotion(p: Partial<PublicSettings["motion"]>) {
     setS((cur) => (cur ? { ...cur, motion: { ...cur.motion, ...p } } : cur));
@@ -123,7 +130,10 @@ export function SettingsRoute() {
     const elevenLabsKey = newElevenLabsKey.trim();
     const update: SettingsUpdate = {
       server: { port: s.server.port },
-      media: { library_paths: s.media?.library_paths ?? [] },
+      media: {
+        library_paths: s.media?.library_paths ?? [],
+        script_offset_ms: s.media?.script_offset_ms ?? 0,
+      },
       device: {
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
         intiface_server_address: s.device.intiface_server_address,
@@ -304,6 +314,8 @@ export function SettingsRoute() {
             savedLocations={saved?.media?.library_paths ?? []}
             limitVideoScriptSpeed={s.motion.apply_video_speed_limit ?? false}
             onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
+            scriptOffsetMillis={s.media?.script_offset_ms ?? 0}
+            onScriptOffsetChange={patchScriptOffset}
             locked={locked}
             onChange={patchMedia}
           />

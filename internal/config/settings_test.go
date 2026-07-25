@@ -1069,3 +1069,50 @@ func TestFocusRangeDefaultsAndValidation(t *testing.T) {
 		t.Fatal("a focus window too narrow to move was accepted")
 	}
 }
+
+// The calibration offset is bounded on both sides. Beyond a couple of seconds
+// the pairing itself is wrong and shifting the script only hides that.
+func TestScriptOffsetIsBoundedAndDefaultsToZero(t *testing.T) {
+	settings := DefaultSettings()
+	if settings.Media.ScriptOffsetMillis != 0 {
+		t.Fatalf("default script offset = %d, want 0", settings.Media.ScriptOffsetMillis)
+	}
+
+	for _, offset := range []int{-MaxScriptOffsetMillis, -250, 0, 250, MaxScriptOffsetMillis} {
+		candidate := settings
+		candidate.Media.ScriptOffsetMillis = offset
+		normalized, err := NormalizeSettings(candidate)
+		if err != nil {
+			t.Fatalf("offset %d rejected: %v", offset, err)
+		}
+		if normalized.Media.ScriptOffsetMillis != offset {
+			t.Fatalf("offset %d normalized to %d", offset, normalized.Media.ScriptOffsetMillis)
+		}
+	}
+
+	// The public projection builds MediaSettings field by field, so a value that
+	// survives normalization can still be dropped on the way to the UI. That is
+	// what happened the first time: saves succeeded and every read returned 0.
+	calibrated := settings
+	calibrated.Media.ScriptOffsetMillis = -150
+	if got := calibrated.Public().Media.ScriptOffsetMillis; got != -150 {
+		t.Fatalf("public script offset = %d, want the saved -150", got)
+	}
+
+	// Out of range clamps rather than failing: this is a calibration dial, and
+	// a hand-edited settings file should still open with a usable value.
+	for offset, want := range map[int]int{
+		-MaxScriptOffsetMillis - 500: -MaxScriptOffsetMillis,
+		MaxScriptOffsetMillis + 500:  MaxScriptOffsetMillis,
+	} {
+		candidate := settings
+		candidate.Media.ScriptOffsetMillis = offset
+		normalized, err := NormalizeSettings(candidate)
+		if err != nil {
+			t.Fatalf("offset %d failed to normalize: %v", offset, err)
+		}
+		if normalized.Media.ScriptOffsetMillis != want {
+			t.Fatalf("offset %d clamped to %d, want %d", offset, normalized.Media.ScriptOffsetMillis, want)
+		}
+	}
+}
