@@ -195,6 +195,14 @@ export const api = {
   mediaStreamURL: (id: string) => `/api/media/videos/${encodeURIComponent(id)}/stream`,
   mediaFunscript: (id: string, signal?: AbortSignal) =>
     request<{ funscript: MediaFunscript }>("GET", `/api/media/videos/${encodeURIComponent(id)}/funscript`, undefined, signal),
+  saveMediaScriptOffset: (id: string, scriptOffsetMillis: number) =>
+    request("POST", "/api/media/script-offset", { id, script_offset_ms: scriptOffsetMillis }),
+  saveMediaPlayback: (patch: Partial<{
+    script_smoothing_percent: number;
+    peak_rounding_ms: number;
+    apply_video_speed_limit: boolean;
+  }>) => request("POST", "/api/media/playback", patch),
+
   mediaSync: (event: MediaSyncEvent, stopSequence?: number, signal?: AbortSignal, keepalive = false) =>
     request<{ sync: MediaSyncStatus }>(
       "POST",

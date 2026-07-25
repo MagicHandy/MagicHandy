@@ -639,3 +639,79 @@ func waitForMediaScan(t *testing.T, server *Server) {
 	}
 	t.Fatal("media scan did not finish")
 }
+
+// The offset moves the clock the video follows, not the points the device
+// already holds, so a calibration change must not stop a running video.
+func TestScriptOffsetAppliesToALiveRunWithoutStopping(t *testing.T) {
+	server := newTestServer(t)
+	root := t.TempDir()
+	writeMediaPair(t, root, "Offset", `{"actions":[{"at":0,"pos":0},{"at":30000,"pos":100}]}`)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Media.LibraryPaths = []string{root}
+		return settings
+	})
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+	if play := postMediaSync(t, server, server.stopSequence.Load(), video.ID, "playing", "play", 1000, 1); play.Code != http.StatusOK {
+		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
+	}
+	before := server.mediaSync.Status().ExpectedMediaTimeMillis
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/media/script-offset",
+		strings.NewReader(`{"id":"`+video.ID+`","script_offset_ms":-200}`)))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	engine := server.currentMotionEngine()
+	if engine == nil || !engine.Snapshot().Running {
+		t.Fatal("a calibration change stopped the run")
+	}
+	after := server.mediaSync.Status()
+	if after.ScriptOffsetMillis != -200 {
+		t.Fatalf("reported offset = %d, want -200", after.ScriptOffsetMillis)
+	}
+	if after.ExpectedMediaTimeMillis != before-200 {
+		t.Fatalf("expected media time = %d, want %d: the video follows the shifted clock",
+			after.ExpectedMediaTimeMillis, before-200)
+	}
+}
+
+// Filters do change the points, and accepted HSP points cannot be rewritten,
+// so they stop the run instead of pretending to apply.
+func TestScriptFilterChangeStopsActiveMedia(t *testing.T) {
+	server := newTestServer(t)
+	root := t.TempDir()
+	writeMediaPair(t, root, "Filters", `{"actions":[{"at":0,"pos":0},{"at":30000,"pos":100}]}`)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Media.LibraryPaths = []string{root}
+		return settings
+	})
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+	if play := postMediaSync(t, server, server.stopSequence.Load(), video.ID, "playing", "play", 0, 1); play.Code != http.StatusOK {
+		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
+	}
+
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/media/playback",
+		strings.NewReader(`{"peak_rounding_ms":60}`)))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+		t.Fatal("a filter change left the old points playing")
+	}
+	if status := server.mediaSync.Status(); status.LastEvent != "media_script_filters_changed" {
+		t.Fatalf("sync status = %+v, want the filter-change invalidation", status)
+	}
+}

@@ -1246,3 +1246,131 @@ input[type="search"] {
     padding-inline: 12px;
   }
 }
+
+/* ---- Floating playback panel ---- */
+/* It overlays the workspace instead of reflowing it: the whole point is to be
+   adjusted while the video plays, so nothing below it may move. */
+.playback-panel-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.playback-panel {
+  position: absolute;
+  right: clamp(8px, 2.4vw, 22px);
+  bottom: clamp(8px, 2.4vw, 22px);
+  width: min(288px, calc(100vw - 16px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+.playback-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.playback-panel-head h2 {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+.playback-panel-head span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.playback-panel-head .icon-button {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+}
+.playback-panel-group {
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.playback-panel-group input[type="range"] {
+  width: 100%;
+  margin: 2px 0 0;
+}
+.playback-panel-legend,
+.playback-panel-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  gap: 8px;
+}
+.playback-panel-legend,
+.playback-panel-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.playback-panel-legend span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.68rem;
+}
+.playback-panel-value {
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.playback-panel-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+.playback-panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+.playback-panel-toggle span {
+  flex: 1;
+}
+.playback-panel-toggle output {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.playback-panel-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.playback-panel-effect {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+@media (max-width: 720px) {
+  .playback-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}

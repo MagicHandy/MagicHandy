@@ -22,6 +22,8 @@ func (s *Server) mediaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/media/scan", s.handleMediaScanState)
 	mux.HandleFunc("DELETE /api/media/scan", s.handleMediaScanCancel)
 	mux.HandleFunc("POST /api/media/duration", s.handleMediaDuration)
+	mux.HandleFunc("POST /api/media/script-offset", s.handleMediaScriptOffset)
+	mux.HandleFunc("POST /api/media/playback", s.handleMediaPlayback)
 }
 
 func (s *Server) handleMediaVideoFunscript(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +196,93 @@ func (s *Server) handleMediaDuration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "saved"})
+}
+
+// handleMediaPlayback patches only the paired-playback filters, so the floating
+// panel does not have to round-trip the whole settings document to change one
+// dial. Saving runs the normal settings path, which stops an active run because
+// filters change points the device has already accepted.
+func (s *Server) handleMediaPlayback(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body struct {
+		ScriptSmoothingPercent *int  `json:"script_smoothing_percent,omitempty"`
+		PeakRoundingMillis     *int  `json:"peak_rounding_ms,omitempty"`
+		ApplyVideoSpeedLimit   *bool `json:"apply_video_speed_limit,omitempty"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	current, _ := s.store.Snapshot()
+	previous := current
+	if body.ScriptSmoothingPercent != nil {
+		current.Media.ScriptSmoothingPercent = *body.ScriptSmoothingPercent
+	}
+	if body.PeakRoundingMillis != nil {
+		current.Media.PeakRoundingMillis = *body.PeakRoundingMillis
+	}
+	if body.ApplyVideoSpeedLimit != nil {
+		current.Motion.ApplyVideoSpeedLimit = *body.ApplyVideoSpeedLimit
+	}
+	saved, err := s.store.Save(current)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	// Filters change the points a run was built from, so the shared settings
+	// transition stops an active clock-locked run exactly as a full save would.
+	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), previous, saved)
+	payload := map[string]any{
+		"media":  saved.Public().Media,
+		"motion": saved.Public().Motion,
+	}
+	status := http.StatusOK
+	if runtimeErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = "filters were saved, but the active run could not apply them"
+	}
+	writeJSON(w, status, payload)
+}
+
+// handleMediaScriptOffset stores this pairing's calibration and, when the video
+// is the one currently playing, applies it to the live run. Nothing stops: the
+// offset moves the clock the video follows, not the points the device holds.
+func (s *Server) handleMediaScriptOffset(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body struct {
+		ID           string `json:"id"`
+		OffsetMillis int    `json:"script_offset_ms"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	body.ID = strings.TrimSpace(body.ID)
+	if body.ID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("video id is required"))
+		return
+	}
+	if err := s.media.SetScriptOffset(r.Context(), body.ID, body.OffsetMillis); err != nil {
+		if errors.Is(err, media.ErrVideoNotFound) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	payload := map[string]any{"status": "saved", "script_offset_ms": body.OffsetMillis}
+	if s.mediaSync != nil {
+		settings, _ := s.store.Snapshot()
+		payload["sync"] = s.mediaSync.SetScriptOffset(
+			body.ID,
+			settings.Media.ScriptOffsetMillis+body.OffsetMillis,
+		)
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleMediaVideoStream(w http.ResponseWriter, r *http.Request) {

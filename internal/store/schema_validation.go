@@ -80,6 +80,7 @@ var requiredSchemaTables = []schemaTable{
 	{name: "media_videos", columns: columns(
 		"id:TEXT", "location_path:TEXT", "relative_path:TEXT", "display_name:TEXT", "size_bytes:INTEGER",
 		"modified_at:TEXT", "duration_ms:INTEGER?", "funscript_relative_path:TEXT?", "missing:INTEGER", "scanned_at:TEXT",
+		"script_offset_ms:INTEGER",
 	), primaryKey: []string{"id"}},
 }
 

@@ -2,9 +2,10 @@
 
 ## Status
 
-**Plan only — nothing here is built.** This proposes a floating settings panel
-scoped to the video currently open in the player, styled after the connection
-manager, holding the sync offset and a small set of funscript filters.
+**Built.** A floating settings panel scoped to the video currently open in the
+player, styled after the connection manager, holding a per-video sync offset and
+a small set of funscript filters. This document stays the design record; the
+"What shipped" section reports what each part actually does.
 
 Sketch: [video-playback-panel-sketch.svg](video-playback-panel-sketch.svg).
 Sync behavior and its constraints: [video-playback.md](video-playback.md).
@@ -72,7 +73,9 @@ the room, not of the file.
 #### Storage
 
 A `script_offset_ms INTEGER NOT NULL DEFAULT 0` column on `media_videos`, added
-as schema v14 (currently 13). It is bounded metadata about a catalog row, which
+as schema v14. The step is a guarded Go hook rather than a bare `ALTER`,
+because SQLite has no conditional `ADD COLUMN` and re-running a migration over
+an already-current database is a normal recovery path here. It is bounded metadata about a catalog row, which
 is what that table already holds — no new table, and a video that has never been
 calibrated reads 0 and simply inherits the setup value.
 
@@ -80,13 +83,14 @@ Rows survive rescans the way the rest of the row does; a video that goes missing
 and returns keeps its calibration. Removing the video removes the offset, which
 is correct — it was a fact about that pairing.
 
-**This should become a live control, which today it is not.** The shipped
-implementation applies the offset by moving the slice point in
-`Funscript.TimelineFrom`, so changing it stops the run and requires Play again
-(`stopMediaForPolicyChange`). That is correct but it makes the slider useless
-for calibration: you cannot feel a 40 ms change if every drag stops the device.
+#### Why it is live
 
-There is a way to apply it without touching buffered points. The video is not
+The first implementation applied the offset by moving the slice point in
+`Funscript.TimelineFrom`, so changing it stopped the run and required Play
+again. That is correct but it made the slider useless for calibration: you
+cannot feel a 40 ms change if every drag stops the device.
+
+It is applied without touching buffered points instead. The video is not
 locked to its own clock — it is locked to `expected_media_time_ms`, the engine's
 transport-aligned projection. Adding the offset to *that projection* moves the
 video relative to the device without rebuilding a single point:
@@ -95,11 +99,11 @@ video relative to the device without rebuilding a single point:
 expected_media_time_ms = anchor + offset + running × rate
 ```
 
-The offset must be added to the drift comparison as well, or the shifted video
-reads as constant drift and trips the soft breach. Both live in
-`observeHeartbeatTiming`, so it is one consistent change, not two.
+The offset is added to the drift comparison as well, or the shifted video would
+read as constant drift and trip the soft breach. Folding it into the runtime's
+anchor does both at once.
 
-Two consequences worth accepting deliberately:
+Two consequences accepted deliberately:
 
 - Each adjustment nudges the video (a correction seek), so dragging is visibly
   steppy. Debouncing the write and only re-aligning on release keeps that to one
@@ -107,9 +111,9 @@ Two consequences worth accepting deliberately:
 - The device never moves for an offset change. That is the point, and it should
   be visible: the readout says the *video* shifted.
 
-If the projection approach is rejected, the fallback is the current behavior
-with honest labeling ("applies on next play") — but then the slider belongs in
-Settings and this panel loses most of its reason to exist.
+The write is debounced by 180 ms so a drag is one request, and the response
+carries the recomputed projection so the picture moves on release rather than up
+to a heartbeat later.
 
 ### 2. Script filters — applied when the run re-arms
 
@@ -118,11 +122,11 @@ cannot be rewritten. So every filter change stops an active run, the same way a
 speed-policy change does. The panel says so once, at the group heading, rather
 than on each control.
 
-The existing `requires_reanchor` path can make that nearly seamless: stop, then
-let the player's resync arm a fresh run at the current video time. The user sees
-a brief motion gap, not a reset to a paused player. That reuse should be
-confirmed early in implementation — if it does not hold, the group needs an
-explicit "Apply" button instead of applying on change.
+The panel writes to `POST /api/media/playback`, which runs the same settings
+transition a full save does, so an active run stops the way a speed-policy
+change already stopped it. Whether the player's existing resync makes that gap
+seamless enough, or whether the group eventually wants an explicit Apply, is a
+question for real use rather than for review.
 
 **Every filter is off by default and the defaults are authored-exact.** This is
 not a style preference; it is a recorded lesson. A media amplitude transform was
@@ -262,9 +266,41 @@ obvious next step once the numbers exist.
 - **Anything that edits the file.** Filters are playback transforms; the paired
   script on disk is never rewritten.
 
-## Suggested slices
+## What shipped
 
-Each is one reviewable PR.
+All four slices landed together rather than as four PRs, because the panel is
+not usable without the offset being live and the offset is not worth a panel
+without something to calibrate against.
+
+- **Panel** — trigger in the funscript strip carrying the effective offset as
+  its label; a fixed overlay layer (`pointer-events: none`) with the panel
+  inside it, so it covers the workspace without blocking anything it does not
+  occupy. Measured 288x321 px against the sketch's 374x514. Escape and outside
+  click close it, and a read-only tab sees every control disabled.
+- **Per-video offset** — schema v14 column, `POST /api/media/script-offset`,
+  written on a 180 ms debounce so a drag is one request. Verified live: dragging
+  saved -180 for the file, the trigger label followed, and the panel reported
+  `this video -180 ms · setup 0 ms`.
+- **Live offset** — the calibration moved out of the slice point and into the
+  sync runtime's anchor, so `expected_media_time_ms` and the drift comparison
+  both carry it. Changing it during playback does not stop motion; the response
+  recomputes the projection so the video moves on release rather than up to a
+  heartbeat later.
+- **Filters** — smoothing reuses `motion.StabilizePatternReversals`; peak
+  rounding is the quadratic fillet described above. Both re-arm the run, both
+  report their measured effect, and the zero value is authored-exact.
+
+Peak rounding was measured rather than argued: tests pin that it never raises
+peak velocity, that its reduction grows with the window and stays bounded, that
+each corner is capped by its own shorter leg, and that a script too dense for
+the fillets plays unrounded instead of being thinned to fit.
+
+Not verified on hardware. How much rounding feels right, and whether smoothing
+helps or flattens a given script, are subjective and need a device.
+
+### Slice order as built
+
+Each was one reviewable step; all landed in one PR.
 
 1. **Panel shell and the per-video offset.** Trigger, floating panel,
    focus/dismiss behavior, read-only gating, schema v14 column, and the slider

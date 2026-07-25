@@ -5,6 +5,8 @@ import { ChevronUpIcon } from "../shell/icons";
 import { formatTimelineTime } from "./ImportTimeline";
 import { FunscriptTimeline } from "./FunscriptTimeline";
 import { MediaVideoPlayer, type MediaPlaybackEvent } from "./MediaVideoPlayer";
+import { PlaybackPanel, formatMillis } from "./PlaybackPanel";
+import { useAppState } from "../state/app-state";
 
 const HEARTBEAT_MILLIS = 1_500;
 const MEDIA_READY_POLL_MILLIS = 100;
@@ -51,6 +53,8 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const [sync, setSync] = useState<MediaSyncStatus>({ active: false, state: "idle" });
   const [syncError, setSyncError] = useState("");
   const [timelineHidden, setTimelineHidden] = useState(readTimelinePreference);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const { state, refresh } = useAppState();
   const mounted = useRef(true);
   const generation = useRef(0);
   const desiredPlaying = useRef(false);
@@ -623,6 +627,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   }
 
   const statusLabel = syncStatusLabel(sync, locked);
+  const effectiveOffset = (state?.settings?.media?.script_offset_ms ?? 0) + (video.script_offset_ms ?? 0);
   const durationMismatch = mediaDurationMismatch(video.duration_ms, script.duration_ms);
   return (
     <MediaVideoPlayer
@@ -641,6 +646,15 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
             <span>{script.action_count.toLocaleString()} actions / {formatTimelineTime(script.duration_ms)}</span>
             {durationMismatch && <span className="media-script-length-warning">Length differs from {formatTimelineTime(video.duration_ms ?? 0)} video</span>}
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary compact-command media-playback-trigger"
+            onClick={() => setPanelOpen((open) => !open)}
+            aria-expanded={panelOpen}
+            aria-haspopup="dialog"
+          >
+            Sync {formatMillis(effectiveOffset)}
+          </button>
           <button type="button" className="btn btn-secondary compact-command media-timeline-toggle" onClick={toggleTimeline} aria-expanded={!timelineHidden}>
             <ChevronUpIcon />{timelineHidden ? "Show timeline" : "Hide timeline"}
           </button>
@@ -653,6 +667,20 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
           <span className="media-sync-time">{formatTimelineTime(currentTime)}</span>
         </div>
         {syncError && <p className="form-status media-playback-error" role="alert">{syncError}</p>}
+        {panelOpen && (
+          <PlaybackPanel
+            video={video}
+            sync={sync}
+            locked={locked}
+            setupOffsetMillis={state?.settings?.media?.script_offset_ms ?? 0}
+            smoothingPercent={state?.settings?.media?.script_smoothing_percent ?? 0}
+            roundingMillis={state?.settings?.media?.peak_rounding_ms ?? 0}
+            limitSpeed={state?.settings?.motion?.apply_video_speed_limit ?? false}
+            onClose={() => setPanelOpen(false)}
+            onVideoUpdate={onVideoUpdate}
+            onFiltersChanged={refresh}
+          />
+        )}
       </section>
     </MediaVideoPlayer>
   );

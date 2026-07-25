@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
@@ -48,6 +49,10 @@ type Video struct {
 	HasFunscript          bool    `json:"has_funscript"`
 	Missing               bool    `json:"missing"`
 	ScannedAt             string  `json:"scanned_at"`
+	// ScriptOffsetMillis calibrates this pairing alone. It adds to the setup
+	// offset in settings rather than replacing it, because the two have
+	// different causes: the setup value is the room, this one is the script.
+	ScriptOffsetMillis int `json:"script_offset_ms"`
 }
 
 // Summary is the constant-size media snapshot used by the regular app poll.
@@ -125,7 +130,8 @@ func (c *Catalog) Close() error {
 func (c *Catalog) List(ctx context.Context) ([]Video, error) {
 	rows, err := c.db.SQL().QueryContext(ctx, `
 		SELECT id, location_path, relative_path, display_name, size_bytes,
-		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at
+		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at,
+		       script_offset_ms
 		FROM media_videos
 		ORDER BY missing, display_name COLLATE NOCASE, id
 	`)
@@ -163,7 +169,8 @@ func (c *Catalog) Summary(ctx context.Context) (Summary, error) {
 func (c *Catalog) Video(ctx context.Context, id string) (Video, error) {
 	video, err := scanVideo(c.db.SQL().QueryRowContext(ctx, `
 		SELECT id, location_path, relative_path, display_name, size_bytes,
-		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at
+		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at,
+		       script_offset_ms
 		FROM media_videos WHERE id = ?
 	`, strings.TrimSpace(id)))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -179,6 +186,30 @@ func (c *Catalog) SetDuration(ctx context.Context, id string, durationMillis int
 	}
 	return c.db.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `UPDATE media_videos SET duration_ms = ? WHERE id = ?`, durationMillis, strings.TrimSpace(id))
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return ErrVideoNotFound
+		}
+		return nil
+	})
+}
+
+// SetScriptOffset stores this pairing's calibration. Bounds are the caller's
+// to enforce; the catalog only refuses a value it could not have produced.
+func (c *Catalog) SetScriptOffset(ctx context.Context, id string, offsetMillis int) error {
+	if offsetMillis < -config.MaxScriptOffsetMillis || offsetMillis > config.MaxScriptOffsetMillis {
+		return fmt.Errorf("script offset must be between -%d and %d milliseconds",
+			config.MaxScriptOffsetMillis, config.MaxScriptOffsetMillis)
+	}
+	return c.db.WithTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx,
+			`UPDATE media_videos SET script_offset_ms = ? WHERE id = ?`, offsetMillis, strings.TrimSpace(id))
 		if err != nil {
 			return err
 		}
@@ -290,6 +321,7 @@ func scanVideo(row rowScanner) (Video, error) {
 	err := row.Scan(
 		&video.ID, &video.LocationPath, &video.RelativePath, &video.DisplayName,
 		&video.SizeBytes, &video.ModifiedAt, &duration, &funscript, &missing, &video.ScannedAt,
+		&video.ScriptOffsetMillis,
 	)
 	if err != nil {
 		return Video{}, err

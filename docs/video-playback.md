@@ -566,14 +566,20 @@ visible mid-playback corrections. One tighter pass (40 ms) once the media clock
 is actually advancing removes it; a correction that small, immediately after the
 repositioning that just happened, is not perceptible.
 
-**Settings > Media > Script offset** is the calibration dial for the remainder,
+**The script offset** is the calibration dial for the remainder,
 which is not a defect the app can remove: scripts are authored against a
 particular sense of timing, displays add presentation latency between
 `currentTime` and the photons, and the device takes real time to move. Positive
-delays the device against the picture, negative advances it, bounded at ±2 s and
-applied by moving the slice point in `TimelineFrom` — never by moving the video
-clock, which is locked to the engine. Changing it stops an active run the same
-way a speed-policy change does, because buffered points cannot be rewritten.
+delays the device against the picture, negative advances it, bounded at ±2 s.
+
+*Revised when the playback panel landed:* the offset is now **per video**, added
+to a setup-wide value in `Settings > Media`, and it is applied by shifting the
+sync runtime's anchor rather than the slice point. The video follows
+`expected_media_time_ms`, so moving that projection moves the picture while the
+device keeps the points it already accepted — which is what lets the panel's
+slider be adjusted during playback instead of stopping the run. The same term
+enters the drift comparison, or a deliberately offset video would read as
+constant drift and trip the soft breach.
 
 Not verified on hardware: the numbers above are from simulated timing and unit
 tests. Which of these dominates in practice, and what offset a real setup wants,
@@ -608,8 +614,8 @@ Until that is decided, the no-transcoding stance stands as written.
 
 ## Cross-references
 
-- [video-playback-panel.md](video-playback-panel.md) — proposed floating
-  playback panel (sync offset and script filters), plan only.
+- [video-playback-panel.md](video-playback-panel.md) — the floating playback
+  panel: per-video offset, smoothing, and peak rounding.
 - [feature-ideas.md](feature-ideas.md) — the reversed non-goal row.
 - [pattern-library.md](pattern-library.md) — why media scripts bypass library
   import caps (a feature-length script is not curatable loop content).

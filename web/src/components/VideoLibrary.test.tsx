@@ -162,6 +162,12 @@ describe("VideoLibrary", () => {
     const result = render(<VideoLibrary locked={false} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Play Session" }));
+
+// The player reads media playback settings straight from app state, the way
+// QuickSettings and ChatPanel do; these tests render it outside the provider.
+vi.mock("../state/app-state", () => ({
+  useAppState: () => ({ state: { settings: { media: {}, motion: {} } }, refresh: vi.fn() }),
+}));
     expect(screen.getByLabelText("Session")).toBeInTheDocument();
 
     result.unmount();

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/media"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -54,12 +55,41 @@ type mediaSyncStatus struct {
 	PlaybackRate     float64 `json:"playback_rate,omitempty"`
 	MotionSpeedLimit int     `json:"motion_speed_limit_percent,omitempty"`
 	RequiresReanchor bool    `json:"requires_reanchor,omitempty"`
+	// ScriptOffsetMillis is the calibration in force: the setup value plus this
+	// video's own. Positive delays the device against the picture.
+	ScriptOffsetMillis int `json:"script_offset_ms,omitempty"`
+	// FilterEffect reports what the active filters measurably changed.
+	FilterEffect *mediaFilterEffect `json:"filter_effect,omitempty"`
 	// ExpectedMediaTimeMillis is the engine's transport-aligned media clock at
 	// UpdatedAt. The browser locks the video to it: when the video's own clock
 	// deviates, the video is nudged, never the buffered device stream.
 	ExpectedMediaTimeMillis int64  `json:"expected_media_time_ms,omitempty"`
 	Message                 string `json:"message,omitempty"`
 	UpdatedAt               string `json:"updated_at,omitempty"`
+}
+
+// mediaFilterEffect is the measured cost of the active filters, reported so the
+// user can see what a filter did rather than trust that it helped.
+type mediaFilterEffect struct {
+	ActionsRemoved       int     `json:"actions_removed,omitempty"`
+	PeakReductionPercent float64 `json:"peak_reduction_percent,omitempty"`
+}
+
+func filterEffect(effect media.Effect) *mediaFilterEffect {
+	if effect.ActionsRemoved == 0 && effect.PeakReductionPercent <= 0 {
+		return nil
+	}
+	return &mediaFilterEffect{
+		ActionsRemoved:       effect.ActionsRemoved,
+		PeakReductionPercent: math.Round(effect.PeakReductionPercent*10) / 10,
+	}
+}
+
+// anchorWithOffset folds the calibration into the clock the video follows. The
+// device keeps playing the points it already has; only the picture moves, which
+// is what makes the offset adjustable without stopping motion.
+func anchorWithOffset(mediaTimeMillis int64, offsetMillis int) int64 {
+	return max(int64(0), mediaTimeMillis+int64(offsetMillis))
 }
 
 func mediaMotionSpeedLimit(target motion.MotionTarget) int {
@@ -91,6 +121,8 @@ type mediaSyncRuntime struct {
 	lastSignal    time.Time
 	driftBreaches int
 	sessionID     string
+	scriptOffset  int
+	videoID       string
 	fences        map[string]mediaSessionFence
 	fenceOrder    []string
 
@@ -181,12 +213,11 @@ func (m *mediaSyncRuntime) arm(ctx context.Context, event mediaSyncEvent, stopSe
 	if err != nil {
 		return m.setError(event, err), err
 	}
-	armSettings, _ := m.server.store.Snapshot()
-	scriptOffset := armSettings.Media.ScriptOffsetMillis
-	// A positive offset delays the script, so the run starts from an earlier
-	// authored moment. The video clock is never moved: shifting it would fight
-	// the engine-clock alignment that owns synchronization.
-	timeline, err := script.TimelineFrom(event.MediaTimeMillis-int64(scriptOffset), event.PlaybackRate)
+	filters, offsetMillis := m.playbackPolicy(ctx, event.VideoID)
+	// The timeline is sliced at the true video position. The offset is carried
+	// by the anchor below instead, so it can be changed live: rebuilding the
+	// slice would mean rebuilding points the device has already accepted.
+	timeline, effect, err := script.TimelineFrom(event.MediaTimeMillis, event.PlaybackRate, filters)
 	if errors.Is(err, media.ErrFunscriptComplete) {
 		status, stopErr := m.stopForEvent(ctx, event, "media_script_completed", "completed", false)
 		if stopErr != nil {
@@ -232,21 +263,25 @@ func (m *mediaSyncRuntime) arm(ctx context.Context, event mediaSyncEvent, stopSe
 
 	now := m.now()
 	status := mediaSyncStatus{
-		Active:           true,
-		VideoID:          event.VideoID,
-		State:            "following",
-		LastEvent:        event.Event,
-		MediaTimeMillis:  event.MediaTimeMillis,
-		PlaybackRate:     event.PlaybackRate,
-		MotionSpeedLimit: mediaMotionSpeedLimit(state.Target),
+		Active:             true,
+		VideoID:            event.VideoID,
+		State:              "following",
+		LastEvent:          event.Event,
+		MediaTimeMillis:    event.MediaTimeMillis,
+		PlaybackRate:       event.PlaybackRate,
+		MotionSpeedLimit:   mediaMotionSpeedLimit(state.Target),
+		ScriptOffsetMillis: offsetMillis,
+		FilterEffect:       filterEffect(effect),
 		// The engine's timeline clock started at transport play, before the held
 		// video resumes; the browser aligns the video to this projection.
-		ExpectedMediaTimeMillis: engineMediaTimeMillis(event.MediaTimeMillis, state.RunningMillis, event.PlaybackRate),
+		ExpectedMediaTimeMillis: engineMediaTimeMillis(anchorWithOffset(event.MediaTimeMillis, offsetMillis), state.RunningMillis, event.PlaybackRate),
 		Message:                 "Device motion is synchronized to the paired script.",
 		UpdatedAt:               now.Format(time.RFC3339Nano),
 	}
 	m.mu.Lock()
-	m.anchorMedia = event.MediaTimeMillis
+	m.anchorMedia = anchorWithOffset(event.MediaTimeMillis, offsetMillis)
+	m.scriptOffset = offsetMillis
+	m.videoID = event.VideoID
 	m.lastSignal = now
 	m.status = status
 	m.driftBreaches = 0
@@ -338,6 +373,7 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 
 	status.DriftMillis = drift
 	status.MediaTimeMillis = event.MediaTimeMillis
+	status.ScriptOffsetMillis = m.currentOffset()
 	status.ExpectedMediaTimeMillis = timing.engineMediaMillis
 	status.LastEvent = event.Event
 	status.UpdatedAt = now.Format(time.RFC3339Nano)
@@ -655,4 +691,71 @@ func absInt64(value int64) int64 {
 		return -value
 	}
 	return value
+}
+
+// playbackPolicy resolves the filters and calibration one run is armed under.
+func (m *mediaSyncRuntime) playbackPolicy(ctx context.Context, videoID string) (media.Filters, int) {
+	settings, _ := m.server.store.Snapshot()
+	return media.Filters{
+		SmoothingPercent:   settings.Media.ScriptSmoothingPercent,
+		PeakRoundingMillis: settings.Media.PeakRoundingMillis,
+	}, m.effectiveOffsetMillis(ctx, videoID, settings.Media.ScriptOffsetMillis)
+}
+
+// effectiveOffsetMillis is the setup calibration plus this video's own. They
+// are added rather than one overriding the other because they have different
+// causes: display latency and device lag belong to the room and are the same
+// for every file, while an author's sense of the beat belongs to the script.
+// Keeping them separate means replacing a monitor re-measures one number
+// instead of every video in the library.
+func (m *mediaSyncRuntime) effectiveOffsetMillis(ctx context.Context, videoID string, setupMillis int) int {
+	total := setupMillis
+	if m.server.media != nil {
+		if video, err := m.server.media.Video(ctx, videoID); err == nil {
+			total += video.ScriptOffsetMillis
+		}
+	}
+	return clampOffsetMillis(total)
+}
+
+// SetScriptOffset applies a calibration change to a live run without stopping
+// it. Only the video moves; the device keeps the points it already accepted.
+func (m *mediaSyncRuntime) SetScriptOffset(videoID string, offsetMillis int) mediaSyncStatus {
+	offsetMillis = clampOffsetMillis(offsetMillis)
+	// Read the engine before taking m.mu: the projection needs its running
+	// clock, and the lock order here is only ever runtime-then-engine.
+	runningMillis := int64(0)
+	if engine := m.server.currentMotionEngine(); engine != nil {
+		runningMillis = engine.Snapshot().RunningMillis
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.status.Active || m.videoID != videoID {
+		return m.status
+	}
+	m.anchorMedia = max(int64(0), m.anchorMedia+int64(offsetMillis-m.scriptOffset))
+	m.scriptOffset = offsetMillis
+	m.status.ScriptOffsetMillis = offsetMillis
+	// Recompute here rather than waiting for the next heartbeat: the response
+	// is what the panel hands the player, so the video moves on release instead
+	// of up to a heartbeat later.
+	m.status.ExpectedMediaTimeMillis = engineMediaTimeMillis(m.anchorMedia, runningMillis, m.status.PlaybackRate)
+	m.status.UpdatedAt = m.now().Format(time.RFC3339Nano)
+	return m.status
+}
+
+func clampOffsetMillis(value int) int {
+	if value < -config.MaxScriptOffsetMillis {
+		return -config.MaxScriptOffsetMillis
+	}
+	if value > config.MaxScriptOffsetMillis {
+		return config.MaxScriptOffsetMillis
+	}
+	return value
+}
+
+func (m *mediaSyncRuntime) currentOffset() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.scriptOffset
 }

@@ -36,7 +36,7 @@ func TestLoadFunscriptNormalizesActionsAndBuildsClockLockedSlice(t *testing.T) {
 		t.Fatalf("normalized actions = %+v", script.Actions)
 	}
 
-	timeline, err := script.TimelineFrom(750, 2)
+	timeline, _, err := script.TimelineFrom(750, 2, Filters{})
 	if err != nil {
 		t.Fatalf("TimelineFrom: %v", err)
 	}
@@ -103,10 +103,10 @@ func TestTimelineFromRejectsCompletedOrInvalidRate(t *testing.T) {
 		DurationMillis: 1000,
 		Actions:        []FunscriptAction{{AtMillis: 0, Position: 0}, {AtMillis: 1000, Position: 100}},
 	}
-	if _, err := script.TimelineFrom(1000, 1); !errors.Is(err, ErrFunscriptComplete) {
+	if _, _, err := script.TimelineFrom(1000, 1, Filters{}); !errors.Is(err, ErrFunscriptComplete) {
 		t.Fatalf("completed error = %v", err)
 	}
-	if _, err := script.TimelineFrom(0, 5); err == nil {
+	if _, _, err := script.TimelineFrom(0, 5, Filters{}); err == nil {
 		t.Fatal("out-of-range playback rate was accepted")
 	}
 }
@@ -137,7 +137,7 @@ func TestTimelineFromAnchorsArbitraryVideoTimestamps(t *testing.T) {
 		{name: "near end", at: 4999, rate: 1, wantPosition: 74.985714, wantNextTime: 1, wantNextValue: 75},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			timeline, err := script.TimelineFrom(test.at, test.rate)
+			timeline, _, err := script.TimelineFrom(test.at, test.rate, Filters{})
 			if err != nil {
 				t.Fatalf("TimelineFrom: %v", err)
 			}
@@ -176,7 +176,7 @@ func TestTimelineFromPreservesReportedReversalsNearOneSeventeen(t *testing.T) {
 			{AtMillis: 83_703, Position: 41},
 		},
 	}
-	timeline, err := script.TimelineFrom(61_863, 1)
+	timeline, _, err := script.TimelineFrom(61_863, 1, Filters{})
 	if err != nil {
 		t.Fatalf("TimelineFrom: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestTimelineFromShiftsTheAuthoredMomentAtTheAnchor(t *testing.T) {
 		},
 	}
 
-	plain, err := script.TimelineFrom(2000, 1)
+	plain, _, err := script.TimelineFrom(2000, 1, Filters{})
 	if err != nil {
 		t.Fatalf("TimelineFrom: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestTimelineFromShiftsTheAuthoredMomentAtTheAnchor(t *testing.T) {
 
 	// Delaying the script by 500ms starts it from the authored 1500ms moment,
 	// which on the way up to the peak is 75%.
-	delayed, err := script.TimelineFrom(2000-500, 1)
+	delayed, _, err := script.TimelineFrom(2000-500, 1, Filters{})
 	if err != nil {
 		t.Fatalf("TimelineFrom delayed: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestTimelineFromShiftsTheAuthoredMomentAtTheAnchor(t *testing.T) {
 		t.Fatalf("delayed start = %.1f, want the authored 1500ms position 75", got)
 	}
 	// Advancing it reaches past the peak by the same amount.
-	advanced, err := script.TimelineFrom(2000+500, 1)
+	advanced, _, err := script.TimelineFrom(2000+500, 1, Filters{})
 	if err != nil {
 		t.Fatalf("TimelineFrom advanced: %v", err)
 	}

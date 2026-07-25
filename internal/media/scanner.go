@@ -413,7 +413,8 @@ func (c *Catalog) applyRootScan(ctx context.Context, result rootScan) (ScanSumma
 func videosForRoot(ctx context.Context, tx *sql.Tx, root string) (map[string]Video, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, location_path, relative_path, display_name, size_bytes,
-		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at
+		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at,
+		       script_offset_ms
 		FROM media_videos WHERE location_path = ?
 	`, root)
 	if err != nil {

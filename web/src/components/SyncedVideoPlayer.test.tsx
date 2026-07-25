@@ -364,6 +364,12 @@ describe("SyncedVideoPlayer", () => {
 
   it("leaves the video paused and reports a synchronization failure", async () => {
     mediaSync.mockRejectedValueOnce(new ApiError("transport unavailable", 502, { error: "transport unavailable" }));
+
+// The player reads media playback settings straight from app state, the way
+// QuickSettings and ChatPanel do; these tests render it outside the provider.
+vi.mock("../state/app-state", () => ({
+  useAppState: () => ({ state: { settings: { media: {}, motion: {} } }, refresh: vi.fn() }),
+}));
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={7} />);
     const player = await screen.findByLabelText("Paired session");
 

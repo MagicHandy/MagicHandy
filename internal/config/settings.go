@@ -183,6 +183,13 @@ type MediaSettings struct {
 	// takes real time to move. This is the calibration control for that
 	// remainder, not a substitute for correct clock alignment.
 	ScriptOffsetMillis int `json:"script_offset_ms"`
+	// ScriptSmoothingPercent removes authored extrema below this prominence.
+	// Zero is off, which is the default: the paired script plays exactly as
+	// authored unless the user asks for something else.
+	ScriptSmoothingPercent int `json:"script_smoothing_percent"`
+	// PeakRoundingMillis rounds each direction change over this window, moving
+	// a hand-authored triangle toward a sine. Zero is off.
+	PeakRoundingMillis int `json:"peak_rounding_ms"`
 }
 
 // DeviceSettings contains device transport configuration.
@@ -210,6 +217,14 @@ const (
 // seconds covers authoring bias, display presentation latency, and device
 // actuation lag together; beyond that the pairing itself is wrong.
 const MaxScriptOffsetMillis = 2000
+
+// MaxScriptSmoothingPercent bounds jitter removal. Above this the filter stops
+// removing noise and starts removing strokes.
+const MaxScriptSmoothingPercent = 5
+
+// MaxPeakRoundingMillis bounds how far a rounded corner reaches. Beyond this
+// the fillet stops being a softened peak and becomes a different stroke shape.
+const MaxPeakRoundingMillis = 200
 
 // MinimumFocusWidthPercent keeps a focus window wide enough to still be
 // motion. Measured across the whole built-in catalog at slow speed with
@@ -612,8 +627,10 @@ func (s Settings) Public() PublicSettings {
 		Version: s.Version,
 		Server:  s.Server,
 		Media: MediaSettings{
-			ScriptOffsetMillis: s.Media.ScriptOffsetMillis,
-			LibraryPaths:       append([]string{}, s.Media.LibraryPaths...),
+			ScriptOffsetMillis:     s.Media.ScriptOffsetMillis,
+			ScriptSmoothingPercent: s.Media.ScriptSmoothingPercent,
+			PeakRoundingMillis:     s.Media.PeakRoundingMillis,
+			LibraryPaths:           append([]string{}, s.Media.LibraryPaths...),
 		},
 		Device: PublicDeviceSettings{
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
@@ -1377,6 +1394,8 @@ func normalizeMediaSettings(settings MediaSettings) MediaSettings {
 		-MaxScriptOffsetMillis,
 		MaxScriptOffsetMillis,
 	)
+	settings.ScriptSmoothingPercent = clampInt(settings.ScriptSmoothingPercent, 0, MaxScriptSmoothingPercent)
+	settings.PeakRoundingMillis = clampInt(settings.PeakRoundingMillis, 0, MaxPeakRoundingMillis)
 	return settings
 }
 
