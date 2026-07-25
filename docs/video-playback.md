@@ -608,6 +608,8 @@ Until that is decided, the no-transcoding stance stands as written.
 
 ## Cross-references
 
+- [video-playback-panel.md](video-playback-panel.md) — proposed floating
+  playback panel (sync offset and script filters), plan only.
 - [feature-ideas.md](feature-ideas.md) — the reversed non-goal row.
 - [pattern-library.md](pattern-library.md) — why media scripts bypass library
   import caps (a feature-length script is not curatable loop content).

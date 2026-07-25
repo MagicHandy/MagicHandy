@@ -1,0 +1,163 @@
+<svg viewBox="0 0 1000 660" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Segoe UI, system-ui, sans-serif">
+  <title>MagicHandy floating playback panel — sync offset and script filters over the video workspace</title>
+  <desc>The Videos workspace with a paired video playing: the player frame, the funscript timeline strip with its sync readout, and a floating settings panel anchored to a "Sync" trigger in the strip header. The panel holds a live per-video sync offset slider added to the setup baseline, three script filters (smoothing, peak rounding, speed limit), each off by default and each with its cost stated, an effect readout counting changed actions, and a reset.</desc>
+  <defs>
+    <clipPath id="frame"><rect x="6" y="6" width="988" height="648" rx="16"/></clipPath>
+    <clipPath id="panelclip"><rect x="596" y="118" width="374" height="514" rx="8"/></clipPath>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b9dd9"/><stop offset="1" stop-color="#3a5a7c"/>
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect x="6" y="6" width="988" height="648" fill="#0e0f11"/>
+
+    <!-- nav rail (compressed: not the subject of this sketch) -->
+    <rect x="6" y="6" width="150" height="648" fill="#17191d"/>
+    <line x1="156" y1="6" x2="156" y2="654" stroke="#2d3138"/>
+    <rect x="22" y="22" width="30" height="30" rx="9" fill="url(#brand)"/>
+    <text x="37" y="43" fill="#0b131c" font-size="15" font-weight="700" text-anchor="middle">M</text>
+    <text x="62" y="36" fill="#eae9e4" font-size="12" font-weight="600">MagicHandy</text>
+    <text x="62" y="49" fill="#98a0a9" font-size="9">local / cloud rest</text>
+    <text x="26" y="90" fill="#98a0a9" font-size="11">Chat</text>
+    <text x="26" y="116" fill="#98a0a9" font-size="11">Preset modes</text>
+    <text x="26" y="142" fill="#98a0a9" font-size="11">Pattern library</text>
+    <rect x="14" y="154" width="134" height="26" rx="7" fill="#262a30"/>
+    <text x="26" y="171" fill="#eae9e4" font-size="11" font-weight="600">Videos</text>
+    <text x="26" y="196" fill="#98a0a9" font-size="11">Settings</text>
+    <rect x="14" y="596" width="134" height="34" rx="8" fill="#c93b40"/>
+    <text x="81" y="617" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">Stop everything</text>
+
+    <!-- top bar -->
+    <line x1="156" y1="60" x2="994" y2="60" stroke="#2d3138"/>
+    <circle cx="180" cy="33" r="4" fill="#4fc06d"/>
+    <text x="192" y="37" fill="#98a0a9" font-size="10">device connected</text>
+    <text x="300" y="37" fill="#98a0a9" font-size="10">controller: you</text>
+    <rect x="812" y="18" width="166" height="30" rx="8" fill="#1e2126" stroke="#2d3138"/>
+    <text x="826" y="37" fill="#98a0a9" font-size="10">The Handy — connected</text>
+
+    <!-- workspace heading -->
+    <text x="180" y="92" fill="#eae9e4" font-size="17" font-weight="600">Videos</text>
+
+    <!-- ============ video player ============ -->
+    <rect x="180" y="112" width="392" height="222" rx="8" fill="#101215" stroke="#2d3138"/>
+    <text x="376" y="228" fill="#3d434c" font-size="12" text-anchor="middle">video</text>
+    <rect x="192" y="304" width="368" height="18" rx="5" fill="#1e2126"/>
+    <rect x="192" y="304" width="152" height="18" rx="5" fill="#3d434c"/>
+    <circle cx="344" cy="313" r="6" fill="#eae9e4"/>
+
+    <!-- ============ funscript strip ============ -->
+    <rect x="180" y="346" width="392" height="152" rx="8" fill="#17191d" stroke="#2d3138"/>
+    <text x="194" y="368" fill="#eae9e4" font-size="11" font-weight="600">Paired funscript</text>
+    <text x="194" y="382" fill="#98a0a9" font-size="9">1,842 actions / 24:10</text>
+
+    <!-- the trigger: sits with the other playback-scoped controls -->
+    <rect x="396" y="356" width="92" height="26" rx="7" fill="#262a30" stroke="#5b9dd9"/>
+    <text x="408" y="373" fill="#eae9e4" font-size="10" font-weight="600">Sync −220 ms</text>
+    <path d="M478 372 l5 -6 l5 6" fill="none" stroke="#98a0a9" stroke-width="1.6" stroke-linecap="round"/>
+    <rect x="494" y="356" width="66" height="26" rx="7" fill="#1e2126" stroke="#2d3138"/>
+    <text x="504" y="373" fill="#98a0a9" font-size="9">Hide timeline</text>
+
+    <!-- authored curve, with the softened overlay the readout refers to -->
+    <rect x="192" y="392" width="368" height="60" rx="5" fill="#101215"/>
+    <path d="M196 446 L216 400 L236 448 L256 402 L276 444 L296 398 L316 450 L336 404 L356 442 L376 400
+             L396 448 L416 402 L436 446 L456 398 L476 448 L496 404 L516 444 L536 400 L556 446"
+          fill="none" stroke="#3d434c" stroke-width="1.6"/>
+    <path d="M196 446 L214 404 L218 400 L234 444 L238 448 L254 406 L258 402 L274 440 L278 444 L294 402
+             L298 398 L314 446 L318 450 L334 408 L338 404 L354 438 L358 442 L374 404 L378 400"
+          fill="none" stroke="#5b9dd9" stroke-width="1.8" opacity="0.9"/>
+    <rect x="300" y="392" width="4" height="60" fill="#eae9e4" opacity="0.85"/>
+
+    <text x="194" y="472" fill="#4fc06d" font-size="9">● Device following video</text>
+    <text x="320" y="472" fill="#98a0a9" font-size="9">8 ms drift</text>
+    <text x="548" y="472" fill="#98a0a9" font-size="9" text-anchor="end">04:12</text>
+    <text x="194" y="488" fill="#3d434c" font-size="8">authored</text>
+    <text x="246" y="488" fill="#5b9dd9" font-size="8">with filters</text>
+
+    <!-- library grid stub -->
+    <text x="180" y="524" fill="#98a0a9" font-size="10">Library</text>
+    <rect x="180" y="534" width="120" height="66" rx="6" fill="#17191d" stroke="#2d3138"/>
+    <rect x="312" y="534" width="120" height="66" rx="6" fill="#17191d" stroke="#2d3138"/>
+    <rect x="444" y="534" width="120" height="66" rx="6" fill="#17191d" stroke="#2d3138"/>
+
+    <!-- ============ floating panel ============ -->
+    <!-- pointer from trigger to panel -->
+    <path d="M488 366 L560 300 L596 300" fill="none" stroke="#3d434c" stroke-width="1" stroke-dasharray="3 3"/>
+
+    <rect x="596" y="118" width="374" height="514" rx="8" fill="#17191d" stroke="#3d434c"/>
+    <g clip-path="url(#panelclip)">
+      <!-- header -->
+      <text x="614" y="146" fill="#eae9e4" font-size="14" font-weight="600">Playback sync</text>
+      <text x="726" y="146" fill="#98a0a9" font-size="9">beach-scene.mp4</text>
+      <rect x="928" y="130" width="26" height="26" rx="7" fill="#1e2126" stroke="#2d3138"/>
+      <path d="M936 138 l10 10 M946 138 l-10 10" stroke="#98a0a9" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="596" y1="164" x2="970" y2="164" stroke="#2d3138"/>
+
+      <!-- offset: per-video slider, setup shown as context -->
+      <text x="614" y="188" fill="#98a0a9" font-size="9" letter-spacing="0.6">SYNC OFFSET</text>
+      <text x="954" y="188" fill="#98a0a9" font-size="9" text-anchor="end">this video</text>
+      <rect x="614" y="200" width="340" height="6" rx="3" fill="#1e2126"/>
+      <rect x="686" y="200" width="72" height="6" rx="3" fill="#3d434c"/>
+      <line x1="784" y1="194" x2="784" y2="212" stroke="#2d3138"/>
+      <circle cx="686" cy="203" r="9" fill="#eae9e4"/>
+      <text x="614" y="228" fill="#98a0a9" font-size="9">−2 s · device later</text>
+      <text x="954" y="228" fill="#98a0a9" font-size="9" text-anchor="end">device earlier · +2 s</text>
+
+      <rect x="614" y="238" width="340" height="30" rx="7" fill="#1e2126"/>
+      <text x="626" y="257" fill="#98a0a9" font-size="9">This video</text>
+      <text x="690" y="257" fill="#eae9e4" font-size="10" font-weight="600">−70 ms</text>
+      <text x="748" y="257" fill="#98a0a9" font-size="9">+ setup</text>
+      <text x="800" y="257" fill="#98a0a9" font-size="10">−150 ms</text>
+      <text x="942" y="257" fill="#5b9dd9" font-size="10" font-weight="600" text-anchor="end">= −220 ms</text>
+
+      <text x="614" y="284" fill="#4fc06d" font-size="9">Applies immediately — the video shifts, the device keeps playing</text>
+      <line x1="596" y1="298" x2="970" y2="298" stroke="#2d3138"/>
+
+      <!-- filters -->
+      <text x="614" y="320" fill="#98a0a9" font-size="9" letter-spacing="0.6">SCRIPT FILTERS</text>
+      <text x="954" y="320" fill="#98a0a9" font-size="9" text-anchor="end">re-arms motion</text>
+
+      <!-- smoothing: on -->
+      <rect x="614" y="330" width="340" height="62" rx="7" fill="#1e2126" stroke="#2d3138"/>
+      <rect x="626" y="342" width="30" height="16" rx="8" fill="#5b9dd9"/>
+      <circle cx="648" cy="350" r="6" fill="#0b131c"/>
+      <text x="666" y="355" fill="#eae9e4" font-size="11" font-weight="600">Smoothing</text>
+      <text x="666" y="368" fill="#98a0a9" font-size="9">removes jitter smaller than 3% lasting under 250 ms</text>
+      <rect x="666" y="377" width="200" height="5" rx="2.5" fill="#101215"/>
+      <rect x="666" y="377" width="72" height="5" rx="2.5" fill="#3d434c"/>
+      <circle cx="738" cy="379" r="7" fill="#eae9e4"/>
+      <text x="942" y="383" fill="#98a0a9" font-size="9" text-anchor="end">3%</text>
+
+      <!-- round peaks: on, with its own slider -->
+      <rect x="614" y="400" width="340" height="76" rx="7" fill="#1e2126" stroke="#2d3138"/>
+      <rect x="626" y="412" width="30" height="16" rx="8" fill="#5b9dd9"/>
+      <circle cx="648" cy="420" r="6" fill="#0b131c"/>
+      <text x="666" y="425" fill="#eae9e4" font-size="11" font-weight="600">Round peaks</text>
+      <text x="666" y="438" fill="#98a0a9" font-size="9">turns a sharp triangle stroke toward a sine — for scripts</text>
+      <text x="666" y="450" fill="#98a0a9" font-size="9">that are patterns, not tracked motion</text>
+      <rect x="666" y="459" width="200" height="5" rx="2.5" fill="#101215"/>
+      <rect x="666" y="459" width="88" height="5" rx="2.5" fill="#3d434c"/>
+      <circle cx="754" cy="461" r="7" fill="#eae9e4"/>
+      <text x="942" y="465" fill="#98a0a9" font-size="9" text-anchor="end">70 ms</text>
+
+      <!-- speed cap: off -->
+      <rect x="614" y="484" width="340" height="48" rx="7" fill="#1e2126" stroke="#2d3138"/>
+      <rect x="626" y="496" width="30" height="16" rx="8" fill="#101215" stroke="#3d434c"/>
+      <circle cx="634" cy="504" r="6" fill="#3d434c"/>
+      <text x="666" y="509" fill="#98a0a9" font-size="11" font-weight="600">Limit speed to motion maximum</text>
+      <text x="666" y="522" fill="#98a0a9" font-size="9">caps only over-limit segments; timestamps unchanged</text>
+
+      <!-- effect readout: the cost of each filter, stated -->
+      <line x1="596" y1="546" x2="970" y2="546" stroke="#2d3138"/>
+      <text x="614" y="566" fill="#98a0a9" font-size="9">1,842 actions</text>
+      <text x="686" y="566" fill="#5b9dd9" font-size="9">smoothing changes 214 · peaks up to 2.1% lower</text>
+      <text x="614" y="582" fill="#3d434c" font-size="9">All filters off plays the script exactly as authored.</text>
+
+      <rect x="614" y="590" width="150" height="28" rx="7" fill="#1e2126" stroke="#2d3138"/>
+      <text x="689" y="608" fill="#eae9e4" font-size="10" text-anchor="middle">Reset to authored</text>
+      <rect x="836" y="590" width="118" height="28" rx="7" fill="#1e2126" stroke="#2d3138"/>
+      <text x="895" y="608" fill="#98a0a9" font-size="10" text-anchor="middle">Media settings</text>
+    </g>
+  </g>
+  <rect x="6" y="6" width="988" height="648" rx="16" fill="none" stroke="#2d3138"/>
+</svg>
