@@ -192,6 +192,40 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	}
 }
 
+func TestChatStreamRecoversDirectPartnerStartOmittedByModel(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Starting with you."}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	body := postChatStream(t, server, `{"message":"Fuck me"}`)
+	if !strings.Contains(body, `"reply":"Starting with you."`) {
+		t.Fatalf("chat stream missing assistant message:\n%s", body)
+	}
+	if !strings.Contains(body, `"semantic_fallback":true`) {
+		t.Fatalf("chat stream did not report the omitted-start fallback:\n%s", body)
+	}
+	if !strings.Contains(body, `event: motion`) || !strings.Contains(body, `"action":"start"`) {
+		t.Fatalf("chat stream missing recovered start motion:\n%s", body)
+	}
+
+	commands := fake.Commands()
+	if len(commands) < 3 {
+		t.Fatalf("motion engine commands = %d, want at least 3: %+v", len(commands), commands)
+	}
+	if commands[0].Kind != transport.CommandKindStrokeWindow ||
+		commands[1].Kind != transport.CommandKindPointsAdd ||
+		commands[2].Kind != transport.CommandKindPointsPlay {
+		t.Fatalf("recovered start bypassed the motion engine: %+v", commands[:3])
+	}
+}
+
 func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{

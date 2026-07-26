@@ -70,6 +70,65 @@ func TestLivePromptParity(t *testing.T) {
 	assertLiveExplicitParity(t, explicitResults, referenceResults)
 }
 
+// TestLiveDirectPartnerStart exercises the app's real prompt, provider, parser,
+// authorization, and semantic fallback without creating an engine or transport.
+func TestLiveDirectPartnerStart(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	patterns := []PatternChoice{
+		{ID: "steady_wave", Name: "Steady wave", Description: "Smooth full-range motion.", Weight: 1},
+		{ID: "slow_squeeze", Name: "Slow squeeze", Description: "Gradual pressure-focused motion.", Weight: 1},
+		{ID: "playful_tease", Name: "Playful tease", Description: "Variable shallow-to-mid teasing.", Weight: 1},
+		{ID: "deep_roll", Name: "Deep roll", Description: "Long rolling strokes with deep emphasis.", Weight: 1},
+	}
+	motionContext := MotionContext{
+		SpeedMinPercent: 20,
+		SpeedMaxPercent: 40,
+	}
+	conversationContext := ConversationContext{
+		PersonaDescription: "An energetic and passionate partner",
+		UserAnatomy:        "penis",
+		CurrentMood:        MoodPassionate,
+	}
+	capabilities := FullCapabilities()
+	capabilities.Voice = VoiceExplicit
+	capabilities.MoodTracking = true
+	service := Service{
+		Provider:            provider,
+		Prompt:              promptSet,
+		Model:               model,
+		MaxTokens:           256,
+		ReasoningMode:       "off",
+		Patterns:            patterns,
+		MotionContext:       &motionContext,
+		ConversationContext: &conversationContext,
+		Capabilities:        &capabilities,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	result, err := service.Complete(ctx, Request{Message: "Fuck me"}, nil)
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("direct partner start | semantic_fallback=%t | %s", result.SemanticFallback, compactLiveEvalJSON(result.Raw))
+	if result.Malformed || strings.TrimSpace(result.Response.Reply) == "" {
+		t.Fatalf("direct partner start produced no usable reply: %+v", result)
+	}
+	if result.Response.Motion == nil || result.Response.Motion.Action != MotionActionStart {
+		t.Fatalf("direct partner start motion = %+v, want start", result.Response.Motion)
+	}
+}
+
 func liveEvalModel(t *testing.T) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

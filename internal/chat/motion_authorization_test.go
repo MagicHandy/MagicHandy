@@ -57,6 +57,38 @@ func TestPlainRequestsStillAuthorizeMotion(t *testing.T) {
 	}
 }
 
+func TestDirectPartnerActionCommandsAuthorizeOnlyClearStarts(t *testing.T) {
+	for _, message := range []string{
+		"Fuck me",
+		"Please fuck me",
+		"Fuck me harder",
+		"Fuck me and talk to me",
+		"Stroke me gently",
+		"Jerk me off",
+		"Ride me however you want",
+	} {
+		if !userAuthorizesMotion(message, MotionActionStart) {
+			t.Errorf("direct partner-action start was refused: %q", message)
+		}
+	}
+
+	for _, message := range []string{
+		"Well, fuck me",
+		"Fuck me, that's funny",
+		"They said fuck me in the story",
+		"Tell me what fuck me means",
+		"Say fuck me",
+		"Don't fuck me",
+		"I do not want you to stroke me",
+		"Should I say fuck me?",
+	} {
+		if userAuthorizesMotion(message, MotionActionStart) ||
+			userAuthorizesMotion(message, MotionActionTarget) {
+			t.Errorf("ambiguous, quoted, or refused partner wording authorized motion: %q", message)
+		}
+	}
+}
+
 // Area requests only ever re-aim motion that is already running, and being
 // refused is indistinguishable from being ignored. Before this list, only the
 // exact phrase "focus on the tip" behind a directive prefix was recognized, so

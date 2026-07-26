@@ -245,7 +245,7 @@ JSON output alone were insufficient.
 ## What Did Not Change
 
 - one shared motion path
-- current-turn motion authorization
+- backend enforcement of current-turn motion authority
 - enabled-only pattern selection
 - speed and focus limits
 - strict parse and one repair attempt
@@ -255,6 +255,15 @@ JSON output alone were insufficient.
 
 Profile, memory, mood, and recent-line text remain quoted or bounded context and
 cannot grant motion authority.
+
+Follow-up, 2026-07-25: the standalone command `Fuck me` exposed a separate
+motion-intent gap after this voice review. The model returned a valid explicit
+reply but no motion, and the deterministic authorization matcher would also
+have stripped a generated start. Direct partner-action starts now have a
+narrow positive matcher plus a stopped-state omitted-motion fallback. Quoted,
+negated, definitional, and conversational uses remain inert. The isolated
+`TestLiveDirectPartnerStart` evaluator exercises the real prompt, provider,
+parser, authorization, and fallback without creating a transport.
 
 ## Limits
 
