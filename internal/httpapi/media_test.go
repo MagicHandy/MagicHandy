@@ -658,6 +658,7 @@ func TestScriptOffsetAppliesToALiveRunWithoutStopping(t *testing.T) {
 	if play := postMediaSync(t, server, server.stopSequence.Load(), video.ID, "playing", "play", 1000, 1); play.Code != http.StatusOK {
 		t.Fatalf("play status = %d: %s", play.Code, play.Body.String())
 	}
+	changeStarted := time.Now()
 	before := server.mediaSync.Status().ExpectedMediaTimeMillis
 
 	request := withController(httptest.NewRequest(http.MethodPost, "/api/media/script-offset",
@@ -676,9 +677,12 @@ func TestScriptOffsetAppliesToALiveRunWithoutStopping(t *testing.T) {
 	if after.ScriptOffsetMillis != -200 {
 		t.Fatalf("reported offset = %d, want -200", after.ScriptOffsetMillis)
 	}
-	if after.ExpectedMediaTimeMillis != before-200 {
-		t.Fatalf("expected media time = %d, want %d: the video follows the shifted clock",
-			after.ExpectedMediaTimeMillis, before-200)
+	// The engine clock advances while the offset request runs.
+	shifted := before - 200
+	latest := shifted + time.Since(changeStarted).Milliseconds() + 5
+	if after.ExpectedMediaTimeMillis < shifted || after.ExpectedMediaTimeMillis > latest {
+		t.Fatalf("expected media time = %d, want %d..%d: the video follows the shifted live clock",
+			after.ExpectedMediaTimeMillis, shifted, latest)
 	}
 }
 
