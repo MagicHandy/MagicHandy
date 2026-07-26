@@ -168,7 +168,8 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	response, parseErr := s.parseAndValidateResponse(raw, capabilities, userMessage)
 	if parseErr == nil {
-		return Result{Response: response, Raw: raw}, nil
+		response, semanticFallback := s.recoverAuthorizedOmittedStart(response, capabilities, userMessage)
+		return Result{Response: response, Raw: raw, SemanticFallback: semanticFallback}, nil
 	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
@@ -223,10 +224,28 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, nil
 	}
 
+	repaired, semanticFallback := s.recoverAuthorizedOmittedStart(repaired, capabilities, userMessage)
 	result.Response = repaired
 	result.Malformed = false
 	result.Repaired = true
+	result.SemanticFallback = semanticFallback
 	return result, nil
+}
+
+// recoverAuthorizedOmittedStart handles one narrow model failure: a valid reply
+// that omits motion for an unambiguous start command. It never widens current-
+// turn authority and never resumes paused or retargets running motion.
+func (s Service) recoverAuthorizedOmittedStart(response AssistantResponse, capabilities Capabilities, userMessage string) (AssistantResponse, bool) {
+	if !capabilities.Motion || s.TrustedMotionInput || s.MotionContext == nil ||
+		s.MotionContext.Running || s.MotionContext.Paused ||
+		!userAuthorizesMotion(userMessage, MotionActionStart) {
+		return response, false
+	}
+	if response.Motion != nil && response.Motion.Action != MotionActionNone {
+		return response, false
+	}
+	response.Motion = &MotionCommand{Action: MotionActionStart}
+	return response, true
 }
 
 func (s Service) recoverSemanticRepair(response AssistantResponse, capabilities Capabilities, userMessage string, repairErr error) (AssistantResponse, bool) {
@@ -273,7 +292,13 @@ func userAuthorizesMotion(message, action string) bool {
 	}
 
 	normalized := normalizeMotionIntent(message)
-	if normalized == "" || motionIntentIsNegated(normalized) || motionIntentIsConversation(normalized) {
+	if normalized == "" || motionIntentIsNegated(normalized) {
+		return false
+	}
+	if action == MotionActionStart && authorizesDirectPartnerStart(normalized) {
+		return true
+	}
+	if motionIntentIsConversation(normalized) {
 		return false
 	}
 	if action == MotionActionStart {
@@ -340,6 +365,35 @@ func motionIntentIsPermissionQuestion(message string) bool {
 		return true
 	}
 	return containsAny(message, "安全ですか", "大丈夫ですか", "安全吗", "会怎么样", "应该吗")
+}
+
+func authorizesDirectPartnerStart(message string) bool {
+	message = strings.TrimSpace(strings.TrimPrefix(message, "please "))
+	message = strings.TrimSpace(strings.TrimSuffix(message, " please"))
+	for _, command := range []string{"fuck me", "stroke me", "jerk me off", "ride me"} {
+		if message == command {
+			return true
+		}
+		if !strings.HasPrefix(message, command+" ") {
+			continue
+		}
+		qualifier := strings.TrimSpace(strings.TrimPrefix(message, command))
+		if containsAnyExact(qualifier,
+			"now", "right now",
+			"slow", "slowly", "gently", "nice and slow", "slow and gentle", "slow and deep",
+			"hard", "harder", "fast", "faster", "deep", "deeper", "hard and fast", "hard and deep",
+			"as hard as you can", "as fast as you can", "however you want", "like you mean it", "with it",
+		) {
+			return true
+		}
+		if hasIntentPrefix(qualifier,
+			"and talk ", "and tell ", "while you ", "until i ", "until i'm ",
+			"with the ", "like you ", "however you ",
+		) {
+			return true
+		}
+	}
+	return false
 }
 
 func authorizesMotionStart(message string) bool {

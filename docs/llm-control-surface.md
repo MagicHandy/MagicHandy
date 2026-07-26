@@ -75,6 +75,19 @@ existing combination, state, speed-band, engine, and transport check. `stop`
 remains unconditionally safe, and conservative exact Chat Stop phrases bypass
 the model in every built-in prompt language.
 
+A standalone direct partner-action imperative such as `fuck me`, `stroke me`,
+`jerk me off`, or `ride me` is also a positive `start` request when motion is
+stopped. The matcher requires the action at the beginning of the normalized
+turn and accepts only bounded motion qualifiers or direct continuations.
+Negated requests, quoted wording, definitions, stories, and conversational
+expletives such as `well, fuck me` remain inert. If the model returns a valid
+reply with no motion or `action:none` for one of those authorized turns,
+deterministic recovery adds only `action:start`. Recovery is disabled when
+model motion is off, motion is running or paused, or the input is an Autopilot
+decision. The semantic start still goes through normal engine admission,
+target normalization, configured speed/range limits, Stop epochs, and the
+selected transport; it is not a private motion path.
+
 Each interactive turn also receives one authoritative runtime snapshot:
 stopped/running/paused state, current pattern or program, current speed and
 area, the persisted speed envelope split into low/middle/high bands, and up to
@@ -90,7 +103,7 @@ This snapshot never enters the user message or semantic motion validator. Mood
 is stored in the existing `diagnostics_json`, so it also needs no schema
 migration. The broader 12-message history is likewise rebuilt from the selected
 server-side session rather than trusted from the request. Utility prompts remain
-byte-identical, do not update mood, and suppress its readout; Autopilot motion
+profile-free, do not update mood, and suppress its readout; Autopilot motion
 decisions deliberately exclude profile context so quoted persona data cannot
 steer an autonomous motion decision.
 

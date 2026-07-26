@@ -87,6 +87,7 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	builder.WriteString(`
 Use that snapshot deliberately:
 - If state is "stopped", use action "start" for an explicit motion request; never use "target" to start motion.
+- When state is "stopped", a direct partner-action imperative such as "fuck me", "stroke me", or "ride me" is an explicit motion request and requires action "start" even without the words "start", "move", or "device".
 - If state is "running", use action "target" only when the user asks to change active motion.
 - If state is "paused", do not invent a resume command; leave motion unchanged.
 - For "continue", "steady", "same", or "hold it there" with no other requested change, preserve the current motion with action "none" or no motion key.
