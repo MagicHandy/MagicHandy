@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Manual motion, explicitly badged "testing": it drives the device directly to
 // check the connection. Normal motion comes from chat and modes.
 import { useId, useState } from "react";
@@ -18,9 +19,9 @@ export function ManualMotionTest() {
   async function start() {
     try {
       await api.startManualTest({ pattern, speed_percent: speed });
-      show("Test motion started.");
+      show(t("Test motion started."));
     } catch (e) {
-      show(e instanceof Error ? e.message : "Could not start test.", "error");
+      show(e instanceof Error ? translateKnown(e.message) : t("Could not start test."), "error");
     } finally {
       refresh();
     }
@@ -35,31 +36,26 @@ export function ManualMotionTest() {
 
   return (
     <div className="group">
-      <h3 className="group-title">
-        Manual motion <span className="badge">testing</span>
+      <h3 className="group-title">{t("Manual motion")}<span className="badge">{t("Testing")}</span>
       </h3>
-      <p className="hint-block">
-        Drives the device directly to test the connection. Normal motion comes from chat and modes.
-      </p>
+      <p className="hint-block">{t("Drives the device directly to test the connection. Normal motion comes from chat and modes.")}</p>
       <div className="row-actions hint-block">
         <button type="button" className="btn btn-start" onClick={() => void start()} disabled={locked}>
-          {manualActive ? "Restart test" : "Start test"}
+          {manualActive ? t("Restart test") : t("Start test")}
         </button>
-        <button type="button" className="btn btn-secondary" onClick={() => void stop()} disabled={!backendOnline || !manualActive}>
-          Stop test
-        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => void stop()} disabled={!backendOnline || !manualActive}>{t("Stop test")}</button>
       </div>
       <label className="field">
-        <span className="label">Pattern</span>
+        <span className="label">{t("Pattern")}</span>
         <select value={pattern} onChange={(e) => setPattern(e.target.value)} disabled={locked}>
-          <option value="stroke">Stroke</option>
-          <option value="pulse">Pulse</option>
-          <option value="tease">Tease</option>
+          <option value="stroke">{t("Stroke")}</option>
+          <option value="pulse">{t("Pulse")}</option>
+          <option value="tease">{t("Tease")}</option>
         </select>
       </label>
       <label className="field" htmlFor={speedID}>
-        <span className="label">Speed <output htmlFor={speedID}>{speed}%</output></span>
-        <input id={speedID} aria-label="Speed" type="range" min={1} max={100} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} disabled={locked} />
+        <span className="label">{t("Speed")}<output htmlFor={speedID}>{speed}%</output></span>
+        <input id={speedID} aria-label={t("Speed")} type="range" min={1} max={100} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} disabled={locked} />
       </label>
     </div>
   );

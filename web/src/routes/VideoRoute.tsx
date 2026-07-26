@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { VideoLibrary } from "../components/VideoLibrary";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState } from "../state/app-state";
@@ -7,7 +8,7 @@ export function VideoRoute() {
 
   return (
     <>
-      <WorkspaceHead title="Videos" wide />
+      <WorkspaceHead title={t("Videos")} wide />
       <div className="video-page" data-requires-backend>
         <VideoLibrary locked={!backendOnline || readOnly} stopSequence={state?.stop_sequence} />
       </div>

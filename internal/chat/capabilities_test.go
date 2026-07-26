@@ -133,7 +133,7 @@ func TestComposeSystemUsesAuthoritativeMotionContext(t *testing.T) {
 			t.Fatalf("motion context prompt missing %q:\n%s", want, system)
 		}
 	}
-	if !strings.Contains(system, finalOutputGuard) || !strings.HasSuffix(system, finalVoiceCheck(VoiceUtility)) {
+	if !strings.Contains(system, finalVoiceCheck(VoiceUtility)) || !strings.HasSuffix(system, finalOutputGuard) {
 		t.Fatal("motion context displaced the terminal output instructions")
 	}
 }

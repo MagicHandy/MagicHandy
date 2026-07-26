@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useId, useState } from "react";
 import { api } from "../api/client";
 
@@ -46,11 +47,11 @@ export function HostPathField({
           aria-describedby={`${hintID}${error ? ` ${errorID}` : ""}`}
           onChange={(event) => onChange(event.target.value)}
         />
-        <button type="button" className="btn btn-secondary" disabled={disabled || browsing} onClick={() => void browse()} aria-label={`Browse for ${label}`}>
-          {browsing ? "Opening..." : "Browse..."}
+        <button type="button" className="btn btn-secondary" disabled={disabled || browsing} onClick={() => void browse()} aria-label={t("Browse for {label}", { label: label })}>
+          {browsing ? t("Opening...") : t("Browse...")}
         </button>
       </div>
-      <span id={hintID} className="hint-inline">Path on the computer running MagicHandy.</span>
+      <span id={hintID} className="hint-inline">{t("Path on the computer running MagicHandy.")}</span>
       {error && <span id={errorID} className="form-status voice-worker-error" role="alert">{error}</span>}
     </div>
   );

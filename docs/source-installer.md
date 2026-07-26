@@ -1,9 +1,10 @@
 # Source Installer And Updater
 
 `install.ps1` is the Windows source-build bootstrap. `update.ps1` is its
-choice-preserving updater. They share
+choice-preserving updater, and `change-language.ps1` is the recovery path for
+UI/chat locale selection. They share
 `scripts/installer/InstallerSupport.psm1`; package detection, downloads, state,
-and builds must not be reimplemented in either entry script.
+and builds must not be reimplemented in entry scripts.
 
 This is not the Phase 16 prebuilt release path. It can begin with no development
 tools installed, but a managed llama.cpp source build installs those tools on
@@ -166,14 +167,21 @@ Use Ollama and avoid the managed llama.cpp/NeuTTS runtime toolchain:
 .\install.ps1 -Yes -SkipLlamaBuild
 ```
 
+Select languages unattended (the interactive installer asks these first):
+
+```powershell
+.\install.ps1 -Yes -UILanguage ja -ChatLanguage es
+```
+
 ## Persisted Choices
 
 After all selected provisioning succeeds, the installer atomically writes
 `%LOCALAPPDATA%\MagicHandy\install-state.json` (or `-StatePath` for managed/test
-use). Schema v1 contains only:
+use). Schema v2 contains only:
 
 - install/update timestamps and repository path
 - data directory and local port
+- app UI/installer locale and built-in chat reply locale
 - whether local LLM setup is selected
 - managed llama.cpp selection and concrete CPU/CUDA backend
 - NeuTTS selection is derived from managed llama.cpp rather than stored as a
@@ -182,9 +190,13 @@ use). Schema v1 contains only:
 - Parakeet asset selection
 - launcher selection
 
-No API key, Handy connection key, prompt/chat content, model bytes, or voice
-credential belongs in this file. The main SQLite settings database remains the
-authority for application settings and credentials.
+Schema v1 is migrated in memory to English UI/chat locales and is written as v2
+only after a successful non-plan update. No API key, Handy connection key,
+prompt/chat content, model bytes, or voice credential belongs in this file.
+The main SQLite settings database remains authoritative for application
+settings and credentials. After provisioning succeeds, `magichandy.exe` runs in
+a language-only configuration mode to atomically apply `ui.locale` and the
+matching built-in prompt set before the app starts.
 
 ## Update Behavior
 
@@ -196,7 +208,7 @@ Run:
 
 The updater:
 
-1. reads and displays the saved choices;
+1. reads the saved choices, restores the saved UI language, and displays both language choices plus the remaining setup;
 2. asks whether to modify them (default: no);
 3. refuses to touch a dirty Git worktree;
 4. fetches explicitly, then fast-forwards `main` from `origin/main` or a live
@@ -228,14 +240,32 @@ clear the optional saved Ollama model choice.
 Changing a choice never silently deletes an existing runtime, model library, or
 voice asset. It only changes what subsequent runs ensure is present.
 
+## Language Recovery
+
+Run `change-language.ps1` if the installer or app UI language was selected
+incorrectly:
+
+```powershell
+.\change-language.ps1
+```
+
+The script displays all five languages by native name before localized text,
+then asks separately for app UI and chat reply languages. It updates the app
+through the same validated language-only executable mode and updates existing
+installer state without touching provider, storage, model, voice, or launcher
+choices. If this checkout is running, it sends Emergency Stop and restarts it;
+`-NoLaunch` leaves it stopped. Unattended use accepts `-UILanguage`,
+`-ChatLanguage`, and `-Yes`.
+
 ## Validation
 
 `scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
-all script syntax, atomic state round trips and secret-field exclusion,
-interrupted HTTP byte-range resume and checksum promotion, managed CUDA/NeuTTS
-versus Ollama-only plans, app-managed NeuTTS schema-5 CPU/CUDA manifest
-discovery, native-DLL and encoder tamper detection, and end-to-end plan-only
-install/update behavior.
+all script syntax; UTF-8 installer catalog key and placeholder parity; absence
+of hard-coded decision prompts; schema-v1-to-v2 migration; atomic state round
+trips and secret-field exclusion; localized update plans; interrupted HTTP
+byte-range resume and checksum promotion; managed CUDA/NeuTTS versus Ollama-only
+plans; app-managed NeuTTS schema-5 CPU/CUDA manifest discovery; native-DLL and
+encoder tamper detection; and end-to-end plan-only install/update behavior.
 Updater fixtures cover non-2xx Stop response parsing, strict response
 validation, exact physical-stop confirmation, unattended refusal, `main`, a
 live feature upstream, a single-branch

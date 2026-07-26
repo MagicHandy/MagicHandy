@@ -45,9 +45,11 @@ On Windows, from the project folder in PowerShell:
 ```
 
 The installer can start from a clean 64-bit Windows machine and provisions
-only what your choices require. Flags, voice options, model imports, updater
-behavior, and manual setup are all covered in the
-**[Getting Started guide](docs/getting-started.md)**.
+only what your choices require. Its first two questions choose the app UI and
+chat reply languages; every later question uses the selected UI language. Run
+`change-language.ps1` if either choice needs to be corrected. Flags, voice
+options, model imports, updater behavior, and manual setup are all covered in
+the **[Getting Started guide](docs/getting-started.md)**.
 
 Prefer to build it yourself? `go run ./cmd/magichandy` (Go 1.25+) serves the
 app at <http://127.0.0.1:49717> — no Node required. Details in the

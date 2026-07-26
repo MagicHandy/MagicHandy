@@ -11,8 +11,11 @@ From the project folder, in PowerShell:
 .\install.ps1
 ```
 
-The source installer can start on a clean 64-bit Windows machine. Everything it
-installs is named, licensed, and consented to before it happens:
+The source installer can start on a clean 64-bit Windows machine. Its first two
+questions select the app UI/installer language and the default chat reply
+language. Every later decision-tree question switches to the selected UI
+language. Everything it installs is named, licensed, and consented to before it
+happens:
 
 - It repairs Windows Package Manager (WinGet) through Microsoft's supported
   path when needed, then installs and verifies Go.
@@ -40,6 +43,8 @@ installs is named, licensed, and consented to before it happens:
 
 | Flag | Effect |
 | --- | --- |
+| `-UILanguage ja` | Set the installer and app UI locale (`en`, `es`, `pt-BR`, `zh-Hans`, or `ja`) |
+| `-ChatLanguage es` | Select the matching built-in chat reply prompt |
 | `-SkipLlamaBuild` | Choose Ollama; skip managed llama.cpp and NeuTTS |
 | `-Yes` | Unattended: accepts the displayed third-party package licenses and large-download choices |
 | `-LlamaBackend cuda` | Select the CUDA build of managed llama.cpp |
@@ -55,6 +60,18 @@ The installer stores only non-secret choices in
 `%LOCALAPPDATA%\MagicHandy\install-state.json`. Provider credentials and the
 Handy connection key never enter installer state.
 
+The UI and chat locales are stored with those choices and applied to the real
+SQLite-backed app settings after a successful build. If the wrong language was
+selected, run:
+
+```powershell
+.\change-language.ps1
+```
+
+The recovery script shows native language names before any language-dependent
+text. If this checkout is running, it sends Emergency Stop and safely restarts
+the app so an old in-memory settings snapshot cannot overwrite the change.
+
 Package IDs, the state schema, and the full command reference live in
 [source-installer.md](source-installer.md).
 
@@ -64,9 +81,10 @@ Package IDs, the state schema, and the full command reference live in
 .\update.ps1
 ```
 
-The updater shows the saved data directory, port, llama.cpp/NeuTTS/Ollama
-selection, Parakeet choice, and launcher choice, then asks whether to modify
-them. It rebuilds through the same provisioning implementation as the
+The updater restores the saved UI language before showing its banner. It then
+shows the saved UI/chat languages, data directory, port,
+llama.cpp/NeuTTS/Ollama selection, Parakeet choice, and launcher choice before
+asking whether to modify them. It rebuilds through the same provisioning implementation as the
 installer, and it:
 
 - refuses to update over local source changes and only fast-forwards — `main`

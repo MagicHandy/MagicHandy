@@ -1,17 +1,18 @@
+import { t, translateKnown, type MessageKey } from "../i18n";
 import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { PauseIcon, PlayIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
 
-const decisionSourceCopy: Record<string, string> = {
+const decisionSourceCopy: Partial<Record<string, MessageKey>> = {
   model: "Assistant selected",
   fallback: "Planner fallback",
   hold: "Continuing current pattern",
 };
 
 const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : "Autopilot request failed.";
+  error instanceof Error ? translateKnown(error.message) : t("Autopilot request failed.");
 
 export function AutopilotControl() {
   const { state, backendOnline, readOnly, motion, refresh } = useAppState();
@@ -33,10 +34,10 @@ export function AutopilotControl() {
     try {
       if (active) {
         await api.stopMode();
-        show("Autopilot stopped.");
+        show(t("Autopilot stopped."));
       } else {
         await api.startMode("autopilot");
-        show("Autopilot started.");
+        show(t("Autopilot started."));
       }
     } catch (error) {
       show(errorMessage(error), "error");
@@ -55,10 +56,10 @@ export function AutopilotControl() {
     try {
       if (paused) {
         await api.resumeMotion();
-        show("Motion resumed.");
+        show(t("Motion resumed."));
       } else {
         await api.pauseMotion();
-        show("Motion paused.");
+        show(t("Motion paused."));
       }
     } catch (error) {
       show(errorMessage(error), "error");
@@ -70,25 +71,25 @@ export function AutopilotControl() {
   }
 
   const segment = modes?.segment_index ?? 0;
-  let status = "Off";
+  let status = t("Off");
   if (pending) {
-    status = { start: "Starting", stop: "Stopping", pause: "Pausing", resume: "Resuming" }[pending];
+    status = { start: t("Starting"), stop: t("Stopping"), pause: t("Pausing"), resume: t("Resuming") }[pending];
   } else if (active && autopilotPaused) {
-    status = "Paused";
+    status = t("Paused");
   } else if (active && segment === 0) {
-    status = "Choosing first segment";
+    status = t("Choosing first segment");
   } else if (active) {
     const source = modes?.decision_source
       ? decisionSourceCopy[modes.decision_source] ?? modes.decision_source
-      : "Active";
-    status = `Segment ${segment} · ${source}`;
+      : t("Active");
+    status = t("Segment {segment} · {source}", { segment, source: translateKnown(source) });
   }
 
   return (
     <div className="autopilot-control" data-active={active || undefined} aria-busy={Boolean(pending) || undefined}>
       <span className="autopilot-control-dot" aria-hidden="true" />
       <div className="autopilot-control-copy">
-        <strong>Autopilot</strong>
+        <strong>{t("Autopilot")}</strong>
         <span role="status">{status}</span>
       </div>
       <div className="autopilot-control-actions">
@@ -96,8 +97,8 @@ export function AutopilotControl() {
           <button
             type="button"
             className="icon-button"
-            aria-label={autopilotPaused ? "Resume Autopilot" : "Pause Autopilot"}
-            title={!canPause ? "Autopilot motion has not started" : autopilotPaused ? "Resume Autopilot" : "Pause Autopilot"}
+            aria-label={autopilotPaused ? t("Resume Autopilot") : t("Pause Autopilot")}
+            title={!canPause ? t("Autopilot motion has not started") : autopilotPaused ? t("Resume Autopilot") : t("Pause Autopilot")}
             disabled={locked || Boolean(pending) || !canPause}
             onClick={() => void togglePause()}
           >
@@ -110,7 +111,7 @@ export function AutopilotControl() {
           disabled={locked || Boolean(pending)}
           onClick={() => void toggle()}
         >
-          {pending === "start" ? "Starting..." : pending === "stop" ? "Stopping..." : active ? "Stop Autopilot" : "Start Autopilot"}
+          {pending === "start" ? t("Starting…") : pending === "stop" ? t("Stopping…") : active ? t("Stop Autopilot") : t("Start Autopilot")}
         </button>
       </div>
     </div>

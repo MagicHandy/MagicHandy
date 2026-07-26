@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode, type SyntheticEvent } from "react";
 import { api } from "../api/client";
 import type { MediaVideo } from "../api/types";
@@ -68,7 +69,7 @@ export function MediaVideoPlayer({
   }
 
   return (
-    <div className="media-player" data-synchronized={synchronized || undefined} aria-label={`Video player for ${video.display_name}`} aria-busy={busy || undefined}>
+    <div className="media-player" data-synchronized={synchronized || undefined} aria-label={t("Video player for {display_name}", { display_name: video.display_name })} aria-busy={busy || undefined}>
       <div className="media-video-frame">
         <video
           ref={setPlayerRef}
@@ -103,7 +104,7 @@ export function MediaVideoPlayer({
           }}
         />
       </div>
-      {playbackError && <div className="form-status media-playback-error media-playback-error-row" role="alert"><span>{playbackError}</span><button type="button" className="btn btn-secondary compact-command" onClick={retryPlayback}>Retry video</button></div>}
+      {playbackError && <div className="form-status media-playback-error media-playback-error-row" role="alert"><span>{playbackError}</span><button type="button" className="btn btn-secondary compact-command" onClick={retryPlayback}>{t("Retry video")}</button></div>}
       {children}
     </div>
   );

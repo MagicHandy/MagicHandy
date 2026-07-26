@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 // The shared track handles pointer input; native range inputs remain available
 // to keyboard and assistive-technology users for each bound.
 import { useId, useRef, type ChangeEvent, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
@@ -93,7 +94,7 @@ export function RangeSlider({ label, hint, minValue, maxValue, floor, ceil = 100
           type="range"
           ref={lowRef}
           className="range-slider-input range-slider-low"
-          aria-label={`${label} minimum`}
+          aria-label={t("{label} minimum", { label: label })}
           aria-describedby={valueId}
           aria-valuemax={maxValue - minGap}
           min={floor}
@@ -107,7 +108,7 @@ export function RangeSlider({ label, hint, minValue, maxValue, floor, ceil = 100
           type="range"
           ref={highRef}
           className="range-slider-input range-slider-high"
-          aria-label={`${label} maximum`}
+          aria-label={t("{label} maximum", { label: label })}
           aria-describedby={valueId}
           aria-valuemin={minValue + minGap}
           min={floor}

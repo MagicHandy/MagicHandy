@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import conductorHand from "../assets/conductor-hand-v2.png";
 import { api } from "../api/client";
@@ -120,13 +121,13 @@ export function ConnectionManager() {
       setCloudAttemptFailed(!result.ok);
       show(
         result.ok
-          ? `The Handy is reachable (${result.latency_ms} ms).`
-          : result.message?.trim() || "The Handy responded, but HSP is unavailable for its current device state.",
+          ? t("The Handy is reachable ({latency} ms).", { latency: result.latency_ms })
+          : result.message?.trim() || t("The Handy responded, but HSP is unavailable for its current device state."),
         result.ok ? "info" : "error",
       );
     } catch (error) {
       setCloudAttemptFailed(true);
-      show(error instanceof Error ? error.message : `Connection ${action === "connect" ? "attempt" : "check"} failed.`, "error");
+      show(error instanceof Error ? translateKnown(error.message) : action === "connect" ? t("Connection attempt failed.") : t("Connection check failed."), "error");
     } finally {
       setCloudAction(null);
       refresh();
@@ -138,10 +139,10 @@ export function ConnectionManager() {
     setCloudAttemptFailed(false);
     try {
       const result = await api.cloudDisconnect();
-      if (result.warning) show(result.warning, "error");
-      else show("MagicHandy released control of The Handy. It can now be used by another app.");
+      if (result.warning) show(translateKnown(result.warning), "error");
+      else show(t("MagicHandy released control of The Handy. It can now be used by another app."));
     } catch (error) {
-      show(error instanceof Error ? error.message : "The Handy could not be disconnected.", "error");
+      show(error instanceof Error ? translateKnown(error.message) : t("The Handy could not be disconnected."), "error");
     } finally {
       setCloudAction(null);
       refresh();
@@ -157,10 +158,10 @@ export function ConnectionManager() {
     try {
       await api.saveConnectionKey(nextKey);
       setCloudKey("");
-      show("Handy connection key saved.");
+      show(t("Handy connection key saved."));
       refresh();
     } catch (error) {
-      show(error instanceof Error ? error.message : "Connection key could not be saved.", "error");
+      show(error instanceof Error ? translateKnown(error.message) : t("Connection key could not be saved."), "error");
     } finally {
       setCloudKeyBusy(false);
     }
@@ -168,13 +169,13 @@ export function ConnectionManager() {
 
   return (
     <div className="connection-manager" data-open={open} data-phase={phase}>
-      <section id="connection-manager-panel" className="connection-manager-panel" aria-label="Connection manager" hidden={!open}>
+      <section id="connection-manager-panel" className="connection-manager-panel" aria-label={t("Connection manager")} hidden={!open}>
         <header className="connection-manager-head">
           <div className="connection-manager-title">
-            <h2>Connection</h2>
-            <p>{provider}</p>
+            <h2>{t("Connection")}</h2>
+            <p>{translateKnown(provider)}</p>
           </div>
-          <button ref={closeRef} type="button" className="icon-button" aria-label="Close connection manager" onClick={() => setOpen(false)}>
+          <button ref={closeRef} type="button" className="icon-button" aria-label={t("Close connection manager")} onClick={() => setOpen(false)}>
             <CloseIcon />
           </button>
         </header>
@@ -185,14 +186,14 @@ export function ConnectionManager() {
           <span className="status-dot" data-state={phase === "connected" ? "ok" : phase === "connecting" || phase === "initializing" ? "pending" : phase === "error" ? "error" : "idle"} aria-hidden="true" />
           <span className="connection-current-copy">
             <strong>{deviceName}</strong>
-            <small>{statusText}</small>
+            <small>{translateKnown(statusText)}</small>
           </span>
           {owner === "cloud_rest" && (
             <button
               type="button"
               className="icon-button connection-current-check"
-              aria-label="Check Cloud connection"
-              title="Check connection"
+              aria-label={t("Check Cloud connection")}
+              title={t("Check connection")}
               disabled={locked || cloudBusy || !keySet}
               onClick={() => void probeCloud("check")}
             >
@@ -206,8 +207,8 @@ export function ConnectionManager() {
             <>
               <form className="connection-key-form" onSubmit={(event) => void saveCloudKey(event)}>
                 <div className="connection-key-label">
-                  <label htmlFor="connection-manager-key">Handy connection key</label>
-                  <span>{keySet ? "Saved" : "Required"}</span>
+                  <label htmlFor="connection-manager-key">{t("Handy connection key")}</label>
+                  <span>{keySet ? t("Saved") : t("Required")}</span>
                 </div>
                 <div className="connection-key-entry">
                   <input
@@ -215,13 +216,13 @@ export function ConnectionManager() {
                     type="password"
                     autoComplete="off"
                     spellCheck={false}
-                    placeholder={keySet ? "Leave blank to keep saved key" : "Paste connection key"}
+                    placeholder={keySet ? t("Leave blank to keep saved key") : t("Paste connection key")}
                     value={cloudKey}
                     disabled={locked || cloudKeyBusy}
                     onChange={(event) => setCloudKey(event.target.value)}
                   />
                   <button type="submit" className="btn btn-secondary" disabled={locked || cloudKeyBusy || !cloudKey.trim()}>
-                    {cloudKeyBusy ? "Saving" : "Save key"}
+                    {cloudKeyBusy ? t("Saving") : t("Save key")}
                   </button>
                 </div>
               </form>
@@ -232,7 +233,7 @@ export function ConnectionManager() {
                 onClick={() => void (connected ? disconnectCloud() : probeCloud("connect"))}
               >
                 <WirelessIcon />
-                {cloudAction === "disconnect" ? "Disconnecting" : cloudAction === "connect" ? "Connecting" : connected ? "Disconnect" : "Connect"}
+                {cloudAction === "disconnect" ? t("Disconnecting") : cloudAction === "connect" ? t("Connecting") : connected ? t("Disconnect") : t("Connect")}
               </button>
             </>
           )}
@@ -253,18 +254,16 @@ export function ConnectionManager() {
             onSnapshotChange={onIntifaceSnapshot}
           />
           <div className="connection-provider-meta">
-            {owner === "cloud_rest" && <span>{bundledApplicationID ? "Built-in Handy API v3 ID" : "Developer API v3 ID override"}</span>}
+            {owner === "cloud_rest" && <span>{bundledApplicationID ? t("Built-in Handy API v3 ID") : t("Developer API v3 ID override")}</span>}
             <a className="connection-configure" href="#/settings/device" onClick={() => { restoreFocus.current = false; setOpen(false); }}>
-              <SettingsIcon />
-              Configure device
-            </a>
+              <SettingsIcon />{t("Configure device")}</a>
           </div>
         </div>
 
         <div className="connection-divider" />
         <div className="connection-limits-head">
-          <h3>Limits</h3>
-          <span>Applies immediately</span>
+          <h3>{t("Limits")}</h3>
+          <span>{t("Applies immediately")}</span>
         </div>
         <QuickSettings section="limits" />
       </section>
@@ -273,7 +272,7 @@ export function ConnectionManager() {
         ref={triggerRef}
         type="button"
         className="connection-manager-trigger"
-        aria-label={`${deviceName} ${statusText}; ${open ? "close" : "open"} connection manager`}
+        aria-label={t("{device} {status}; {action} connection manager", { device: deviceName, status: translateKnown(statusText), action: open ? t("close") : t("open") })}
         aria-controls="connection-manager-panel"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -281,7 +280,7 @@ export function ConnectionManager() {
         <span className="connection-trigger-icon" aria-hidden="true"><WirelessIcon size={20} /></span>
         <span className="connection-trigger-copy">
           <strong>{deviceName}</strong>
-          <small>{statusText}</small>
+          <small>{translateKnown(statusText)}</small>
         </span>
         <ChevronUpIcon className="connection-trigger-chevron" />
       </button>
@@ -305,7 +304,7 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
       viewBox="0 0 360 260"
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label={phase === "initializing" ? "The Handy connection status loading" : phase === "connecting" ? "The Handy wireless connection in progress" : "The Handy wireless connection"}
+      aria-label={phase === "initializing" ? t("The Handy connection status loading") : phase === "connecting" ? t("The Handy wireless connection in progress") : t("The Handy wireless connection")}
     >
       <image className="connection-hand" href={conductorHand} x="47" y="-70" width="260" height="260" preserveAspectRatio="xMidYMid meet" />
       <g className="connection-signal" aria-hidden="true">

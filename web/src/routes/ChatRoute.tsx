@@ -1,3 +1,4 @@
+import { t, translateKnown, type MessageKey } from "../i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { ChatSession, ChatSessionsResponse } from "../api/types";
@@ -12,7 +13,7 @@ import { useAppState, useToast } from "../state/app-state";
 
 type PendingChange = { action: "new" } | { action: "switch"; target: ChatSession };
 
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Chat session request failed.";
+const errorMessage = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Chat session request failed.");
 
 export function ChatRoute() {
   const { backendOnline, readOnly, state, motion, refresh } = useAppState();
@@ -66,14 +67,14 @@ export function ChatRoute() {
     if (selectionChanged || summaryBehind) void loadSessions();
   }, [active?.latest_seq, loadSessions, loading, operation, state?.chat?.active_session_id, state?.chat?.latest_seq, state?.uptime_seconds, streaming, workspace?.active_session_id]);
 
-  async function applyWorkspace(action: () => Promise<ChatSessionsResponse>, success?: string) {
+  async function applyWorkspace(action: () => Promise<ChatSessionsResponse>, success?: MessageKey) {
     if (operation) return;
     loadGeneration.current += 1;
     setOperation(true);
     try {
       const response = await action();
       if (mounted.current) setWorkspace(response);
-      if (success) show(success);
+      if (success) show(translateKnown(success));
       refresh();
     } catch (error) {
       show(errorMessage(error), "error");
@@ -125,14 +126,14 @@ export function ChatRoute() {
   }
 
   function deleteSession(session: ChatSession) {
-    if (session.active || locked || !window.confirm(`Delete ${session.title}? This cannot be undone.`)) return;
+    if (session.active || locked || !window.confirm(t("Delete {title}? This cannot be undone.", { title: session.title }))) return;
     void applyWorkspace(() => api.deleteChatSession(session.id), "Chat deleted.");
   }
 
   return (
     <div className="chat-route">
       <div className="chat-workbench">
-        <section className="chat-conversation" aria-label="Conversation">
+        <section className="chat-conversation" aria-label={t("Conversation")}>
           <ChatTabs
             sessions={sessions}
             activeId={active?.id ?? ""}
@@ -145,9 +146,9 @@ export function ChatRoute() {
           />
           {loadError ? (
             <div className="chat-session-state" role="alert">
-              <strong>Chat tabs unavailable</strong>
+              <strong>{t("Chat tabs unavailable")}</strong>
               <span>{loadError}</span>
-              <button type="button" className="btn btn-secondary" onClick={() => void loadSessions()}>Retry</button>
+              <button type="button" className="btn btn-secondary" onClick={() => void loadSessions()}>{t("Retry")}</button>
             </div>
           ) : active ? (
             <ChatPanel
@@ -157,20 +158,20 @@ export function ChatRoute() {
               onSessionChanged={loadSessions}
             />
           ) : (
-            <div className="chat-session-state" role="status">{loading ? "Loading chats..." : "No active chat."}</div>
+            <div className="chat-session-state" role="status">{loading ? t("Loading chats...") : t("No active chat.")}</div>
           )}
         </section>
 
-        <aside className="chat-sidebar" aria-label="Motion controls">
-          <h2 className="section-title">Controls</h2>
+        <aside className="chat-sidebar" aria-label={t("Motion controls")}>
+          <h2 className="section-title">{t("Controls")}</h2>
           <AutopilotControl />
           <div className="divider" />
           <VoiceQuickControls />
           <div className="divider" />
-          <h2 className="section-title">Motion behavior</h2>
+          <h2 className="section-title">{t("Motion behavior")}</h2>
           <QuickSettings section="behavior" />
           <div className="chat-motion-status">
-            <h3 className="group-title">Motion status</h3>
+            <h3 className="group-title">{t("Motion status")}</h3>
             <MotionVisualizer motion={motion} />
           </div>
         </aside>

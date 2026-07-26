@@ -1,3 +1,4 @@
+import { t, translateKnown } from "./i18n";
 import { useEffect } from "react";
 import { PatternLibraryRoute } from "./routes/PatternLibraryRoute";
 import { PresetModesRoute } from "./routes/PresetModesRoute";
@@ -24,10 +25,10 @@ export function App() {
       {!state ? (
         <section className="startup-screen" aria-live="polite" aria-busy={!startupError}>
           <div className="startup-mark" aria-hidden="true">MH</div>
-          <h1>MagicHandy</h1>
-          <p>{startupError || "Starting the core and restoring your workspace..."}</p>
+          <h1>{t("MagicHandy")}</h1>
+          <p>{translateKnown(startupError || "Starting the core and restoring your workspace…")}</p>
           {!startupError ? <span className="startup-progress" aria-hidden="true" /> : (
-            <button type="button" className="btn btn-secondary" onClick={refresh}>Retry core connection</button>
+            <button type="button" className="btn btn-secondary" onClick={refresh}>{t("Retry core connection")}</button>
           )}
         </section>
       ) : <ErrorBoundary key={base}>

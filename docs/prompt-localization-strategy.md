@@ -4,127 +4,163 @@
 
 Use hybrid localized prompts for local models:
 
-- Localize behavior, persona, anatomy, memory, and voice-output prose into the
-  target language.
-- Explicitly tell the model which language to use for the user-facing `reply`
-  value.
-- Keep JSON keys, enum values, pattern IDs, and the code-owned JSON contract in
-  English.
-- Do not translate protocol tokens such as `reply`, `motion`, `action`,
-  `pattern_id`, `speed_percent`, `none`, `start`, `target`, `stop`, `stroke`,
-  `pulse`, `tease`, `new_mood`, or any accepted mood value.
+- Localize behavior, persona, voice, anatomy, mood, memory framing,
+  conversation context, recent-reply framing, reply-language reminders, and
+  repair-language reminders.
+- Keep user-facing `reply` text in the language selected by the built-in prompt
+  set.
+- Keep JSON keys, enum values, pattern IDs, and the code-owned machine contract
+  in English.
+- Preserve user-authored memories, persona text, custom anatomy, and canonical
+  recent assistant replies verbatim inside bounded context.
+- Keep the final output guard last, after every localized or dynamic block.
 
-This is the rule for both neutral prompt packs and future explicit/adult prompt
-packs. Adult/persona/anatomy prose should be translated at the same tone and
-explicitness as the source; only machine protocol stays stable.
+Do not translate protocol tokens such as `reply`, `motion`, `action`,
+`pattern_id`, `speed_percent`, `none`, `start`, `target`, `stop`, `stroke`,
+`pulse`, `tease`, `new_mood`, or accepted mood values.
 
-## Why Not English-Only Prompts
+This applies to neutral and adult prompt profiles. Adult/persona/anatomy prose
+must retain the source tone and explicitness; only machine protocol remains
+language-neutral.
 
-An English prompt with one instruction like "answer in Spanish" usually protects
-JSON compliance, but it gives small local models weak language priming. These
-models can over-weight the surrounding English instructions and produce English
-or mixed-language `reply` text, especially after repair prompts or saved-memory
-blocks.
+## Rationale
 
-## Why Not Fully Translated Prompts
+An English prompt followed by “answer in Spanish” weakly primes smaller local
+models. They may follow the surrounding English instructions instead,
+especially after saved-memory blocks or a malformed-output repair.
 
-Fully translating the entire system prompt, including the JSON schema and enum
-descriptions, gives stronger language priming but creates protocol risk. Small
-local models are more likely to translate JSON keys or enum values when the
-schema explanation is translated, for example emitting localized equivalents of
-`reply`, `motion`, `start`, or `stop`. MagicHandy's parser is intentionally
-strict, so translated protocol tokens become malformed responses.
+Translating the whole schema creates the opposite failure: models begin
+translating JSON keys and enum values. MagicHandy's parser is intentionally
+strict, so a translated equivalent of `reply`, `motion`, `start`, or `stop` is
+invalid.
 
-## Hybrid Shape
+Hybrid composition gives the model sustained target-language prose while
+placing one stable English wire contract at the end.
 
-The composed prompt should have this shape:
+## Composition Order
+
+`composeSystem` produces this order:
 
 ```text
-<localized behavior/persona instructions>
-<localized instruction: write the user-facing `reply` in the target language>
-<English instruction: keep JSON keys and enum values exactly as defined>
+<localized built-in behavior/persona instructions>
+<localized code-owned voice identity>
+<English machine behavior constraints that define stable tokens>
 
 <code-owned English JSON contract>
-
-<code-owned authoritative motion context, when enabled>
-<code-owned voice/profile/anatomy/mood context, for interactive non-utility chat>
-<quoted latest three canonical assistant lines, when present>
-
-<localized saved-memory header, if memories are present>
-- <user-authored memory text, verbatim>
-
-<code-owned final output guard; always last>
+<code-owned pattern and motion capabilities>
+<localized authoritative motion/conversation framing, when present>
+<localized profile, anatomy, mood, and recent-reply framing>
+  <user/model-authored values quoted verbatim>
+<localized saved-memory header>
+  <user-authored memories verbatim>
+<localized final voice check>
+<localized reply-language reminder for a built-in prompt set>
+<code-owned final JSON output guard; always last>
 ```
 
-The prompt contract remains appended by code, not stored inside prompt sets. That
-keeps editable/user-imported prompts from weakening the parser contract while
-still letting built-in and custom prompt sets control persona and language.
+Prompt sets cannot weaken or replace the parser contract. If a built-in set is
+missing, composition falls back to the English built-in. Custom prompt sets do
+not receive a built-in English language override: their own instructions remain
+responsible for reply language, while the machine contract is still appended.
 
-Current implementation note: built-in behavior text and memory headers have
-native translations. The newer code-owned voice, anatomy, quoted-profile,
-mood-state, and recent-line instructions remain English pending a native-speaker
-pass. This does not change the selected `reply` language, and it is preferable
-to silently weakening or sanitizing the adult-language rule. The profile values
-and recent lines themselves remain user/model-authored data and are never
-translated by prompt composition.
+## Built-In Prompt Sets
 
-`new_mood` is optional only for interactive non-utility chat. Its 17 accepted
-values are stable English protocol tokens documented in
-`docs/localization-wording.md`; localized display text must map from those
-values rather than changing the wire enum.
-
-## Current Built-In Prompt Sets
-
-`internal/chat/prompts.go` defines these built-ins:
-
-| Language | Prompt set ID | Reply language |
+| Language | Prompt set ID | Reply locale |
 | --- | --- | --- |
-| English | `magichandy_motion_v1` | English |
-| Spanish | `magichandy_motion_v1_es` | Spanish |
-| Portuguese (Brazil) | `magichandy_motion_v1_pt_br` | Brazilian Portuguese |
-| Simplified Chinese | `magichandy_motion_v1_zh_hans` | Simplified Chinese |
-| Japanese | `magichandy_motion_v1_ja` | Japanese |
+| English | `magichandy_motion_v1` | `en` |
+| Spanish | `magichandy_motion_v1_es` | `es` |
+| Portuguese (Brazil) | `magichandy_motion_v1_pt_br` | `pt-BR` |
+| Simplified Chinese | `magichandy_motion_v1_zh_hans` | `zh-Hans` |
+| Japanese | `magichandy_motion_v1_ja` | `ja` |
 
-The existing English ID remains the default so saved settings and old traces do
-not change behavior unexpectedly. A future locale setting can select the matching
-built-in prompt set by default for new users.
+The English ID remains the default for existing settings. The browser prompt
+selector and source installer map native language choices to these IDs through
+`config.PromptSetForLocale`.
+
+## Dynamic Context
+
+Code-owned framing is localized, but values are not:
+
+- Persona descriptions and custom anatomy are quoted as user-authored text.
+- Saved memories are included verbatim under a localized header.
+- Recent assistant replies are canonical database text and remain verbatim.
+- Mood and motion enums stay exact English protocol values even when surrounding
+  prose is localized.
+- Pattern IDs remain stable. Display names and descriptions may be localized in
+  the future without changing the identifier sent in JSON.
+
+This boundary avoids accidental translation of identity, intent, or historical
+conversation content.
 
 ## Repair Prompts
 
-Repair prompts should stay strict and protocol-focused. They may be English, but
-must include the selected prompt set and should tell the model to preserve the
-reply language required by that prompt set. The repair pass should fix JSON
-shape, not translate or rewrite the user's preferred language.
+`RepairPrompt` remains strict and protocol-focused. It includes a localized
+instruction to preserve the selected built-in reply language while correcting
+only JSON shape and accepted values. The final repair request still names the
+English protocol tokens.
 
-## Validation Guidance
+A repair must not:
 
-When validating prompt changes against Ollama, use the local models that are
-strong at this task, such as:
+- translate a correct user-facing reply into English;
+- rewrite or sanitize user-authored context;
+- accept localized JSON keys or enum values; or
+- add markdown, commentary, or keys outside the contract.
 
-- `igorls/gemma-4-12B-it-qat-q4_0-unquantized-heretic:Q4_0`
-- `draganis/vanessa`
+## Automated Validation
 
-For each supported language, test both chat-only and motion-request turns. A pass
-requires all of the following:
+`internal/chat/prompt_localization_test.go` covers all built-in locales and
+asserts:
 
-- The response parses as one JSON object with no markdown or extra keys.
-- The `reply` value is in the selected language.
-- JSON keys and enum values remain exact English protocol tokens.
-- Optional `new_mood`, when present, is one of the 17 exact protocol values.
-- Motion requests use only permitted `action`, `pattern_id`, and
-  `speed_percent` values.
-- User-authored memories are referenced naturally and are not silently sanitized
-  or translated unless the user requested translation.
+- localized behavior, voice, context, memory, anatomy, and final reminders are
+  present;
+- user-authored values remain byte-for-byte present;
+- JSON keys and action/mood enums remain English;
+- the code-owned output guard is the final prompt block;
+- repair prompts preserve target language;
+- custom prompt sets do not receive a built-in English language override.
 
-Suggested smoke prompts:
+The permanent live test is intentionally build-tagged because it requires a
+running local model:
 
-```text
-hello, talk to me briefly
-start slow motion
-make it a little faster
-stop now
+```powershell
+go test -tags liveeval ./internal/chat -run TestLivePromptLocalizationGemma -v
 ```
 
-Run the same intent in the target language too. The model may receive user input
-in any language, but the selected prompt set determines the default language for
-the `reply` value unless the user explicitly requests a different language.
+Prerequisite: an OpenAI-compatible llama.cpp server at
+`http://127.0.0.1:8080`. The test discovers the loaded model through
+`/v1/models`. It creates no motion engine or transport and therefore cannot send
+a device command.
+
+## Live Gemma Evidence
+
+On 2026-07-26,
+`igorls-gemma-4-12b-it-qat-q4-0-unquantized-1bdd95189f67` passed the live
+llama.cpp matrix in a final repeated 15.78-second run:
+
+- Spanish, Brazilian Portuguese, Simplified Chinese, and Japanese;
+- one chat-only request per language;
+- one motion-intent request per language; and
+- one deliberately malformed-response repair per language.
+
+All 12 responses parsed as one strict JSON object. Every `reply` matched the
+selected language heuristic, every motion request used the English `start`
+enum, and every repair preserved the target reply language. This is evidence
+for the tested Gemma build and prompt shape, not a guarantee for every local
+model or quantization.
+
+## Review Gate
+
+For prompt changes, run unit tests first, then the live matrix against the
+primary managed llama.cpp path. A release-facing prompt change passes only when:
+
+- chat-only responses do not accidentally authorize motion;
+- target-language replies are natural and not mixed with English instruction
+  prose;
+- motion and mood fields use only accepted English values;
+- malformed-output repair preserves language and strict JSON;
+- memories and profile values are not translated or sanitized; and
+- the final output guard remains last.
+
+Ollama remains supported, but managed llama.cpp with the installed Gemma model
+is the primary acceptance path. Do not substitute an unrelated Ollama model for
+this check without recording it as additional, not equivalent, evidence.

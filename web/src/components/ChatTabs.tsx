@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import type { ChatSession } from "../api/types";
 import { MoreHorizontalIcon, PlusIcon, SaveIcon, TrashIcon } from "../shell/icons";
@@ -115,11 +116,11 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
 
   return (
     <header className="chat-tabs-bar">
-      <h1 className="chat-tabs-title">Chat</h1>
+      <h1 className="chat-tabs-title">{t("Chat")}</h1>
       {assistantMood && (
-        <div className="chat-mood-readout" role="status" aria-label={`Assistant mood: ${assistantMood}`}>
-          <span>Mood</span>
-          <strong>{assistantMood}</strong>
+        <div className="chat-mood-readout" role="status" aria-label={t("Assistant mood: {mood}", { mood: translateKnown(assistantMood) })}>
+          <span>{t("Mood")}</span>
+          <strong>{translateKnown(assistantMood)}</strong>
         </div>
       )}
       <div className="chat-tabs-track">
@@ -128,7 +129,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
           className="chat-tabs-scroll"
           style={{ width: preferredTabStripWidth(sessions.length) }}
         >
-          <div className="chat-tabs-list" role="tablist" aria-label="Chat sessions">
+          <div className="chat-tabs-list" role="tablist" aria-label={t("Chat sessions")}>
             {sessions.map((session) => {
               const hasMenuActions = !session.saved || !session.active;
               return (
@@ -147,7 +148,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
                     aria-controls="active-chat-panel"
                     tabIndex={session.id === activeId ? 0 : -1}
                     disabled={disabled}
-                    title={session.saved ? session.title : `${session.title} (not saved)`}
+                    title={session.saved ? session.title : t("{title} (not saved)", { title: session.title })}
                     onClick={() => onActivate(session)}
                     onKeyDown={(event) => {
                       if (["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) {
@@ -161,13 +162,13 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
                     }}
                   >
                     <span>{session.title}</span>
-                    {!session.saved && <span className="chat-tab-unsaved" aria-label="Not saved" />}
+                    {!session.saved && <span className="chat-tab-unsaved" aria-label={t("Not saved")} />}
                   </button>
                   {hasMenuActions && (
                     <button
                       type="button"
                       className="chat-tab-menu-button"
-                      aria-label={`Open options for ${session.title}`}
+                      aria-label={t("Open options for {title}", { title: session.title })}
                       aria-haspopup="menu"
                       aria-expanded={menu?.session.id === session.id}
                       disabled={disabled}
@@ -188,8 +189,8 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
           <button
             type="button"
             className="chat-new-button"
-            aria-label="Start a new chat"
-            title="New chat"
+            aria-label={t("Start a new chat")}
+            title={t("New chat")}
             disabled={disabled}
             onClick={onNew}
           >
@@ -202,7 +203,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
           ref={menuRef}
           className="chat-tab-menu"
           role="menu"
-          aria-label={`${menu.session.title} options`}
+          aria-label={t("{title} options", { title: menu.session.title })}
           style={{ left: menu.left, top: menu.top }}
         >
           <button
@@ -212,7 +213,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
             onClick={() => { menu.opener.focus(); setMenu(null); onSave(menu.session); }}
           >
             <SaveIcon size={16} />
-            {menu.session.saved ? "Saved" : "Save chat"}
+            {menu.session.saved ? t("Saved") : t("Save chat")}
           </button>
           <button
             type="button"
@@ -220,9 +221,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
             disabled={menu.session.active}
             onClick={() => { menu.opener.focus(); setMenu(null); onDelete(menu.session); }}
           >
-            <TrashIcon size={16} />
-            Delete chat
-          </button>
+            <TrashIcon size={16} />{t("Delete chat")}</button>
         </div>
       )}
     </header>

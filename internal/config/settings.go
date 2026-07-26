@@ -158,6 +158,7 @@ const (
 type Settings struct {
 	Version     int                 `json:"version"`
 	Server      ServerSettings      `json:"server"`
+	UI          UISettings          `json:"ui"`
 	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
@@ -452,6 +453,7 @@ type ChatSettings struct {
 type PublicSettings struct {
 	Version     int                       `json:"version"`
 	Server      ServerSettings            `json:"server"`
+	UI          UISettings                `json:"ui"`
 	Media       MediaSettings             `json:"media"`
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
@@ -490,6 +492,7 @@ type PublicSettingsOptionHints struct {
 	ParakeetSources         []string `json:"parakeet_sources"`
 	NeuTTSSamplingModes     []string `json:"neutts_sampling_modes"`
 	ChatStartupBehaviors    []string `json:"chat_startup_behaviors"`
+	Locales                 []string `json:"locales"`
 }
 
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
@@ -542,6 +545,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 // SettingsUpdate is the payload accepted by the settings API.
 type SettingsUpdate struct {
 	Server             ServerSettings      `json:"server"`
+	UI                 *UISettings         `json:"ui,omitempty"`
 	Media              *MediaSettings      `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
@@ -568,6 +572,9 @@ func DefaultSettings() Settings {
 		Version: CurrentSettingsVersion,
 		Server: ServerSettings{
 			Port: DefaultServerPort,
+		},
+		UI: UISettings{
+			Locale: LocaleEnglish,
 		},
 		Device: DeviceSettings{
 			HSPDispatchOwner:       DispatchOwnerCloudREST,
@@ -626,6 +633,7 @@ func (s Settings) Public() PublicSettings {
 	return PublicSettings{
 		Version: s.Version,
 		Server:  s.Server,
+		UI:      s.UI,
 		Media: MediaSettings{
 			ScriptOffsetMillis:     s.Media.ScriptOffsetMillis,
 			ScriptSmoothingPercent: s.Media.ScriptSmoothingPercent,
@@ -645,82 +653,7 @@ func (s Settings) Public() PublicSettings {
 		Voice:       publicVoiceSettings(s.Voice),
 		Chat:        s.Chat,
 		Diagnostics: s.Diagnostics,
-		Options: PublicSettingsOptionHints{
-			HSPDispatchOwners: []string{
-				DispatchOwnerCloudREST,
-				DispatchOwnerBrowserBluetooth,
-				DispatchOwnerIntiface,
-			},
-			APIApplicationIDSources: []string{
-				ApplicationIDSourceBundled,
-				ApplicationIDSourceDeveloperOverride,
-			},
-			MotionStyles: []string{
-				MotionStyleGentle,
-				MotionStyleBalanced,
-				MotionStyleIntense,
-			},
-			DiagnosticsVerbosities: []string{
-				DiagnosticsVerbosityNormal,
-				DiagnosticsVerbosityDebug,
-				DiagnosticsVerbosityTrace,
-			},
-			LLMProviders: []string{
-				LLMProviderLlamaCPP,
-				LLMProviderOllama,
-			},
-			LlamaCPPModes: []string{
-				LlamaCPPModeManaged,
-				LlamaCPPModeExternal,
-			},
-			LLMReasoningModes: []string{
-				LLMReasoningOff,
-				LLMReasoningAuto,
-			},
-			LLMMaxOutputTokens: []int{128, 256, 512, 1024},
-			LLMChatVoices: []string{
-				LLMChatVoiceUtility,
-				LLMChatVoiceWarm,
-				LLMChatVoiceIntimate,
-				LLMChatVoiceExplicit,
-			},
-			LLMUserAnatomies: []string{
-				LLMUserAnatomyPenis,
-				LLMUserAnatomyVagina,
-				LLMUserAnatomyCustom,
-			},
-			PromptSets: []string{
-				PromptSetMagicHandyMotionV1,
-				PromptSetMagicHandyMotionV1ES,
-				PromptSetMagicHandyMotionV1PTBR,
-				PromptSetMagicHandyMotionV1ZHHans,
-				PromptSetMagicHandyMotionV1JA,
-			},
-			TTSProviders: []string{
-				VoiceProviderNone,
-				VoiceTTSProviderElevenLabs,
-				VoiceTTSProviderNeuTTSAir,
-				VoiceProviderCustom,
-			},
-			ASRProviders: []string{
-				VoiceProviderNone,
-				VoiceASRProviderParakeet,
-				VoiceASRProviderOpenAICompat,
-				VoiceProviderCustom,
-			},
-			ParakeetSources: []string{
-				ParakeetSourceApp,
-				ParakeetSourceCustom,
-			},
-			NeuTTSSamplingModes: []string{
-				NeuTTSSamplingFixed,
-				NeuTTSSamplingRandom,
-			},
-			ChatStartupBehaviors: []string{
-				ChatStartupPrevious,
-				ChatStartupNew,
-			},
-		},
+		Options:     publicSettingsOptionHints(),
 	}
 }
 
@@ -762,6 +695,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next := s
 	next.Version = CurrentSettingsVersion
 	next.Server = update.Server
+	if update.UI != nil {
+		next.UI.Locale = strings.TrimSpace(update.UI.Locale)
+	}
 	if update.Media != nil {
 		next.Media = normalizeMediaSettings(*update.Media)
 	}
@@ -980,6 +916,9 @@ func validateSettings(settings Settings) error {
 	if settings.Server.Port < 1 || settings.Server.Port > 65535 {
 		return fmt.Errorf("server port must be between 1 and 65535")
 	}
+	if !oneOf(settings.UI.Locale, LocaleEnglish, LocaleSpanish, LocalePortugueseBrazil, LocaleSimplifiedChinese, LocaleJapanese) {
+		return fmt.Errorf("unknown UI locale %q", settings.UI.Locale)
+	}
 	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
 	}
@@ -1017,6 +956,10 @@ func applyMissingDefaults(settings Settings) Settings {
 	defaults := DefaultSettings()
 	if settings.Server.Port == 0 {
 		settings.Server.Port = defaults.Server.Port
+	}
+	settings.UI.Locale = strings.TrimSpace(settings.UI.Locale)
+	if settings.UI.Locale == "" {
+		settings.UI.Locale = defaults.UI.Locale
 	}
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner

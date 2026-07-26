@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef } from "react";
 import type { ChatSession } from "../api/types";
 import { trapModalTab } from "../util/modal";
@@ -38,10 +39,10 @@ export function ChatSessionDialog({ action, active, targetTitle, autopilotActive
   const startingNew = action === "new";
   const canSave = !active.saved && active.message_count > 0;
   const continueLabel = startingNew && canSave
-    ? "Discard and start"
+    ? t("Discard and start")
     : startingNew
-      ? "Start new chat"
-      : "Switch without saving";
+      ? t("Start new chat")
+      : t("Switch without saving");
 
   return (
     <div className="modal-scrim" onMouseDown={(event) => { if (!pending && event.target === event.currentTarget) onCancel(); }}>
@@ -54,27 +55,26 @@ export function ChatSessionDialog({ action, active, targetTitle, autopilotActive
         tabIndex={-1}
       >
         <header>
-          <h2 id="chat-session-dialog-title">{startingNew ? "Start a new chat?" : `Switch to ${targetTitle}?`}</h2>
+          <h2 id="chat-session-dialog-title">{startingNew ? t("Start a new chat?") : t("Switch to {title}?", { title: targetTitle ?? "" })}</h2>
         </header>
         <div className="chat-session-dialog-body">
           <p>
             {active.saved
-              ? `${active.title} is saved and will remain available in the tab bar.`
+              ? t("{title} is saved and will remain available in the tab bar.", { title: active.title })
               : canSave
-                ? `${active.title} has not been saved. Use Save and continue to keep it after MagicHandy closes.`
-                : "The current chat is empty and will be replaced."}
+                ? t("{title} has not been saved. Use Save and continue to keep it after MagicHandy closes.", { title: active.title })
+                : t("The current chat is empty and will be replaced.")}
           </p>
-          {autopilotActive && <p className="chat-session-dialog-note">Autopilot will stop before the active chat changes.</p>}
+          {autopilotActive && <p className="chat-session-dialog-note">{t("Autopilot will stop before the active chat changes.")}</p>}
         </div>
         <footer>
-          <button type="button" className="btn btn-secondary" disabled={pending} onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn btn-secondary" disabled={pending} onClick={onCancel}>{t("Cancel")}</button>
           {canSave && (
-            <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => onContinue(true)}>
-              Save and {startingNew ? "start" : "switch"}
+            <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => onContinue(true)}>{startingNew ? t("Save and start") : t("Save and switch")}
             </button>
           )}
           <button type="button" className="btn btn-primary" disabled={pending} onClick={() => onContinue(false)}>
-            {pending ? "Updating chat..." : continueLabel}
+            {pending ? t("Updating chat…") : continueLabel}
           </button>
         </footer>
       </section>

@@ -9,8 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "node scripts/check-localization.mjs && vitest run",
+    "test:watch": "vitest",
+    "localization:check": "node scripts/check-localization.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

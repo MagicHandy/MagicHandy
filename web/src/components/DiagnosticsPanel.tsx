@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Diagnostics: a read-only status grid from backend state, a one-click copyable
 // summary for bug reports, trace export, and a double-confirm settings reset
 // (memories and prompt sets are deliberately untouched by reset).
@@ -6,7 +7,7 @@ import { api } from "../api/client";
 import type { PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
+const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
 function download(name: string, content: string) {
   const blob = new Blob([content], { type: "application/json" });
@@ -88,9 +89,9 @@ export function DiagnosticsPanel({
     );
     try {
       await navigator.clipboard.writeText(bundle);
-      show("Diagnostics summary copied.");
+      show(t("Diagnostics summary copied."));
     } catch {
-      show("Clipboard unavailable.", "error");
+      show(t("Clipboard unavailable."), "error");
     }
   }
   async function exportTrace() {
@@ -112,7 +113,7 @@ export function DiagnosticsPanel({
     try {
       const response = await api.resetSettings();
       await onReset?.(response.settings);
-      show("Settings reset to defaults.");
+      show(t("Settings reset to defaults."));
       refresh();
     } catch (e) {
       const resetSettings = resetSettingsFromError(e);
@@ -129,8 +130,8 @@ export function DiagnosticsPanel({
   return (
     <>
       <div className="row-actions hint-block">
-        <button type="button" className="btn btn-secondary" onClick={() => void copy()}>Copy summary</button>
-        <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>Export trace</button>
+        <button type="button" className="btn btn-secondary" onClick={() => void copy()}>{t("Copy summary")}</button>
+        <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>{t("Export trace")}</button>
       </div>
       <dl className="meta-grid">
         {rows.map(([k, v]) => (
@@ -142,13 +143,10 @@ export function DiagnosticsPanel({
       </dl>
       <div className="divider" />
       <div className="group">
-        <h3 className="group-title">Reset</h3>
-        <p className="hint-block">
-          Restores every setting to factory defaults, including the connection key. Saved memories and prompt
-          sets are not touched.
-        </p>
+        <h3 className="group-title">{t("Reset")}</h3>
+        <p className="hint-block">{t("Restores every setting to factory defaults, including the connection key. Saved memories and prompt sets are not touched.")}</p>
         <button type="button" className="btn btn-danger-outline" disabled={locked || resetting} onClick={() => void reset()}>
-          {resetting ? "Resetting settings" : confirmReset ? "Confirm reset all settings" : "Reset all settings"}
+          {resetting ? t("Resetting settings") : confirmReset ? t("Confirm reset all settings") : t("Reset all settings")}
         </button>
       </div>
     </>

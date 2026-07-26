@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import {
   useCallback,
   useEffect,
@@ -112,21 +113,21 @@ export function MediaPreviewDialog({
     <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section ref={dialogRef} className="media-preview-dialog" role="dialog" aria-labelledby="media-preview-title" tabIndex={-1}>
         <header className="media-dialog-header">
-          <div><p className="eyebrow">Import preview</p><h2 id="media-preview-title">Match video and timeline</h2></div>
-          <button type="button" className="icon-button" aria-label="Close video preview" title="Close" onClick={onClose}><CloseIcon /></button>
+          <div><p className="eyebrow">{t("Import preview")}</p><h2 id="media-preview-title">{t("Match video and timeline")}</h2></div>
+          <button type="button" className="icon-button" aria-label={t("Close video preview")} title={t("Close")} onClick={onClose}><CloseIcon /></button>
         </header>
         <div className="media-dialog-body">
           <div className="media-preview-picker">
-            <label><span>Video</span><select value={selectedID} disabled={loading || videos.length === 0} onChange={(event) => setSelectedID(event.target.value)}>{videos.map((video) => <option key={video.id} value={video.id}>{video.display_name}</option>)}</select></label>
-            <button type="button" className="icon-button" aria-label="Refresh video choices" title="Refresh" disabled={loading} onClick={() => void loadVideos()}><RefreshIcon /></button>
+            <label><span>{t("Video")}</span><select value={selectedID} disabled={loading || videos.length === 0} onChange={(event) => setSelectedID(event.target.value)}>{videos.map((video) => <option key={video.id} value={video.id}>{video.display_name}</option>)}</select></label>
+            <button type="button" className="icon-button" aria-label={t("Refresh video choices")} title={t("Refresh")} disabled={loading} onClick={() => void loadVideos()}><RefreshIcon /></button>
           </div>
-          {loading && <p className="form-status" role="status">Loading video catalog</p>}
+          {loading && <p className="form-status" role="status">{t("Loading video catalog")}</p>}
           {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
-          {!loading && !error && !selected && <div className="empty-state compact-empty"><h2>No scanned videos</h2><a className="btn btn-secondary" href="#/settings/media" onClick={onClose}>Library locations</a></div>}
+          {!loading && !error && !selected && <div className="empty-state compact-empty"><h2>{t("No scanned videos")}</h2><a className="btn btn-secondary" href="#/settings/media" onClick={onClose}>{t("Library locations")}</a></div>}
           {selected && (
             <MediaVideoPlayer video={selected} allowMetadataWrite={!disabled} onTimeChange={setPlayhead} onDuration={setVideoDuration}>
               <div className="media-preview-timeline">
-                <div className="media-preview-readout"><strong>{funscriptName}</strong><span>Playhead {formatTimelineTime(playhead)}</span>{durationDelta !== null && durationDelta > 1000 && <span data-warning>Lengths differ by {formatTimelineTime(durationDelta)}</span>}</div>
+                <div className="media-preview-readout"><strong>{funscriptName}</strong><span>{t("Playhead {time}", { time: formatTimelineTime(playhead) })}</span>{durationDelta !== null && durationDelta > 1000 && <span data-warning>{t("Lengths differ by {duration}", { duration: formatTimelineTime(durationDelta) })}</span>}</div>
                 <ImportTimeline points={points} duration={duration} start={trim.start} end={trim.end} viewport={viewport} disabled={disabled} playhead={playhead} onTrimChange={onTrimChange} onViewportChange={onViewportChange} />
               </div>
             </MediaVideoPlayer>

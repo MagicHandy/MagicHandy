@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaScanState, MediaVideo } from "../api/types";
@@ -96,7 +97,7 @@ export function MediaSettingsPanel({
   }
 
   function removeLocation(location: string) {
-    if (!window.confirm(`Remove ${location} from the video library?`)) return;
+    if (!window.confirm(t("Remove {location} from the video library?", { location }))) return;
     onChange(locations.filter((entry) => entry !== location));
   }
 
@@ -122,7 +123,7 @@ export function MediaSettingsPanel({
   const summary = scan?.summary;
   return (
     <div className="media-settings">
-      <h2 className="section-title">Video script playback</h2>
+      <h2 className="section-title">{t("Video script playback")}</h2>
       <label className="toggle-line">
         <span className="toggle">
           <input
@@ -133,14 +134,11 @@ export function MediaSettingsPanel({
           />
           <span className="track" aria-hidden="true" />
         </span>
-        <span>
-          Apply motion speed limit to video scripts
-          <small>Off preserves paired funscript timing and movement. On caps only over-limit segments. A change during playback requires Play again.</small>
+        <span>{t("Apply motion speed limit to video scripts")}<small>{t("Off preserves paired funscript timing and movement. On caps only over-limit segments. A change during playback requires Play again.")}</small>
         </span>
       </label>
       <label className="field">
-        <span className="label">
-          Script offset <span className="hint-inline">milliseconds</span>
+        <span className="label">{t("Script offset")}<span className="hint-inline">{t("milliseconds")}</span>
         </span>
         <input
           type="number"
@@ -151,45 +149,39 @@ export function MediaSettingsPanel({
           disabled={locked}
           onChange={(event) => onScriptOffsetChange(clampOffset(Number(event.target.value)))}
         />
-        <small>
-          Positive delays the device against the picture, negative advances it. Some offset is
-          normal and is not a fault in the video or the script: scripts are authored to a
-          particular sense of timing, screens add their own display delay, and the device takes
-          real time to move. Start at 0, and adjust only if motion consistently feels early or
-          late. A change during playback requires Play again.
-        </small>
+        <small>{t("Positive delays the device against the picture, negative advances it. Some offset is normal and is not a fault in the video or the script: scripts are authored to a particular sense of timing, screens add their own display delay, and the device takes real time to move. Start at 0, and adjust only if motion consistently feels early or late. A change during playback requires Play again.")}</small>
       </label>
       <div className="divider" />
-      <h2 className="section-title">Library locations</h2>
-      <div className="media-location-list" aria-label="Video library locations">
-        {locations.length === 0 && <p className="form-status">No locations configured.</p>}
+      <h2 className="section-title">{t("Library locations")}</h2>
+      <div className="media-location-list" aria-label={t("Video library locations")}>
+        {locations.length === 0 && <p className="form-status">{t("No locations configured.")}</p>}
         {locations.map((location) => {
           const count = counts.get(location) ?? { total: 0, missing: 0 };
           return (
             <div className="media-location-row" key={location}>
-              <span><strong>{location}</strong><small>{count.total.toLocaleString()} videos{count.missing > 0 ? ` / ${count.missing.toLocaleString()} missing` : ""}</small></span>
-              <button type="button" className="icon-button" aria-label={`Remove ${location}`} title="Remove location" disabled={locked || scan?.running} onClick={() => removeLocation(location)}><TrashIcon /></button>
+              <span><strong>{location}</strong><small>{count.missing > 0 ? t("{total} videos · {missing} missing", { total: count.total.toLocaleString(), missing: count.missing.toLocaleString() }) : t("{count} videos", { count: count.total.toLocaleString() })}</small></span>
+              <button type="button" className="icon-button" aria-label={t("Remove {location}", { location: location })} title={t("Remove location")} disabled={locked || scan?.running} onClick={() => removeLocation(location)}><TrashIcon /></button>
             </div>
           );
         })}
       </div>
       <div className="media-location-add">
-        <HostPathField label="New location" value={draft} kind="directory" disabled={locked || scan?.running} placeholder="Choose a video folder" onChange={setDraft} />
-        <button type="button" className="btn btn-secondary" disabled={locked || scan?.running || !draft.trim()} onClick={addLocation}>Add location</button>
+        <HostPathField label={t("New location")} value={draft} kind="directory" disabled={locked || scan?.running} placeholder={t("Choose a video folder")} onChange={setDraft} />
+        <button type="button" className="btn btn-secondary" disabled={locked || scan?.running || !draft.trim()} onClick={addLocation}>{t("Add location")}</button>
       </div>
       <div className="divider" />
       <div className="media-scan-controls">
         <div>
-          <strong>Catalog scan</strong>
-          <span>{dirty ? "Save location changes before scanning." : scan?.running ? `${scan.files_visited.toLocaleString()} files checked / ${scan.videos_found.toLocaleString()} videos found` : `${videos.length.toLocaleString()} catalog entries`}</span>
+          <strong>{t("Catalog scan")}</strong>
+          <span>{dirty ? t("Save location changes before scanning.") : scan?.running ? t("{files} files checked / {videos} videos found", { files: scan.files_visited.toLocaleString(), videos: scan.videos_found.toLocaleString() }) : t("{count} catalog entries", { count: videos.length.toLocaleString() })}</span>
         </div>
         {scan?.running
-          ? <button type="button" className="btn btn-secondary" disabled={locked || !scan.cancellable} onClick={() => void cancelScan()}>Cancel scan</button>
-          : <button type="button" className="btn btn-primary" disabled={locked || dirty || savedLocations.length === 0} onClick={() => void startScan()}><RefreshIcon />Scan now</button>}
+          ? <button type="button" className="btn btn-secondary" disabled={locked || !scan.cancellable} onClick={() => void cancelScan()}>{t("Cancel scan")}</button>
+          : <button type="button" className="btn btn-primary" disabled={locked || dirty || savedLocations.length === 0} onClick={() => void startScan()}><RefreshIcon />{t("Scan now")}</button>}
       </div>
-      {scan?.running && <progress className="media-scan-progress" aria-label="Media scan progress" />}
+      {scan?.running && <progress className="media-scan-progress" aria-label={t("Media scan progress")} />}
       {!scan?.running && scan?.completed_at && summary && (
-        <p className="media-scan-summary" role="status">Last scan: {summary.added} added / {summary.updated} updated / {summary.missing} missing / {summary.removed} removed / {summary.skipped} skipped</p>
+        <p className="media-scan-summary" role="status">{t("Last scan: {added} added / {updated} updated / {missing} missing / {removed} removed / {skipped} skipped", { added: summary.added, updated: summary.updated, missing: summary.missing, removed: summary.removed, skipped: summary.skipped })}</p>
       )}
       {(summary?.issues ?? []).map((issue) => <p className="form-status media-playback-error" role="alert" key={`${issue.location}:${issue.message}`}>{issue.location}: {issue.message}</p>)}
       {scan?.error && <p className="form-status media-playback-error" role="alert">{scan.error}</p>}

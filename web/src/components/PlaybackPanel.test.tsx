@@ -82,6 +82,14 @@ describe("PlaybackPanel", () => {
     expect(screen.getByText("Playing the script exactly as authored.")).toBeInTheDocument();
   });
 
+  it("keeps an empty filter report in the pending state", () => {
+    render(panel({
+      smoothingPercent: 3,
+      sync: { active: true, state: "following", filter_effect: {} },
+    }));
+    expect(screen.getByText("Filters on; effect is measured when motion re-arms.")).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
   it("reports what the filters measurably changed", () => {
     render(panel({
       smoothingPercent: 3,

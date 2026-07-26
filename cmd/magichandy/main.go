@@ -41,6 +41,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 
 	addr := flags.String("addr", "", "HTTP listen address override")
 	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
+	setUILocale := flags.String("set-ui-locale", "", "set the app UI locale and exit")
+	setChatLocale := flags.String("set-chat-locale", "", "set the built-in chat reply locale and exit")
 	logLevel := flags.String("log-level", "info", "structured log level: debug, info, warn, or error")
 	showVersion := flags.Bool("version", false, "print version and exit")
 
@@ -64,6 +66,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	store, err := config.OpenStore(resolvedDataDir)
 	if err != nil {
+		return err
+	}
+	if handled, err := configureLanguagesAndExit(store, *setUILocale, *setChatLocale, stdout); handled {
 		return err
 	}
 	settings, loadStatus := store.Snapshot()
@@ -94,14 +99,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	defer api.Close()
 
-	listenAddr := defaults.Server.Address
-	if settings.Server.Port != 0 {
-		listenAddr = fmt.Sprintf("127.0.0.1:%d", settings.Server.Port)
-	}
-	if *addr != "" {
-		listenAddr = *addr
-	}
-
+	listenAddr := listenAddress(defaults.Server.Address, settings.Server.Port, *addr)
 	server := newHTTPServer(listenAddr, api.Handler())
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -136,6 +134,16 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	return nil
 }
 
+func listenAddress(defaultAddress string, settingsPort int, override string) string {
+	if override != "" {
+		return override
+	}
+	if settingsPort != 0 {
+		return fmt.Sprintf("127.0.0.1:%d", settingsPort)
+	}
+	return defaultAddress
+}
+
 func newHTTPServer(address string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              address,
@@ -144,6 +152,43 @@ func newHTTPServer(address string, handler http.Handler) *http.Server {
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
+}
+
+func configureLanguagesAndExit(store *config.Store, uiLocale, chatLocale string, stdout io.Writer) (bool, error) {
+	if uiLocale == "" && chatLocale == "" {
+		return false, nil
+	}
+	configureErr := configureLanguages(store, uiLocale, chatLocale)
+	closeErr := store.Close()
+	if configureErr != nil {
+		return true, configureErr
+	}
+	if closeErr != nil {
+		return true, closeErr
+	}
+	_, err := fmt.Fprintf(stdout, "language settings updated: ui=%s chat=%s\n", uiLocale, chatLocale)
+	return true, err
+}
+
+func configureLanguages(store *config.Store, uiLocale, chatLocale string) error {
+	if uiLocale == "" || chatLocale == "" {
+		return errors.New("set-ui-locale and set-chat-locale must be provided together")
+	}
+	if !config.IsSupportedLocale(uiLocale) {
+		return fmt.Errorf("unsupported UI locale %q", uiLocale)
+	}
+	promptSet, ok := config.PromptSetForLocale(chatLocale)
+	if !ok {
+		return fmt.Errorf("unsupported chat locale %q", chatLocale)
+	}
+	settings, _ := store.Snapshot()
+	settings.UI.Locale = uiLocale
+	settings.LLM.PromptSet = promptSet
+	_, err := store.Save(settings)
+	if err != nil {
+		return fmt.Errorf("save language settings: %w", err)
+	}
+	return nil
 }
 
 func executablePath() string {

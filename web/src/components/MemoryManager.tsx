@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Long-term memory: transparent and user-managed. Global switch, per-item
 // enable/remove, add, and a double-confirm clear. Chat works with memory off.
 import { useEffect, useRef, useState } from "react";
@@ -5,7 +6,7 @@ import { api } from "../api/client";
 import type { MemoryState } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
+const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
 export function MemoryManager({ locked = false }: { locked?: boolean }) {
   const { backendOnline } = useAppState();
@@ -63,14 +64,14 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
 
   if (!mem) return (
     <div className="group">
-      <h3 className="group-title">Long-term memory</h3>
+      <h3 className="group-title">{t("Long-term memory")}</h3>
       {loadError ? (
         <div className="empty-state compact-empty" role="alert">
-          <strong>Memory unavailable</strong>
+          <strong>{t("Memory unavailable")}</strong>
           <p>{loadError}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => void reload()}>Retry</button>
+          <button type="button" className="btn btn-secondary" onClick={() => void reload()}>{t("Retry")}</button>
         </div>
-      ) : <p className="form-status" role="status">{loading ? "Loading memory..." : "Memory unavailable."}</p>}
+      ) : <p className="form-status" role="status">{loading ? t("Loading memory...") : t("Memory unavailable.")}</p>}
     </div>
   );
   const memories = Array.isArray(mem.memories) ? mem.memories : [];
@@ -79,12 +80,12 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
 
   return (
     <div className="group" aria-busy={busy || loading || undefined}>
-      <h3 className="group-title">Long-term memory</h3>
+      <h3 className="group-title">{t("Long-term memory")}</h3>
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
-          <strong>Memory refresh failed</strong>
+          <strong>{t("Memory refresh failed")}</strong>
           <p>{loadError}</p>
-          <button type="button" className="btn btn-secondary" disabled={busy || loading} onClick={() => void reload()}>Retry</button>
+          <button type="button" className="btn btn-secondary" disabled={busy || loading} onClick={() => void reload()}>{t("Retry")}</button>
         </div>
       )}
       <label className="toggle-line hint-block">
@@ -98,11 +99,11 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
           />
           <span className="track" aria-hidden="true" />
         </span>
-        <span>Include saved memories in chat <span className="hint-inline">applies immediately</span></span>
+        <span>{t("Include saved memories in chat")}<span className="hint-inline">{t("applies immediately")}</span></span>
       </label>
 
       <ul className="memory-list">
-        {memories.length === 0 && <li className="form-status">No memories saved.</li>}
+        {memories.length === 0 && <li className="form-status">{t("No memories saved.")}</li>}
         {memories.map((m) => (
           <li key={m.id} className="group memory-item">
             <label className="toggle">
@@ -111,27 +112,25 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
                 role="switch"
                 checked={m.enabled}
                 disabled={interactionLocked}
-                aria-label="Enable memory"
+                aria-label={t("Enable memory")}
                 onChange={(e) => void run("Updating memory", () => api.setMemoryItemEnabled(m.id, e.target.checked))}
               />
               <span className="track" aria-hidden="true" />
             </label>
             <span className="memory-text">{m.text}</span>
-            <button type="button" className="btn btn-secondary" disabled={interactionLocked} onClick={() => void run("Removing memory", () => api.removeMemory(m.id))}>
-              Remove
-            </button>
+            <button type="button" className="btn btn-secondary" disabled={interactionLocked} onClick={() => void run("Removing memory", () => api.removeMemory(m.id))}>{t("Remove")}</button>
           </li>
         ))}
       </ul>
 
       <label className="field">
-        <span className="label">New memory</span>
+        <span className="label">{t("New memory")}</span>
         <textarea
           rows={2}
           maxLength={2000}
           value={draft}
           disabled={interactionLocked}
-          placeholder="A short fact the assistant should remember"
+          placeholder={t("A short fact the assistant should remember")}
           onChange={(e) => setDraft(e.target.value)}
         />
       </label>
@@ -141,9 +140,7 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
           className="btn btn-primary"
           disabled={interactionLocked || !draft.trim()}
           onClick={() => void run("Adding memory", async () => { await api.addMemory(draft.trim()); if (mounted.current) setDraft(""); })}
-        >
-          Add memory
-        </button>
+        >{t("Add memory")}</button>
         <button
           type="button"
           className="btn btn-danger-outline"
@@ -157,11 +154,11 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
             void run("Clearing memory", () => api.clearMemory());
           }}
         >
-          {confirmClear ? "Confirm clear all" : "Clear all"}
+          {confirmClear ? t("Confirm clear all") : t("Clear all")}
         </button>
       </div>
       {busyAction && <p className="form-status" role="status">{busyAction}...</p>}
-      {locked && <p className="form-status">{backendOnline ? "Read-only client." : "Core offline."}</p>}
+      {locked && <p className="form-status">{backendOnline ? t("Read-only client.") : t("Core offline.")}</p>}
     </div>
   );
 }

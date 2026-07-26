@@ -549,11 +549,13 @@ export interface OptionHints {
   parakeet_sources?: string[];
   neutts_sampling_modes?: string[];
   chat_startup_behaviors?: string[];
+  locales?: string[];
 }
 
 export interface PublicSettings {
   version: number;
   server: { port: number };
+  ui?: { locale: string };
   media?: { library_paths: string[]; script_offset_ms?: number; script_smoothing_percent?: number; peak_rounding_ms?: number };
   device: {
     hsp_dispatch_owner: string;
@@ -705,6 +707,7 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
+  ui?: { locale: string };
   media: { library_paths: string[]; script_offset_ms?: number; script_smoothing_percent?: number; peak_rounding_ms?: number };
   device: {
     hsp_dispatch_owner: string;

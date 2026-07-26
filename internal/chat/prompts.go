@@ -313,6 +313,7 @@ func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, c
 	if !capabilities.Motion || !capabilities.Patterns {
 		patterns = nil
 	}
+	locale := promptLocaleForID(set.ID)
 	var builder strings.Builder
 	behavior := strings.TrimSpace(set.System)
 	if behavior == "" {
@@ -321,7 +322,7 @@ func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, c
 	}
 	builder.WriteString(behavior)
 	builder.WriteString("\n\n")
-	builder.WriteString(voiceIdentityInstructions(capabilities.Voice))
+	builder.WriteString(voiceIdentityInstructionsForLocale(locale, capabilities.Voice))
 	builder.WriteString("\n\n")
 	builder.WriteString(contractInstructions(capabilities))
 	if capabilities.Motion && capabilities.Patterns {
@@ -333,7 +334,7 @@ func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, c
 		builder.WriteString(motionContextInstructions(*motionContext, capabilities, patterns))
 	}
 	if capabilities.Voice != VoiceUtility && conversationContext != nil {
-		if contextText := conversationContextInstructions(*conversationContext, capabilities); contextText != "" {
+		if contextText := conversationContextInstructionsForLocale(locale, *conversationContext, capabilities); contextText != "" {
 			builder.WriteString("\n\n")
 			builder.WriteString(contextText)
 		}
@@ -352,13 +353,17 @@ func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, c
 		}
 	}
 	builder.WriteString("\n\n")
+	builder.WriteString(finalVoiceCheckForLocale(locale, capabilities.Voice))
+	if languageReminder := replyLanguageReminderForPromptID(set.ID); languageReminder != "" {
+		builder.WriteString("\n\n")
+		builder.WriteString(languageReminder)
+	}
+	builder.WriteString("\n\n")
 	if capabilities.MoodTracking {
 		builder.WriteString(finalOutputGuardWithMood)
 	} else {
 		builder.WriteString(finalOutputGuard)
 	}
-	builder.WriteString("\n\n")
-	builder.WriteString(finalVoiceCheck(capabilities.Voice))
 	return builder.String()
 }
 
@@ -504,11 +509,12 @@ func memoryInstructionForPrompt(promptID string) string {
 func RepairPrompt(prompt PromptSet, parseError string) string {
 	return fmt.Sprintf(`Repair your previous MagicHandy response.
 
-Return exactly one JSON object matching the contract from the system prompt. Do not add markdown, comments, code fences, or extra keys. Preserve the reply language required by the selected prompt set.
+Return exactly one JSON object matching the contract from the system prompt. Do not add markdown, comments, code fences, or extra keys.
+%s
 
 Validation error:
 %s
 
 Prompt set:
-%s`, strings.TrimSpace(parseError), prompt.ID)
+%s`, repairLanguageInstruction(prompt.ID), strings.TrimSpace(parseError), prompt.ID)
 }

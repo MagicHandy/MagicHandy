@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { CurvePoint, PatternInput, PatternPreview } from "../api/types";
 import { ClearIcon, PlayIcon } from "../shell/icons";
@@ -42,7 +43,7 @@ export function PatternAuthoring({ locked, saving, onPreview, onPreviewError, on
   }, []);
 
   const input = (): PatternInput => ({
-    name: name.trim() || "Untitled pattern",
+    name: name.trim() || t("Untitled pattern"),
     description: description.trim(),
     kind,
     cycle_ms: cycle,
@@ -114,28 +115,28 @@ export function PatternAuthoring({ locked, saving, onPreview, onPreviewError, on
   }
 
   return (
-    <section className="authoring-layout" aria-label="Pattern authoring">
-      <h2 className="visually-hidden">Pattern authoring</h2>
+    <section className="authoring-layout" aria-label={t("Pattern authoring")}>
+      <h2 className="visually-hidden">{t("Pattern authoring")}</h2>
       <div className="authoring-controls">
-        <label className="field"><span className="label">Name</span><input value={name} maxLength={80} disabled={locked} onChange={(event) => setName(event.target.value)} /></label>
-        <label className="field"><span className="label">Description</span><input value={description} maxLength={400} disabled={locked} onChange={(event) => setDescription(event.target.value)} /></label>
-        <div className="field"><span className="label">Pattern type</span><div className="segmented" role="group" aria-label="Pattern type"><button type="button" aria-pressed={kind === "routine"} data-active={kind === "routine" || undefined} disabled={locked} onClick={() => { setKind("routine"); setCycle(Math.max(6600, cycle)); invalidatePreview(); }}>Routine</button><button type="button" aria-pressed={kind === "burst"} data-active={kind === "burst" || undefined} disabled={locked} onClick={() => { setKind("burst"); invalidatePreview(); }}>Burst</button></div></div>
-        <label className="field"><span className="label">Cycle length (seconds)</span><input type="number" min={kind === "routine" ? 6.6 : 0.5} max={120} step={0.1} value={cycle / 1000} disabled={locked} onChange={(event) => { const seconds = event.currentTarget.valueAsNumber; if (Number.isFinite(seconds)) { setCycle(Math.round(seconds * 1000)); invalidatePreview(); } }} /></label>
-        <label className="field"><span className="label">Simplification <strong>{tolerance.toFixed(1)}%</strong></span><input type="range" min={0.2} max={5} step={0.1} value={tolerance} disabled={locked} onChange={(event) => { setTolerance(Number(event.target.value)); invalidatePreview(); }} /></label>
-        <label className="field"><span className="label">Tags</span><input value={tags} placeholder="steady, progressive" disabled={locked} onChange={(event) => setTags(event.target.value)} /></label>
-        <dl className="authoring-readout"><div><dt>Source points</dt><dd>{preview?.original_count ?? points.length}</dd></div><div><dt>Saved knots</dt><dd>{preview?.simplified_count ?? points.length}</dd></div><div><dt>Preview points</dt><dd>{preview?.samples.length ?? 0}</dd></div></dl>
+        <label className="field"><span className="label">{t("Name")}</span><input value={name} maxLength={80} disabled={locked} onChange={(event) => setName(event.target.value)} /></label>
+        <label className="field"><span className="label">{t("Description")}</span><input value={description} maxLength={400} disabled={locked} onChange={(event) => setDescription(event.target.value)} /></label>
+        <div className="field"><span className="label">{t("Pattern type")}</span><div className="segmented" role="group" aria-label={t("Pattern type")}><button type="button" aria-pressed={kind === "routine"} data-active={kind === "routine" || undefined} disabled={locked} onClick={() => { setKind("routine"); setCycle(Math.max(6600, cycle)); invalidatePreview(); }}>{t("Routine")}</button><button type="button" aria-pressed={kind === "burst"} data-active={kind === "burst" || undefined} disabled={locked} onClick={() => { setKind("burst"); invalidatePreview(); }}>{t("Burst")}</button></div></div>
+        <label className="field"><span className="label">{t("Cycle length (seconds)")}</span><input type="number" min={kind === "routine" ? 6.6 : 0.5} max={120} step={0.1} value={cycle / 1000} disabled={locked} onChange={(event) => { const seconds = event.currentTarget.valueAsNumber; if (Number.isFinite(seconds)) { setCycle(Math.round(seconds * 1000)); invalidatePreview(); } }} /></label>
+        <label className="field"><span className="label">{t("Simplification")}<strong>{tolerance.toFixed(1)}%</strong></span><input type="range" min={0.2} max={5} step={0.1} value={tolerance} disabled={locked} onChange={(event) => { setTolerance(Number(event.target.value)); invalidatePreview(); }} /></label>
+        <label className="field"><span className="label">{t("Tags")}</span><input value={tags} placeholder={t("steady, progressive")} disabled={locked} onChange={(event) => setTags(event.target.value)} /></label>
+        <dl className="authoring-readout"><div><dt>{t("Source points")}</dt><dd>{preview?.original_count ?? points.length}</dd></div><div><dt>{t("Saved knots")}</dt><dd>{preview?.simplified_count ?? points.length}</dd></div><div><dt>{t("Preview points")}</dt><dd>{preview?.samples.length ?? 0}</dd></div></dl>
       </div>
 
       <div className="authoring-stage">
         <div className="authoring-toolbar">
-          <div className="segmented compact-segmented" role="group" aria-label="Canvas mode"><button type="button" aria-pressed={mode === "draw"} data-active={mode === "draw" || undefined} disabled={locked} onClick={() => setMode("draw")}>Draw</button><button type="button" aria-pressed={mode === "edit"} data-active={mode === "edit" || undefined} disabled={locked || points.length < 2} onClick={() => setMode("edit")}>Edit knots</button></div>
-          <span className="sampler-label">Backend preview</span>
-          <button type="button" className="icon-button" title="Clear canvas" aria-label="Clear canvas" disabled={locked || points.length === 0} onClick={resetCanvas}><ClearIcon /></button>
+          <div className="segmented compact-segmented" role="group" aria-label={t("Canvas mode")}><button type="button" aria-pressed={mode === "draw"} data-active={mode === "draw" || undefined} disabled={locked} onClick={() => setMode("draw")}>{t("Draw")}</button><button type="button" aria-pressed={mode === "edit"} data-active={mode === "edit" || undefined} disabled={locked || points.length < 2} onClick={() => setMode("edit")}>{t("Edit knots")}</button></div>
+          <span className="sampler-label">{t("Backend preview")}</span>
+          <button type="button" className="icon-button" title={t("Clear canvas")} aria-label={t("Clear canvas")} disabled={locked || points.length === 0} onClick={resetCanvas}><ClearIcon /></button>
         </div>
         <PatternCanvas mode={mode} cycle={cycle} points={points} samples={preview?.samples ?? []} disabled={locked} onChange={changePoints} onCommit={(next) => void refreshPreview(next)} />
         <div className="authoring-actions">
-          <button type="button" className="btn btn-secondary" disabled={locked || previewing || points.length < 2} onClick={() => void refreshPreview()}><PlayIcon /> {previewing ? "Sampling" : "Preview"}</button>
-          <button type="button" className="btn btn-primary" disabled={locked || saving || previewing || points.length < 2 || !name.trim()} onClick={() => void save()}>{saving ? "Saving" : "Save pattern"}</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || previewing || points.length < 2} onClick={() => void refreshPreview()}><PlayIcon /> {previewing ? t("Sampling") : t("Preview")}</button>
+          <button type="button" className="btn btn-primary" disabled={locked || saving || previewing || points.length < 2 || !name.trim()} onClick={() => void save()}>{saving ? t("Saving") : t("Save pattern")}</button>
         </div>
         <KnotEditor points={points} cycle={cycle} disabled={locked} onChange={changePoints} onCommit={(next) => void refreshPreview(next)} />
       </div>
@@ -226,7 +227,7 @@ function PatternCanvas({ mode, cycle, points, samples, disabled, onChange, onCom
     }
   }
 
-  return <canvas ref={canvasRef} className="pattern-canvas" aria-label="Pattern drawing canvas" aria-disabled={disabled || undefined} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />;
+  return <canvas ref={canvasRef} className="pattern-canvas" aria-label={t("Pattern drawing canvas")} aria-disabled={disabled || undefined} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />;
 }
 
 function drawCanvas(canvas: HTMLCanvasElement, cycle: number, points: CurvePoint[], samples: CurvePoint[]) {
@@ -288,14 +289,14 @@ function nearestPoint(points: CurvePoint[], target: CurvePoint, cycle: number) {
 function KnotEditor({ points, cycle, disabled, onChange, onCommit }: { points: CurvePoint[]; cycle: number; disabled: boolean; onChange: (points: CurvePoint[]) => void; onCommit: (points: CurvePoint[]) => void }) {
   return (
     <details className="advanced-fields knot-editor">
-      <summary>Edit sparse knots</summary>
+      <summary>{t("Edit sparse knots")}</summary>
       <div className="knot-list">
         {/* Position is the stable identity while a knot's editable time changes. */}
         {points.map((point, index) => (
           <div className="knot-row" key={index}>
             <span>{index + 1}</span>
-            <label>Time <input type="number" min={0} max={cycle} value={point.time_ms} disabled={disabled} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) onChange(points.map((item, itemIndex) => itemIndex === index ? { ...item, time_ms: value } : item)); }} onBlur={() => onCommit(points)} /></label>
-            <label>Position <input type="number" min={0} max={100} step={0.1} value={point.position_percent} disabled={disabled} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) onChange(points.map((item, itemIndex) => itemIndex === index ? { ...item, position_percent: value } : item)); }} onBlur={() => onCommit(points)} /></label>
+            <label>{t("Time")}<input type="number" min={0} max={cycle} value={point.time_ms} disabled={disabled} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) onChange(points.map((item, itemIndex) => itemIndex === index ? { ...item, time_ms: value } : item)); }} onBlur={() => onCommit(points)} /></label>
+            <label>{t("Position")}<input type="number" min={0} max={100} step={0.1} value={point.position_percent} disabled={disabled} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) onChange(points.map((item, itemIndex) => itemIndex === index ? { ...item, position_percent: value } : item)); }} onBlur={() => onCommit(points)} /></label>
           </div>
         ))}
       </div>

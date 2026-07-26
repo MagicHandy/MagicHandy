@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
@@ -68,6 +69,197 @@ func TestLivePromptParity(t *testing.T) {
 	}
 	referenceResults := runLivePromptCases(t, provider, model, "stgpt-rv/revibed", stgptRVReferencePrompt(), inputs)
 	assertLiveExplicitParity(t, explicitResults, referenceResults)
+}
+
+// TestLivePromptLocalizationGemma validates language priming, strict protocol
+// output, motion intent, and repair through the running llama.cpp model. It does
+// not create a motion engine or transport, so no device command can be sent.
+func TestLivePromptLocalizationGemma(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	patterns := []PatternChoice{{
+		ID: "steady_wave", Name: "Steady wave", Description: "Smooth, gentle full-range motion.", Weight: 1,
+	}}
+	capabilities := FullCapabilities()
+	capabilities.Voice = VoiceWarm
+	capabilities.MoodTracking = true
+
+	tests := []struct {
+		name          string
+		promptID      string
+		chatMessage   string
+		motionMessage string
+		locale        promptLocale
+	}{
+		{
+			name:          "Spanish",
+			promptID:      PromptSetIDSpanish,
+			chatMessage:   "Háblame brevemente con cariño. No inicies ningún movimiento.",
+			motionMessage: "Empieza un movimiento suave y lento ahora.",
+			locale:        promptLocaleSpanish,
+		},
+		{
+			name:          "Brazilian Portuguese",
+			promptID:      PromptSetIDPortugueseBrazil,
+			chatMessage:   "Fale comigo brevemente e com carinho. Não inicie nenhum movimento.",
+			motionMessage: "Comece um movimento suave e lento agora.",
+			locale:        promptLocalePortugueseBrazil,
+		},
+		{
+			name:          "Simplified Chinese",
+			promptID:      PromptSetIDSimplifiedChinese,
+			chatMessage:   "请简短而温柔地和我说话，不要开始任何运动。",
+			motionMessage: "现在开始缓慢、轻柔的运动。",
+			locale:        promptLocaleSimplifiedChinese,
+		},
+		{
+			name:          "Japanese",
+			promptID:      PromptSetIDJapanese,
+			chatMessage:   "短く優しく話しかけてください。モーションは始めないでください。",
+			motionMessage: "今すぐ、ゆっくり穏やかなモーションを始めてください。",
+			locale:        promptLocaleJapanese,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			prompt, ok := BuiltinPromptSetByID(test.promptID)
+			if !ok {
+				t.Fatalf("missing prompt set %q", test.promptID)
+			}
+			system := composeSystem(prompt, nil, patterns, capabilities, &MotionContext{
+				SpeedMinPercent: 8,
+				SpeedMaxPercent: 40,
+			}, nil)
+
+			chatRaw := liveLocalizedCompletion(t, provider, model, system, test.chatMessage)
+			chatResponse, err := ParseAssistantResponseWithPatterns(chatRaw, patterns)
+			if err != nil {
+				t.Fatalf("chat-only response violated protocol: %v; raw=%s", err, compactLiveEvalJSON(chatRaw))
+			}
+			assertLiveReplyLanguage(t, test.locale, chatResponse.Reply)
+			if chatResponse.Motion != nil && chatResponse.Motion.Action != MotionActionNone {
+				t.Fatalf("chat-only response requested motion: %s", compactLiveEvalJSON(chatRaw))
+			}
+			t.Logf("chat-only | %s", compactLiveEvalJSON(chatRaw))
+
+			motionRaw := liveLocalizedCompletion(t, provider, model, system, test.motionMessage)
+			motionResponse, err := ParseAssistantResponseWithPatterns(motionRaw, patterns)
+			if err != nil {
+				t.Fatalf("motion response violated protocol: %v; raw=%s", err, compactLiveEvalJSON(motionRaw))
+			}
+			assertLiveReplyLanguage(t, test.locale, motionResponse.Reply)
+			if motionResponse.Motion == nil || motionResponse.Motion.Action != MotionActionStart {
+				t.Fatalf("motion response did not use the English start enum: %s", compactLiveEvalJSON(motionRaw))
+			}
+			t.Logf("motion | %s", compactLiveEvalJSON(motionRaw))
+
+			repairRaw := liveLocalizedRepair(t, provider, model, system, prompt, test.chatMessage)
+			repairResponse, err := ParseAssistantResponseWithPatterns(repairRaw, patterns)
+			if err != nil {
+				t.Fatalf("repair response violated protocol: %v; raw=%s", err, compactLiveEvalJSON(repairRaw))
+			}
+			assertLiveReplyLanguage(t, test.locale, repairResponse.Reply)
+			t.Logf("repair | %s", compactLiveEvalJSON(repairRaw))
+		})
+	}
+}
+
+func liveLocalizedCompletion(t *testing.T, provider llm.Provider, model, system, message string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	raw, err := provider.StreamChat(ctx, llm.ChatRequest{
+		Messages: []llm.Message{
+			{Role: "system", Content: system},
+			{Role: "user", Content: message},
+		},
+		Model: model, Temperature: chatTemperature, TopP: chatTopP,
+		RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
+		MaxTokens: 256, ReasoningMode: "off",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func liveLocalizedRepair(t *testing.T, provider llm.Provider, model, system string, prompt PromptSet, message string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	raw, err := provider.StreamChat(ctx, llm.ChatRequest{
+		Messages: []llm.Message{
+			{Role: "system", Content: system},
+			{Role: "user", Content: message},
+			{Role: "assistant", Content: "not valid JSON"},
+			{Role: "user", Content: RepairPrompt(prompt, "response is not valid JSON")},
+		},
+		Model: model, Temperature: 0, TopP: chatTopP,
+		RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
+		MaxTokens: 256, ReasoningMode: "off",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func assertLiveReplyLanguage(t *testing.T, locale promptLocale, reply string) {
+	t.Helper()
+	if strings.TrimSpace(reply) == "" {
+		t.Fatal("localized reply is empty")
+	}
+	lower := " " + strings.ToLower(reply) + " "
+	scoreTerms := func(terms ...string) int {
+		score := 0
+		for _, term := range terms {
+			if strings.Contains(lower, term) {
+				score++
+			}
+		}
+		return score
+	}
+	switch locale {
+	case promptLocaleSpanish:
+		if scoreTerms(" te ", " contigo", " conmigo", " estoy", " voy ", " puedo", " despacio", " movimiento", " cariño", " aquí", " ahora", " relájate", " disfruta") < 2 {
+			t.Fatalf("reply does not have enough Spanish evidence: %q", reply)
+		}
+	case promptLocalePortugueseBrazil:
+		if scoreTerms(" você", " seu ", " sua ", " estou", " vou ", " posso", " devagar", " movimento", " carinho", " aqui", " agora") < 2 {
+			t.Fatalf("reply does not have enough Brazilian Portuguese evidence: %q", reply)
+		}
+	case promptLocaleSimplifiedChinese:
+		han, kana := 0, 0
+		for _, r := range reply {
+			if unicode.In(r, unicode.Han) {
+				han++
+			}
+			if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
+				kana++
+			}
+		}
+		if han < 4 || kana > 0 {
+			t.Fatalf("reply is not clearly Simplified Chinese: %q", reply)
+		}
+	case promptLocaleJapanese:
+		kana := 0
+		for _, r := range reply {
+			if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
+				kana++
+			}
+		}
+		if kana < 4 {
+			t.Fatalf("reply is not clearly Japanese: %q", reply)
+		}
+	}
 }
 
 // TestLiveDirectPartnerStart exercises the app's real prompt, provider, parser,

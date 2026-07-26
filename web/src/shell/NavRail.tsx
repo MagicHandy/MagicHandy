@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Permanent left navigation rail: profile lockup, page links, and the pinned
 // Stop footer. The rail is present on every route (docs/ui-navigation-redesign.md).
 import { useAppState, useHashRoute } from "../state/app-state";
@@ -21,23 +22,27 @@ export function NavRail() {
   const active = routeBase(useHashRoute());
   const { state } = useAppState();
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "cloud";
-  const ownerLabel = owner.replace(/_/g, " ");
+  const ownerLabel = {
+    cloud_rest: "Cloud REST",
+    browser_bluetooth: "Browser Bluetooth",
+    intiface: "Intiface Central",
+  }[owner] ?? owner.replace(/_/g, " ");
 
   return (
-    <nav className="nav-rail" aria-label="Primary navigation">
+    <nav className="nav-rail" aria-label={t("Primary navigation")}>
       <a className="nav-profile" href="#/settings">
         <span className="nav-avatar" aria-hidden="true">M</span>
         <span className="nav-identity">
-          <span className="name">MagicHandy</span>
-          <span className="sub">local / {ownerLabel}</span>
+          <span className="name">{t("MagicHandy")}</span>
+          <span className="sub">{t("local / {owner}", { owner: translateKnown(ownerLabel) })}</span>
         </span>
       </a>
       <div className="nav-divider" aria-hidden="true" />
       <div className="nav-links">
         {LINKS.map((l) => (
-          <a key={l.base} className="nav-link" href={l.href} aria-label={l.label} aria-current={active === l.base ? "page" : undefined}>
+          <a key={l.base} className="nav-link" href={l.href} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
             <span className="icon"><l.Icon /></span>
-            <span className="label">{l.label}</span>
+            <span className="label">{translateKnown(l.label)}</span>
           </a>
         ))}
       </div>

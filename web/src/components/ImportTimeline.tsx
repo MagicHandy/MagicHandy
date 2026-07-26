@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import {
   useEffect,
   useId,
@@ -324,16 +325,15 @@ export function ImportTimeline({
   return (
     <>
       <div className="import-timeline-head">
-        <output id={descriptionId} className="import-timeline-view" aria-label="Visible timeline range">
-          Viewing {formatTimelineTime(viewStart)}-{formatTimelineTime(viewEnd)} at {formatZoom(zoomLevel)}
+        <output id={descriptionId} className="import-timeline-view" aria-label={t("Visible timeline range")}>{t("Viewing {start}-{end} at {zoom}", { start: formatTimelineTime(viewStart), end: formatTimelineTime(viewEnd), zoom: formatZoom(zoomLevel) })}
         </output>
-        <div className="import-timeline-controls" role="group" aria-label="Timeline view">
-          <TimelineButton label="Earlier" title="Move view earlier (Left arrow)" disabled={viewStart <= 0} onClick={() => panTimeline(-1)}><ArrowLeftIcon /></TimelineButton>
-          <TimelineButton label="Later" title="Move view later (Right arrow)" disabled={viewEnd >= duration} onClick={() => panTimeline(1)}><ArrowRightIcon /></TimelineButton>
-          <TimelineButton label="Zoom out" title="Zoom out (-)" disabled={fullView} onClick={() => zoomTimeline(2)}><ZoomOutIcon /></TimelineButton>
-          <TimelineButton label="Zoom in" title="Zoom in (+)" disabled={span <= 1} onClick={() => zoomTimeline(0.5)}><ZoomInIcon /></TimelineButton>
-          <TimelineButton label="Fit selection" title="Fit the selected range" disabled={selectionView} onClick={() => onViewportChange({ start, end })}><FitSelectionIcon /></TimelineButton>
-          <TimelineButton label="Fit all" title="Fit the complete source (0)" disabled={fullView} onClick={() => onViewportChange({ start: 0, end: duration })}><FitAllIcon /></TimelineButton>
+        <div className="import-timeline-controls" role="group" aria-label={t("Timeline view")}>
+          <TimelineButton label={t("Earlier")} title={t("Move view earlier (Left arrow)")} disabled={viewStart <= 0} onClick={() => panTimeline(-1)}><ArrowLeftIcon /></TimelineButton>
+          <TimelineButton label={t("Later")} title={t("Move view later (Right arrow)")} disabled={viewEnd >= duration} onClick={() => panTimeline(1)}><ArrowRightIcon /></TimelineButton>
+          <TimelineButton label={t("Zoom out")} title={t("Zoom out (-)")} disabled={fullView} onClick={() => zoomTimeline(2)}><ZoomOutIcon /></TimelineButton>
+          <TimelineButton label={t("Zoom in")} title={t("Zoom in (+)")} disabled={span <= 1} onClick={() => zoomTimeline(0.5)}><ZoomInIcon /></TimelineButton>
+          <TimelineButton label={t("Fit selection")} title={t("Fit the selected range")} disabled={selectionView} onClick={() => onViewportChange({ start, end })}><FitSelectionIcon /></TimelineButton>
+          <TimelineButton label={t("Fit all")} title={t("Fit the complete source (0)")} disabled={fullView} onClick={() => onViewportChange({ start: 0, end: duration })}><FitAllIcon /></TimelineButton>
         </div>
       </div>
       <div
@@ -342,9 +342,9 @@ export function ImportTimeline({
         className="import-timeline-frame"
         role="group"
         tabIndex={0}
-        aria-label={`Funscript timeline editor, ${formatTimelineTime(duration)} total, viewing ${formatTimelineTime(viewStart)} to ${formatTimelineTime(viewEnd)}, selection ${formatTimelineTime(start)} to ${formatTimelineTime(end)}, ${formatTimelineTime(end - start)} selected`}
+        aria-label={t("Funscript timeline editor: {duration} total; viewing {viewStart} to {viewEnd}; selection {start} to {end}; {selected} selected", { duration: formatTimelineTime(duration), viewStart: formatTimelineTime(viewStart), viewEnd: formatTimelineTime(viewEnd), start: formatTimelineTime(start), end: formatTimelineTime(end), selected: formatTimelineTime(end - start) })}
         aria-describedby={descriptionId}
-        title="Scroll to zoom at cursor; Shift-scroll to pan"
+        title={t("Scroll to zoom at cursor; Shift-scroll to pan")}
         onPointerDown={startTrimDrag}
         onPointerMove={continueTrimDrag}
         onPointerUp={finishTrimDrag}
@@ -382,7 +382,7 @@ export function ImportTimeline({
               data-disabled={disabled || undefined}
               role="slider"
               tabIndex={disabled ? -1 : 0}
-              aria-label={bound === "start" ? "Trim start" : "Trim end"}
+              aria-label={bound === "start" ? t("Trim start") : t("Trim end")}
               aria-orientation="horizontal"
               aria-valuemin={minimum}
               aria-valuemax={maximum}
@@ -402,15 +402,15 @@ export function ImportTimeline({
         className="import-timeline-scrollbar"
         role="scrollbar"
         tabIndex={fullView ? -1 : 0}
-        aria-label="Timeline viewport"
+        aria-label={t("Timeline viewport")}
         aria-controls={timelineId}
         aria-orientation="horizontal"
         aria-valuemin={0}
         aria-valuemax={maximumViewStart}
         aria-valuenow={viewStart}
-        aria-valuetext={`${formatTimelineTime(viewStart)} to ${formatTimelineTime(viewEnd)}`}
+        aria-valuetext={t("{start} to {end}", { start: formatTimelineTime(viewStart), end: formatTimelineTime(viewEnd) })}
         aria-disabled={fullView || undefined}
-        title="Drag to move the visible timeline range"
+        title={t("Drag to move the visible timeline range")}
         style={{
           "--viewport-position": viewportPosition,
           "--viewport-size": `${viewportSize * 100}%`,

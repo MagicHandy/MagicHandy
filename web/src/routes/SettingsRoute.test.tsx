@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { PublicSettings } from "../api/types";
+import { setLocaleForTest } from "../i18n";
+import english from "../i18n/locales/en.json";
+import japanese from "../i18n/locales/ja.json";
 import { SettingsRoute } from "./SettingsRoute";
 
 const app = vi.hoisted(() => ({
@@ -45,6 +48,7 @@ function settings(verbosity: string): PublicSettings {
   return {
     version: 1,
     server: { port: 49717 },
+    ui: { locale: "en" },
     device: {
       hsp_dispatch_owner: "cloud_rest",
       intiface_server_address: "ws://127.0.0.1:12345",
@@ -113,12 +117,14 @@ function settings(verbosity: string): PublicSettings {
       parakeet_sources: ["app_managed"],
       neutts_sampling_modes: ["fixed", "random"],
       chat_startup_behaviors: ["previous", "new"],
+      locales: ["en", "es", "pt-BR", "zh-Hans", "ja"],
     },
   } as unknown as PublicSettings;
 }
 
 describe("SettingsRoute", () => {
   beforeEach(() => {
+    setLocaleForTest("en", english);
     app.hash = "#/settings/diagnostics";
     app.refresh.mockReset();
     app.show.mockReset();
@@ -127,6 +133,42 @@ describe("SettingsRoute", () => {
     resetSettings.mockReset();
     saveSettings.mockResolvedValue({ settings: settings("normal") });
     resetSettings.mockResolvedValue({ settings: settings("normal") });
+  });
+
+  it("persists the selected interface language", async () => {
+    app.hash = "#/settings/general";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const language = await screen.findByRole("combobox", { name: "Language" });
+    expect(language).toHaveValue("en");
+    expect(screen.getByRole("option", { name: "Português (Brasil)" })).toHaveValue("pt-BR");
+    fireEvent.change(language, { target: { value: "ja" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "ja" });
+  });
+
+  it("localizes settings navigation, firmware guidance, and chat option labels", async () => {
+    setLocaleForTest("ja", japanese);
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+
+    app.hash = "#/settings/device";
+    const deviceView = render(<SettingsRoute />);
+    expect(await screen.findByRole("link", { name: "一般" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "デバイス" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "メディアライブラリ" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "プロンプトとメモリ" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "診断" })).toBeInTheDocument();
+    expect(screen.getByText("Cloud REST には、API v3 アクセスが有効な Handy ファームウェア v4 が必要です。")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "\u540c\u68b1\u30a2\u30d7\u30ea\u30b1\u30fc\u30b7\u30e7\u30f3 ID" })).toBeInTheDocument();
+    deviceView.unmount();
+
+    app.hash = "#/settings/prompts";
+    render(<SettingsRoute />);
+    expect(await screen.findByRole("option", { name: "実用（中立的なアシスタント）" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "ペニス" })).toBeInTheDocument();
   });
 
   it("reloads the routed form after factory reset before it can be saved again", async () => {

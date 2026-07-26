@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAppState, useToast } from "../state/app-state";
@@ -26,7 +27,7 @@ export function VoiceQuickControls() {
       refresh();
     } catch (error) {
       setEnabled(!next);
-      show(error instanceof Error ? error.message : "Voice preference failed.", "error");
+      show(error instanceof Error ? translateKnown(error.message) : t("Voice preference failed."), "error");
     } finally {
       setSaving(false);
     }
@@ -36,12 +37,12 @@ export function VoiceQuickControls() {
     <>
       <label className="toggle-line voice-quick-toggle">
         <span className="toggle"><input type="checkbox" checked={enabled} disabled={!backendOnline || readOnly || saving} onChange={(event) => void change(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
-        <span>Speak replies</span>
+        <span>{t("Speak replies")}</span>
       </label>
       {enabled && !ttsReady && (
         <span className="status-readout voice-quick-warning">
           <span className="status-dot" data-state="warn" />
-          <span className="status-text">Voice output is not ready — start it in Settings → Voice</span>
+          <span className="status-text">{t("Voice output is not ready — start it in Settings → Voice")}</span>
         </span>
       )}
     </>
