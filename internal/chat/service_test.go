@@ -184,7 +184,7 @@ func TestNoEnabledPatternsExposeDeterministicFallback(t *testing.T) {
 	}
 }
 
-func TestPromptExamplesMatchStrictParserAndGuardIsLast(t *testing.T) {
+func TestPromptMotionExamplesMatchStrictParserAndVoiceCheckIsLast(t *testing.T) {
 	examples := []string{
 		`{"reply":"I hear you."}`,
 		`{"reply":"Keeping it steady.","motion":{"action":"none"}}`,
@@ -194,16 +194,26 @@ func TestPromptExamplesMatchStrictParserAndGuardIsLast(t *testing.T) {
 	}
 	for _, example := range examples {
 		if _, err := ParseAssistantResponseWithPatterns(example, nil); err != nil {
-			t.Fatalf("prompt example %s: %v", example, err)
+			t.Fatalf("parser example %s: %v", example, err)
 		}
 	}
 	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	prompt := ComposeSystemWithPatterns(set, []string{"keep replies brief"}, []PatternChoice{{ID: "pulse", Name: "Pulse"}})
-	if !strings.HasSuffix(prompt, finalOutputGuard) {
-		t.Fatalf("final output guard is not last:\n%s", prompt)
+	if !strings.Contains(prompt, finalOutputGuard) || !strings.HasSuffix(prompt, finalVoiceCheck(VoiceUtility)) {
+		t.Fatalf("terminal output instructions are out of order:\n%s", prompt)
 	}
-	if strings.Contains(prompt, "short user-facing reply") {
-		t.Fatal("prompt contains a placeholder small models may copy verbatim")
+	for _, copiedReply := range []string{
+		`"reply":"I hear you."`,
+		`"reply":"Keeping it steady."`,
+		`"reply":"Starting gently."`,
+		`"reply":"Adjusting the pace."`,
+		`"reply":"Stopping."`,
+		`"reply":"Starting that pattern."`,
+		`"reply":"Changing the feel."`,
+	} {
+		if strings.Contains(prompt, copiedReply) {
+			t.Fatalf("prompt still contains a lexical reply anchor %q", copiedReply)
+		}
 	}
 	for _, line := range strings.Split(prompt, "\n") {
 		if !strings.HasPrefix(line, "Valid curated ") {
@@ -213,7 +223,8 @@ func TestPromptExamplesMatchStrictParserAndGuardIsLast(t *testing.T) {
 		if !ok {
 			t.Fatalf("curated example marker malformed: %q", line)
 		}
-		if _, err := ParseAssistantResponseWithPatterns(example, []PatternChoice{{ID: "pulse"}}); err != nil {
+		fullResponse := `{"reply":"Fresh reply.","motion":` + example + `}`
+		if _, err := ParseAssistantResponseWithPatterns(fullResponse, []PatternChoice{{ID: "pulse"}}); err != nil {
 			t.Fatalf("curated prompt example %s: %v", example, err)
 		}
 	}
@@ -256,8 +267,16 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 			t.Fatalf("request %d generation controls = %+v", index, request)
 		}
 	}
-	if provider.requests[1].Temperature != 0 {
-		t.Fatalf("repair temperature = %v, want 0", provider.requests[1].Temperature)
+	initial := provider.requests[0]
+	initialControls := [4]float64{initial.Temperature, initial.TopP, initial.RepeatPenalty, float64(initial.RepeatLastN)}
+	wantInitialControls := [4]float64{chatTemperature, chatTopP, chatRepeatPenalty, chatRepeatLastN}
+	if initialControls != wantInitialControls {
+		t.Fatalf("initial sampling controls = %+v", initial)
+	}
+	repair := provider.requests[1]
+	repairControls := [4]float64{repair.Temperature, repair.TopP, repair.RepeatPenalty, float64(repair.RepeatLastN)}
+	if repairControls != [4]float64{} {
+		t.Fatalf("repair sampling controls = %+v, want deterministic defaults", repair)
 	}
 	repairPrompt := provider.requests[1].Messages[len(provider.requests[1].Messages)-1].Content
 	if !strings.Contains(repairPrompt, "Validation error") || strings.Contains(repairPrompt, "not json") {

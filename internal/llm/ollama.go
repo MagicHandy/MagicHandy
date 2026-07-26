@@ -51,6 +51,15 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 			"temperature": request.Temperature,
 		},
 	}
+	if request.TopP > 0 {
+		body.Options["top_p"] = request.TopP
+	}
+	if request.RepeatPenalty > 0 {
+		body.Options["repeat_penalty"] = request.RepeatPenalty
+	}
+	if request.RepeatLastN != 0 {
+		body.Options["repeat_last_n"] = request.RepeatLastN
+	}
 	if request.MaxTokens > 0 {
 		body.Options["num_predict"] = request.MaxTokens
 	}

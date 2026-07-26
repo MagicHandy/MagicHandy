@@ -32,6 +32,9 @@ type ChatRequest struct {
 	Messages      []Message
 	Model         string
 	Temperature   float64
+	TopP          float64
+	RepeatPenalty float64
+	RepeatLastN   int
 	MaxTokens     int
 	ReasoningMode string
 	// ReasoningBudgetTokens is used only by providers with an explicit bounded-thinking API.

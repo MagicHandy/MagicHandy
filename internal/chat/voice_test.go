@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestUtilityVoiceLeavesThePromptUnchanged(t *testing.T) {
+func TestUtilityVoiceUsesCodeOwnedIdentityWithoutProfileContext(t *testing.T) {
 	prompt, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	patterns := []PatternChoice{{ID: "stroke", Name: "Stroke"}}
 
@@ -15,10 +15,16 @@ func TestUtilityVoiceLeavesThePromptUnchanged(t *testing.T) {
 	utility := ComposeSystemWithCapabilities(prompt, nil, patterns, capabilities)
 
 	if baseline != utility {
-		t.Fatal("utility voice must compose byte-identical to the historical prompt")
+		t.Fatal("the zero-value voice must resolve to utility")
 	}
-	if strings.Contains(utility, "CHAT VOICE") {
-		t.Fatal("utility voice must not add a voice section")
+	for _, want := range []string{
+		"REPLY IDENTITY - UTILITY:",
+		"FINAL CHAT VOICE CHECK - UTILITY:",
+		"concise, non-sexual reply",
+	} {
+		if !strings.Contains(utility, want) {
+			t.Fatalf("utility prompt missing %q:\n%s", want, utility)
+		}
 	}
 	withContext := composeSystem(prompt, nil, patterns, capabilities, nil, &ConversationContext{
 		PersonaDescription: "ignored utility persona",
@@ -29,7 +35,7 @@ func TestUtilityVoiceLeavesThePromptUnchanged(t *testing.T) {
 		},
 	})
 	if withContext != baseline {
-		t.Fatal("utility voice must remain byte-identical when profile context exists")
+		t.Fatal("profile context must not enter the utility prompt")
 	}
 }
 
@@ -80,8 +86,8 @@ func TestNonUtilityVoiceComposesBoundedQuotedProfileMoodAndRecentLines(t *testin
 			t.Fatalf("mood contract missing %q", mood)
 		}
 	}
-	if !strings.HasSuffix(system, finalOutputGuardWithMood) {
-		t.Fatal("mood-aware final output guard must remain last")
+	if !strings.Contains(system, finalOutputGuardWithMood) || !strings.HasSuffix(system, finalVoiceCheck(VoiceExplicit)) {
+		t.Fatal("mood-aware format guard must immediately precede the terminal voice check")
 	}
 }
 
@@ -91,10 +97,10 @@ func TestUserAnatomyInstructionsStaySeparateFromPersona(t *testing.T) {
 		custom  string
 		want    string
 	}{
-		{anatomy: "penis", want: "penis/cock/dick"},
-		{anatomy: "vagina", want: "pussy/cunt/vagina/vulva/clit"},
-		{anatomy: "custom", custom: "chosen wording", want: `described as "chosen wording"`},
-		{anatomy: "custom", want: "Use neutral user-anatomy language"},
+		{anatomy: "penis", want: `"your penis", "your cock", or "your dick"`},
+		{anatomy: "vagina", want: `"your pussy", "your cunt", "your vagina"`},
+		{anatomy: "custom", custom: "chosen wording", want: `My anatomy is described as "chosen wording"`},
+		{anatomy: "custom", want: "Use neutral user-anatomy language unless I name it"},
 	} {
 		got := userAnatomyInstruction(testCase.anatomy, testCase.custom)
 		if !strings.Contains(got, testCase.want) || !strings.Contains(got, "partner persona") && testCase.anatomy == "custom" {
@@ -132,43 +138,53 @@ func TestProfileAndRecentLineDataCannotAuthorizeMotion(t *testing.T) {
 	}
 }
 
-func TestVoiceLevelsComposeTheirRegisterSections(t *testing.T) {
+func TestVoiceLevelsComposeIdentityAndTerminalRegisterSections(t *testing.T) {
 	prompt, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	patterns := []PatternChoice{{ID: "stroke", Name: "Stroke"}}
 
 	for _, testCase := range []struct {
-		voice    VoiceLevel
-		header   string
-		required []string
-		banned   []string
+		voice          VoiceLevel
+		identityHeader string
+		finalHeader    string
+		required       []string
+		banned         []string
 	}{
 		{
-			voice:    VoiceWarm,
-			header:   "CHAT VOICE - WARM COMPANION:",
-			required: []string{"never explicit", "never copy or imitate their reply wording"},
-			banned:   []string{"erotic"},
+			voice:          VoiceWarm,
+			identityHeader: "REPLY IDENTITY - WARM COMPANION:",
+			finalHeader:    "FINAL CHAT VOICE CHECK - WARM:",
+			required:       []string{"never explicit", "specific affectionate or flirtatious reaction"},
+			banned:         []string{"direct erotic and anatomical language"},
 		},
 		{
-			voice:    VoiceIntimate,
-			header:   "CHAT VOICE - INTIMATE PARTNER:",
-			required: []string{"intimate partner in the room", "not an assistant"},
-			banned:   []string{"erotic"},
+			voice:          VoiceIntimate,
+			identityHeader: "REPLY IDENTITY - INTIMATE PARTNER:",
+			finalHeader:    "FINAL CHAT VOICE CHECK - INTIMATE:",
+			required:       []string{"intimate adult partner here in the room", "evocative rather than graphically sexual"},
+			banned:         []string{"direct erotic and anatomical language"},
 		},
 		{
-			voice:  VoiceExplicit,
-			header: "CHAT VOICE - EXPLICIT PARTNER:",
+			voice:          VoiceExplicit,
+			identityHeader: "REPLY IDENTITY - EXPLICIT PARTNER:",
+			finalHeader:    "FINAL CHAT VOICE CHECK - EXPLICIT:",
 			required: []string{
-				"adult erotic partner",
-				"do not sanitize, euphemize",
-				"never copy or imitate their reply wording",
+				"consenting adult erotic partner here in the room",
+				"Do not sanitize, euphemize",
+				"include at least one direct sexual or anatomical phrase",
 			},
 		},
 	} {
 		capabilities := FullCapabilities()
 		capabilities.Voice = testCase.voice
 		system := ComposeSystemWithCapabilities(prompt, nil, patterns, capabilities)
-		if !strings.Contains(system, testCase.header) {
-			t.Fatalf("%s prompt missing header %q", testCase.voice, testCase.header)
+		identityAt := strings.Index(system, testCase.identityHeader)
+		contractAt := strings.Index(system, "Return exactly one JSON object")
+		finalAt := strings.Index(system, testCase.finalHeader)
+		if identityAt == -1 || contractAt == -1 || finalAt == -1 {
+			t.Fatalf("%s prompt missing identity, contract, or final check", testCase.voice)
+		}
+		if identityAt > contractAt || finalAt < contractAt {
+			t.Fatalf("%s prompt order identity=%d contract=%d final=%d", testCase.voice, identityAt, contractAt, finalAt)
 		}
 		for _, want := range testCase.required {
 			if !strings.Contains(system, want) {
@@ -180,26 +196,28 @@ func TestVoiceLevelsComposeTheirRegisterSections(t *testing.T) {
 				t.Fatalf("%s prompt must not contain %q", testCase.voice, unwanted)
 			}
 		}
-		// The voice changes register only: the machine contract and the final
-		// output guard survive at every level.
+		// Voice changes register only: the machine contract and format guard
+		// survive at every level, with the voice check intentionally last.
 		if !strings.Contains(system, `"action":"start"`) {
 			t.Fatalf("%s prompt lost the motion contract", testCase.voice)
 		}
-		if !strings.HasSuffix(system, finalOutputGuard) {
-			t.Fatalf("%s prompt displaced the final output guard", testCase.voice)
+		if !strings.Contains(system, finalOutputGuard) || !strings.HasSuffix(system, finalVoiceCheck(testCase.voice)) {
+			t.Fatalf("%s prompt displaced the terminal output instructions", testCase.voice)
 		}
 	}
 }
 
-func TestVoiceSectionPrecedesMemoriesAndGuard(t *testing.T) {
+func TestVoiceIdentityPrecedesMemoriesAndFinalCheckFollowsThem(t *testing.T) {
 	prompt, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	capabilities := FullCapabilities()
 	capabilities.Voice = VoiceIntimate
 	system := ComposeSystemWithCapabilities(prompt, []string{"prefers a slow start"}, nil, capabilities)
 
-	voiceAt := strings.Index(system, "CHAT VOICE - INTIMATE PARTNER:")
+	identityAt := strings.Index(system, "REPLY IDENTITY - INTIMATE PARTNER:")
 	memoriesAt := strings.Index(system, "Saved user memories")
-	if voiceAt == -1 || memoriesAt == -1 || voiceAt > memoriesAt {
-		t.Fatalf("voice section must precede memories: voice=%d memories=%d", voiceAt, memoriesAt)
+	finalAt := strings.Index(system, "FINAL CHAT VOICE CHECK - INTIMATE:")
+	if identityAt == -1 || memoriesAt == -1 || finalAt == -1 ||
+		identityAt > memoriesAt || memoriesAt > finalAt {
+		t.Fatalf("prompt order identity=%d memories=%d final=%d", identityAt, memoriesAt, finalAt)
 	}
 }

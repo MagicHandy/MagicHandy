@@ -35,6 +35,9 @@ func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 	_, err = provider.StreamChat(t.Context(), ChatRequest{
 		Messages:              []Message{{Role: "user", Content: "test"}},
 		Temperature:           0,
+		TopP:                  0.95,
+		RepeatPenalty:         1.2,
+		RepeatLastN:           40,
 		MaxTokens:             256,
 		ReasoningMode:         "auto",
 		ReasoningBudgetTokens: 128,
@@ -44,6 +47,9 @@ func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 	}
 	if body["temperature"] != float64(0) || body["max_tokens"] != float64(256) {
 		t.Fatalf("generation controls = %#v", body)
+	}
+	if body["top_p"] != 0.95 || body["repeat_penalty"] != 1.2 || body["repeat_last_n"] != float64(40) {
+		t.Fatalf("sampling controls = %#v", body)
 	}
 	if body["thinking_budget_tokens"] != float64(128) {
 		t.Fatalf("thinking budget = %#v", body["thinking_budget_tokens"])
@@ -64,6 +70,11 @@ func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 	if !ok || kwargs["enable_thinking"] != false {
 		t.Fatalf("chat template kwargs = %#v", body["chat_template_kwargs"])
 	}
+	for _, key := range []string{"top_p", "repeat_penalty", "repeat_last_n"} {
+		if _, ok := body[key]; ok {
+			t.Fatalf("repair request unexpectedly included %q: %#v", key, body)
+		}
+	}
 }
 
 func TestOllamaStreamChatSendsGenerationControls(t *testing.T) {
@@ -83,7 +94,10 @@ func TestOllamaStreamChatSendsGenerationControls(t *testing.T) {
 	}
 	_, err = provider.StreamChat(t.Context(), ChatRequest{
 		Messages:      []Message{{Role: "user", Content: "test"}},
-		Temperature:   0.2,
+		Temperature:   0.3,
+		TopP:          0.95,
+		RepeatPenalty: 1.2,
+		RepeatLastN:   40,
 		MaxTokens:     512,
 		ReasoningMode: "off",
 	}, nil)
@@ -93,6 +107,9 @@ func TestOllamaStreamChatSendsGenerationControls(t *testing.T) {
 	options, ok := body["options"].(map[string]any)
 	if !ok || options["num_predict"] != float64(512) || body["think"] != false {
 		t.Fatalf("generation controls = %#v", body)
+	}
+	if options["temperature"] != 0.3 || options["top_p"] != 0.95 || options["repeat_penalty"] != 1.2 || options["repeat_last_n"] != float64(40) {
+		t.Fatalf("sampling controls = %#v", options)
 	}
 }
 

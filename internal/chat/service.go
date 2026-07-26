@@ -44,6 +44,13 @@ type Result struct {
 	SemanticFallback bool
 }
 
+const (
+	chatTemperature   = 0.3
+	chatTopP          = 0.95
+	chatRepeatPenalty = 1.2
+	chatRepeatLastN   = 40
+)
+
 var (
 	errMotionNoChange        = errors.New("motion target repeats the current content, speed, and area; change one allowed target field or use action none")
 	errMotionPatternStale    = errors.New("explicit variation selected a recently used pattern; select a fresh enabled pattern")
@@ -144,7 +151,10 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:              messages,
 		Model:                 s.Model,
-		Temperature:           0.2,
+		Temperature:           chatTemperature,
+		TopP:                  chatTopP,
+		RepeatPenalty:         chatRepeatPenalty,
+		RepeatLastN:           chatRepeatLastN,
 		MaxTokens:             s.MaxTokens,
 		ReasoningMode:         s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens,

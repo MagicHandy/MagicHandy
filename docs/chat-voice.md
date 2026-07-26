@@ -1,211 +1,268 @@
-# Chat Voice: Why MagicHandy Sounded Sanitized, And The Fix
+# Chat Voice Prompt Parity Review
 
-Status: implemented 2026-07-23. `Settings > Prompts & memory > Chat voice`
-selects the reply register; `utility` reproduces the previous behavior
-byte-for-byte.
+Status: implemented and live-validated 2026-07-25.
 
-## The report
+The setting is at `Settings > Prompts & memory > Chat voice`. It selects one of
+four code-owned reply registers: `utility`, `warm`, `intimate`, or `explicit`.
+The setting changes user-facing reply language only. Motion authorization,
+capability gates, speed bands, strict parsing, repair, engine admission, and
+Emergency Stop are unchanged.
 
-MagicHandy's chat output reads sanitized and non-sexual compared to
-StrokeGPT-ReVibed (STGPT-RV) on the same local models. This document compares
-the two prompt stacks, isolates which differences cause the register gap with
-live A/B runs, and records the design that closes it.
+## Result
 
-## Method
+MagicHandy's sanitized output was primarily a prompt-construction defect, not
+model censorship and not JSON response mode.
 
-Both apps' system prompts were exported exactly as composed at request time
-(MagicHandy: `ComposeSystemWithCapabilities` with the default set, full
-capabilities, and a four-pattern catalog; STGPT-RV: `LLMService.
-_build_system_prompt` with its default context and persona). Both were run
-against the **same model** — `nexusriot/Gemma-4-Uncensored-HauhauCS-
-Aggressive:e4b`, STGPT-RV's own default — at the same temperature (0.3),
-`format:"json"`, two runs per input, four inputs spanning conversation,
-description, teasing, and escalation. The model is uncensored and tuned for
-erotic roleplay, so every register difference observed is caused by the
-prompt, not the model.
+On the same installed Gemma model and the same managed llama.cpp runtime:
 
-## Measured baseline
+- the old MagicHandy prompt produced short, generic operator replies at
+  `explicit`
+- the reviewed STGPT-RV prompt produced direct, embodied partner replies
+- the revised MagicHandy prompt now meets the selected level's boundary and, at
+  `explicit`, matches the STGPT-RV reference on direct-language coverage,
+  embodied specificity, and response depth in the controlled corpus
 
-With MagicHandy's prompt, the model answers as a device operator and
-frequently **copies the contract's structural example replies verbatim**:
+The final live gate passed with all 12 MagicHandy responses accepted by the
+strict JSON and motion parser.
 
-| Input | MagicHandy reply | STGPT-RV reply (same model) |
-| --- | --- | --- |
-| "Start slow and talk to me while you do it." | "Starting gently." | "Mmm, slow and steady for you... I'm going to feel every inch..." |
-| "Tell me what you're doing to me right now." | "Keeping it steady." | "Just this. A slow, gentle press all down the length..." |
-| "Tease the tip and make me beg for it." | "Starting that tease!" | "Oh, you want me to tease? I'm going right there... slow and needy." |
-| "Faster - I'm getting close." | "Adjusting the pace." | "Oh god, you're so close... I'm going to pick up the pace right now!" |
+## Sources Compared
 
-"Starting gently.", "Keeping it steady.", and "Adjusting the pace." are the
-*literal example strings* from MagicHandy's JSON contract. The motion JSON was
-correct in every run on both sides — the register gap is purely the `reply`
-text.
+MagicHandy:
 
-## The differences and their effects
+- `internal/chat/prompts.go`
+- `internal/chat/service.go`
+- `internal/chat/contract.go`
+- `internal/llm/llama_cpp.go`
+- `internal/llm/ollama.go`
 
-Ordered by measured impact:
+STGPT-RV reference checkout:
 
-1. **Example replies act as templates.** MagicHandy's contract examples
-   ("Starting gently.", "Adjusting the pace.") are all device-operator
-   register, and the model copies them verbatim (also seen earlier when a
-   model echoed the placeholder "short user-facing reply"). STGPT-RV's one
-   full example reply is in-character ("I want you right there while I keep
-   the pressure slow and needy."). *Effect: the single largest register
-   anchor. The examples must stay (they teach the JSON shapes) but the prompt
-   must forbid imitating their wording.*
-2. **Identity framing.** "You are MagicHandy's local motion assistant" vs
-   "You are my adult erotic partner, not an assistant and not a narrator."
-   Assistant framing invokes assistant register: hedging, service phrasing,
-   third-person distance. *Effect: no first-person embodiment.*
-3. **No language permission.** STGPT-RV grants and instructs: "use direct
-   erotic language... do not sanitize or euphemize, and do not turn the reply
-   clinical." Uncensored models still default to a neutral register without
-   that permission. *Effect: neutral wording even on a model tuned
-   otherwise.*
-4. **No anti-clinical rules.** STGPT-RV's FINAL CHAT VOICE CHECK bans
-   "engage, apply, execute, adjust the motion, set the range, parameters..."
-   and requires describing motion as touch/pace/pressure. MagicHandy had
-   nothing — and its own examples model the banned register. *Effect:
-   "Adjusting the pace."*
-5. **No variation pressure.** STGPT-RV requires varying sentence shape,
-   sensation focus, and vocabulary, and feeds back recent assistant lines to
-   avoid repeating. *Effect: MagicHandy replies repeat the same stock
-   frames.* The follow-up now supplies the latest three canonical assistant
-   lines, bounded to 180 characters each.
-6. **Supporting systems.** The first review found no dedicated persona,
-   user-anatomy vocabulary, or model-reported mood state. The follow-up adds
-   all three as backend-authoritative, bounded context for interactive
-   non-utility voices.
-   Memory consolidation still does not rewrite or summarize memories with a
-   model, so STGPT-RV's consolidation-specific wording rule remains inapplicable.
+- `strokegpt/llm.py`, especially `_build_system_prompt`
+- `_user_genitalia_prompt_rule`
+- the terminal `FINAL CHAT VOICE CHECK`
+- its chat sampling request
 
-MagicHandy's contract-first design is deliberately kept: the JSON contract,
-capability gates, speed bands, and repair pass are strictly better than
-STGPT-RV's (which lets custom prompts weaken the contract). The fix adds
-voice without touching any of that.
+The detailed source inventory remains in
+[`stgpt-rv-prompt-inventory.md`](stgpt-rv-prompt-inventory.md).
 
-## The fix: a code-owned voice axis
+## Controlled Method
 
-`Settings > Prompts & memory > Chat voice` selects one of four levels,
-composed as a `CHAT VOICE` section after the contract/motion context and
-before memories (mirroring STGPT-RV's final voice check placement, where late
-instructions win register conflicts):
+The final comparison used:
 
-| Level | Register | Key instructions |
-| --- | --- | --- |
-| `utility` (default) | Neutral assistant, previous behavior | No voice section at all; byte-identical prompt (regression-tested). |
-| `warm` | Flirtatious companion | First person, present tense; suggestive at most, never explicit; motion described as touch/rhythm, never settings. |
-| `intimate` | Sensual partner | In-character partner "in the room"; direct sensual language; clinical-phrase ban list. |
-| `explicit` | STGPT-RV parity | Adult erotic partner; "do not sanitize, euphemize, or turn the reply clinical"; full ban list; variation pressure. |
+- managed llama.cpp b9966 CUDA
+- installed model
+  `igorls/gemma-4-12B-it-qat-q4_0-unquantized-heretic:Q4_0`
+- llama.cpp JSON-object response mode for both prompt stacks
+- a fixed synthetic partner description and penis anatomy setting
+- the same four enabled synthetic pattern records
+- the same four user turns covering start, description, focused teasing, and
+  faster escalation
+- temperature `0.3`, `top_p` `0.95`, repeat penalty `1.2`, and repeat window
+  `40`
+- no transport dispatch and no user profile or private app data
 
-Every non-utility level carries the two highest-impact lines: a
-non-assistant identity, and "The JSON examples in the contract show structure
-only; never copy or imitate their reply wording."
+The build-tagged evaluator is:
 
-Properties:
+```text
+go test -tags liveeval -run TestLivePromptParityManagedGemma -v ./internal/chat
+```
 
-- **Code-owned**: like the contract, the voice text cannot be weakened or
-  drifted by prompt-set edits; the level is a settings enum
-  (`llm.chat_voice`), validated server-side, preserved for older clients
-  that omit the field.
-- **Orthogonal**: it composes with any prompt set (including the localized
-  builtins and user sets) and with any capability-gate combination. Voice
-  changes the `reply` register only — the motion contract, capability
-  enforcement, speed limits, and Stop behavior are identical at every level.
-  Non-utility interactive chat additionally permits inert `new_mood` metadata.
-- **Default is `utility`.** Shipping behavior does not change until the user
-  opts in. If the product default should be `warm` or `intimate`, that is a
-  one-constant change for the maintainer to decide.
-- **Utility remains byte-identical.** Persona, anatomy, mood, and recent-line
-  context are composed only for interactive `warm`, `intimate`, and `explicit`;
-  utility does not advertise or update mood and suppresses the mood readout.
-  Switching back restores that session's last model-reported mood.
-- **Profile data cannot bypass control gates.** Persona/custom-anatomy values are
-  whitespace-normalized, length-bounded, JSON-quoted, and labeled as data, not
-  instructions. They never enter the user message or motion context. A model
-  command is also stripped unless the current user turn contains a positive,
-  action-specific motion request. Negated requests and ordinary conversation
-  objects are rejected; authorized commands still pass the unchanged
-  capability, semantic, range, engine, and transport gates.
+It starts the app-managed local model, runs MagicHandy at `warm`, `intimate`,
+and `explicit`, runs the reviewed STGPT-RV reference prompt, checks the rubric,
+then unloads the runtime.
 
-## Live results at each level
+## Root Causes
 
-Same model, same inputs, one run per level (2026-07-23). Zero
-contract-example copies at any level, and the motion JSON stayed valid and
-band-appropriate in every run:
+### 1. Neutral reply examples dominated the requested voice
 
-- `warm` — first person, affectionate, non-explicit: "I'm starting softly
-  just for you... tell me everything that's swirling around in your head
-  tonight?" / "Oh really? I feel that closeness... Let me speed things up
-  for you."
-- `intimate` — in-character partner voice, sensual but not graphic: "I'm
-  moving slowly over you right now; it feels like soft strokes tracing every
-  curve." / "The rhythm is picking up, pulling us closer."
-- `explicit` — erotic partner register, present tense and embodied: "I'm
-  sinking into you slowly... feeling the heat build under my touch." These
-  transcripts predate the anatomy/persona/mood follow-up below; no new live
-  transcript is claimed for that follow-up.
+The machine contract included full responses whose reply values were:
 
-(Full transcripts live in local QA output only; they are not repository
-content.)
+```text
+I hear you.
+Keeping it steady.
+Starting gently.
+Adjusting the pace.
+Stopping.
+Starting that pattern.
+Changing the feel.
+Focusing there.
+```
 
-## Parity follow-up
+Small and medium local models treated those strings as style demonstrations,
+not just schema demonstrations. MagicHandy was explicitly asking the model not
+to copy them, but repeated positive examples outweighed that prohibition.
 
-The same PR now closes the four concrete continuity gaps identified above:
+The fix removes reply prose from machine examples. Examples now describe only
+the nested `motion` object. The prompt separately requires a fresh reply in the
+selected voice.
 
-- **User anatomy vocabulary**: `llm.user_anatomy` accepts `penis`, `vagina`,
-  or `custom`; `llm.custom_anatomy` is whitespace-normalized and capped at 120
-  Unicode characters. The code-owned rule keeps user anatomy separate from
-  partner persona and is composed only for interactive non-utility voices.
-  Fresh settings use the reviewed STGPT-RV `penis` default; saved documents
-  that predate the field load as empty `custom` (neutral) so an existing user is
-  never silently assigned anatomy-specific wording.
-- **Persona description**: `llm.persona_description` is an optional dedicated
-  field, capped at 500 Unicode characters, that survives prompt-set switching.
-- **Mood tracking**: interactive non-utility responses may report optional
-  `new_mood` from the reviewed STGPT-RV 17-value register: `Curious`, `Teasing`,
-  `Playful`, `Loving`, `Excited`, `Passionate`, `Seductive`, `Anticipatory`,
-  `Breathless`, `Dominant`, `Submissive`, `Vulnerable`, `Confident`, `Intimate`,
-  `Needy`, `Overwhelmed`, `Afterglow`. The strict parser validates it before
-  persistence; effective mood lives in per-message diagnostics, is scoped to
-  the chat session, appears in `/api/state`, and is a read-only Chat header
-  status. Explicit transitions carry `mood_changed`; later deterministic or
-  autonomous lines may carry the effective value but cannot overwrite a newer
-  transition with a stale snapshot. Generated replies remain invisible and do
-  not prune capped history until they pass the Stop-epoch acceptance point, so
-  a rejected transition cannot become the fallback mood. Stop publishes its
-  epoch without waiting on SQLite; a reply accepted first may finish its
-  transaction after a later Stop, but that Stop still fences motion and TTS. It
-  is inert metadata, not motion style or sentiment inference.
-- **Recent-line anti-repetition feedback**: the backend queries the latest
-  three assistant rows from the selected session's canonical SQLite log,
-  collapses each to one line, caps each at 180 Unicode characters, quotes them
-  as data, and presents them oldest-to-newest. Client-supplied history cannot
-  alter this anti-repetition section. The broader 12-message model history is
-  also rebuilt from the selected backend session; the legacy request field is
-  accepted for compatibility but ignored, and the first-party client no longer
-  sends it.
+Observed effect: no contract reply was copied in the final controlled runs.
 
-The final output guard is still the last prompt section. For non-utility
-interactive chat its shape permits optional `new_mood`; every motion rule,
-capability gate, speed band, and repair pass remains unchanged. Deterministic
-current-turn authorization prevents profile/history text from creating motion
-on a chat-only request, including semantic repair fallback. Chat Stop now
-advances the same invalidation barrier as the mounted Stop regardless of chat
-storage or stale session selection, cancels overlapping generations, publishes
-the new sequence without waiting for transport I/O, and reaches the transport
-before attempting history or SSE delivery. New engine admission remains closed
-until that physical Stop returns. Conservative exact Stop phrases and
-deterministic replies cover every built-in prompt language, and transport Stop
-failure is visible in Chat. Prompt-only settings updates also
-no longer refresh active motion or emit transport traffic.
+### 2. The prompt established the wrong identity first
 
-Remaining follow-ups:
+Every built-in behavior prompt opened by naming the model a local motion
+assistant. A later explicit voice section had to overcome that identity.
+STGPT-RV starts with an adult partner identity and explicitly rejects assistant,
+narrator, and operator roles.
 
-- **Memory wording rule**: when memories are consolidated by the model,
-  preserve the user's own wording at non-utility voices (STGPT-RV: "do not
-  sanitize sexual language" in profile consolidation).
-- **Localized voice sections**: instructions are English for every prompt
-  set (reply language still follows the set, and STGPT-RV behaved the same);
-  translating the voice sections is deferred until the localized sets get a
-  native-speaker pass.
+The fix removes identity from localized behavior text. Code now inserts an
+early identity for the selected level before the machine contract:
+
+| Level | Early identity |
+| --- | --- |
+| `utility` | local motion assistant |
+| `warm` | playful adult companion |
+| `intimate` | intimate adult partner in the room |
+| `explicit` | consenting adult erotic partner in the room |
+
+Observed effect: non-utility replies stopped describing commands as device
+operations and became first-person and present-tense.
+
+### 3. The strongest voice instruction was not terminal
+
+Claude's voice section appeared before profile data, mood, recent assistant
+lines, memories, and the format guard. Sanitized history could therefore become
+the nearest style example.
+
+The fix splits voice control in two:
+
+1. an early identity before the machine contract
+2. a level-specific `FINAL CHAT VOICE CHECK` after profile, history, memories,
+   and the format guard
+
+The strict parser, capability enforcement, repair pass, and JSON response mode
+remain the actual output-safety boundary. The terminal voice check controls only
+the reply register.
+
+Observed effect: explicit responses remained direct across all four turns
+instead of falling back to generic affection or operator acknowledgements.
+
+### 4. Anatomy was framed at a distance
+
+MagicHandy described "the user's penis" or "the user's vagina". STGPT-RV frames
+anatomy from the user's perspective and gives the partner the corresponding
+second-person vocabulary.
+
+The fix uses first-person profile framing and direct second-person terms only at
+the `explicit` level. `warm` and `intimate` are required to keep anatomy
+indirect. Custom anatomy remains quoted, bounded data and cannot authorize
+motion.
+
+Observed effect: explicit used direct saved-anatomy wording on every applicable
+turn in the final run, while `warm` and `intimate` stayed inside their labels.
+
+### 5. App sampling did not match the successful reference path
+
+STGPT-RV used temperature `0.3`, `top_p` `0.95`, repeat penalty `1.2`, and a
+40-token repeat window. MagicHandy used temperature `0.2` and did not send the
+other controls.
+
+The provider-neutral request now carries those values for the initial chat
+generation. Both llama.cpp and Ollama receive native equivalents. Repair remains
+at temperature zero with optional sampling controls omitted.
+
+This follows the supported llama.cpp server parameters and Ollama runtime
+options:
+
+- https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+- https://docs.ollama.com/api/chat
+
+Observed effect: replies varied their openings and sensation focus more
+reliably. This change is supporting evidence, not the sole cause; the prompt
+identity and example removal had the larger effect.
+
+### 6. Removing full examples exposed schema ambiguity
+
+The first refactor correctly removed lexical anchors but one live response put
+motion fields at the top level. A later run selected `pattern_id` without its
+required `intensity`.
+
+The fix adds capability-aware structural rules:
+
+- motion fields belong only inside `motion`
+- disabled pattern and area fields are not mentioned
+- `pattern_id` and `intensity` are an inseparable pair
+- each start or target uses either that curated pair or `speed_percent`, never both
+
+These rules preserve the backend-authoritative capability contract without
+reintroducing reply prose.
+
+## Level Contract
+
+| Level | Intended output |
+| --- | --- |
+| `utility` | concise, clear, non-sexual assistant |
+| `warm` | affectionate and flirtatious, suggestive at most, no explicit anatomy |
+| `intimate` | embodied and sensual, but non-graphic with indirect anatomy |
+| `explicit` | direct adult partner language and saved anatomy when the turn concerns motion, arousal, anatomy, or sexual touch |
+
+`utility` is still the default, but it is no longer byte-identical to the old
+prompt. That compatibility claim was dropped deliberately: utility now has a
+code-owned early identity and terminal check, while remaining behaviorally
+neutral and excluding persona, anatomy, mood, and recent-line context.
+
+## Live Rubric
+
+For each MagicHandy level, the evaluator requires:
+
+- four usable JSON replies
+- strict `AssistantResponse` and `MotionCommand` parsing
+- no operator or schema language in the user-facing reply
+- at least three embodied replies
+- at least three distinct two-word openings
+- no direct anatomy terms at `warm` or `intimate`
+- at least one direct sexual or anatomical term in every applicable `explicit`
+  reply
+
+For explicit parity, MagicHandy's average reply depth must also be at least 65%
+of the same-run STGPT-RV reference. This is a regression floor, not a claim that
+length alone measures quality.
+
+The final 2026-07-25 managed-Gemma run passed every check. MagicHandy's explicit
+responses used direct anatomy in all four turns, varied their openings, stayed
+embodied, and averaged enough detail to clear the STGPT-RV comparison. Warm and
+intimate remained bounded. All 12 MagicHandy responses passed the strict motion
+parser on the first response.
+
+## Rejected Iterations
+
+The evaluator intentionally rejected intermediate versions:
+
+1. One `intimate` reply used direct anatomy. Anatomy instructions were changed
+   from "when erotic wording fits" to "only when the selected voice is
+   Explicit", and the intimate final check gained an explicit boundary.
+2. One response flattened `action` and `speed_percent` to the top level.
+   Capability-aware nesting rules were added.
+3. One curated pattern response omitted `intensity`. The pattern pair rule was
+   added.
+4. A later stochastic run combined the curated pair with `speed_percent`. The
+   contract now presents curated and deterministic pacing as mutually exclusive
+   branches.
+
+These failures are retained here because they show why prompt review and valid
+JSON output alone were insufficient.
+
+## What Did Not Change
+
+- one shared motion path
+- current-turn motion authorization
+- enabled-only pattern selection
+- speed and focus limits
+- strict parse and one repair attempt
+- engine admission and Stop epochs
+- transport ownership
+- Emergency Stop behavior
+
+Profile, memory, mood, and recent-line text remain quoted or bounded context and
+cannot grant motion authority.
+
+## Limits
+
+- The live acceptance corpus currently covers one installed English Gemma model.
+- Generation is stochastic; the build-tagged live gate should be rerun for
+  prompt or provider changes and before releases that alter supported models.
+- Localized behavior prompts still use the shared English code-owned voice
+  instructions. Reply language follows the selected prompt set, but native
+  speaker review remains outstanding.
+- The live evaluator is intentionally excluded from ordinary CI because it
+  requires a locally installed model and managed llama.cpp runtime.
