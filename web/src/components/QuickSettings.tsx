@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Immediate-apply quick controls: speed/stroke/reverse/style. No save step —
 // each change patches the engine live (docs/ui-design.md, Quick Controls).
 // Disabled for read-only or backend-offline clients with a visible reason.
@@ -80,7 +81,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
       await api.applyQuick(body);
       succeeded = true;
     } catch (e) {
-      if (mounted.current) show(e instanceof Error ? e.message : "Quick setting failed", "error");
+      if (mounted.current) show(e instanceof Error ? translateKnown(e.message) : t("Quick setting failed."), "error");
     } finally {
       if (!succeeded) {
         for (const [key, sentRevision] of sentRevisions) {
@@ -106,17 +107,17 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
     }
   }
 
-  if (!vals) return <p className="form-status">Loading…</p>;
+  if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
   const showLimits = section !== "behavior";
   const showBehavior = section !== "limits";
 
   return (
     <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
-      <legend className="visually-hidden">{section === "limits" ? "Speed, stroke, and focus ranges" : section === "behavior" ? "Direction and motion style" : "Speed, stroke, focus, direction, and style"}</legend>
+      <legend className="visually-hidden">{section === "limits" ? t("Speed, stroke, and focus ranges") : section === "behavior" ? t("Direction and motion style") : t("Speed, stroke, focus, direction, and style")}</legend>
       {showLimits && (
         <RangeSlider
-          label="Speed"
+          label={t("Speed")}
           floor={1}
           minValue={vals.speed_min_percent}
           maxValue={vals.speed_max_percent}
@@ -130,7 +131,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
       )}
       {showLimits && (
         <RangeSlider
-          label="Stroke"
+          label={t("Stroke")}
           floor={0}
           minValue={vals.stroke_min_percent}
           maxValue={vals.stroke_max_percent}
@@ -144,8 +145,8 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
       )}
       {showLimits && (
         <RangeSlider
-          label="Focus"
-          hint="patterns fill this range"
+          label={t("Focus")}
+          hint={t("Patterns fill this range")}
           floor={0}
           minGap={MINIMUM_FOCUS_WIDTH}
           minValue={vals.focus_min_percent}
@@ -171,11 +172,10 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           />
           <span className="track" aria-hidden="true" />
         </span>
-        <span>Reverse direction</span>
+        <span>{t("Reverse direction")}</span>
       </label>}
       {showBehavior && <label className="field">
-        <span className="label">
-          Style <span className="hint-inline">biases autonomous pacing</span>
+        <span className="label">{t("Style")}<span className="hint-inline">{t("biases autonomous pacing")}</span>
         </span>
         <select
           value={vals.style}
@@ -186,12 +186,12 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           }}
         >
           {STYLES.map((s) => (
-            <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>
+            <option key={s} value={s}>{translateKnown(s[0].toUpperCase() + s.slice(1))}</option>
           ))}
         </select>
       </label>}
       {locked && (
-        <p className="form-status">{readOnly ? "Read-only client — cannot change motion." : "Core offline."}</p>
+        <p className="form-status">{readOnly ? t("Read-only client — cannot change motion.") : t("Core offline.")}</p>
       )}
     </fieldset>
   );

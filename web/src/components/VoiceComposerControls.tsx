@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { MicrophoneIcon } from "../shell/icons";
@@ -177,7 +178,7 @@ export function VoiceComposerControls({
       const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === "audioinput");
       setAudioInputs(devices.map((device, index) => ({
         deviceId: device.deviceId,
-        label: device.label || `Microphone ${index + 1}`,
+        label: device.label || t("Microphone {index}", { index: index + 1 }),
       })));
       const selected = selectedDeviceRef.current;
       if (selected !== "default" && !devices.some((device) => device.deviceId === selected)) {
@@ -621,13 +622,13 @@ export function VoiceComposerControls({
           <MicrophoneIcon size={20} />
           {recording && <span className="voice-mic-countdown" aria-hidden="true">{recordingSecondsLeft}</span>}
           {active && <span className="voice-capture-label" aria-hidden="true">
-            {arming ? "Starting microphone" : listening ? (speechDetected ? "Speech detected" : "Listening continuously") : processing ? "Transcribing" : "Listening"}
+            {arming ? t("Starting microphone") : listening ? (speechDetected ? t("Speech detected") : t("Listening continuously")) : processing ? t("Transcribing") : t("Listening")}
           </span>}
         </button>
         <button
           type="button"
           className="voice-menu-trigger"
-          aria-label={menuOpen ? "Close voice input menu" : "Open voice input menu"}
+          aria-label={menuOpen ? t("Close voice input menu") : t("Open voice input menu")}
           aria-controls="voice-input-menu"
           aria-expanded={menuOpen}
           disabled={active}
@@ -637,21 +638,21 @@ export function VoiceComposerControls({
         </button>
       </div>
 
-      <div id="voice-input-menu" className="voice-input-menu" hidden={!menuOpen} aria-label="Voice input options">
-        <span className="field-label">Voice mode</span>
-        <div className="voice-mode-toggle" aria-label="Voice mode">
-          <button type="button" disabled={savingPreferences} aria-pressed={mode === "hold"} onClick={() => { setMode("hold"); void savePreference({ input_mode: "hold" }); }}>Hold to talk</button>
-          <button type="button" disabled={savingPreferences} aria-pressed={mode === "hands_free"} onClick={() => { setMode("hands_free"); void savePreference({ input_mode: "hands_free" }); }}>Hands-free</button>
+      <div id="voice-input-menu" className="voice-input-menu" hidden={!menuOpen} aria-label={t("Voice input options")}>
+        <span className="field-label">{t("Voice mode")}</span>
+        <div className="voice-mode-toggle" aria-label={t("Voice mode")}>
+          <button type="button" disabled={savingPreferences} aria-pressed={mode === "hold"} onClick={() => { setMode("hold"); void savePreference({ input_mode: "hold" }); }}>{t("Hold to talk")}</button>
+          <button type="button" disabled={savingPreferences} aria-pressed={mode === "hands_free"} onClick={() => { setMode("hands_free"); void savePreference({ input_mode: "hands_free" }); }}>{t("Hands-free")}</button>
         </div>
-        <label className="field-label" htmlFor="voice-input-device">Microphone</label>
+        <label className="field-label" htmlFor="voice-input-device">{t("Microphone")}</label>
         <select id="voice-input-device" value={selectedDevice} disabled={active} onChange={(event) => selectInput(event.target.value)}>
-          <option value="default">Default microphone</option>
+          <option value="default">{t("Default microphone")}</option>
           {audioInputs.filter((input) => input.deviceId && input.deviceId !== "default").map((input) => (
             <option key={input.deviceId} value={input.deviceId}>{input.label}</option>
           ))}
         </select>
         <label className="voice-range-label" htmlFor="voice-input-sensitivity">
-          <span>Sensitivity</span><output>{sensitivity}</output>
+          <span>{t("Sensitivity")}</span><output>{sensitivity}</output>
         </label>
         <input
           id="voice-input-sensitivity"
@@ -665,7 +666,7 @@ export function VoiceComposerControls({
           onKeyUp={() => void savePreference({ input_sensitivity: sensitivity })}
         />
         <label className="voice-range-label" htmlFor="voice-input-silence">
-          <span>End-of-speech delay</span><output>{(silenceMillis / 1000).toFixed(1)} s</output>
+          <span>{t("End-of-speech delay")}</span><output>{t("{seconds} s", { seconds: (silenceMillis / 1000).toFixed(1) })}</output>
         </label>
         <input
           id="voice-input-silence"
@@ -689,13 +690,13 @@ export function VoiceComposerControls({
               void savePreference({ input_noise_suppression: event.target.checked });
             }}
           />
-          <span>Noise suppression</span>
+          <span>{t("Noise suppression")}</span>
         </label>
-        <div className="voice-level" aria-label={`Microphone level ${Math.round(inputLevel * 100)} percent`}>
+        <div className="voice-level" aria-label={t("Microphone level {percent} percent", { percent: Math.round(inputLevel * 100) })}>
           <span style={{ width: `${Math.round(inputLevel * 100)}%` }} />
         </div>
-        {queuedSegments > 0 && <span className="voice-queue-status" role="status">{queuedSegments} phrase{queuedSegments === 1 ? "" : "s"} queued</span>}
-        {microphoneReady && <button type="button" className="voice-release-button" disabled={active} onClick={abortCapture}>Release microphone</button>}
+        {queuedSegments > 0 && <span className="voice-queue-status" role="status">{queuedSegments === 1 ? t("1 phrase queued") : t("{count} phrases queued", { count: queuedSegments })}</span>}
+        {microphoneReady && <button type="button" className="voice-release-button" disabled={active} onClick={abortCapture}>{t("Release microphone")}</button>}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Prompt sets: create/duplicate/edit/delete. Built-in sets are protected
 // templates (read-only; duplicate to edit). The motion JSON contract is
 // appended by the backend and cannot be edited out.
@@ -6,7 +7,7 @@ import { api } from "../api/client";
 import type { PromptSet } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : "Request failed");
+const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
 export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
   const { backendOnline } = useAppState();
@@ -91,7 +92,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
     if (builtin || !selected) return;
     await mutate("Saving prompt set", async () => {
       await api.updatePromptSet(selected.id, name.trim(), system.trim());
-      show("Prompt set saved.");
+      show(t("Prompt set saved."));
       await reload(selected.id);
     });
   }
@@ -99,7 +100,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
     if (!selected) return;
     await mutate("Duplicating prompt set", async () => {
       const created = await api.createPromptSet(`${name || "Prompt set"} copy`, system || "You are a helpful assistant.");
-      show("Duplicated.");
+      show(t("Duplicated."));
       await reload(created.set?.id);
     });
   }
@@ -107,62 +108,60 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
     if (builtin || !selected) return;
     await mutate("Deleting prompt set", async () => {
       await api.deletePromptSet(selected.id);
-      show("Deleted.");
+      show(t("Deleted."));
       await reload("");
     });
   }
 
   if (!sets) return (
     <div className="group">
-      <h3 className="group-title">Prompt set editor</h3>
+      <h3 className="group-title">{t("Prompt set editor")}</h3>
       {loadError ? (
         <div className="empty-state compact-empty" role="alert">
-          <strong>Prompt sets unavailable</strong>
+          <strong>{t("Prompt sets unavailable")}</strong>
           <p>{loadError}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => void reload()}>Retry</button>
+          <button type="button" className="btn btn-secondary" onClick={() => void reload()}>{t("Retry")}</button>
         </div>
-      ) : <p className="form-status" role="status">{loading ? "Loading prompt sets..." : "Prompt sets unavailable."}</p>}
+      ) : <p className="form-status" role="status">{loading ? t("Loading prompt sets...") : t("Prompt sets unavailable.")}</p>}
     </div>
   );
 
   return (
     <div className="group" aria-busy={busy || loading || undefined}>
-      <h3 className="group-title">Prompt set editor</h3>
+      <h3 className="group-title">{t("Prompt set editor")}</h3>
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
-          <strong>Prompt set refresh failed</strong>
+          <strong>{t("Prompt set refresh failed")}</strong>
           <p>{loadError}</p>
-          <button type="button" className="btn btn-secondary" disabled={busy || loading} onClick={() => void reload()}>Retry</button>
+          <button type="button" className="btn btn-secondary" disabled={busy || loading} onClick={() => void reload()}>{t("Retry")}</button>
         </div>
       )}
-      {sets.length === 0 && <p className="form-status" role="status">No prompt sets available.</p>}
+      {sets.length === 0 && <p className="form-status" role="status">{t("No prompt sets available.")}</p>}
       <label className="field">
-        <span className="label">Edit set</span>
+        <span className="label">{t("Edit set")}</span>
         <select value={selId} disabled={!backendOnline || busy || loading || sets.length === 0} onChange={(e) => select(e.target.value)}>
           {sets.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}{s.builtin ? " (built-in)" : ""}</option>
+            <option key={s.id} value={s.id}>{s.builtin ? t("{name} (built-in)", { name: s.name }) : s.name}</option>
           ))}
         </select>
       </label>
       <label className="field">
-        <span className="label">
-          Name {builtin && <span className="badge">Built-in — read-only</span>}
+        <span className="label">{t("Name")}{builtin && <span className="badge">{t("Built-in — read-only")}</span>}
         </span>
         <input type="text" maxLength={80} value={name} readOnly={builtin || interactionLocked || !selected} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
-        <span className="label">
-          Behavior instructions <span className="hint-inline">the motion JSON contract is enforced by code</span>
+        <span className="label">{t("Behavior instructions")}<span className="hint-inline">{t("the motion JSON contract is enforced by code")}</span>
         </span>
         <textarea rows={6} maxLength={16384} value={system} readOnly={builtin || interactionLocked || !selected} onChange={(e) => setSystem(e.target.value)} />
       </label>
       <div className="row-actions">
-        <button type="button" className="btn btn-secondary" disabled={interactionLocked || !selected} onClick={() => void duplicate()}>Duplicate as new</button>
-        <button type="button" className="btn btn-primary" disabled={interactionLocked || builtin || !selected} onClick={() => void save()}>Save set</button>
-        <button type="button" className="btn btn-danger-outline" disabled={interactionLocked || builtin || !selected} onClick={() => void remove()}>Delete set</button>
+        <button type="button" className="btn btn-secondary" disabled={interactionLocked || !selected} onClick={() => void duplicate()}>{t("Duplicate as new")}</button>
+        <button type="button" className="btn btn-primary" disabled={interactionLocked || builtin || !selected} onClick={() => void save()}>{t("Save set")}</button>
+        <button type="button" className="btn btn-danger-outline" disabled={interactionLocked || builtin || !selected} onClick={() => void remove()}>{t("Delete set")}</button>
       </div>
       {busyAction && <p className="form-status" role="status">{busyAction}...</p>}
-      {locked && <p className="form-status">{backendOnline ? "Read-only client." : "Core offline."}</p>}
+      {locked && <p className="form-status">{backendOnline ? t("Read-only client.") : t("Core offline.")}</p>}
     </div>
   );
 }

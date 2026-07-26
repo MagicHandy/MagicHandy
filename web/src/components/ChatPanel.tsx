@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Streaming chat over the server-side shared message log (ADR 0003): history
 // loads from the canonical log, other tabs' messages arrive via the state
 // poll, and this client advances only its own cursor. Keeps near-bottom
@@ -28,7 +29,7 @@ interface Props {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const message = (error: unknown) => error instanceof Error ? error.message : "Conversation history request failed.";
+const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Conversation history request failed.");
 
 export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) {
   const { backendOnline, readOnly, state, refresh } = useAppState();
@@ -221,12 +222,12 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             // A model-requested stop is not the global Emergency Stop, and a
             // rejected stop may still have reached the device, so the wording
             // stays neutral about both.
-            const prefix = ev.data.action === "stop" ? "Device Stop could not be confirmed" : "Motion command failed";
-            show(`${prefix}: ${motionError}`, "error");
+            const prefix = ev.data.action === "stop" ? t("Device Stop could not be confirmed") : t("Motion command failed");
+            show(t("{state}: {message}", { state: prefix, message: motionError }), "error");
             setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, warning: true } : x)));
           }
         } else if (ev.event === "error") {
-          const message = String((ev.data as { message?: string }).message ?? "Chat error");
+          const message = translateKnown(String((ev.data as { message?: string }).message ?? "Chat error"));
           // A reply the backend already committed stays visible: replacing it
           // with the error would contradict the history a reload shows.
           const replyRetained = String((ev.data as { reply_retained?: string }).reply_retained ?? "") === "true";
@@ -235,12 +236,12 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             ? { ...x, text: replyRetained ? x.text : message, warning: true }
             : x)));
         } else if (ev.event === "done" && ev.data.ok === false) {
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || "Malformed model response.", warning: true } : x)));
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || t("Malformed model response."), warning: true } : x)));
         }
       }, undefined, stopSequence);
       if (lastSeq.current > 0) void api.advanceChatCursor(sessionId, lastSeq.current).catch(() => undefined);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Chat failed.";
+      const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");
       show(message, "error");
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
     } finally {
@@ -264,31 +265,31 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
   }
 
   return (
-    <div className="chat" id="active-chat-panel" role="tabpanel" aria-label="Active conversation">
+    <div className="chat" id="active-chat-panel" role="tabpanel" aria-label={t("Active conversation")}>
       <div className="chat-log-shell">
         <div className="chat-log" ref={logRef} onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions" aria-busy={historyLoading || undefined}>
-          {historyLoading && <div className="chat-history-state" role="status">Loading conversation…</div>}
+          {historyLoading && <div className="chat-history-state" role="status">{t("Loading conversation…")}</div>}
           {historyError && (
             <div className="chat-history-state" role="alert">
-              <strong>Conversation unavailable</strong>
-              <span>{historyError}</span>
-              <button type="button" className="btn btn-secondary" onClick={() => void loadHistory()}>Retry</button>
+              <strong>{t("Conversation unavailable")}</strong>
+              <span>{translateKnown(historyError)}</span>
+              <button type="button" className="btn btn-secondary" onClick={() => void loadHistory()}>{t("Retry")}</button>
             </div>
           )}
-          {!historyLoading && !historyError && messages.length === 0 && <div className="chat-history-state chat-history-empty">No messages yet</div>}
+          {!historyLoading && !historyError && messages.length === 0 && <div className="chat-history-state chat-history-empty">{t("No messages yet")}</div>}
           {messages.map((m) => (
             <div key={m.id} className="chat-message" data-role={m.role} data-streaming={m.streaming || undefined} data-state={m.warning ? "warning" : undefined}>
               {m.role === "assistant" ? <AssistantAvatar message={m} /> : <span className="chat-avatar" aria-hidden="true">Y</span>}
               <div className="chat-body">
-                <span className="chat-speaker">{m.role === "user" ? "You" : "MagicHandy"}</span>
-                <div className="chat-bubble">{m.text || (m.warning ? "Malformed model JSON — the reply could not be parsed." : "")}</div>
+                <span className="chat-speaker">{m.role === "user" ? t("You") : "MagicHandy"}</span>
+                <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
               </div>
             </div>
           ))}
           {tailError && <p className="form-status chat-sync-status" role="status">{tailError}</p>}
         </div>
         {showJump && (
-          <button type="button" className="btn btn-secondary chat-jump" onClick={jump}>Jump to latest</button>
+          <button type="button" className="btn btn-secondary chat-jump" onClick={jump}>{t("Jump to latest")}</button>
         )}
       </div>
       <form
@@ -303,7 +304,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             <VoiceComposerControls
               disabled={locked}
               ready={asrReady}
-              unavailableTitle="Start and load the speech-input worker in Settings → Voice"
+              unavailableTitle={t("Start and load the speech-input worker in Settings → Voice")}
               preferences={{
                 input_mode: voiceSettings?.input_mode ?? "hands_free",
                 input_sensitivity: voiceSettings?.input_sensitivity ?? 55,
@@ -316,14 +317,14 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
               showError={(message) => show(message, "error")}
             />
           )}
-          <label className="visually-hidden" htmlFor="chat-input">Message</label>
+          <label className="visually-hidden" htmlFor="chat-input">{t("Message")}</label>
           <textarea
             id="chat-input"
             rows={2}
             maxLength={1000}
             value={draft}
             disabled={locked || voiceActive}
-            placeholder={historyError ? "Conversation history unavailable." : historyLoading ? "Loading conversation…" : readOnly ? "Read-only — this tab can't drive motion." : "Message MagicHandy…"}
+            placeholder={historyError ? t("Conversation history unavailable.") : historyLoading ? t("Loading conversation…") : readOnly ? t("Read-only — this tab can't drive motion.") : t("Message MagicHandy…")}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -332,9 +333,9 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
               }
             }}
           />
-          <button type="submit" className="btn btn-primary chat-send" disabled={locked || busy || voiceActive || !draft.trim()}>Send</button>
+          <button type="submit" className="btn btn-primary chat-send" disabled={locked || busy || voiceActive || !draft.trim()}>{t("Send")}</button>
         </div>
-        <span className="visually-hidden" role="status">{busy ? "Streaming" : voiceActive ? "Voice input active" : historyError ? "Conversation history unavailable" : historyLoading ? "Loading conversation history" : locked ? (readOnly ? "Read-only" : "Core offline") : "Idle"}</span>
+        <span className="visually-hidden" role="status">{busy ? t("Streaming") : voiceActive ? t("Voice input active") : historyError ? t("Conversation history unavailable") : historyLoading ? t("Loading conversation history") : locked ? (readOnly ? t("Read-only") : t("Core offline")) : t("Idle")}</span>
       </form>
     </div>
   );
@@ -350,9 +351,9 @@ function AssistantAvatar({ message }: { message: Msg }) {
   const title = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
   return (
     <span className="chat-avatar-diagnostics">
-      <button type="button" className="chat-avatar" aria-label="Show response diagnostics" aria-describedby={tooltipID} title={title}>M</button>
+      <button type="button" className="chat-avatar" aria-label={t("Show response diagnostics")} aria-describedby={tooltipID} title={title}>M</button>
       <span id={tooltipID} className="chat-diagnostics-tooltip" role="tooltip">
-        <strong>Response diagnostics</strong>
+        <strong>{t("Response diagnostics")}</strong>
         <dl>
           {rows.map(([label, value]) => (
             <div key={label}>
@@ -368,23 +369,23 @@ function AssistantAvatar({ message }: { message: Msg }) {
 
 function diagnosticRows(diagnostics: ChatMessageDiagnostics): Array<[string, string]> {
   const rows: Array<[string, string]> = [];
-  if (diagnostics.source) rows.push(["Source", sourceLabel(diagnostics.source)]);
-  if (diagnostics.provider) rows.push(["Provider", diagnostics.provider]);
-  if (diagnostics.model) rows.push(["Model", diagnostics.model]);
-  if (diagnostics.prompt_set) rows.push(["Prompt set", diagnostics.prompt_set]);
-  if (Number.isFinite(diagnostics.request_ms)) rows.push(["Run time", `${Math.max(0, Math.round(diagnostics.request_ms ?? 0))} ms`]);
-  if (diagnostics.motion_action) rows.push(["Motion", diagnostics.motion_action]);
-  if (diagnostics.repaired) rows.push(["Parser", "Repaired response"]);
-  if (diagnostics.semantic_fallback) rows.push(["Fallback", "Semantic fallback used"]);
-  if (diagnostics.initial_malformed) rows.push(["Initial response", "Malformed JSON"]);
+  if (diagnostics.source) rows.push([t("Source"), sourceLabel(diagnostics.source)]);
+  if (diagnostics.provider) rows.push([t("Provider"), diagnostics.provider]);
+  if (diagnostics.model) rows.push([t("Model"), diagnostics.model]);
+  if (diagnostics.prompt_set) rows.push([t("Prompt set"), diagnostics.prompt_set]);
+  if (Number.isFinite(diagnostics.request_ms)) rows.push([t("Run time"), `${Math.max(0, Math.round(diagnostics.request_ms ?? 0))} ms`]);
+  if (diagnostics.motion_action) rows.push([t("Motion"), translateKnown(diagnostics.motion_action)]);
+  if (diagnostics.repaired) rows.push([t("Parser"), t("Repaired response")]);
+  if (diagnostics.semantic_fallback) rows.push([t("Fallback"), t("Semantic fallback used")]);
+  if (diagnostics.initial_malformed) rows.push([t("Initial response"), t("Malformed JSON")]);
   return rows;
 }
 
 function sourceLabel(source: string): string {
   switch (source) {
-    case "interactive": return "Interactive chat";
-    case "autopilot": return "Autopilot";
-    case "deterministic_stop": return "Deterministic Stop";
+    case "interactive": return t("Interactive chat");
+    case "autopilot": return t("Autopilot");
+    case "deterministic_stop": return t("Deterministic Stop");
     default: return source;
   }
 }

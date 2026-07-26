@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { api } from "../api/client";
 import { RefreshIcon, StopIcon } from "../shell/icons";
@@ -30,11 +31,9 @@ export class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <section className="panel" role="alert">
-          <h2 className="section-title">This view could not render</h2>
+          <h2 className="section-title">{t("This view could not render")}</h2>
           <p className="form-status">{this.state.message}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => this.setState({ message: "" })}>
-            Try again
-          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => this.setState({ message: "" })}>{t("Try again")}</button>
         </section>
       );
     }
@@ -68,15 +67,14 @@ function ApplicationFailure({ message }: { message: string }) {
 
   return (
     <main className="fatal-screen" role="alert">
-      <h1>MagicHandy could not finish loading</h1>
+      <h1>{t("MagicHandy could not finish loading")}</h1>
       <p>{message}</p>
       <div className="fatal-actions">
-        <button type="button" className="btn btn-danger" aria-label="Emergency stop all motion" onClick={() => void stop()}>
-          <StopIcon /> Emergency Stop <span className="kbd" aria-hidden="true">Esc</span>
+        <button type="button" className="btn btn-danger" aria-label={t("Emergency stop all motion")} onClick={() => void stop()}>
+          <StopIcon />{t("Emergency Stop")}<span className="kbd" aria-hidden="true">{t("Esc")}</span>
         </button>
         <button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>
-          <RefreshIcon /> Reload application
-        </button>
+          <RefreshIcon />{t("Reload application")}</button>
       </div>
       {stopStatus && <p role="status">{stopStatus}</p>}
     </main>

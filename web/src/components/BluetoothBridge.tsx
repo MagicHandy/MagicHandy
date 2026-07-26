@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Browser Bluetooth bridge. The browser owns the BLE session and executes only
 // backend-issued bridge commands; React never creates motion commands itself.
 import { useEffect, useRef, useState } from "react";
@@ -167,7 +168,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
     if (!bluetoothSupported()) {
       const res = await postBluetoothStatus({ connected: false, supported: false, status: "unsupported", message: "Web Bluetooth is not available in this browser." });
       if (mounted.current) setBridge(res.bluetooth);
-      show("Web Bluetooth is not available in this browser.", "error");
+      show(t("Web Bluetooth is not available in this browser."), "error");
       return;
     }
     setConnecting(true);
@@ -209,13 +210,13 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
       }
       setBridge(res.bluetooth);
       ensureCommandLoop();
-      show("Bluetooth connected.");
+      show(t("Bluetooth connected."));
     } catch (e) {
       clearBluetoothSession({ disconnect: true });
       const message = e instanceof Error ? e.message : "Bluetooth connection failed.";
       const res = await postBluetoothStatus({ connected: false, status: "error", error: message, message: "Bluetooth connection failed." }).catch(() => null);
       if (res && mounted.current) setBridge(res.bluetooth);
-      if (mounted.current) show(message, "error");
+      if (mounted.current) show(translateKnown(message), "error");
     } finally {
       if (mounted.current) setConnecting(false);
     }
@@ -230,7 +231,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
       }
       await handleBluetoothDisconnect();
     } catch (e) {
-      show(e instanceof Error ? e.message : "Bluetooth disconnect failed.", "error");
+      show(e instanceof Error ? translateKnown(e.message) : t("Bluetooth disconnect failed."), "error");
     }
   }
 
@@ -402,7 +403,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
       await sendBleRequest("hsp/stop", {}, { waitForResponse: false });
     } catch (error) {
       if (reportError && mounted.current) {
-        show(error instanceof Error ? `Bluetooth Stop failed: ${error.message}` : "Bluetooth Stop failed.", "error");
+        show(error instanceof Error ? t("Bluetooth Stop failed: {message}", { message: error.message }) : t("Bluetooth Stop failed."), "error");
       }
     }
   }
@@ -556,22 +557,20 @@ export function BluetoothBridge({ visible, locked, backendOnline, initial, onSta
     <div className="bluetooth-panel">
       <div className="bluetooth-summary">
         <span className="bluetooth-indicator" data-state={connected ? "connected" : status} aria-hidden="true" />
-        <span>{bridge.message || (connected ? "Bluetooth connected" : "Bluetooth disconnected")}</span>
+        <span>{bridge.message ? translateKnown(bridge.message) : connected ? t("Bluetooth connected") : t("Bluetooth disconnected")}</span>
       </div>
       <div className="row-actions">
         <button type="button" className="btn btn-secondary" disabled={locked || connecting || connected} onClick={() => void connectBluetooth()}>
-          {connecting ? "Connecting" : "Connect Bluetooth"}
+          {connecting ? t("Connecting") : t("Connect Bluetooth")}
         </button>
-        <button type="button" className="btn btn-secondary" disabled={!backendOnline || !connected} onClick={() => void disconnectBluetooth()}>
-          Disconnect
-        </button>
+        <button type="button" className="btn btn-secondary" disabled={!backendOnline || !connected} onClick={() => void disconnectBluetooth()}>{t("Disconnect")}</button>
       </div>
       <dl className="meta-grid">
-        <div><dt>Browser</dt><dd>{browser}</dd></div>
-        <div><dt>Device</dt><dd>{deviceName}</dd></div>
-        <div><dt>Bridge</dt><dd>{bridgeQueueLabel(bridge)}</dd></div>
+        <div><dt>{t("Browser")}</dt><dd>{translateKnown(browser)}</dd></div>
+        <div><dt>{t("Device")}</dt><dd>{deviceName}</dd></div>
+        <div><dt>{t("Bridge")}</dt><dd>{bridgeQueueLabel(bridge)}</dd></div>
       </dl>
-      {locked && <p className="form-status">{backendOnline ? "Read-only client." : "Core offline."}</p>}
+      {locked && <p className="form-status">{backendOnline ? t("Read-only client.") : t("Core offline.")}</p>}
     </div>
   );
 }

@@ -58,6 +58,7 @@ try {
     $files = @(
         'install.ps1',
         'update.ps1',
+        'change-language.ps1',
         'scripts\installer\InstallerSupport.psm1',
         'internal\llm\runtimeassets\build-managed-llama.ps1'
     )
@@ -72,6 +73,39 @@ try {
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
 
+    Write-Host 'Checking installer localization catalogs and prompt coverage...'
+    $localeRoot = Join-Path $Repo 'scripts\installer\locales'
+    $catalogs = @{}
+    foreach ($locale in @('en', 'es', 'pt-BR', 'zh-Hans', 'ja')) {
+        $catalogPath = Join-Path $localeRoot "$locale.json"
+        $catalogText = [System.IO.File]::ReadAllText($catalogPath, [System.Text.Encoding]::UTF8)
+        Assert-True -Condition (-not $catalogText.Contains([char]0xfffd)) -Message "$locale catalog should not contain replacement characters"
+        $catalogs[$locale] = $catalogText | ConvertFrom-Json
+    }
+    $englishKeys = @($catalogs.en.PSObject.Properties.Name | Sort-Object)
+    Assert-True -Condition ($englishKeys.Count -gt 100) -Message 'installer catalogs should cover the full decision tree'
+    foreach ($locale in @('es', 'pt-BR', 'zh-Hans', 'ja')) {
+        $keys = @($catalogs[$locale].PSObject.Properties.Name | Sort-Object)
+        Assert-Equal -Expected ($englishKeys -join "`n") -Actual ($keys -join "`n") -Message "$locale catalog key parity"
+        foreach ($key in $englishKeys) {
+            $expected = @([regex]::Matches([string]$catalogs.en.$key, '\{\d+\}') | ForEach-Object Value | Sort-Object -Unique)
+            $actual = @([regex]::Matches([string]$catalogs[$locale].$key, '\{\d+\}') | ForEach-Object Value | Sort-Object -Unique)
+            Assert-Equal -Expected ($expected -join ',') -Actual ($actual -join ',') -Message "$locale/$key placeholder parity"
+            Assert-True -Condition (-not [string]::IsNullOrWhiteSpace([string]$catalogs[$locale].$key)) -Message "$locale/$key should not be blank"
+        }
+        Set-MagicHandyInstallerLocale -Locale $locale
+        Assert-Equal -Expected ([string]$catalogs[$locale].selected_heading) -Actual (Get-MagicHandyText -Key 'selected_heading') -Message "$locale runtime lookup"
+        $nativeInput = [string]$catalogs[$locale].language_name
+        $resolvedNative = & $supportModule { param([string]$Value) ConvertTo-MagicHandyLocale -Value $Value } $nativeInput
+        Assert-Equal -Expected $locale -Actual $resolvedNative -Message "$locale native language-name input"
+        Assert-True -Condition ((Get-MagicHandyText -Key 'selected_heading') -ne [string]$catalogs.en.selected_heading) -Message "$locale should translate selected installation heading"
+    }
+    Set-MagicHandyInstallerLocale -Locale 'en'
+    foreach ($file in @('install.ps1', 'update.ps1', 'scripts\installer\InstallerSupport.psm1')) {
+        $source = [System.IO.File]::ReadAllText((Join-Path $Repo $file))
+        Assert-True -Condition (-not $source.Contains("-Question '")) -Message "$file should not pass a literal single-quoted decision prompt"
+        Assert-True -Condition (-not $source.Contains('Read-Host ''')) -Message "$file should not use a literal Read-Host decision prompt"
+    }
     Write-Host 'Checking same-process CUDA environment initialization...'
     $builderPath = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
     $builderTokens = $null
@@ -111,12 +145,12 @@ try {
     Assert-True -Condition ($updateBanner -match 'UPDATE - local-first AI control for The Handy') -Message 'update banner should identify the product and operation'
     $installCompletion = Write-MagicHandyCompletionArt -Operation Install 6>&1 | Out-String
     Assert-True -Condition ($installCompletion -match 'INSTALL COMPLETE') -Message 'install completion should identify the finished operation'
-    Assert-True -Condition ($installCompletion -match 'APP BUILD VERIFIED - CONFIGURATION REQUIRED') -Message 'install completion should distinguish a verified build from configured providers'
+    Assert-True -Condition ($installCompletion -match 'APP BUILD VERIFIED - CONFIGURATION APPLIED') -Message 'install completion should confirm that selected language configuration was applied'
     Assert-True -Condition ($installCompletion -match 'Open Settings.+select a model, voice provider, and device transport') -Message 'install completion should give relevant next steps'
     Assert-True -Condition ($installCompletion -match 'Managed NeuTTS can create reference codes\s+locally from a WAV and exact transcript') -Message 'install completion should describe the local NeuTTS reference workflow'
     Assert-True -Condition ($installCompletion -match '\|\|=+\[\]') -Message 'completion should include the Handy motion-rail text art'
     $updateCompletion = Write-MagicHandyCompletionArt -Operation Update 6>&1 | Out-String
-    Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices were reapplied') -Message 'update completion should confirm preserved choices'
+    Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices and language settings were applied') -Message 'update completion should confirm preserved choices and languages'
     $planCompletion = Write-MagicHandyCompletionArt -Operation UpdatePlan 6>&1 | Out-String
     Assert-True -Condition ($planCompletion -match 'NO CHANGES MADE') -Message 'plan completion should not claim that a build ran'
 
@@ -136,14 +170,32 @@ try {
         -CreateLauncher $true
     Write-MagicHandyInstallState -State $state -Path $statePath
     $loaded = Read-MagicHandyInstallState -Path $statePath
-    Assert-Equal -Expected 1 -Actual ([int]$loaded.schema_version) -Message 'state schema'
+    Assert-Equal -Expected 2 -Actual ([int]$loaded.schema_version) -Message 'state schema'
     Assert-Equal -Expected 49800 -Actual ([int]$loaded.port) -Message 'saved port'
     Assert-Equal -Expected 'cuda' -Actual ([string]$loaded.llama_backend) -Message 'saved backend'
+    Assert-Equal -Expected 'en' -Actual ([string]$loaded.ui_locale) -Message 'saved UI locale'
+    Assert-Equal -Expected 'en' -Actual ([string]$loaded.chat_locale) -Message 'saved chat locale'
     Assert-True -Condition ([bool]$loaded.install_parakeet) -Message 'saved Parakeet choice'
     $json = Get-Content -LiteralPath $statePath -Raw
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
 
+    $legacyStatePath = Join-Path $tempRoot 'legacy-install-state.json'
+    $legacyState = $json | ConvertFrom-Json
+    $legacyState.schema_version = 1
+    $legacyState.PSObject.Properties.Remove('ui_locale')
+    $legacyState.PSObject.Properties.Remove('chat_locale')
+    [System.IO.File]::WriteAllText($legacyStatePath, ($legacyState | ConvertTo-Json -Depth 5))
+    $migratedState = Read-MagicHandyInstallState -Path $legacyStatePath
+    Assert-Equal -Expected 2 -Actual ([int]$migratedState.schema_version) -Message 'legacy state should migrate to schema 2 in memory'
+    Assert-Equal -Expected 'en' -Actual ([string]$migratedState.ui_locale) -Message 'legacy state UI locale default'
+    Assert-Equal -Expected 'en' -Actual ([string]$migratedState.chat_locale) -Message 'legacy state chat locale default'
+
+    $invalidLocalePath = Join-Path $tempRoot 'invalid-locale-state.json'
+    $invalidLocale = $json | ConvertFrom-Json
+    $invalidLocale.ui_locale = 'fr'
+    [System.IO.File]::WriteAllText($invalidLocalePath, ($invalidLocale | ConvertTo-Json -Depth 5))
+    Assert-Throws -Action { Read-MagicHandyInstallState -Path $invalidLocalePath } -Pattern 'ui_locale.+one of' -Message 'unsupported installer locale'
     $invalidBooleanPath = Join-Path $tempRoot 'invalid-boolean-state.json'
     $invalidBoolean = $json | ConvertFrom-Json
     $invalidBoolean.build_managed_llama = 'false'
@@ -162,6 +214,18 @@ try {
     [System.IO.File]::WriteAllText($inconsistentStatePath, ($inconsistentState | ConvertTo-Json -Depth 5))
     Assert-Throws -Action { Read-MagicHandyInstallState -Path $inconsistentStatePath } -Pattern 'cannot configure LLM runtimes' -Message 'inconsistent installer choices'
 
+    Write-Host 'Checking update restores saved language before plan output...'
+    $localizedStatePath = Join-Path $tempRoot 'localized-install-state.json'
+    $localizedState = $json | ConvertFrom-Json
+    $localizedState.ui_locale = 'ja'
+    $localizedState.chat_locale = 'es'
+    Write-MagicHandyInstallState -State $localizedState -Path $localizedStatePath
+    $localizedBefore = [System.IO.File]::ReadAllText($localizedStatePath)
+    $localizedOutput = & (Join-Path $Repo 'update.ps1') -Yes -NoPull -NoLaunch -PlanOnly -StatePath $localizedStatePath 6>&1 | Out-String
+    Assert-True -Condition ($localizedOutput.Contains([string]$catalogs.ja.current_heading)) -Message 'update plan should restore Japanese before displaying choices'
+    Assert-True -Condition ($localizedOutput.Contains((Get-MagicHandyLanguageName -Locale 'es'))) -Message 'update plan should display the saved Spanish chat language'
+    Assert-Equal -Expected $localizedBefore -Actual ([System.IO.File]::ReadAllText($localizedStatePath)) -Message 'plan-only localized update must not rewrite installer state'
+    Set-MagicHandyInstallerLocale -Locale 'en'
     Write-Host 'Checking PATH refresh preserves session-only tools...'
     $originalPath = $env:Path
     $sessionToolPath = Join-Path $tempRoot 'session-only-tools'
@@ -866,6 +930,7 @@ version = "0.1.0"
     Write-Host 'Checking selected-component plans...'
     $managedPlan = @(Get-MagicHandyProvisionPlan -State $loaded)
     Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.25'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'Apply app UI language English and chat reply language English'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Visual Studio C\+\+'
     Assert-PlanContains -Plan $managedPlan -Pattern 'CUDA Toolkit'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
@@ -1028,7 +1093,7 @@ version = "0.1.0"
     Write-Host 'Checking updater runtime reconfiguration prompt...'
     $global:MagicHandyInstallerResponses = New-Object System.Collections.Generic.Queue[string]
     $global:MagicHandyInstallerPrompts = New-Object System.Collections.Generic.List[string]
-    foreach ($response in @('y', '', '', 'y', 'n', 'y', '-', 'n', 'y')) {
+    foreach ($response in @('y', '', '', '', '', 'y', 'n', 'y', '-', 'n', 'y')) {
         $global:MagicHandyInstallerResponses.Enqueue($response)
     }
     function global:Read-Host {

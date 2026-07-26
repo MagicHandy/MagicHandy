@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 // Floating playback panel for the video currently open in the player. It
 // overlays the workspace rather than reflowing it, because its whole purpose is
 // to be adjusted while watching: calibration you cannot see the effect of is
@@ -121,28 +122,31 @@ export function PlaybackPanel({
 
   const effective = clamp(setupOffsetMillis + offset, -MAX_OFFSET_MILLIS, MAX_OFFSET_MILLIS);
   const effect = sync.filter_effect;
+  const actionsRemoved = effect?.actions_removed ?? 0;
+  const peakReductionPercent = effect?.peak_reduction_percent ?? 0;
+  const hasMeasuredEffect = actionsRemoved > 0 || peakReductionPercent > 0;
   const filtered = smoothing > 0 || rounding > 0 || speedLimit;
 
   return (
     <div className="playback-panel-layer">
-      <section className="playback-panel" ref={panelRef} aria-label={`Playback settings for ${video.display_name}`}>
+      <section className="playback-panel" ref={panelRef} aria-label={t("Playback settings for {display_name}", { display_name: video.display_name })}>
         <header className="playback-panel-head">
-          <h2>Playback</h2>
+          <h2>{t("Playback")}</h2>
           <span title={video.display_name}>{video.display_name}</span>
-          <button type="button" className="icon-button" aria-label="Close playback settings" onClick={onClose}>
+          <button type="button" className="icon-button" aria-label={t("Close playback settings")} onClick={onClose}>
             <CloseIcon />
           </button>
         </header>
 
         <fieldset className="playback-panel-group" disabled={locked}>
-          <legend className="visually-hidden">Sync offset</legend>
+          <legend className="visually-hidden">{t("Sync offset")}</legend>
           <div className="playback-panel-row">
-            <span className="playback-panel-label">Offset</span>
+            <span className="playback-panel-label">{t("Offset")}</span>
             <output className="playback-panel-value">{formatMillis(effective)}</output>
           </div>
           <input
             type="range"
-            aria-label="Sync offset for this video"
+            aria-label={t("Sync offset for this video")}
             min={-MAX_OFFSET_MILLIS}
             max={MAX_OFFSET_MILLIS}
             step={10}
@@ -150,16 +154,12 @@ export function PlaybackPanel({
             disabled={locked}
             onChange={(event) => changeOffset(Number(event.target.value))}
           />
-          <p className="playback-panel-hint">
-            this video {formatMillis(offset)} · setup {formatMillis(setupOffsetMillis)}
-            <br />
-            Positive delays the device against the picture. Applies while playing.
-          </p>
+          <p className="playback-panel-hint">{t("this video {video} · setup {setup}", { video: formatMillis(offset), setup: formatMillis(setupOffsetMillis) })}
+            <br />{t("Positive delays the device against the picture. Applies while playing.")}</p>
         </fieldset>
 
         <fieldset className="playback-panel-group" disabled={locked}>
-          <legend className="playback-panel-legend">
-            Script filters <span>restarts motion</span>
+          <legend className="playback-panel-legend">{t("Script filters")}<span>{t("restarts motion")}</span>
           </legend>
 
           <label className="playback-panel-toggle">
@@ -173,13 +173,13 @@ export function PlaybackPanel({
                 writeFilters({ script_smoothing_percent: next });
               }}
             />
-            <span>Smoothing</span>
-            <output>{smoothing > 0 ? `${smoothing}%` : "off"}</output>
+            <span>{t("Smoothing")}</span>
+            <output>{smoothing > 0 ? <>{smoothing}%</> : t("off")}</output>
           </label>
           {smoothing > 0 && (
             <input
               type="range"
-              aria-label="Smoothing threshold"
+              aria-label={t("Smoothing threshold")}
               min={1}
               max={MAX_SMOOTHING_PERCENT}
               step={1}
@@ -204,13 +204,13 @@ export function PlaybackPanel({
                 writeFilters({ peak_rounding_ms: next });
               }}
             />
-            <span>Round peaks</span>
-            <output>{rounding > 0 ? `${rounding} ms` : "off"}</output>
+            <span>{t("Round peaks")}</span>
+            <output>{rounding > 0 ? t("{rounding} ms", { rounding: rounding }) : t("off")}</output>
           </label>
           {rounding > 0 && (
             <input
               type="range"
-              aria-label="Peak rounding window"
+              aria-label={t("Peak rounding window")}
               min={10}
               max={MAX_ROUNDING_MILLIS}
               step={10}
@@ -234,26 +234,28 @@ export function PlaybackPanel({
                 writeFilters({ apply_video_speed_limit: event.target.checked });
               }}
             />
-            <span>Limit speed</span>
-            <output>{speedLimit ? "on" : "off"}</output>
+            <span>{t("Limit speed")}</span>
+            <output>{speedLimit ? t("on") : t("off")}</output>
           </label>
         </fieldset>
 
         <footer className="playback-panel-foot">
           <p className="playback-panel-effect" role="status">
-            {!filtered && "Playing the script exactly as authored."}
-            {filtered && !effect && "Filters on; effect is measured when motion re-arms."}
-            {filtered && effect && [
-              effect.actions_removed ? `${effect.actions_removed.toLocaleString()} actions removed` : "",
-              effect.peak_reduction_percent ? `peaks up to ${effect.peak_reduction_percent}% lower` : "",
-            ].filter(Boolean).join(" · ")}
+            {!filtered && t("Playing the script exactly as authored.")}
+            {filtered && !hasMeasuredEffect && t("Filters on; effect is measured when motion re-arms.")}
+            {filtered && hasMeasuredEffect && (actionsRemoved > 0 && peakReductionPercent > 0
+              ? t("{count} actions removed · peaks up to {percent}% lower", {
+                count: actionsRemoved.toLocaleString(),
+                percent: peakReductionPercent,
+              })
+              : actionsRemoved > 0
+                ? t("{count} actions removed", { count: actionsRemoved.toLocaleString() })
+                : t("Peaks up to {percent}% lower", { percent: peakReductionPercent }))}
           </p>
-          <button type="button" className="btn btn-secondary compact-command" disabled={locked} onClick={reset}>
-            Reset
-          </button>
+          <button type="button" className="btn btn-secondary compact-command" disabled={locked} onClick={reset}>{t("Reset")}</button>
         </footer>
         {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
-        {locked && <p className="form-status">Read-only tab — playback settings are visible only.</p>}
+        {locked && <p className="form-status">{t("Read-only tab — playback settings are visible only.")}</p>}
       </section>
     </div>
   );

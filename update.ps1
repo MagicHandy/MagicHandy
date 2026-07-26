@@ -73,11 +73,12 @@ if (-not $StatePath) {
 }
 $StatePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StatePath)
 
-Write-MagicHandyBanner -Operation Update
-Write-Host '  Existing provider and storage choices are preserved by default.' -ForegroundColor DarkGray
-
 $state = Read-MagicHandyInstallState -Path $StatePath
-Write-InstallerHeading 'Current installation choices'
+Set-MagicHandyInstallerLocale -Locale ([string]$state.ui_locale)
+Write-MagicHandyBanner -Operation Update
+Write-Host ('  ' + (Get-MagicHandyText -Key 'update_preserved_note')) -ForegroundColor DarkGray
+
+Write-InstallerHeading (Get-MagicHandyText -Key 'current_heading')
 Show-MagicHandyInstallState -State $state
 
 $modifyChoices = if ($Reconfigure) {
@@ -85,16 +86,16 @@ $modifyChoices = if ($Reconfigure) {
 } elseif ($Yes) {
     $false
 } else {
-    Confirm-MagicHandyChoice -Question 'Modify previous installation choices before rebuilding?' -Default $false
+    Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'update_modify_question') -Default $false
 }
 
 if (-not $NoPull -and -not $PlanOnly) {
-    Write-InstallerHeading 'Update source'
+    Write-InstallerHeading (Get-MagicHandyText -Key 'update_source_heading')
     Update-MagicHandySource -RepositoryPath $Repo -AssumeYes:$Yes
 } elseif ($PlanOnly) {
-    Write-Host 'Plan-only mode: source update skipped.' -ForegroundColor DarkGray
+    Write-Host (Get-MagicHandyText -Key 'update_plan_skip') -ForegroundColor DarkGray
 } else {
-    Write-Host 'Source update skipped by -NoPull.' -ForegroundColor DarkGray
+    Write-Host (Get-MagicHandyText -Key 'update_no_pull') -ForegroundColor DarkGray
 }
 
 $installer = Join-Path $Repo 'install.ps1'

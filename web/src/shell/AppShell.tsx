@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 // The persistent shell: nav rail + status bar + backend banner + routed
 // workspace. Stop lives in the rail (always mounted), not here.
 import type { ReactNode } from "react";
@@ -16,8 +17,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="workspace" id="workspace">
           {!backendOnline && state && (
             <div className="backend-banner" role="alert">
-              <strong>Core connection lost.</strong>
-              <span>Backend-required controls are locked until the core responds.</span>
+              <strong>{t("Core connection lost.")}</strong>
+              <span>{t("Backend-required controls are locked until the core responds.")}</span>
             </div>
           )}
           {children}

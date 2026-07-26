@@ -31,8 +31,8 @@ describe("VoiceRequestQueue", () => {
     render(<VoiceRequestQueue locked={false} requests={requests} refresh={vi.fn(async () => undefined)} />);
 
     const queue = screen.getByRole("region", { name: "Voice queue" });
-    expect(within(queue).getByText("Speech output")).toBeInTheDocument();
-    expect(within(queue).getByText("Speech input")).toBeInTheDocument();
+    expect(within(queue).getByText("Speech output (TTS)")).toBeInTheDocument();
+    expect(within(queue).getByText("Speech input (ASR)")).toBeInTheDocument();
     expect(within(queue).getAllByRole("button", { name: "Cancel" })).toHaveLength(2);
     expect(within(queue).queryByText("#tts-12")).not.toBeInTheDocument();
     expect(screen.getAllByRole("region", { name: "Voice queue" })).toHaveLength(1);

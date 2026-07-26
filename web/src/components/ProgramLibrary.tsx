@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { useEffect, useState } from "react";
 import type { EngineSnapshot, LibraryProgram } from "../api/types";
 import { DownloadIcon, PauseIcon, PlayIcon, StopIcon, TrashIcon } from "../shell/icons";
@@ -39,25 +40,25 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
   useEffect(() => setIntensity((value) => Math.min(value, intensityCap)), [intensityCap]);
 
   return (
-    <section className="library-view" aria-label="Programs and funscripts">
-      {programs.length > 0 && <h2 className="visually-hidden">Programs</h2>}
+    <section className="library-view" aria-label={t("Programs and funscripts")}>
+      {programs.length > 0 && <h2 className="visually-hidden">{t("Programs")}</h2>}
       <div className="program-toolbar">
         <label className="inline-slider">
-          <span>Intensity <strong>{intensity}%</strong></span>
+          <span>{t("Intensity")}<strong>{intensity}%</strong></span>
           <input type="range" min={1} max={intensityCap} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} />
         </label>
       </div>
 
       {activeProgram && (
-        <div className="program-player" aria-label="Program player">
+        <div className="program-player" aria-label={t("Program player")}>
           <div>
-            <strong>{engine?.target?.label ?? "Program"}</strong>
-            <span>{playbackState} / {engine?.running || engine?.paused ? formatClock(engine.running_ms) : `${progress}%`}</span>
+            <strong>{engine?.target?.label ?? t("Program")}</strong>
+            <span>{translateKnown(playbackState)} / {engine?.running || engine?.paused ? formatClock(engine.running_ms) : <>{progress}%</>}</span>
           </div>
-          <div className="program-progress" role="progressbar" aria-label="Program progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div>
+          <div className="program-progress" role="progressbar" aria-label={t("Program progress")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div>
           <div className="row-actions">
-            {engine?.paused ? <button type="button" className="icon-button" title="Resume program" aria-label="Resume program" disabled={locked || busyKeys.has(libraryActionKey.playerControl)} onClick={() => void onResume()}><PlayIcon /></button> : <button type="button" className="icon-button" title="Pause program" aria-label="Pause program" disabled={locked || !engine?.running || busyKeys.has(libraryActionKey.playerControl)} onClick={() => void onPause()}><PauseIcon /></button>}
-            <button type="button" className="icon-button stop-icon-button" title="Stop program" aria-label="Stop program" disabled={offline || busyKeys.has(libraryActionKey.playerStop)} onClick={() => void onStop()}><StopIcon /></button>
+            {engine?.paused ? <button type="button" className="icon-button" title={t("Resume program")} aria-label={t("Resume program")} disabled={locked || busyKeys.has(libraryActionKey.playerControl)} onClick={() => void onResume()}><PlayIcon /></button> : <button type="button" className="icon-button" title={t("Pause program")} aria-label={t("Pause program")} disabled={locked || !engine?.running || busyKeys.has(libraryActionKey.playerControl)} onClick={() => void onPause()}><PauseIcon /></button>}
+            <button type="button" className="icon-button stop-icon-button" title={t("Stop program")} aria-label={t("Stop program")} disabled={offline || busyKeys.has(libraryActionKey.playerStop)} onClick={() => void onStop()}><StopIcon /></button>
           </div>
         </div>
       )}
@@ -66,19 +67,19 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
         {programs.map((program) => {
           const mutating = busyKeys.has(libraryActionKey.program(program.id));
           return <article className="program-row" key={program.id}>
-            <PatternCurve points={program.preview_samples} label={`${program.name} backend-sampled program curve`} />
+            <PatternCurve points={program.preview_samples} label={t("Backend-sampled program curve for {name}", { name: program.name })} />
             <div className="pattern-copy">
               <h3>{program.name}</h3>
-              <div className="pattern-meta"><span>{formatClock(program.duration_ms)}</span><span>{program.points.length} knots</span><span>{program.origin}</span></div>
+              <div className="pattern-meta"><span>{formatClock(program.duration_ms)}</span><span>{t("{count} knots", { count: program.points.length })}</span><span>{program.origin}</span></div>
             </div>
             <div className="pattern-actions">
-              <button type="button" className="btn btn-primary compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, intensity)}><PlayIcon /> Play</button>
-              <button type="button" className="icon-button" title="Export program" aria-label={`Export ${program.name}`} disabled={offline || busyKeys.has(libraryActionKey.exportProgram(program.id))} onClick={() => void onExport(program.id)}><DownloadIcon /></button>
-              <button type="button" className="icon-button" title="Delete program" aria-label={`Delete ${program.name}`} disabled={locked || mutating} onClick={() => void onDelete(program.id)}><TrashIcon /></button>
+              <button type="button" className="btn btn-primary compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, intensity)}><PlayIcon />{t("Play")}</button>
+              <button type="button" className="icon-button" title={t("Export program")} aria-label={t("Export {name}", { name: program.name })} disabled={offline || busyKeys.has(libraryActionKey.exportProgram(program.id))} onClick={() => void onExport(program.id)}><DownloadIcon /></button>
+              <button type="button" className="icon-button" title={t("Delete program")} aria-label={t("Delete {name}", { name: program.name })} disabled={locked || mutating} onClick={() => void onDelete(program.id)}><TrashIcon /></button>
             </div>
           </article>;
         })}
-        {programs.length === 0 && <div className="empty-state compact-empty"><h2>No programs imported</h2><p>Use the Import tab to bring in a funscript or share file.</p></div>}
+        {programs.length === 0 && <div className="empty-state compact-empty"><h2>{t("No programs imported")}</h2><p>{t("Use the Import tab to bring in a funscript or share file.")}</p></div>}
       </div>
     </section>
   );

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 // The single authoritative visualizer. It renders engine state only and labels
 // position as a commanded estimate — never a guessed or device-confirmed value.
 import type { CSSProperties } from "react";
@@ -84,23 +85,23 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
         <div className="viz-telemetry">
           <div className="viz-summary">
             <span className="viz-state"><span className="viz-state-dot" aria-hidden="true" />{stateLabel}</span>
-            <span className="viz-commanded"><strong>{roundedPosition}%</strong><small>commanded</small></span>
+            <span className="viz-commanded"><strong>{roundedPosition}%</strong><small>{t("commanded")}</small></span>
           </div>
           <div className="viz-pattern">
-            <span>Pattern</span>
+            <span>{t("Pattern")}</span>
             <strong title={patternName}>{patternName}</strong>
           </div>
           <dl className="viz-metrics">
             <div>
-              <dt>Range</dt>
+              <dt>{t("Range")}</dt>
               <dd>{Math.round(min)}-{Math.round(max)}%</dd>
             </div>
             <div>
-              <dt>Speed</dt>
+              <dt>{t("Speed")}</dt>
               <dd>{speed}</dd>
             </div>
             <div>
-              <dt>Source</dt>
+              <dt>{t("Source")}</dt>
               <dd title={source}>{source}</dd>
             </div>
           </dl>

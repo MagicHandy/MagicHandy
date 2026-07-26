@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlayIcon, UploadIcon } from "../shell/icons";
 import { ImportTimeline, formatTimelineTime, type TimelinePoint, type TimeWindow } from "./ImportTimeline";
@@ -95,11 +96,10 @@ export function MotionImport({ locked, importing, onImport }: Props) {
   }
 
   return (
-    <section className="library-view import-studio" aria-label="Import motion content">
+    <section className="library-view import-studio" aria-label={t("Import motion content")}>
       <div className="program-toolbar">
         <label className="btn btn-secondary file-button" aria-disabled={locked || importing}>
-          <UploadIcon /> Choose file
-          <input
+          <UploadIcon />{t("Choose file")}<input
             type="file"
             accept=".funscript,.json"
             disabled={locked || importing}
@@ -110,48 +110,48 @@ export function MotionImport({ locked, importing, onImport }: Props) {
             }}
           />
         </label>
-        {funscript && <button type="button" className="btn btn-secondary" disabled={locked || importing} onClick={() => setPreviewOpen(true)}><PlayIcon />Preview with video</button>}
-        <span className="hint-inline">Funscripts (.funscript) and MagicHandy share files (.json).</span>
+        {funscript && <button type="button" className="btn btn-secondary" disabled={locked || importing} onClick={() => setPreviewOpen(true)}><PlayIcon />{t("Preview with video")}</button>}
+        <span className="hint-inline">{t("Funscripts (.funscript) and MagicHandy share files (.json).")}</span>
       </div>
 
       {reading && (
         <div className="empty-state compact-empty" role="status">
-          <h2>Reading file</h2>
-          <p>Checking the selected motion file.</p>
+          <h2>{t("Reading file")}</h2>
+          <p>{t("Checking the selected motion file.")}</p>
         </div>
       )}
 
       {!reading && !parsed && (
         <div className="empty-state compact-empty">
-          <h2>No file selected</h2>
-          <p>Pick a funscript to trim it into a pattern or program, or a MagicHandy share file to import it as-is.</p>
+          <h2>{t("No file selected")}</h2>
+          <p>{t("Pick a funscript to trim it into a pattern or program, or a MagicHandy share file to import it as-is.")}</p>
         </div>
       )}
 
       {parsed?.type === "error" && (
         <div className="empty-state compact-empty" role="alert">
-          <h2>File not usable</h2>
+          <h2>{t("File not usable")}</h2>
           <p>{parsed.message}</p>
         </div>
       )}
 
       {parsed?.type === "share" && (
         <div className="import-card">
-          <h2>MagicHandy share file</h2>
+          <h2>{t("MagicHandy share file")}</h2>
           <p className="pattern-meta">
             <span>{parsed.name || parsed.file.name}</span>
-            <span>Imports as {parsed.kind}</span>
+            <span>{t("Imports as {kind}", { kind: parsed.kind === "program" ? t("program") : t("pattern") })}</span>
           </p>
-          <p className="hint-block narrow">Share files carry their own kind and content; they import without trimming.</p>
+          <p className="hint-block narrow">{t("Share files carry their own kind and content; they import without trimming.")}</p>
           <button type="button" className="btn btn-primary" disabled={locked || importing} onClick={() => void submit()}>
-            {importing ? "Importing" : `Import ${parsed.kind}`}
+            {importing ? t("Importing") : t("Import {kind}", { kind: parsed.kind === "program" ? t("program") : t("pattern") })}
           </button>
         </div>
       )}
 
       {funscript && (
         <div className="import-card">
-          <h2 className="visually-hidden">Trim and import funscript</h2>
+          <h2 className="visually-hidden">{t("Trim and import funscript")}</h2>
           <ImportTimeline
             points={funscript.points}
             duration={funscript.duration}
@@ -163,28 +163,27 @@ export function MotionImport({ locked, importing, onImport }: Props) {
             onViewportChange={setViewport}
           />
           <p className="pattern-meta import-selection-meta">
-            <output className="import-selection-length" aria-label="Current trim selection length">
-              Selection length {formatTimelineTime(trim.end - trim.start)}
+            <output className="import-selection-length" aria-label={t("Current trim selection length")}>{t("Selection length {duration}", { duration: formatTimelineTime(trim.end - trim.start) })}
             </output>
-            <span>{formatTimelineTime(trim.start)}-{formatTimelineTime(trim.end)} of {formatTimelineTime(funscript.duration)}</span>
-            <span>{selection.length} of {funscript.points.length} actions selected</span>
-            {trimmed && <span>trimmed</span>}
+            <span>{t("{start}–{end} of {duration}", { start: formatTimelineTime(trim.start), end: formatTimelineTime(trim.end), duration: formatTimelineTime(funscript.duration) })}</span>
+            <span>{t("{selected} of {total} actions selected", { selected: selection.length, total: funscript.points.length })}</span>
+            {trimmed && <span>{t("trimmed")}</span>}
           </p>
 
           <div className="import-options">
-            <div className="segmented compact-segmented" role="group" aria-label="Import as">
-              <button type="button" aria-pressed={kind === "program"} data-active={kind === "program" || undefined} disabled={locked || importing} onClick={() => setKind("program")}>Program</button>
-              <button type="button" aria-pressed={kind === "pattern"} data-active={kind === "pattern" || undefined} disabled={locked || importing} onClick={() => setKind("pattern")}>Loop pattern</button>
+            <div className="segmented compact-segmented" role="group" aria-label={t("Import as")}>
+              <button type="button" aria-pressed={kind === "program"} data-active={kind === "program" || undefined} disabled={locked || importing} onClick={() => setKind("program")}>{t("Program")}</button>
+              <button type="button" aria-pressed={kind === "pattern"} data-active={kind === "pattern" || undefined} disabled={locked || importing} onClick={() => setKind("pattern")}>{t("Loop pattern")}</button>
             </div>
             <label className="import-name">
-              <span className="field-label">Save as</span>
+              <span className="field-label">{t("Save as")}</span>
               <input type="text" maxLength={MAX_NAME_CHARS} value={name} disabled={locked || importing} onChange={(event) => setName(event.target.value)} />
             </label>
           </div>
           <p className="hint-block narrow">
             {kind === "program"
-              ? "Programs preserve the selected knots and duration, play once, and use a 500 ms minimum playback period."
-              : "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes."}
+              ? t("Programs preserve the selected knots and duration, play once, and use a 500 ms minimum playback period.")
+              : t("Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes.")}
           </p>
 
           {importProblem && <p className="import-problem" role="status">{importProblem}</p>}
@@ -194,7 +193,7 @@ export function MotionImport({ locked, importing, onImport }: Props) {
             disabled={locked || importing || importProblem !== ""}
             onClick={() => void submit()}
           >
-            {importing ? "Importing" : kind === "program" ? "Import as program" : "Import as loop pattern"}
+            {importing ? t("Importing") : kind === "program" ? t("Import as program") : t("Import as loop pattern")}
           </button>
         </div>
       )}

@@ -184,7 +184,7 @@ func TestNoEnabledPatternsExposeDeterministicFallback(t *testing.T) {
 	}
 }
 
-func TestPromptMotionExamplesMatchStrictParserAndVoiceCheckIsLast(t *testing.T) {
+func TestPromptMotionExamplesMatchStrictParserAndOutputGuardIsLast(t *testing.T) {
 	examples := []string{
 		`{"reply":"I hear you."}`,
 		`{"reply":"Keeping it steady.","motion":{"action":"none"}}`,
@@ -199,7 +199,7 @@ func TestPromptMotionExamplesMatchStrictParserAndVoiceCheckIsLast(t *testing.T) 
 	}
 	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	prompt := ComposeSystemWithPatterns(set, []string{"keep replies brief"}, []PatternChoice{{ID: "pulse", Name: "Pulse"}})
-	if !strings.Contains(prompt, finalOutputGuard) || !strings.HasSuffix(prompt, finalVoiceCheck(VoiceUtility)) {
+	if !strings.Contains(prompt, finalVoiceCheck(VoiceUtility)) || !strings.HasSuffix(prompt, finalOutputGuard) {
 		t.Fatalf("terminal output instructions are out of order:\n%s", prompt)
 	}
 	for _, copiedReply := range []string{

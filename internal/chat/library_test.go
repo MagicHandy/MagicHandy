@@ -23,7 +23,8 @@ func TestComposeSystemAlwaysAppendsContract(t *testing.T) {
 	// follow editable text so it cannot become the latest output rule.
 	if strings.Index(composed, "pirate") > strings.Index(composed, "Return exactly one JSON object") ||
 		!strings.Contains(composed, finalOutputGuard) ||
-		!strings.HasSuffix(composed, finalVoiceCheck(VoiceUtility)) {
+		!strings.Contains(composed, finalVoiceCheck(VoiceUtility)) ||
+		!strings.HasSuffix(composed, finalOutputGuard) {
 		t.Fatalf("contract did not follow behavior text:\n%s", composed)
 	}
 }

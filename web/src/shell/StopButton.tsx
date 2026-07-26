@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Emergency Stop. Mounted once, outside routed content (in the nav rail footer),
 // so it is present on every route and reachable by read-only/offline clients.
 // Esc is the documented global shortcut. See docs/ui-design.md (Emergency Stop).
@@ -20,11 +21,11 @@ export function StopButton({ className = "" }: { className?: string }) {
     window.dispatchEvent(new Event("magichandy:emergency-stop"));
     try {
       const result = await api.stopMotion();
-      show(result?.error ?? "Stopped.", result?.error ? "error" : "info");
+      show(result?.error ? translateKnown(result.error) : t("Stopped."), result?.error ? "error" : "info");
     } catch (error) {
       const message = error instanceof ApiError
-        ? error.message
-        : "Stop request failed — check the connection.";
+        ? translateKnown(error.message)
+        : t("Stop request failed; check the connection.");
       show(message, "error");
     } finally {
       refresh();
@@ -58,11 +59,11 @@ export function StopButton({ className = "" }: { className?: string }) {
       className={`stop-button ${className}`.trim()}
       data-emergency-stop
       onClick={() => void stop()}
-      aria-label="Emergency stop all motion"
+      aria-label={t("Emergency stop all motion")}
     >
       <StopIcon />
-      <span>Stop everything</span>
-      <span className="kbd" aria-hidden="true">Esc</span>
+      <span>{t("Stop everything")}</span>
+      <span className="kbd" aria-hidden="true">{t("Esc")}</span>
     </button>
   );
 }

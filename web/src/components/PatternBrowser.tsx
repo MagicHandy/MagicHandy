@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryPattern } from "../api/types";
 import { CheckIcon, CloseIcon, DownloadIcon, PencilIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon, TrashIcon } from "../shell/icons";
@@ -26,16 +27,16 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
   const enabled = patterns.filter((pattern) => pattern.enabled).length;
 
   return (
-    <section className="library-view" aria-label="Pattern catalog">
-      {patterns.length > 0 && <h2 className="visually-hidden">Patterns</h2>}
+    <section className="library-view" aria-label={t("Pattern catalog")}>
+      {patterns.length > 0 && <h2 className="visually-hidden">{t("Patterns")}</h2>}
       <div className="library-toolbar">
         <div className="curation-readout" data-fallback={enabled === 0 || undefined}>
-          <strong>{enabled === 0 ? "Deterministic fallback active" : `${enabled} ${enabled === 1 ? "pattern" : "patterns"} available to chat`}</strong>
-          <span>{patterns.length} total</span>
+          <strong>{enabled === 0 ? t("Deterministic fallback active") : enabled === 1 ? t("1 pattern available to chat") : t("{count} patterns available to chat", { count: enabled })}</strong>
+          <span>{t("{count} total", { count: patterns.length })}</span>
         </div>
         <label className="field compact-field">
-          <span className="visually-hidden">Search patterns</span>
-          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patterns" />
+          <span className="visually-hidden">{t("Search patterns")}</span>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search patterns")} />
         </label>
       </div>
 
@@ -44,28 +45,28 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
           const mutating = busyKeys.has(libraryActionKey.pattern(pattern.id));
           const startingMotion = busyKeys.has(libraryActionKey.motionStart);
           return <article className="pattern-row" key={pattern.id} data-disabled={!pattern.enabled || undefined}>
-            <label className="toggle pattern-enable" title={pattern.enabled ? "Disable pattern" : "Enable pattern"}>
-              <input type="checkbox" checked={pattern.enabled} disabled={locked || mutating} aria-label={`Enable ${pattern.name}`} onChange={(event) => void onPatch(pattern.id, { enabled: event.target.checked })} />
+            <label className="toggle pattern-enable" title={pattern.enabled ? t("Disable pattern") : t("Enable pattern")}>
+              <input type="checkbox" checked={pattern.enabled} disabled={locked || mutating} aria-label={t("Enable {name}", { name: pattern.name })} onChange={(event) => void onPatch(pattern.id, { enabled: event.target.checked })} />
               <span className="track" aria-hidden="true" />
             </label>
-            <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={`${pattern.name} backend-sampled pattern curve`} />
+            <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={t("Backend-sampled curve for {name}", { name: pattern.name })} />
             <div className="pattern-copy">
               <PatternNameEditor pattern={pattern} locked={locked || mutating} onCommit={(name) => onPatch(pattern.id, { name })} />
               {pattern.description && <p>{pattern.description}</p>}
-              <div className="pattern-meta"><span>{(pattern.cycle_ms / 1000).toFixed(1)} s</span><span>{pattern.kind}</span><span>{pattern.points.length} knots</span></div>
+              <div className="pattern-meta"><span>{t("{seconds} s", { seconds: (pattern.cycle_ms / 1000).toFixed(1) })}</span><span>{pattern.kind}</span><span>{t("{count} knots", { count: pattern.points.length })}</span></div>
               {pattern.tags.length > 0 && <div className="tag-list">{pattern.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
             </div>
             <WeightEditor pattern={pattern} locked={locked || mutating} onCommit={(weight) => onPatch(pattern.id, { weight })} />
             <div className="pattern-actions">
-              <button type="button" className="icon-button" title="Audition pattern" aria-label={`Audition ${pattern.name}`} disabled={locked || !pattern.enabled || mutating || startingMotion} onClick={() => void onPlay(pattern.id)}><PlayIcon /></button>
-              <button type="button" className="icon-button" title="Rate up" aria-label={`Rate ${pattern.name} up`} disabled={locked || mutating} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon /></button>
-              <button type="button" className="icon-button" title="Rate down" aria-label={`Rate ${pattern.name} down`} disabled={locked || mutating} onClick={() => void onFeedback(pattern.id, -1)}><ThumbDownIcon /></button>
-              <button type="button" className="icon-button" title="Export pattern" aria-label={`Export ${pattern.name}`} disabled={offline || busyKeys.has(libraryActionKey.exportPattern(pattern.id))} onClick={() => void onExport(pattern.id)}><DownloadIcon /></button>
-              {pattern.origin !== "builtin" && <button type="button" className="icon-button" title="Delete pattern" aria-label={`Delete ${pattern.name}`} disabled={locked || mutating} onClick={() => void onDelete(pattern.id)}><TrashIcon /></button>}
+              <button type="button" className="icon-button" title={t("Audition pattern")} aria-label={t("Audition {name}", { name: pattern.name })} disabled={locked || !pattern.enabled || mutating || startingMotion} onClick={() => void onPlay(pattern.id)}><PlayIcon /></button>
+              <button type="button" className="icon-button" title={t("Rate up")} aria-label={t("Rate {name} up", { name: pattern.name })} disabled={locked || mutating} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon /></button>
+              <button type="button" className="icon-button" title={t("Rate down")} aria-label={t("Rate {name} down", { name: pattern.name })} disabled={locked || mutating} onClick={() => void onFeedback(pattern.id, -1)}><ThumbDownIcon /></button>
+              <button type="button" className="icon-button" title={t("Export pattern")} aria-label={t("Export {name}", { name: pattern.name })} disabled={offline || busyKeys.has(libraryActionKey.exportPattern(pattern.id))} onClick={() => void onExport(pattern.id)}><DownloadIcon /></button>
+              {pattern.origin !== "builtin" && <button type="button" className="icon-button" title={t("Delete pattern")} aria-label={t("Delete {name}", { name: pattern.name })} disabled={locked || mutating} onClick={() => void onDelete(pattern.id)}><TrashIcon /></button>}
             </div>
           </article>;
         })}
-        {filtered.length === 0 && <div className="empty-state compact-empty"><h2>No matching patterns</h2></div>}
+        {filtered.length === 0 && <div className="empty-state compact-empty"><h2>{t("No matching patterns")}</h2></div>}
       </div>
     </section>
   );
@@ -103,7 +104,7 @@ function PatternNameEditor({ pattern, locked, onCommit }: { pattern: LibraryPatt
       <form className="pattern-title-line pattern-rename-form" onSubmit={(event) => { event.preventDefault(); void commit(); }}>
         <input
           type="text"
-          aria-label={`Rename ${pattern.name}`}
+          aria-label={t("Rename {name}", { name: pattern.name })}
           maxLength={80}
           value={draft}
           disabled={locked || committing}
@@ -114,8 +115,8 @@ function PatternNameEditor({ pattern, locked, onCommit }: { pattern: LibraryPatt
             if (event.key === "Escape") { event.preventDefault(); cancel(); }
           }}
         />
-        <button type="submit" className="icon-button pattern-title-action" title="Save name" aria-label={`Save name for ${pattern.name}`} disabled={locked || committing || !draft.trim()}><CheckIcon size={16} /></button>
-        <button type="button" className="icon-button pattern-title-action" title="Cancel rename" aria-label={`Cancel renaming ${pattern.name}`} disabled={committing} onClick={cancel}><CloseIcon size={16} /></button>
+        <button type="submit" className="icon-button pattern-title-action" title={t("Save name")} aria-label={t("Save name for {name}", { name: pattern.name })} disabled={locked || committing || !draft.trim()}><CheckIcon size={16} /></button>
+        <button type="button" className="icon-button pattern-title-action" title={t("Cancel rename")} aria-label={t("Cancel renaming {name}", { name: pattern.name })} disabled={committing} onClick={cancel}><CloseIcon size={16} /></button>
         <span className="origin-label">{pattern.origin}</span>
       </form>
     );
@@ -125,7 +126,7 @@ function PatternNameEditor({ pattern, locked, onCommit }: { pattern: LibraryPatt
     <div className="pattern-title-line">
       <h3>{pattern.name}</h3>
       <span className="origin-label">{pattern.origin}</span>
-      <button type="button" className="icon-button pattern-title-action" title="Rename pattern" aria-label={`Rename ${pattern.name}`} disabled={locked} onClick={() => setEditing(true)}><PencilIcon size={15} /></button>
+      <button type="button" className="icon-button pattern-title-action" title={t("Rename pattern")} aria-label={t("Rename {name}", { name: pattern.name })} disabled={locked} onClick={() => setEditing(true)}><PencilIcon size={15} /></button>
     </div>
   );
 }
@@ -160,7 +161,7 @@ function WeightEditor({ pattern, locked, onCommit }: { pattern: LibraryPattern; 
   }
   return (
     <label className="weight-editor">
-      <span>Weight</span>
+      <span>{t("Weight")}</span>
       <input type="number" min={0.1} max={3} step={0.05} value={value} disabled={locked || committing} onChange={(event) => setValue(event.target.value)} onBlur={() => void commit()} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
     </label>
   );

@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // connection disclosure. Motion controls remain in their routed workspaces.
 import { MotionVisualizer } from "../components/MotionVisualizer";
@@ -46,28 +47,28 @@ export function StatusBar() {
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
 
   return (
-    <div className="status-bar" role="region" aria-label="Status">
+    <div className="status-bar" role="region" aria-label={t("Status")}>
       <span className="status-readout">
         <span className="status-dot" data-state={phaseState} />
-        <span className="status-text">{phaseLabel}</span>
+        <span className="status-text">{translateKnown(phaseLabel)}</span>
       </span>
       <span className="status-divider" aria-hidden="true" />
       <span className="status-readout">
         <span className="status-dot" data-state={coreState} />
-        <span className="status-text">{coreLabel}</span>
+        <span className="status-text">{translateKnown(coreLabel)}</span>
       </span>
       {state && <span
         className="status-readout status-readout-controller"
-        title={readOnly ? "Read-only client" : "This tab is the controller"}
-        aria-label={readOnly ? "Read-only client" : "This tab is the controller"}
+        title={readOnly ? t("Read-only client") : t("This tab is the controller")}
+        aria-label={readOnly ? t("Read-only client") : t("This tab is the controller")}
       >
         <span className="status-dot" data-state={readOnly ? "warn" : "ok"} />
-        <span className="status-text">{readOnly ? "read-only" : "controller: you"}</span>
+        <span className="status-text">{readOnly ? t("read-only") : t("controller: you")}</span>
       </span>}
       {(voiceCrashed || speakNotReady) && (
         <span className="status-readout">
           <span className="status-dot" data-state={voiceCrashed ? "error" : "warn"} />
-          <span className="status-text">{voiceCrashed ? "voice crashed" : "voice not ready"}</span>
+          <span className="status-text">{voiceCrashed ? t("voice crashed") : t("voice not ready")}</span>
         </span>
       )}
       <span className="status-divider" aria-hidden="true" />

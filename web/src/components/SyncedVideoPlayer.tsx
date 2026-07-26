@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { MediaFunscript, MediaSyncEvent, MediaSyncStatus, MediaVideo } from "../api/types";
@@ -663,15 +664,15 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       onPlaybackEvent={video.has_funscript ? handlePlaybackEvent : undefined}
       synchronized={video.has_funscript}
     >
-      {loadingScript && <div className="media-script-loading" role="status">Preparing paired script and video</div>}
-      {!loadingScript && !script && scriptError && <p className="form-status media-playback-error" role="alert">Script unavailable: {scriptError}. Video playback will not command motion.</p>}
+      {loadingScript && <div className="media-script-loading" role="status">{t("Preparing paired script and video")}</div>}
+      {!loadingScript && !script && scriptError && <p className="form-status media-playback-error" role="alert">{t("Script unavailable: {error}. Video playback will not command motion.", { error: scriptError })}</p>}
       {script && (
-        <section className="media-funscript" aria-label="Paired funscript timeline">
+        <section className="media-funscript" aria-label={t("Paired funscript timeline")}>
           <div className="media-funscript-head">
             <div>
-              <strong>Paired funscript</strong>
-              <span>{script.action_count.toLocaleString()} actions / {formatTimelineTime(script.duration_ms)}</span>
-              {durationMismatch && <span className="media-script-length-warning">Length differs from {formatTimelineTime(video.duration_ms ?? 0)} video</span>}
+              <strong>{t("Paired funscript")}</strong>
+              <span>{t("{count} actions / {duration}", { count: script.action_count.toLocaleString(), duration: formatTimelineTime(script.duration_ms) })}</span>
+              {durationMismatch && <span className="media-script-length-warning">{t("Length differs from {duration} video", { duration: formatTimelineTime(video.duration_ms ?? 0) })}</span>}
             </div>
             <button
               type="button"
@@ -679,11 +680,10 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
               onClick={() => setPanelOpen((open) => !open)}
               aria-expanded={panelOpen}
               aria-haspopup="dialog"
-            >
-              Sync {formatMillis(effectiveOffset)}
+            >{t("Sync {offset}", { offset: formatMillis(effectiveOffset) })}
             </button>
             <button type="button" className="btn btn-secondary compact-command media-timeline-toggle" onClick={toggleTimeline} aria-expanded={!timelineHidden}>
-              <ChevronUpIcon />{timelineHidden ? "Show timeline" : "Hide timeline"}
+              <ChevronUpIcon />{timelineHidden ? t("Show timeline") : t("Hide timeline")}
             </button>
           </div>
           <FunscriptTimeline script={script} currentTime={currentTime} hidden={timelineHidden} onSeek={seek} />
@@ -694,9 +694,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
             role="status"
             aria-busy={syncOperation ? true : undefined}
           >
-            <span className="media-sync-state"><span aria-hidden="true" />{statusLabel}</span>
-            {sync.active && typeof sync.motion_speed_limit_percent === "number" && <span>{sync.motion_speed_limit_percent}% speed limit</span>}
-            {sync.active && typeof sync.drift_ms === "number" && <span aria-hidden="true">{Math.abs(sync.drift_ms)} ms drift</span>}
+            <span className="media-sync-state"><span aria-hidden="true" />{translateKnown(statusLabel)}</span>
+            {sync.active && typeof sync.motion_speed_limit_percent === "number" && <span>{t("{percent}% speed limit", { percent: sync.motion_speed_limit_percent })}</span>}
+            {sync.active && typeof sync.drift_ms === "number" && <span aria-hidden="true">{t("{milliseconds} ms drift", { milliseconds: Math.abs(sync.drift_ms) })}</span>}
             <span className="media-sync-time">{formatTimelineTime(currentTime)}</span>
           </div>
           {syncError && <p className="form-status media-playback-error" role="alert">{syncError}</p>}

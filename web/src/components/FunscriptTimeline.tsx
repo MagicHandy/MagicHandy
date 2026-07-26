@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { MediaFunscript, MediaFunscriptAction } from "../api/types";
 import { formatTimelineTime } from "./ImportTimeline";
@@ -143,7 +144,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
 
   if (hidden) {
     return (
-      <div className="media-timeline-collapsed" aria-label={`Funscript progress ${formatTimelineTime(currentTime)} of ${formatTimelineTime(duration)}`}>
+      <div className="media-timeline-collapsed" aria-label={t("Funscript progress {current} of {duration}", { current: formatTimelineTime(currentTime), duration: formatTimelineTime(duration) })}>
         <span style={{ width: `${progress * 100}%` }} />
       </div>
     );
@@ -154,12 +155,12 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
       className="media-timeline-frame"
       role="slider"
       tabIndex={0}
-      aria-label={`Funscript timeline, ${script.action_count.toLocaleString()} actions`}
+      aria-label={t("Funscript timeline, {count} actions", { count: script.action_count.toLocaleString() })}
       aria-valuemin={0}
       aria-valuemax={duration}
       aria-valuenow={Math.round(displayedTime)}
-      aria-valuetext={`${formatTimelineTime(displayedTime)} of ${formatTimelineTime(duration)}`}
-      title="Click or drag to seek; arrow keys move five seconds"
+      aria-valuetext={t("{current} of {duration}", { current: formatTimelineTime(displayedTime), duration: formatTimelineTime(duration) })}
+      title={t("Click or drag to seek; arrow keys move five seconds")}
       onPointerDown={startSeek}
       onPointerMove={moveSeek}
       onPointerUp={finishSeek}

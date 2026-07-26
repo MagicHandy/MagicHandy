@@ -17,6 +17,9 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.Server.Port != DefaultServerPort {
 		t.Fatalf("server port = %d, want %d", settings.Server.Port, DefaultServerPort)
 	}
+	if settings.UI.Locale != LocaleEnglish {
+		t.Fatalf("UI locale = %q, want %q", settings.UI.Locale, LocaleEnglish)
+	}
 	if settings.Device.HSPDispatchOwner != DispatchOwnerCloudREST {
 		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST)
 	}
@@ -49,6 +52,61 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	}
 }
 
+func TestUILocaleDefaultsPublishesAndValidatesSupportedLocales(t *testing.T) {
+	settings := DefaultSettings()
+	settings.UI.Locale = ""
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings empty locale: %v", err)
+	}
+	if normalized.UI.Locale != LocaleEnglish {
+		t.Fatalf("normalized locale = %q, want %q", normalized.UI.Locale, LocaleEnglish)
+	}
+	public := normalized.Public()
+	want := []string{LocaleEnglish, LocaleSpanish, LocalePortugueseBrazil, LocaleSimplifiedChinese, LocaleJapanese}
+	if len(public.Options.Locales) != len(want) {
+		t.Fatalf("locale options = %v, want %v", public.Options.Locales, want)
+	}
+	for index, locale := range want {
+		if public.Options.Locales[index] != locale {
+			t.Fatalf("locale option %d = %q, want %q", index, public.Options.Locales[index], locale)
+		}
+	}
+
+	settings = DefaultSettings()
+	settings.UI.Locale = "fr"
+	if _, err := NormalizeSettings(settings); err == nil || !strings.Contains(err.Error(), "unknown UI locale") {
+		t.Fatalf("invalid locale error = %v", err)
+	}
+}
+
+func TestPromptSetForLocaleCoversSupportedLocales(t *testing.T) {
+	tests := []struct {
+		locale string
+		prompt string
+	}{
+		{LocaleEnglish, PromptSetMagicHandyMotionV1},
+		{LocaleSpanish, PromptSetMagicHandyMotionV1ES},
+		{LocalePortugueseBrazil, PromptSetMagicHandyMotionV1PTBR},
+		{LocaleSimplifiedChinese, PromptSetMagicHandyMotionV1ZHHans},
+		{LocaleJapanese, PromptSetMagicHandyMotionV1JA},
+	}
+	for _, test := range tests {
+		prompt, ok := PromptSetForLocale(test.locale)
+		if !ok || prompt != test.prompt {
+			t.Errorf("PromptSetForLocale(%q) = %q, %t; want %q, true", test.locale, prompt, ok, test.prompt)
+		}
+		if !IsSupportedLocale(test.locale) {
+			t.Errorf("IsSupportedLocale(%q) = false", test.locale)
+		}
+	}
+	if prompt, ok := PromptSetForLocale("fr"); ok || prompt != "" {
+		t.Fatalf("PromptSetForLocale(fr) = %q, %t; want empty, false", prompt, ok)
+	}
+	if IsSupportedLocale("fr") {
+		t.Fatal("IsSupportedLocale(fr) = true")
+	}
+}
 func TestBundledAPIApplicationIDUsesPublicV3ID(t *testing.T) {
 	if BundledAPIApplicationID != "rQoTWeMPrklUYcfdSXYYhS_9z.jAVNwy" {
 		t.Fatalf("bundled API application ID = %q, want public Handy API v3 ID", BundledAPIApplicationID)
@@ -98,6 +156,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49720
+	settings.UI.Locale = LocaleJapanese
 	settings.Device.HSPDispatchOwner = DispatchOwnerIntiface
 	settings.Device.IntifaceServerAddress = "wss://intiface.example.test/socket"
 	settings.Device.APIApplicationIDSource = ApplicationIDSourceDeveloperOverride
@@ -123,6 +182,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if got.Server.Port != 49720 {
 		t.Fatalf("server port = %d, want 49720", got.Server.Port)
+	}
+	if got.UI.Locale != LocaleJapanese {
+		t.Fatalf("UI locale = %q, want %q", got.UI.Locale, LocaleJapanese)
 	}
 	if got.Device.HandyConnectionKey != "secret" {
 		t.Fatal("connection key did not persist")

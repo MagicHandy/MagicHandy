@@ -1,3 +1,4 @@
+import { t, translateKnown, type MessageKey } from "../i18n";
 // Live status and controls for one optional voice worker (ADR 0003). The
 // settings parent owns the shared status poll so ASR, TTS, and their request
 // queue render one coherent backend snapshot.
@@ -7,15 +8,15 @@ import type { VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from 
 import { useToast } from "../state/app-state";
 import { useVoicePlayback } from "../state/voice-playback";
 
-const message = (error: unknown) => error instanceof Error ? error.message : "Request failed";
+const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Request failed");
 
-const STATE_LABEL: Record<string, string> = {
-  disabled: "disabled",
-  not_configured: "not configured",
-  stopped: "stopped",
-  starting: "starting...",
-  running: "running",
-  crashed: "crashed",
+const STATE_LABEL: Partial<Record<string, MessageKey>> = {
+  disabled: "Disabled",
+  not_configured: "Not configured",
+  stopped: "Stopped",
+  starting: "Starting...",
+  running: "Running",
+  crashed: "Crashed",
 };
 
 function dotState(state: string): string {
@@ -33,7 +34,7 @@ function dotState(state: string): string {
   }
 }
 
-const ROLE_LABEL: Record<string, string> = {
+const ROLE_LABEL: Partial<Record<string, MessageKey>> = {
   tts: "Speech output (TTS)",
   asr: "Speech input (ASR)",
 };
@@ -71,12 +72,12 @@ export function VoiceWorkers({
   const { queueSpeech } = useVoicePlayback();
   const [busyRole, setBusyRole] = useState<string | null>(null);
 
-  async function run(role: "tts" | "asr", action: () => Promise<unknown>, doing: string) {
+  async function run(role: "tts" | "asr", action: () => Promise<unknown>, doing: MessageKey) {
     setBusyRole(role);
     try {
       await action();
     } catch (error) {
-      show(`${doing} failed: ${message(error)}`, "error");
+      show(t("{action} failed: {message}", { action: translateKnown(doing), message: message(error) }), "error");
     } finally {
       setBusyRole(null);
       void refresh();
@@ -86,10 +87,10 @@ export function VoiceWorkers({
   async function sendTest(role: "tts" | "asr") {
     setBusyRole(role);
     try {
-      const result = await api.voiceWorkerTest(role, { text: "MagicHandy voice test", delay_ms: 0 });
+      const result = await api.voiceWorkerTest(role, { text: t("MagicHandy voice test"), delay_ms: 0 });
       if (role === "tts" && result.request?.id) queueSpeech(result.request.id);
     } catch (error) {
-      show(`Test request failed: ${message(error)}`, "error");
+      show(t("Test request failed: {message}", { message: message(error) }), "error");
     } finally {
       setBusyRole(null);
       void refresh();
@@ -105,15 +106,15 @@ export function VoiceWorkers({
   return (
     <div className="voice-workers">
       {showParakeetModule && (
-        <div className="voice-module-readout" role="status" aria-label="MagicHandy Parakeet module">
+        <div className="voice-module-readout" role="status" aria-label={t("MagicHandy Parakeet module")}>
           <span className="status-dot" data-state={parakeetModule?.installed ? "ok" : parakeetModule?.state === "incomplete" ? "warn" : "idle"} />
-          <span>{parakeetModule?.message || "Checking the MagicHandy Parakeet module."}</span>
+          <span>{parakeetModule?.message ? translateKnown(parakeetModule.message) : t("Checking the MagicHandy Parakeet module.")}</span>
         </div>
       )}
       {showNeuTTSModule && (
-        <div className="voice-module-readout" role="status" aria-label="NeuTTS module">
+        <div className="voice-module-readout" role="status" aria-label={t("NeuTTS module")}>
           <span className="status-dot" data-state={visibleModule?.installed ? "ok" : visibleModule?.state === "incomplete" ? "warn" : "idle"} />
-          <span>{visibleModule?.message || `Checking the ${visibleModuleName} module.`}</span>
+          <span>{visibleModule?.message ? translateKnown(visibleModule.message) : t("Checking the {module} module.", { module: visibleModuleName })}</span>
         </div>
       )}
       {roles.map((role) => {
@@ -129,44 +130,47 @@ export function VoiceWorkers({
         return (
           <div key={role} className="voice-worker-row">
             <div className="voice-worker-head">
-              <span className="voice-worker-name">{selectedRole ? "Worker" : ROLE_LABEL[role]}</span>
+              <span className="voice-worker-name">{selectedRole ? t("Worker") : translateKnown(ROLE_LABEL[role] ?? role)}</span>
               <span className="status-readout">
                 <span className="status-dot" data-state={dotState(state)} />
-                <span className="status-text">{STATE_LABEL[state] ?? state}</span>
+                <span className="status-text">{translateKnown(STATE_LABEL[state] ?? state)}</span>
               </span>
               {worker?.provider && state === "running" && (
                 <span className="hint-inline">
-                  {worker.provider} v{worker.provider_version} / protocol v{worker.protocol_version} / model {worker.model_state ?? "unknown"} / queue {worker.queue_depth}
+                  {t("{provider} v{providerVersion} / protocol v{protocolVersion} / model {modelState} / queue {queueDepth}", { provider: worker.provider, providerVersion: worker.provider_version ?? "unknown", protocolVersion: worker.protocol_version ?? "unknown", modelState: worker.model_state ?? "unknown", queueDepth: worker.queue_depth ?? 0 })}
                 </span>
               )}
             </div>
             {state === "not_configured" && (
-              <p className="form-status">{(showParakeetModule || showNeuTTSModule) ? "The selected module is not ready; follow the module status above before starting it." : "The selected worker is not configured. Check its provider fields or installation, then save."}</p>
+              <p className="form-status">{(showParakeetModule || showNeuTTSModule) ? t("The selected module is not ready; follow the module status above before starting it.") : t("The selected worker is not configured. Check its provider fields or installation, then save.")}</p>
             )}
             {state === "disabled" && providerSelected && (
-              <p className="form-status">{enabled ? "Save these voice settings; Start will appear here once the worker is configured." : "Enable voice workers and save; Start will appear here when the worker is ready."}</p>
+              <p className="form-status">{enabled ? t("Save these voice settings; Start will appear here once the worker is configured.") : t("Enable voice workers and save; Start will appear here when the worker is ready.")}</p>
             )}
             {worker?.last_error && state !== "running" && (
               <p className="form-status voice-worker-error">{worker.last_error}</p>
             )}
             {lastResult && (
               <p className="form-status voice-last-result">
-                {`Last request ${lastResult.state}`}
-                {lastResult.state === "done" && lastResult.transcript?.[0]?.text ? ` - "${lastResult.transcript[0].text}"` : ""}
-                {lastResult.state === "done" && (lastResult.audio_bytes ?? 0) > 0 ? ` - ${lastResult.audio_bytes} bytes of audio` : ""}
-                {lastResult.state === "failed" && lastResult.error ? ` - ${lastResult.error.code}: ${lastResult.error.message}` : ""}
+                {lastResult.state === "done" && lastResult.transcript?.[0]?.text
+                  ? t("Last request completed: \"{text}\"", { text: lastResult.transcript[0].text })
+                  : lastResult.state === "done" && (lastResult.audio_bytes ?? 0) > 0
+                    ? t("Last request completed with {bytes} bytes of audio.", { bytes: lastResult.audio_bytes ?? 0 })
+                    : lastResult.state === "failed" && lastResult.error
+                      ? t("Last request failed ({code}): {message}", { code: lastResult.error.code, message: lastResult.error.message })
+                      : t("Last request: {state}", { state: lastResult.state })}
               </p>
             )}
             {state !== "disabled" && state !== "not_configured" && dirty && (
-              <p className="form-status">Save settings to apply the selection above before controlling this worker.</p>
+              <p className="form-status">{t("Save settings to apply the selection above before controlling this worker.")}</p>
             )}
             {state !== "disabled" && state !== "not_configured" && (
               <div className="row-actions">
-                {state === "stopped" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStart(role), "Start")}>Start</button>}
-                {state === "crashed" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerRestart(role), "Restart")}>Restart</button>}
-                {(isRunning || isStarting) && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStop(role), "Stop")}>Stop</button>}
-                {isRunning && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerModel(role, !modelLoaded), modelLoaded ? "Unload model" : "Load model")}>{modelLoaded ? "Unload model" : "Load model"}</button>}
-                {isRunning && modelLoaded && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void sendTest(role)}>Send test</button>}
+                {state === "stopped" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStart(role), "Start")}>{t("Start")}</button>}
+                {state === "crashed" && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerRestart(role), "Restart")}>{t("Restart")}</button>}
+                {(isRunning || isStarting) && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerStop(role), "Stop")}>{t("Stop")}</button>}
+                {isRunning && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void run(role, () => api.voiceWorkerModel(role, !modelLoaded), modelLoaded ? "Unload model" : "Load model")}>{modelLoaded ? t("Unload model") : t("Load model")}</button>}
+                {isRunning && modelLoaded && <button type="button" className="btn btn-secondary" disabled={!canControl} onClick={() => void sendTest(role)}>{t("Send test")}</button>}
               </div>
             )}
           </div>

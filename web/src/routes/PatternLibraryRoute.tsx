@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { api } from "../api/client";
 import type { LibraryPattern, PatternInput, PatternLibrary, PatternPreview } from "../api/types";
@@ -106,7 +107,7 @@ export function PatternLibraryRoute() {
       const response = await api.createPattern(input);
       setLibrary((current) => ({ ...current, patterns: [...current.patterns, response.pattern] }));
       setView("browse");
-      show(`${response.pattern.name} saved.`);
+      show(t("{name} saved.", { name: response.pattern.name }));
     });
   }
 
@@ -115,14 +116,14 @@ export function PatternLibraryRoute() {
   }
 
   function showPreviewError(error: unknown) {
-    show(error instanceof Error ? error.message : "Pattern preview failed.", "error");
+    show(error instanceof Error ? translateKnown(error.message) : t("Pattern preview failed."), "error");
   }
 
   async function importFile(file: File, asKind: "pattern" | "program"): Promise<boolean> {
     return withBusy(libraryActionKey.import, async () => {
       const response = await api.importMotionContent(file, asKind);
       const imported = response?.import;
-      if (!imported?.pattern && !imported?.program) throw new Error("The import response did not contain motion content.");
+      if (!imported?.pattern && !imported?.program) throw new Error(t("The import response did not contain motion content."));
       const importedPattern = imported.pattern;
       const importedProgram = imported.program;
       setLibrary((current) => ({
@@ -134,15 +135,16 @@ export function PatternLibraryRoute() {
           ? [...current.programs.filter((item) => item.id !== importedProgram.id), importedProgram]
           : current.programs,
       }));
-      const stripped = imported.gaps_stripped > 0 ? ` ${imported.gaps_stripped} long gaps removed.` : "";
-      show(`${file.name} imported.${stripped}`);
+      show(imported.gaps_stripped > 0
+        ? t("{name} imported. Long gaps removed: {count}.", { name: file.name, count: imported.gaps_stripped })
+        : t("{name} imported.", { name: file.name }));
       setView(importedPattern ? "browse" : "programs");
     });
   }
 
   async function removePattern(id: string) {
     const pattern = library.patterns.find((item) => item.id === id);
-    if (!pattern || !window.confirm(`Delete ${pattern.name}?`)) return;
+    if (!pattern || !window.confirm(t("Delete {name}?", { name: pattern.name }))) return;
     await withBusy(libraryActionKey.pattern(id), async () => {
       await api.deletePattern(id);
       setLibrary((current) => ({ ...current, patterns: current.patterns.filter((item) => item.id !== id) }));
@@ -151,7 +153,7 @@ export function PatternLibraryRoute() {
 
   async function removeProgram(id: string) {
     const program = library.programs.find((item) => item.id === id);
-    if (!program || !window.confirm(`Delete ${program.name}?`)) return;
+    if (!program || !window.confirm(t("Delete {name}?", { name: program.name }))) return;
     await withBusy(libraryActionKey.program(id), async () => {
       await api.deleteProgram(id);
       setLibrary((current) => ({ ...current, programs: current.programs.filter((item) => item.id !== id) }));
@@ -209,7 +211,7 @@ export function PatternLibraryRoute() {
       await action();
       return true;
     } catch (error) {
-      show(error instanceof Error ? error.message : "Pattern library action failed.", "error");
+      show(error instanceof Error ? translateKnown(error.message) : t("Pattern library action failed."), "error");
       return false;
     } finally {
       inFlightActions.current.delete(key);
@@ -233,9 +235,9 @@ export function PatternLibraryRoute() {
 
   return (
     <>
-      <WorkspaceHead title="Pattern library" />
+      <WorkspaceHead title={t("Pattern library")} />
       <section className="panel library-shell" data-requires-backend aria-busy={loading || undefined}>
-        <nav className="library-tabs" aria-label="Pattern library views" role="tablist">
+        <nav className="library-tabs" aria-label={t("Pattern library views")} role="tablist">
           {views.map((tab) => (
             <button
               type="button"
@@ -250,18 +252,18 @@ export function PatternLibraryRoute() {
               onClick={() => setView(tab)}
               onKeyDown={(event) => selectAdjacentTab(event, tab)}
             >
-              {tab === "author" ? "Author" : tab[0].toUpperCase() + tab.slice(1)}
+              {tab === "author" ? t("Author") : tab[0].toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </nav>
 
         {loading ? (
-          <div className="empty-state compact-empty" role="status"><h2>Loading library</h2></div>
+          <div className="empty-state compact-empty" role="status"><h2>{t("Loading library")}</h2></div>
         ) : loadError ? (
           <div className="empty-state compact-empty" role="alert">
-            <h2>Library unavailable</h2>
+            <h2>{t("Library unavailable")}</h2>
             <p>{loadError}</p>
-            <button type="button" className="btn btn-secondary" onClick={() => void load()}>Retry</button>
+            <button type="button" className="btn btn-secondary" onClick={() => void load()}>{t("Retry")}</button>
           </div>
         ) : (
           <>

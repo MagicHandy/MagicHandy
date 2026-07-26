@@ -86,8 +86,8 @@ func TestNonUtilityVoiceComposesBoundedQuotedProfileMoodAndRecentLines(t *testin
 			t.Fatalf("mood contract missing %q", mood)
 		}
 	}
-	if !strings.Contains(system, finalOutputGuardWithMood) || !strings.HasSuffix(system, finalVoiceCheck(VoiceExplicit)) {
-		t.Fatal("mood-aware format guard must immediately precede the terminal voice check")
+	if !strings.Contains(system, finalVoiceCheck(VoiceExplicit)) || !strings.HasSuffix(system, finalOutputGuardWithMood) {
+		t.Fatal("mood-aware format guard must be the terminal prompt instruction")
 	}
 }
 
@@ -197,11 +197,11 @@ func TestVoiceLevelsComposeIdentityAndTerminalRegisterSections(t *testing.T) {
 			}
 		}
 		// Voice changes register only: the machine contract and format guard
-		// survive at every level, with the voice check intentionally last.
+		// survive at every level, with the machine-readable output guard intentionally last.
 		if !strings.Contains(system, `"action":"start"`) {
 			t.Fatalf("%s prompt lost the motion contract", testCase.voice)
 		}
-		if !strings.Contains(system, finalOutputGuard) || !strings.HasSuffix(system, finalVoiceCheck(testCase.voice)) {
+		if !strings.Contains(system, finalVoiceCheck(testCase.voice)) || !strings.HasSuffix(system, finalOutputGuard) {
 			t.Fatalf("%s prompt displaced the terminal output instructions", testCase.voice)
 		}
 	}

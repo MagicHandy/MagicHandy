@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:InstallStateSchema = 1
+$script:InstallStateSchema = 2
 $script:MinimumGoVersion = [Version]'1.25.0'
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
@@ -33,6 +33,153 @@ $script:NeuTTSEncoderModelSHA256 = '04af54f6af51a7573a8bbcfd691b4f2c68b6dbd03aef
 $script:NeuTTSEncoderWeightsURL = "https://huggingface.co/KevinAHM/distill-neucodec-onnx/resolve/$($script:NeuTTSEncoderRevision)/onnx/distill_neucodec_encoder.onnx.data?download=true"
 $script:NeuTTSEncoderWeightsSHA256 = '935859ed7904671dc82da1c533b9bf2fd8bcf6d8fc702bdba5bc25c8f7329e4f'
 
+$script:SupportedLocales = @('en', 'es', 'pt-BR', 'zh-Hans', 'ja')
+$script:InstallerLocale = 'en'
+$script:InstallerCatalogs = @{}
+
+function Import-MagicHandyInstallerCatalog {
+    param([Parameter(Mandatory = $true)][string]$Locale)
+
+    if ($script:InstallerCatalogs.ContainsKey($Locale)) {
+        return $script:InstallerCatalogs[$Locale]
+    }
+    if ($Locale -notin $script:SupportedLocales) {
+        throw "Unsupported installer locale '$Locale'."
+    }
+    $path = Join-Path $PSScriptRoot "locales\$Locale.json"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Installer language catalog not found at '$path'."
+    }
+    try {
+        $json = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+        $catalog = $json | ConvertFrom-Json
+    } catch {
+        throw "Installer language catalog '$path' is invalid: $_"
+    }
+    if ($catalog -isnot [System.Management.Automation.PSCustomObject]) {
+        throw "Installer language catalog '$path' must contain a JSON object."
+    }
+    $script:InstallerCatalogs[$Locale] = $catalog
+    return $catalog
+}
+
+function Assert-MagicHandyInstallerCatalogs {
+    $english = Import-MagicHandyInstallerCatalog -Locale 'en'
+    $englishKeys = @($english.PSObject.Properties.Name | Sort-Object)
+    foreach ($locale in $script:SupportedLocales) {
+        $catalog = Import-MagicHandyInstallerCatalog -Locale $locale
+        $keys = @($catalog.PSObject.Properties.Name | Sort-Object)
+        if (($keys -join "`n") -ne ($englishKeys -join "`n")) {
+            throw "Installer language catalog '$locale' does not match the English key set."
+        }
+        foreach ($key in $englishKeys) {
+            $expected = @([regex]::Matches([string]$english.$key, '\{\d+\}') | ForEach-Object Value | Sort-Object -Unique)
+            $actual = @([regex]::Matches([string]$catalog.$key, '\{\d+\}') | ForEach-Object Value | Sort-Object -Unique)
+            if (($actual -join ',') -ne ($expected -join ',')) {
+                throw "Installer language catalog '$locale' has mismatched placeholders for '$key'."
+            }
+        }
+    }
+}
+
+function Get-MagicHandySupportedLocales {
+    return @($script:SupportedLocales)
+}
+
+function Set-MagicHandyInstallerLocale {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$Locale)
+
+    $script:InstallerLocale = $Locale
+}
+
+function Get-MagicHandyInstallerLocale {
+    return $script:InstallerLocale
+}
+
+function Get-MagicHandyText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Key,
+        [object[]]$Values = @()
+    )
+
+    $catalog = Import-MagicHandyInstallerCatalog -Locale $script:InstallerLocale
+    $property = $catalog.PSObject.Properties[$Key]
+    if ($null -eq $property) {
+        throw "Unknown installer message key '$Key'."
+    }
+    $message = [string]$property.Value
+    if ($Values.Count -eq 0) {
+        return $message
+    }
+    return [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, $message, $Values)
+}
+
+function Get-MagicHandyLanguageName {
+    param([Parameter(Mandatory = $true)][string]$Locale)
+
+    $catalog = Import-MagicHandyInstallerCatalog -Locale $Locale
+    return [string]$catalog.language_name
+}
+
+function ConvertTo-MagicHandyLocale {
+    param([AllowEmptyString()][string]$Value)
+
+    $normalized = $Value.Trim()
+    foreach ($locale in $script:SupportedLocales) {
+        if ([string]::Equals($normalized, (Get-MagicHandyLanguageName -Locale $locale), [StringComparison]::OrdinalIgnoreCase)) {
+            return $locale
+        }
+    }
+    switch ($normalized.ToLowerInvariant()) {
+        '1' { return 'en' }
+        'en' { return 'en' }
+        'english' { return 'en' }
+        '2' { return 'es' }
+        'es' { return 'es' }
+        'spanish' { return 'es' }
+        '3' { return 'pt-BR' }
+        'pt' { return 'pt-BR' }
+        'pt-br' { return 'pt-BR' }
+        'portuguese' { return 'pt-BR' }
+        '4' { return 'zh-Hans' }
+        'zh' { return 'zh-Hans' }
+        'zh-hans' { return 'zh-Hans' }
+        'chinese' { return 'zh-Hans' }
+        '5' { return 'ja' }
+        'ja' { return 'ja' }
+        'jp' { return 'ja' }
+        'japanese' { return 'ja' }
+        default { return $null }
+    }
+}
+
+function Read-MagicHandyLanguage {
+    [CmdletBinding()]
+    param(
+        [string]$QuestionKey = 'language_selector',
+        [ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$Default = 'en'
+    )
+
+    Write-Host ''
+    Write-Host (Get-MagicHandyText -Key $QuestionKey) -ForegroundColor Cyan
+    for ($index = 0; $index -lt $script:SupportedLocales.Count; $index++) {
+        $locale = $script:SupportedLocales[$index]
+        Write-Host ("  {0}. {1} [{2}]" -f ($index + 1), (Get-MagicHandyLanguageName -Locale $locale), $locale)
+    }
+    while ($true) {
+        $answer = Read-MagicHandyValue -Question (Get-MagicHandyText -Key 'language_prompt') -Default $Default
+        $locale = ConvertTo-MagicHandyLocale -Value $answer
+        if ($null -ne $locale) {
+            return $locale
+        }
+        Write-Warning (Get-MagicHandyText -Key 'language_invalid')
+    }
+}
+
+Assert-MagicHandyInstallerCatalogs
+
 function Write-InstallerHeading([string]$Text) {
     Write-Host ''
     Write-Host $Text -ForegroundColor Cyan
@@ -43,17 +190,18 @@ function Write-MagicHandyBanner {
     [CmdletBinding()]
     param([ValidateSet('Install', 'Update')][string]$Operation)
 
-    $art = @'
-  __  __             _      _   _                 _
- |  \/  | __ _  __ _(_) ___| | | | __ _ _ __   __| |_   _
- | |\/| |/ _` |/ _` | |/ __| |_| |/ _` | '_ \ / _` | | | |
- | |  | | (_| | (_| | | (__|  _  | (_| | | | | (_| | |_| |
- |_|  |_|\__,_|\__, |_|\___|_| |_|\__,_|_| |_|\__,_|\__, |
-               |___/                                 |___/
-'@
+    $art = @(
+        '  __  __             _      _   _                 _',
+        ' |  \/  | __ _  __ _(_) ___| | | | __ _ _ __   __| |_   _',
+        ' | |\/| |/ _` |/ _` | |/ __| |_| |/ _` | ''_ \ / _` | | | |',
+        ' | |  | | (_| | (_| | | (__|  _  | (_| | | | | (_| | |_| |',
+        ' |_|  |_|\__,_|\__, |_|\___|_| |_|\__,_|_| |_|\__,_|\__, |',
+        '               |___/                                 |___/'
+    ) -join "`n"
+    $operationKey = if ($Operation -eq 'Install') { 'operation_install' } else { 'operation_update' }
     Write-Host $art -ForegroundColor Cyan
-    Write-Host ("  {0} - local-first AI control for The Handy" -f $Operation.ToUpperInvariant()) -ForegroundColor White
-    Write-Host '  Adults only. Keep Emergency Stop within reach.' -ForegroundColor DarkGray
+    Write-Host ('  ' + (Get-MagicHandyText -Key 'banner_tagline' -Values @((Get-MagicHandyText -Key $operationKey)))) -ForegroundColor White
+    Write-Host ('  ' + (Get-MagicHandyText -Key 'banner_safety')) -ForegroundColor DarkGray
     Write-Host ''
 }
 
@@ -61,18 +209,22 @@ function Write-MagicHandyCompletionArt {
     [CmdletBinding()]
     param([ValidateSet('Install', 'Update', 'InstallPlan', 'UpdatePlan')][string]$Operation)
 
-    $title = switch ($Operation) {
-        'Install' { 'INSTALL COMPLETE' }
-        'Update' { 'UPDATE COMPLETE' }
-        'InstallPlan' { 'INSTALL PLAN READY' }
-        'UpdatePlan' { 'UPDATE PLAN READY' }
+    $titleKey = switch ($Operation) {
+        'Install' { 'completion_install_title' }
+        'Update' { 'completion_update_title' }
+        'InstallPlan' { 'completion_install_plan_title' }
+        'UpdatePlan' { 'completion_update_plan_title' }
     }
-    $status = if ($Operation -like '*Plan') { 'NO CHANGES MADE' } else { 'APP BUILD VERIFIED - CONFIGURATION REQUIRED' }
-    $detail = switch ($Operation) {
-        'Install' { 'Open Settings to select a model, voice provider, and device transport. Managed NeuTTS can create reference codes locally from a WAV and exact transcript.' }
-        'Update' { 'Congratulations. Saved installation choices were reapplied to the current build.' }
-        default { 'Review the plan above, then rerun without -PlanOnly when ready.' }
+    $statusKey = if ($Operation -like '*Plan') { 'completion_plan_status' } else { 'completion_build_status' }
+    $detailKey = switch ($Operation) {
+        'Install' { 'completion_install_detail' }
+        'Update' { 'completion_update_detail' }
+        default { 'completion_plan_detail' }
     }
+    $title = Get-MagicHandyText -Key $titleKey
+    $status = Get-MagicHandyText -Key $statusKey
+    $detail = Get-MagicHandyText -Key $detailKey
+    $stop = Get-MagicHandyText -Key 'completion_stop'
     $art = @"
   +----------------------------------------------------------+
   |  MAGIC HANDY  $($title.PadRight(43))|
@@ -80,7 +232,7 @@ function Write-MagicHandyCompletionArt {
              ||==============================[]
              ||  $status
   $detail
-  Emergency Stop is always on-screen and available with Esc.
+  $stop
 "@
     Write-Host ''
     Write-Host $art -ForegroundColor Green
@@ -98,12 +250,15 @@ function Confirm-MagicHandyChoice {
     if ($AssumeYes) {
         return $true
     }
-    $hint = if ($Default) { 'Y/n' } else { 'y/N' }
-    $answer = Read-Host "$Question [$hint]"
+    $hintKey = if ($Default) { 'choice_hint_yes' } else { 'choice_hint_no' }
+    $answer = Read-Host "$Question [$(Get-MagicHandyText -Key $hintKey)]"
     if ([string]::IsNullOrWhiteSpace($answer)) {
         return $Default
     }
-    return $answer -match '^(?i:y|yes)$'
+    $answer = $answer.Trim()
+    $localizedYes = Get-MagicHandyText -Key 'choice_yes'
+    return $answer -ieq 'y' -or $answer -ieq 'yes' -or $answer -ieq $localizedYes -or
+        ($localizedYes.Length -gt 0 -and $answer -ieq $localizedYes.Substring(0, 1))
 }
 
 function Read-MagicHandyValue {
@@ -131,7 +286,8 @@ function Read-MagicHandyOptionalValue {
     )
 
     $display = if ([string]::IsNullOrWhiteSpace($Default)) { '' } else { " [$Default]" }
-    $answer = Read-Host "$Question$display (enter - to clear)"
+    $clear = Get-MagicHandyText -Key 'optional_clear'
+    $answer = Read-Host "$Question$display ($clear)"
     if ([string]::IsNullOrWhiteSpace($answer)) {
         return $Default
     }
@@ -149,12 +305,12 @@ function Read-MagicHandyBackend {
     )
 
     while ($true) {
-        $answer = Read-MagicHandyValue -Question 'Managed llama.cpp backend (cpu or cuda)' -Default $Default
+        $answer = Read-MagicHandyValue -Question (Get-MagicHandyText -Key 'backend_question') -Default $Default
         $answer = $answer.ToLowerInvariant()
         if ($answer -in @('cpu', 'cuda')) {
             return $answer
         }
-        Write-Warning 'Enter cpu or cuda.'
+        Write-Warning (Get-MagicHandyText -Key 'backend_invalid')
     }
 }
 
@@ -284,6 +440,19 @@ function Assert-MagicHandyChildPath {
     }
 }
 
+function Convert-MagicHandyInstallState {
+    param([Parameter(Mandatory = $true)][object]$State)
+
+    if ($State -is [System.Management.Automation.PSCustomObject] -and
+        $State.PSObject.Properties.Name -contains 'schema_version' -and
+        $State.schema_version -is [int] -and [int]$State.schema_version -eq 1) {
+        $State | Add-Member -NotePropertyName 'ui_locale' -NotePropertyValue 'en'
+        $State | Add-Member -NotePropertyName 'chat_locale' -NotePropertyValue 'en'
+        $State.schema_version = $script:InstallStateSchema
+    }
+    return $State
+}
+
 function Assert-MagicHandyInstallState {
     param(
         [Parameter(Mandatory = $true)][object]$State,
@@ -295,7 +464,7 @@ function Assert-MagicHandyInstallState {
     }
     $required = @(
         'schema_version', 'installed_at', 'updated_at', 'repository_path', 'data_dir', 'port',
-        'setup_llm', 'build_managed_llama', 'llama_backend', 'ensure_ollama',
+        'ui_locale', 'chat_locale', 'setup_llm', 'build_managed_llama', 'llama_backend', 'ensure_ollama',
         'ollama_model', 'install_parakeet', 'create_launcher'
     )
     foreach ($name in $required) {
@@ -316,6 +485,11 @@ function Assert-MagicHandyInstallState {
     foreach ($name in @('setup_llm', 'build_managed_llama', 'ensure_ollama', 'install_parakeet', 'create_launcher')) {
         if ($State.$name -isnot [bool]) {
             throw "$Source field '$name' must be boolean."
+        }
+    }
+    foreach ($name in @('ui_locale', 'chat_locale')) {
+        if ($State.$name -isnot [string] -or [string]$State.$name -notin $script:SupportedLocales) {
+            throw "$Source field '$name' must be one of: $($script:SupportedLocales -join ', ')."
         }
     }
     foreach ($name in @('repository_path', 'data_dir')) {
@@ -363,6 +537,8 @@ function New-MagicHandyInstallState {
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [Parameter(Mandatory = $true)][string]$DataDir,
         [Parameter(Mandatory = $true)][ValidateRange(1, 65535)][int]$Port,
+        [ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$UILocale = 'en',
+        [ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$ChatLocale = 'en',
         [Parameter(Mandatory = $true)][bool]$SetupLLM,
         [Parameter(Mandatory = $true)][bool]$BuildManagedLlama,
         [Parameter(Mandatory = $true)][ValidateSet('cpu', 'cuda')][string]$LlamaBackend,
@@ -384,6 +560,8 @@ function New-MagicHandyInstallState {
         repository_path = [System.IO.Path]::GetFullPath($RepositoryPath)
         data_dir = [System.IO.Path]::GetFullPath($DataDir)
         port = $Port
+        ui_locale = $UILocale
+        chat_locale = $ChatLocale
         setup_llm = $SetupLLM
         build_managed_llama = $BuildManagedLlama
         llama_backend = $LlamaBackend
@@ -408,6 +586,7 @@ function Read-MagicHandyInstallState {
     } catch {
         throw "Installer state '$Path' is not valid JSON: $_"
     }
+    $state = Convert-MagicHandyInstallState -State $state
     Assert-MagicHandyInstallState -State $state -Source "Installer state '$Path'"
     return $state
 }
@@ -437,19 +616,29 @@ function Show-MagicHandyInstallState {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][object]$State)
 
-    $managed = if ([bool]$State.build_managed_llama) { "yes ($($State.llama_backend))" } else { 'no' }
-    $neutts = if ([bool]$State.build_managed_llama) { 'yes (with managed llama.cpp)' } else { 'no (managed llama.cpp skipped)' }
-    $ollama = if ([bool]$State.ensure_ollama) { 'yes' } else { 'no' }
-    $parakeet = if ([bool]$State.install_parakeet) { 'yes' } else { 'no' }
-    $launcher = if ([bool]$State.create_launcher) { 'yes' } else { 'no' }
-    Write-Host "  Data directory:   $($State.data_dir)"
-    Write-Host "  Local port:       $($State.port)"
-    Write-Host "  Managed llama.cpp: $managed"
-    Write-Host "  NeuTTS runtime:   $neutts"
-    Write-Host "  Ensure Ollama:    $ollama"
-    Write-Host "  Ollama model:     $(if ([string]::IsNullOrWhiteSpace([string]$State.ollama_model)) { '(unchanged)' } else { $State.ollama_model })"
-    Write-Host "  Parakeet ASR:     $parakeet"
-    Write-Host "  Launcher:         $launcher"
+    $yes = Get-MagicHandyText -Key 'choice_yes'
+    $no = Get-MagicHandyText -Key 'choice_no'
+    $managed = if ([bool]$State.build_managed_llama) { Get-MagicHandyText -Key 'summary_managed_yes' -Values @($State.llama_backend) } else { $no }
+    $neutts = if ([bool]$State.build_managed_llama) { Get-MagicHandyText -Key 'summary_neutts_yes' } else { Get-MagicHandyText -Key 'summary_neutts_no' }
+    $ollama = if ([bool]$State.ensure_ollama) { $yes } else { $no }
+    $parakeet = if ([bool]$State.install_parakeet) { $yes } else { $no }
+    $launcher = if ([bool]$State.create_launcher) { $yes } else { $no }
+    $model = if ([string]::IsNullOrWhiteSpace([string]$State.ollama_model)) { '({0})' -f (Get-MagicHandyText -Key 'choice_unchanged') } else { $State.ollama_model }
+    $values = @(
+        @('summary_ui_language', (Get-MagicHandyLanguageName -Locale $State.ui_locale)),
+        @('summary_chat_language', (Get-MagicHandyLanguageName -Locale $State.chat_locale)),
+        @('summary_data_dir', $State.data_dir),
+        @('summary_port', $State.port),
+        @('summary_llama', $managed),
+        @('summary_neutts', $neutts),
+        @('summary_ollama', $ollama),
+        @('summary_ollama_model', $model),
+        @('summary_parakeet', $parakeet),
+        @('summary_launcher', $launcher)
+    )
+    foreach ($item in $values) {
+        Write-Host ('  {0}: {1}' -f (Get-MagicHandyText -Key $item[0]), $item[1])
+    }
 }
 
 function Get-MagicHandyProvisionPlan {
@@ -457,39 +646,51 @@ function Get-MagicHandyProvisionPlan {
     param([Parameter(Mandatory = $true)][object]$State)
 
     $plan = New-Object System.Collections.Generic.List[string]
-    $plan.Add('Ensure Go 1.25+ is installed')
-    $plan.Add('Build magichandy.exe with CGO disabled')
-    $plan.Add('Build Parakeet, NeuTTS Air, and ElevenLabs Go protocol adapters')
+    $plan.Add((Get-MagicHandyText -Key 'plan_go'))
+    $plan.Add((Get-MagicHandyText -Key 'plan_build_app'))
+    $plan.Add((Get-MagicHandyText -Key 'plan_build_workers'))
+    $plan.Add((Get-MagicHandyText -Key 'plan_languages' -Values @(
+        (Get-MagicHandyLanguageName -Locale $State.ui_locale),
+        (Get-MagicHandyLanguageName -Locale $State.chat_locale)
+    )))
     if ([bool]$State.build_managed_llama) {
-        $plan.Add('Ensure Git and CMake are installed')
-        $plan.Add('Ensure the Visual Studio C++ Build Tools workload and Windows SDK are installed')
+        $plan.Add((Get-MagicHandyText -Key 'plan_git_cmake'))
+        $plan.Add((Get-MagicHandyText -Key 'plan_cpp'))
         if ([string]$State.llama_backend -eq 'cuda') {
-            $plan.Add('Ensure the NVIDIA CUDA Toolkit is installed')
+            $plan.Add((Get-MagicHandyText -Key 'plan_cuda'))
         }
-        $plan.Add("Build and activate pinned managed llama.cpp ($($State.llama_backend))")
-        $plan.Add('Ensure LLVM/libclang, Rustup, and the pinned Rust 1.94.0 Windows MSVC toolchain are installed')
-        $plan.Add("Ensure eSpeak NG $($script:NeuTTSPhonemizerVersion)+ is installed for NeuTTS phonemization")
-        $neuttsAcceleration = if ([string]$State.llama_backend -eq 'cuda') { 'CUDA backbone + WGPU codec' } else { 'CPU backbone + CPU codec' }
-        $neuttsInstalledSize = if ([string]$State.llama_backend -eq 'cuda') { 'about 2.0 GiB installed' } else { 'about 1.9 GiB installed' }
-        $plan.Add("Build MagicHandy's persistent NeuTTS runner from pinned neutts-rs ($neuttsAcceleration)")
-        $plan.Add('Build the MagicHandy NeuCodec ONNX reference encoder worker')
-        $plan.Add("Install checksum-verified NeuTTS Air Q4, NeuCodec decoder, and reference encoder assets ($neuttsInstalledSize; about 1.3 GiB additional transient download)")
+        $plan.Add((Get-MagicHandyText -Key 'plan_llama' -Values @($State.llama_backend)))
+        $plan.Add((Get-MagicHandyText -Key 'plan_rust'))
+        $plan.Add((Get-MagicHandyText -Key 'plan_espeak' -Values @($script:NeuTTSPhonemizerVersion)))
+        $neuttsAcceleration = if ([string]$State.llama_backend -eq 'cuda') {
+            Get-MagicHandyText -Key 'neutts_acceleration_cuda'
+        } else {
+            Get-MagicHandyText -Key 'neutts_acceleration_cpu'
+        }
+        $neuttsInstalledSize = if ([string]$State.llama_backend -eq 'cuda') {
+            Get-MagicHandyText -Key 'neutts_installed_cuda'
+        } else {
+            Get-MagicHandyText -Key 'neutts_installed_cpu'
+        }
+        $plan.Add((Get-MagicHandyText -Key 'plan_neutts_runner' -Values @($neuttsAcceleration)))
+        $plan.Add((Get-MagicHandyText -Key 'plan_encoder'))
+        $plan.Add((Get-MagicHandyText -Key 'plan_neutts_assets' -Values @($neuttsInstalledSize)))
     } else {
-        $plan.Add('Skip NeuTTS runtime build and model assets because managed llama.cpp is not selected')
+        $plan.Add((Get-MagicHandyText -Key 'plan_neutts_skip'))
     }
     if ([bool]$State.ensure_ollama) {
-        $plan.Add('Ensure Ollama is installed')
+        $plan.Add((Get-MagicHandyText -Key 'plan_ollama'))
         if (-not [string]::IsNullOrWhiteSpace([string]$State.ollama_model)) {
-            $plan.Add("Ensure Ollama model '$($State.ollama_model)' is present")
+            $plan.Add((Get-MagicHandyText -Key 'plan_ollama_model' -Values @($State.ollama_model)))
         }
     }
     if ([bool]$State.install_parakeet) {
-        $plan.Add('Install checksum-verified Parakeet CPU runner and 644 MiB model')
+        $plan.Add((Get-MagicHandyText -Key 'plan_parakeet'))
     }
     if ([bool]$State.create_launcher) {
-        $plan.Add('Write Start-MagicHandy.ps1')
+        $plan.Add((Get-MagicHandyText -Key 'plan_launcher_write'))
     } else {
-        $plan.Add('Remove an existing generated Start-MagicHandy.ps1; preserve any user-authored file')
+        $plan.Add((Get-MagicHandyText -Key 'plan_launcher_remove'))
     }
     return $plan.ToArray()
 }
@@ -503,9 +704,9 @@ function Ensure-MagicHandyWinGet {
         return $winget
     }
 
-    Write-Host 'Windows Package Manager is missing. The installer can repair/install it using the official Microsoft.WinGet.Client PowerShell module.'
-    Write-Host 'This installs the NuGet provider and Microsoft.WinGet.Client for the current user.' -ForegroundColor DarkGray
-    if (-not (Confirm-MagicHandyChoice -Question 'Install Windows Package Manager now?' -Default $true -AssumeYes:$AssumeYes)) {
+    Write-Host (Get-MagicHandyText -Key 'winget_missing')
+    Write-Host (Get-MagicHandyText -Key 'winget_detail') -ForegroundColor DarkGray
+    if (-not (Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'winget_question') -Default $true -AssumeYes:$AssumeYes)) {
         throw 'Windows Package Manager is required to provision a bare machine.'
     }
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -560,13 +761,14 @@ function Confirm-MagicHandyPackageInstall {
         [string]$Size = '',
         [switch]$AssumeYes
     )
-    Write-Host "$Name is required for $Purpose."
-    Write-Host "License: $License$(if ($Size) { "; approximate disk use: $Size" } else { '' })." -ForegroundColor DarkGray
-    if (-not (Confirm-MagicHandyChoice -Question "Install $Name now?" -Default $true -AssumeYes:$AssumeYes)) {
+    Write-Host (Get-MagicHandyText -Key 'package_required' -Values @($Name, $Purpose))
+    $sizeText = if ($Size) { Get-MagicHandyText -Key 'package_size' -Values @($Size) } else { '' }
+    Write-Host (Get-MagicHandyText -Key 'package_license' -Values @($License, $sizeText)) -ForegroundColor DarkGray
+    $question = Get-MagicHandyText -Key 'package_question' -Values @($Name)
+    if (-not (Confirm-MagicHandyChoice -Question $question -Default $true -AssumeYes:$AssumeYes)) {
         throw "$Name is required for the selected installation choices."
     }
 }
-
 function Get-MagicHandyGoVersion {
     $go = Resolve-MagicHandyExecutable -Name 'go'
     if (-not $go) {
@@ -586,7 +788,7 @@ function Ensure-MagicHandyGo {
 
     $version = Get-MagicHandyGoVersion
     if ($null -eq $version -or $version -lt $script:MinimumGoVersion) {
-        Confirm-MagicHandyPackageInstall -Name 'Go' -Purpose 'building the pure-Go application and workers' -License 'BSD-3-Clause; https://go.dev/LICENSE' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'Go' -Purpose (Get-MagicHandyText -Key 'purpose_go') -License 'BSD-3-Clause; https://go.dev/LICENSE' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'GoLang.Go' -AssumeYes:$AssumeYes
         $version = Get-MagicHandyGoVersion
     }
@@ -604,7 +806,7 @@ function Ensure-MagicHandyGit {
 
     $git = Resolve-MagicHandyExecutable -Name 'git'
     if (-not $git) {
-        Confirm-MagicHandyPackageInstall -Name 'Git for Windows' -Purpose 'updating MagicHandy and fetching pinned llama.cpp and NeuTTS source' -License 'GPL-2.0; https://gitforwindows.org/' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'Git for Windows' -Purpose (Get-MagicHandyText -Key 'purpose_git') -License 'GPL-2.0; https://gitforwindows.org/' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Git.Git' -AssumeYes:$AssumeYes
         $git = Resolve-MagicHandyExecutable -Name 'git'
     }
@@ -650,7 +852,7 @@ function Ensure-MagicHandyESpeak {
     $executable = Resolve-MagicHandyESpeak
     $version = if ($executable) { Get-MagicHandyESpeakVersion -Executable $executable } else { $null }
     if ($null -eq $version -or $version -lt [Version]$script:NeuTTSPhonemizerVersion) {
-        Confirm-MagicHandyPackageInstall -Name 'eSpeak NG' -Purpose 'producing the phonemes NeuTTS was trained to synthesize' -License 'GPL-3.0-or-later; https://github.com/espeak-ng/espeak-ng' -Size 'about 25 MB' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'eSpeak NG' -Purpose (Get-MagicHandyText -Key 'purpose_espeak') -License 'GPL-3.0-or-later; https://github.com/espeak-ng/espeak-ng' -Size 'about 25 MB' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'eSpeak-NG.eSpeak-NG' -AssumeYes:$AssumeYes
         $executable = Resolve-MagicHandyESpeak
         $version = if ($executable) { Get-MagicHandyESpeakVersion -Executable $executable } else { $null }
@@ -668,7 +870,7 @@ function Ensure-MagicHandyCMake {
 
     $cmake = Resolve-MagicHandyCMake
     if (-not $cmake) {
-        Confirm-MagicHandyPackageInstall -Name 'CMake' -Purpose 'configuring the managed llama.cpp and NeuTTS source builds' -License 'BSD-3-Clause; https://cmake.org/licensing/' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'CMake' -Purpose (Get-MagicHandyText -Key 'purpose_cmake') -License 'BSD-3-Clause; https://cmake.org/licensing/' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Kitware.CMake' -AssumeYes:$AssumeYes
         $cmake = Resolve-MagicHandyCMake
     }
@@ -685,7 +887,7 @@ function Ensure-MagicHandyVCToolchain {
     if (Test-MagicHandyVCToolchain) {
         return
     }
-    Confirm-MagicHandyPackageInstall -Name 'Visual Studio Build Tools with Desktop C++' -Purpose 'compiling the managed llama.cpp and NeuTTS runners' -License 'Microsoft Visual Studio license; https://visualstudio.microsoft.com/license-terms/' -Size 'several GB' -AssumeYes:$AssumeYes
+    Confirm-MagicHandyPackageInstall -Name 'Visual Studio Build Tools with Desktop C++' -Purpose (Get-MagicHandyText -Key 'purpose_cpp') -License 'Microsoft Visual Studio license; https://visualstudio.microsoft.com/license-terms/' -Size 'several GB' -AssumeYes:$AssumeYes
     $override = '--wait --quiet --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
     Invoke-MagicHandyWinGetInstall -ID 'Microsoft.VisualStudio.BuildTools' -Override $override -AssumeYes:$AssumeYes
     if (-not (Test-MagicHandyVCToolchain)) {
@@ -711,7 +913,7 @@ function Ensure-MagicHandyRustup {
 
     $rustup = Resolve-MagicHandyExecutable -Name 'rustup'
     if (-not $rustup) {
-        Confirm-MagicHandyPackageInstall -Name 'Rustup' -Purpose 'building the selected NeuTTS stream_pcm runner and its llama.cpp binding' -License 'Apache-2.0 or MIT; https://github.com/rust-lang/rustup' -Size 'toolchain and build cache use several GB temporarily' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'Rustup' -Purpose (Get-MagicHandyText -Key 'purpose_rust') -License 'Apache-2.0 or MIT; https://github.com/rust-lang/rustup' -Size 'toolchain and build cache use several GB temporarily' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Rustlang.Rustup' -AssumeYes:$AssumeYes
         $rustup = Resolve-MagicHandyExecutable -Name 'rustup'
     }
@@ -738,7 +940,7 @@ function Ensure-MagicHandyLibClang {
 
     $libClang = Resolve-MagicHandyLibClang
     if (-not $libClang) {
-        Confirm-MagicHandyPackageInstall -Name 'LLVM' -Purpose 'providing libclang for the NeuTTS llama.cpp Rust bindings' -License 'Apache-2.0 with LLVM exceptions; https://llvm.org/LICENSE.txt' -Size 'approximately 2 GB' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'LLVM' -Purpose (Get-MagicHandyText -Key 'purpose_llvm') -License 'Apache-2.0 with LLVM exceptions; https://llvm.org/LICENSE.txt' -Size 'approximately 2 GB' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'LLVM.LLVM' -AssumeYes:$AssumeYes
         $libClang = Resolve-MagicHandyLibClang
     }
@@ -755,7 +957,7 @@ function Ensure-MagicHandyCUDA {
 
     $nvcc = Resolve-MagicHandyExecutable -Name 'nvcc'
     if (-not $nvcc) {
-        Confirm-MagicHandyPackageInstall -Name 'NVIDIA CUDA Toolkit' -Purpose 'building the selected CUDA llama.cpp backend' -License 'NVIDIA CUDA Toolkit EULA; https://docs.nvidia.com/cuda/eula/' -Size 'several GB' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'NVIDIA CUDA Toolkit' -Purpose (Get-MagicHandyText -Key 'purpose_cuda') -License 'NVIDIA CUDA Toolkit EULA; https://docs.nvidia.com/cuda/eula/' -Size 'several GB' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Nvidia.CUDA' -AssumeYes:$AssumeYes
         $nvcc = Resolve-MagicHandyExecutable -Name 'nvcc'
     }
@@ -771,7 +973,7 @@ function Ensure-MagicHandyOllama {
 
     $ollama = Resolve-MagicHandyExecutable -Name 'ollama'
     if (-not $ollama) {
-        Confirm-MagicHandyPackageInstall -Name 'Ollama' -Purpose 'the selected external local-LLM provider' -License 'MIT; https://github.com/ollama/ollama/blob/main/LICENSE' -AssumeYes:$AssumeYes
+        Confirm-MagicHandyPackageInstall -Name 'Ollama' -Purpose (Get-MagicHandyText -Key 'purpose_ollama') -License 'MIT; https://github.com/ollama/ollama/blob/main/LICENSE' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'Ollama.Ollama' -AssumeYes:$AssumeYes
         $ollama = Resolve-MagicHandyExecutable -Name 'ollama'
     }
@@ -1506,19 +1708,19 @@ function Confirm-MagicHandyNeuTTSInstall {
         [switch]$AssumeYes
     )
 
-    Write-Host "NeuTTS runner: neutts-rs v0.1.1 (MIT) with system eSpeak NG $($script:NeuTTSPhonemizerVersion)+ (GPL-3.0-or-later)."
-    Write-Host "Source commit: $($script:NeuTTSSourceCommit); Rust toolchain: $($script:NeuTTSRustToolchain)." -ForegroundColor DarkGray
+    Write-Host (Get-MagicHandyText -Key 'neutts_runner_info' -Values @($script:NeuTTSPhonemizerVersion))
+    Write-Host (Get-MagicHandyText -Key 'neutts_source_info' -Values @($script:NeuTTSSourceCommit, $script:NeuTTSRustToolchain)) -ForegroundColor DarkGray
     $installedSize = if ($Backend -eq 'cuda') { 'about 2.0 GiB' } else { 'about 1.9 GiB' }
-    Write-Host "NeuTTS models: Air Q4, NeuCodec, and DistillNeuCodec ONNX, Apache-2.0; $installedSize installed plus temporary build and conversion assets."
+    Write-Host (Get-MagicHandyText -Key 'neutts_models_info' -Values @($installedSize))
     if ($Backend -eq 'cuda') {
-        Write-Host 'NeuTTS acceleration: CUDA runs the speech backbone on NVIDIA GPU layers and WGPU accelerates NeuCodec. This substantially reduces reply latency but reserves GPU memory while voice replies are enabled.' -ForegroundColor Cyan
+        Write-Host (Get-MagicHandyText -Key 'neutts_cuda_info') -ForegroundColor Cyan
     } else {
-        Write-Host 'NeuTTS acceleration: CPU-only. This saves GPU memory and works without CUDA, but speech generation can be much slower than real time.' -ForegroundColor Yellow
+        Write-Host (Get-MagicHandyText -Key 'neutts_cpu_info') -ForegroundColor Yellow
     }
     Write-Host "Air Q4 SHA-256: $($script:NeuTTSBackboneSHA256)" -ForegroundColor DarkGray
     Write-Host "NeuCodec SHA-256: $($script:NeuTTSCodecSHA256)" -ForegroundColor DarkGray
     Write-Host "Reference encoder model SHA-256: $($script:NeuTTSEncoderModelSHA256)" -ForegroundColor DarkGray
-    if (-not (Confirm-MagicHandyChoice -Question 'Download the pinned NeuTTS models and build the local runner now?' -Default $true -AssumeYes:$AssumeYes)) {
+    if (-not (Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'neutts_download_question') -Default $true -AssumeYes:$AssumeYes)) {
         throw 'NeuTTS installation is required when managed llama.cpp is selected. Rerun with -SkipLlamaBuild to skip both.'
     }
 }
@@ -1914,6 +2116,32 @@ function Get-MagicHandyCheckoutProcesses {
     })
 }
 
+function Test-MagicHandyAppRunning {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$RepositoryPath)
+
+    return @(Get-MagicHandyCheckoutProcesses -RepositoryPath $RepositoryPath).Count -gt 0
+}
+
+function Set-MagicHandyAppLanguages {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryPath,
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$UILocale,
+        [Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$ChatLocale
+    )
+
+    $executable = Join-Path $RepositoryPath 'magichandy.exe'
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        throw "MagicHandy executable not found at '$executable'. Run install.ps1 or update.ps1 first."
+    }
+    & $executable -data-dir $DataDir -set-ui-locale $UILocale -set-chat-locale $ChatLocale | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "MagicHandy could not apply language settings (exit $LASTEXITCODE)."
+    }
+}
+
 function Remove-MagicHandyBuildBackups {
     param([Parameter(Mandatory = $true)][string]$RepositoryPath)
 
@@ -2077,7 +2305,7 @@ function Assert-MagicHandyRebuildStopResponse {
             $confirmation = if ($null -ne $PhysicalStopConfirmation) {
                 & $PhysicalStopConfirmation
             } else {
-                Read-Host 'Verify the device is physically stopped, then type STOPPED to continue'
+                Read-Host (Get-MagicHandyText -Key 'physical_stop_prompt')
             }
             if ($confirmation.Trim() -ceq 'STOPPED') {
                 return
@@ -2118,7 +2346,7 @@ function Stop-MagicHandyAppForRebuild {
         throw "A MagicHandy process from this checkout is running but is not reachable on configured port $Port. Use Emergency Stop, close it, and rerun update.ps1."
     }
 
-    Write-Host "Stopping the running MagicHandy process before rebuilding..." -ForegroundColor Cyan
+    Write-Host (Get-MagicHandyText -Key 'stopping_app') -ForegroundColor Cyan
     try {
         $stopResponse = Invoke-MagicHandyRebuildStopRequest -Port $Port
         Assert-MagicHandyRebuildStopResponse -Response $stopResponse -AllowPhysicalStopConfirmation:$AllowPhysicalStopConfirmation -PhysicalStopConfirmation $PhysicalStopConfirmation
@@ -2223,7 +2451,7 @@ function Invoke-MagicHandyProvision {
     )
 
     if ($PlanOnly) {
-        Write-InstallerHeading 'Provisioning plan (no changes made)'
+        Write-InstallerHeading (Get-MagicHandyText -Key 'provision_plan_heading')
         foreach ($item in (Get-MagicHandyProvisionPlan -State $State)) {
             Write-Host "  - $item"
         }
@@ -2234,7 +2462,7 @@ function Invoke-MagicHandyProvision {
     }
 
     New-Item -ItemType Directory -Force -Path $State.data_dir | Out-Null
-    Write-InstallerHeading 'Build MagicHandy and worker adapters'
+    Write-InstallerHeading (Get-MagicHandyText -Key 'build_heading')
     if ($RunningPort -eq 0) {
         $RunningPort = [int]$State.port
     }
@@ -2257,7 +2485,7 @@ function Invoke-MagicHandyProvision {
             throw "Managed llama.cpp build failed (exit $LASTEXITCODE)."
         }
 
-        Write-InstallerHeading 'NeuTTS Air runtime (with managed llama.cpp)'
+        Write-InstallerHeading (Get-MagicHandyText -Key 'neutts_heading')
         $espeak = Ensure-MagicHandyESpeak -AssumeYes:$AssumeYes
         Restore-MagicHandyNeuTTSBackup -DataDir $State.data_dir
         if (Test-MagicHandyNeuTTSInstall -DataDir $State.data_dir -Backend $State.llama_backend) {
@@ -2271,21 +2499,24 @@ function Invoke-MagicHandyProvision {
     }
 
     if ([bool]$State.ensure_ollama) {
-        Write-InstallerHeading 'Ollama provider'
+        Write-InstallerHeading (Get-MagicHandyText -Key 'ollama_heading')
         $ollama = Ensure-MagicHandyOllama -AssumeYes:$AssumeYes
         Ensure-MagicHandyOllamaModel -OllamaExecutable $ollama -Model ([string]$State.ollama_model)
     }
 
     if ([bool]$State.install_parakeet) {
-        Write-InstallerHeading 'Offline Parakeet speech input'
+        Write-InstallerHeading (Get-MagicHandyText -Key 'parakeet_heading')
         Install-MagicHandyParakeet -DataDir $State.data_dir
     }
 
+    Write-InstallerHeading (Get-MagicHandyText -Key 'languages_heading')
+    Set-MagicHandyAppLanguages -RepositoryPath $RepositoryPath -DataDir $State.data_dir -UILocale $State.ui_locale -ChatLocale $State.chat_locale
+
     if ([bool]$State.create_launcher) {
-        Write-InstallerHeading 'Launcher'
+        Write-InstallerHeading (Get-MagicHandyText -Key 'launcher_heading')
         Write-MagicHandyLauncher -RepositoryPath $RepositoryPath -DataDir $State.data_dir -Port ([int]$State.port)
     } elseif (Test-Path -LiteralPath (Join-Path $RepositoryPath 'Start-MagicHandy.ps1') -PathType Leaf) {
-        Write-InstallerHeading 'Launcher'
+        Write-InstallerHeading (Get-MagicHandyText -Key 'launcher_heading')
         Remove-MagicHandyGeneratedLauncher -RepositoryPath $RepositoryPath
     }
 }
@@ -2458,6 +2689,12 @@ function Update-MagicHandySource {
 }
 
 Export-ModuleMember -Function @(
+    'Get-MagicHandySupportedLocales',
+    'Set-MagicHandyInstallerLocale',
+    'Get-MagicHandyInstallerLocale',
+    'Get-MagicHandyText',
+    'Get-MagicHandyLanguageName',
+    'Read-MagicHandyLanguage',
     'Write-InstallerHeading',
     'Write-MagicHandyBanner',
     'Write-MagicHandyCompletionArt',
@@ -2474,6 +2711,9 @@ Export-ModuleMember -Function @(
     'Get-MagicHandyProvisionPlan',
     'Ensure-MagicHandyGit',
     'Invoke-MagicHandyProvision',
+    'Test-MagicHandyAppRunning',
+    'Stop-MagicHandyAppForRebuild',
+    'Set-MagicHandyAppLanguages',
     'Start-MagicHandyApp',
     'Update-MagicHandySource'
 )

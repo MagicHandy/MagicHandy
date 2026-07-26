@@ -1,3 +1,4 @@
+import { t, translateKnown, type MessageKey } from "../i18n";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { IntifaceTransportSnapshot } from "../api/types";
@@ -56,7 +57,7 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
   const choices = useMemo(() => (snapshot.status.devices ?? []).flatMap((device) =>
     device.linear_actuators.map((actuator) => ({
       value: `${device.device_index}:${actuator.index}`,
-      label: `${device.device_name} - ${actuator.feature_descriptor || actuator.actuator_type || `Linear ${actuator.index + 1}`}`,
+      label: `${device.device_name} - ${actuator.feature_descriptor || actuator.actuator_type || t("Linear {index}", { index: actuator.index + 1 })}`,
     }))), [snapshot.status.devices]);
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
 
   if (!visible) return null;
 
-  async function run(action: () => Promise<IntifaceTransportSnapshot>, success: string, nextActivity: IntifaceActivity) {
+  async function run(action: () => Promise<IntifaceTransportSnapshot>, success: MessageKey, nextActivity: IntifaceActivity) {
     setBusy(true);
     setActivity(nextActivity);
     if (nextActivity === "connecting") onConnectionAttemptError?.(false);
@@ -76,10 +77,10 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
       const next = await action();
       setSnapshot(next);
       if (nextActivity === "connecting") onConnectionAttemptError?.(false);
-      show(success);
+      show(translateKnown(success));
     } catch (error) {
       if (nextActivity === "connecting") onConnectionAttemptError?.(true);
-      show(error instanceof Error ? error.message : "Intiface request failed.", "error");
+      show(error instanceof Error ? translateKnown(error.message) : t("Intiface request failed."), "error");
     } finally {
       setBusy(false);
       setActivity(null);
@@ -102,31 +103,31 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
         <span className="status-dot" data-state={snapshot.status.connected ? "connected" : "disconnected"} aria-hidden="true" />
         <span>{statusText}</span>
       </div>
-      {dirty && <p className="form-status">Save the dispatch owner and server address before connecting.</p>}
+      {dirty && <p className="form-status">{t("Save the dispatch owner and server address before connecting.")}</p>}
       <div className="row-actions">
         {snapshot.status.connected ? (
-          <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(api.intifaceDisconnect, "Intiface disconnected.", "disconnecting")}>Disconnect</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(api.intifaceDisconnect, "Intiface disconnected.", "disconnecting")}>{t("Disconnect")}</button>
         ) : (
-          <button type="button" className="btn btn-secondary" disabled={locked || dirty || busy} onClick={() => void run(api.intifaceConnect, "Intiface connected.", "connecting")}>Connect</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || dirty || busy} onClick={() => void run(api.intifaceConnect, "Intiface connected.", "connecting")}>{t("Connect")}</button>
         )}
         {snapshot.status.connected && (
-          <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(snapshot.status.scanning ? api.intifaceStopScan : api.intifaceStartScan, snapshot.status.scanning ? "Intiface scan stopped." : "Intiface scan started.", "scanning")}>{snapshot.status.scanning ? "Stop scan" : "Scan devices"}</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(snapshot.status.scanning ? api.intifaceStopScan : api.intifaceStartScan, snapshot.status.scanning ? "Intiface scan stopped." : "Intiface scan started.", "scanning")}>{snapshot.status.scanning ? t("Stop scan") : t("Scan devices")}</button>
         )}
       </div>
       {snapshot.status.connected && choices.length > 0 && (
         <div className="transport-selection">
           <label className="field">
-            <span className="label">Linear actuator</span>
+            <span className="label">{t("Linear actuator")}</span>
             <select value={choice} disabled={locked || busy} onChange={(event) => setChoice(event.target.value)}>
-              <option value="">Select an actuator</option>
+              <option value="">{t("Select an actuator")}</option>
               {choices.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
-          <button type="button" className="btn btn-secondary" disabled={locked || busy || !choice} onClick={selectActuator}>Use actuator</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || busy || !choice} onClick={selectActuator}>{t("Use actuator")}</button>
         </div>
       )}
       {snapshot.status.connected && choices.length === 0 && !snapshot.status.scanning && (
-        <p className="form-status">No linear actuators discovered. Start a scan after the device is available to Intiface Central.</p>
+        <p className="form-status">{t("No linear actuators discovered. Start a scan after the device is available to Intiface Central.")}</p>
       )}
     </div>
   );

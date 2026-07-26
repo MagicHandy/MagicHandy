@@ -1,3 +1,4 @@
+import { t, translateKnown } from "../i18n";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { api } from "../api/client";
 import { audioPlaybackToken, installAudioPlaybackUnlock, playBlob, stopAllAudioPlayback } from "../util/audio";
@@ -9,6 +10,7 @@ interface VoicePlaybackValue {
 
 const VoicePlaybackContext = createContext<VoicePlaybackValue | null>(null);
 const REQUEST_POLL_MS = 250;
+const normalizePlaybackReason = (reason: string) => reason.replace(/[.!?。！？]+$/u, "");
 
 interface SpeechQueueEntry {
   id: string;
@@ -96,8 +98,8 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
           const result = await entry.audio;
           if (!result.ok) {
             if (result.error && !isAbort(result.error) && !disposed.current) {
-              const reason = result.error instanceof Error ? result.error.message : "unknown playback error";
-              show(`Speech output could not play: ${reason}.`, "error");
+              const reason = normalizePlaybackReason(result.error instanceof Error ? translateKnown(result.error.message) : t("unknown playback error"));
+              show(t("Speech output could not play: {reason}.", { reason }), "error");
             }
             continue;
           }
@@ -105,8 +107,8 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
           await playBlob(result.audio, playbackToken);
         } catch (error) {
           if (!isAbort(error) && !disposed.current) {
-            const reason = error instanceof Error ? error.message : "unknown playback error";
-            show(`Speech output could not play: ${reason}.`, "error");
+            const reason = normalizePlaybackReason(error instanceof Error ? translateKnown(error.message) : t("unknown playback error"));
+            show(t("Speech output could not play: {reason}.", { reason }), "error");
           }
         } finally {
           if (controllers.current.get(entry.id) === entry.controller) {

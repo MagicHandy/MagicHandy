@@ -34,7 +34,8 @@ optional managed NeuTTS runner), never for the MagicHandy Go core itself.
 
 - **Build/run from source:** `go run ./cmd/magichandy` (or `go build`). No venv,
   no pip.
-- **Interactive installer (`install.ps1`, this repo):** can bootstrap a clean
+- **Interactive installer (`install.ps1`, this repo):** asks for app UI and
+  chat reply languages before other decisions, then can bootstrap a clean
   64-bit Windows machine. It repairs/installs WinGet through Microsoft's
   supported PowerShell path when needed, then installs and verifies Go. A
   selected managed llama.cpp source build additionally provisions Git, CMake,
@@ -49,8 +50,9 @@ optional managed NeuTTS runner), never for the MagicHandy Go core itself.
   size/license-visible, and SHA-256 verified, and voice remains disabled. The
   installer can write a `Start-MagicHandy.ps1` launcher and open the app.
 - **State-aware source updater (`update.ps1`):** atomically reads the non-secret
-  install choices stored under LocalAppData, shows them, asks whether to revise
-  them, refuses a dirty worktree, resolves an explicit safe fast-forward target,
+  install choices stored under LocalAppData, restores the saved UI language,
+  shows UI/chat locales with the remaining choices, asks whether to revise them,
+  refuses a dirty worktree, resolves an explicit safe fast-forward target,
   and rebuilds through the same provisioning implementation. Live feature
   branches follow their upstream; merged features with a deleted upstream may
   advance from `origin/main` only after an ancestry check. Provider credentials
@@ -177,6 +179,8 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 
 - `install.ps1` — the interactive installer.
 - `update.ps1` — the choice-preserving source updater.
+- `change-language.ps1` — the native-name UI/chat language recovery flow.
+- `docs/localization-wording.md` — the catalog, tone, and translation contract.
 - `scripts/installer/InstallerSupport.psm1` — shared provisioning/state logic.
 - `docs/source-installer.md` — package IDs, state schema, commands, and updater contract.
 - `IMPLEMENTATION_PLAN.md` — Phase 16 (packaging), Phases 12-13 (voice).
