@@ -44,6 +44,9 @@ func (s *Server) handleMediaVideoFunscript(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
+	if s.mediaSync != nil {
+		s.mediaSync.PrepareScript(script)
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"funscript": script})
 }

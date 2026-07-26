@@ -91,9 +91,9 @@ func TestCloudRESTTransportDeclaresBufferedLead(t *testing.T) {
 }
 
 func TestCloudRESTTransportReadsMotionStartupState(t *testing.T) {
-	var paths []string
+	paths := make(chan string, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.Method+" "+r.URL.Path)
+		paths <- r.Method + " " + r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/slider/state":
@@ -120,9 +120,74 @@ func TestCloudRESTTransportReadsMotionStartupState(t *testing.T) {
 		!results.Stroke.OK || results.Stroke.Kind != CommandKindStrokeWindowState {
 		t.Fatalf("startup results = %+v", results)
 	}
-	wantPaths := []string{"GET /slider/state", "GET /slider/stroke"}
-	if len(paths) != len(wantPaths) || paths[0] != wantPaths[0] || paths[1] != wantPaths[1] {
-		t.Fatalf("paths = %v, want %v", paths, wantPaths)
+	seenPaths := map[string]bool{<-paths: true, <-paths: true}
+	for _, want := range []string{"GET /slider/state", "GET /slider/stroke"} {
+		if !seenPaths[want] {
+			t.Fatalf("paths = %v, missing %q", seenPaths, want)
+		}
+	}
+}
+
+func TestCloudRESTTransportReadsStartupEndpointsConcurrently(t *testing.T) {
+	entered := make(chan string, 2)
+	release := make(chan struct{})
+	released := false
+	defer func() {
+		if !released {
+			close(release)
+		}
+	}()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entered <- r.URL.Path
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/slider/state":
+			_, _ = w.Write([]byte(`{"result":{"position":0.5,"speed_absolute":0,"position_absolute":50}}`))
+		case "/slider/stroke":
+			_, _ = w.Write([]byte(`{"result":{"min":0,"max":1,"min_absolute":0,"max_absolute":100}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cloud := newTestCloudTransport(t, server.URL)
+	type startupOutcome struct {
+		results MotionStartupStateResults
+		err     error
+	}
+	done := make(chan startupOutcome, 1)
+	go func() {
+		_, results, err := cloud.ReadMotionStartupState(context.Background())
+		done <- startupOutcome{results: results, err: err}
+	}()
+
+	seenPaths := make(map[string]bool, 2)
+	for range 2 {
+		select {
+		case path := <-entered:
+			seenPaths[path] = true
+		case <-time.After(time.Second):
+			t.Fatalf("startup reads were serialized; entered paths = %v", seenPaths)
+		}
+	}
+	close(release)
+	released = true
+
+	select {
+	case outcome := <-done:
+		if outcome.err != nil || !outcome.results.Slider.OK || !outcome.results.Stroke.OK {
+			t.Fatalf("concurrent startup read = %+v, error = %v", outcome.results, outcome.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("concurrent startup read did not complete")
+	}
+	for _, want := range []string{"/slider/state", "/slider/stroke"} {
+		if !seenPaths[want] {
+			t.Fatalf("entered paths = %v, missing %q", seenPaths, want)
+		}
 	}
 }
 
@@ -164,7 +229,8 @@ func TestCloudRESTTransportRejectsIncompleteMotionStartupState(t *testing.T) {
 
 	cloud := newTestCloudTransport(t, server.URL)
 	_, results, err := cloud.ReadMotionStartupState(context.Background())
-	if err == nil || results.Slider.OK || results.Stroke.Kind != "" {
+	if err == nil || results.Slider.OK || results.Slider.Kind != CommandKindSliderState ||
+		results.Stroke.OK || results.Stroke.Kind != CommandKindStrokeWindowState {
 		t.Fatalf("incomplete startup response = %+v, error = %v", results, err)
 	}
 	if strings.Contains(err.Error(), `{"result"`) {

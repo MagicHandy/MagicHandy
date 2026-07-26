@@ -42,6 +42,13 @@ interface PlaybackSession {
   stopSequence?: number;
 }
 
+type SyncOperationKind = "starting" | "seeking" | "resyncing" | "resuming";
+
+interface SyncOperation {
+  kind: SyncOperationKind;
+  mediaTimeMillis: number;
+}
+
 export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }: Props) {
   const session = useMemo<PlaybackSession>(() => ({ id: createMediaSessionID(), sequence: 0 }), [video.id]);
   const playerRef = useRef<HTMLVideoElement | null>(null);
@@ -54,6 +61,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const [syncError, setSyncError] = useState("");
   const [timelineHidden, setTimelineHidden] = useState(readTimelinePreference);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [syncOperation, setSyncOperation] = useState<SyncOperation | null>(null);
   const { state, refresh } = useAppState();
   const mounted = useRef(true);
   const generation = useRef(0);
@@ -145,6 +153,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     setSyncError("");
     setSync({ active: false, state: "idle" });
     setCurrentTime(0);
+    setSyncOperation(null);
     desiredPlaying.current = false;
     activeSync.current = false;
     seekInProgress.current = false;
@@ -199,6 +208,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     if (previous === undefined || stopSequence === undefined || previous === stopSequence || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
     desiredPlaying.current = false;
     awaitingMedia.current = false;
+    setSyncOperation(null);
     playIntentLostAt.current = 0;
     pendingArm.current = null;
     bufferingStop.current = Promise.resolve();
@@ -249,6 +259,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
 
   const showSyncFailure = useCallback((reason: unknown, fallback: string) => {
     if (!mounted.current) return;
+    setSyncOperation(null);
     const status = syncStatusFromError(reason);
     activeSync.current = false;
     awaitingMedia.current = false;
@@ -321,6 +332,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       return;
     }
     awaitingMedia.current = false;
+    const armMediaTimeMillis = mediaTimeMillis(player);
+    setSyncOperation({
+      kind: event === "play" ? "starting" : "resyncing",
+      mediaTimeMillis: armMediaTimeMillis,
+    });
 
     const commandGeneration = ++generation.current;
     capturedStopSequence.current = sequence;
@@ -338,14 +354,20 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       }
       if (status.state === "completed") {
         desiredPlaying.current = false;
+        setSyncOperation(null);
         suppressNext("play");
         await player.play();
         return;
       }
       if (!status.active) {
         desiredPlaying.current = false;
+        setSyncOperation(null);
         return;
       }
+      const alignedMediaTimeMillis = typeof status.expected_media_time_ms === "number"
+        ? Math.max(0, Math.round(status.expected_media_time_ms))
+        : armMediaTimeMillis;
+      setSyncOperation({ kind: "resuming", mediaTimeMillis: alignedMediaTimeMillis });
       suppressNext("play");
       try {
         // The engine clock has been running since transport play; move the
@@ -394,8 +416,16 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const handlePlaybackEvent = useCallback((event: MediaPlaybackEvent, player: HTMLVideoElement) => {
     lastPlayer.current = player;
     setCurrentTime(mediaTimeMillis(player));
-    if (!script || locked) return;
+    if (!script) {
+      if (loadingScript && event === "play") holdVideo(player);
+      return;
+    }
+    if (locked) return;
 
+    if (event === "playing") {
+      if (desiredPlaying.current && activeSync.current) setSyncOperation(null);
+      return;
+    }
     if (event === "play") {
       if (ignoredPlay.current) {
         ignoredPlay.current = false;
@@ -430,6 +460,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (desiredPlaying.current) playIntentLostAt.current = performance.now();
       desiredPlaying.current = false;
       resumeAfterSeek.current = false;
+      setSyncOperation(null);
       generation.current += 1;
       awaitingMedia.current = false;
       mediaReadyGeneration.current += 1;
@@ -442,6 +473,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (alignSeekActive.current) return;
       if (seekInProgress.current) return;
       seekInProgress.current = true;
+      setSyncOperation({ kind: "seeking", mediaTimeMillis: mediaTimeMillis(player) });
       resumeAfterSeek.current = desiredPlaying.current
         || !player.paused
         || (playIntentLostAt.current > 0 && performance.now() - playIntentLostAt.current < SEEK_GESTURE_PAUSE_MILLIS);
@@ -465,9 +497,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       seekInProgress.current = false;
       if (shouldResume) {
         desiredPlaying.current = true;
+        setSyncOperation({ kind: "resyncing", mediaTimeMillis: mediaTimeMillis(player) });
         void seekingStop.current.then(() => armPlayback(player, "seeked"));
       } else {
         desiredPlaying.current = false;
+        setSyncOperation(null);
         void seekingStop.current.then(() => stopPlaybackMotion(player, "paused", "seeked"));
       }
       return;
@@ -481,6 +515,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     }
     if (event === "ended") {
       desiredPlaying.current = false;
+      setSyncOperation(null);
       generation.current += 1;
       awaitingMedia.current = false;
       armAbort.current?.abort();
@@ -507,6 +542,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       armAbort.current?.abort();
       holdVideo(player);
       activeSync.current = false;
+      setSyncOperation(null);
       setSyncError("");
       setSync({
         active: false,
@@ -524,12 +560,13 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (!desiredPlaying.current && !activeSync.current && !arming.current) return;
       desiredPlaying.current = false;
       awaitingMedia.current = false;
+      setSyncOperation(null);
       generation.current += 1;
       armAbort.current?.abort();
       holdVideo(player);
       void stopPlaybackMotion(player, "paused", "error");
     }
-  }, [armPlayback, clearMediaReadyPoll, holdVideo, locked, resumeWhenMediaReady, script, stopPlaybackMotion, video.id, waitForMediaReady]);
+  }, [armPlayback, clearMediaReadyPoll, holdVideo, loadingScript, locked, resumeWhenMediaReady, script, stopPlaybackMotion, video.id, waitForMediaReady]);
 
   useEffect(() => {
     if (!script || locked) return undefined;
@@ -559,6 +596,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   useEffect(() => {
     if (!locked || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
     desiredPlaying.current = false;
+    setSyncOperation(null);
     playIntentLostAt.current = 0;
     generation.current += 1;
     armAbort.current?.abort();
@@ -610,78 +648,74 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     });
   }
 
-  if (loadingScript) {
-    return (
-      <div className="media-player" aria-busy="true">
-        <div className="media-script-loading" role="status">Loading paired funscript</div>
-      </div>
-    );
-  }
-
-  if (!script) {
-    return (
-      <MediaVideoPlayer video={video} allowMetadataWrite={!locked} onVideoUpdate={onVideoUpdate}>
-        {scriptError && <p className="form-status media-playback-error" role="alert">Script unavailable: {scriptError}. Video playback will not command motion.</p>}
-      </MediaVideoPlayer>
-    );
-  }
-
-  const statusLabel = syncStatusLabel(sync, locked);
+  const statusLabel = script ? syncStatusLabel(sync, locked, syncOperation) : "";
   const effectiveOffset = (state?.settings?.media?.script_offset_ms ?? 0) + (video.script_offset_ms ?? 0);
-  const durationMismatch = mediaDurationMismatch(video.duration_ms, script.duration_ms);
+  const durationMismatch = script ? mediaDurationMismatch(video.duration_ms, script.duration_ms) : false;
   return (
     <MediaVideoPlayer
       video={video}
       allowMetadataWrite={!locked}
+      controlsEnabled={!loadingScript}
+      busy={loadingScript}
       onVideoUpdate={onVideoUpdate}
       onTimeChange={handleTimeChange}
       playerRef={playerRef}
-      onPlaybackEvent={handlePlaybackEvent}
-      synchronized
+      onPlaybackEvent={video.has_funscript ? handlePlaybackEvent : undefined}
+      synchronized={video.has_funscript}
     >
-      <section className="media-funscript" aria-label="Paired funscript timeline">
-        <div className="media-funscript-head">
-          <div>
-            <strong>Paired funscript</strong>
-            <span>{script.action_count.toLocaleString()} actions / {formatTimelineTime(script.duration_ms)}</span>
-            {durationMismatch && <span className="media-script-length-warning">Length differs from {formatTimelineTime(video.duration_ms ?? 0)} video</span>}
+      {loadingScript && <div className="media-script-loading" role="status">Preparing paired script and video</div>}
+      {!loadingScript && !script && scriptError && <p className="form-status media-playback-error" role="alert">Script unavailable: {scriptError}. Video playback will not command motion.</p>}
+      {script && (
+        <section className="media-funscript" aria-label="Paired funscript timeline">
+          <div className="media-funscript-head">
+            <div>
+              <strong>Paired funscript</strong>
+              <span>{script.action_count.toLocaleString()} actions / {formatTimelineTime(script.duration_ms)}</span>
+              {durationMismatch && <span className="media-script-length-warning">Length differs from {formatTimelineTime(video.duration_ms ?? 0)} video</span>}
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary compact-command media-playback-trigger"
+              onClick={() => setPanelOpen((open) => !open)}
+              aria-expanded={panelOpen}
+              aria-haspopup="dialog"
+            >
+              Sync {formatMillis(effectiveOffset)}
+            </button>
+            <button type="button" className="btn btn-secondary compact-command media-timeline-toggle" onClick={toggleTimeline} aria-expanded={!timelineHidden}>
+              <ChevronUpIcon />{timelineHidden ? "Show timeline" : "Hide timeline"}
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary compact-command media-playback-trigger"
-            onClick={() => setPanelOpen((open) => !open)}
-            aria-expanded={panelOpen}
-            aria-haspopup="dialog"
+          <FunscriptTimeline script={script} currentTime={currentTime} hidden={timelineHidden} onSeek={seek} />
+          <div
+            className="media-sync-readout"
+            data-state={sync.state}
+            data-operation={syncOperation?.kind}
+            role="status"
+            aria-busy={syncOperation ? true : undefined}
           >
-            Sync {formatMillis(effectiveOffset)}
-          </button>
-          <button type="button" className="btn btn-secondary compact-command media-timeline-toggle" onClick={toggleTimeline} aria-expanded={!timelineHidden}>
-            <ChevronUpIcon />{timelineHidden ? "Show timeline" : "Hide timeline"}
-          </button>
-        </div>
-        <FunscriptTimeline script={script} currentTime={currentTime} hidden={timelineHidden} onSeek={seek} />
-        <div className="media-sync-readout" data-state={sync.state} role="status">
-          <span className="media-sync-state"><span aria-hidden="true" />{statusLabel}</span>
-          {sync.active && typeof sync.motion_speed_limit_percent === "number" && <span>{sync.motion_speed_limit_percent}% speed limit</span>}
-          {sync.active && typeof sync.drift_ms === "number" && <span aria-hidden="true">{Math.abs(sync.drift_ms)} ms drift</span>}
-          <span className="media-sync-time">{formatTimelineTime(currentTime)}</span>
-        </div>
-        {syncError && <p className="form-status media-playback-error" role="alert">{syncError}</p>}
-        {panelOpen && (
-          <PlaybackPanel
-            video={video}
-            sync={sync}
-            locked={locked}
-            setupOffsetMillis={state?.settings?.media?.script_offset_ms ?? 0}
-            smoothingPercent={state?.settings?.media?.script_smoothing_percent ?? 0}
-            roundingMillis={state?.settings?.media?.peak_rounding_ms ?? 0}
-            limitSpeed={state?.settings?.motion?.apply_video_speed_limit ?? false}
-            onClose={() => setPanelOpen(false)}
-            onVideoUpdate={onVideoUpdate}
-            onFiltersChanged={refresh}
-          />
-        )}
-      </section>
+            <span className="media-sync-state"><span aria-hidden="true" />{statusLabel}</span>
+            {sync.active && typeof sync.motion_speed_limit_percent === "number" && <span>{sync.motion_speed_limit_percent}% speed limit</span>}
+            {sync.active && typeof sync.drift_ms === "number" && <span aria-hidden="true">{Math.abs(sync.drift_ms)} ms drift</span>}
+            <span className="media-sync-time">{formatTimelineTime(currentTime)}</span>
+          </div>
+          {syncError && <p className="form-status media-playback-error" role="alert">{syncError}</p>}
+          {panelOpen && (
+            <PlaybackPanel
+              video={video}
+              sync={sync}
+              locked={locked}
+              setupOffsetMillis={state?.settings?.media?.script_offset_ms ?? 0}
+              smoothingPercent={state?.settings?.media?.script_smoothing_percent ?? 0}
+              roundingMillis={state?.settings?.media?.peak_rounding_ms ?? 0}
+              limitSpeed={state?.settings?.motion?.apply_video_speed_limit ?? false}
+              onClose={() => setPanelOpen(false)}
+              onVideoUpdate={onVideoUpdate}
+              onFiltersChanged={refresh}
+            />
+          )}
+        </section>
+      )}
     </MediaVideoPlayer>
   );
 }
@@ -724,8 +758,17 @@ function syncStatusFromError(reason: unknown): MediaSyncStatus | null {
   return candidate as MediaSyncStatus;
 }
 
-function syncStatusLabel(sync: MediaSyncStatus, locked: boolean): string {
+function syncStatusLabel(sync: MediaSyncStatus, locked: boolean, operation: SyncOperation | null): string {
   if (locked) return "Timeline only; this tab does not control motion";
+  if (operation) {
+    const at = formatTimelineTime(operation.mediaTimeMillis);
+    switch (operation.kind) {
+      case "starting": return `Starting paired motion at ${at}`;
+      case "seeking": return `Seeking to ${at}; stopping prior motion`;
+      case "resyncing": return `Resyncing motion to script at ${at}`;
+      case "resuming": return `Script aligned at ${at}; resuming video`;
+    }
+  }
   switch (sync.state) {
     case "following": return "Device following video";
     case "seeking":

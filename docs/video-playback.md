@@ -585,6 +585,43 @@ Not verified on hardware: the numbers above are from simulated timing and unit
 tests. Which of these dominates in practice, and what offset a real setup wants,
 needs one paired-playback session with a device.
 
+### Playback initiation and Firefox seek pass (2026-07-26)
+
+Firefox user testing exposed avoidable serialization before the first frame and
+an ambiguous seek state. The paired player previously waited for the complete
+funscript request before it mounted the `<video>` element, so the browser could
+not begin metadata or media buffering while the bounded script was read and
+parsed. The player now mounts immediately with `preload="auto"`; native controls
+stay unavailable until the paired script is validated, preventing unsynchronized
+play while allowing media and script I/O to overlap.
+
+The successful timeline read also prepares the same bounded, validated script
+inside the sync runtime. The first arm promotes that document instead of opening
+and parsing the file a second time. Preparation replaces an inactive document,
+so the runtime still retains at most one full funscript curve. Deep seeks use a
+binary search for the first future action rather than scanning every action
+before the new timestamp.
+
+Cloud startup still reads physical slider position and stroke geometry before a
+lead-in. Those independent read-only requests now run concurrently under the
+same transport admission and HSP lock. A Stop still invalidates the admission,
+the runtime still waits for both complete snapshots, and all physical arrival
+and zero-speed verification remains unchanged.
+
+Seek feedback now describes the local operation instead of relying only on the
+last backend snapshot:
+
+- `Seeking to <time>; stopping prior motion`
+- `Resyncing motion to script at <time>`
+- `Script aligned at <time>; resuming video`
+
+The operation clears on the media element's `playing` event, which is the honest
+browser signal that playback resumed, rather than when `play()` was requested.
+Coverage includes Firefox's observed `pause` -> `seeking` -> `seeked` ordering,
+keeps playback intent through that one scrub gesture, and verifies that the
+re-arm uses the new media timestamp. Hardware alignment was not re-measured in
+this pass; M3's real-device gate remains open.
+
 ### Open decision: offline pre-transcode
 
 The wall above rules out transcoding *during playback*. It does not by itself

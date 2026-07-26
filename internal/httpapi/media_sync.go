@@ -113,18 +113,19 @@ type mediaSyncRuntime struct {
 	server *Server
 	now    func() time.Time
 
-	lifecycleMu   sync.Mutex
-	mu            sync.Mutex
-	status        mediaSyncStatus
-	script        *media.Funscript
-	anchorMedia   int64
-	lastSignal    time.Time
-	driftBreaches int
-	sessionID     string
-	scriptOffset  int
-	videoID       string
-	fences        map[string]mediaSessionFence
-	fenceOrder    []string
+	lifecycleMu    sync.Mutex
+	mu             sync.Mutex
+	status         mediaSyncStatus
+	script         *media.Funscript
+	preparedScript *media.Funscript
+	anchorMedia    int64
+	lastSignal     time.Time
+	driftBreaches  int
+	sessionID      string
+	scriptOffset   int
+	videoID        string
+	fences         map[string]mediaSessionFence
+	fenceOrder     []string
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -465,6 +466,9 @@ func (m *mediaSyncRuntime) stopForEvent(ctx context.Context, event mediaSyncEven
 	m.driftBreaches = 0
 	if releaseScript {
 		m.script = nil
+		if m.preparedScript != nil && m.preparedScript.VideoID == event.VideoID {
+			m.preparedScript = nil
+		}
 	}
 	m.status = status
 	m.mu.Unlock()
@@ -514,9 +518,32 @@ func (m *mediaSyncRuntime) trimFencesLocked() {
 	}
 }
 
+// PrepareScript lets the timeline read pay the bounded file parse once. It is
+// promoted into the active session only when an arm requests the same opaque
+// video ID; motion still validates and slices the document server-side.
+func (m *mediaSyncRuntime) PrepareScript(script media.Funscript) {
+	if script.VideoID == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.status.Active || (m.script != nil && m.script.VideoID == script.VideoID) {
+		return
+	}
+	m.script = nil
+	m.preparedScript = &script
+}
+
 func (m *mediaSyncRuntime) scriptFor(ctx context.Context, videoID string) (media.Funscript, error) {
 	m.mu.Lock()
 	if m.script != nil && m.script.VideoID == videoID {
+		script := *m.script
+		m.mu.Unlock()
+		return script, nil
+	}
+	if m.preparedScript != nil && m.preparedScript.VideoID == videoID {
+		m.script = m.preparedScript
+		m.preparedScript = nil
 		script := *m.script
 		m.mu.Unlock()
 		return script, nil

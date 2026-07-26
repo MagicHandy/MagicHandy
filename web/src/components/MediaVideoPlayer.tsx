@@ -6,6 +6,8 @@ interface Props {
   video: MediaVideo;
   allowMetadataWrite: boolean;
   children?: ReactNode;
+  controlsEnabled?: boolean;
+  busy?: boolean;
   onDuration?: (durationMillis: number) => void;
   onTimeChange?: (timeMillis: number) => void;
   onVideoUpdate?: (video: MediaVideo) => void;
@@ -14,12 +16,14 @@ interface Props {
   synchronized?: boolean;
 }
 
-export type MediaPlaybackEvent = "play" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "canplay" | "error";
+export type MediaPlaybackEvent = "play" | "playing" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "canplay" | "error";
 
 export function MediaVideoPlayer({
   video,
   allowMetadataWrite,
   children,
+  controlsEnabled = true,
+  busy = false,
   onDuration,
   onTimeChange,
   onVideoUpdate,
@@ -64,12 +68,13 @@ export function MediaVideoPlayer({
   }
 
   return (
-    <div className="media-player" data-synchronized={synchronized || undefined} aria-label={`Video player for ${video.display_name}`}>
+    <div className="media-player" data-synchronized={synchronized || undefined} aria-label={`Video player for ${video.display_name}`} aria-busy={busy || undefined}>
       <div className="media-video-frame">
         <video
           ref={setPlayerRef}
           key={video.id}
-          controls
+          controls={controlsEnabled}
+          tabIndex={controlsEnabled ? undefined : -1}
           playsInline
           preload={synchronized ? "auto" : "metadata"}
           src={api.mediaStreamURL(video.id)}
@@ -77,6 +82,7 @@ export function MediaVideoPlayer({
           onLoadedMetadata={(event) => void loadedMetadata(event)}
           onTimeUpdate={(event) => onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000))}
           onPlay={(event) => onPlaybackEvent?.("play", event.currentTarget)}
+          onPlaying={(event) => onPlaybackEvent?.("playing", event.currentTarget)}
           onPause={(event) => onPlaybackEvent?.("pause", event.currentTarget)}
           onSeeking={(event) => {
             onTimeChange?.(Math.round(event.currentTarget.currentTime * 1000));

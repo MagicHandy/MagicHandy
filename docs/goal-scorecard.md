@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The current embedded
-   browser payload is 953,185 raw / 577,833 gzip bytes because the isolated
-   connection artwork contributes 437,021 gzip bytes. HTML/CSS/JS is 508,949 raw
-   / 140,812 gzip bytes, and the stripped binary is 15,235,584 bytes. These
+   browser payload is 954,289 raw / 578,822 gzip bytes because the isolated
+   connection artwork contributes 437,397 gzip bytes. HTML/CSS/JS is 510,053 raw
+   / 141,425 gzip bytes, and the stripped binary is 15,260,160 bytes. These
    remain within budget, but future bitmap additions must not normalize this
    one-time fidelity cost.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -121,6 +121,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-26** - Video initiation and Firefox seek-status pass. Paired media
+  now mounts immediately so browser preloading can begin while its bounded script is fetched;
+  controls remain withheld until validation. The timeline response prepares one
+  server-side document for promotion on first arm, deep seeks binary-search past
+  old actions, and Cloud's independent physical slider/stroke reads overlap
+  under the existing Stop admission. Seek feedback names the target timestamp
+  while stopping, resynchronizing, and resuming, then clears only on `playing`.
+  Focused coverage reproduces Firefox's pause-before-seek event order. All 253
+  frontend tests, typecheck/build, the full Go suite, vet, lint, and plain plus
+  stripped `CGO_ENABLED=0` builds pass. The local race suite remains unavailable:
+  installed Clang targets MSVC and rejects Go's MinGW flags, while MinGW GCC is
+  absent; CI retains the mandatory race gate. Against the checked-in bundle,
+  Node 22 zlib level-9 measurement is +1,035 raw / +346 gzip bytes: 510,053 /
+  141,425 HTML/CSS/JS and 954,289 / 578,822 complete. Plain/stripped binaries
+  are 21,610,496 / 15,260,160 bytes. Physical alignment was not re-measured; the
+  M3 hardware gate remains open.
 
 - **2026-07-23** - Chat voice continuity parity: non-utility interactive chat
   adds bounded, quoted persona and user-anatomy settings, the reviewed strict

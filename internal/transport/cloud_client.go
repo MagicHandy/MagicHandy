@@ -125,28 +125,48 @@ func (t *CloudRESTTransport) ReadMotionStartupState(ctx context.Context) (Motion
 		return MotionStartupState{}, MotionStartupStateResults{Slider: result}, err
 	}
 
-	sliderResult, sliderBody, err := t.dispatchWithBody(ctx, t.builder.BuildSliderState())
-	results := MotionStartupStateResults{Slider: sliderResult}
-	if err != nil {
-		return MotionStartupState{}, results, err
+	type startupRead struct {
+		result CommandResult
+		body   []byte
+		err    error
 	}
-	position, positionAbsolute, speed, err := parseCloudSliderState(sliderBody)
+	sliderRequest := t.builder.BuildSliderState()
+	strokeRequest := t.builder.BuildStrokeWindowState()
+	sliderRead := make(chan startupRead, 1)
+	strokeRead := make(chan startupRead, 1)
+
+	// These endpoints are independent, read-only snapshots. Dispatching them
+	// together removes one Cloud round trip while the shared admission and HSP
+	// lock still prevent startup from crossing a concurrent Stop or command.
+	go func() {
+		result, body, readErr := t.dispatchWithBody(ctx, sliderRequest)
+		sliderRead <- startupRead{result: result, body: body, err: readErr}
+	}()
+	go func() {
+		result, body, readErr := t.dispatchWithBody(ctx, strokeRequest)
+		strokeRead <- startupRead{result: result, body: body, err: readErr}
+	}()
+
+	slider := <-sliderRead
+	stroke := <-strokeRead
+	results := MotionStartupStateResults{Slider: slider.result, Stroke: stroke.result}
+	if slider.err != nil {
+		return MotionStartupState{}, results, slider.err
+	}
+	position, positionAbsolute, speed, err := parseCloudSliderState(slider.body)
 	if err != nil {
 		results.Slider = t.recordBuildError(CommandKindSliderState, err)
 		return MotionStartupState{}, results, err
 	}
-	if err := t.motionGate.validate(admission); err != nil {
+	if stroke.err != nil {
+		return MotionStartupState{}, results, stroke.err
+	}
+	strokeMin, strokeMax, strokeMinAbsolute, strokeMaxAbsolute, err := parseCloudStrokeWindowState(stroke.body)
+	if err != nil {
 		results.Stroke = t.recordBuildError(CommandKindStrokeWindowState, err)
 		return MotionStartupState{}, results, err
 	}
-
-	strokeResult, strokeBody, err := t.dispatchWithBody(ctx, t.builder.BuildStrokeWindowState())
-	results.Stroke = strokeResult
-	if err != nil {
-		return MotionStartupState{}, results, err
-	}
-	strokeMin, strokeMax, strokeMinAbsolute, strokeMaxAbsolute, err := parseCloudStrokeWindowState(strokeBody)
-	if err != nil {
+	if err := t.motionGate.validate(admission); err != nil {
 		results.Stroke = t.recordBuildError(CommandKindStrokeWindowState, err)
 		return MotionStartupState{}, results, err
 	}
