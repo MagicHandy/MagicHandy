@@ -47,6 +47,9 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 		Messages:             request.Messages,
 		Stream:               true,
 		Temperature:          request.Temperature,
+		TopP:                 request.TopP,
+		RepeatPenalty:        request.RepeatPenalty,
+		RepeatLastN:          request.RepeatLastN,
 		MaxTokens:            request.MaxTokens,
 		ThinkingBudgetTokens: request.ReasoningBudgetTokens,
 		ResponseFormat: &openAIResponseFormat{
@@ -170,6 +173,9 @@ type openAIChatRequest struct {
 	Messages             []Message                 `json:"messages"`
 	Stream               bool                      `json:"stream"`
 	Temperature          float64                   `json:"temperature"`
+	TopP                 float64                   `json:"top_p,omitempty"`
+	RepeatPenalty        float64                   `json:"repeat_penalty,omitempty"`
+	RepeatLastN          int                       `json:"repeat_last_n,omitempty"`
 	MaxTokens            int                       `json:"max_tokens,omitempty"`
 	ThinkingBudgetTokens int                       `json:"thinking_budget_tokens,omitempty"`
 	ChatTemplateKwargs   *openAIChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`

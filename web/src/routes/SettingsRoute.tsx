@@ -428,8 +428,9 @@ export function SettingsRoute() {
               />
             </label>
             <p className="hint">
-              Anatomy vocabulary and persona apply to interactive Warm, Intimate, and Explicit replies only.
-              They are bounded prompt context and cannot change motion permissions or limits.
+              Anatomy context and persona apply to interactive Warm, Intimate, and Explicit replies.
+              Direct anatomy wording is reserved for Explicit; the other levels keep references indirect.
+              This bounded context cannot change motion permissions or limits.
             </p>
             <div className="divider" />
             <PromptSetEditor locked={locked} />

@@ -9,6 +9,16 @@ model-reported mood, recent-line feedback, localization-catalog, and placement-
 wording gaps identified below. The original dated findings remain unchanged as
 the review record; see "Follow-up closure" at the end.
 
+Correction, 2026-07-25: the original mechanism-level verdict was too
+optimistic. A controlled same-model llama.cpp run showed that Claude's
+`explicit` prompt still produced restrained, formulaic output well below the
+STGPT-RV reference. The review had not live-tested that claim. The later prompt
+parity work removed neutral reply examples, split early identity from a
+terminal voice check, made anatomy level-aware, and matched the reference
+sampling controls. `utility` is no longer byte-identical and the format guard
+is no longer the final section; both are deliberate corrections. See
+[`chat-voice.md`](chat-voice.md) for the current evidence and design.
+
 ## The task this reviews
 
 Given prompt: *"Review and compare STGPT-RV and MagicHandy prompts, determine
@@ -166,8 +176,13 @@ the reviewed safety properties:
   acceptance point; Stop itself never waits on SQLite, and post-acceptance Stop
   still fences motion and TTS
 - prompt-only settings changes no longer refresh running motion
-- the wording catalog and implementation report now describe the new surfaces
-  and clarify that the format guard, not the voice section, remains last
+- the later parity update intentionally places a code-owned final voice check
+  after the format guard; strict parsing, repair, and capability enforcement
+  remain the output boundary
 
-No additional live explicit-output transcript was produced; the original
-review's stated live-testing limitation still applies.
+That final statement was true for PR #126 but is superseded. On 2026-07-25,
+MagicHandy was tested live against the reviewed STGPT-RV reference using the
+same installed Gemma model, managed llama.cpp runtime, corpus, profile, and
+sampling controls. The build-tagged rubric now checks level boundaries, direct
+explicit-language coverage, embodied variation, strict motion parsing, and a
+minimum response-depth comparison. The final managed run passed.
