@@ -49,17 +49,23 @@ func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
 		Seed:               42,
 		MaxSegmentDuration: 80 * time.Millisecond,
 		Decide: func(_ context.Context, input modes.DecisionInput) (modes.Decision, error) {
-			// A scripted curation: pick an enabled builtin with an in-band
-			// intensity and speak once at the first check-in.
+			// Alternate enabled builtins so each scripted check-in is a real
+			// curation rather than an intentional no-op Hold.
+			patternID := "pulse"
+			intensity := 33
+			if input.SegmentIndex%2 == 1 {
+				patternID = "stroke"
+				intensity = 35
+			}
 			say := ""
 			if input.SegmentIndex == 0 {
 				say = "Starting a steady pulse."
 			}
 			result := chat.Result{Response: chat.AssistantResponse{
 				Reply:  say,
-				Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: "pulse", Intensity: intPtr(33)},
+				Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: patternID, Intensity: intPtr(intensity)},
 			}}
-			return server.mapAutopilotResult(result)
+			return server.mapAutopilotResult(result, input)
 		},
 		Announce: func(_ context.Context, say string) {
 			mu.Lock()
@@ -158,9 +164,12 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	}
 
 	decision, err := server.autopilotDecide(t.Context(), modes.DecisionInput{
-		Style:           config.MotionStyleBalanced,
-		SpeedMinPercent: 20,
-		SpeedMaxPercent: 80,
+		Style:            config.MotionStyleBalanced,
+		SpeedMinPercent:  20,
+		SpeedMaxPercent:  80,
+		CurrentPatternID: motion.PatternStroke,
+		CurrentSpeed:     30,
+		CurrentAreaFocus: &motion.AreaFocus{MinPercent: 0, MaxPercent: 34},
 	})
 	if err != nil {
 		t.Fatalf("autopilotDecide: %v", err)
@@ -180,7 +189,7 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 		contextText.WriteString(message.Content)
 		contextText.WriteByte('\n')
 	}
-	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot check-in"} {
+	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot check-in", "pattern \"stroke\" at 30% speed in area \"base\""} {
 		if !strings.Contains(contextText.String(), want) {
 			t.Fatalf("provider context missing %q:\n%s", want, contextText.String())
 		}
@@ -294,11 +303,20 @@ func TestCanceledAutopilotAnnouncementNeverEntersChat(t *testing.T) {
 	}
 }
 
-func TestMapAutopilotResult(t *testing.T) {
+func autopilotMapInput() modes.DecisionInput {
+	return modes.DecisionInput{
+		CurrentPatternID: motion.PatternStroke,
+		CurrentSpeed:     30,
+		CurrentAreaFocus: &motion.AreaFocus{MinPercent: 0, MaxPercent: 34},
+	}
+}
+
+func TestMapAutopilotResultHoldsNonChanges(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
+	input := autopilotMapInput()
 
-	hold, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{Reply: "just talking"}})
+	hold, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{Reply: "just talking"}}, input)
 	if err != nil || !hold.Hold || hold.Say != "just talking" {
 		t.Fatalf("nil motion => %+v, %v; want hold with say", hold, err)
 	}
@@ -306,28 +324,51 @@ func TestMapAutopilotResult(t *testing.T) {
 	stop, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
 		Reply:  "stopping",
 		Motion: &chat.MotionCommand{Action: chat.MotionActionStop},
-	}})
+	}}, input)
 	if err != nil || !stop.Hold {
 		t.Fatalf("model stop => %+v, %v; want hold (user owns stop)", stop, err)
 	}
 
-	curated, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
-		Reply:  "picking up",
-		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: "stroke", Intensity: intPtr(45)},
-	}})
-	if err != nil {
-		t.Fatalf("curated: %v", err)
-	}
-	if curated.Hold || string(curated.Segment.PatternID) != "stroke" || curated.Segment.SpeedPercent != 45 || curated.Pattern == nil {
-		t.Fatalf("curated => %+v; want resolved stroke segment", curated)
+	noOp, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
+		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget},
+	}}, input)
+	if err != nil || !noOp.Hold {
+		t.Fatalf("unchanged target => %+v, %v; want hold", noOp, err)
 	}
 
 	disabled, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
 		Reply:  "hm",
 		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: "not-a-pattern", Intensity: intPtr(45)},
-	}})
+	}}, input)
 	if err != nil || !disabled.Hold {
 		t.Fatalf("unknown pattern => %+v, %v; want hold", disabled, err)
+	}
+}
+
+func TestMapAutopilotResultAppliesPartialChanges(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	input := autopilotMapInput()
+
+	curated, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
+		Reply:  "picking up",
+		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: "stroke", Intensity: intPtr(45)},
+	}}, input)
+	if err != nil {
+		t.Fatalf("curated: %v", err)
+	}
+	if curated.Hold || string(curated.Segment.PatternID) != "stroke" || curated.Segment.SpeedPercent != 45 ||
+		curated.Pattern == nil || !sameAreaFocus(curated.Segment.AreaFocus, input.CurrentAreaFocus) {
+		t.Fatalf("curated => %+v; want resolved stroke segment preserving the live area", curated)
+	}
+
+	areaOnly, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
+		Reply:  "opening up",
+		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, Area: chat.AreaZoneFull},
+	}}, input)
+	if err != nil || areaOnly.Hold || areaOnly.Segment.PatternID != motion.PatternStroke ||
+		areaOnly.Segment.SpeedPercent != 30 || areaOnly.Segment.AreaFocus != nil {
+		t.Fatalf("area-only result => %+v, %v; want current pattern and speed at full area", areaOnly, err)
 	}
 }
 
@@ -339,6 +380,10 @@ func TestAutopilotDecisionMessageFramesTheContract(t *testing.T) {
 		SpeedMinPercent:  20,
 		SpeedMaxPercent:  80,
 		LastSay:          "previous line",
+		CurrentPatternID: "stroke",
+		CurrentSpeed:     30,
+		CurrentArea:      chat.AreaZoneBase,
+		AreaFocusEnabled: true,
 	})
 	for _, want := range []string{
 		"Autopilot check-in 3",
@@ -346,6 +391,8 @@ func TestAutopilotDecisionMessageFramesTheContract(t *testing.T) {
 		"20-80%",
 		"stroke, pulse",
 		"previous line",
+		"Current motion: pattern \"stroke\" at 30% speed in area \"base\"",
+		"current named area focus is temporary",
 		"Never use action \"stop\"",
 	} {
 		if !strings.Contains(message, want) {

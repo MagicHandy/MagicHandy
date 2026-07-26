@@ -45,6 +45,7 @@ type EngineOptions struct {
 type Engine struct {
 	mu        sync.Mutex
 	commandMu sync.Mutex
+	targetMu  sync.Mutex
 
 	transport        transport.Transport
 	traces           *diagnostics.TraceRing
@@ -227,6 +228,9 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 
 // ApplyTarget retargets active motion without stopping the active stream.
 func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason string) (ActiveMotionState, error) {
+	e.targetMu.Lock()
+	defer e.targetMu.Unlock()
+
 	if reason == "" {
 		reason = "target_applied"
 	}
@@ -235,6 +239,9 @@ func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason st
 		return e.Snapshot(), err
 	}
 	if err := e.ensureLeadBuffer(ctx, runEpoch, "retarget_lead_points"); err != nil {
+		return e.Snapshot(), err
+	}
+	if err := ctx.Err(); err != nil {
 		return e.Snapshot(), err
 	}
 	if err := e.retarget(runEpoch, target, reason); err != nil {
@@ -246,6 +253,9 @@ func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason st
 
 // RefreshSettings applies active speed, stroke-window, and direction updates.
 func (e *Engine) RefreshSettings(ctx context.Context, settings config.MotionSettings, reason string) (ActiveMotionState, error) {
+	e.targetMu.Lock()
+	defer e.targetMu.Unlock()
+
 	if reason == "" {
 		reason = "settings_refresh"
 	}

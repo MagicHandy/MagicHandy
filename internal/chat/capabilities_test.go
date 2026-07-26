@@ -209,7 +209,7 @@ func TestNoOpTargetUsesRepairWithoutForcingSteadyTurns(t *testing.T) {
 	}
 }
 
-func TestRepeatedSemanticFailureUsesFreshPatternAndPreservesOtherChanges(t *testing.T) {
+func TestSemanticRepairAcceptsModelSelectedRecentPatternAndOtherChanges(t *testing.T) {
 	capabilities := FullCapabilities()
 	context := MotionContext{
 		Running: true, PatternID: "pulse", RecentPatternIDs: []string{"tease"},
@@ -226,12 +226,12 @@ func TestRepeatedSemanticFailureUsesFreshPatternAndPreservesOtherChanges(t *test
 	}
 
 	result, err := service.Complete(t.Context(), Request{Message: "Mix it up, focus on the base, and go a little faster"}, nil)
-	if err != nil || result.Malformed || !result.Repaired || !result.SemanticFallback || result.Response.Motion == nil {
-		t.Fatalf("semantic fallback failed: result=%+v err=%v", result, err)
+	if err != nil || result.Malformed || !result.Repaired || result.SemanticFallback || result.Response.Motion == nil {
+		t.Fatalf("semantic repair failed: result=%+v err=%v", result, err)
 	}
 	command := result.Response.Motion
-	if command.PatternID != "waves" || command.SpeedPercent == nil || *command.SpeedPercent != 35 || command.Area != AreaZoneBase {
-		t.Fatalf("semantic fallback target = %+v, want fresh pattern with repaired speed and area", command)
+	if command.PatternID != "tease" || command.SpeedPercent == nil || *command.SpeedPercent != 35 || command.Area != AreaZoneBase {
+		t.Fatalf("semantic repair target = %+v, want the model-selected pattern, speed, and area", command)
 	}
 }
 
@@ -420,29 +420,30 @@ func TestSemanticRepairCannotRecreateUnauthorizedMotion(t *testing.T) {
 	}
 }
 
-func TestPatternVariationIntentDoesNotCaptureConversationalObjects(t *testing.T) {
+func TestMotionVariationIntentDoesNotCaptureConversationalObjects(t *testing.T) {
 	for _, message := range []string{
 		"Surprise me with a joke",
 		"Add some variation to your wording",
 		"Give me something different to think about",
 	} {
-		if requestsPatternVariation(message) {
-			t.Errorf("requestsPatternVariation(%q) = true, want false", message)
+		if requestsMotionVariation(message) {
+			t.Errorf("requestsMotionVariation(%q) = true, want false", message)
 		}
 	}
 	for _, message := range []string{
 		"Mix it up",
 		"Surprise me again",
+		"Keep changing it up",
 		"Change the feel again, but keep the same pace",
 		"Mix it up, focus on the base, and go a little faster",
 	} {
-		if !requestsPatternVariation(message) {
-			t.Errorf("requestsPatternVariation(%q) = false, want true", message)
+		if !requestsMotionVariation(message) {
+			t.Errorf("requestsMotionVariation(%q) = false, want true", message)
 		}
 	}
 }
 
-func TestExplicitVariationRepairWithoutMotionUsesFreshFallback(t *testing.T) {
+func TestExplicitVariationStaysMalformedAfterRepeatedModelNoOp(t *testing.T) {
 	capabilities := FullCapabilities()
 	context := MotionContext{
 		Running: true, PatternID: "waves", RecentPatternIDs: []string{"pulse", "waves"},
@@ -450,7 +451,7 @@ func TestExplicitVariationRepairWithoutMotionUsesFreshFallback(t *testing.T) {
 	}
 	provider := &scriptedProvider{responses: []string{
 		`{"reply":"Changing it.","motion":{"action":"target","speed_percent":30}}`,
-		`{"reply":"Changing the feel."}`,
+		`{"reply":"Changing the feel.","motion":{"action":"none"}}`,
 	}}
 	service := Service{
 		Provider:      provider,
@@ -459,16 +460,18 @@ func TestExplicitVariationRepairWithoutMotionUsesFreshFallback(t *testing.T) {
 	}
 
 	result, err := service.Complete(t.Context(), Request{Message: "Change the feel again, but keep a moderate pace"}, nil)
-	if err != nil || result.Malformed || !result.SemanticFallback || result.Response.Motion == nil {
-		t.Fatalf("missing-variation fallback failed: result=%+v err=%v", result, err)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
 	}
-	command := result.Response.Motion
-	if command.PatternID != "climb" || command.SpeedPercent == nil || *command.SpeedPercent != 30 {
-		t.Fatalf("fallback command = %+v, want fresh climb at current moderate speed", command)
+	if !result.InitialMalformed || !result.Malformed || result.Repaired || result.SemanticFallback || result.Response.Motion != nil {
+		t.Fatalf("repeated model no-op was replaced by deterministic motion: %+v", result)
+	}
+	if len(provider.requests) != 2 {
+		t.Fatalf("provider requests = %d, want one generation and one repair", len(provider.requests))
 	}
 }
 
-func TestExplicitVariationRejectsRecentPatternButSteadyRequestsPreserveIt(t *testing.T) {
+func TestExplicitVariationAllowsRecentPatternButSteadyRequestsPreserveCurrent(t *testing.T) {
 	capabilities := FullCapabilities()
 	context := MotionContext{
 		Running: true, PatternID: "stroke", RecentPatternIDs: []string{"pulse", "tease"},
@@ -476,7 +479,6 @@ func TestExplicitVariationRejectsRecentPatternButSteadyRequestsPreserveIt(t *tes
 	}
 	provider := &scriptedProvider{responses: []string{
 		`{"reply":"Changing it.","motion":{"action":"target","pattern_id":"pulse","speed_percent":30}}`,
-		`{"reply":"Changing it.","motion":{"action":"target","pattern_id":"waves","speed_percent":30}}`,
 	}}
 	service := Service{
 		Provider:      provider,
@@ -485,20 +487,43 @@ func TestExplicitVariationRejectsRecentPatternButSteadyRequestsPreserveIt(t *tes
 	}
 
 	result, err := service.Complete(t.Context(), Request{Message: "Mix it up again"}, nil)
-	if err != nil || result.Malformed || !result.Repaired || result.Response.Motion == nil {
-		t.Fatalf("recent-pattern repair failed: result=%+v err=%v", result, err)
+	if err != nil || result.Malformed || result.Repaired || result.Response.Motion == nil {
+		t.Fatalf("recent model-selected pattern was rejected: result=%+v err=%v", result, err)
 	}
-	if result.Response.Motion.PatternID != "waves" {
-		t.Fatalf("repaired pattern = %q, want fresh waves", result.Response.Motion.PatternID)
+	if result.Response.Motion.PatternID != "pulse" {
+		t.Fatalf("pattern = %q, want model-selected pulse", result.Response.Motion.PatternID)
 	}
 
 	steadyProvider := &scriptedProvider{responses: []string{
-		`{"reply":"Keeping the pace.","motion":{"action":"target","pattern_id":"pulse","speed_percent":32}}`,
+		`{"reply":"Keeping the pace.","motion":{"action":"target","pattern_id":"stroke","speed_percent":32}}`,
 	}}
 	service.Provider = steadyProvider
 	steady, err := service.Complete(t.Context(), Request{Message: "A little faster, keep the same pattern"}, nil)
-	if err != nil || steady.Repaired || steady.Response.Motion == nil || steady.Response.Motion.PatternID != "pulse" {
-		t.Fatalf("pacing request incorrectly rejected recent pattern: result=%+v err=%v", steady, err)
+	if err != nil || steady.Repaired || steady.Response.Motion == nil || steady.Response.Motion.PatternID != "stroke" {
+		t.Fatalf("pacing request did not preserve current pattern: result=%+v err=%v", steady, err)
+	}
+}
+
+func TestExplicitVariationMayChangeOnlyTheFocusedArea(t *testing.T) {
+	capabilities := FullCapabilities()
+	context := MotionContext{
+		Running: true, PatternID: "stroke", SpeedPercent: 30, Area: AreaZoneBase,
+		SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"Opening it up.","motion":{"action":"target","area":"full"}}`,
+	}}
+	service := Service{
+		Provider: provider, Patterns: []PatternChoice{{ID: "stroke"}, {ID: "pulse"}},
+		MotionContext: &context, Capabilities: &capabilities,
+	}
+
+	result, err := service.Complete(t.Context(), Request{Message: "Keep changing it up"}, nil)
+	if err != nil || result.Malformed || result.Repaired || result.Response.Motion == nil {
+		t.Fatalf("area-only variation failed: result=%+v err=%v", result, err)
+	}
+	if result.Response.Motion.Area != AreaZoneFull || result.Response.Motion.PatternID != "" {
+		t.Fatalf("area-only target = %+v, want full area without a forced pattern change", result.Response.Motion)
 	}
 }
 

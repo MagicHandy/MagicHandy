@@ -433,6 +433,55 @@ That is an expectation, not a result. Until one instrumented capture per owner
 exists, record-then-play is the safe default for any authoring-by-demonstration
 work, and live pass-through needs its own evidence before it is designed.
 
+## Follow-Up Review - 2026-07-25
+
+A stopped-chat trace exposed a higher-level interaction that the catalog sweeps
+did not cover. `just the base` projected a full-range loop into 0–34 but kept
+the same cycle time, cutting physical travel rate by roughly two thirds. The
+focus then survived four Autopilot decisions because decision prompts did not
+receive the engine's live area, and `keep changing it up` was not recognized as
+a variation directive. The semantic validator also demanded a fresh pattern,
+then synthesized one deterministically after a repeated model no-op. That made
+conversational taste a second hard-coded motion policy without clearing the
+stale focus that caused the poor feel.
+
+### Focus changes position without imposing slow motion
+
+A focused repeating pattern now contracts its played cycle with its projected
+travel. When proportional contraction would exceed the source pattern's
+acceleration envelope, an authored-duration floor contracts only by the square
+root of focus gain (`distance / time^2`). This preserves requested travel rate
+when possible and preserves authored acceleration when both cannot hold. Media
+and finite programs remain clock-locked or author-timed and are unchanged.
+
+The adaptive curve fitter now probes focused curves at 5 ms resolution with up
+to 512 internal candidates while retaining the existing 128-point wire-output
+cap. Authored knots remain mandatory for stable loops; transition fitting may
+remove tiny reversal chatter instead of preserving it as a device command.
+
+### The model owns conversational variation
+
+Explicit variation may change any meaningful combination of pattern, speed, or
+area. Recent patterns remain prompt context, not a deterministic exclusion
+list. A semantic no-op receives one repair pass; if the model repeats it, no
+synthetic physical command is invented. Deterministic code still owns current-
+turn authorization, capability and enabled-content gates, configured limits,
+normalization, Stop epochs, transport ownership, and engine admission.
+
+Autopilot decisions now receive the engine's live pattern, speed, and area.
+While an interactive chat target is applying, autonomous decisions are paused;
+a successful target is adopted as the current Autopilot segment and cancels any
+stale in-flight decision. The generation-tokened handoff rejects late adoption
+after Stop or a mode change. Plain conversation and pacing-only requests
+preserve a named area, while broad variation may move or clear it unless the
+user asked to stay there.
+
+Automated coverage includes focused travel rate, long authored-cycle
+acceleration floors, area-only variation, repeated no-op handling, current-state
+Autopilot decisions, and interactive chat/Autopilot handoff. Real-device feel
+remains unverified in this follow-up; any hardware pass must stay below 40% and
+capture owner telemetry and a trace export.
+
 ## ScriptPlayer Comparison
 
 Useful ideas retained from

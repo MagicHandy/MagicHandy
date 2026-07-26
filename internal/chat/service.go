@@ -53,8 +53,7 @@ const (
 
 var (
 	errMotionNoChange        = errors.New("motion target repeats the current content, speed, and area; change one allowed target field or use action none")
-	errMotionPatternStale    = errors.New("explicit variation selected a recently used pattern; select a fresh enabled pattern")
-	errMotionVariationAbsent = errors.New("explicit variation requires a different enabled pattern")
+	errMotionVariationAbsent = errors.New("explicit variation requires a meaningful change to content, speed, or area")
 	errMotionSpeedBand       = errors.New("motion speed is outside the explicitly requested speed band")
 )
 
@@ -210,7 +209,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	repaired, repairParseErr := s.parseAndValidateResponse(repairRaw, capabilities, userMessage)
 	if repairParseErr != nil {
-		if fallback, ok := s.recoverSemanticRepair(repaired, capabilities, userMessage, repairParseErr); ok {
+		if fallback, ok := s.recoverSemanticRepair(repaired, userMessage, repairParseErr); ok {
 			result.Response = fallback
 			result.Malformed = false
 			result.Repaired = true
@@ -248,18 +247,12 @@ func (s Service) recoverAuthorizedOmittedStart(response AssistantResponse, capab
 	return response, true
 }
 
-func (s Service) recoverSemanticRepair(response AssistantResponse, capabilities Capabilities, userMessage string, repairErr error) (AssistantResponse, bool) {
-	if errors.Is(repairErr, errMotionNoChange) && !requestsPatternVariation(userMessage) && strings.TrimSpace(response.Reply) != "" {
+func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage string, repairErr error) (AssistantResponse, bool) {
+	if errors.Is(repairErr, errMotionNoChange) && !requestsMotionVariation(userMessage) && strings.TrimSpace(response.Reply) != "" {
 		response.Motion = nil
 		return response, true
 	}
-	if !requestsPatternVariation(userMessage) || !isSemanticMotionError(repairErr) {
-		return AssistantResponse{}, false
-	}
-	if !s.TrustedMotionInput && !userAuthorizesMotion(userMessage, MotionActionTarget) {
-		return AssistantResponse{}, false
-	}
-	return s.semanticPatternFallback(response, capabilities, userMessage)
+	return AssistantResponse{}, false
 }
 
 func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities, userMessage string) (AssistantResponse, error) {
@@ -276,7 +269,7 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 	if response.Motion == nil && (!capabilities.Motion || (!s.TrustedMotionInput && !userAuthorizesMotion(userMessage, MotionActionTarget))) {
 		return response, nil
 	}
-	if err := validateMotionChange(response, s.MotionContext, userMessage, s.Patterns); err != nil {
+	if err := validateMotionChange(response, s.MotionContext, userMessage); err != nil {
 		return response, err
 	}
 	return response, nil
@@ -463,7 +456,7 @@ func authorizesMotionTarget(message string) bool {
 		containsAny(message, "加快", "减慢", "放慢", "改变", "更换", "聚焦", "快一点", "慢一点", "深入", "变浅", "缩短", "加长")
 	japaneseTarget := containsAny(message, "動き", "モーション", "速度", "リズム", "パターン", "先端", "シャフト", "根元") &&
 		containsAny(message, "速く", "遅く", "ゆっくり", "変え", "変更", "集中", "深く", "浅く", "短く", "長く")
-	return chineseTarget || japaneseTarget || (directive && requestsPatternVariation(message))
+	return chineseTarget || japaneseTarget || (directive && requestsMotionVariation(message))
 }
 
 // authorizesAreaFocus recognizes a request to move motion to part of the
@@ -508,7 +501,8 @@ func placesMotion(message string) bool {
 func motionIntentIsDirective(message string) bool {
 	if containsAnyExact(message,
 		"mix it up", "mix it up again", "change it up", "change it up again",
-		"change things up", "change things up again", "something different", "something else",
+		"change things up", "change things up again", "keep changing it up", "keep mixing it up",
+		"keep switching it up", "keep varying it", "something different", "something else",
 		"surprise me", "surprise me again", "switch it up", "switch it up again",
 		"variation", "more variation", "add variety", "vary it",
 	) {
@@ -540,37 +534,34 @@ func hasIntentPhrase(message string, phrases ...string) bool {
 	return false
 }
 
-func validateMotionChange(response AssistantResponse, context *MotionContext, userMessage string, patterns []PatternChoice) error {
+func validateMotionChange(response AssistantResponse, context *MotionContext, userMessage string) error {
 	if context == nil {
 		return nil
 	}
 	command := response.Motion
-	if err := validateRequestedPatternVariation(command, *context, userMessage, patterns); err != nil {
-		return err
-	}
+	variationRequested := context.Running && requestsMotionVariation(userMessage)
 	if command == nil {
+		if variationRequested {
+			return errMotionVariationAbsent
+		}
 		return nil
+	}
+	if variationRequested && command.Action == MotionActionNone {
+		return errMotionVariationAbsent
 	}
 	if err := validateRequestedSpeedBand(*command, *context, userMessage); err != nil {
 		return err
 	}
-	if !context.Running || command.Action != MotionActionTarget {
+	if !context.Running || (command.Action != MotionActionTarget && command.Action != MotionActionStart) {
 		return nil
 	}
-	if motionTargetMatchesContext(*command, *context) {
-		return errMotionNoChange
-	}
-	return validatePatternFreshness(*command, *context, userMessage, patterns)
-}
-
-func validateRequestedPatternVariation(command *MotionCommand, context MotionContext, userMessage string, patterns []PatternChoice) error {
-	if !context.Running || !requestsPatternVariation(userMessage) || !hasAlternativePattern(patterns, context.PatternID) {
+	if !motionTargetMatchesContext(*command, *context) {
 		return nil
 	}
-	if command == nil || command.Action != MotionActionTarget || command.PatternID == "" || strings.EqualFold(command.PatternID, context.PatternID) {
+	if variationRequested {
 		return errMotionVariationAbsent
 	}
-	return nil
+	return errMotionNoChange
 }
 
 func motionTargetMatchesContext(command MotionCommand, context MotionContext) bool {
@@ -594,15 +585,6 @@ func motionSpeedMatchesContext(command MotionCommand, currentSpeed int) bool {
 		return *command.SpeedPercent == currentSpeed
 	}
 	return true
-}
-
-func validatePatternFreshness(command MotionCommand, context MotionContext, userMessage string, patterns []PatternChoice) error {
-	if requestsPatternVariation(userMessage) && command.PatternID != "" &&
-		isRecentPattern(command.PatternID, context.RecentPatternIDs) &&
-		hasFreshPattern(patterns, context.PatternID, context.RecentPatternIDs) {
-		return errMotionPatternStale
-	}
-	return nil
 }
 
 func validateRequestedSpeedBand(command MotionCommand, context MotionContext, userMessage string) error {
@@ -665,17 +647,9 @@ func countTrue(values ...bool) int {
 	return count
 }
 
-func isSemanticMotionError(err error) bool {
-	return errors.Is(err, errMotionNoChange) || errors.Is(err, errMotionPatternStale) ||
-		errors.Is(err, errMotionVariationAbsent) || errors.Is(err, errMotionSpeedBand)
-}
-
-func requestsPatternVariation(message string) bool {
+func requestsMotionVariation(message string) bool {
 	message = normalizeMotionIntent(message)
 	if motionIntentIsNegated(message) || motionIntentIsConversation(message) {
-		return false
-	}
-	if containsAny(message, "do not change the pattern", "don't change the pattern", "keep the same pattern", "keep this pattern", "same pattern") {
 		return false
 	}
 	if containsAny(message,
@@ -686,7 +660,8 @@ func requestsPatternVariation(message string) bool {
 		return true
 	}
 	variationPhrase := containsAny(message,
-		"change it up", "change things up", "mix it up", "mix things up", "something different",
+		"change it up", "change things up", "keep changing it up", "mix it up", "mix things up",
+		"keep mixing it up", "keep switching it up", "keep varying it", "something different",
 		"something else", "surprise me", "switch it up", "variation", "variety", "vary it",
 	)
 	if !variationPhrase {
@@ -701,6 +676,7 @@ func requestsPatternVariation(message string) bool {
 	standalone := strings.Trim(message, " .,!?:;\t\r\n")
 	return containsAnyExact(standalone,
 		"change it up", "change it up again", "change things up", "change things up again",
+		"keep changing it up", "keep mixing it up", "keep switching it up", "keep varying it",
 		"mix it up", "mix it up again", "mix things up", "mix things up again",
 		"something different", "something else", "surprise me", "surprise me again",
 		"switch it up", "switch it up again", "variation", "more variation", "add variety", "vary it",
@@ -714,109 +690,6 @@ func containsAnyExact(value string, candidates ...string) bool {
 		}
 	}
 	return false
-}
-
-func isRecentPattern(patternID string, recentPatternIDs []string) bool {
-	for _, recentID := range recentPatternIDs {
-		if strings.EqualFold(strings.TrimSpace(patternID), strings.TrimSpace(recentID)) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasFreshPattern(patterns []PatternChoice, currentID string, recentPatternIDs []string) bool {
-	for _, pattern := range patterns {
-		patternID := strings.TrimSpace(pattern.ID)
-		if patternID != "" && !strings.EqualFold(patternID, currentID) && !isRecentPattern(patternID, recentPatternIDs) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasAlternativePattern(patterns []PatternChoice, currentID string) bool {
-	for _, pattern := range patterns {
-		patternID := strings.TrimSpace(pattern.ID)
-		if patternID != "" && !strings.EqualFold(patternID, currentID) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s Service) semanticPatternFallback(response AssistantResponse, capabilities Capabilities, userMessage string) (AssistantResponse, bool) {
-	if !capabilities.Motion || !capabilities.Patterns || s.MotionContext == nil || !s.MotionContext.Running || len(s.Patterns) < 2 {
-		return AssistantResponse{}, false
-	}
-	patternID, ok := selectFallbackPattern(s.Patterns, s.MotionContext.PatternID, s.MotionContext.RecentPatternIDs)
-	if !ok {
-		return AssistantResponse{}, false
-	}
-	command, ok := buildFallbackPatternCommand(patternID, response.Motion, *s.MotionContext, userMessage)
-	if !ok {
-		return AssistantResponse{}, false
-	}
-	response.Motion = &command
-	return response, true
-}
-
-func selectFallbackPattern(patterns []PatternChoice, currentID string, recentPatternIDs []string) (string, bool) {
-	currentID = strings.TrimSpace(currentID)
-	start := 0
-	for index, pattern := range patterns {
-		if strings.EqualFold(strings.TrimSpace(pattern.ID), currentID) {
-			start = (index + 1) % len(patterns)
-			break
-		}
-	}
-	recent := make(map[string]bool, len(recentPatternIDs))
-	for _, patternID := range recentPatternIDs {
-		recent[strings.ToLower(strings.TrimSpace(patternID))] = true
-	}
-	for pass := range 2 {
-		for offset := range len(patterns) {
-			patternID := strings.TrimSpace(patterns[(start+offset)%len(patterns)].ID)
-			normalizedID := strings.ToLower(patternID)
-			if normalizedID == "" || strings.EqualFold(normalizedID, currentID) || (pass == 0 && recent[normalizedID]) {
-				continue
-			}
-			return patternID, true
-		}
-	}
-	return "", false
-}
-
-func buildFallbackPatternCommand(patternID string, repaired *MotionCommand, context MotionContext, userMessage string) (MotionCommand, bool) {
-	command := MotionCommand{Action: MotionActionTarget, PatternID: patternID}
-	if repaired != nil {
-		command.Area = repaired.Area
-		command.Intensity = cloneInt(repaired.Intensity)
-		command.SpeedPercent = cloneInt(repaired.SpeedPercent)
-	}
-	if validateRequestedSpeedBand(command, context, userMessage) != nil {
-		command.Intensity = nil
-		command.SpeedPercent = nil
-	}
-	if command.Intensity == nil && command.SpeedPercent == nil {
-		speed := context.SpeedPercent
-		if _, band, requested := requestedSpeedBand(context, userMessage); requested && (speed < band[0] || speed > band[1]) {
-			speed = band[0] + (band[1]-band[0])/2
-		}
-		if speed < 1 || speed > 100 {
-			return MotionCommand{}, false
-		}
-		command.SpeedPercent = &speed
-	}
-	return command, true
-}
-
-func cloneInt(value *int) *int {
-	if value == nil {
-		return nil
-	}
-	cloned := *value
-	return &cloned
 }
 
 func buildMessages(systemPrompt string, history []llm.Message, userMessage string) []llm.Message {

@@ -10,7 +10,8 @@ import (
 const (
 	wireApproximationTolerance  = 0.3
 	maximumAdaptiveChunkPoints  = 128
-	bufferedProbeIntervalMillis = int64(25)
+	maximumInternalProbePoints  = 512
+	bufferedProbeIntervalMillis = int64(5)
 )
 
 // knotTimesBetween maps authored curve knots onto stream time. Buffered owners
@@ -64,11 +65,41 @@ func (p MotionPlan) knotTimesBetween(startMillis, endMillis int64) []int64 {
 	return uniqueMillis(times)
 }
 
+func motionProbeTimes(
+	plan MotionPlan,
+	transition *planTransition,
+	preservePlanKnots bool,
+	chunkStart, chunkEnd, probeIntervalMillis int64,
+	maximumPoints int,
+) ([]int64, map[int64]struct{}, bool) {
+	transitionInChunk := transitionOverlaps(transition, chunkStart, chunkEnd)
+	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+min(len(plan.curve.authoredKnots), maximumPoints))
+	for streamMillis := chunkStart; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
+		times = append(times, streamMillis)
+	}
+	mandatory := make(map[int64]struct{}, 2)
+	if preservePlanKnots {
+		for _, at := range motionPathKnotTimes(plan, transition, chunkStart, chunkEnd) {
+			times = append(times, at)
+			if !transitionInChunk {
+				mandatory[at] = struct{}{}
+			}
+		}
+	}
+	if transitionInChunk {
+		for _, at := range transitionBoundaryTimes(transition, chunkStart, chunkEnd) {
+			times = append(times, at)
+			mandatory[at] = struct{}{}
+		}
+	}
+	sort.Slice(times, func(left, right int) bool { return times[left] < times[right] })
+	return uniqueMillis(times), mandatory, transitionInChunk
+}
+
 func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	intervalMillis := e.sampleInterval.Milliseconds()
 	chunkStart := e.nextSampleMillis
 	chunkEnd := chunkStart + int64(e.chunkSize)*intervalMillis
-	transitionInChunk := transitionOverlaps(e.transition, chunkStart, chunkEnd)
 	probeIntervalMillis := intervalMillis
 	if e.preservePlanKnots && probeIntervalMillis > bufferedProbeIntervalMillis {
 		probeIntervalMillis = bufferedProbeIntervalMillis
@@ -77,24 +108,12 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	if maximumPoints < 2 {
 		maximumPoints = maximumAdaptiveChunkPoints
 	}
-	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+int64(maximumPoints)-1)/int64(maximumPoints))
+	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+maximumInternalProbePoints-1)/maximumInternalProbePoints)
 	probeIntervalMillis = max(probeIntervalMillis, minimumBoundedProbe)
-	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+min(len(e.plan.curve.authoredKnots), maximumPoints))
-	for streamMillis := chunkStart; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
-		times = append(times, streamMillis)
-	}
-	if e.preservePlanKnots {
-		times = append(times, motionPathKnotTimes(e.plan, e.transition, chunkStart, chunkEnd)...)
-	}
-	mandatory := make(map[int64]struct{}, 2)
-	if transitionInChunk {
-		for _, at := range transitionBoundaryTimes(e.transition, chunkStart, chunkEnd) {
-			times = append(times, at)
-			mandatory[at] = struct{}{}
-		}
-	}
-	sort.Slice(times, func(left, right int) bool { return times[left] < times[right] })
-	times = uniqueMillis(times)
+	times, mandatory, transitionInChunk := motionProbeTimes(
+		e.plan, e.transition, e.preservePlanKnots,
+		chunkStart, chunkEnd, probeIntervalMillis, maximumPoints,
+	)
 
 	samples := make([]MotionSample, 0, len(times)+1)
 	hasPreviousAnchor := e.lastSample != nil && (len(times) == 0 || e.lastSample.TimeMillis < times[0])

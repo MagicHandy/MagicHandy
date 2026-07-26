@@ -62,11 +62,13 @@ func NewMotionPlan(
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
+	focus := newFocusProjection(target, content, settings)
 	periodMillis := periodForContent(content.duration, target.SpeedPercent, content.loop, patternKind(target))
 	if target.Media != nil {
 		periodMillis = content.duration
+	} else {
+		periodMillis = focusedLoopPeriod(periodMillis, content.duration, content.loop, patternKind(target), focus)
 	}
-	focus := newFocusProjection(target, content, settings)
 	return MotionPlan{
 		ID:            id,
 		Target:        target,
@@ -296,6 +298,28 @@ func periodForContent(baseDuration int64, speedPercent int, loop bool, kind stri
 		return minimumBurstCycleMillis
 	}
 	return period
+}
+
+// focusedLoopPeriod keeps a narrowed loop from also becoming proportionally
+// slower. The requested period contracts with travel, while the routine floor
+// contracts only by sqrt(gain): acceleration scales with distance/time^2, so
+// this preserves the catalog acceleration budget when a high requested speed
+// cannot preserve both travel rate and acceleration.
+func focusedLoopPeriod(period, authoredPeriod int64, loop bool, kind string, focus focusProjection) int64 {
+	gain := focus.gain()
+	if !loop || gain <= 0 || gain >= 1 {
+		return period
+	}
+	adjusted := int64(math.Round(float64(period) * gain))
+	baseline := max(authoredPeriod, int64(minimumBurstCycleMillis))
+	minimum := int64(minimumBurstCycleMillis)
+	if kind != PatternKindBurst {
+		baseline = max(baseline, RoutineCycleFloorMillis)
+		minimum = int64(math.Ceil(float64(baseline) * math.Sqrt(gain)))
+	} else {
+		minimum = max(minimum, int64(math.Ceil(float64(baseline)*math.Sqrt(gain))))
+	}
+	return max(adjusted, minimum)
 }
 
 func patternKind(target MotionTarget) string {
