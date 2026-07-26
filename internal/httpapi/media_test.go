@@ -93,6 +93,33 @@ func assertMediaFunscriptResponse(t *testing.T, server *Server, videoID, root st
 	if strings.Contains(funscript.Body.String(), root) || strings.Contains(funscript.Body.String(), ".funscript") {
 		t.Fatalf("funscript API leaked a filesystem path: %s", funscript.Body.String())
 	}
+
+	server.mediaSync.mu.Lock()
+	prepared := server.mediaSync.preparedScript
+	server.mediaSync.mu.Unlock()
+	if prepared == nil || prepared.VideoID != videoID || prepared.ActionCount != 2 {
+		t.Fatalf("prepared script = %+v, want the timeline response cached for promotion", prepared)
+	}
+	promoted, err := server.mediaSync.scriptFor(t.Context(), videoID)
+	if err != nil || promoted.VideoID != videoID || promoted.ActionCount != 2 {
+		t.Fatalf("promoted script = %+v, error = %v", promoted, err)
+	}
+	server.mediaSync.mu.Lock()
+	stillPrepared := server.mediaSync.preparedScript
+	active := server.mediaSync.script
+	server.mediaSync.mu.Unlock()
+	if stillPrepared != nil || active == nil || active.VideoID != videoID {
+		t.Fatalf("script cache after promotion: prepared=%+v active=%+v", stillPrepared, active)
+	}
+
+	server.mediaSync.PrepareScript(media.Funscript{VideoID: "replacement"})
+	server.mediaSync.mu.Lock()
+	replacedActive := server.mediaSync.script
+	replacement := server.mediaSync.preparedScript
+	server.mediaSync.mu.Unlock()
+	if replacedActive != nil || replacement == nil || replacement.VideoID != "replacement" {
+		t.Fatalf("script cache after inactive replacement: prepared=%+v active=%+v", replacement, replacedActive)
+	}
 }
 
 func TestMediaSyncDrivesPairedTimelineThroughSharedEngine(t *testing.T) {

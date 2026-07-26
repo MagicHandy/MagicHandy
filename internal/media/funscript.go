@@ -162,12 +162,12 @@ func (f Funscript) TimelineFrom(
 		return motion.MediaTimelineDefinition{}, Effect{}, ErrFunscriptComplete
 	}
 
-	points := make([]motion.CurvePoint, 0, len(f.Actions))
+	firstFuture := sort.Search(len(f.Actions), func(index int) bool {
+		return f.Actions[index].AtMillis > mediaTimeMillis
+	})
+	points := make([]motion.CurvePoint, 0, len(f.Actions)-firstFuture+1)
 	points = append(points, motion.CurvePoint{PositionPercent: f.positionAt(mediaTimeMillis)})
-	for _, action := range f.Actions {
-		if action.AtMillis <= mediaTimeMillis {
-			continue
-		}
+	for _, action := range f.Actions[firstFuture:] {
 		at := int64(math.Round(float64(action.AtMillis-mediaTimeMillis) / playbackRate))
 		if at <= points[len(points)-1].TimeMillis {
 			points[len(points)-1].PositionPercent = float64(action.Position)

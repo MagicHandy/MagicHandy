@@ -546,13 +546,40 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 		t.Fatalf("motion result used fake transport: %+v", started.Engine.LastResult)
 	}
 
+	assertMotionStartCloudRequests(t, requests)
+}
+
+func assertMotionStartCloudRequests(t *testing.T, requests <-chan capturedCloudRequest) {
+	t.Helper()
+	assertAuthenticated := func(seen capturedCloudRequest) {
+		t.Helper()
+		if seen.Path != "/servertime" && (seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey) {
+			t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
+		}
+	}
+	first := readCapturedCloudRequest(t, requests)
+	if first.Method != http.MethodPut || first.Path != "/hsp/stop" {
+		t.Fatalf("first request = %+v, want PUT /hsp/stop", first)
+	}
+	assertAuthenticated(first)
+
+	startupReads := map[string]bool{"/slider/state": false, "/slider/stroke": false}
+	for range 2 {
+		seen := readCapturedCloudRequest(t, requests)
+		if seen.Method != http.MethodGet {
+			t.Fatalf("startup request = %+v, want GET", seen)
+		}
+		if _, expected := startupReads[seen.Path]; !expected || startupReads[seen.Path] {
+			t.Fatalf("startup request = %+v, want one read of each startup endpoint", seen)
+		}
+		startupReads[seen.Path] = true
+		assertAuthenticated(seen)
+	}
+
 	wantRequests := []struct {
 		method string
 		path   string
 	}{
-		{method: http.MethodPut, path: "/hsp/stop"},
-		{method: http.MethodGet, path: "/slider/state"},
-		{method: http.MethodGet, path: "/slider/stroke"},
 		{method: http.MethodPut, path: "/slider/stroke"},
 		{method: http.MethodPut, path: "/hsp/setup"},
 		{method: http.MethodPut, path: "/hsp/add"},
@@ -565,9 +592,7 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 		if seen.Method != want.method || seen.Path != want.path {
 			t.Fatalf("request = %+v, want %s %s", seen, want.method, want.path)
 		}
-		if seen.Path != "/servertime" && (seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey) {
-			t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
-		}
+		assertAuthenticated(seen)
 	}
 }
 

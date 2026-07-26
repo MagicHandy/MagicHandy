@@ -49,6 +49,29 @@ describe("MediaVideoPlayer", () => {
     expect(onVideoUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: "session", duration_ms: 42000 }));
   });
 
+  it("preloads synchronized media while controls are temporarily withheld", () => {
+    const onPlaybackEvent = vi.fn();
+    render(
+      <MediaVideoPlayer
+        video={video("paired")}
+        allowMetadataWrite={false}
+        synchronized
+        controlsEnabled={false}
+        busy
+        onPlaybackEvent={onPlaybackEvent}
+      />,
+    );
+
+    const player = screen.getByLabelText("paired") as HTMLVideoElement;
+    expect(player).toHaveAttribute("preload", "auto");
+    expect(player).not.toHaveAttribute("controls");
+    expect(player).toHaveAttribute("tabindex", "-1");
+    expect(player.closest(".media-player")).toHaveAttribute("aria-busy", "true");
+
+    fireEvent.playing(player);
+    expect(onPlaybackEvent).toHaveBeenCalledWith("playing", player);
+  });
+
   it("does not rewrite an equivalent browser duration", () => {
     render(<MediaVideoPlayer video={video("session", 41900)} allowMetadataWrite synchronized />);
     const player = screen.getByLabelText("session") as HTMLVideoElement;
