@@ -29,6 +29,9 @@ type DecisionInput struct {
 	SpeedMinPercent  int
 	SpeedMaxPercent  int
 	LastSay          string
+	CurrentPatternID motion.PatternID
+	CurrentSpeed     int
+	CurrentAreaFocus *motion.AreaFocus
 }
 
 // Decision is one curation outcome. Hold keeps the current segment's pattern
@@ -94,9 +97,17 @@ func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentCho
 // decisionInput snapshots the bounded model-visible context.
 func (m *Manager) decisionInput() DecisionInput {
 	settings := m.options.Settings()
+	var current *motion.MotionTarget
+	if engine := m.options.Current(); engine != nil {
+		snapshot := engine.Snapshot()
+		if (snapshot.Running || snapshot.Paused) && snapshot.Target.PatternID != "" {
+			copied := cloneTarget(snapshot.Target)
+			current = &copied
+		}
+	}
+
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	return DecisionInput{
+	input := DecisionInput{
 		Style:            settings.Style,
 		SegmentIndex:     m.segmentIdx,
 		RecentPatternIDs: append([]string(nil), m.recentPatternIDs...),
@@ -104,32 +115,72 @@ func (m *Manager) decisionInput() DecisionInput {
 		SpeedMaxPercent:  settings.SpeedMaxPercent,
 		LastSay:          m.lastSay,
 	}
+	if current == nil && m.segment.PatternID != "" {
+		fallback := m.segment.Target(modeLabel(m.mode), m.mode)
+		fallback.Pattern = m.pattern
+		copied := cloneTarget(fallback)
+		current = &copied
+	}
+	m.mu.Unlock()
+
+	if current != nil {
+		input.CurrentPatternID = current.PatternID
+		input.CurrentSpeed = current.SpeedPercent
+		if current.AreaFocus != nil {
+			focus := *current.AreaFocus
+			input.CurrentAreaFocus = &focus
+		}
+	}
+	return input
 }
 
 // heldSegment re-arms the current segment (same pattern, same speed) for a
 // fresh deterministic duration.
 func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
-	m.mu.Lock()
-	current := m.segment
-	patternDefinition := m.pattern
-	pattern := current.PatternID
-	m.mu.Unlock()
-	if pattern == "" {
-		return Segment{}, nil, false
+	duration := m.plannedDurationMillis()
+	if engine := m.options.Current(); engine != nil {
+		snapshot := engine.Snapshot()
+		if snapshot.Running || snapshot.Paused {
+			if segment, pattern, ok := segmentFromMotionTarget(snapshot.Target, duration); ok {
+				return segment, pattern, true
+			}
+		}
 	}
-	held := current
-	held.DriftToSpeedPercent = 0
-	held.DurationMillis = m.plannedDurationMillis()
-	return NormalizeSegment(held), patternDefinition, true
+
+	m.mu.Lock()
+	target := m.segment.Target(modeLabel(m.mode), m.mode)
+	target.Pattern = m.pattern
+	target = cloneTarget(target)
+	m.mu.Unlock()
+	return segmentFromMotionTarget(target, duration)
 }
 
-// plannedDurationMillis borrows the deterministic style duration bounds.
-func (m *Manager) plannedDurationMillis() int64 {
+func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (Segment, *motion.PatternDefinition, bool) {
+	if target.PatternID == "" || target.SpeedPercent <= 0 {
+		return Segment{}, nil, false
+	}
+	copied := cloneTarget(target)
+	segment := NormalizeSegment(Segment{
+		PatternID:      copied.PatternID,
+		SpeedPercent:   copied.SpeedPercent,
+		AreaFocus:      copied.AreaFocus,
+		DurationMillis: durationMillis,
+	})
+	return segment, copied.Pattern, true
+}
+
+func (m *Manager) currentStyleProfile() styleProfile {
 	settings := m.options.Settings()
 	profile, ok := styleProfiles[settings.Style]
 	if !ok {
 		profile = styleProfiles[config.MotionStyleBalanced]
 	}
+	return profile
+}
+
+// plannedDurationMillis borrows the deterministic style duration bounds.
+func (m *Manager) plannedDurationMillis() int64 {
+	profile := m.currentStyleProfile()
 	m.mu.Lock()
 	planner := m.planner
 	m.mu.Unlock()

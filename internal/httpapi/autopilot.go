@@ -73,6 +73,10 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 		SpeedMinPercent:  input.SpeedMinPercent,
 		SpeedMaxPercent:  input.SpeedMaxPercent,
 		LastSay:          input.LastSay,
+		CurrentPatternID: string(input.CurrentPatternID),
+		CurrentSpeed:     input.CurrentSpeed,
+		CurrentArea:      chatAreaZone(input.CurrentAreaFocus),
+		AreaFocusEnabled: capabilities.AreaFocus,
 	})
 	result, err := service.Complete(ctx, chat.Request{Message: message, History: history}, nil)
 	if err != nil {
@@ -81,7 +85,7 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if result.Malformed {
 		return modes.Decision{}, errors.New("autopilot decision stayed malformed: " + result.MalformedError)
 	}
-	return s.mapAutopilotResult(result)
+	return s.mapAutopilotResult(result, input)
 }
 
 func (s *Server) autopilotHistory() ([]llm.Message, error) {
@@ -100,7 +104,7 @@ func (s *Server) autopilotHistory() ([]llm.Message, error) {
 }
 
 // mapAutopilotResult converts one validated chat result into a modes decision.
-func (s *Server) mapAutopilotResult(result chat.Result) (modes.Decision, error) {
+func (s *Server) mapAutopilotResult(result chat.Result, input modes.DecisionInput) (modes.Decision, error) {
 	say := strings.TrimSpace(result.Response.Reply)
 	command := result.Response.Motion
 	if command == nil || command.Action == chat.MotionActionNone || command.Action == chat.MotionActionStop {
@@ -109,19 +113,37 @@ func (s *Server) mapAutopilotResult(result chat.Result) (modes.Decision, error) 
 		return modes.Decision{Hold: true, Say: say}, nil
 	}
 
-	speed := 0
+	patternID := strings.TrimSpace(command.PatternID)
+	if patternID == "" {
+		patternID = string(input.CurrentPatternID)
+	}
+	speed := input.CurrentSpeed
 	if command.Intensity != nil {
 		speed = *command.Intensity
 	} else if command.SpeedPercent != nil {
 		speed = *command.SpeedPercent
 	}
-	if command.PatternID == "" || speed <= 0 {
-		// A motion change without a curated pattern and intensity holds the
-		// current segment instead of guessing a new one.
+	var areaFocus *motion.AreaFocus
+	if input.CurrentAreaFocus != nil {
+		focus := *input.CurrentAreaFocus
+		areaFocus = &focus
+	}
+	if command.Area != "" {
+		focus, ok := zoneAreaFocus(command.Area)
+		if !ok {
+			return modes.Decision{Hold: true, Say: say}, nil
+		}
+		areaFocus = focus
+	}
+	if patternID == "" || speed <= 0 {
+		return modes.Decision{Hold: true, Say: say}, nil
+	}
+	if strings.EqualFold(patternID, string(input.CurrentPatternID)) &&
+		speed == input.CurrentSpeed && sameAreaFocus(areaFocus, input.CurrentAreaFocus) {
 		return modes.Decision{Hold: true, Say: say}, nil
 	}
 
-	resolved, found, err := s.patterns.ResolveEnabled(command.PatternID)
+	resolved, found, err := s.patterns.ResolveEnabled(patternID)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve autopilot pattern: %w", err)
 	}
@@ -130,20 +152,22 @@ func (s *Server) mapAutopilotResult(result chat.Result) (modes.Decision, error) 
 		// now-disabled selection.
 		return modes.Decision{Hold: true, Say: say}, nil
 	}
-	segment := modes.Segment{
-		PatternID:    motion.PatternID(resolved.ID),
-		SpeedPercent: speed,
-	}
-	if command.Area != "" {
-		if focus, ok := zoneAreaFocus(command.Area); ok {
-			segment.AreaFocus = focus
-		}
-	}
 	return modes.Decision{
-		Segment: segment,
+		Segment: modes.Segment{
+			PatternID:    motion.PatternID(resolved.ID),
+			SpeedPercent: speed,
+			AreaFocus:    areaFocus,
+		},
 		Pattern: &resolved,
 		Say:     say,
 	}, nil
+}
+
+func sameAreaFocus(left, right *motion.AreaFocus) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // autopilotAnnounce publishes one Autopilot line with the same lockstep ordering

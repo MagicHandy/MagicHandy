@@ -443,14 +443,17 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
 		}
-		s.notifyChatTarget(target)
 		if current.Running {
-			state, err := engine.ApplyTarget(ctx, target, "chat_start_retarget")
-			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+			state, applyErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
+				return engine.ApplyTarget(ctx, target, "chat_start_retarget")
+			})
+			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, applyErr
 		}
 		settings, _ := s.store.Snapshot()
-		state, err := engine.StartAtGeneration(ctx, target, settings.Motion, admission)
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+		state, startErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
+			return engine.StartAtGeneration(ctx, target, settings.Motion, admission)
+		})
+		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, startErr
 	case chat.MotionActionTarget:
 		engine := s.currentMotionEngine()
 		if engine == nil {
@@ -464,9 +467,10 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
 		}
-		s.notifyChatTarget(target)
-		state, err := engine.ApplyTarget(ctx, target, "chat_target")
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, err
+		state, applyErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
+			return engine.ApplyTarget(ctx, target, "chat_target")
+		})
+		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, applyErr
 	case chat.MotionActionStop:
 		// A chat stop is a user stop: modes end and keepalive stands down.
 		finishModeStop := func() {}
@@ -490,6 +494,20 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
 	}
+}
+
+func (s *Server) applyChatTargetHandoff(
+	target motion.MotionTarget,
+	apply func() (motion.ActiveMotionState, error),
+) (motion.ActiveMotionState, error) {
+	handoffGeneration := s.prepareChatTarget()
+	state, err := apply()
+	if err != nil {
+		s.cancelChatTarget(handoffGeneration)
+		return state, err
+	}
+	s.notifyChatTarget(handoffGeneration, target)
+	return state, nil
 }
 
 func (s *Server) requestStopSequence(r *http.Request) (uint64, error) {
@@ -553,9 +571,22 @@ func (s *Server) cancelActiveChats() {
 	}
 }
 
-func (s *Server) notifyChatTarget(target motion.MotionTarget) {
+func (s *Server) prepareChatTarget() uint64 {
 	if s.modes != nil {
-		s.modes.NotifyChatTarget(target)
+		return s.modes.PrepareChatTarget()
+	}
+	return 0
+}
+
+func (s *Server) cancelChatTarget(generation uint64) {
+	if s.modes != nil {
+		s.modes.CancelChatTarget(generation)
+	}
+}
+
+func (s *Server) notifyChatTarget(generation uint64, target motion.MotionTarget) {
+	if s.modes != nil {
+		s.modes.NotifyChatTarget(generation, target)
 	}
 }
 

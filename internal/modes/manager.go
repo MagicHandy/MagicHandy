@@ -77,7 +77,8 @@ type Status struct {
 	LastEventAt    string `json:"last_event_at,omitempty"`
 	WaitingForChat bool   `json:"waiting_for_chat,omitempty"`
 	// DecisionSource reports where Autopilot's current segment came from:
-	// "model", "fallback" (planner after a failed decision), or "hold".
+	// "model", "fallback" (planner after a failed decision), "hold", or
+	// "interactive" when chat supplied the live target.
 	DecisionSource string `json:"decision_source,omitempty"`
 	// LastSay is the most recent Autopilot line. The planner uses it to avoid
 	// repetition; the API retains it as diagnostic state while Chat owns display.
@@ -91,24 +92,25 @@ type Manager struct {
 
 	options Options
 
-	mode        string
-	cancel      context.CancelFunc
-	done        chan struct{}
-	planner     *Planner
-	segment     Segment
-	pattern     *motion.PatternDefinition
-	deadline    time.Time
-	driftAt     time.Time
-	driftDone   bool
-	wasPaused   bool
-	userStopped bool
-	nextRetry   time.Time
-	chatTarget  *motion.MotionTarget
-	lastEvent   string
-	lastEventAt time.Time
-	segmentIdx  int
-	generation  uint64
-	chatVersion uint64
+	mode              string
+	cancel            context.CancelFunc
+	done              chan struct{}
+	planner           *Planner
+	segment           Segment
+	pattern           *motion.PatternDefinition
+	deadline          time.Time
+	driftAt           time.Time
+	driftDone         bool
+	wasPaused         bool
+	userStopped       bool
+	nextRetry         time.Time
+	chatTarget        *motion.MotionTarget
+	chatTargetPending bool
+	lastEvent         string
+	lastEventAt       time.Time
+	segmentIdx        int
+	generation        uint64
+	chatVersion       uint64
 
 	recentPatternIDs []string
 	decisionSource   string
@@ -191,6 +193,7 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.mode = mode
 	m.userStopped = false
 	m.chatTarget = nil
+	m.chatTargetPending = false
 	m.driftDone = true
 	m.deadline = time.Time{}
 	m.nextRetry = time.Time{}
@@ -265,6 +268,7 @@ func (m *Manager) BeginUserStop() func() {
 	m.mu.Lock()
 	m.userStopped = true
 	m.chatTarget = nil
+	m.chatTargetPending = false
 	m.chatVersion++
 	m.generation++
 	m.cancelOperationLocked()
@@ -295,17 +299,78 @@ func (m *Manager) BeginUserStop() func() {
 	}
 }
 
-// NotifyChatTarget adopts a chat-applied target for chat keepalive.
-func (m *Manager) NotifyChatTarget(target motion.MotionTarget) {
+// PrepareChatTarget blocks new mode work and invalidates any in-flight decision
+// before an interactive target enters the shared engine.
+func (m *Manager) PrepareChatTarget() uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.userStopped = false
-	m.chatVersion++
-	if m.operationMode == ModeChat {
-		m.cancelOperationLocked()
+	m.chatTargetPending = true
+	m.generation++
+	m.cancelOperationLocked()
+	return m.generation
+}
+
+// CancelChatTarget releases a failed interactive handoff so the active mode can
+// resume planning on its next tick.
+func (m *Manager) CancelChatTarget(generation uint64) {
+	m.mu.Lock()
+	if m.chatTargetPending && m.generation == generation {
+		m.chatTargetPending = false
 	}
+	m.mu.Unlock()
+}
+
+// NotifyChatTarget adopts a successfully applied chat target for keepalive and
+// as Autopilot's authoritative current segment.
+func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget) bool {
 	copied := cloneTarget(target)
+	// Re-evaluate an interactive focus after the shortest style dwell instead
+	// of letting a random long segment make a conversational area feel sticky.
+	durationMillis := m.currentStyleProfile().minDurationMillis
+	segment, pattern, adoptable := segmentFromMotionTarget(copied, durationMillis)
+	now := m.options.Now()
+
+	m.mu.Lock()
+	if !m.chatTargetPending || m.generation != generation || m.userStopped {
+		m.mu.Unlock()
+		return false
+	}
+	m.chatTargetPending = false
+	m.chatVersion++
+	m.generation++
+	m.cancelOperationLocked()
 	m.chatTarget = &copied
+	adopted := m.mode == ModeAutopilot && adoptable
+	if adopted {
+		duration := time.Duration(segment.DurationMillis) * time.Millisecond
+		if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
+			duration = m.options.MaxSegmentDuration
+			segment.DurationMillis = duration.Milliseconds()
+		}
+		m.segment = segment
+		m.pattern = pattern
+		m.segmentIdx++
+		m.deadline = now.Add(duration)
+		m.driftDone = true
+		m.nextRetry = time.Time{}
+		m.decisionSource = "interactive"
+		m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
+		if len(m.recentPatternIDs) > 4 {
+			m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
+		}
+	}
+	m.mu.Unlock()
+
+	if adopted {
+		m.trace(ModeAutopilot, "interactive_target_adopted", &diagnostics.MotionTracePlanner{
+			Mode:              ModeAutopilot,
+			Event:             "interactive_target_adopted",
+			PatternIdentifier: string(segment.PatternID),
+			SpeedPercent:      segment.SpeedPercent,
+			DurationMillis:    segment.DurationMillis,
+		}, "chat")
+	}
+	return true
 }
 
 // NotifyChatStop clears the keepalive target after a chat-driven stop.
@@ -313,11 +378,11 @@ func (m *Manager) NotifyChatStop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chatTarget = nil
+	m.chatTargetPending = false
 	m.userStopped = true
 	m.chatVersion++
-	if m.operationMode == ModeChat {
-		m.cancelOperationLocked()
-	}
+	m.generation++
+	m.cancelOperationLocked()
 }
 
 // Shutdown stops the loop at process exit.
@@ -394,9 +459,14 @@ func (m *Manager) tickAutonomous(ctx context.Context, mode string) {
 	m.mu.Unlock()
 
 	if !driftDone && now.After(driftAt) {
+		operationCtx, finish, ok := m.beginStartOperation(ctx, mode, generation, 0)
+		if !ok {
+			return
+		}
+		defer finish()
 		if target, ok := segment.DriftTarget(modeLabel(mode), mode); ok {
 			target.Pattern = pattern
-			if _, err := engine.ApplyTarget(ctx, target, mode+"_drift"); err == nil {
+			if _, err := engine.ApplyTarget(operationCtx, target, mode+"_drift"); err == nil {
 				if m.modeGenerationActive(mode, generation) {
 					m.trace(mode, "segment_drift", &diagnostics.MotionTracePlanner{
 						Mode:              mode,
@@ -407,8 +477,11 @@ func (m *Manager) tickAutonomous(ctx context.Context, mode string) {
 				}
 			}
 		}
+		if operationCtx.Err() != nil {
+			return
+		}
 		m.mu.Lock()
-		if m.mode == mode && m.generation == generation {
+		if m.mode == mode && m.generation == generation && !m.chatTargetPending {
 			m.driftDone = true
 		}
 		m.mu.Unlock()
@@ -461,16 +534,24 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 // Transitions ride the engine's phase-preserving / low-jump handoff — modes
 // never replace streams or touch transport.
 func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, mode string, reason string, generation uint64) {
-	choice := m.nextSegmentChoice(ctx, mode)
-	if ctx.Err() != nil || !m.modeGenerationActive(mode, generation) {
+	operationCtx, finish, ok := m.beginStartOperation(ctx, mode, generation, 0)
+	if !ok {
 		return
 	}
-	state, err := engine.ApplyTarget(ctx, m.choiceTarget(mode, choice), reason)
+	defer finish()
+
+	choice := m.nextSegmentChoice(operationCtx, mode)
+	if operationCtx.Err() != nil || !m.modeGenerationActive(mode, generation) {
+		return
+	}
+	state, err := engine.ApplyTarget(operationCtx, m.choiceTarget(mode, choice), reason)
 	if err != nil {
-		m.backoff(mode, generation, "segment_failed", err)
+		if operationCtx.Err() == nil {
+			m.backoff(mode, generation, "segment_failed", err)
+		}
 		return
 	}
-	m.finishSegmentChoice(ctx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
+	m.finishSegmentChoice(operationCtx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
 }
 
 // choiceTarget builds the engine target for one segment choice, attaching any
@@ -525,7 +606,7 @@ func (m *Manager) armSegment(mode string, segment Segment, pattern *motion.Patte
 	now := m.options.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != mode || m.generation != generation || m.userStopped {
+	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending {
 		return false
 	}
 	m.segment = segment
@@ -612,20 +693,20 @@ func (m *Manager) tickChat(ctx context.Context) {
 func (m *Manager) modeActive(mode string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && !m.userStopped
+	return m.mode == mode && !m.userStopped && !m.chatTargetPending
 }
 
 func (m *Manager) modeGenerationActive(mode string, generation uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && m.generation == generation && !m.userStopped
+	return m.mode == mode && m.generation == generation && !m.userStopped && !m.chatTargetPending
 }
 
 func (m *Manager) chatOperationActive(generation, chatVersion uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.mode == ModeChat && m.generation == generation && m.chatVersion == chatVersion &&
-		m.chatTarget != nil && !m.userStopped
+		m.chatTarget != nil && !m.userStopped && !m.chatTargetPending
 }
 
 func (m *Manager) freezeDeadline() {
@@ -647,7 +728,7 @@ func (m *Manager) thawDeadline() {
 
 func (m *Manager) backoff(mode string, generation uint64, event string, err error) {
 	m.mu.Lock()
-	if m.mode != mode || m.generation != generation || m.userStopped {
+	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending {
 		m.mu.Unlock()
 		return
 	}
@@ -663,7 +744,7 @@ func (m *Manager) beginStartOperation(
 	chatVersion uint64,
 ) (context.Context, func(), bool) {
 	m.mu.Lock()
-	if m.mode != mode || m.generation != generation || m.userStopped ||
+	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending ||
 		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil)) {
 		m.mu.Unlock()
 		return nil, nil, false

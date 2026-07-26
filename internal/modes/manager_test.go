@@ -22,6 +22,7 @@ type fakeEngine struct {
 	mu           sync.Mutex
 	running      bool
 	paused       bool
+	target       motion.MotionTarget
 	starts       []motion.MotionTarget
 	targets      []motion.MotionTarget
 	reasons      []string
@@ -50,6 +51,7 @@ func (f *fakeEngine) Start(ctx context.Context, target motion.MotionTarget, _ co
 	}
 	f.running = true
 	f.paused = false
+	f.target = target
 	f.starts = append(f.starts, target)
 	return motion.ActiveMotionState{Running: true, Target: target}, nil
 }
@@ -62,13 +64,14 @@ func (f *fakeEngine) ApplyTarget(_ context.Context, target motion.MotionTarget, 
 	if f.targetErr != nil {
 		return motion.ActiveMotionState{}, f.targetErr
 	}
+	f.target = target
 	return motion.ActiveMotionState{Running: f.running, Target: target}, nil
 }
 
 func (f *fakeEngine) Snapshot() motion.ActiveMotionState {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return motion.ActiveMotionState{Running: f.running, Paused: f.paused}
+	return motion.ActiveMotionState{Running: f.running, Paused: f.paused, Target: f.target}
 }
 
 func (f *fakeEngine) setState(running bool, paused bool) {
@@ -308,7 +311,8 @@ func TestChatKeepaliveRestartsOnlyAfterRecovery(t *testing.T) {
 	}
 
 	target := motion.MotionTarget{Source: "chat", PatternID: motion.PatternPulse, SpeedPercent: 30}
-	manager.NotifyChatTarget(target)
+	handoffGeneration := manager.PrepareChatTarget()
+	manager.NotifyChatTarget(handoffGeneration, target)
 	engine.setState(false, false) // engine idle from a recovery stop
 	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
 
@@ -349,7 +353,8 @@ func TestFreshChatModeDoesNotReuseStoppedSessionTarget(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeChat); err != nil {
 		t.Fatal(err)
 	}
-	manager.NotifyChatTarget(motion.MotionTarget{
+	handoffGeneration := manager.PrepareChatTarget()
+	manager.NotifyChatTarget(handoffGeneration, motion.MotionTarget{
 		Source: "chat", PatternID: motion.PatternPulse, SpeedPercent: 30,
 	})
 	engine.setState(true, false)
@@ -364,6 +369,38 @@ func TestFreshChatModeDoesNotReuseStoppedSessionTarget(t *testing.T) {
 	}
 	if status := manager.Status(); !status.WaitingForChat {
 		t.Fatalf("fresh chat mode status = %+v, want waiting for a new target", status)
+	}
+}
+
+func TestStaleChatTargetHandoffCannotClearUserStop(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeChat); err != nil {
+		t.Fatal(err)
+	}
+
+	handoffGeneration := manager.PrepareChatTarget()
+	finishStop := manager.BeginUserStop()
+	defer finishStop()
+	accepted := manager.NotifyChatTarget(handoffGeneration, motion.MotionTarget{
+		Source: "chat", PatternID: motion.PatternPulse, SpeedPercent: 30,
+	})
+	finishStop()
+	if accepted {
+		t.Fatal("chat target handoff overtook an explicit user stop")
+	}
+
+	manager.mu.Lock()
+	userStopped := manager.userStopped
+	chatTarget := manager.chatTarget
+	pending := manager.chatTargetPending
+	manager.mu.Unlock()
+	if !userStopped || chatTarget != nil || pending {
+		t.Fatalf("stale handoff changed stopped state: stopped=%t target=%+v pending=%t", userStopped, chatTarget, pending)
+	}
+	if status := manager.Status(); status.Active {
+		t.Fatalf("stale handoff reactivated mode: %+v", status)
 	}
 }
 

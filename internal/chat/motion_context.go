@@ -93,15 +93,15 @@ Use that snapshot deliberately:
 - For "continue", "steady", "same", or "hold it there" with no other requested change, preserve the current motion with action "none" or no motion key.
 - If the same request asks for a concrete change, apply that change; words such as "same feel" mean preserve fields the user did not ask to change, not action "none".
 - For a modest pacing request such as "a little faster" or "slower", change speed within the supplied limits while preserving the current content and area by omitting fields the user did not ask to change.
-- For an explicit request to vary, mix up, surprise, or change the feel, make one purposeful change instead of repeating both the current content and speed. Do not change every field at once.
+- For an explicit request to vary, mix up, surprise, or change the feel, choose a meaningful change to pattern, speed, area, or a fitting combination. You own that semantic choice; vary positioning when the conversation calls for it, but do not mechanically change every field at once.
 - Ordinary conversation is not a reason to change motion.`)
 	if capabilities.Patterns {
 		builder.WriteString(`
-- When an explicit variation is requested, prefer a fresh enabled pattern ID when that list is present; otherwise select an alternative. A speed-only target that repeats the current speed does not satisfy a variation request. If the user wants the same pace, omit intensity and speed_percent; the app preserves current speed. For a pacing-only request, keep the current pattern by omitting pattern_id.`)
+- Recent patterns are context, not a prohibition. Prefer variety when it fits, but you may deliberately reuse one while changing speed or area. If the user wants the same pace, omit intensity and speed_percent; the app preserves current speed. For a pacing-only request, keep the current pattern by omitting pattern_id.`)
 	}
 	if capabilities.AreaFocus {
 		builder.WriteString(`
-- Preserve the current area unless the user requests a region change. A request for full range while focused is a change: use action "target" with area "full" and omit unchanged pattern and speed fields.`)
+- A named area focus is temporary unless the user explicitly asks to stay or keep it there. Pacing-only requests preserve area, but a broad variation request while focused should normally move to another fitting area or use area "full" instead of silently pinning every later motion to that region. Omit area only when preserving it is intentional.`)
 	}
 	return builder.String()
 }

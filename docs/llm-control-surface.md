@@ -109,22 +109,29 @@ steer an autonomous motion decision.
 
 Continuity and variation are separate intents. Ordinary conversation,
 "continue", and steady/hold requests preserve motion; pacing-only requests
-preserve content and area. An explicit request to vary selects a non-current
-pattern and avoids the bounded recent set while a fresh enabled choice exists.
-Semantic no-op targets receive the existing single repair pass. If a small
-model repeats a no-op on an ordinary or steady turn, deterministic recovery
-drops the motion command and preserves the valid reply. Only an explicit motion
-variation request can fall back to a fresh pattern after repair; that fallback
-changes the pattern while preserving valid speed and area intent. This prevents
-both per-turn churn and short two-pattern oscillation without turning selection
-into a static sequence.
+preserve content and area. For an explicit variation request, the model owns
+the semantic choice across pattern, speed, and area. Any meaningful target
+change is valid, including an area-only move back to `full` or a speed change
+that keeps the current pattern. Recent pattern ids are prompt context rather
+than a deterministic exclusion list.
+
+Semantic no-op targets receive one repair pass. If the model repeats a no-op,
+deterministic recovery drops the motion command and preserves the valid reply;
+it does not synthesize a pattern change. Authorization, capability gates,
+enabled-content checks, configured limits, and the shared motion engine remain
+deterministic. Content-selection taste and conversational variation stay with
+the model instead of a second hard-coded motion policy.
 
 Chat Autopilot reuses this same contract at bounded segment boundaries. Its
 request includes the latest 12 canonical conversation messages, current style
-and speed band, recent pattern ids, and the last autonomous line. It may curate
-an enabled pattern/intensity or hold; deterministic code owns duration and all
-clamps. This is broader orchestration of the existing contract, not a second
-motion schema.
+and speed band, the engine's live pattern, speed, and area, recent pattern ids,
+and the last autonomous line. It may curate an enabled pattern/intensity or
+hold; deterministic code owns duration and all clamps. An accepted interactive
+chat target temporarily suspends decision dispatch, then becomes Autopilot's
+current segment after the engine applies it; a stale in-flight decision cannot
+restore the previous focus. A generation token prevents late adoption after
+Stop or a mode change. This is broader orchestration of the existing contract,
+not a second motion schema.
 
 ## What the engine already supports that the model cannot reach
 
@@ -180,10 +187,14 @@ commitment.
 
 Implemented: the chat contract accepts `"area":"tip"|"shaft"|"base"|"full"` on
 start/target; named zones localize to bounded windows in deterministic code
-(tip 66–100, shaft 33–67, base 0–34; `full` clears), a focus persists across
-plain adjustments until changed, and region changes ride the engine's normal
-retarget path. Autopilot decisions carry the same field. Gated by the
-**Model motion control** checkbox list in Settings > Model
+(tip 66–100, shaft 33–67, base 0–34; `full` clears). Focus persists through
+ordinary chat and pacing-only adjustments. Broad variation may change or clear
+it; a named focus is temporary unless the user explicitly asks to stay. A
+focused loop contracts its cycle with the narrowed travel so it does not also
+become physically slow, bounded by the source pattern's authored acceleration
+budget. Region changes ride the engine's normal retarget path, and Autopilot
+decisions carry the same field. Gated by the **Model motion control** checkbox
+list in Settings > Model
 (`llm.motion_capabilities`: motion / patterns / area focus / experimental
 patterns) — disabled methods are never described to the model and are stripped
 if emitted, without failing the turn. Live-verified against a local Ollama 3B:

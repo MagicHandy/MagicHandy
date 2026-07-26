@@ -129,6 +129,53 @@ func TestLiveDirectPartnerStart(t *testing.T) {
 	}
 }
 
+// TestLiveFocusedMotionVariation exercises conversational variation through the
+// real Gemma/llama.cpp prompt and parser without creating an engine or transport.
+func TestLiveFocusedMotionVariation(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	patterns := []PatternChoice{
+		{ID: "stroke", Name: "Stroke", Description: "Smooth full-range stroke.", Weight: 1},
+		{ID: "pulse", Name: "Pulse", Description: "Compact rhythmic pulses.", Weight: 1},
+		{ID: "waves", Name: "Waves", Description: "Rolling wave motion.", Weight: 1},
+		{ID: "tease", Name: "Tease", Description: "Variable teasing motion.", Weight: 1},
+	}
+	motionContext := MotionContext{
+		Running: true, PatternID: "stroke", RecentPatternIDs: []string{"pulse", "waves", "stroke"},
+		SpeedPercent: 30, Area: AreaZoneBase,
+		SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	capabilities := FullCapabilities()
+	service := Service{
+		Provider: provider, Prompt: promptSet, Model: model,
+		MaxTokens: 256, ReasoningMode: "off", Patterns: patterns,
+		MotionContext: &motionContext, Capabilities: &capabilities,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	result, err := service.Complete(ctx, Request{Message: "Keep changing it up"}, nil)
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("focused variation | repaired=%t | %s", result.Repaired, compactLiveEvalJSON(result.Raw))
+	if result.Malformed || result.Response.Motion == nil || result.Response.Motion.Action != MotionActionTarget {
+		t.Fatalf("focused variation produced no usable target: %+v", result)
+	}
+	if result.Response.Motion.Area == "" || result.Response.Motion.Area == AreaZoneBase {
+		t.Fatalf("focused variation kept the stale base focus: %+v", result.Response.Motion)
+	}
+}
+
 func liveEvalModel(t *testing.T) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

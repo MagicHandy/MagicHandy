@@ -38,6 +38,49 @@ func TestConfinedPatternFillsItsFocusWindow(t *testing.T) {
 	}
 }
 
+func TestFocusedLoopPreservesRequestedTravelRateWithinAccelerationBudget(t *testing.T) {
+	definition, _ := BuiltinPatternDefinition(PatternStroke)
+	settings := focusTestSettings()
+	full := NewMotionPlan("full", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+	}, settings, 0, 0, time.Unix(0, 0))
+	focused := NewMotionPlan("focused", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+		AreaFocus: &AreaFocus{MinPercent: 0, MaxPercent: 34},
+	}, settings, 0, 0, time.Unix(0, 0))
+
+	wantPeriod := int64(math.Round(float64(full.PeriodMillis) * 0.34))
+	if focused.PeriodMillis != wantPeriod {
+		t.Fatalf("focused period = %dms, want %dms to preserve played travel rate", focused.PeriodMillis, wantPeriod)
+	}
+	fullRate := 100 / (float64(full.PeriodMillis) / 12)
+	focusedRate := 34 / (float64(focused.PeriodMillis) / 12)
+	if math.Abs(fullRate-focusedRate) > 0.001 {
+		t.Fatalf("focused one-way rate = %.4f%%/ms, want full-range %.4f%%/ms", focusedRate, fullRate)
+	}
+}
+
+func TestFocusedLoopRespectsAuthoredAccelerationBudget(t *testing.T) {
+	definition := PatternDefinition{
+		ID: "slow-custom", Name: "Slow custom", Kind: PatternKindRoutine, CycleMillis: 12000,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 6000, PositionPercent: 100},
+			{TimeMillis: 12000, PositionPercent: 0},
+		},
+	}
+	focused := NewMotionPlan("focused", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
+		AreaFocus: &AreaFocus{MinPercent: 0, MaxPercent: 25},
+	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
+
+	// A quarter-distance loop needs at least half its authored period to keep
+	// acceleration at or below the source pattern (distance / time^2).
+	if focused.PeriodMillis != 6000 {
+		t.Fatalf("focused period = %dms, want 6000ms authored-acceleration floor", focused.PeriodMillis)
+	}
+}
+
 // Without a focus window the authored amplitude is the content, and nothing
 // may re-expand it. A window covering everything is not a focus.
 func TestUnfocusedPatternKeepsAuthoredAmplitude(t *testing.T) {

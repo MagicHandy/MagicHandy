@@ -183,13 +183,83 @@ func TestAutopilotHoldKeepsCurrentSegmentWithoutDrift(t *testing.T) {
 	engine.mu.Lock()
 	held := engine.targets[0]
 	engine.mu.Unlock()
-	if held.PatternID != library.ID || held.Pattern != library || held.SpeedPercent != 40 {
+	if held.PatternID != library.ID || held.Pattern == nil || held.Pattern.ID != library.ID || held.SpeedPercent != 40 {
 		t.Fatalf("hold target = %+v, want same pattern and speed", held)
 	}
 	if status := manager.Status(); status.DecisionSource != "hold" {
 		t.Fatalf("decision source = %q, want hold", status.DecisionSource)
 	}
 	waitFor(t, time.Second, func() bool { return len(announcer.all()) >= 1 })
+	decider.mu.Lock()
+	if len(decider.inputs) < 2 {
+		decider.mu.Unlock()
+		t.Fatal("hold decision did not receive a second input")
+	}
+	input := decider.inputs[1]
+	decider.mu.Unlock()
+	if input.CurrentPatternID != library.ID || input.CurrentSpeed != 40 {
+		t.Fatalf("hold input current motion = %+v, want the live custom wave at 40%%", input)
+	}
+}
+
+func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{PatternID: motion.PatternStroke, SpeedPercent: 30, DurationMillis: 4000}},
+		{Hold: true},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, nil)
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+
+	handoffGeneration := manager.PrepareChatTarget()
+	clock.Advance(150 * time.Second)
+	time.Sleep(20 * time.Millisecond)
+	if calls := decider.callCount(); calls != 1 {
+		t.Fatalf("Autopilot decided while interactive target was pending: %d calls", calls)
+	}
+
+	definition, _ := motion.BuiltinPatternDefinition(motion.PatternPulse)
+	focus := &motion.AreaFocus{MinPercent: 0, MaxPercent: 34}
+	interactive := motion.MotionTarget{
+		Source: "chat", PatternID: motion.PatternPulse, Pattern: &definition,
+		SpeedPercent: 28, AreaFocus: focus,
+	}
+	if _, err := engine.ApplyTarget(t.Context(), interactive, "chat_target"); err != nil {
+		t.Fatalf("interactive ApplyTarget: %v", err)
+	}
+	if !manager.NotifyChatTarget(handoffGeneration, interactive) {
+		t.Fatal("interactive target handoff was unexpectedly stale")
+	}
+	if status := manager.Status(); status.DecisionSource != "interactive" {
+		t.Fatalf("status after chat handoff = %+v, want interactive source", status)
+	}
+	manager.mu.Lock()
+	dwell := manager.deadline.Sub(clock.Now())
+	manager.mu.Unlock()
+	if want := time.Duration(styleProfiles[config.MotionStyleBalanced].minDurationMillis) * time.Millisecond; dwell != want {
+		t.Fatalf("interactive target dwell = %s, want shortest balanced dwell %s", dwell, want)
+	}
+
+	clock.Advance(150 * time.Second)
+	waitFor(t, time.Second, func() bool { _, targets := engine.counts(); return targets >= 2 })
+	engine.mu.Lock()
+	held := engine.targets[len(engine.targets)-1]
+	engine.mu.Unlock()
+	if held.PatternID != motion.PatternPulse || held.SpeedPercent != 28 || held.AreaFocus == nil || *held.AreaFocus != *focus {
+		t.Fatalf("Autopilot Hold reverted the chat target: %+v", held)
+	}
+
+	decider.mu.Lock()
+	lastInput := decider.inputs[len(decider.inputs)-1]
+	decider.mu.Unlock()
+	if lastInput.CurrentPatternID != motion.PatternPulse || lastInput.CurrentSpeed != 28 ||
+		lastInput.CurrentAreaFocus == nil || *lastInput.CurrentAreaFocus != *focus {
+		t.Fatalf("post-chat decision input = %+v, want the interactive target", lastInput)
+	}
 }
 
 func TestAutopilotAnnouncementContextCancelsWithStop(t *testing.T) {
