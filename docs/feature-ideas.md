@@ -143,8 +143,9 @@ independent of everything.
 - **Video + funscript sync player.** **M0-M2 implemented; hardware acceptance
   planned (2026-07-22)** —
   the earlier non-goal disposition was reversed by explicit direction. The
-  concerns behind it survive as guardrails (no transcoding, no media
-  management, no new motion pathway); the full design — library locations +
+  concerns behind it survive as guardrails (no media management, no new motion
+  pathway; offline conversion and thumbnails are revisited under those same
+  guardrails in [media-tooling.md](media-tooling.md)); the full design — library locations +
   scan, a dedicated video grid/search page, exact-basename funscript
   pairing, reusable plain playback and import preview, synced playback anchored
   to the video clock, and the hideable position trace plus activity rail — lives in
@@ -158,7 +159,8 @@ independent of everything.
   machine. **Strong candidate** — cheap, and it is the honest substitute for
   much of what the undecided STGPT-RV importer would do for *MagicHandy's own*
   future migrations.
-- **Data-directory usage dashboard.** Models and voice trees are multi-GB;
+- **Data-directory usage dashboard.** Generated thumbnails join models and
+  voice trees as a purgeable store ([media-tooling.md](media-tooling.md));
   show per-store disk usage in Settings > Diagnostics with guarded cleanup
   actions. **Strong candidate, small.**
 - **Multiple local profiles.** Separate data dirs behind a picker (distinct

@@ -334,7 +334,8 @@ downsampling is reused at canvas resolution):
   serving remain unchanged.
 - **Accepted deferrals:** thumbnails/posters, transcoding, codec bundling,
   per-video deep links, the funscript OSD, and synchronized motion remain outside
-  this follow-up. OSD is M1 and motion is M2; neither may add a second media or
+  this follow-up. *(Thumbnails and transcoding are revisited in
+  [media-tooling.md](media-tooling.md); codec bundling stays rejected there.)* OSD is M1 and motion is M2; neither may add a second media or
   motion pathway.
 
 ### M1-M2 implementation review (2026-07-22)
@@ -624,6 +625,10 @@ this pass; M3's real-device gate remains open.
 
 ### Open decision: offline pre-transcode
 
+**A proposed answer now exists in [media-tooling.md](media-tooling.md)**, which
+covers this question together with library thumbnails — the two turned out to
+share one optional dependency. What follows is the framing that produced it.
+
 The wall above rules out transcoding *during playback*. It does not by itself
 answer a different question: whether the app may help a user convert a file
 **once, ahead of time**, into something the browser can play. One shape for that
@@ -653,6 +658,8 @@ Until that is decided, the no-transcoding stance stands as written.
 
 - [video-playback-panel.md](video-playback-panel.md) — the floating playback
   panel: per-video offset, smoothing, and peak rounding.
+- [media-tooling.md](media-tooling.md) — proposed thumbnails, optional FFmpeg,
+  and offline format conversion (plan only).
 - [feature-ideas.md](feature-ideas.md) — the reversed non-goal row.
 - [pattern-library.md](pattern-library.md) — why media scripts bypass library
   import caps (a feature-length script is not curatable loop content).
