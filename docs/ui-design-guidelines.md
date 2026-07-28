@@ -96,10 +96,11 @@ pill.
 
 - Width `clamp(212px, 18vw, 236px)`, full height, `--surface` with a `--line`
   right border. Not the page background — it is a distinct surface.
-- **Profile lockup** (top): 34–36px avatar as a `--radius-sm` squircle with the
-  `--accent`→`--steel-deep` gradient (the existing brand/avatar gradient),
-  `MagicHandy` in `--text` `600`, and `local / {dispatch owner}` in `--muted`
-  `0.72rem`. It is a link to `#/settings`.
+- **Product lockup** (top): 36px `--radius-sm` monogram on the quiet
+  `--accent-tint` surface, `MagicHandy` in `--text` `600`, and
+  `local / {dispatch owner}` in `--muted` `0.72rem`. It is static identity;
+  Settings has one explicit destination in the page links. Use spacing, not a
+  divider or underline, to separate identity from navigation.
 - **Nav row**: 40px tall, `0 12px`, 18px icon + `0.9rem` label, `--radius-sm`.
   Default is a `--muted` label on a transparent background; hover uses
   `--surface-2`. Active uses the soft `--accent-tint` fill, `--text` label,

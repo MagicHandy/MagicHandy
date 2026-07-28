@@ -37,6 +37,8 @@ describe("shell accessibility", () => {
     expect(screen.getByRole("link", { name: "Pattern library" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Videos" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByText("MagicHandy")).not.toHaveRole("link");
+    expect(screen.getAllByRole("link", { name: "Settings" })).toHaveLength(1);
     expect(routeBase("#/videos/session")).toBe("videos");
     expect(routeBase("#/not-a-route/details")).toBe("chat");
   });
