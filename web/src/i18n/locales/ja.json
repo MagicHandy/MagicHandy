@@ -694,6 +694,7 @@
   "Resume program": "プログラムを再開",
   "Resuming": "再開中",
   "Retry": "再試行",
+  "Language resources could not be loaded.": "言語リソースを読み込めませんでした。",
   "Retry core connection": "コア接続を再試行",
   "Retry video": "ビデオを再試行",
   "Return to videos": "動画に戻る",

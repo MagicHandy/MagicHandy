@@ -582,7 +582,8 @@ function Read-MagicHandyInstallState {
         throw "No installer state exists at '$Path'. Run install.ps1 first."
     }
     try {
-        $state = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+        $json = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+        $state = $json | ConvertFrom-Json
     } catch {
         throw "Installer state '$Path' is not valid JSON: $_"
     }

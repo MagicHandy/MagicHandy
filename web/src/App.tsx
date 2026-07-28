@@ -1,4 +1,4 @@
-import { t, translateKnown } from "./i18n";
+import { t, translateKnown, useLocale } from "./i18n";
 import { useEffect } from "react";
 import { PatternLibraryRoute } from "./routes/PatternLibraryRoute";
 import { PresetModesRoute } from "./routes/PresetModesRoute";
@@ -11,6 +11,7 @@ import { useAppState, useHashRoute } from "./state/app-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export function App() {
+  useLocale();
   const route = useHashRoute();
   const base = routeBase(route);
   const { state, startupError, refresh } = useAppState();

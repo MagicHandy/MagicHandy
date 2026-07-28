@@ -694,6 +694,7 @@
   "Resume program": "继续程序",
   "Resuming": "正在继续",
   "Retry": "重试",
+  "Language resources could not be loaded.": "无法加载语言资源。",
   "Retry core connection": "重试核心连接",
   "Retry video": "重试视频",
   "Return to videos": "返回视频",

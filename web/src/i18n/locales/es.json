@@ -694,6 +694,7 @@
   "Resume program": "Reanudar programa",
   "Resuming": "Reanudando",
   "Retry": "Reintentar",
+  "Language resources could not be loaded.": "No se pudieron cargar los recursos de idioma.",
   "Retry core connection": "Reintentar conexión con el núcleo",
   "Retry video": "Reintentar video",
   "Return to videos": "Volver a videos",

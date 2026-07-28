@@ -180,6 +180,27 @@ try {
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
 
+    $unicodeStatePath = Join-Path $tempRoot 'unicode-install-state.json'
+    $unicodeDataDir = Join-Path $tempRoot (-join ([char[]]@(0x5229, 0x7528, 0x8005, 0x30c7, 0x30fc, 0x30bf)))
+    $unicodeModel = -join ([char[]]@(0x6a21, 0x578b, 0x2f, 0x97f3, 0x58f0, 0x3a, 0x6700, 0x65b0))
+    $unicodeState = New-MagicHandyInstallState `
+        -RepositoryPath $Repo `
+        -DataDir $unicodeDataDir `
+        -Port 49801 `
+        -SetupLLM $true `
+        -BuildManagedLlama $false `
+        -LlamaBackend 'cpu' `
+        -EnsureOllama $true `
+        -OllamaModel $unicodeModel `
+        -InstallParakeet $false `
+        -CreateLauncher $false
+    Write-MagicHandyInstallState -State $unicodeState -Path $unicodeStatePath
+    $unicodeLoaded = Read-MagicHandyInstallState -Path $unicodeStatePath
+    Assert-Equal -Expected ([System.IO.Path]::GetFullPath($unicodeDataDir)) -Actual ([string]$unicodeLoaded.data_dir) -Message 'BOM-less UTF-8 state data directory'
+    Assert-Equal -Expected $unicodeModel -Actual ([string]$unicodeLoaded.ollama_model) -Message 'BOM-less UTF-8 state model'
+    $unicodeBytes = [System.IO.File]::ReadAllBytes($unicodeStatePath)
+    Assert-True -Condition (-not ($unicodeBytes.Length -ge 3 -and $unicodeBytes[0] -eq 0xef -and $unicodeBytes[1] -eq 0xbb -and $unicodeBytes[2] -eq 0xbf)) -Message 'state writer should remain BOM-less UTF-8'
+
     $legacyStatePath = Join-Path $tempRoot 'legacy-install-state.json'
     $legacyState = $json | ConvertFrom-Json
     $legacyState.schema_version = 1

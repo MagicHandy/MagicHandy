@@ -321,8 +321,10 @@ func motionIntentIsNegated(message string) bool {
 		return true
 	}
 	return containsAny(message,
-		"不要", "别", "別", "不想", "不能", "不再", "停止", "停下",
-		"動かさない", "動かないで", "しないで", "ないで", "止め", "やめ",
+		"不要", "请勿", "請勿", "勿", "莫", "别", "別", "不想", "不能", "不再",
+		"不开始", "不開始", "不启动", "不啟動", "停止", "停下", "禁止",
+		"動かさない", "動かないで", "動かすな", "動くな", "しないで", "するな",
+		"始めるな", "開始するな", "ないで", "止め", "やめ", "禁止",
 	)
 }
 
@@ -357,7 +359,22 @@ func motionIntentIsPermissionQuestion(message string) bool {
 	) {
 		return true
 	}
-	return containsAny(message, "安全ですか", "大丈夫ですか", "安全吗", "会怎么样", "应该吗")
+	if hasIntentPhrase(message, "should", "should the", "should you") &&
+		hasIntentPhrase(message, "move", "moving", "motion", "movement", "device", "pattern") {
+		return true
+	}
+	if containsAny(message, "安全ですか", "大丈夫ですか", "安全吗", "会怎么样") {
+		return true
+	}
+	chineseMotion := containsAny(message, "运动", "運動", "移动", "移動", "开始", "開始", "启动", "啟動", "速度", "模式")
+	chineseQuestion := containsAny(message, "应该", "應該", "应不应该", "應不應該", "是否", "该不该", "該不該", "要不要") ||
+		(containsAny(message, "可以", "能") && containsAny(message, "吗", "嗎"))
+	if chineseMotion && chineseQuestion {
+		return true
+	}
+	japaneseMotion := containsAny(message, "動き", "動か", "始め", "開始", "モーション", "速度", "パターン")
+	japaneseQuestion := containsAny(message, "べき", "てもいい", "ほうがいい", "安全", "大丈夫", "どうなる")
+	return japaneseMotion && japaneseQuestion
 }
 
 func authorizesDirectPartnerStart(message string) bool {
@@ -610,10 +627,29 @@ func validateRequestedSpeedBand(command MotionCommand, context MotionContext, us
 }
 
 func requestedSpeedBand(context MotionContext, message string) (string, [2]int, bool) {
-	message = strings.ToLower(strings.TrimSpace(message))
-	low := containsAny(message, "gentle", "gently", "slow pace", "slowly", "low speed")
-	middle := containsAny(message, "medium pace", "medium speed", "moderate", "moderately")
-	high := containsAny(message, "as fast as", "fastest", "full speed", "max speed", "maximum speed")
+	message = normalizeMotionIntent(message)
+	if hasIntentPhrase(message,
+		"faster", "slower", "harder", "gentler", "a little faster", "a little slower",
+		"más rápido", "más rápida", "más despacio", "más lento", "más lenta",
+		"mais rápido", "mais rápida", "mais devagar", "mais lento", "mais lenta",
+	) || containsAny(message, "快一点", "慢一点", "もっと速く", "もっと遅く", "もっとゆっくり") {
+		return "", [2]int{}, false
+	}
+	low := hasIntentPhrase(message,
+		"gentle", "gently", "slow", "slow pace", "slowly", "low speed",
+		"despacio", "lentamente", "suave", "suavemente", "ritmo lento", "velocidad baja",
+		"devagar", "ritmo lento", "velocidade baixa",
+	) || containsAny(message, "慢速", "缓慢", "緩慢", "慢慢", "轻柔", "輕柔", "温柔", "低速", "ゆっくり", "やさしく", "優しく", "穏やか", "低速")
+	middle := hasIntentPhrase(message,
+		"medium", "medium pace", "medium speed", "moderate", "moderately",
+		"medio", "media", "moderado", "moderada", "velocidad media",
+		"médio", "média", "moderado", "moderada", "velocidade média",
+	) || containsAny(message, "中速", "适中", "適中", "中等速度", "适度", "適度", "中くらい", "普通の速さ")
+	high := hasIntentPhrase(message,
+		"fast", "hard", "as fast as", "fastest", "full speed", "max speed", "maximum speed",
+		"rápido", "rápida", "fuerte", "máxima velocidad", "a toda velocidad", "lo más rápido",
+		"forte", "velocidade máxima", "o mais rápido",
+	) || containsAny(message, "快速", "最快", "最快速", "全速", "最大速度", "尽可能快", "盡可能快", "用力", "高速", "最速", "できるだけ速く", "強く")
 	if countTrue(low, middle, high) != 1 {
 		return "", [2]int{}, false
 	}
