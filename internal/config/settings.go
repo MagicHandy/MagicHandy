@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -173,26 +171,6 @@ type ServerSettings struct {
 	Port int `json:"port"`
 }
 
-// MediaSettings contains user-selected roots for explicit video catalog scans.
-// Paths are not secrets, but the scanner never accepts them from media routes.
-type MediaSettings struct {
-	LibraryPaths []string `json:"library_paths"`
-	// ScriptOffsetMillis shifts a paired script against its video. Positive
-	// delays the script, negative advances it. Some offset is not a defect the
-	// app can remove: scripts are authored against a particular sense of "on
-	// the beat", displays add their own presentation latency, and the device
-	// takes real time to move. This is the calibration control for that
-	// remainder, not a substitute for correct clock alignment.
-	ScriptOffsetMillis int `json:"script_offset_ms"`
-	// ScriptSmoothingPercent removes authored extrema below this prominence.
-	// Zero is off, which is the default: the paired script plays exactly as
-	// authored unless the user asks for something else.
-	ScriptSmoothingPercent int `json:"script_smoothing_percent"`
-	// PeakRoundingMillis rounds each direction change over this window, moving
-	// a hand-authored triangle toward a sine. Zero is off.
-	PeakRoundingMillis int `json:"peak_rounding_ms"`
-}
-
 // DeviceSettings contains device transport configuration.
 type DeviceSettings struct {
 	HSPDispatchOwner         string `json:"hsp_dispatch_owner"`
@@ -213,19 +191,6 @@ const (
 	// MotionStyleIntense favors pulse patterns, higher speeds, faster changes.
 	MotionStyleIntense = "intense"
 )
-
-// MaxScriptOffsetMillis bounds the paired-script calibration offset. Two
-// seconds covers authoring bias, display presentation latency, and device
-// actuation lag together; beyond that the pairing itself is wrong.
-const MaxScriptOffsetMillis = 2000
-
-// MaxScriptSmoothingPercent bounds jitter removal. Above this the filter stops
-// removing noise and starts removing strokes.
-const MaxScriptSmoothingPercent = 5
-
-// MaxPeakRoundingMillis bounds how far a rounded corner reaches. Beyond this
-// the fillet stops being a softened peak and becomes a different stroke shape.
-const MaxPeakRoundingMillis = 200
 
 // MinimumFocusWidthPercent keeps a focus window wide enough to still be
 // motion. Measured across the whole built-in catalog at slow speed with
@@ -556,16 +521,6 @@ type SettingsUpdate struct {
 	ClearConnectionKey bool                `json:"clear_connection_key"`
 }
 
-// MediaUpdate patches only the submitted media settings. Filter controls save
-// independently from the general Settings form, so omitted fields must retain
-// the latest durable values rather than being reset by a stale form snapshot.
-type MediaUpdate struct {
-	LibraryPaths           *[]string `json:"library_paths,omitempty"`
-	ScriptOffsetMillis     *int      `json:"script_offset_ms,omitempty"`
-	ScriptSmoothingPercent *int      `json:"script_smoothing_percent,omitempty"`
-	PeakRoundingMillis     *int      `json:"peak_rounding_ms,omitempty"`
-}
-
 // DeviceUpdate is the API write payload for device settings.
 type DeviceUpdate struct {
 	HSPDispatchOwner         string  `json:"hsp_dispatch_owner"`
@@ -585,6 +540,13 @@ func DefaultSettings() Settings {
 		},
 		UI: UISettings{
 			Locale: LocaleEnglish,
+		},
+		Media: MediaSettings{
+			ReencodeCodec:     ReencodeCodecH264,
+			ReencodeCRFH264:   DefaultReencodeCRFH264,
+			ReencodeCRFH265:   DefaultReencodeCRFH265,
+			ReencodePreset:    DefaultReencodePreset,
+			ReencodeAudioKbps: DefaultReencodeAudioKbps,
 		},
 		Device: DeviceSettings{
 			HSPDispatchOwner:       DispatchOwnerCloudREST,
@@ -644,11 +606,25 @@ func (s Settings) Public() PublicSettings {
 		Version: s.Version,
 		Server:  s.Server,
 		UI:      s.UI,
+		// Every MediaSettings field has to be copied explicitly here. A field
+		// added to the struct but missed in this projection saves correctly and
+		// then reads back as its zero value, which unit tests over ApplyUpdate
+		// and NormalizeSettings cannot see.
 		Media: MediaSettings{
-			ScriptOffsetMillis:     s.Media.ScriptOffsetMillis,
-			ScriptSmoothingPercent: s.Media.ScriptSmoothingPercent,
-			PeakRoundingMillis:     s.Media.PeakRoundingMillis,
-			LibraryPaths:           append([]string{}, s.Media.LibraryPaths...),
+			ScriptOffsetMillis:          s.Media.ScriptOffsetMillis,
+			ScriptSmoothingPercent:      s.Media.ScriptSmoothingPercent,
+			PeakRoundingMillis:          s.Media.PeakRoundingMillis,
+			LibraryPaths:                append([]string{}, s.Media.LibraryPaths...),
+			FFmpegPath:                  s.Media.FFmpegPath,
+			ConvertH265ForCompatibility: s.Media.ConvertH265ForCompatibility,
+			ReencodeCodec:               s.Media.ReencodeCodec,
+			ReencodeCRFH264:             s.Media.ReencodeCRFH264,
+			ReencodeCRFH265:             s.Media.ReencodeCRFH265,
+			ReencodePreset:              s.Media.ReencodePreset,
+			ReencodeAudioKbps:           s.Media.ReencodeAudioKbps,
+			GenerateThumbnailsOnScan:    s.Media.GenerateThumbnailsOnScan,
+			ConvertIncompatibleOnScan:   s.Media.ConvertIncompatibleOnScan,
+			ShowSupersededOriginals:     s.Media.ShowSupersededOriginals,
 		},
 		Device: PublicDeviceSettings{
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
@@ -709,20 +685,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		next.UI.Locale = strings.TrimSpace(update.UI.Locale)
 	}
 	if update.Media != nil {
-		media := next.Media
-		if update.Media.LibraryPaths != nil {
-			media.LibraryPaths = append([]string{}, (*update.Media.LibraryPaths)...)
-		}
-		if update.Media.ScriptOffsetMillis != nil {
-			media.ScriptOffsetMillis = *update.Media.ScriptOffsetMillis
-		}
-		if update.Media.ScriptSmoothingPercent != nil {
-			media.ScriptSmoothingPercent = *update.Media.ScriptSmoothingPercent
-		}
-		if update.Media.PeakRoundingMillis != nil {
-			media.PeakRoundingMillis = *update.Media.PeakRoundingMillis
-		}
-		next.Media = normalizeMediaSettings(media)
+		next.Media = normalizeMediaSettings(mergeMediaUpdate(next.Media, *update.Media))
 	}
 	next.Device.HSPDispatchOwner = update.Device.HSPDispatchOwner
 	next.Device.IntifaceServerAddress = strings.TrimSpace(update.Device.IntifaceServerAddress)
@@ -1342,36 +1305,6 @@ func cloneSettings(settings Settings) Settings {
 	return settings
 }
 
-func normalizeMediaSettings(settings MediaSettings) MediaSettings {
-	paths := make([]string, 0, len(settings.LibraryPaths))
-	for _, value := range settings.LibraryPaths {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		value = filepath.Clean(value)
-		duplicate := false
-		for _, existing := range paths {
-			if existing == value || (runtime.GOOS == "windows" && strings.EqualFold(existing, value)) {
-				duplicate = true
-				break
-			}
-		}
-		if !duplicate {
-			paths = append(paths, value)
-		}
-	}
-	settings.LibraryPaths = paths
-	settings.ScriptOffsetMillis = clampInt(
-		settings.ScriptOffsetMillis,
-		-MaxScriptOffsetMillis,
-		MaxScriptOffsetMillis,
-	)
-	settings.ScriptSmoothingPercent = clampInt(settings.ScriptSmoothingPercent, 0, MaxScriptSmoothingPercent)
-	settings.PeakRoundingMillis = clampInt(settings.PeakRoundingMillis, 0, MaxPeakRoundingMillis)
-	return settings
-}
-
 func clampInt(value, minimum, maximum int) int {
 	if value < minimum {
 		return minimum
@@ -1380,25 +1313,6 @@ func clampInt(value, minimum, maximum int) int {
 		return maximum
 	}
 	return value
-}
-
-func validateMediaSettings(settings MediaSettings) error {
-	// The script offset is clamped in normalizeMediaSettings rather than
-	// rejected here: it is a calibration dial, and a hand-edited settings file
-	// should still load with a usable value instead of failing to open.
-	const maxLibraryPaths = 32
-	if len(settings.LibraryPaths) > maxLibraryPaths {
-		return fmt.Errorf("media library supports at most %d locations", maxLibraryPaths)
-	}
-	for _, value := range settings.LibraryPaths {
-		if !filepath.IsAbs(value) {
-			return fmt.Errorf("media library location must be an absolute path: %q", value)
-		}
-		if len(value) > 4096 {
-			return errors.New("media library location is too long")
-		}
-	}
-	return nil
 }
 
 func cloneStrings(values []string) []string {

@@ -65,6 +65,8 @@ type discoveredVideo struct {
 	SizeBytes             int64
 	ModifiedAt            string
 	FunscriptRelativePath *string
+	Compatibility         Compatibility
+	Superseded            bool
 }
 
 type rootScan struct {
@@ -97,6 +99,14 @@ func emptyScanState() ScanState {
 
 // StartScan snapshots configured roots and starts one cancellable scan.
 func (c *Catalog) StartScan(locations []string) (ScanState, error) {
+	return c.StartScanThen(locations, nil)
+}
+
+// StartScanThen starts a scan and runs after() once it has finished, which is
+// how the opt-in generate-and-convert options ride a scan the user started.
+// The callback receives the final state so it can decline: a cancelled or
+// failed scan should not silently launch an hour of encoding.
+func (c *Catalog) StartScanThen(locations []string, after func(ScanState)) (ScanState, error) {
 	roots, err := normalizeRoots(locations)
 	if err != nil {
 		return ScanState{}, err
@@ -104,7 +114,7 @@ func (c *Catalog) StartScan(locations []string) (ScanState, error) {
 
 	c.scanMu.Lock()
 	defer c.scanMu.Unlock()
-	if c.closed {
+	if c.closed.Load() {
 		return ScanState{}, ErrClosed
 	}
 	if c.maintenance || c.scanState.Running {
@@ -120,7 +130,7 @@ func (c *Catalog) StartScan(locations []string) (ScanState, error) {
 	}
 	state := cloneScanState(c.scanState)
 	c.scanWG.Add(1)
-	go c.runScan(ctx, roots)
+	go c.runScan(ctx, roots, after)
 	return state, nil
 }
 
@@ -142,7 +152,7 @@ func (c *Catalog) CancelScan() ScanState {
 	return cloneScanState(c.scanState)
 }
 
-func (c *Catalog) runScan(ctx context.Context, roots []string) {
+func (c *Catalog) runScan(ctx context.Context, roots []string, after func(ScanState)) {
 	defer c.scanWG.Done()
 	summary := ScanSummary{Locations: len(roots), Issues: []ScanIssue{}}
 	var runErr error
@@ -195,6 +205,13 @@ func (c *Catalog) runScan(ctx context.Context, roots []string) {
 	c.scanCancel = nil
 	state := cloneScanState(c.scanState)
 	c.scanMu.Unlock()
+
+	// A cancelled or failed scan does not trigger follow-up work. The catalog
+	// it produced is incomplete, and launching an hour of encoding off a scan
+	// the user just stopped would be the opposite of what they asked for.
+	if after != nil && !state.Cancelled && state.Error == "" {
+		after(state)
+	}
 
 	level := slogLevelForScan(state)
 	c.logger.Log(context.Background(), level, "media library scan finished",
@@ -307,7 +324,7 @@ func (d *rootDiscovery) visit(path string, entry fs.DirEntry, walkErr error) err
 		d.reportProgress(0)
 		return nil
 	}
-	if !supportedVideoExtension(extension) {
+	if !CatalogedExtension(extension) {
 		d.reportProgress(0)
 		return nil
 	}
@@ -345,13 +362,9 @@ func (d *rootDiscovery) flushProgress() {
 
 func (d *rootDiscovery) catalogResult() rootScan {
 	sort.Slice(d.videos, func(i, j int) bool { return d.videos[i].relative < d.videos[j].relative })
+	superseded := supersededKeys(d.videos)
 	d.result.videos = make([]discoveredVideo, 0, len(d.videos))
 	for _, video := range d.videos {
-		var pair *string
-		if relative, ok := d.funScripts[pairKey(video.relative)]; ok {
-			value := relative
-			pair = &value
-		}
 		d.result.videos = append(d.result.videos, discoveredVideo{
 			ID:                    stableVideoID(d.result.root, video.relative),
 			LocationPath:          d.result.root,
@@ -359,16 +372,59 @@ func (d *rootDiscovery) catalogResult() rootScan {
 			DisplayName:           video.name,
 			SizeBytes:             video.size,
 			ModifiedAt:            video.modified,
-			FunscriptRelativePath: pair,
+			FunscriptRelativePath: d.resolveScript(video.relative),
+			Compatibility:         ContainerCompatibility(video.relative),
+			Superseded:            containsKey(superseded, pairKey(video.relative)),
 		})
 	}
 	return d.result
 }
 
+// resolveScript pairs by exact basename first, then retries without the
+// reserved conversion suffix so a converted file keeps the script its source
+// was paired with.
+func (d *rootDiscovery) resolveScript(relative string) *string {
+	if script, ok := d.funScripts[pairKey(relative)]; ok {
+		return &script
+	}
+	if !HasConvertedSuffix(relative) {
+		return nil
+	}
+	if script, ok := d.funScripts[convertedPairKey(relative)]; ok {
+		return &script
+	}
+	return nil
+}
+
+// supersededKeys derives which rows a converted file hides. Derived at scan
+// time rather than stored as a flag, because the filesystem is the source of
+// truth and people move and delete files outside the app: delete the converted
+// copy and the original reappears on the next scan with no stale flag to clean
+// up. The row survives either way, so its per-video sync offset does too.
+func supersededKeys(videos []videoCandidate) map[string]struct{} {
+	keys := make(map[string]struct{})
+	for _, video := range videos {
+		if !HasConvertedSuffix(video.relative) {
+			continue
+		}
+		keys[convertedPairKey(video.relative)] = struct{}{}
+	}
+	return keys
+}
+
+func containsKey(keys map[string]struct{}, key string) bool {
+	_, ok := keys[key]
+	return ok
+}
+
 func (c *Catalog) applyRootScan(ctx context.Context, result rootScan) (ScanSummary, error) {
 	delta := ScanSummary{Issues: []ScanIssue{}}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var dropped []string
 	err := c.db.WithTx(ctx, func(tx *sql.Tx) error {
+		// Reset per attempt: WithTx may retry, and a partial list from an
+		// aborted attempt would delete covers for rows that still exist.
+		dropped = nil
 		existing, err := videosForRoot(ctx, tx, result.root)
 		if err != nil {
 			return err
@@ -397,6 +453,7 @@ func (c *Catalog) applyRootScan(ctx context.Context, result rootScan) (ScanSumma
 				if _, err := tx.ExecContext(ctx, `DELETE FROM media_videos WHERE id = ?`, id); err != nil {
 					return err
 				}
+				dropped = append(dropped, id)
 				delta.Removed++
 				continue
 			}
@@ -407,14 +464,19 @@ func (c *Catalog) applyRootScan(ctx context.Context, result rootScan) (ScanSumma
 		}
 		return nil
 	})
+	if err == nil {
+		// After the commit, never before: a rolled-back transaction would
+		// otherwise leave the row intact and its cover gone.
+		for _, id := range dropped {
+			c.deleteThumbnail(id)
+		}
+	}
 	return delta, err
 }
 
 func videosForRoot(ctx context.Context, tx *sql.Tx, root string) (map[string]Video, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, location_path, relative_path, display_name, size_bytes,
-		       modified_at, duration_ms, funscript_relative_path, missing, scanned_at,
-		       script_offset_ms
+		SELECT `+videoColumns+`
 		FROM media_videos WHERE location_path = ?
 	`, root)
 	if err != nil {
@@ -432,27 +494,55 @@ func videosForRoot(ctx context.Context, tx *sql.Tx, root string) (map[string]Vid
 	return result, rows.Err()
 }
 
+// upsertVideo writes one discovered row.
+//
+// The learned facts — compatibility, probed codecs, the generated cover — are
+// kept only while the file is byte-for-byte the one they were learned from.
+// A changed size or timestamp means a different file behind the same name, and
+// carrying "this plays" across that would be a stale claim in exactly the
+// direction that hides a broken video. The same CASE already guards duration.
 func upsertVideo(ctx context.Context, tx *sql.Tx, video discoveredVideo, scannedAt string) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO media_videos(
 			id, location_path, relative_path, display_name, size_bytes, modified_at,
-			duration_ms, funscript_relative_path, missing, scanned_at
-		) VALUES(?, ?, ?, ?, ?, ?, NULL, ?, 0, ?)
+			duration_ms, funscript_relative_path, missing, scanned_at, compatibility, superseded
+		) VALUES(?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			location_path = excluded.location_path,
 			relative_path = excluded.relative_path,
 			display_name = excluded.display_name,
-			duration_ms = CASE
-				WHEN media_videos.size_bytes = excluded.size_bytes AND media_videos.modified_at = excluded.modified_at
+			duration_ms = CASE WHEN media_videos.size_bytes = excluded.size_bytes
+				AND media_videos.modified_at = excluded.modified_at
 				THEN media_videos.duration_ms ELSE NULL END,
+			thumbnail_generated_at = CASE WHEN media_videos.size_bytes = excluded.size_bytes
+				AND media_videos.modified_at = excluded.modified_at
+				THEN media_videos.thumbnail_generated_at ELSE NULL END,
+			video_codec = CASE WHEN media_videos.size_bytes = excluded.size_bytes
+				AND media_videos.modified_at = excluded.modified_at
+				THEN media_videos.video_codec ELSE NULL END,
+			audio_codec = CASE WHEN media_videos.size_bytes = excluded.size_bytes
+				AND media_videos.modified_at = excluded.modified_at
+				THEN media_videos.audio_codec ELSE NULL END,
+			compatibility = CASE WHEN media_videos.size_bytes = excluded.size_bytes
+				AND media_videos.modified_at = excluded.modified_at
+				THEN media_videos.compatibility ELSE excluded.compatibility END,
 			size_bytes = excluded.size_bytes,
 			modified_at = excluded.modified_at,
 			funscript_relative_path = excluded.funscript_relative_path,
+			superseded = excluded.superseded,
 			missing = 0,
 			scanned_at = excluded.scanned_at
 	`, video.ID, video.LocationPath, video.RelativePath, video.DisplayName, video.SizeBytes,
-		video.ModifiedAt, nullableString(video.FunscriptRelativePath), scannedAt)
+		video.ModifiedAt, nullableString(video.FunscriptRelativePath), scannedAt,
+		string(video.Compatibility), boolToInt(video.Superseded))
 	return err
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func videoChanged(current Video, next discoveredVideo) bool {
@@ -516,18 +606,23 @@ func pathDepth(relative string) int {
 	return strings.Count(clean, string(filepath.Separator)) + 1
 }
 
-func supportedVideoExtension(extension string) bool {
-	switch extension {
-	case ".mp4", ".m4v", ".webm", ".mov":
-		return true
-	default:
-		return false
-	}
+func pairKey(relative string) string {
+	base := strings.TrimSuffix(filepath.Base(relative), filepath.Ext(relative))
+	return directoryKey(relative, base)
 }
 
-func pairKey(relative string) string {
+// convertedPairKey is the key a converted file falls back to. Scripts pair by
+// exact basename, so Holiday_MHConverted.mp4 would look for
+// Holiday_MHConverted.funscript, find nothing, and silently cost the user the
+// pairing that is the whole point of the library. Stripping the reserved suffix
+// and trying again is the one fallback that fixes it, and it changes nothing on
+// disk: no file is copied, renamed, or duplicated.
+func convertedPairKey(relative string) string {
+	return directoryKey(relative, stripConvertedSuffix(relative))
+}
+
+func directoryKey(relative, base string) string {
 	directory := filepath.ToSlash(filepath.Dir(filepath.FromSlash(relative)))
-	base := strings.TrimSuffix(filepath.Base(relative), filepath.Ext(relative))
 	key := directory + "\x00" + base
 	if runtime.GOOS == "windows" {
 		return strings.ToLower(key)

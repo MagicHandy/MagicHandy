@@ -35,6 +35,9 @@ interface Props {
   locked: boolean;
   stopSequence?: number;
   onVideoUpdate?: (video: MediaVideo) => void;
+  /** Offered by the library when the browser refuses to decode this file. */
+  onRequestConversion?: () => void;
+  conversionBusy?: boolean;
 }
 
 interface PlaybackSession {
@@ -50,7 +53,7 @@ interface SyncOperation {
   mediaTimeMillis: number;
 }
 
-export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }: Props) {
+export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, onRequestConversion, conversionBusy }: Props) {
   const session = useMemo<PlaybackSession>(() => ({ id: createMediaSessionID(), sequence: 0 }), [video.id]);
   const activeSessionID = useRef(session.id);
   activeSessionID.current = session.id;
@@ -705,6 +708,8 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       playerRef={playerRef}
       onPlaybackEvent={video.has_funscript ? handlePlaybackEvent : undefined}
       synchronized={video.has_funscript}
+      onRequestConversion={onRequestConversion}
+      conversionBusy={conversionBusy}
     >
       {loadingScript && <div className="media-script-loading" role="status">{t("Preparing paired script and video")}</div>}
       {!loadingScript && !script && scriptError && <p className="form-status media-playback-error" role="alert">{t("Script unavailable: {error}. Video playback will not command motion.", { error: scriptError })}</p>}

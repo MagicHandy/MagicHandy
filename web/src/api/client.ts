@@ -29,6 +29,8 @@ import type {
   ManagedLlamaRuntimeBuild,
   MediaScanState,
   MediaFunscript,
+  MediaJobState,
+  MediaToolStatus,
   MediaSyncEvent,
   MediaSyncStatus,
   MediaVideo,
@@ -127,6 +129,32 @@ async function uploadVoiceTranscription(audio: Blob, format: string, stopSequenc
   return parsed as { request: VoiceRequestSnapshot };
 }
 
+// uploadThumbnail posts a captured frame as raw bytes. The shared request()
+// helper JSON-encodes its body, which a JPEG cannot survive.
+async function uploadThumbnail(id: string, image: Blob): Promise<{ status: string }> {
+  const res = await fetch(`/api/media/videos/${encodeURIComponent(id)}/thumbnail`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    body: image,
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
+  if (!res.ok) {
+    const message = parsed && typeof parsed === "object" && "error" in parsed
+      ? String((parsed as { error: unknown }).error)
+      : `Thumbnail upload failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed as { status: string };
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly body: unknown) {
     super(message);
@@ -202,6 +230,26 @@ export const api = {
     peak_rounding_ms: number;
     apply_video_speed_limit: boolean;
   }>) => request("POST", "/api/media/playback", patch),
+
+  // Media tooling. Thumbnails and conversion both need the optional external
+  // FFmpeg; the compatibility report does not, because the browser produced it.
+  mediaThumbnailURL: (video: MediaVideo) =>
+    video.thumbnail_generated_at
+      ? `/api/media/videos/${encodeURIComponent(video.id)}/thumbnail?v=${encodeURIComponent(video.thumbnail_generated_at)}`
+      : "",
+  saveMediaThumbnail: uploadThumbnail,
+  // Reports what the browser actually did with a file. This is the only signal
+  // that catches a supported container holding a codec this browser lacks.
+  reportMediaCompatibility: (id: string, compatibility: "playable" | "unsupported_codec") =>
+    request<{ status: string }>("POST", "/api/media/compatibility", { id, compatibility }),
+  mediaTools: (signal?: AbortSignal) =>
+    request<{ tools: MediaToolStatus }>("GET", "/api/media/tools", undefined, signal),
+  mediaJob: (signal?: AbortSignal) => request<{ job: MediaJobState }>("GET", "/api/media/job", undefined, signal),
+  cancelMediaJob: () => request<{ job: MediaJobState }>("DELETE", "/api/media/job"),
+  generateMediaThumbnails: (redo = false) =>
+    request<{ job: MediaJobState }>("POST", "/api/media/thumbnails", { redo }),
+  clearMediaThumbnails: () => request<{ removed: number }>("DELETE", "/api/media/thumbnails"),
+  convertMedia: (ids: string[] = []) => request<{ job: MediaJobState }>("POST", "/api/media/convert", { ids }),
 
   mediaSync: (event: MediaSyncEvent, stopSequence?: number, signal?: AbortSignal, keepalive = false) =>
     request<{ sync: MediaSyncStatus }>(

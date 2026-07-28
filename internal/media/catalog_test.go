@@ -16,7 +16,6 @@ func TestExplicitScanPairsVideosAndTracksMissingLifecycle(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "Session.mp4"), "video-one")
 	writeTestFile(t, filepath.Join(root, "Session.funscript"), `{"actions":[]}`)
-	writeTestFile(t, filepath.Join(root, "ignored.mkv"), "not-browser-safe")
 	writeTestFile(t, filepath.Join(root, ".hidden", "private.mp4"), "hidden")
 	deep := root
 	for index := 0; index <= MaxScanDepth; index++ {

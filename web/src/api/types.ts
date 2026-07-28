@@ -274,6 +274,15 @@ export interface PatternLibrary {
   auto_disable: boolean;
 }
 
+// MediaCompatibility mirrors internal/media.Compatibility. Only "playable" is
+// ever a positive claim, and only a real playback attempt produces it: a
+// supported container says nothing about whether its codec decodes here.
+export type MediaCompatibility =
+  | "unknown"
+  | "playable"
+  | "unsupported_container"
+  | "unsupported_codec";
+
 export interface MediaVideo {
   id: string;
   location_path: string;
@@ -285,6 +294,76 @@ export interface MediaVideo {
   missing: boolean;
   scanned_at: string;
   script_offset_ms?: number;
+  thumbnail_generated_at?: string | null;
+  compatibility?: MediaCompatibility;
+  video_codec?: string | null;
+  audio_codec?: string | null;
+  superseded?: boolean;
+  container_type?: string;
+}
+
+// canPlayContainer asks this browser's own engine whether it opens a container,
+// cached because the answer cannot change within a page load.
+const containerSupport = new Map<string, boolean>();
+
+function canPlayContainer(containerType: string): boolean {
+  const cached = containerSupport.get(containerType);
+  if (cached !== undefined) return cached;
+  let supported = false;
+  try {
+    supported = document.createElement("video").canPlayType(containerType) !== "";
+  } catch {
+    supported = false;
+  }
+  containerSupport.set(containerType, supported);
+  return supported;
+}
+
+/**
+ * needsConversion decides whether to offer a repair.
+ *
+ * The two incompatibility states are not equally certain, and treating them
+ * alike would put a wrong badge on a lot of working files. An observed codec
+ * refusal is fact: this browser tried and failed. An unsupported *container* is
+ * only the server's guess from a file extension, and that guess is browser-
+ * specific — Chrome opens MKV, Firefox does not. So the guess is checked
+ * against the engine that would actually do the playing before it is shown.
+ */
+export function needsConversion(video: MediaVideo): boolean {
+  if (video.missing) return false;
+  if (video.compatibility === "unsupported_codec") return true;
+  if (video.compatibility !== "unsupported_container") return false;
+  return !video.container_type || !canPlayContainer(video.container_type);
+}
+
+export interface MediaToolStatus {
+  configured: boolean;
+  available: boolean;
+  ffmpeg_path?: string;
+  version?: string;
+  error?: string;
+}
+
+export interface MediaJobIssue {
+  name: string;
+  message: string;
+}
+
+export interface MediaJobState {
+  kind?: "thumbnails" | "conversion";
+  running: boolean;
+  cancellable: boolean;
+  cancelled: boolean;
+  started_at?: string;
+  completed_at?: string;
+  current_name?: string;
+  total: number;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  item_percent: number;
+  issues: MediaJobIssue[] | null;
+  error?: string;
 }
 
 export interface MediaFunscriptAction {
@@ -333,6 +412,23 @@ export interface MediaScanIssue {
   message: string;
 }
 
+export interface MediaSettingsPayload {
+  library_paths: string[];
+  script_offset_ms?: number;
+  script_smoothing_percent?: number;
+  peak_rounding_ms?: number;
+  ffmpeg_path?: string;
+  convert_h265_for_compatibility?: boolean;
+  reencode_codec?: "h264" | "h265";
+  reencode_crf_h264?: number;
+  reencode_crf_h265?: number;
+  reencode_preset?: string;
+  reencode_audio_kbps?: number;
+  generate_thumbnails_on_scan?: boolean;
+  convert_incompatible_on_scan?: boolean;
+  show_superseded_originals?: boolean;
+}
+
 export interface MediaScanState {
   running: boolean;
   cancellable: boolean;
@@ -362,6 +458,7 @@ export interface MediaSummary {
   paired_count?: number;
   scan?: MediaScanState;
   sync?: MediaSyncStatus;
+  job?: MediaJobState;
 }
 
 export interface PatternInput {
@@ -556,7 +653,7 @@ export interface PublicSettings {
   version: number;
   server: { port: number };
   ui?: { locale: string };
-  media?: { library_paths: string[]; script_offset_ms?: number; script_smoothing_percent?: number; peak_rounding_ms?: number };
+  media?: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;
@@ -708,7 +805,7 @@ export interface OllamaModelScan {
 export interface SettingsUpdate {
   server: { port: number };
   ui?: { locale: string };
-  media: { library_paths: string[]; script_offset_ms?: number; script_smoothing_percent?: number; peak_rounding_ms?: number };
+  media: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;
     intiface_server_address: string;

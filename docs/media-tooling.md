@@ -2,10 +2,44 @@
 
 ## Status
 
-**Plan only — nothing here is built.** This answers a question the tiled video
-library raised (there is nowhere for a thumbnail to come from) and, in doing so,
-resolves the shape of the open pre-transcode decision in
-[video-playback.md](video-playback.md).
+**Built**, except the optional FFmpeg downloader (slice 3), which is deferred
+for a stated reason in [What shipped](#what-shipped). This document was the
+plan; the sections below are kept as the design record, with corrections marked
+where implementation proved the plan wrong.
+
+It answers a question the tiled video library raised (there is nowhere for a
+thumbnail to come from) and, in doing so, resolves the open pre-transcode
+decision in [video-playback.md](video-playback.md).
+
+## The correction this plan needed
+
+The plan asserted that an incompatible file **cannot appear in the library at
+all**, because the scanner only indexed `.mp4 .m4v .webm .mov`. That was wrong,
+and the error mattered: it is true of incompatible *containers* and false of
+incompatible *codecs*.
+
+An `.mp4` holding HEVC is indexed today. It is an ordinary catalog row with an
+ordinary extension, and Firefox — which ships no HEVC decoder on most platforms
+— will not play it. Nothing about the filename says so. That file was always
+reachable, always broken, and invisible to every check the plan proposed.
+
+Two things follow, and both are in the shipped code:
+
+1. **An extension is never a playability claim.** Classifying by extension may
+   report "unknown", never "playable". Only a real playback attempt produces a
+   positive verdict.
+2. **The observed failure is the primary signal, not the third one.** The plan
+   listed it third, after extension and `ffprobe`. It is first: it is the only
+   signal that catches a supported container holding an unsupported codec, and
+   it is free, because the browser is already reporting it.
+
+A second correction came from running the result: **the extension prior is
+browser-specific**. Chrome opens MKV; Firefox does not. A server-side list
+saying "`.mkv` cannot be played" puts a wrong badge on working files for every
+Chrome user. So the server sends the container's MIME type and the client asks
+its own engine via `canPlayType` before showing the badge. Verified live: the
+same catalog reports one repairable file in Chromium and would report two in
+Firefox.
 
 ## The question
 
@@ -192,19 +226,25 @@ playback path. The no-real-time-transcoding wall stands.
 
 ### What "incompatible" means
 
-Three signals, in increasing order of cost:
+Three signals. The order below is the shipped order of authority, which is not
+the order the first draft gave them:
 
 | Signal | Cost | Catches |
 | --- | --- | --- |
-| **Extension** | Free, at scan | `.mkv`, `.avi`, `.wmv`, `.ts` … — containers the `<video>` element will not open |
-| **Observed failure** | Free, already happening | A supported container whose *codec* the browser refused; the player already reports exactly this |
-| **`ffprobe`** | Needs FFmpeg | The same thing before you try to play it, which is what a batch task needs |
+| **Observed failure** | Free, already happening | Anything this browser actually refused, including a supported container holding an unsupported codec. The only signal that reaches HEVC-in-MP4. |
+| **Extension, checked against the engine** | Free, at scan | Containers `<video>` will not open — confirmed per browser with `canPlayType` before it is shown, because MKV support differs between Chrome and Firefox |
+| **`ffprobe`** | Needs FFmpeg | Which codecs are actually inside, used to explain a verdict and to choose remux over re-encode |
 
-The middle one is worth noticing: `MediaVideoPlayer` already handles `onError`
-with "Verify that the file still exists and uses a browser-supported codec".
-That is an *observed* incompatibility on this machine, in this browser, which is
-more authoritative than any table of codec support — and it is the moment the
-user is most likely to want the button.
+The first is the important one, and it is nearly free: the player already
+handles `onError`. What it needed was to read `MediaError.code` and separate
+`MEDIA_ERR_DECODE` / `MEDIA_ERR_SRC_NOT_SUPPORTED` from a file that simply did
+not arrive — a deleted file raises the same code in some browsers, and telling
+someone to convert a video that no longer exists sends them to fix the wrong
+thing. So the stream is range-probed before the codec is blamed.
+
+The verdict is stored, so the offer survives a reload, and it is **reversible**:
+a later successful play writes "playable" straight back over it. It has to be,
+because the answer belongs to a browser rather than to the file.
 
 ### The library has to index incompatible files first
 
@@ -415,6 +455,60 @@ entirely avoidable annoyance.
   than at 90%.
 - One conversion at a time, cancellable, with progress — a two-hour job with no
   cancel button is a bug.
+
+## What shipped
+
+| Slice | State |
+| --- | --- |
+| 1. Browser-captured covers | Built |
+| 2. FFmpeg as a validated dependency | Built |
+| 3. FFmpeg download | **Not built** — see below |
+| 4. Batch thumbnails | Built |
+| 5. Incompatible files in the catalog | Built |
+| 6. Conversion | Built |
+
+**Slice 3 is deliberately absent.** Shipping a downloader means pinning a URL
+and a SHA-256 for a third-party build. Publishing a checksum that has not been
+verified against the artifact it claims to describe is worse than having no
+download button at all: it looks like a safety guarantee and is not one. The
+path field covers everyone who already has FFmpeg, and the absent state is
+honest and actionable. This stays open until someone can pin a real checksum.
+
+### Where the plan met reality
+
+Two failures that only appeared when the code ran against a real encoder, both
+now covered by tests:
+
+- **The output muxer must be named.** Conversion writes to `<name>.partial` and
+  renames on success, and FFmpeg selects its format from the file extension. It
+  cannot resolve one from `.partial`, and fails with a bare "Error opening
+  output files: Invalid argument". `-f mp4` is load-bearing. The same applies
+  to thumbnail capture, which needs `-f image2 -c:v mjpeg`.
+- **The thumbnail seek needs a real duration, not a fallback.** Rows have no
+  duration until the browser reports one after playback — and batch thumbnails
+  exist precisely for videos nobody has played. A fixed fallback offset seeks
+  past the end of anything shorter and FFmpeg reports only that no packets
+  arrived. `ffprobe` is asked instead, the answer is stored, and a failed
+  capture retries at frame zero.
+
+One design change came from the same pass: **Tier 1 never seeks.** The plan had
+it capturing a frame a fraction of the way in, but that element is the one a
+clock-locked run follows, and seeking would emit `seeking`/`seeked` into the
+sync engine — moving the device to chase a thumbnail. It now takes whatever
+frame is on screen once playback passes three seconds, which is all Tier 1 ever
+promised: covers for videos someone actually opens.
+
+### Measured
+
+Against a generated fixture set, with FFmpeg 8.1.1:
+
+| Case | Path | Result |
+| --- | --- | --- |
+| H.264 + AAC in `.mkv` | Remux | 357 ms, 182 KB → 184 KB, plays |
+| MPEG-4 Part 2 in `.avi` | Re-encode to H.264 | Plays, 320×180 confirmed decoded |
+| Paired script across a conversion | Suffix-strip fallback | 3 actions still resolve |
+| Per-video sync offset across a conversion | Inherited | 175 ms carried |
+| Originals after conversion | Hidden, not deleted | Both files still on disk |
 
 ## Non-goals
 

@@ -8,10 +8,13 @@ vi.mock("../api/client", () => ({
   api: {
     mediaStreamURL: (id: string) => `/stream/${id}`,
     saveMediaDuration: vi.fn(),
+    reportMediaCompatibility: vi.fn(),
+    saveMediaThumbnail: vi.fn(),
   },
 }));
 
 const saveMediaDuration = vi.mocked(api.saveMediaDuration);
+const reportMediaCompatibility = vi.mocked(api.reportMediaCompatibility);
 
 function video(id: string, duration: number | null = null): MediaVideo {
   return {
@@ -31,6 +34,7 @@ describe("MediaVideoPlayer", () => {
   beforeEach(() => {
     saveMediaDuration.mockReset();
     saveMediaDuration.mockResolvedValue({ status: "saved" });
+    reportMediaCompatibility.mockReset();
   });
 
   it("backfills browser-decoded duration once and reports it to the caller", async () => {
@@ -83,7 +87,7 @@ describe("MediaVideoPlayer", () => {
     expect(saveMediaDuration).not.toHaveBeenCalled();
   });
 
-  it("does not write from read-only playback and offers recovery from decode errors", () => {
+  it("does not write from read-only playback and offers recovery from decode errors", async () => {
     const load = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
     const onPlaybackEvent = vi.fn();
     const result = render(<MediaVideoPlayer video={video("first")} allowMetadataWrite={false} onPlaybackEvent={onPlaybackEvent} />);
@@ -91,7 +95,7 @@ describe("MediaVideoPlayer", () => {
     Object.defineProperty(first, "duration", { configurable: true, value: 12 });
     fireEvent.loadedMetadata(first);
     fireEvent.error(first);
-    expect(screen.getByRole("alert")).toHaveTextContent("file still exists");
+    expect(await screen.findByRole("alert")).toHaveTextContent("file is still available");
     expect(onPlaybackEvent).toHaveBeenCalledWith("error", first);
     expect(saveMediaDuration).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Retry video" }));
@@ -99,11 +103,63 @@ describe("MediaVideoPlayer", () => {
 
     fireEvent.error(first);
     fireEvent.canPlay(first);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
 
     result.rerender(<MediaVideoPlayer video={video("second")} allowMetadataWrite={false} />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByLabelText("second")).toHaveAttribute("src", "/stream/second");
     load.mockRestore();
+  });
+
+  // The case the whole feature exists for: a container every browser opens,
+  // holding a codec this one cannot decode. Nothing about the filename says so,
+  // and only the element's own error code reveals it.
+  it("offers conversion when the browser refuses to decode a reachable file", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: null });
+    vi.stubGlobal("fetch", fetchMock);
+    reportMediaCompatibility.mockResolvedValue({ status: "saved" });
+    const onRequestConversion = vi.fn();
+
+    render(
+      <MediaVideoPlayer
+        video={video("hevc")}
+        allowMetadataWrite
+        onRequestConversion={onRequestConversion}
+      />,
+    );
+    const player = screen.getByLabelText("hevc") as HTMLVideoElement;
+    // MEDIA_ERR_SRC_NOT_SUPPORTED: the bytes arrived and were refused.
+    Object.defineProperty(player, "error", { configurable: true, value: { code: 4 } });
+    fireEvent.error(player);
+
+    expect(await screen.findByText("This browser cannot play this file")).toBeInTheDocument();
+    await waitFor(() => expect(reportMediaCompatibility).toHaveBeenCalledWith("hevc", "unsupported_codec"));
+    fireEvent.click(screen.getByRole("button", { name: "Convert this video" }));
+    expect(onRequestConversion).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+
+  // A deleted file also raises code 4 in some browsers. Blaming the codec there
+  // would send the user to convert a file that is simply gone.
+  it("does not blame the codec when the file cannot be fetched", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, body: null });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MediaVideoPlayer video={video("gone")} allowMetadataWrite onRequestConversion={vi.fn()} />);
+    const player = screen.getByLabelText("gone") as HTMLVideoElement;
+    Object.defineProperty(player, "error", { configurable: true, value: { code: 4 } });
+    fireEvent.error(player);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("file is still available");
+    expect(screen.queryByRole("button", { name: "Convert this video" })).not.toBeInTheDocument();
+    expect(reportMediaCompatibility).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("records a successful decode so the repair offer does not persist", async () => {
+    reportMediaCompatibility.mockResolvedValue({ status: "saved" });
+    render(<MediaVideoPlayer video={{ ...video("mixed"), compatibility: "unsupported_codec" }} allowMetadataWrite />);
+    fireEvent.canPlay(screen.getByLabelText("mixed"));
+    await waitFor(() => expect(reportMediaCompatibility).toHaveBeenCalledWith("mixed", "playable"));
   });
 });

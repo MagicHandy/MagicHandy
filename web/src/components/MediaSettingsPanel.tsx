@@ -1,9 +1,10 @@
 import { formatNumber, t } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MediaScanState, MediaVideo } from "../api/types";
+import type { MediaScanState, MediaSettingsPayload, MediaVideo } from "../api/types";
 import { RefreshIcon, TrashIcon } from "../shell/icons";
 import { HostPathField } from "./HostPathField";
+import { MediaToolsSettings } from "./MediaToolsSettings";
 
 // Mirrors config.MaxScriptOffsetMillis.
 const MAX_SCRIPT_OFFSET_MILLIS = 2000;
@@ -14,26 +15,25 @@ function clampOffset(value: number): number {
 }
 
 interface Props {
-  locations: string[];
+  media: MediaSettingsPayload;
   savedLocations: string[];
   limitVideoScriptSpeed: boolean;
   onLimitVideoScriptSpeedChange: (enabled: boolean) => void;
-  scriptOffsetMillis: number;
-  onScriptOffsetChange: (millis: number) => void;
   locked: boolean;
-  onChange: (locations: string[]) => void;
+  onChange: (patch: Partial<MediaSettingsPayload>) => void;
 }
 
 export function MediaSettingsPanel({
-  locations,
+  media,
   savedLocations,
   limitVideoScriptSpeed,
   onLimitVideoScriptSpeedChange,
-  scriptOffsetMillis,
-  onScriptOffsetChange,
   locked,
   onChange,
 }: Props) {
+  const locations = media.library_paths;
+  const scriptOffsetMillis = media.script_offset_ms ?? 0;
+  const onScriptOffsetChange = (millis: number) => onChange({ script_offset_ms: millis });
   const [draft, setDraft] = useState("");
   const [videos, setVideos] = useState<MediaVideo[]>([]);
   const [scan, setScan] = useState<MediaScanState | null>(null);
@@ -91,14 +91,14 @@ export function MediaSettingsPanel({
       setError(t("That library location is already listed."));
       return;
     }
-    onChange([...locations, value]);
+    onChange({ library_paths: [...locations, value] });
     setDraft("");
     setError("");
   }
 
   function removeLocation(location: string) {
     if (!window.confirm(t("Remove {location} from the video library?", { location }))) return;
-    onChange(locations.filter((entry) => entry !== location));
+    onChange({ library_paths: locations.filter((entry) => entry !== location) });
   }
 
   async function startScan() {
@@ -186,6 +186,8 @@ export function MediaSettingsPanel({
       {(summary?.issues ?? []).map((issue) => <p className="form-status media-playback-error" role="alert" key={`${issue.location}:${issue.message}`}>{issue.location}: {issue.message}</p>)}
       {scan?.error && <p className="form-status media-playback-error" role="alert">{scan.error}</p>}
       {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
+      <div className="divider" />
+      <MediaToolsSettings media={media} locked={locked} onChange={onChange} />
     </div>
   );
 }
