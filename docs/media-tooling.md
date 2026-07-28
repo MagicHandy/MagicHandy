@@ -44,6 +44,11 @@ substance survives intact:
 What changes is that "we cannot do this" becomes "this is an explicit,
 consented, bounded thing a user can turn on".
 
+One further decision is superseded below: the scanner's exclusion of `.mkv` and
+other unplayable containers, justified as "honest absence beats a broken row".
+That reasoning held while nothing could be done about those files. Once there is
+a repair path, absence hides exactly the files the repair exists for.
+
 ## Reference
 
 [Stash](https://github.com/stashapp/stash) is the closest comparable and the
@@ -174,64 +179,138 @@ If FFmpeg is absent, the option is visible but disabled with the reason, rather
 than hidden — otherwise the feature is undiscoverable for exactly the people who
 would want it.
 
-## 4. Format conversion
+## 4. Conversion — repair only
 
-Explicit, per-file, never automatic, and never in the playback path. The
-no-real-time-transcoding wall stands: this converts a file once, ahead of time.
+Conversion exists to make an unplayable file playable. **A file that already
+plays is never converted**, by any path — not by the button, not by a scan, not
+to save space. That closes the archival question the first draft left open, and
+it removes a whole class of ways this feature could waste hours of someone's CPU
+on files that were fine.
 
-### Codec is the user's choice, with the tradeoff stated
+Explicit, never automatic in the sense of running unasked, and never in the
+playback path. The no-real-time-transcoding wall stands.
 
-Both codecs are offered and neither is decided for the user. H.264 is the
-default because it is the one that always plays; H.265 is there because halving
-the file size is a real reason to want it.
+### What "incompatible" means
 
-| Setting | Size | Plays here |
+Three signals, in increasing order of cost:
+
+| Signal | Cost | Catches |
 | --- | --- | --- |
-| **H.264** (default) | Baseline | Yes, everywhere |
-| **H.265** | Roughly half | Depends on your OS, browser, and hardware decode |
+| **Extension** | Free, at scan | `.mkv`, `.avi`, `.wmv`, `.ts` … — containers the `<video>` element will not open |
+| **Observed failure** | Free, already happening | A supported container whose *codec* the browser refused; the player already reports exactly this |
+| **`ffprobe`** | Needs FFmpeg | The same thing before you try to play it, which is what a batch task needs |
 
-The note in Settings has to say that plainly, because the failure is silent and
-specific: an H.265 file that plays fine in VLC can still refuse to play in this
-app, on this machine, for reasons that have nothing to do with the file. The
-conversion therefore **verifies playability afterward rather than assuming it**
-and reports the result — that check is cheap, and it is the difference between a
-setting and a trap.
+The middle one is worth noticing: `MediaVideoPlayer` already handles `onError`
+with "Verify that the file still exists and uses a browser-supported codec".
+That is an *observed* incompatibility on this machine, in this browser, which is
+more authoritative than any table of codec support — and it is the moment the
+user is most likely to want the button.
 
-Whichever codec is selected applies to every conversion until it is changed.
-There is no per-file override: the point of a default is that most people set it
-once.
+### The library has to index incompatible files first
 
-### Remux before re-encode
+**This is the change that makes everything else possible, and it supersedes a
+recorded decision.** The scanner currently indexes only `.mp4 .m4v .webm .mov`,
+and `video-playback.md` justifies excluding `.mkv` because "the `<video>`
+element cannot reliably play it, and honest absence beats a broken row."
 
-Most files that fail to play are not encoded wrongly; they are in the wrong
-*container*. An `.mkv` holding H.264 video and AAC audio needs no encoding at
-all — copying the streams into MP4 is near-instant and mathematically lossless.
+That was right when nothing could be done about it. It is wrong now: absence
+hides exactly the files this feature exists to fix. Someone with a library of
+`.mkv` files would see an empty grid and no reason to think the app could help.
 
-This should be detected with `ffprobe` and offered first:
+So the scanner gains a second extension set — **known video containers that
+cannot be played here** — indexed and shown with a "needs conversion" state
+rather than skipped. They are visibly not playable, they carry the conversion
+affordance, and they still pair with their funscripts, so the pairing is already
+known before conversion rather than discovered after.
 
-| Detected | Action | Cost |
+Indexing them is useful even with no FFmpeg configured: "40 files here need
+conversion, which needs FFmpeg" is actionable, while an empty grid is not.
+
+### Where conversion is offered
+
+- **On the video page**, when the selected file is known-incompatible by
+  extension or has just failed to play. This is the contextual case and the one
+  that matters: the user is looking at the thing that did not work.
+- **As a task in `Settings > Media`**, for a library-wide sweep, and as a
+  scan-attached option alongside thumbnail generation.
+
+Both paths convert **only files established as incompatible**. A scan-attached
+conversion that re-encoded a playable library would be the single worst thing
+this feature could do, so the gate is the same in both places rather than
+re-derived per entry point.
+
+If FFmpeg is absent, both are visible and disabled with the reason. Hiding them
+would leave the "needs conversion" badge unexplained.
+
+### Remux when the container is the only problem — feasibility
+
+**Practical, and the common case.** Most `.mkv` files hold H.264 or H.265 video
+with AAC audio; both are legal MP4 payloads, so the streams copy across
+untouched. A feature-length film remuxes in seconds with no quality change at
+all, against tens of minutes to hours for a re-encode.
+
+`ffprobe` reports the codecs, and the decision is mechanical:
+
+| Video | Audio | Action |
 | --- | --- | --- |
-| Compatible streams, wrong container | **Remux** (`-c copy`) | Seconds, no quality loss |
-| Incompatible video stream | Re-encode video, copy audio if AAC | Minutes to hours |
-| Incompatible audio only | Copy video, encode audio | Fast |
+| MP4-legal | MP4-legal | **Remux** — `-c copy`, seconds, lossless |
+| MP4-legal | not (Vorbis, FLAC, PCM…) | Copy video, encode audio to AAC — still fast |
+| not (VP9 in MKV, MPEG-2, VC-1…) | either | Re-encode video; copy audio when already AAC |
 
-Skipping this would make the common case take an hour instead of ten seconds,
-and would degrade quality for no reason. It is the single most valuable part of
-this feature.
+Caveats that decide whether a remux actually succeeds, all of them known and
+bounded:
+
+- **Subtitles do not survive.** MKV's ASS/SSA tracks have no MP4 equivalent
+  worth carrying. Dropping them is the honest default, and the result should say
+  so rather than let someone discover it later. Converting them to `mov_text`
+  loses styling and is not worth the complexity here.
+- **`-movflags +faststart` is not optional.** It relocates the index to the
+  front of the file so the browser can begin playing over a range request
+  instead of fetching the whole thing first. Without it a remuxed file
+  technically plays and practically feels broken over the app's own streaming
+  path.
+- **Odd timestamps** occasionally need regenerating. Detectable from the
+  result, and a failed remux should fall back to a re-encode offer rather than
+  reporting success.
+
+The value here is large enough that remux is the *first* thing tried, not a
+special case: skipping it would turn a ten-second job into an hour-long one and
+degrade quality for no reason.
+
+### H.265 is assumed playable, with a toggle
+
+Default assumption: **HEVC plays here**, so an H.265 file in an unplayable
+container needs only a remux. Most current setups can decode it, and assuming
+otherwise would force a needless re-encode on the majority.
+
+For setups where it does not play, `Settings > Media` gains **Convert H.265 for
+wider compatibility** (off by default). Turning it on has two linked effects:
+
+1. H.265 files become *candidates for conversion* rather than remux targets.
+2. The re-encode target is **forced to H.264**.
+
+That interlock matters. Without it, someone who just declared "H.265 does not
+play here" could still have the re-encode produce H.265 — spending an hour to
+arrive back at an unplayable file. The setting means one thing, and the code
+enforces both halves of it.
+
+The observed-failure signal covers the same ground automatically: a file that
+fails to play *is* incompatible on this machine regardless of what any setting
+says, and the conversion offer follows from that directly.
 
 ### Quality controls
 
-Code-owned enums, not free text:
+These apply only when a re-encode is genuinely required, which after the remux
+path is a minority of files. Code-owned enums, not free text:
 
-- **CRF** — the quality/size dial. Lower is better and larger. Exposed over
-  roughly 18–30, with the UI saying what the number means ("lower is better
-  quality and a bigger file") rather than assuming familiarity.
-
-  **The default has to differ per codec.** The two CRF scales are not the same:
-  x265 needs a higher number for comparable perceived quality, so carrying one
-  value across a codec change would silently alter quality in whichever
-  direction the user did not ask for. Separate defaults — around 23 for x264 and
-  around 28 for x265 — each remembered per codec.
+- **Re-encode codec** — H.264 by default; H.265 available for smaller output,
+  and forced to H.264 when the compatibility toggle above is on.
+- **CRF** — the quality/size dial. Lower is better and larger, exposed over
+  roughly 18–30, with the UI saying what the number means rather than assuming
+  familiarity. **The default differs per codec** (around 23 for x264, around 28
+  for x265): the two scales are not the same, so carrying one value across a
+  codec change would silently alter quality in whichever direction the user did
+  not ask for.
 - **Preset** — the speed/efficiency dial (`ultrafast` … `veryslow`). It trades
   encoding time for file size at the same quality, and does **not** trade
   quality. Worth saying, because it is the most commonly misread encoder knob.
@@ -245,12 +324,14 @@ All under `media`, all with a working default, none required to use the app:
 | Field | Default | Notes |
 | --- | --- | --- |
 | `ffmpeg_path` | empty | Empty means absent; features that need it say so |
-| `conversion_codec` | `h264` | `h264` or `h265`, with the tradeoff noted beside it |
-| `conversion_crf_h264` | 23 | Separate per codec, because the scales differ |
-| `conversion_crf_h265` | 28 | |
-| `conversion_preset` | `medium` | `ultrafast` … `veryslow` |
-| `conversion_audio_kbps` | 192 | 128 / 192 / 256, or copy when already AAC |
+| `convert_h265_for_compatibility` | false | On: H.265 counts as incompatible, and re-encodes target H.264 |
+| `reencode_codec` | `h264` | Only used when a remux is impossible; forced to `h264` by the toggle above |
+| `reencode_crf_h264` | 23 | Separate per codec, because the scales differ |
+| `reencode_crf_h265` | 28 | |
+| `reencode_preset` | `medium` | `ultrafast` … `veryslow` |
+| `reencode_audio_kbps` | 192 | 128 / 192 / 256, or copy when already AAC |
 | `generate_thumbnails_on_scan` | false | Rides an explicit scan only |
+| `convert_incompatible_on_scan` | false | Rides an explicit scan only; incompatible files only |
 | `show_superseded_originals` | false | Reveals files hidden by the suffix rule |
 
 ### Output naming, and the marker that ties it together
@@ -298,6 +379,10 @@ file and the original reappears on the next scan, with no stale flag to clean
 up. Hidden rather than removed, so the row and its per-video sync offset survive
 and a "show superseded originals" toggle costs nothing.
 
+Because conversion is repair-only, the hidden original is by definition a file
+that could not be played here — so hiding it removes a dead entry rather than a
+usable one, which is what made the archival case uncomfortable and this one not.
+
 The details that decide whether this is safe:
 
 - **Matching is case-insensitive on Windows**, consistent with how library paths
@@ -337,8 +422,11 @@ Recorded so they are not proposed later as small additions:
 
 - Hover previews, scrubber sprites, animated thumbnails.
 - Perceptual-hash deduplication, tagging, scrapers, metadata editing.
-- Batch/queued conversion pipelines. One file on request; a queue is how a
-  utility becomes a media manager.
+- Batch/queued conversion pipelines beyond the bounded library sweep. One file
+  on request, or one explicit pass over files that cannot play; a general queue
+  is how a utility becomes a media manager.
+- Converting a file that already plays, for size or any other reason. Repair
+  only.
 - Any decode or conversion in the playback path.
 - FFmpeg as a hard requirement. Every feature here degrades to today's behavior
   when it is absent.
@@ -353,12 +441,16 @@ Recorded so they are not proposed later as small additions:
 3. **FFmpeg download.** Consent, license, checksum, progress. Optional, and it
    can be skipped indefinitely by anyone who supplies a path.
 4. **Batch thumbnails.** The generate task plus the scan-attached option.
-5. **Conversion.** Probe, remux-first, the two presets, output rules, task
-   integration.
+5. **Incompatible files in the catalog.** Index the containers the browser
+   cannot open, show them as needing conversion, and let them pair with their
+   scripts. Useful on its own — it tells someone their library is not empty,
+   just unplayable — and every conversion path depends on it.
+6. **Conversion.** Probe, remux first, re-encode only what must be, the suffix
+   and pairing rules, and the task integration.
 
 1 is independently worth shipping. 2 is worth shipping even alone, because it
-turns "this is impossible" into "this needs a thing you can install". 5 is the
-largest and should be last.
+turns "this is impossible" into "this needs a thing you can install". 5 is small
+and unblocks the rest. 6 is the largest and should be last.
 
 ## Open questions
 
@@ -367,11 +459,11 @@ largest and should be last.
 - Is a conversion worth offering for files that already play, purely to shrink
   them? That is archival, not compatibility, and it edges toward media
   management.
-- Should a failed HEVC playability check offer to redo the conversion as H.264
-  automatically, or just report it? Automatic sounds helpful and quietly spends
-  another hour of someone's CPU.
-- Should the suffix rule hide an original whose extension is already
-  playable? Converting `Holiday.mp4` to H.265 for size produces
-  `Holiday_MHConverted.mp4`, and the rule hides the perfectly good original
-  — correct as written, but worth confirming, since that case is archival
-  rather than repair.
+- How wide should the "cannot be played here" extension set be? `.mkv` and
+  `.avi` are obvious; a long tail of rare containers would add rows nobody can
+  act on without also adding value.
+- Should an observed playback failure mark the catalog row, so the "needs
+  conversion" state survives a reload without re-probing? It is useful state and
+  it is also a cache that can go stale when a browser gains codec support.
+- Does the scan-attached conversion want a ceiling — convert at most N files, or
+  stop after M minutes? An overnight sweep is fine; an accidental one is not.
