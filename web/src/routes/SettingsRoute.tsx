@@ -14,6 +14,7 @@ import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { LOCALE_OPTIONS, normalizeLocale, t, translateKnown, type MessageKey } from "../i18n";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
+import type { MediaSettingsPayload } from "../api/types";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -123,30 +124,12 @@ export function SettingsRoute() {
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
   }
-  function patchMedia(libraryPaths: string[]) {
+  // Spread rather than rebuilding the object field by field: this section owns
+  // a dozen settings now, and an enumerated rebuild silently drops whichever
+  // one a later change forgets to list.
+  function patchMedia(p: Partial<MediaSettingsPayload>) {
     setS((cur) => (cur
-      ? {
-        ...cur,
-        media: {
-          library_paths: libraryPaths,
-          script_offset_ms: cur.media?.script_offset_ms ?? 0,
-          script_smoothing_percent: cur.media?.script_smoothing_percent ?? 0,
-          peak_rounding_ms: cur.media?.peak_rounding_ms ?? 0,
-        },
-      }
-      : cur));
-  }
-  function patchScriptOffset(millis: number) {
-    setS((cur) => (cur
-      ? {
-        ...cur,
-        media: {
-          library_paths: cur.media?.library_paths ?? [],
-          script_offset_ms: millis,
-          script_smoothing_percent: cur.media?.script_smoothing_percent ?? 0,
-          peak_rounding_ms: cur.media?.peak_rounding_ms ?? 0,
-        },
-      }
+      ? { ...cur, media: { ...cur.media, library_paths: cur.media?.library_paths ?? [], ...p } }
       : cur));
   }
   function patchMotion(p: Partial<PublicSettings["motion"]>) {
@@ -177,9 +160,21 @@ export function SettingsRoute() {
       ui: { locale: normalizeLocale(s.ui?.locale) },
       // Playback filters save through their immediate endpoint. Omitting them
       // here prevents a stale Settings draft from overwriting newer values.
+      // Everything else in this section has no immediate endpoint, so it has to
+      // be listed here or the form would appear to save and change nothing.
       media: {
         library_paths: s.media?.library_paths ?? [],
         script_offset_ms: s.media?.script_offset_ms ?? 0,
+        ffmpeg_path: s.media?.ffmpeg_path ?? "",
+        convert_h265_for_compatibility: s.media?.convert_h265_for_compatibility ?? false,
+        reencode_codec: s.media?.reencode_codec ?? "h264",
+        reencode_crf_h264: s.media?.reencode_crf_h264 ?? 23,
+        reencode_crf_h265: s.media?.reencode_crf_h265 ?? 28,
+        reencode_preset: s.media?.reencode_preset ?? "medium",
+        reencode_audio_kbps: s.media?.reencode_audio_kbps ?? 192,
+        generate_thumbnails_on_scan: s.media?.generate_thumbnails_on_scan ?? false,
+        convert_incompatible_on_scan: s.media?.convert_incompatible_on_scan ?? false,
+        show_superseded_originals: s.media?.show_superseded_originals ?? false,
       },
       device: {
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
@@ -378,12 +373,10 @@ export function SettingsRoute() {
 
         {section === "media" && (
           <MediaSettingsPanel
-            locations={s.media?.library_paths ?? []}
+            media={s.media ?? { library_paths: [] }}
             savedLocations={saved?.media?.library_paths ?? []}
             limitVideoScriptSpeed={s.motion.apply_video_speed_limit ?? false}
             onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
-            scriptOffsetMillis={s.media?.script_offset_ms ?? 0}
-            onScriptOffsetChange={patchScriptOffset}
             locked={locked}
             onChange={patchMedia}
           />

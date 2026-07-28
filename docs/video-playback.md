@@ -131,9 +131,12 @@ also enables an optional client-captured poster frame in a later slice.
   never on startup, never on a timer (goals-and-guardrails download/IO rule).
 - Walks each registered root with bounds: max depth 6, max 10,000 files per
   root, symlinks not followed, hidden directories skipped. Extensions:
-  `.mp4 .m4v .webm .mov` (browser-decodable set; `.mkv` deliberately excluded
-  — the `<video>` element cannot reliably play it, and honest absence beats a
-  broken row).
+  `.mp4 .m4v .webm .mov` plus a second set of containers the element cannot
+  open (`.mkv`, `.avi`, …), indexed and flagged as needing conversion rather
+  than skipped. **Superseded:** the exclusion was justified as "honest absence
+  beats a broken row", which held while nothing could be done about those
+  files. Once there is a repair path, absence hides exactly the files the
+  repair exists for. See [media-tooling.md](media-tooling.md).
 - Pairing: a sibling `NAME.funscript` for `NAME.mp4` in the **same
   directory** is recorded at scan (requirement 2 says exact same name;
   multi-axis variants like `NAME.roll.funscript` are ignored in v1).
@@ -332,7 +335,10 @@ downsampling is reused at canvas resolution):
   `video/mp4`, `video/webm`, or `video/quicktime` response types on every host;
   byte ranges, `nosniff`, no-store caching, rooted file opens, and constant-memory
   serving remain unchanged.
-- **Accepted deferrals:** thumbnails/posters, transcoding, codec bundling,
+- **Resolved deferrals** (see [media-tooling.md](media-tooling.md)):
+  thumbnails/posters and offline conversion are built. Codec bundling remains
+  declined — FFmpeg stays external and optional.
+- **Accepted deferrals:** codec bundling,
   per-video deep links, the funscript OSD, and synchronized motion remain outside
   this follow-up. *(Thumbnails and transcoding are revisited in
   [media-tooling.md](media-tooling.md); codec bundling stays rejected there.)* OSD is M1 and motion is M2; neither may add a second media or
@@ -519,7 +525,7 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
   loaded sync curve is the one meaningful allocation (roughly 3 MB retained
   for 100k validated actions, with bounded temporary parse copies) and is
   released or replaced when the player ends, closes, or selects another video.
-- The `.mkv` exclusion, no-transcoding stance, and localhost-only serving are
+- The no-transcoding-during-playback stance and localhost-only serving are
   deliberate scope walls; revisiting any of them is a new decision, not
   scope drift.
 
@@ -652,7 +658,9 @@ something else. What has to be settled before any code:
 - **Scope discipline.** "Convert one file on request" must not grow into media
   management, batch pipelines, or format-detection heuristics.
 
-Until that is decided, the no-transcoding stance stands as written.
+**Decided and built.** Offline, explicit, repair-only conversion ships in
+[media-tooling.md](media-tooling.md); the no-transcoding-during-playback wall
+stands unchanged. A file that already plays is never converted.
 
 ## Cross-references
 

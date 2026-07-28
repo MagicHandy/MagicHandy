@@ -1,7 +1,8 @@
 import { formatNumber, t } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MediaScanState, MediaVideo } from "../api/types";
+import type { MediaJobState, MediaScanState, MediaToolStatus, MediaVideo } from "../api/types";
+import { needsConversion } from "../api/types";
 import { ArrowLeftIcon, CloseIcon, PlayIcon, RefreshIcon, VideoIcon } from "../shell/icons";
 import { SyncedVideoPlayer } from "./SyncedVideoPlayer";
 
@@ -20,6 +21,9 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   const [scanError, setScanError] = useState("");
   const [scanAction, setScanAction] = useState<"start" | "cancel" | "">("");
   const [scan, setScan] = useState<MediaScanState | null>(null);
+  const [job, setJob] = useState<MediaJobState | null>(null);
+  const [tools, setTools] = useState<MediaToolStatus | null>(null);
+  const [conversionError, setConversionError] = useState("");
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
 
@@ -55,6 +59,15 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
         setScanError(reason instanceof Error ? reason.message : t("Scan status could not be loaded."));
       }
     });
+    void api.mediaTools(controller.signal).then((response) => {
+      if (mounted.current && !controller.signal.aborted) setTools(response.tools);
+    }).catch(() => {
+      // The absent state is the honest default here: without a tools answer,
+      // conversion stays offered but disabled with a reason.
+    });
+    void api.mediaJob(controller.signal).then((response) => {
+      if (mounted.current && !controller.signal.aborted) setJob(response.job);
+    }).catch(() => {});
     return () => {
       mounted.current = false;
       loadGeneration.current += 1;
@@ -90,6 +103,28 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
     };
   }, [load, scan?.running]);
 
+  useEffect(() => {
+    if (!job?.running) return undefined;
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      try {
+        const response = await api.mediaJob();
+        if (stopped || !mounted.current) return;
+        setJob(response.job);
+        if (response.job.running) timer = window.setTimeout(() => void poll(), 700);
+        else await load();
+      } catch {
+        if (!stopped && mounted.current) timer = window.setTimeout(() => void poll(), 2000);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 700);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [job?.running, load]);
+
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     const filtered = needle ? videos.filter((video) => (
@@ -106,6 +141,30 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   }, [query, sort, videos]);
   const selected = videos.find((video) => video.id === selectedID);
   const pairedCount = videos.filter((video) => video.has_funscript).length;
+  const brokenCount = videos.filter(needsConversion).length;
+  const conversionBusy = job?.running === true && job.kind === "conversion";
+
+  // startConversion repairs files that cannot play. Named identifiers or the
+  // whole library; either way the server converts only what it has established
+  // is broken, so this cannot re-encode a working file.
+  async function startConversion(ids: string[]) {
+    setConversionError("");
+    try {
+      const response = await api.convertMedia(ids);
+      if (mounted.current) setJob(response.job);
+    } catch (reason) {
+      if (mounted.current) setConversionError(reason instanceof Error ? reason.message : t("Conversion could not be started."));
+    }
+  }
+
+  async function cancelJob() {
+    try {
+      const response = await api.cancelMediaJob();
+      if (mounted.current) setJob(response.job);
+    } catch {
+      // Cancellation is advisory; the next poll reports the real state.
+    }
+  }
 
   async function startScan() {
     setScanError("");
@@ -157,7 +216,21 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
           <button type="button" className="btn btn-secondary compact-command" onClick={() => setSelectedID("")}><ArrowLeftIcon />{t("Videos")}</button>
           <div><h2>{selected.display_name}</h2><span>{selected.has_funscript ? t("{size} / {location} / script found", { size: formatFileSize(selected.size_bytes), location: formatLocation(selected.location_path) }) : t("{size} / {location}", { size: formatFileSize(selected.size_bytes), location: formatLocation(selected.location_path) })}</span></div>
         </div>
-        <SyncedVideoPlayer video={selected} locked={locked} stopSequence={stopSequence} onVideoUpdate={updateVideo} />
+        <SyncedVideoPlayer
+          video={selected}
+          locked={locked}
+          stopSequence={stopSequence}
+          onVideoUpdate={updateVideo}
+          conversionBusy={conversionBusy}
+          onRequestConversion={locked || !tools?.available ? undefined : () => void startConversion([selected.id])}
+        />
+        {!tools?.available && needsConversion(selected) && (
+          <p className="form-status media-playback-error" role="alert">
+            {t("Set an FFmpeg location in Settings > Media to enable conversion.")}
+            {" "}
+            <a href="#/settings/media">{t("Set up FFmpeg")}</a>
+          </p>
+        )}
       </section>
     );
   }
@@ -177,6 +250,24 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
           )}
         </div>
       </div>
+      {brokenCount > 0 && !job?.running && (
+        <div className="form-status media-convert-banner" role="status">
+          <span>{t("{count} files cannot be played by this browser.", { count: formatNumber(brokenCount) })}</span>
+          {tools?.available
+            ? <button type="button" className="btn btn-secondary compact-command" disabled={locked} onClick={() => void startConversion([])}>{t("Convert all")}</button>
+            : <a className="btn btn-secondary compact-command" href="#/settings/media">{t("Set up FFmpeg")}</a>}
+        </div>
+      )}
+      {job?.running && (
+        <div className="form-status media-job-status" role="status">
+          <span>{job.kind === "conversion"
+            ? t("Converting {name} ({done} of {total}, {percent}%)", { name: job.current_name ?? "", done: formatNumber(job.processed + 1), total: formatNumber(job.total), percent: formatNumber(job.item_percent) })
+            : t("Generating thumbnails ({done} of {total})", { done: formatNumber(job.processed), total: formatNumber(job.total) })}</span>
+          <button type="button" className="btn btn-secondary compact-command" disabled={!job.cancellable} onClick={() => void cancelJob()}>{t("Cancel")}</button>
+        </div>
+      )}
+      {conversionError && <p className="form-status media-playback-error" role="alert">{conversionError}</p>}
+      {!job?.running && job?.failed ? <p className="form-status media-playback-error" role="alert">{t("{count} files could not be converted.", { count: formatNumber(job.failed) })}</p> : null}
       {scan?.running && <p className="form-status media-scan-status" role="status">{t("Scanning: {files} files / {videos} videos found", { files: formatNumber(scan.files_visited), videos: formatNumber(scan.videos_found) })}</p>}
       {loading && videos.length > 0 && <p className="form-status" role="status">{t("Refreshing catalog")}</p>}
       {scanError && <p className="form-status media-playback-error" role="alert">{t("Scan status: {message}", { message: scanError })}</p>}
@@ -203,13 +294,18 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
               className="media-card"
               data-missing={video.missing || undefined}
               aria-disabled={video.missing || undefined}
-              title={video.missing ? t("File unavailable. Reconnect the location and scan again.") : undefined}
+              title={video.missing ? t("File unavailable. Reconnect the location and scan again.") : needsConversion(video) ? t("This browser cannot play this file. Open it to convert.") : undefined}
               onClick={() => { if (!video.missing) setSelectedID(video.id); }}
               aria-label={video.missing ? t("Unavailable {name}", { name: video.display_name }) : t("Play {name}", { name: video.display_name })}
             >
-              <span className="media-card-visual" aria-hidden="true"><VideoIcon size={30} /><PlayIcon size={18} /></span>
+              <span className="media-card-visual" aria-hidden="true">
+                {video.thumbnail_generated_at
+                  ? <img className="media-card-thumbnail" src={api.mediaThumbnailURL(video)} alt="" loading="lazy" decoding="async" />
+                  : <VideoIcon size={30} />}
+                <PlayIcon size={18} />
+              </span>
               <span className="media-card-copy"><strong>{video.display_name}</strong><span>{formatDuration(video.duration_ms)} / {formatFileSize(video.size_bytes)}</span><span className="media-card-location" title={video.location_path}>{formatLocation(video.location_path)}</span></span>
-              <span className="media-card-badges">{video.has_funscript && <span className="badge">{t("script")}</span>}{video.missing && <span className="badge media-missing-badge">{t("missing")}</span>}</span>
+              <span className="media-card-badges">{video.has_funscript && <span className="badge">{t("script")}</span>}{video.missing && <span className="badge media-missing-badge">{t("missing")}</span>}{needsConversion(video) && <span className="badge media-convert-badge">{t("needs conversion")}</span>}</span>
             </button>
           ))}
         </div>

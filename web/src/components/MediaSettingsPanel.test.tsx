@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { MediaScanState } from "../api/types";
+import type { MediaScanState, MediaSettingsPayload } from "../api/types";
 import { MediaSettingsPanel } from "./MediaSettingsPanel";
 
 vi.mock("../api/client", () => ({
@@ -19,8 +19,6 @@ const mediaScan = vi.mocked(api.mediaScan);
 const startMediaScan = vi.mocked(api.startMediaScan);
 const speedLimitProps = {
   limitVideoScriptSpeed: false,
-  scriptOffsetMillis: 0,
-  onScriptOffsetChange: vi.fn(),
   onLimitVideoScriptSpeedChange: vi.fn(),
 };
 
@@ -57,15 +55,16 @@ describe("MediaSettingsPanel", () => {
 
   it("reports a bounded script offset to the settings form", async () => {
     const onScriptOffsetChange = vi.fn();
+    const onChange = (patch: Partial<MediaSettingsPayload>) => {
+      if (patch.script_offset_ms !== undefined) onScriptOffsetChange(patch.script_offset_ms);
+    };
     render(
       <MediaSettingsPanel
         {...speedLimitProps}
-        scriptOffsetMillis={-150}
-        onScriptOffsetChange={onScriptOffsetChange}
-        locations={[]}
+        media={{ library_paths: [], script_offset_ms: -150 }}
         savedLocations={[]}
         locked={false}
-        onChange={vi.fn()}
+        onChange={onChange}
       />,
     );
 
@@ -83,14 +82,14 @@ describe("MediaSettingsPanel", () => {
 
   it("shows catalog counts, requires saving path edits, and starts only an explicit scan", async () => {
     const onChange = vi.fn();
-    const result = render(<MediaSettingsPanel {...speedLimitProps} locations={["C:/media"]} savedLocations={["C:/media"]} locked={false} onChange={onChange} />);
+    const result = render(<MediaSettingsPanel {...speedLimitProps} media={{ library_paths: ["C:/media"] }} savedLocations={["C:/media"]} locked={false} onChange={onChange} />);
 
     expect(await screen.findByText("1 videos")).toBeInTheDocument();
-    result.rerender(<MediaSettingsPanel {...speedLimitProps} locations={["C:/media", "D:/new"]} savedLocations={["C:/media"]} locked={false} onChange={onChange} />);
+    result.rerender(<MediaSettingsPanel {...speedLimitProps} media={{ library_paths: ["C:/media", "D:/new"] }} savedLocations={["C:/media"]} locked={false} onChange={onChange} />);
     expect(screen.getByText("Save location changes before scanning.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scan now" })).toBeDisabled();
 
-    result.rerender(<MediaSettingsPanel {...speedLimitProps} locations={["C:/media", "D:/new"]} savedLocations={["C:/media", "D:/new"]} locked={false} onChange={onChange} />);
+    result.rerender(<MediaSettingsPanel {...speedLimitProps} media={{ library_paths: ["C:/media", "D:/new"] }} savedLocations={["C:/media", "D:/new"]} locked={false} onChange={onChange} />);
     await waitFor(() => expect(mediaVideos).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
     await waitFor(() => expect(startMediaScan).toHaveBeenCalledOnce());
@@ -103,17 +102,17 @@ describe("MediaSettingsPanel", () => {
       summary: { ...completedScan.summary, issues: [{ location: "C:/media", message: "folder unavailable" }] },
     } });
     const onChange = vi.fn();
-    render(<MediaSettingsPanel {...speedLimitProps} locations={["C:/media"]} savedLocations={["C:/media"]} locked={false} onChange={onChange} />);
+    render(<MediaSettingsPanel {...speedLimitProps} media={{ library_paths: ["C:/media"] }} savedLocations={["C:/media"]} locked={false} onChange={onChange} />);
 
     expect(await screen.findByText("catalog transaction failed")).toHaveAttribute("role", "alert");
     expect(screen.getByText("C:/media: folder unavailable")).toHaveAttribute("role", "alert");
     fireEvent.click(screen.getByRole("button", { name: "Remove C:/media" }));
     expect(window.confirm).toHaveBeenCalledOnce();
-    expect(onChange).toHaveBeenCalledWith([]);
+    expect(onChange).toHaveBeenCalledWith({ library_paths: [] });
   });
 
   it("keeps authored video-script speed by default and reports an opt-in change", async () => {
-    render(<MediaSettingsPanel {...speedLimitProps} locations={[]} savedLocations={[]} locked={false} onChange={vi.fn()} />);
+    render(<MediaSettingsPanel {...speedLimitProps} media={{ library_paths: [] }} savedLocations={[]} locked={false} onChange={vi.fn()} />);
     expect(await screen.findByText("1 catalog entries")).toBeInTheDocument();
 
     const toggle = screen.getByRole("checkbox", { name: /Apply motion speed limit to video scripts/ });

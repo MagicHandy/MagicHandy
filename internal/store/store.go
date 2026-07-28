@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 14
+	CurrentSchemaVersion = 15
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -493,6 +493,11 @@ var migrations = [][]string{
 	// SQLite has no conditional ADD COLUMN, and every other step here is safe to
 	// re-run, so the column is added by a guarded Go step instead.
 	{`SELECT 1`},
+	// v14 -> v15: media tooling state. Three facts the catalog could not hold
+	// before: whether a cover has been generated, whether the browser can
+	// actually play the file, and whether a converted copy supersedes this row.
+	// All three are guarded Go steps for the same reason as v14.
+	{`SELECT 1`},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -759,6 +764,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migrateCommittedMessages(ctx, tx)
 	case 14:
 		err = migrateVideoScriptOffset(ctx, tx)
+	case 15:
+		err = migrateVideoMediaTooling(ctx, tx)
 	default:
 		return nil
 	}
@@ -779,6 +786,38 @@ func migrateVideoScriptOffset(ctx context.Context, tx *sql.Tx) error {
 	_, err = tx.ExecContext(ctx,
 		`ALTER TABLE media_videos ADD COLUMN script_offset_ms INTEGER NOT NULL DEFAULT 0`)
 	return err
+}
+
+// migrateVideoMediaTooling adds the thumbnail, compatibility, and superseded
+// columns. Compatibility defaults to "unknown" rather than "playable": the app
+// has never observed these files play, and claiming otherwise would suppress
+// the conversion offer on exactly the rows that need it.
+func migrateVideoMediaTooling(ctx context.Context, tx *sql.Tx) error {
+	additions := []struct {
+		column     string
+		definition string
+	}{
+		{"thumbnail_generated_at", `TEXT`},
+		{"compatibility", `TEXT NOT NULL DEFAULT 'unknown'`},
+		{"video_codec", `TEXT`},
+		{"audio_codec", `TEXT`},
+		{"superseded", `INTEGER NOT NULL DEFAULT 0 CHECK (superseded IN (0, 1))`},
+	}
+	for _, addition := range additions {
+		exists, err := columnExists(ctx, tx, "media_videos", addition.column)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		statement := fmt.Sprintf( // #nosec G201 -- internal constants only.
+			`ALTER TABLE media_videos ADD COLUMN %s %s`, addition.column, addition.definition)
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func columnHasType(ctx context.Context, tx *sql.Tx, table, column, columnType string) (bool, error) {

@@ -164,10 +164,13 @@ describe("SettingsRoute", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].media).toEqual({
-      library_paths: ["C:\\Media"],
-      script_offset_ms: 125,
-    });
+    const media = saveSettings.mock.calls[0][0].media;
+    // The guard is the omission: these two save through their own immediate
+    // endpoint, so a stale Settings draft must never carry them.
+    expect(media).not.toHaveProperty("script_smoothing_percent");
+    expect(media).not.toHaveProperty("peak_rounding_ms");
+    expect(media.library_paths).toEqual(["C:\\Media"]);
+    expect(media.script_offset_ms).toBe(125);
   });
 
   it("localizes settings navigation, firmware guidance, and chat option labels", async () => {

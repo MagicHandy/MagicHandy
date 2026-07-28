@@ -25,6 +25,7 @@ func (s *Server) mediaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/media/duration", s.handleMediaDuration)
 	mux.HandleFunc("POST /api/media/script-offset", s.handleMediaScriptOffset)
 	mux.HandleFunc("POST /api/media/playback", s.handleMediaPlayback)
+	s.mediaToolRoutes(mux)
 }
 
 func (s *Server) handleMediaVideoFunscript(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +140,26 @@ func (s *Server) handleMediaVideos(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, errors.New("media catalog could not be loaded"))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"videos": videos})
+	settings, _ := s.store.Snapshot()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"videos": visibleVideos(videos, settings.Media.ShowSupersededOriginals),
+	})
+}
+
+// visibleVideos hides rows a converted copy supersedes. Hidden rather than
+// deleted: the row and its per-video sync offset survive, so revealing them
+// costs nothing and deleting the converted file brings the original back.
+func visibleVideos(videos []media.Video, showSuperseded bool) []media.Video {
+	if showSuperseded {
+		return videos
+	}
+	visible := make([]media.Video, 0, len(videos))
+	for _, video := range videos {
+		if !video.Superseded {
+			visible = append(visible, video)
+		}
+	}
+	return visible
 }
 
 func (s *Server) handleMediaScanStart(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +167,7 @@ func (s *Server) handleMediaScanStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	state, err := s.media.StartScan(settings.Media.LibraryPaths)
+	state, err := s.media.StartScanThen(settings.Media.LibraryPaths, s.scanFollowUp(settings.Media))
 	if err != nil {
 		switch {
 		case errors.Is(err, media.ErrNoLocations):
@@ -341,6 +361,7 @@ func (s *Server) mediaState(ctx context.Context) map[string]any {
 		"available_count": summary.AvailableCount,
 		"paired_count":    summary.PairedCount,
 		"scan":            s.media.ScanState(),
+		"job":             s.media.JobState(),
 	}
 	if s.mediaSync != nil {
 		state["sync"] = s.mediaSync.Status()

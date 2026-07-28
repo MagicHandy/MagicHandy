@@ -1383,3 +1383,66 @@ input[type="search"] {
     width: auto;
   }
 }
+
+/* Media tooling: covers, the repair affordance, and long-job progress. */
+/* The cover fills the existing 16:9 slot without contributing to layout height.
+   Left in flow it sizes to its own aspect ratio, which is taller than the slot
+   and pushes the badge row past the card's hidden overflow. */
+.media-card-thumbnail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-convert-badge {
+  color: var(--warn);
+}
+/* The repair notice is a distinct state from a playback error: the file is
+   present and readable, so it offers an action rather than only a retry. */
+.media-incompatible-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+.media-incompatible-copy {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.media-incompatible-copy span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.media-incompatible-actions,
+.media-tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.media-convert-banner,
+.media-job-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.media-tool-hint {
+  color: var(--muted);
+}
+.media-tool-ready {
+  color: var(--ok);
+}
+.media-tool-subsection {
+  margin-top: 0;
+  font-size: 0.86rem;
+}

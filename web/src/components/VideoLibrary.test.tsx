@@ -14,6 +14,13 @@ vi.mock("../api/client", () => ({
     mediaStreamURL: (id: string) => `/stream/${id}`,
     mediaFunscript: vi.fn(),
     mediaSync: vi.fn(),
+    mediaTools: vi.fn(),
+    mediaJob: vi.fn(),
+    cancelMediaJob: vi.fn(),
+    convertMedia: vi.fn(),
+    mediaThumbnailURL: (video: MediaVideo) => `/thumb/${video.id}`,
+    reportMediaCompatibility: vi.fn(),
+    saveMediaThumbnail: vi.fn(),
   },
 }));
 
@@ -23,6 +30,14 @@ const startMediaScan = vi.mocked(api.startMediaScan);
 const cancelMediaScan = vi.mocked(api.cancelMediaScan);
 const mediaFunscript = vi.mocked(api.mediaFunscript);
 const mediaSync = vi.mocked(api.mediaSync);
+const mediaTools = vi.mocked(api.mediaTools);
+const mediaJob = vi.mocked(api.mediaJob);
+const convertMedia = vi.mocked(api.convertMedia);
+
+const idleJob = {
+  running: false, cancellable: false, cancelled: false,
+  total: 0, processed: 0, succeeded: 0, failed: 0, item_percent: 0, issues: [],
+};
 
 const idleScan: MediaScanState = {
   running: false,
@@ -51,6 +66,9 @@ describe("VideoLibrary", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mediaScan.mockResolvedValue({ scan: idleScan });
+    mediaTools.mockResolvedValue({ tools: { configured: true, available: true, version: "ffmpeg version 7.1" } });
+    mediaJob.mockResolvedValue({ job: idleJob });
+    convertMedia.mockResolvedValue({ job: { ...idleJob, running: true, kind: "conversion", cancellable: true, total: 1 } });
     startMediaScan.mockResolvedValue({ scan: { ...idleScan, running: true, cancellable: true } });
     cancelMediaScan.mockResolvedValue({ scan: { ...idleScan, running: true, cancellable: false } });
     mediaFunscript.mockResolvedValue({ funscript: {
