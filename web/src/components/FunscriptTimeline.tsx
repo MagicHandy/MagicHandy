@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { MediaFunscript, MediaFunscriptAction } from "../api/types";
 import { formatTimelineTime } from "./ImportTimeline";
@@ -155,7 +155,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
       className="media-timeline-frame"
       role="slider"
       tabIndex={0}
-      aria-label={t("Funscript timeline, {count} actions", { count: script.action_count.toLocaleString() })}
+      aria-label={t("Funscript timeline, {count} actions", { count: formatNumber(script.action_count) })}
       aria-valuemin={0}
       aria-valuemax={duration}
       aria-valuenow={Math.round(displayedTime)}

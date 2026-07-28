@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -245,6 +246,111 @@ func TestMotionStartStateStop(t *testing.T) {
 	stopped := callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
 	if stopped.Engine.Running {
 		t.Fatalf("motion should be stopped, got %+v", stopped)
+	}
+}
+
+func TestTransportStopAliasesUseGlobalCoordinator(t *testing.T) {
+	for _, endpoint := range []string{
+		"/api/transport/cloud/stop",
+		"/api/transport/bluetooth/stop",
+	} {
+		t.Run(endpoint, func(t *testing.T) {
+			fake := transport.NewFake()
+			server := newTestServerWithRuntime(t, Runtime{
+				Transport:       fake,
+				MotionTransport: fake,
+			})
+			if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+				t.Fatal("motion did not start")
+			}
+			before := server.stopSequence.Load()
+
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, endpoint, nil))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("Stop alias status = %d: %s", recorder.Code, recorder.Body.String())
+			}
+			if got := server.stopSequence.Load(); got != before+1 {
+				t.Fatalf("stop sequence = %d, want %d", got, before+1)
+			}
+			engine := server.currentMotionEngine()
+			if engine == nil || engine.Snapshot().Running {
+				t.Fatalf("Stop alias left shared engine running: %+v", engine)
+			}
+			commands := fake.Commands()
+			if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+				t.Fatalf("commands = %+v, want final Stop", commands)
+			}
+		})
+	}
+}
+
+func TestEmergencyStopDoesNotWaitForMediaLifecycleWork(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("motion did not start")
+	}
+
+	server.mediaSync.lifecycleMu.Lock()
+	defer server.mediaSync.lifecycleMu.Unlock()
+	done := make(chan struct{})
+	recorder := httptest.NewRecorder()
+	go func() {
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", nil))
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Emergency Stop waited behind media lifecycle work")
+	}
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("Stop status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want physical Stop", commands)
+	}
+}
+
+func TestBluetoothDisconnectUsesGlobalStopCoordinator(t *testing.T) {
+	fake := transport.NewFake()
+	bridge := transport.NewBrowserBluetoothBridge()
+	connected := true
+	bridge.ConnectClient(transport.BrowserBluetoothClientStatus{
+		ClientID:  "disconnect-test",
+		Connected: &connected,
+		Status:    "connected",
+	})
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:              fake,
+		MotionTransport:        fake,
+		BrowserBluetoothBridge: bridge,
+	})
+	if started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"speed_percent":30}`); !started.Engine.Running {
+		t.Fatal("motion did not start")
+	}
+	before := server.stopSequence.Load()
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodPost,
+		"/api/transport/bluetooth/disconnect",
+		strings.NewReader(`{"client_id":"disconnect-test"}`),
+	))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("disconnect status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if got := server.stopSequence.Load(); got != before+1 {
+		t.Fatalf("stop sequence = %d, want %d", got, before+1)
+	}
+	if engine := server.currentMotionEngine(); engine != nil {
+		t.Fatalf("Bluetooth disconnect retained motion engine: %+v", engine.Snapshot())
 	}
 }
 
@@ -800,6 +906,45 @@ func TestMotionEventsStreamsMotionState(t *testing.T) {
 	}
 	if !strings.Contains(block.String(), "event: motion") || !strings.Contains(block.String(), `"available":true`) {
 		t.Fatalf("SSE block = %q, want motion availability event", block.String())
+	}
+}
+
+func TestQuiesceReleasesMotionEventStream(t *testing.T) {
+	server := newTestServer(t)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	response, err := http.Get(httpServer.URL + "/api/motion/events?client_id=shutdown-events")
+	if err != nil {
+		t.Fatalf("open motion events: %v", err)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+	reader := bufio.NewReader(response.Body)
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			t.Fatalf("read initial event: %v", readErr)
+		}
+		if line == "\n" || line == "\r\n" {
+			break
+		}
+	}
+
+	server.Quiesce()
+	streamDone := make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(io.Discard, reader)
+		streamDone <- copyErr
+	}()
+	select {
+	case copyErr := <-streamDone:
+		if copyErr != nil {
+			t.Fatalf("drain quiesced stream: %v", copyErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("motion event stream remained active after Quiesce")
 	}
 }
 

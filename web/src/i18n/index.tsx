@@ -1,6 +1,5 @@
 import {
   createContext,
-  Fragment,
   useContext,
   useEffect,
   useMemo,
@@ -15,6 +14,7 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 export type MessageKey = keyof typeof english;
 export type MessageValues = Record<string, string | number>;
 type Catalog = Record<MessageKey, string>;
+type CatalogLoader = (locale: Locale) => Promise<Catalog>;
 
 export const LOCALE_OPTIONS: ReadonlyArray<{ value: Locale; label: string }> = [
   { value: "en", label: "English" },
@@ -49,6 +49,10 @@ export function t(message: MessageKey, values?: MessageValues): string {
   return interpolate(activeCatalog[message] ?? english[message], values);
 }
 
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat(activeLocale).format(value);
+}
+
 // Server and model status text is not always a compile-time literal. Translate
 // it when it matches a catalog key and preserve the diagnostic otherwise.
 export function translateKnown(message: string, values?: MessageValues): string {
@@ -65,25 +69,47 @@ async function loadCatalog(locale: Locale): Promise<Catalog> {
 
 interface I18nContextValue {
   locale: Locale;
+  requestedLocale: Locale;
+  loadError: boolean;
+  retry: () => void;
 }
 
-const I18nContext = createContext<I18nContextValue>({ locale: "en" });
+const I18nContext = createContext<I18nContextValue>({
+  locale: "en",
+  requestedLocale: "en",
+  loadError: false,
+  retry: () => {},
+});
 
-export function I18nProvider({ children }: { children: ReactNode }) {
+export function I18nProvider({
+  children,
+  catalogLoader = loadCatalog,
+}: {
+  children: ReactNode;
+  catalogLoader?: CatalogLoader;
+}) {
   const { state } = useAppState();
   const requested = normalizeLocale(state?.settings?.ui?.locale);
   const [loaded, setLoaded] = useState<{ locale: Locale; catalog: Catalog }>({
     locale: "en",
     catalog: english,
   });
+  const [loadError, setLoadError] = useState(false);
+  const [retrySequence, setRetrySequence] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    void loadCatalog(requested).then((catalog) => {
-      if (!cancelled) setLoaded({ locale: requested, catalog });
-    });
+    setLoadError(false);
+    void catalogLoader(requested).then(
+      (catalog) => {
+        if (!cancelled) setLoaded({ locale: requested, catalog });
+      },
+      () => {
+        if (!cancelled) setLoadError(true);
+      },
+    );
     return () => { cancelled = true; };
-  }, [requested]);
+  }, [catalogLoader, requested, retrySequence]);
 
   activeLocale = loaded.locale;
   activeCatalog = loaded.catalog;
@@ -92,16 +118,25 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = loaded.locale;
   }, [loaded.locale]);
 
-  const value = useMemo(() => ({ locale: loaded.locale }), [loaded.locale]);
+  const value = useMemo(() => ({
+    locale: loaded.locale,
+    requestedLocale: requested,
+    loadError,
+    retry: () => setRetrySequence((value) => value + 1),
+  }), [loadError, loaded.locale, requested]);
   return (
     <I18nContext.Provider value={value}>
-      <Fragment key={loaded.locale}>{children}</Fragment>
+      {children}
     </I18nContext.Provider>
   );
 }
 
+export function useI18n(): I18nContextValue {
+  return useContext(I18nContext);
+}
+
 export function useLocale(): Locale {
-  return useContext(I18nContext).locale;
+  return useI18n().locale;
 }
 
 export function setLocaleForTest(locale: Locale, catalog: Catalog = english): void {

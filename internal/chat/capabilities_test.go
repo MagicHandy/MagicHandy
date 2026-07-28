@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -380,13 +381,53 @@ func TestCurrentTurnMotionAuthorizationRecognizesSupportedPromptLanguages(t *tes
 		"讲个笑话",
 		"不要开始运动",
 		"别开始运动",
+		"请勿开始运动",
+		"应该开始运动吗",
+		"可以开始运动吗",
 		"冗談を言って",
 		"動かさないで",
 		"モーションを始めないで",
+		"モーションを開始するな",
+		"モーションを開始すべきですか",
+		"モーションを開始してもいいですか",
 	} {
 		if userAuthorizesMotion(message, MotionActionStart) || userAuthorizesMotion(message, MotionActionTarget) {
 			t.Errorf("conversation or negation %q authorized motion", message)
 		}
+	}
+}
+
+func TestLocalizedRefusalsAndPermissionQuestionsStripModelMotion(t *testing.T) {
+	capabilities := FullCapabilities()
+	context := MotionContext{SpeedMinPercent: 20, SpeedMaxPercent: 40}
+	for _, message := range []string{
+		"Do not start moving",
+		"Should the motion start?",
+		"No empieces el movimiento",
+		"¿Debería empezar el movimiento?",
+		"Não comece o movimento",
+		"Deveria começar o movimento?",
+		"请勿开始运动",
+		"应该开始运动吗",
+		"モーションを開始するな",
+		"モーションを開始すべきですか",
+	} {
+		t.Run(message, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []string{
+				`{"reply":"Starting.","motion":{"action":"start","speed_percent":30}}`,
+			}}
+			service := Service{Provider: provider, MotionContext: &context, Capabilities: &capabilities}
+			result, err := service.Complete(t.Context(), Request{Message: message}, nil)
+			if err != nil {
+				t.Fatalf("Complete: %v", err)
+			}
+			if result.Response.Motion != nil {
+				t.Fatalf("unauthorized localized turn retained motion: %+v", result.Response.Motion)
+			}
+			if len(provider.requests) != 1 {
+				t.Fatalf("provider requests = %d, want no semantic repair", len(provider.requests))
+			}
+		})
 	}
 }
 
@@ -542,6 +583,52 @@ func TestClearSpeedBandRequestsReceiveOneRepair(t *testing.T) {
 	}
 	if speed := result.Response.Motion.SpeedPercent; speed == nil || *speed != 25 {
 		t.Fatalf("repaired speed = %v, want 25", speed)
+	}
+}
+
+func TestLocalizedSpeedBandsReceiveOneRepair(t *testing.T) {
+	capabilities := FullCapabilities()
+	context := MotionContext{SpeedMinPercent: 20, SpeedMaxPercent: 40}
+	tests := []struct {
+		name     string
+		message  string
+		wrong    int
+		repaired int
+	}{
+		{name: "en low", message: "Start moving gently", wrong: 40, repaired: 25},
+		{name: "en middle", message: "Start motion at a moderate pace", wrong: 20, repaired: 30},
+		{name: "en high", message: "Start moving fast", wrong: 20, repaired: 36},
+		{name: "es low", message: "Empieza el movimiento lentamente", wrong: 40, repaired: 25},
+		{name: "es middle", message: "Empieza el movimiento a velocidad moderada", wrong: 20, repaired: 30},
+		{name: "es high", message: "Empieza el movimiento rápido", wrong: 20, repaired: 36},
+		{name: "pt-BR low", message: "Começa o movimento devagar", wrong: 40, repaired: 25},
+		{name: "pt-BR middle", message: "Começa o movimento em velocidade moderada", wrong: 20, repaired: 30},
+		{name: "pt-BR high", message: "Começa o movimento rápido", wrong: 20, repaired: 36},
+		{name: "zh-Hans low", message: "开始慢速运动", wrong: 40, repaired: 25},
+		{name: "zh-Hans middle", message: "开始中速运动", wrong: 20, repaired: 30},
+		{name: "zh-Hans high", message: "开始快速运动", wrong: 20, repaired: 36},
+		{name: "ja low", message: "ゆっくりモーションを開始して", wrong: 40, repaired: 25},
+		{name: "ja middle", message: "中速でモーションを開始して", wrong: 20, repaired: 30},
+		{name: "ja high", message: "高速でモーションを開始して", wrong: 20, repaired: 36},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []string{
+				fmt.Sprintf(`{"reply":"Starting.","motion":{"action":"start","speed_percent":%d}}`, test.wrong),
+				fmt.Sprintf(`{"reply":"Starting.","motion":{"action":"start","speed_percent":%d}}`, test.repaired),
+			}}
+			service := Service{Provider: provider, MotionContext: &context, Capabilities: &capabilities}
+			result, err := service.Complete(t.Context(), Request{Message: test.message}, nil)
+			if err != nil || result.Malformed || !result.Repaired || result.Response.Motion == nil {
+				t.Fatalf("speed-band repair failed: result=%+v err=%v", result, err)
+			}
+			if speed := result.Response.Motion.SpeedPercent; speed == nil || *speed != test.repaired {
+				t.Fatalf("repaired speed = %v, want %d", speed, test.repaired)
+			}
+			if len(provider.requests) != 2 {
+				t.Fatalf("provider requests = %d, want one generation and one repair", len(provider.requests))
+			}
+		})
 	}
 }
 

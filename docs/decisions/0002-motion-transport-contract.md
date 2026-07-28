@@ -75,7 +75,11 @@ The motion engine owns target selection, plan sampling, active state, retargetin
 
 ## Emergency Stop Contract
 
-Stop is global and explicit. It must:
+Stop is global and explicit. Every public Stop endpoint, transport disconnect,
+actuator selection, and dispatch-owner change first enters the same server
+coordinator. Owner-specific handlers may add diagnostics or close resources
+only after global motion admission is closed; they do not invoke a private
+transport Stop path. The global Stop operation must:
 
 - cancel active motion loop work
 - stop mode planners

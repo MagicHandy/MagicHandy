@@ -1,6 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLocaleForTest } from "../i18n";
+import english from "../i18n/locales/en.json";
+import spanish from "../i18n/locales/es.json";
 import { MotionVisualizer } from "./MotionVisualizer";
+
+afterEach(() => setLocaleForTest("en", english));
 
 describe("MotionVisualizer", () => {
   it("distinguishes startup from active playback", () => {
@@ -91,5 +96,29 @@ describe("MotionVisualizer", () => {
 
     expect(screen.getByText("Paired session")).toBeInTheDocument();
     expect(screen.getByText("media")).toBeInTheDocument();
+  });
+
+  it("localizes its computed state and accessibility description without renaming user content", () => {
+    setLocaleForTest("es", spanish);
+    render(
+      <MotionVisualizer
+        motion={{
+          available: true,
+          engine: {
+            running: true,
+            paused: false,
+            target: {
+              pattern_name: "Paused",
+              source: "chat",
+              speed_percent: 30,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("En marcha")).toBeInTheDocument();
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Movimiento En marcha; patrón Paused/i })).toBeInTheDocument();
   });
 });

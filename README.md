@@ -13,8 +13,8 @@ on your machine — no account, no tracking.
 
 - **Chat that moves the device.** A local LLM (llama.cpp or Ollama) replies
   *and* drives motion through one shared, safe motion engine.
-- **Hands-free modes.** Freestyle keeps things going on its own; LLM-driven
-  Autopilot is on the way.
+- **Hands-free modes.** Freestyle provides deterministic motion; Chat
+  Autopilot lets the selected local model curate motion over time.
 - **You stay in control.** Live speed / stroke / direction controls apply
   instantly, and emergency **Stop** is one click (or `Esc`) on every screen.
 - **Local-first and private by default.** App data lives in a local database;
@@ -44,10 +44,11 @@ On Windows, from the project folder in PowerShell:
 .\update.ps1    # later: update and rebuild, keeping your choices
 ```
 
-The installer can start from a clean 64-bit Windows machine and provisions
-only what your choices require. Its first two questions choose the app UI and
+The installer is designed to bootstrap a clean 64-bit Windows machine and
+provisions only what your choices require; release clean-machine acceptance
+remains open. Its first two questions choose the app UI and
 chat reply languages; every later question uses the selected UI language. Run
-`change-language.ps1` if either choice needs to be corrected. Flags, voice
+`.\change-language.ps1` if either choice needs to be corrected. Flags, voice
 options, model imports, updater behavior, and manual setup are all covered in
 the **[Getting Started guide](docs/getting-started.md)**.
 
@@ -73,10 +74,11 @@ app at <http://127.0.0.1:49717> — no Node required. Details in the
 
 MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working from source
 today: chat-driven motion (Handy Cloud, browser Bluetooth, Intiface), live
-controls, Freestyle, long-term memory, editable prompt sets, a pattern/program
-library, voice providers with push-to-talk, and model management. Planned:
-Autopilot, guided setup, curated model downloads, and packaged releases. The
-full picture is in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+controls, Freestyle, Chat Autopilot, long-term memory, editable prompt sets, a
+pattern/program library, voice providers with push-to-talk, and model
+management. Planned: guided setup, curated model downloads, and packaged
+releases. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full
+roadmap.
 
 MagicHandy and [LSO (Local Stroke Orchestrator)](docs/lso-merge-integration.md)
 are being combined into one project on this Go core.

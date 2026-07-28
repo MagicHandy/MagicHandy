@@ -546,7 +546,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 type SettingsUpdate struct {
 	Server             ServerSettings      `json:"server"`
 	UI                 *UISettings         `json:"ui,omitempty"`
-	Media              *MediaSettings      `json:"media,omitempty"`
+	Media              *MediaUpdate        `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
 	LLM                LLMUpdate           `json:"llm"`
@@ -554,6 +554,16 @@ type SettingsUpdate struct {
 	Chat               *ChatSettings       `json:"chat,omitempty"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
+}
+
+// MediaUpdate patches only the submitted media settings. Filter controls save
+// independently from the general Settings form, so omitted fields must retain
+// the latest durable values rather than being reset by a stale form snapshot.
+type MediaUpdate struct {
+	LibraryPaths           *[]string `json:"library_paths,omitempty"`
+	ScriptOffsetMillis     *int      `json:"script_offset_ms,omitempty"`
+	ScriptSmoothingPercent *int      `json:"script_smoothing_percent,omitempty"`
+	PeakRoundingMillis     *int      `json:"peak_rounding_ms,omitempty"`
 }
 
 // DeviceUpdate is the API write payload for device settings.
@@ -699,7 +709,20 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		next.UI.Locale = strings.TrimSpace(update.UI.Locale)
 	}
 	if update.Media != nil {
-		next.Media = normalizeMediaSettings(*update.Media)
+		media := next.Media
+		if update.Media.LibraryPaths != nil {
+			media.LibraryPaths = append([]string{}, (*update.Media.LibraryPaths)...)
+		}
+		if update.Media.ScriptOffsetMillis != nil {
+			media.ScriptOffsetMillis = *update.Media.ScriptOffsetMillis
+		}
+		if update.Media.ScriptSmoothingPercent != nil {
+			media.ScriptSmoothingPercent = *update.Media.ScriptSmoothingPercent
+		}
+		if update.Media.PeakRoundingMillis != nil {
+			media.PeakRoundingMillis = *update.Media.PeakRoundingMillis
+		}
+		next.Media = normalizeMediaSettings(media)
 	}
 	next.Device.HSPDispatchOwner = update.Device.HSPDispatchOwner
 	next.Device.IntifaceServerAddress = strings.TrimSpace(update.Device.IntifaceServerAddress)
@@ -909,7 +932,14 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 		settings.LLM.CustomAnatomy = ""
 	}
 
-	return MigrateSettings(settings, header.Version)
+	localeFallback := false
+	if !IsSupportedLocale(strings.TrimSpace(settings.UI.Locale)) {
+		settings.UI.Locale = LocaleEnglish
+		localeFallback = true
+	}
+
+	migratedSettings, migrated, err := MigrateSettings(settings, header.Version)
+	return migratedSettings, migrated || localeFallback, err
 }
 
 func validateSettings(settings Settings) error {

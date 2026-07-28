@@ -80,8 +80,11 @@ type Server struct {
 	neuttsAdapterInstalled atomic.Bool
 	stopSequence           atomic.Uint64
 	quiescing              atomic.Bool
+	lifecycleCtx           context.Context
+	lifecycleCancel        context.CancelFunc
 	quiesceOnce            sync.Once
 	closeOnce              sync.Once
+	settingsLifecycleMu    sync.Mutex
 	chatLifecycleMu        sync.Mutex
 	chatCancelMu           sync.Mutex
 	chatCancels            map[uint64]context.CancelFunc
@@ -141,6 +144,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		return nil, err
 	}
 
+	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	server := &Server{
 		static:          static,
 		logger:          logger,
@@ -157,12 +161,15 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		controller:      newControllerRuntime(),
 		hostPathPicker:  systemHostPathPicker,
 		personalization: personalization,
+		lifecycleCtx:    lifecycleCtx,
+		lifecycleCancel: lifecycleCancel,
 		started:         time.Now().UTC(),
 		version:         version,
 	}
 
 	manager, err := server.newModeManager()
 	if err != nil {
+		lifecycleCancel()
 		managedLLM.Close()
 		_ = modelManager.Close()
 		personalization.Close()
@@ -174,6 +181,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
 
 	if err := server.openPersistentDomains(settings.Media.LibraryPaths, settings.Chat); err != nil {
+		lifecycleCancel()
 		server.modes.Shutdown()
 		if server.voice != nil {
 			server.voice.Shutdown()
@@ -236,6 +244,15 @@ func (s *Server) configureVoice(settings config.VoiceSettings, executablePath, d
 	s.voiceDataDir = dataDir
 	s.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")))
 	s.voice = newVoiceManager(settings, executablePath, dataDir)
+}
+
+func (s *Server) requestLifecycleContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(s.lifecycleCtx)
+	stopParentWatch := context.AfterFunc(parent, cancel)
+	return ctx, func() {
+		stopParentWatch()
+		cancel()
+	}
 }
 
 // Handler returns the HTTP handler for use by net/http servers and tests.
@@ -436,20 +453,20 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	current, _ := s.store.Snapshot()
-	next, err := current.ApplyUpdate(update)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	var updateErr error
+	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		var next config.Settings
+		next, updateErr = current.ApplyUpdate(update)
+		return next, updateErr
+	})
+	if updateErr != nil {
+		writeError(w, http.StatusBadRequest, updateErr)
 		return
 	}
-
-	saved, err := s.store.Save(next)
-	if err != nil {
+	if saveErr != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("settings could not be saved"))
 		return
 	}
-
-	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), current, next)
 
 	_, status := s.store.Snapshot()
 	payload := map[string]any{
@@ -482,18 +499,18 @@ func (s *Server) handlePutConnectionKey(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	current, _ := s.store.Snapshot()
-	next := current
-	next.Device.HandyConnectionKey = update.ConnectionKey
-	if _, err := s.store.Save(next); err != nil {
+	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		current.Device.HandyConnectionKey = update.ConnectionKey
+		return current, nil
+	})
+	if saveErr != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("connection key could not be saved"))
 		return
 	}
-	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), current, next)
 
-	settings, status := s.store.PublicSnapshot()
+	_, status := s.store.Snapshot()
 	payload := map[string]any{
-		"settings": settings,
+		"settings": saved.Public(),
 		"status":   status,
 	}
 	responseStatus := http.StatusOK

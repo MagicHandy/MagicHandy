@@ -284,4 +284,74 @@ describe("ChatPanel history", () => {
 
     expect(await screen.findByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
   });
+
+  it("aborts the active stream without callbacks when the panel unmounts", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    let streamSignal: AbortSignal | undefined;
+    streamChatMock.mockImplementation((_sessionId, _message, _onEvent, signal) => {
+      streamSignal = signal;
+      return new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const onBusyChange = vi.fn();
+    const result = render(<ChatPanel sessionId={SESSION_ID} onBusyChange={onBusyChange} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "keep talking" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledOnce());
+
+    result.unmount();
+    expect(streamSignal?.aborted).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(app.show).not.toHaveBeenCalled();
+    expect(app.queueSpeech).not.toHaveBeenCalled();
+    expect(app.refresh).not.toHaveBeenCalled();
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("aborts the active stream and unlocks composition after Emergency Stop", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    let streamSignal: AbortSignal | undefined;
+    streamChatMock.mockImplementation((_sessionId, _message, _onEvent, signal) => {
+      streamSignal = signal;
+      return new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const result = render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "keep talking" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledOnce());
+
+    app.state = { ...app.state, stop_sequence: 2 };
+    result.rerender(<ChatPanel sessionId={SESSION_ID} />);
+
+    await waitFor(() => expect(streamSignal?.aborted).toBe(true));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    expect(app.show).not.toHaveBeenCalled();
+    expect(app.queueSpeech).not.toHaveBeenCalled();
+    expect(app.refresh).not.toHaveBeenCalled();
+  });
 });

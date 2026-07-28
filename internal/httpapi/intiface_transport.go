@@ -108,7 +108,12 @@ func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	stopErr := s.stopAndClearMotionEngine(r.Context(), "intiface_disconnected")
+	finishStop := s.beginGlobalStop("intiface_disconnected")
+	defer finishStop()
+
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	stopErr := s.stopAndClearMotionEngine(stopCtx, "intiface_disconnected")
+	cancel()
 	s.closeIntifaceSession()
 	s.writeIntifaceResult(w, stopErr)
 }
@@ -153,7 +158,12 @@ func (s *Server) handleIntifaceSelect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	err := s.stopAndClearMotionEngine(r.Context(), "intiface_selection_changed")
+	finishStop := s.beginGlobalStop("intiface_selection_changed")
+	defer finishStop()
+
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	err := s.stopAndClearMotionEngine(stopCtx, "intiface_selection_changed")
+	cancel()
 	owner, ownerErr := s.currentIntiface()
 	if err == nil {
 		err = ownerErr

@@ -62,6 +62,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if ($Reconfigure -and $Yes) {
+    throw 'Reconfigure is interactive and cannot be combined with Yes.'
+}
 $Repo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $support = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
 if (-not (Test-Path -LiteralPath $support)) {

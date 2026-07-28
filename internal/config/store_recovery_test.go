@@ -226,6 +226,72 @@ func TestSQLiteSettingsMigrationIsDurable(t *testing.T) {
 	}
 }
 
+func TestUnsupportedPersistedLocaleFallsBackWithoutDiscardingSettings(t *testing.T) {
+	dir := t.TempDir()
+	seed, err := OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore seed: %v", err)
+	}
+	settings, _ := seed.Snapshot()
+	settings.UI.Locale = "future-locale"
+	settings.Server.Port = 51234
+	settings.LLM.PromptSet = "custom-review-prompt"
+	document, err := json.Marshal(settings)
+	if err != nil {
+		_ = seed.Close()
+		t.Fatalf("marshal fixture: %v", err)
+	}
+	if _, err := seed.Datastore().SQL().Exec(`
+		INSERT INTO settings(id, document, updated_at)
+		VALUES('current', ?, 'fixture')
+		ON CONFLICT(id) DO UPDATE SET document = excluded.document
+	`, string(document)); err != nil {
+		_ = seed.Close()
+		t.Fatalf("seed future locale: %v", err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close seed: %v", err)
+	}
+
+	loaded, err := OpenStore(dir)
+	if err != nil {
+		t.Fatalf("OpenStore future locale: %v", err)
+	}
+	t.Cleanup(func() { _ = loaded.Close() })
+	got, status := loaded.Snapshot()
+	if status.Recovered || status.UsingDefaults {
+		t.Fatalf("status = %+v, want field-level migration", status)
+	}
+	if !status.Migrated {
+		t.Fatalf("status = %+v, want locale migration", status)
+	}
+	if got.UI.Locale != LocaleEnglish {
+		t.Fatalf("UI locale = %q, want %q", got.UI.Locale, LocaleEnglish)
+	}
+	if got.Server.Port != 51234 {
+		t.Fatalf("server port = %d, want preserved 51234", got.Server.Port)
+	}
+	if got.LLM.PromptSet != "custom-review-prompt" {
+		t.Fatalf("prompt set = %q, want preserved custom prompt", got.LLM.PromptSet)
+	}
+	var persisted string
+	if err := loaded.Datastore().SQL().QueryRow(`
+		SELECT document FROM settings WHERE id = 'current'
+	`).Scan(&persisted); err != nil {
+		t.Fatalf("read persisted settings: %v", err)
+	}
+	var persistedSettings Settings
+	if err := json.Unmarshal([]byte(persisted), &persistedSettings); err != nil {
+		t.Fatalf("decode persisted settings: %v", err)
+	}
+	if persistedSettings.UI.Locale != LocaleEnglish {
+		t.Fatalf("persisted UI locale = %q, want %q", persistedSettings.UI.Locale, LocaleEnglish)
+	}
+	if persistedSettings.LLM.PromptSet != "custom-review-prompt" {
+		t.Fatalf("persisted prompt set = %q, want preserved custom prompt", persistedSettings.LLM.PromptSet)
+	}
+}
+
 func TestSaveRejectsOversizedSettingsBeforeWriting(t *testing.T) {
 	store, err := OpenStore(t.TempDir())
 	if err != nil {

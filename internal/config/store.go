@@ -47,6 +47,7 @@ type LoadStatus struct {
 
 // Store owns the process-local settings snapshot and durable settings row.
 type Store struct {
+	saveMu     sync.Mutex
 	mu         sync.RWMutex
 	dataDir    string
 	path       string
@@ -121,18 +122,54 @@ func (s *Store) PublicSnapshot() (PublicSettings, LoadStatus) {
 
 // Save validates, writes, and publishes the next settings snapshot.
 func (s *Store) Save(next Settings) (Settings, error) {
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
 	next, err := NormalizeSettings(next)
 	if err != nil {
+		return Settings{}, err
+	}
+	return s.commit(next)
+}
+
+// Update atomically derives, validates, writes, and publishes settings from the
+// latest snapshot. All runtime read-modify-write paths should use Update rather
+// than constructing a replacement from a separately acquired Snapshot.
+func (s *Store) Update(mutate func(Settings) (Settings, error)) (previous Settings, saved Settings, err error) {
+	if mutate == nil {
+		return Settings{}, Settings{}, errors.New("settings update function is required")
+	}
+
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
+	s.mu.RLock()
+	previous = cloneSettings(s.settings)
+	s.mu.RUnlock()
+
+	next, err := mutate(cloneSettings(previous))
+	if err != nil {
+		return Settings{}, Settings{}, err
+	}
+	next, err = NormalizeSettings(next)
+	if err != nil {
+		return Settings{}, Settings{}, err
+	}
+	saved, err = s.commit(next)
+	if err != nil {
+		return Settings{}, Settings{}, err
+	}
+	return previous, saved, nil
+}
+
+func (s *Store) commit(next Settings) (Settings, error) {
+	durable := cloneSettings(next)
+	if err := s.writeSettings(context.Background(), durable); err != nil {
 		return Settings{}, err
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	durable := cloneSettings(next)
-	if err := s.writeSettings(context.Background(), durable); err != nil {
-		return Settings{}, err
-	}
 	s.settings = durable
 	s.status = s.applyDatastoreRecovery(LoadStatus{
 		DataDir:            s.dataDir,

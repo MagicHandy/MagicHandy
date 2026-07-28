@@ -194,7 +194,7 @@ export function VoiceComposerControls({
     const current = microphoneStream.current;
     if (current?.getAudioTracks().some((track) => track.readyState === "live")) return current;
     if (!navigator.mediaDevices?.getUserMedia) {
-      showError("Microphone capture requires localhost or HTTPS in a supported browser.");
+      showError(t("Microphone capture requires localhost or HTTPS in a supported browser."));
       return null;
     }
 
@@ -218,14 +218,14 @@ export function VoiceComposerControls({
           if (microphoneStream.current !== stream) return;
           abortCapture();
           setSelectedDevice("default");
-          if (mounted.current) showError("The selected microphone became unavailable.");
+          if (mounted.current) showError(t("The selected microphone became unavailable."));
         }, { once: true });
       }
       void refreshAudioInputs();
       return stream;
     } catch (error) {
       releaseMicrophone();
-      if (mounted.current) showError(error instanceof Error ? error.message : "Microphone permission was denied.");
+      if (mounted.current) showError(error instanceof Error ? error.message : t("Microphone permission was denied."));
       return null;
     } finally {
       if (mounted.current) setArming(false);
@@ -271,7 +271,7 @@ export function VoiceComposerControls({
       wantsCapture.current = false;
       if (session === captureSession.current) handsFreeStopSequence.current = undefined;
       releaseMicrophone();
-      if (mounted.current) showError(error instanceof Error ? error.message : "Continuous microphone capture could not start.");
+      if (mounted.current) showError(error instanceof Error ? error.message : t("Continuous microphone capture could not start."));
     }
   }
 
@@ -314,7 +314,7 @@ export function VoiceComposerControls({
   function enqueueSegment(next: PendingSegment) {
     if (next.session !== captureSession.current) return;
     if (segmentQueue.current.length >= MAX_PENDING_SEGMENTS) {
-      showError("Voice transcription is falling behind; pause briefly before continuing.");
+      showError(t("Voice transcription is falling behind; pause briefly before continuing."));
       return;
     }
     segmentQueue.current.push(next);
@@ -341,7 +341,7 @@ export function VoiceComposerControls({
           }
         } catch (error) {
           if (mounted.current && next.session === captureSession.current) {
-            showError(error instanceof Error ? error.message : "Transcription failed.");
+            showError(error instanceof Error ? error.message : t("Transcription failed."));
           }
         }
       }
@@ -354,7 +354,7 @@ export function VoiceComposerControls({
   async function startHoldRecording() {
     if (disabled || !ready || active || recorder.current) return;
     if (typeof MediaRecorder === "undefined") {
-      showError("Hold-to-talk requires MediaRecorder support in this browser.");
+      showError(t("Hold-to-talk requires MediaRecorder support in this browser."));
       return;
     }
     wantsCapture.current = true;
@@ -376,7 +376,7 @@ export function VoiceComposerControls({
       nextRecorder.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
       nextRecorder.onerror = () => {
         discardedRecorders.current.add(nextRecorder);
-        showError("The browser could not record from the selected microphone.");
+        showError(t("The browser could not record from the selected microphone."));
         stopHoldRecording(true);
       };
       nextRecorder.onstart = () => {
@@ -401,7 +401,7 @@ export function VoiceComposerControls({
       recorder.current = null;
       wantsCapture.current = false;
       releaseMicrophone();
-      if (mounted.current) showError(error instanceof Error ? error.message : "The browser could not start microphone recording.");
+      if (mounted.current) showError(error instanceof Error ? error.message : t("The browser could not start microphone recording."));
     }
   }
 
@@ -434,10 +434,10 @@ export function VoiceComposerControls({
       if (transcript && mounted.current && session === captureSession.current) {
         await onTranscriptRef.current(transcript, captureStopSequence);
       } else if (mounted.current && session === captureSession.current) {
-        showError("No speech was recognized.");
+        showError(t("No speech was recognized."));
       }
     } catch (error) {
-      if (mounted.current && session === captureSession.current) showError(error instanceof Error ? error.message : "Transcription failed.");
+      if (mounted.current && session === captureSession.current) showError(error instanceof Error ? error.message : t("Transcription failed."));
     } finally {
       if (mounted.current && session === captureSession.current) setProcessing(false);
       scheduleWarmRelease();
@@ -465,13 +465,13 @@ export function VoiceComposerControls({
       try {
         return await waitForTranscript(submitted.request.id, () => session !== captureSession.current, requestAbort.signal);
       } catch (error) {
-        if (transcriptionTimedOut && session === captureSession.current) throw new Error("Transcription timed out.");
+        if (transcriptionTimedOut && session === captureSession.current) throw new Error(t("Transcription timed out."));
         throw error;
       } finally {
         window.clearTimeout(transcriptionTimer);
       }
     } catch (error) {
-      if (uploadTimedOut && session === captureSession.current) throw new Error("Transcription upload timed out.");
+      if (uploadTimedOut && session === captureSession.current) throw new Error(t("Transcription upload timed out."));
       throw error;
     } finally {
       window.clearTimeout(uploadTimer);
@@ -561,7 +561,7 @@ export function VoiceComposerControls({
       setSensitivity(preferences.input_sensitivity);
       setSilenceMillis(preferences.input_silence_ms);
       setNoiseSuppression(preferences.input_noise_suppression);
-      showError(error instanceof Error ? error.message : "Voice input preference could not be saved.");
+      showError(error instanceof Error ? error.message : t("Voice input preference could not be saved."));
     } finally {
       setSavingPreferences(false);
     }
@@ -574,16 +574,16 @@ export function VoiceComposerControls({
   }
 
   const label = arming
-    ? "Cancel microphone startup"
+    ? t("Cancel microphone startup")
     : listening
-      ? "Stop hands-free listening"
+      ? t("Stop hands-free listening")
       : recording
-        ? `Stop and transcribe, ${recordingSecondsLeft} seconds remaining`
+        ? t("Stop and transcribe, {seconds} seconds remaining", { seconds: recordingSecondsLeft })
         : processing
-          ? "Finishing voice transcription"
+          ? t("Finishing voice transcription")
           : mode === "hands_free"
-            ? "Start hands-free listening"
-            : "Hold to talk";
+            ? t("Start hands-free listening")
+            : t("Hold to talk");
   const title = ready ? label : unavailableTitle;
 
   return (
@@ -714,9 +714,9 @@ async function waitForTranscript(requestID: string, canceled: () => boolean, sig
     }
     const res = await api.voiceRequest(requestID, signal);
     const request = res.request;
-    if (request.role !== "asr" || request.type !== "transcribe") throw new Error("The voice worker returned the wrong request.");
+    if (request.role !== "asr" || request.type !== "transcribe") throw new Error(t("The voice worker returned the wrong request."));
     if (request.state === "done") return request.transcript?.[0]?.text?.trim() ?? "";
-    if (request.state === "failed") throw new Error(request.error?.message || "Transcription failed.");
+    if (request.state === "failed") throw new Error(request.error?.message || t("Transcription failed."));
     if (request.state === "canceled") return "";
     await new Promise((resolve) => setTimeout(resolve, 150));
   }

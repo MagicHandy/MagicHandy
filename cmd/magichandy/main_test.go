@@ -58,6 +58,55 @@ func TestRunConfiguresLanguagesWithoutStartingServer(t *testing.T) {
 	}
 }
 
+func TestRunLanguageConfigurationRefusesRecoveredDefaults(t *testing.T) {
+	dataDir := t.TempDir()
+	seed, err := config.OpenStore(dataDir)
+	if err != nil {
+		t.Fatalf("OpenStore seed: %v", err)
+	}
+	const invalidDocument = "{broken"
+	if _, err := seed.Datastore().SQL().Exec(`
+		INSERT INTO settings(id, document, updated_at)
+		VALUES('current', ?, 'fixture')
+		ON CONFLICT(id) DO UPDATE SET document = excluded.document
+	`, invalidDocument); err != nil {
+		_ = seed.Close()
+		t.Fatalf("seed invalid settings: %v", err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("Close seed: %v", err)
+	}
+
+	err = run([]string{
+		"-data-dir", dataDir,
+		"-set-ui-locale", config.LocaleJapanese,
+		"-set-chat-locale", config.LocaleSpanish,
+	}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "recovered defaults are active") {
+		t.Fatalf("run error = %v, want recovered-default refusal", err)
+	}
+
+	store, err := config.OpenStore(dataDir)
+	if err != nil {
+		t.Fatalf("OpenStore verify: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	settings, status := store.Snapshot()
+	if !status.Recovered || !status.UsingDefaults {
+		t.Fatalf("status = %+v, want recovery to remain active", status)
+	}
+	if settings.UI.Locale != config.LocaleEnglish {
+		t.Fatalf("UI locale = %q, want recovered default %q", settings.UI.Locale, config.LocaleEnglish)
+	}
+	var activeRows int
+	if err := store.Datastore().SQL().QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&activeRows); err != nil {
+		t.Fatalf("count active settings: %v", err)
+	}
+	if activeRows != 0 {
+		t.Fatalf("active settings rows = %d, want 0", activeRows)
+	}
+}
+
 func TestRunLanguageConfigurationRequiresTwoSupportedLocales(t *testing.T) {
 	tests := []struct {
 		name string

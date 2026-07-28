@@ -352,8 +352,12 @@ func (m *mediaSyncRuntime) handleHeartbeat(ctx context.Context, event mediaSyncE
 	exceeded := timing.exceeded
 	breaches := timing.breachCount
 	if timing.requiresStop {
-		if _, err := engine.Stop(ctx, "media_drift"); err != nil {
+		_, stopped, err := m.server.stopMediaEngineIfOwned(ctx, event.VideoID, "media_drift")
+		if err != nil {
 			return m.setError(event, err), err
+		}
+		if !stopped {
+			return m.interrupted(event, "Another motion source took control; pause and play the video to re-arm it."), errMediaMotionInterrupted
 		}
 		status = mediaSyncStatus{
 			VideoID:          event.VideoID,
@@ -441,14 +445,8 @@ func (m *mediaSyncRuntime) stopForEvent(ctx context.Context, event mediaSyncEven
 	if current.VideoID != "" && event.VideoID != "" && current.VideoID != event.VideoID {
 		return current, nil
 	}
-	engine := m.server.currentMotionEngine()
-	if engine != nil {
-		engineState := engine.Snapshot()
-		if engineState.Target.Source == motion.TargetSourceMedia && (engineState.Running || engineState.Paused || engineState.Completing) {
-			if _, err := engine.Stop(ctx, reason); err != nil {
-				return m.setError(event, err), err
-			}
-		}
+	if _, _, err := m.server.stopMediaEngineIfOwned(ctx, event.VideoID, reason); err != nil {
+		return m.setError(event, err), err
 	}
 	now := m.now()
 	status := mediaSyncStatus{
@@ -535,20 +533,32 @@ func (m *mediaSyncRuntime) PrepareScript(script media.Funscript) {
 }
 
 func (m *mediaSyncRuntime) scriptFor(ctx context.Context, videoID string) (media.Funscript, error) {
+	var cached *media.Funscript
 	m.mu.Lock()
 	if m.script != nil && m.script.VideoID == videoID {
-		script := *m.script
-		m.mu.Unlock()
-		return script, nil
-	}
-	if m.preparedScript != nil && m.preparedScript.VideoID == videoID {
-		m.script = m.preparedScript
-		m.preparedScript = nil
-		script := *m.script
-		m.mu.Unlock()
-		return script, nil
+		scriptCopy := *m.script
+		cached = &scriptCopy
+	} else if m.preparedScript != nil && m.preparedScript.VideoID == videoID {
+		scriptCopy := *m.preparedScript
+		cached = &scriptCopy
 	}
 	m.mu.Unlock()
+
+	if cached != nil && cached.SourceIdentity != "" {
+		identity, err := m.server.media.FunscriptSourceIdentity(ctx, videoID)
+		if err != nil {
+			return media.Funscript{}, err
+		}
+		if identity == cached.SourceIdentity {
+			m.mu.Lock()
+			m.script = cached
+			m.preparedScript = nil
+			script := *m.script
+			m.mu.Unlock()
+			return script, nil
+		}
+	}
+
 	script, err := m.server.media.LoadFunscript(ctx, videoID)
 	if err != nil {
 		return media.Funscript{}, err
@@ -613,8 +623,9 @@ func (m *mediaSyncRuntime) setStatus(status mediaSyncStatus) {
 }
 
 func (m *mediaSyncRuntime) Invalidate(reason string) {
-	m.lifecycleMu.Lock()
-	defer m.lifecycleMu.Unlock()
+	// Emergency Stop publishes its epoch before this call. Do not wait behind
+	// ordinary arm/seek work: those paths recheck the epoch before and after
+	// engine startup, while physical Stop must proceed immediately.
 	status := m.Status()
 	status.Active = false
 	status.State = "stopped"

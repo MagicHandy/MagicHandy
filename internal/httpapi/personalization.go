@@ -248,13 +248,15 @@ func (s *Server) handlePromptSetDelete(w http.ResponseWriter, r *http.Request) {
 
 	// Deleting the selected set falls back to the default explicitly, so chat
 	// never runs against a dangling selection.
-	current, _ := s.store.Snapshot()
-	if current.LLM.PromptSet == id {
-		current.LLM.PromptSet = chat.DefaultPromptSetID
-		if _, err := s.store.Save(current); err != nil {
-			writeError(w, http.StatusInternalServerError, errors.New("prompt set deleted, but the selection could not be reset"))
-			return
+	_, _, err := s.store.Update(func(current config.Settings) (config.Settings, error) {
+		if current.LLM.PromptSet == id {
+			current.LLM.PromptSet = chat.DefaultPromptSetID
 		}
+		return current, nil
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("prompt set deleted, but the selection could not be reset"))
+		return
 	}
 	s.writePromptSetsPayload(w, nil)
 }
@@ -308,13 +310,13 @@ func (s *Server) handleSettingsReset(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	current, _ := s.store.Snapshot()
-	saved, err := s.store.Save(config.DefaultSettings())
+	_, saved, err, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(config.Settings) (config.Settings, error) {
+		return config.DefaultSettings(), nil
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("settings could not be reset"))
 		return
 	}
-	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), current, saved)
 
 	_, status := s.store.Snapshot()
 	payload := map[string]any{

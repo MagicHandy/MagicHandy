@@ -105,6 +105,7 @@ type Manager struct {
 	userStopped       bool
 	nextRetry         time.Time
 	chatTarget        *motion.MotionTarget
+	chatKeepalive     bool
 	chatTargetPending bool
 	lastEvent         string
 	lastEventAt       time.Time
@@ -193,6 +194,7 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.mode = mode
 	m.userStopped = false
 	m.chatTarget = nil
+	m.chatKeepalive = false
 	m.chatTargetPending = false
 	m.driftDone = true
 	m.deadline = time.Time{}
@@ -268,6 +270,7 @@ func (m *Manager) BeginUserStop() func() {
 	m.mu.Lock()
 	m.userStopped = true
 	m.chatTarget = nil
+	m.chatKeepalive = false
 	m.chatTargetPending = false
 	m.chatVersion++
 	m.generation++
@@ -340,6 +343,9 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 	m.generation++
 	m.cancelOperationLocked()
 	m.chatTarget = &copied
+	// Only reusable loop patterns are recovery targets. Programs and media are
+	// finite; an idle engine means they completed rather than lost transport.
+	m.chatKeepalive = adoptable
 	adopted := m.mode == ModeAutopilot && adoptable
 	if adopted {
 		duration := time.Duration(segment.DurationMillis) * time.Millisecond
@@ -378,6 +384,7 @@ func (m *Manager) NotifyChatStop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chatTarget = nil
+	m.chatKeepalive = false
 	m.chatTargetPending = false
 	m.userStopped = true
 	m.chatVersion++
@@ -639,7 +646,7 @@ func (m *Manager) tickChat(ctx context.Context) {
 
 	m.mu.Lock()
 	var target *motion.MotionTarget
-	if m.chatTarget != nil {
+	if m.chatTarget != nil && m.chatKeepalive {
 		copied := cloneTarget(*m.chatTarget)
 		target = &copied
 	}
@@ -706,7 +713,7 @@ func (m *Manager) chatOperationActive(generation, chatVersion uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.mode == ModeChat && m.generation == generation && m.chatVersion == chatVersion &&
-		m.chatTarget != nil && !m.userStopped && !m.chatTargetPending
+		m.chatTarget != nil && m.chatKeepalive && !m.userStopped && !m.chatTargetPending
 }
 
 func (m *Manager) freezeDeadline() {
@@ -745,7 +752,7 @@ func (m *Manager) beginStartOperation(
 ) (context.Context, func(), bool) {
 	m.mu.Lock()
 	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending ||
-		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil)) {
+		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil || !m.chatKeepalive)) {
 		m.mu.Unlock()
 		return nil, nil, false
 	}

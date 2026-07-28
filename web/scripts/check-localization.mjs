@@ -10,7 +10,7 @@ const localeNames = ["en", "es", "pt-BR", "zh-Hans", "ja"];
 const visibleAttributes = new Set(["alt", "aria-label", "aria-valuetext", "placeholder", "title", "label", "hint", "accessibleLabel", "unavailableTitle"]);
 const iconText = /^(?:M|Y|MH|MagicHandy|[\s+\-−–—×%/#:;,.…•·]+|\d+(?:\.\d+)?%?)$/u;
 const sameValueAllowed = {
-  es: new Set(["{count} tokens", "{count} videos", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Chat", "Commit", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable"]),
+  es: new Set(["{count} tokens", "{count} videos", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Chat", "Commit", "Error", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable"]),
   "pt-BR": new Set(["{count} tokens", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Chat", "Commit", "Esc", "Funscript", "Interface", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva"]),
   "zh-Hans": new Set(["{rounding} ms", "{size} / {location}", "{state}: {message}", "Esc", "Funscript", "Intiface Central", "MagicHandy", "NeuTTS Air"]),
   ja: new Set(["{rounding} ms", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy", "NeuTTS Air"]),
@@ -70,12 +70,35 @@ function plainTextExpression(expression) {
   }
   return true;
 }
+const catalogErrors = [];
+function readCatalog(locale) {
+  const file = path.join(localeRoot, `${locale}.json`);
+  const raw = fs.readFileSync(file, "utf8");
+  const sourceFile = ts.parseJsonText(file, raw);
+  const rootExpression = sourceFile.statements[0]?.expression;
+  if (rootExpression && ts.isObjectLiteralExpression(rootExpression)) {
+    const seen = new Map();
+    for (const property of rootExpression.properties) {
+      if (!ts.isPropertyAssignment(property) || !ts.isStringLiteralLike(property.name)) continue;
+      const key = property.name.text;
+      const line = sourceFile.getLineAndCharacterOfPosition(property.name.getStart(sourceFile)).line + 1;
+      const firstLine = seen.get(key);
+      if (firstLine !== undefined) {
+        catalogErrors.push(`${locale}: duplicate catalog key ${JSON.stringify(key)} at line ${line} (first defined at line ${firstLine})`);
+      } else {
+        seen.set(key, line);
+      }
+    }
+  }
+  return JSON.parse(raw);
+}
+
 const catalogs = Object.fromEntries(localeNames.map((locale) => [
   locale,
-  JSON.parse(fs.readFileSync(path.join(localeRoot, `${locale}.json`), "utf8")),
+  readCatalog(locale),
 ]));
 const englishKeys = Object.keys(catalogs.en).sort();
-const errors = [];
+const errors = [...catalogErrors];
 const used = new Map();
 
 for (const locale of localeNames.slice(1)) {

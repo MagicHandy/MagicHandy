@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,6 +118,8 @@ func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
 	defer ticker.Stop()
 	for {
 		select {
+		case <-s.lifecycleCtx.Done():
+			return
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
@@ -221,40 +224,39 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	current, _ := s.store.Snapshot()
-	motionSettings := current.Motion
-	if body.SpeedMinPercent != nil {
-		motionSettings.SpeedMinPercent = *body.SpeedMinPercent
-	}
-	if body.SpeedMaxPercent != nil {
-		motionSettings.SpeedMaxPercent = *body.SpeedMaxPercent
-	}
-	if body.StrokeMinPercent != nil {
-		motionSettings.StrokeMinPercent = *body.StrokeMinPercent
-	}
-	if body.StrokeMaxPercent != nil {
-		motionSettings.StrokeMaxPercent = *body.StrokeMaxPercent
-	}
-	if body.FocusMinPercent != nil {
-		motionSettings.FocusMinPercent = *body.FocusMinPercent
-	}
-	if body.FocusMaxPercent != nil {
-		motionSettings.FocusMaxPercent = *body.FocusMaxPercent
-	}
-	if body.ReverseDirection != nil {
-		motionSettings.ReverseDirection = *body.ReverseDirection
-	}
-	if body.Style != nil {
-		motionSettings.Style = *body.Style
-	}
-	current.Motion = motionSettings
-
-	saved, err := s.store.Save(current)
+	_, saved, err, refreshErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		motionSettings := current.Motion
+		if body.SpeedMinPercent != nil {
+			motionSettings.SpeedMinPercent = *body.SpeedMinPercent
+		}
+		if body.SpeedMaxPercent != nil {
+			motionSettings.SpeedMaxPercent = *body.SpeedMaxPercent
+		}
+		if body.StrokeMinPercent != nil {
+			motionSettings.StrokeMinPercent = *body.StrokeMinPercent
+		}
+		if body.StrokeMaxPercent != nil {
+			motionSettings.StrokeMaxPercent = *body.StrokeMaxPercent
+		}
+		if body.FocusMinPercent != nil {
+			motionSettings.FocusMinPercent = *body.FocusMinPercent
+		}
+		if body.FocusMaxPercent != nil {
+			motionSettings.FocusMaxPercent = *body.FocusMaxPercent
+		}
+		if body.ReverseDirection != nil {
+			motionSettings.ReverseDirection = *body.ReverseDirection
+		}
+		if body.Style != nil {
+			motionSettings.Style = *body.Style
+		}
+		current.Motion = motionSettings
+		return current, nil
+	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	refreshErr := s.refreshActiveMotion(r.Context(), saved.Motion)
 
 	payload := map[string]any{"motion": saved.Public().Motion}
 	if engine := s.currentMotionEngine(); engine != nil {
@@ -268,54 +270,85 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, payload)
 }
 
+type emergencyStopResult struct {
+	state              motion.ActiveMotionState
+	transportResult    transport.CommandResult
+	engineAvailable    bool
+	transportAvailable bool
+}
+
 func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
+	s.handleEmergencyStop(w, r, "ui_stop")
+}
+
+func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, reason string) {
+	outcome, err := s.emergencyStop(r.Context(), reason)
+	if outcome.engineAvailable {
+		s.writeMotionResult(w, outcome.state, err)
+		return
+	}
+
+	payload := map[string]any{
+		"available": outcome.transportAvailable,
+		"stopped":   true,
+	}
+	status := http.StatusOK
+	if outcome.transportAvailable {
+		payload["transport_result"] = transport.SafeCommandResult(outcome.transportResult)
+	}
+	if err != nil {
+		if outcome.transportAvailable {
+			status = http.StatusBadGateway
+			payload["error"] = s.safeMotionErrorMessage(err)
+		} else {
+			payload["error"] = "stop could not reach the configured transport: " + s.safeMotionErrorMessage(err)
+		}
+	}
+	writeJSON(w, status, payload)
+}
+
+func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencyStopResult, error) {
+	finishStop := s.beginGlobalStop(reason)
+	defer finishStop()
+
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+
+	// The engine and the selected fallback transport are mutually exclusive.
+	// Holding lifecycleMu prevents a replacement engine from appearing between
+	// that decision and physical Stop.
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
+	engine := s.currentMotionEngine()
+	if engine != nil {
+		state, err := engine.Stop(stopCtx, reason)
+		return emergencyStopResult{state: state, engineAvailable: true}, err
+	}
+
+	result, err := s.stopSelectedTransport(stopCtx, reason+"_no_engine")
+	return emergencyStopResult{
+		transportResult:    result,
+		transportAvailable: err == nil || strings.TrimSpace(result.Transport) != "",
+	}, err
+}
+
+func (s *Server) beginGlobalStop(reason string) func() {
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
-	finishInvalidation := s.invalidateWorkForStop("emergency_stop")
-	defer finishInvalidation()
+	finishInvalidation := s.invalidateWorkForStop(reason)
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
 	if s.modes != nil {
 		finishModeStop = s.modes.BeginUserStop()
 	}
-	defer finishModeStop()
-	// Advance/invalidation happened above. Holding lifecycleMu only serializes
-	// the final physical Stop against creation of a replacement engine.
-	s.motion.lifecycleMu.Lock()
-	defer s.motion.lifecycleMu.Unlock()
-	engine := s.currentMotionEngine()
-	if engine == nil {
-		s.stopSelectedTransportWithoutEngine(w, r)
-		return
-	}
-	state, err := engine.Stop(r.Context(), "ui_stop")
-	s.writeMotionResult(w, state, err)
-}
-
-func (s *Server) stopSelectedTransportWithoutEngine(w http.ResponseWriter, r *http.Request) {
-	commandTransport, err := s.newSelectedStopTransport()
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"available": false,
-			"stopped":   true,
-			"error":     "stop could not reach the configured transport: " + s.safeMotionErrorMessage(err),
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			finishModeStop()
+			finishInvalidation()
 		})
-		return
 	}
-	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
-	result, stopErr := commandTransport.Stop(stopCtx, transport.StopCommand{Reason: "ui_stop_no_engine"})
-	stopCancel()
-	payload := map[string]any{
-		"available":        true,
-		"transport_result": result,
-	}
-	status := http.StatusOK
-	if stopErr != nil {
-		status = http.StatusBadGateway
-		payload["error"] = s.safeMotionErrorMessage(stopErr)
-	}
-	writeJSON(w, status, payload)
 }
 
 func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (transport.CommandResult, error) {
@@ -323,7 +356,16 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 	if err != nil {
 		return transport.CommandResult{}, err
 	}
-	return commandTransport.Stop(ctx, transport.StopCommand{Reason: reason})
+	result, stopErr := commandTransport.Stop(ctx, transport.StopCommand{Reason: reason})
+	switch selected := commandTransport.(type) {
+	case *transport.CloudRESTTransport:
+		diagnostics := s.saveCloudDiagnostics(selected.Diagnostics())
+		s.traceCloudResult(reason, diagnostics, result)
+	case *transport.BrowserBluetoothTransport:
+		diagnostics := s.saveBluetoothDiagnostics(selected.Diagnostics())
+		s.traceBluetoothResult(reason, diagnostics, result)
+	}
+	return result, stopErr
 }
 
 func (s *Server) invalidateWorkForStop(reason string) func() {
@@ -430,6 +472,26 @@ func (s *Server) refreshActiveMotion(ctx context.Context, settings config.Motion
 	return err
 }
 
+func (s *Server) updateSettingsAndRuntime(
+	ctx context.Context,
+	mutate func(config.Settings) (config.Settings, error),
+) (previous config.Settings, saved config.Settings, saveErr error, runtimeErr error) {
+	s.settingsLifecycleMu.Lock()
+	defer s.settingsLifecycleMu.Unlock()
+
+	previous, saved, saveErr = s.store.Update(mutate)
+	if saveErr != nil {
+		return previous, saved, saveErr, nil
+	}
+	// Persisted settings remain authoritative if the requesting browser goes
+	// away. Runtime transitions, especially transport teardown, must therefore
+	// not be canceled by request disconnect.
+	transitionCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	runtimeErr = s.applySettingsRuntimeTransition(transitionCtx, previous, saved)
+	return previous, saved, nil, runtimeErr
+}
+
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
 	s.applyVoiceSettingsTransition(next)
 	var runtimeErr error
@@ -523,6 +585,27 @@ func motionStateActive(state motion.ActiveMotionState) bool {
 	return state.Running || state.Starting || state.Paused || state.Completing
 }
 
+func (s *Server) stopMediaEngineIfOwned(
+	ctx context.Context,
+	videoID string,
+	reason string,
+) (motion.ActiveMotionState, bool, error) {
+	s.motion.lifecycleMu.Lock()
+	defer s.motion.lifecycleMu.Unlock()
+	engine := s.currentMotionEngine()
+	if engine == nil {
+		return motion.ActiveMotionState{}, false, nil
+	}
+	state := engine.Snapshot()
+	if state.Target.Source != motion.TargetSourceMedia ||
+		state.Target.MediaID != videoID ||
+		!motionStateActive(state) {
+		return state, false, nil
+	}
+	stopped, err := engine.Stop(ctx, reason)
+	return stopped, true, err
+}
+
 func (s *Server) stopAndClearActiveMediaEngine(ctx context.Context, reason string) error {
 	s.motion.lifecycleMu.Lock()
 	defer s.motion.lifecycleMu.Unlock()
@@ -562,6 +645,9 @@ func (s *Server) stopAndClearMotionEngineLocked(ctx context.Context, reason stri
 func (s *Server) Quiesce() {
 	s.quiescing.Store(true)
 	s.quiesceOnce.Do(func() {
+		if s.lifecycleCancel != nil {
+			s.lifecycleCancel()
+		}
 		finishInvalidation := s.invalidateWorkForStop("server_shutdown")
 		defer finishInvalidation()
 		if s.mediaSync != nil {

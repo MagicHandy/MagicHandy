@@ -76,6 +76,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify committed bundle is current
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all -- dist)" ]; then
+            echo "web/dist differs from a clean production build:"
+            git status --short --untracked-files=all -- dist
+            exit 1
+          fi
+
   installer:
     name: Installer
     runs-on: windows-latest

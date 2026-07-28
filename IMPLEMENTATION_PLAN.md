@@ -18,7 +18,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-26. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-27. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -95,7 +95,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
-| Localization | Five-locale browser UI, installer/update/recovery flow, and hybrid built-in chat prompts | **Complete; release language review remains part of final parity** | current PR |
+| Localization | Five-locale browser UI, installer/update/recovery flow, and hybrid built-in chat prompts | **Complete; release language review remains part of final parity** | #137, #138 |
 | Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; interactive managed llama.cpp + Ollama model matrix passed; long-session, cadence, and richer-arrangement acceptance open** | #101, #106 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |

@@ -960,6 +960,14 @@ distinct successful active and repeated-idle Stop commands plus a recorded
 close-time Stop. Browser-backend loss and current Cloud/Browser hardware retry
 evidence remain open, so the risk stays Critical.
 
+Implementation status (2026-07-27): all public owner Stop routes now enter one
+global coordinator that advances the Stop epoch, invalidates media/chat/voice
+work without waiting behind ordinary media lifecycle work, stops modes, and
+then stops the engine or selected owner. Disconnect and owner-selection paths
+use the same admission closure before owner-specific teardown. Automated race,
+stale-media, canceled-dispatch, and shutdown-stream regressions cover the new
+coordination; hardware retry evidence remains open.
+
 Mitigation:
 
 - retain regression coverage that every Stop request attempts the selected

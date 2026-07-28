@@ -68,10 +68,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if handled, err := configureLanguagesAndExit(store, *setUILocale, *setChatLocale, stdout); handled {
+	settings, loadStatus := store.Snapshot()
+	if handled, err := configureLanguagesAndExit(store, loadStatus, *setUILocale, *setChatLocale, stdout); handled {
 		return err
 	}
-	settings, loadStatus := store.Snapshot()
 	if loadStatus.Recovered {
 		logger.Warn(
 			"settings or datastore recovered",
@@ -154,11 +154,11 @@ func newHTTPServer(address string, handler http.Handler) *http.Server {
 	}
 }
 
-func configureLanguagesAndExit(store *config.Store, uiLocale, chatLocale string, stdout io.Writer) (bool, error) {
+func configureLanguagesAndExit(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string, stdout io.Writer) (bool, error) {
 	if uiLocale == "" && chatLocale == "" {
 		return false, nil
 	}
-	configureErr := configureLanguages(store, uiLocale, chatLocale)
+	configureErr := configureLanguages(store, loadStatus, uiLocale, chatLocale)
 	closeErr := store.Close()
 	if configureErr != nil {
 		return true, configureErr
@@ -170,7 +170,7 @@ func configureLanguagesAndExit(store *config.Store, uiLocale, chatLocale string,
 	return true, err
 }
 
-func configureLanguages(store *config.Store, uiLocale, chatLocale string) error {
+func configureLanguages(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string) error {
 	if uiLocale == "" || chatLocale == "" {
 		return errors.New("set-ui-locale and set-chat-locale must be provided together")
 	}
@@ -181,10 +181,14 @@ func configureLanguages(store *config.Store, uiLocale, chatLocale string) error 
 	if !ok {
 		return fmt.Errorf("unsupported chat locale %q", chatLocale)
 	}
-	settings, _ := store.Snapshot()
-	settings.UI.Locale = uiLocale
-	settings.LLM.PromptSet = promptSet
-	_, err := store.Save(settings)
+	if loadStatus.Recovered && loadStatus.UsingDefaults {
+		return errors.New("language settings cannot be changed while recovered defaults are active; review and save recovered settings in the app first")
+	}
+	_, _, err := store.Update(func(settings config.Settings) (config.Settings, error) {
+		settings.UI.Locale = uiLocale
+		settings.LLM.PromptSet = promptSet
+		return settings, nil
+	})
 	if err != nil {
 		return fmt.Errorf("save language settings: %w", err)
 	}

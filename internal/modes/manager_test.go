@@ -346,6 +346,40 @@ func TestChatKeepaliveRestartsOnlyAfterRecovery(t *testing.T) {
 	}
 }
 
+func TestChatKeepaliveDoesNotReplayCompletedFiniteProgram(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+
+	if _, err := manager.Start(context.Background(), ModeChat); err != nil {
+		t.Fatalf("Start chat: %v", err)
+	}
+	program := &motion.ProgramDefinition{
+		ID:             "one-shot",
+		Name:           "One shot",
+		DurationMillis: 500,
+		Points: []motion.CurvePoint{
+			{TimeMillis: 0, PositionPercent: 20},
+			{TimeMillis: 500, PositionPercent: 80},
+		},
+	}
+	handoffGeneration := manager.PrepareChatTarget()
+	if !manager.NotifyChatTarget(handoffGeneration, motion.MotionTarget{
+		Source: "chat", ProgramID: program.ID, Program: program, SpeedPercent: 30,
+	}) {
+		t.Fatal("finite target handoff was unexpectedly stale")
+	}
+
+	engine.setState(false, false) // normal finite-program completion
+	time.Sleep(30 * time.Millisecond)
+	if starts, _ := engine.counts(); starts != 0 {
+		t.Fatalf("keepalive replayed a completed finite target: %d starts", starts)
+	}
+	if status := manager.Status(); status.WaitingForChat {
+		t.Fatalf("completed target was discarded from chat status: %+v", status)
+	}
+}
+
 func TestFreshChatModeDoesNotReuseStoppedSessionTarget(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}

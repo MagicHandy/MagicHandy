@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 // Floating playback panel for the video currently open in the player. It
 // overlays the workspace rather than reflowing it, because its whole purpose is
 // to be adjusted while watching: calibration you cannot see the effect of is
@@ -245,11 +245,11 @@ export function PlaybackPanel({
             {filtered && !hasMeasuredEffect && t("Filters on; effect is measured when motion re-arms.")}
             {filtered && hasMeasuredEffect && (actionsRemoved > 0 && peakReductionPercent > 0
               ? t("{count} actions removed · peaks up to {percent}% lower", {
-                count: actionsRemoved.toLocaleString(),
+                count: formatNumber(actionsRemoved),
                 percent: peakReductionPercent,
               })
               : actionsRemoved > 0
-                ? t("{count} actions removed", { count: actionsRemoved.toLocaleString() })
+                ? t("{count} actions removed", { count: formatNumber(actionsRemoved) })
                 : t("Peaks up to {percent}% lower", { percent: peakReductionPercent }))}
           </p>
           <button type="button" className="btn btn-secondary compact-command" disabled={locked} onClick={reset}>{t("Reset")}</button>
