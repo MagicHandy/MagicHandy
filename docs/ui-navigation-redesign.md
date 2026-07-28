@@ -79,11 +79,11 @@ scroll only if the link list overflows (Stop stays pinned regardless).
 
 ### Identity (top)
 
-A compact profile lockup: a modest 34px `--radius-sm` avatar with the restrained
-azure-to-steel brand gradient, `MagicHandy`, and `local / {dispatch owner}` from
-backend state. The lockup is a link to **Settings** (`#/settings`). This is the
-"click your profile to configure" affordance from the Python app, now a page
-rather than a window.
+A compact product lockup: a modest 36px `--radius-sm` azure monogram,
+`MagicHandy`, and `local / {dispatch owner}` from backend state. It is static
+identity rather than a second Settings link. Spacing separates it from the page
+links without an underline or divider; **Settings** remains an explicit,
+single destination in the navigation list.
 
 ### Page links (middle)
 

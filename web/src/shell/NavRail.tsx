@@ -1,5 +1,5 @@
 import { t, translateKnown } from "../i18n";
-// Permanent left navigation rail: profile lockup, page links, and the pinned
+// Permanent left navigation rail: product identity, page links, and the pinned
 // Stop footer. The rail is present on every route (docs/ui-navigation-redesign.md).
 import { useAppState, useHashRoute } from "../state/app-state";
 import { ChatIcon, LibraryIcon, ModesIcon, SettingsIcon, VideoIcon } from "./icons";
@@ -30,14 +30,13 @@ export function NavRail() {
 
   return (
     <nav className="nav-rail" aria-label={t("Primary navigation")}>
-      <a className="nav-profile" href="#/settings">
-        <span className="nav-avatar" aria-hidden="true">M</span>
-        <span className="nav-identity">
-          <span className="name">{t("MagicHandy")}</span>
-          <span className="sub">{t("local / {owner}", { owner: translateKnown(ownerLabel) })}</span>
+      <div className="nav-brand">
+        <span className="nav-brand-mark" aria-hidden="true">M</span>
+        <span className="nav-brand-copy">
+          <span className="nav-brand-name">{t("MagicHandy")}</span>
+          <span className="nav-brand-context">{t("local / {owner}", { owner: translateKnown(ownerLabel) })}</span>
         </span>
-      </a>
-      <div className="nav-divider" aria-hidden="true" />
+      </div>
       <div className="nav-links">
         {LINKS.map((l) => (
           <a key={l.base} className="nav-link" href={l.href} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
