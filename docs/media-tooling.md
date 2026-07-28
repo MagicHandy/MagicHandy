@@ -179,24 +179,27 @@ would want it.
 Explicit, per-file, never automatic, and never in the playback path. The
 no-real-time-transcoding wall stands: this converts a file once, ahead of time.
 
-### The compatibility target is H.264, and this matters
+### Codec is the user's choice, with the tradeoff stated
 
-The stated goal is to make browser-incompatible files playable. **Encoding to
-H.265 can defeat that goal.** Browser HEVC support is conditional on the
-operating system, the browser, and often hardware decode support; it is not
-something the app can rely on. H.264 in MP4, by contrast, plays essentially
-everywhere.
+Both codecs are offered and neither is decided for the user. H.264 is the
+default because it is the one that always plays; H.265 is there because halving
+the file size is a real reason to want it.
 
-So the two things asked for are offered as two different jobs, labeled as such:
-
-| Preset | Codec | Purpose |
+| Setting | Size | Plays here |
 | --- | --- | --- |
-| **Make it playable** (default) | H.264 + AAC in MP4 | Guaranteed to play in the app |
-| **Archive smaller** | H.265 + AAC in MP4 | Roughly half the size; **may not play here** |
+| **H.264** (default) | Baseline | Yes, everywhere |
+| **H.265** | Roughly half | Depends on your OS, browser, and hardware decode |
 
-Choosing H.265 must warn that the result may not be playable in this app, and
-the conversion should verify afterward rather than assume — the honest check is
-whether the browser can actually decode the output.
+The note in Settings has to say that plainly, because the failure is silent and
+specific: an H.265 file that plays fine in VLC can still refuse to play in this
+app, on this machine, for reasons that have nothing to do with the file. The
+conversion therefore **verifies playability afterward rather than assuming it**
+and reports the result — that check is cheap, and it is the difference between a
+setting and a trap.
+
+Whichever codec is selected applies to every conversion until it is changed.
+There is no per-file override: the point of a default is that most people set it
+once.
 
 ### Remux before re-encode
 
@@ -220,36 +223,111 @@ this feature.
 
 Code-owned enums, not free text:
 
-- **CRF** — the quality/size dial. Lower is better and larger. Sensible exposed
-  range is roughly 18–28 with a stated default; the UI should say what the
-  number means ("lower is better quality and a bigger file") rather than
-  assuming familiarity.
+- **CRF** — the quality/size dial. Lower is better and larger. Exposed over
+  roughly 18–30, with the UI saying what the number means ("lower is better
+  quality and a bigger file") rather than assuming familiarity.
+
+  **The default has to differ per codec.** The two CRF scales are not the same:
+  x265 needs a higher number for comparable perceived quality, so carrying one
+  value across a codec change would silently alter quality in whichever
+  direction the user did not ask for. Separate defaults — around 23 for x264 and
+  around 28 for x265 — each remembered per codec.
 - **Preset** — the speed/efficiency dial (`ultrafast` … `veryslow`). It trades
   encoding time for file size at the same quality, and does **not** trade
   quality. Worth saying, because it is the most commonly misread encoder knob.
 - **AAC bitrate** — 128 / 192 / 256 kbps, plus **copy when the source audio is
   already AAC**, which is both faster and lossless.
 
-### Output, and the constraint no general tool has
+### The settings this adds
 
-Paired funscripts match by **exact basename in the same directory**. Convert
-`Foo.mkv` and the existing `Foo.funscript` pairs with the result only if the
-output is `Foo.mp4` in that same folder.
+All under `media`, all with a working default, none required to use the app:
 
-That dictates the default: **beside the source, same basename, new extension**,
-with a name collision refused rather than resolved silently. Writing output to
-the data directory or a chosen folder must warn that the pairing will not follow
-— which is a real cost, not a preference, because the pairing is the entire
-point of the library.
+| Field | Default | Notes |
+| --- | --- | --- |
+| `ffmpeg_path` | empty | Empty means absent; features that need it say so |
+| `conversion_codec` | `h264` | `h264` or `h265`, with the tradeoff noted beside it |
+| `conversion_crf_h264` | 23 | Separate per codec, because the scales differ |
+| `conversion_crf_h265` | 28 | |
+| `conversion_preset` | `medium` | `ultrafast` … `veryslow` |
+| `conversion_audio_kbps` | 192 | 128 / 192 / 256, or copy when already AAC |
+| `generate_thumbnails_on_scan` | false | Rides an explicit scan only |
+| `show_superseded_originals` | false | Reveals files hidden by the suffix rule |
 
-Other rules:
+### Output naming, and the marker that ties it together
+
+Output lands **beside the source** with a reserved suffix:
+
+```
+Holiday.mkv   ->   Holiday_MHConverted.mp4
+```
+
+The suffix does three jobs at once, which is why it earns a reserved token
+rather than a plain rename:
+
+1. **It is self-describing.** A file in someone's library a year later says
+   where it came from without a database to consult.
+2. **It cannot collide.** Writing `Holiday.mp4` beside `Holiday.mkv` fails when
+   the user already has a `Holiday.mp4`; the suffixed name has no such problem,
+   so the "refuse on collision" case mostly disappears.
+3. **It is the signal to hide the original**, below.
+
+#### Funscript pairing has to be taught about it
+
+This is the part that breaks if it is not handled. Scripts pair by exact
+basename, so `Holiday_MHConverted.mp4` would look for
+`Holiday_MHConverted.funscript`, find nothing, and the conversion would silently
+cost the user their script pairing — which is the entire point of the library.
+
+The pair resolver gains one fallback: **strip the reserved suffix and try
+again.** `Holiday_MHConverted.mp4` matches `Holiday_MHConverted.funscript` when
+that exists, and otherwise `Holiday.funscript`. That is a small bounded change
+to a rule the app fully owns, and it means nothing is copied, renamed, or
+duplicated inside the user's folders.
+
+#### Hiding the superseded original
+
+After a conversion the library should show one entry, not two. The rule is
+**derived at scan time, never stored**:
+
+> When `NAME_MHConverted.<ext>` exists in a directory, any other file in that
+> same directory whose basename is exactly `NAME` is indexed but hidden.
+
+Derived rather than a database flag, because the filesystem is the source of
+truth and people move and delete files outside the app. Delete the converted
+file and the original reappears on the next scan, with no stale flag to clean
+up. Hidden rather than removed, so the row and its per-video sync offset survive
+and a "show superseded originals" toggle costs nothing.
+
+The details that decide whether this is safe:
+
+- **Matching is case-insensitive on Windows**, consistent with how library paths
+  are already deduplicated there.
+- **A file already carrying the suffix is never converted again**, so
+  `NAME_MHConverted_MHConverted.mp4` cannot exist. The suffix is stripped once,
+  not repeatedly.
+- **The token is fixed, not configurable.** A configurable marker would orphan
+  every previously converted file the moment someone changed it.
+- **Accepted risk:** a user who independently owns both
+  `Holiday_MHConverted.mp4` and `Holiday.mp4` would see the latter hidden. The
+  token is distinctive enough that this is vanishingly unlikely, hiding is
+  reversible, and nothing is deleted — so the honest response is to accept it
+  and keep the toggle discoverable, not to add heuristics that would be wrong in
+  subtler ways.
+
+#### Carrying the calibration across
+
+The converted file is a new catalog row, so its per-video sync offset would
+start at zero. It should **inherit the source's offset** instead: conversion
+moves no timestamp and the paired script is the same file, so the script's bias
+is identical. Making someone re-calibrate a file they just converted is a small,
+entirely avoidable annoyance.
+
+#### Other rules
 
 - **Never overwrite or delete the source.** A conversion that loses the original
   is not recoverable.
 - Check free space against an estimate before starting, and fail early rather
   than at 90%.
-- On success the new file is scanned in normally. An optional "hide the
-  original" marks the source row excluded rather than deleting anything.
 - One conversion at a time, cancellable, with progress — a two-hour job with no
   cancel button is a bug.
 
@@ -292,3 +370,8 @@ largest and should be last.
 - Should a failed HEVC playability check offer to redo the conversion as H.264
   automatically, or just report it? Automatic sounds helpful and quietly spends
   another hour of someone's CPU.
+- Should the suffix rule hide an original whose extension is already
+  playable? Converting `Holiday.mp4` to H.265 for size produces
+  `Holiday_MHConverted.mp4`, and the rule hides the perfectly good original
+  — correct as written, but worth confirming, since that case is archival
+  rather than repair.
