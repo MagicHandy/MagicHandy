@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import { api, clientId } from "../api/client";
 import type { NeuTTSReference } from "../api/types";
@@ -144,7 +144,7 @@ export function NeuTTSReferenceDialog({ initialWAV, initialTranscript, onApply, 
             <button type="button" className="btn btn-secondary" disabled={generating || !wavPath.trim() || !transcript.trim()} onClick={() => void generate()}>
               {generating ? t("Generating...") : t("Generate reference codes")}
             </button>
-            {generated && <span className="reference-token-count" role="status">{t("{count} codes generated", { count: generated.token_count.toLocaleString() })}</span>}
+            {generated && <span className="reference-token-count" role="status">{t("{count} codes generated", { count: formatNumber(generated.token_count) })}</span>}
           </div>
           {error && <p className="form-status voice-worker-error" role="alert">{error}</p>}
 

@@ -150,7 +150,8 @@ try {
     Assert-True -Condition ($installCompletion -match 'Managed NeuTTS can create reference codes\s+locally from a WAV and exact transcript') -Message 'install completion should describe the local NeuTTS reference workflow'
     Assert-True -Condition ($installCompletion -match '\|\|=+\[\]') -Message 'completion should include the Handy motion-rail text art'
     $updateCompletion = Write-MagicHandyCompletionArt -Operation Update 6>&1 | Out-String
-    Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices and language settings were applied') -Message 'update completion should confirm preserved choices and languages'
+    Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices were applied') -Message 'update completion should confirm preserved installation choices'
+    Assert-True -Condition ($updateCompletion -match 'current app language and prompt settings were preserved\s+unless explicitly reconfigured') -Message 'update completion should describe app language authority'
     $planCompletion = Write-MagicHandyCompletionArt -Operation UpdatePlan 6>&1 | Out-String
     Assert-True -Condition ($planCompletion -match 'NO CHANGES MADE') -Message 'plan completion should not claim that a build ran'
 
@@ -245,6 +246,7 @@ try {
     $localizedOutput = & (Join-Path $Repo 'update.ps1') -Yes -NoPull -NoLaunch -PlanOnly -StatePath $localizedStatePath 6>&1 | Out-String
     Assert-True -Condition ($localizedOutput.Contains([string]$catalogs.ja.current_heading)) -Message 'update plan should restore Japanese before displaying choices'
     Assert-True -Condition ($localizedOutput.Contains((Get-MagicHandyLanguageName -Locale 'es'))) -Message 'update plan should display the saved Spanish chat language'
+    Assert-True -Condition ($localizedOutput.Contains([string]$catalogs.ja.plan_languages_preserved)) -Message 'ordinary update should preserve backend language and prompt settings'
     Assert-Equal -Expected $localizedBefore -Actual ([System.IO.File]::ReadAllText($localizedStatePath)) -Message 'plan-only localized update must not rewrite installer state'
     Set-MagicHandyInstallerLocale -Locale 'en'
     Write-Host 'Checking PATH refresh preserves session-only tools...'
@@ -601,6 +603,11 @@ version = "0.1.0"
     } finally {
         $env:CGO_ENABLED = $previousCGO
     }
+    Set-MagicHandyAppLanguages `
+        -RepositoryPath $runtimeRepo `
+        -DataDir ($runtimeData + '\') `
+        -UILocale 'JA' `
+        -ChatLocale 'ES'
     $runtimeArguments = & $supportModule {
         param($Address, $DataDir)
         New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir
@@ -620,6 +627,9 @@ version = "0.1.0"
         } while ([DateTime]::UtcNow -lt $readyDeadline)
         Assert-True -Condition $ready -Message 'test app should become ready'
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $runtimeData 'magichandy.db')) -Message 'quoted startup should keep the database under the intended spaced data path'
+        $runtimeSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$runtimePort/api/settings" -TimeoutSec 5
+        Assert-Equal -Expected 'ja' -Actual ([string]$runtimeSettings.settings.ui.locale) -Message 'language helper should canonicalize UI locale'
+        Assert-Equal -Expected 'magichandy_motion_v1_es' -Actual ([string]$runtimeSettings.settings.llm.prompt_set) -Message 'language helper should canonicalize chat locale'
 
         $foreignRepo = Join-Path $tempRoot 'foreign-app-repo'
         New-Item -ItemType Directory -Force -Path $foreignRepo | Out-Null

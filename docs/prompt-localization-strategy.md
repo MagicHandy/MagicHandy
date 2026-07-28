@@ -11,8 +11,10 @@ Use hybrid localized prompts for local models:
   set.
 - Keep JSON keys, enum values, pattern IDs, and the code-owned machine contract
   in English.
-- Preserve user-authored memories, persona text, custom anatomy, and canonical
-  recent assistant replies verbatim inside bounded context.
+- Do not translate user-authored memories, persona text, custom anatomy, or
+  canonical recent assistant replies. Persona, anatomy, and recent replies are
+  whitespace-normalized, length-bounded, and JSON-quoted; saved memories remain
+  bounded list entries.
 - Keep the final output guard last, after every localized or dynamic block.
 
 Do not translate protocol tokens such as `reply`, `motion`, `action`,
@@ -48,11 +50,11 @@ placing one stable English wire contract at the end.
 
 <code-owned English JSON contract>
 <code-owned pattern and motion capabilities>
-<localized authoritative motion/conversation framing, when present>
+<code-owned English authoritative motion framing, when present>
 <localized profile, anatomy, mood, and recent-reply framing>
-  <user/model-authored values quoted verbatim>
+  <user/model-authored values normalized, bounded, and JSON-quoted>
 <localized saved-memory header>
-  <user-authored memories verbatim>
+  <bounded user-authored memory list entries>
 <localized final voice check>
 <localized reply-language reminder for a built-in prompt set>
 <code-owned final JSON output guard; always last>
@@ -79,13 +81,17 @@ selector and source installer map native language choices to these IDs through
 
 ## Dynamic Context
 
-Code-owned framing is localized, but values are not:
+Reply-facing framing is localized; authoritative motion framing and the
+machine contract remain English. Dynamic values are not translated:
 
-- Persona descriptions and custom anatomy are quoted as user-authored text.
-- Saved memories are included verbatim under a localized header.
-- Recent assistant replies are canonical database text and remain verbatim.
-- Mood and motion enums stay exact English protocol values even when surrounding
-  prose is localized.
+- Persona descriptions and custom anatomy are whitespace-normalized,
+  length-bounded, and JSON-quoted as user-authored text.
+- Saved memories are trimmed list entries under a localized header. They are
+  bounded by storage limits but are not individually quoted.
+- Recent assistant replies come from the canonical database log, then are
+  whitespace-normalized, length-bounded, and JSON-quoted.
+- Mood and motion enums stay exact English protocol values. Motion-state
+  instructions also remain English.
 - Pattern IDs remain stable. Display names and descriptions may be localized in
   the future without changing the identifier sent in JSON.
 
@@ -113,7 +119,7 @@ asserts:
 
 - localized behavior, voice, context, memory, anatomy, and final reminders are
   present;
-- user-authored values remain byte-for-byte present;
+- user-authored values remain untranslated after their documented bounds;
 - JSON keys and action/mood enums remain English;
 - the code-owned output guard is the final prompt block;
 - repair prompts preserve target language;
@@ -130,6 +136,11 @@ Prerequisite: an OpenAI-compatible llama.cpp server at
 `http://127.0.0.1:8080`. The test discovers the loaded model through
 `/v1/models`. It creates no motion engine or transport and therefore cannot send
 a device command.
+
+The live test exercises prompt composition, provider output, strict parsing,
+and repair. It does not call `Service.Complete`, pin a model artifact hash, or
+cover current-turn authorization and localized speed-band enforcement; those
+boundaries remain deterministic unit/integration tests.
 
 ## Live Gemma Evidence
 

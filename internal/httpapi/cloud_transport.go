@@ -33,12 +33,6 @@ type cloudRuntime struct {
 	diagnostics transport.TransportDiagnostics
 }
 
-type cloudCommandResponse struct {
-	Error       string                         `json:"error,omitempty"`
-	Result      transport.CommandResult        `json:"result"`
-	Diagnostics transport.TransportDiagnostics `json:"diagnostics"`
-}
-
 type cloudStateResponse struct {
 	Error       string                         `json:"error,omitempty"`
 	State       transport.HSPStateSnapshot     `json:"state"`
@@ -143,7 +137,7 @@ func (s *Server) handleCloudEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(r.Context())
+	ctx, cancel := s.requestLifecycleContext(r.Context())
 	defer cancel()
 	var writeErr error
 	setEventStreamHeaders(w)
@@ -173,14 +167,11 @@ func (s *Server) handleCloudStop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	cloud, err := s.newCloudTransportForControl()
-	if err != nil {
-		s.writeCloudSetupError(w, err)
-		return
+	reason := strings.TrimSpace(command.Reason)
+	if reason == "" {
+		reason = "manual_cloud_stop"
 	}
-
-	result, err := cloud.Stop(r.Context(), command)
-	s.writeCloudCommandResponse(w, string(transport.CommandKindStop), cloud, result, err)
+	s.handleEmergencyStop(w, r, reason)
 }
 
 func (s *Server) handleCloudDisconnect(w http.ResponseWriter, r *http.Request) {
@@ -200,13 +191,8 @@ func (s *Server) handleCloudDisconnect(w http.ResponseWriter, r *http.Request) {
 	// must still succeed when credentials have become invalid; only the physical
 	// Stop confirmation may be unavailable in that case.
 	s.setCloudControlReleased(true)
-	finishInvalidation := s.invalidateWorkForStop("cloud_disconnected")
-	defer finishInvalidation()
-	finishModeStop := func() {}
-	if s.modes != nil {
-		finishModeStop = s.modes.BeginUserStop()
-	}
-	defer finishModeStop()
+	finishStop := s.beginGlobalStop("cloud_disconnected")
+	defer finishStop()
 
 	hadEngine := s.currentMotionEngine() != nil
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
@@ -280,27 +266,6 @@ func (s *Server) newCloudTransportForControl() (*transport.CloudRESTTransport, e
 		transport.CloudEndpointConfig{BaseURL: s.cloud.baseURL},
 		s.cloud.client,
 	)
-}
-
-func (s *Server) writeCloudCommandResponse(
-	w http.ResponseWriter,
-	reason string,
-	cloud *transport.CloudRESTTransport,
-	result transport.CommandResult,
-	err error,
-) {
-	diagnostics := s.saveCloudDiagnostics(cloud.Diagnostics())
-	s.traceCloudResult(reason, diagnostics, result)
-	payload := cloudCommandResponse{
-		Result:      transport.SafeCommandResult(result),
-		Diagnostics: diagnostics,
-	}
-	status := http.StatusOK
-	if err != nil {
-		payload.Error = safeCloudErrorMessage(err)
-		status = cloudCommandStatus(err, result)
-	}
-	writeJSON(w, status, payload)
 }
 
 func (s *Server) writeCloudSetupError(w http.ResponseWriter, err error) {

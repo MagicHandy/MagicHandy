@@ -46,7 +46,7 @@ func (e *Engine) dispatchThrough(
 		PointsAdd: &appendCommand,
 	}, result, err)
 	e.rememberResult(result, err)
-	if err == nil || ctx.Err() != nil || errors.Is(err, errRunInvalidated) || e.validateRun(runEpoch) != nil {
+	if err == nil || errors.Is(err, errRunInvalidated) || e.validateRun(runEpoch) != nil {
 		e.commandMu.Unlock()
 		return err
 	}
@@ -155,7 +155,7 @@ func (e *Engine) setStrokeWindowCommand(
 		StrokeWindow: &strokeCommand,
 	}, result, err)
 	e.rememberResult(result, err)
-	if err == nil || !recoverFailure || ctx.Err() != nil || e.validateRun(runEpoch) != nil {
+	if err == nil || !recoverFailure || e.validateRun(runEpoch) != nil {
 		e.commandMu.Unlock()
 		return err
 	}

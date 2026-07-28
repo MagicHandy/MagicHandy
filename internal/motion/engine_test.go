@@ -812,6 +812,85 @@ func TestEngineStopsAfterUncertainAppendFailure(t *testing.T) {
 	}
 }
 
+func TestCanceledRetargetRecoversAfterAcceptedAppend(t *testing.T) {
+	commandTransport := newCancelAfterAcceptanceTransport()
+	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(128), time.Hour)
+	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	commandTransport.blockNextAdd = true
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := engine.ApplyTarget(ctx, MotionTarget{
+			Label:        "canceled target",
+			Source:       "test",
+			PatternID:    PatternPulse,
+			SpeedPercent: 60,
+		}, "canceled_retarget")
+		done <- err
+	}()
+	select {
+	case <-commandTransport.addStarted:
+	case <-time.After(time.Second):
+		t.Fatal("retarget append did not reach the transport")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("canceled retarget unexpectedly succeeded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled retarget did not recover")
+	}
+	if state := engine.Snapshot(); state.Running {
+		t.Fatalf("state = %+v, want recovery stopped", state)
+	}
+	commands := commandTransport.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want Stop after canceled accepted append", commands)
+	}
+}
+
+func TestCanceledSettingsRefreshRecoversAfterAcceptedStrokeWindow(t *testing.T) {
+	commandTransport := newCancelAfterAcceptanceTransport()
+	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(128), time.Hour)
+	settings := config.DefaultSettings().Motion
+	if _, err := engine.Start(context.Background(), testTarget(), settings); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	commandTransport.blockNextStroke = true
+	settings.StrokeMinPercent = 10
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := engine.RefreshSettings(ctx, settings, "canceled_settings")
+		done <- err
+	}()
+	select {
+	case <-commandTransport.strokeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("settings stroke-window command did not reach the transport")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("canceled settings refresh unexpectedly succeeded")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled settings refresh did not recover")
+	}
+	if state := engine.Snapshot(); state.Running {
+		t.Fatalf("state = %+v, want recovery stopped", state)
+	}
+	commands := commandTransport.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("commands = %+v, want Stop after canceled accepted stroke-window update", commands)
+	}
+}
+
 func TestEngineStopsAfterUncertainStartupPlayFailure(t *testing.T) {
 	commandTransport := &acceptedErrorTransport{Fake: transport.NewFake(), failPlay: true}
 	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(128), time.Hour)
@@ -961,6 +1040,63 @@ type acceptedErrorTransport struct {
 	*transport.Fake
 	failNextAdd bool
 	failPlay    bool
+}
+
+type cancelAfterAcceptanceTransport struct {
+	*transport.Fake
+	mu              sync.Mutex
+	blockNextAdd    bool
+	blockNextStroke bool
+	addStarted      chan struct{}
+	strokeStarted   chan struct{}
+}
+
+func newCancelAfterAcceptanceTransport() *cancelAfterAcceptanceTransport {
+	return &cancelAfterAcceptanceTransport{
+		Fake:          transport.NewFake(),
+		addStarted:    make(chan struct{}),
+		strokeStarted: make(chan struct{}),
+	}
+}
+
+func (t *cancelAfterAcceptanceTransport) AppendPoints(
+	ctx context.Context,
+	command transport.AppendPointsCommand,
+) (transport.CommandResult, error) {
+	t.mu.Lock()
+	block := t.blockNextAdd
+	t.blockNextAdd = false
+	t.mu.Unlock()
+	if !block {
+		return t.Fake.AppendPoints(ctx, command)
+	}
+	result, err := t.Fake.AppendPoints(context.Background(), command)
+	if err != nil {
+		return result, err
+	}
+	close(t.addStarted)
+	<-ctx.Done()
+	return result, ctx.Err()
+}
+
+func (t *cancelAfterAcceptanceTransport) SetStrokeWindow(
+	ctx context.Context,
+	command transport.StrokeWindowCommand,
+) (transport.CommandResult, error) {
+	t.mu.Lock()
+	block := t.blockNextStroke
+	t.blockNextStroke = false
+	t.mu.Unlock()
+	if !block {
+		return t.Fake.SetStrokeWindow(ctx, command)
+	}
+	result, err := t.Fake.SetStrokeWindow(context.Background(), command)
+	if err != nil {
+		return result, err
+	}
+	close(t.strokeStarted)
+	<-ctx.Done()
+	return result, ctx.Err()
 }
 
 type misleadingDiagnosticsTransport struct {

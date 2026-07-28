@@ -45,6 +45,9 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
   const lastSeq = useRef(0);
   const seeded = useRef(false);
   const mounted = useRef(false);
+  const streamGeneration = useRef(0);
+  const activeStream = useRef<AbortController | null>(null);
+  const observedStopSequence = useRef(state?.stop_sequence);
   const historyLoad = useRef<Promise<void> | null>(null);
   const tailLoad = useRef<Promise<void> | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -90,7 +93,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
         if (!mounted.current || busyRef.current) return;
         const fresh = res.messages.filter((m) => m.seq > lastSeq.current);
         if (!fresh.length) {
-          setTailError(res.latest_seq > lastSeq.current ? "Conversation updates could not be synchronized; retrying." : "");
+          setTailError(res.latest_seq > lastSeq.current ? t("Conversation updates could not be synchronized; retrying.") : "");
           return;
         }
         setMessages((m) => [...m, ...fresh.map((x) => ({ id: `log-${x.seq}`, role: x.role, text: x.content, diagnostics: x.diagnostics }))]);
@@ -103,7 +106,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
         setTailError("");
         void api.advanceChatCursor(sessionId, res.latest_seq).catch(() => undefined);
       } catch (error) {
-        if (mounted.current) setTailError(`Conversation updates delayed: ${message(error)} Retrying.`);
+        if (mounted.current) setTailError(t("Conversation updates delayed: {reason} Retrying.", { reason: message(error) }));
       }
     })();
     tailLoad.current = request;
@@ -121,10 +124,22 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
     mounted.current = true;
     void loadHistory();
     return () => {
+      streamGeneration.current += 1;
       mounted.current = false;
+      activeStream.current?.abort();
+      activeStream.current = null;
+      busyRef.current = false;
       onBusyChange?.(false);
     };
   }, [loadHistory, onBusyChange]);
+
+  useEffect(() => {
+    const previous = observedStopSequence.current;
+    const current = state?.stop_sequence;
+    observedStopSequence.current = current;
+    if (previous === undefined || current === undefined || previous === current) return;
+    activeStream.current?.abort();
+  }, [state?.stop_sequence]);
 
   const latestSeq = state?.chat?.active_session_id === sessionId ? state?.chat?.latest_seq ?? 0 : 0;
   const pollEpoch = state?.uptime_seconds ?? 0;
@@ -177,11 +192,15 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
     busyRef.current = true;
     setBusy(true);
     onBusyChange?.(true);
+    const controller = new AbortController();
+    const requestGeneration = ++streamGeneration.current;
+    activeStream.current = controller;
     let raw = "";
     let repairRaw = "";
     let mustRefreshStopState = false;
     try {
       await streamChat(sessionId, text, (ev) => {
+        if (!mounted.current || streamGeneration.current !== requestGeneration || controller.signal.aborted) return;
         if (ev.event === "status") {
           const status = ev.data as { state?: string; provider?: string; model?: string; prompt_set?: string; user_seq?: number; stop_sequence?: number };
           const userSeq = Number(status.user_seq ?? 0);
@@ -238,22 +257,34 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
         } else if (ev.event === "done" && ev.data.ok === false) {
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || t("Malformed model response."), warning: true } : x)));
         }
-      }, undefined, stopSequence);
-      if (lastSeq.current > 0) void api.advanceChatCursor(sessionId, lastSeq.current).catch(() => undefined);
+      }, controller.signal, stopSequence);
+      if (mounted.current && streamGeneration.current === requestGeneration && lastSeq.current > 0) {
+        void api.advanceChatCursor(sessionId, lastSeq.current).catch(() => undefined);
+      }
     } catch (e) {
+      if (controller.signal.aborted || !mounted.current || streamGeneration.current !== requestGeneration) return;
       const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");
       show(message, "error");
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
     } finally {
+      if (activeStream.current === controller) activeStream.current = null;
+      if (!mounted.current || streamGeneration.current !== requestGeneration) return;
       // A deterministic Chat Stop advances the backend invalidation sequence.
       // Keep composition locked until the authoritative snapshot catches up.
-      if (mustRefreshStopState) await refresh();
-      else void refresh();
+      if (!controller.signal.aborted) {
+        if (mustRefreshStopState) await refresh();
+        else void refresh();
+      }
+      if (!mounted.current || streamGeneration.current !== requestGeneration) return;
       busyRef.current = false;
       setBusy(false);
       onBusyChange?.(false);
-      setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, streaming: false } : x)));
-      onSessionChanged?.();
+      setMessages((m) => m.flatMap((x) => {
+        if (x.id !== assistantId) return [x];
+        if (controller.signal.aborted && !x.text) return [];
+        return [{ ...x, streaming: false }];
+      }));
+      if (!controller.signal.aborted) onSessionChanged?.();
     }
   }
 

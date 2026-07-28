@@ -24,13 +24,6 @@ type bluetoothRuntime struct {
 	diagnostics transport.TransportDiagnostics
 }
 
-type bluetoothCommandResponse struct {
-	Error       string                                   `json:"error,omitempty"`
-	Result      transport.CommandResult                  `json:"result"`
-	Diagnostics transport.TransportDiagnostics           `json:"diagnostics"`
-	Bridge      transport.BrowserBluetoothBridgeSnapshot `json:"bridge"`
-}
-
 type bluetoothStateResponse struct {
 	Error       string                                   `json:"error,omitempty"`
 	State       transport.HSPStateSnapshot               `json:"state"`
@@ -50,6 +43,7 @@ type bluetoothStatusResponse struct {
 	DispatchOwner string                                   `json:"dispatch_owner"`
 	Bluetooth     transport.BrowserBluetoothBridgeSnapshot `json:"bluetooth"`
 	Diagnostics   transport.TransportDiagnostics           `json:"diagnostics"`
+	Warning       string                                   `json:"warning,omitempty"`
 }
 
 type bluetoothCommandsResponse struct {
@@ -126,8 +120,19 @@ func (s *Server) handleBluetoothDisconnect(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	finishStop := s.beginGlobalStop("bluetooth_disconnected")
+	defer finishStop()
+
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	stopErr := s.stopAndClearMotionEngine(stopCtx, "bluetooth_disconnected")
+	cancel()
 	s.bluetooth.bridge.DisconnectClient(request.ClientID, request.Message)
-	writeJSON(w, http.StatusOK, s.bluetoothStatus())
+	response := s.bluetoothStatus()
+	if stopErr != nil {
+		response.Warning = "Bluetooth disconnected, but the active motion Stop could not be confirmed: " +
+			s.safeMotionErrorMessage(stopErr)
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleBluetoothCommands(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +150,9 @@ func (s *Server) handleBluetoothCommands(w http.ResponseWriter, r *http.Request)
 		}
 		wait = time.Duration(seconds * float64(time.Second))
 	}
-	commands, err := s.bluetooth.bridge.NextCommands(r.Context(), clientID, wait)
+	ctx, cancel := s.requestLifecycleContext(r.Context())
+	defer cancel()
+	commands, err := s.bluetooth.bridge.NextCommands(ctx, clientID, wait)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -240,11 +247,13 @@ func (s *Server) handleBluetoothEvents(w http.ResponseWriter, r *http.Request) {
 	_ = writeBluetoothSnapshotEvent(w, s.bluetooth.bridge.Snapshot())
 	flusher.Flush()
 
+	ctx, cancel := s.requestLifecycleContext(r.Context())
+	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			if err := writeBluetoothSnapshotEvent(w, s.bluetooth.bridge.Snapshot()); err != nil {
@@ -261,14 +270,11 @@ func (s *Server) handleBluetoothStop(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	bluetooth, err := s.newBluetoothTransport()
-	if err != nil {
-		s.writeBluetoothSetupError(w, err)
-		return
+	reason := strings.TrimSpace(command.Reason)
+	if reason == "" {
+		reason = "manual_bluetooth_stop"
 	}
-
-	result, err := bluetooth.Stop(r.Context(), command)
-	s.writeBluetoothCommandResponse(w, string(transport.CommandKindStop), bluetooth, result, err)
+	s.handleEmergencyStop(w, r, reason)
 }
 
 func (s *Server) newBluetoothTransport() (*transport.BrowserBluetoothTransport, error) {
@@ -280,28 +286,6 @@ func (s *Server) newBluetoothTransport() (*transport.BrowserBluetoothTransport, 
 		s.bluetooth.bridge,
 		transport.BrowserBluetoothOptions{ReverseDirection: settings.Motion.ReverseDirection},
 	)
-}
-
-func (s *Server) writeBluetoothCommandResponse(
-	w http.ResponseWriter,
-	reason string,
-	bluetooth *transport.BrowserBluetoothTransport,
-	result transport.CommandResult,
-	err error,
-) {
-	diagnostics := s.saveBluetoothDiagnostics(bluetooth.Diagnostics())
-	s.traceBluetoothResult(reason, diagnostics, result)
-	payload := bluetoothCommandResponse{
-		Result:      transport.SafeCommandResult(result),
-		Diagnostics: diagnostics,
-		Bridge:      s.bluetooth.bridge.Snapshot(),
-	}
-	status := http.StatusOK
-	if err != nil {
-		payload.Error = safeBluetoothErrorMessage(err)
-		status = bluetoothCommandStatus(err, &result)
-	}
-	writeJSON(w, status, payload)
 }
 
 func (s *Server) writeBluetoothSetupError(w http.ResponseWriter, err error) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"sort"
 
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -45,6 +46,7 @@ type Funscript struct {
 	DurationMillis int64             `json:"duration_ms"`
 	ActionCount    int               `json:"action_count"`
 	Actions        []FunscriptAction `json:"actions"`
+	SourceIdentity string            `json:"-"`
 }
 
 type rawFunscript struct {
@@ -54,6 +56,22 @@ type rawFunscript struct {
 type rawFunscriptAction struct {
 	AtMillis *int64 `json:"at"`
 	Position *int   `json:"pos"`
+}
+
+// FunscriptSourceIdentity returns a private cache key for the current paired
+// file without parsing it. The path remains server-only and never enters API
+// payloads or diagnostics.
+func (c *Catalog) FunscriptSourceIdentity(ctx context.Context, id string) (string, error) {
+	file, _, err := c.OpenFunscript(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("%w: inspect paired file", ErrFunscriptUnavailable)
+	}
+	return funscriptSourceIdentity(file, info), nil
 }
 
 // LoadFunscript opens and parses the exact-basename pair for one video.
@@ -71,12 +89,20 @@ func (c *Catalog) LoadFunscript(ctx context.Context, id string) (Funscript, erro
 	if info.Size() > MaxMediaFunscriptBytes {
 		return Funscript{}, ErrFunscriptTooLarge
 	}
+	sourceIdentity := funscriptSourceIdentity(file, info)
 	data, err := io.ReadAll(io.LimitReader(file, MaxMediaFunscriptBytes+1))
 	if err != nil {
 		return Funscript{}, fmt.Errorf("%w: read paired file", ErrFunscriptUnavailable)
 	}
 	if int64(len(data)) > MaxMediaFunscriptBytes {
 		return Funscript{}, ErrFunscriptTooLarge
+	}
+	afterRead, err := file.Stat()
+	if err != nil {
+		return Funscript{}, fmt.Errorf("%w: re-inspect paired file", ErrFunscriptUnavailable)
+	}
+	if sourceIdentity != funscriptSourceIdentity(file, afterRead) {
+		return Funscript{}, fmt.Errorf("%w: paired file changed while it was being read", ErrFunscriptUnavailable)
 	}
 	actions, err := parseFunscriptActions(data)
 	if err != nil {
@@ -88,7 +114,12 @@ func (c *Catalog) LoadFunscript(ctx context.Context, id string) (Funscript, erro
 		DurationMillis: actions[len(actions)-1].AtMillis,
 		ActionCount:    len(actions),
 		Actions:        actions,
+		SourceIdentity: sourceIdentity,
 	}, nil
+}
+
+func funscriptSourceIdentity(file *os.File, info os.FileInfo) string {
+	return fmt.Sprintf("%s\x00%d\x00%d", file.Name(), info.Size(), info.ModTime().UTC().UnixNano())
 }
 
 func parseFunscriptActions(data []byte) ([]FunscriptAction, error) {

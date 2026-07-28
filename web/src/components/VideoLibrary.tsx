@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaScanState, MediaVideo } from "../api/types";
@@ -34,7 +34,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       }
     } catch (reason) {
       if (!signal?.aborted && mounted.current && generation === loadGeneration.current) {
-        setCatalogError(reason instanceof Error ? reason.message : "Video catalog could not be loaded.");
+        setCatalogError(reason instanceof Error ? reason.message : t("Video catalog could not be loaded."));
       }
     } finally {
       if (!signal?.aborted && mounted.current && generation === loadGeneration.current) setLoading(false);
@@ -52,7 +52,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       }
     }).catch((reason) => {
       if (mounted.current && !controller.signal.aborted) {
-        setScanError(reason instanceof Error ? reason.message : "Scan status could not be loaded.");
+        setScanError(reason instanceof Error ? reason.message : t("Scan status could not be loaded."));
       }
     });
     return () => {
@@ -79,7 +79,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
         else await load();
       } catch (reason) {
         if (stopped || !mounted.current) return;
-        setScanError(reason instanceof Error ? reason.message : "Scan status could not be loaded.");
+        setScanError(reason instanceof Error ? reason.message : t("Scan status could not be loaded."));
         schedule(1500);
       }
     };
@@ -114,7 +114,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       const response = await api.startMediaScan();
       if (mounted.current) setScan(response.scan);
     } catch (reason) {
-      if (mounted.current) setScanError(reason instanceof Error ? reason.message : "Video scan could not be started.");
+      if (mounted.current) setScanError(reason instanceof Error ? reason.message : t("Video scan could not be started."));
     } finally {
       if (mounted.current) setScanAction("");
     }
@@ -127,7 +127,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       const response = await api.cancelMediaScan();
       if (mounted.current) setScan(response.scan);
     } catch (reason) {
-      if (mounted.current) setScanError(reason instanceof Error ? reason.message : "Video scan could not be cancelled.");
+      if (mounted.current) setScanError(reason instanceof Error ? reason.message : t("Video scan could not be cancelled."));
     } finally {
       if (mounted.current) setScanAction("");
     }
@@ -177,7 +177,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
           )}
         </div>
       </div>
-      {scan?.running && <p className="form-status media-scan-status" role="status">{t("Scanning: {files} files / {videos} videos found", { files: scan.files_visited.toLocaleString(), videos: scan.videos_found.toLocaleString() })}</p>}
+      {scan?.running && <p className="form-status media-scan-status" role="status">{t("Scanning: {files} files / {videos} videos found", { files: formatNumber(scan.files_visited), videos: formatNumber(scan.videos_found) })}</p>}
       {loading && videos.length > 0 && <p className="form-status" role="status">{t("Refreshing catalog")}</p>}
       {scanError && <p className="form-status media-playback-error" role="alert">{t("Scan status: {message}", { message: scanError })}</p>}
       {!scan?.running && scan?.error && <p className="form-status media-playback-error" role="alert">{t("Scan failed: {message}", { message: scan.error })}</p>}

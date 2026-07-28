@@ -1,4 +1,4 @@
-import { t, translateKnown } from "../i18n";
+import { formatNumber, t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { MediaFunscript, MediaSyncEvent, MediaSyncStatus, MediaVideo } from "../api/types";
@@ -52,6 +52,8 @@ interface SyncOperation {
 
 export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }: Props) {
   const session = useMemo<PlaybackSession>(() => ({ id: createMediaSessionID(), sequence: 0 }), [video.id]);
+  const activeSessionID = useRef(session.id);
+  activeSessionID.current = session.id;
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const lastPlayer = useRef<HTMLVideoElement | null>(null);
   const [script, setScript] = useState<MediaFunscript | null>(null);
@@ -76,6 +78,8 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
   const bufferingStop = useRef<Promise<void>>(Promise.resolve());
   const readyArm = useRef<"play" | "seeked" | "ratechange" | "resync">("play");
   const heartbeatPending = useRef(false);
+  const heartbeatAbort = useRef<AbortController | null>(null);
+  const sessionRequestControllers = useRef(new Set<AbortController>());
   const ignoredPlay = useRef(false);
   const ignoredPause = useRef(false);
   const ignoredPlayTimer = useRef<number>();
@@ -277,10 +281,21 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     keepalive = false,
     signal?: AbortSignal,
   ) => {
+    const ownedController = signal ? null : new AbortController();
+    if (ownedController) sessionRequestControllers.current.add(ownedController);
     lastPlayer.current = player;
-    const response = await api.mediaSync(buildSyncEvent(video.id, player, state, event, session), sequence, signal, keepalive);
-    updateSync(response.sync);
-    return response.sync;
+    try {
+      const response = await api.mediaSync(
+        buildSyncEvent(video.id, player, state, event, session),
+        sequence,
+        signal ?? ownedController?.signal,
+        keepalive,
+      );
+      if (mounted.current && activeSessionID.current === session.id) updateSync(response.sync);
+      return response.sync;
+    } finally {
+      if (ownedController) sessionRequestControllers.current.delete(ownedController);
+    }
   }, [session, updateSync, video.id]);
 
   const stopPlaybackMotion = useCallback(async (
@@ -302,6 +317,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     player: HTMLVideoElement,
     event: "play" | "seeked" | "ratechange" | "resync",
   ) => {
+    if (!mounted.current || activeSessionID.current !== session.id || !desiredPlaying.current) return;
     if (arming.current) {
       pendingArm.current = event;
       generation.current += 1;
@@ -576,19 +592,34 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
       if (!player || !desiredPlaying.current || !activeSync.current || arming.current || heartbeatPending.current || player.paused) return;
       const sequence = capturedStopSequence.current;
       if (sequence === undefined) return;
+      const controller = new AbortController();
+      const requestGeneration = generation.current;
+      const requestSessionID = session.id;
       heartbeatPending.current = true;
-      void syncEvent(player, "playing", "heartbeat", sequence).then((status) => {
+      heartbeatAbort.current = controller;
+      void syncEvent(player, "playing", "heartbeat", sequence, false, controller.signal).then((status) => {
+        if (
+          controller.signal.aborted
+          || !mounted.current
+          || activeSessionID.current !== requestSessionID
+          || generation.current !== requestGeneration
+          || !desiredPlaying.current
+        ) return;
         if (status.requires_reanchor && desiredPlaying.current) {
           void armPlayback(player, "resync");
           return;
         }
         if (status.active) alignPlayerToEngineClock(player);
       }).catch((reason) => {
+        if (controller.signal.aborted || !mounted.current || activeSessionID.current !== requestSessionID) return;
         desiredPlaying.current = false;
         holdVideo(player);
         showSyncFailure(reason, "Video synchronization was interrupted; motion stopped.");
       }).finally(() => {
-        heartbeatPending.current = false;
+        if (heartbeatAbort.current === controller) {
+          heartbeatAbort.current = null;
+          heartbeatPending.current = false;
+        }
       });
     }, HEARTBEAT_MILLIS);
     return () => window.clearInterval(timer);
@@ -612,16 +643,27 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
     const closingVideoID = video.id;
     const closingSession = session;
     return () => {
+      // Close admission before canceling requests so no late heartbeat or
+      // queued seek continuation can re-arm this session.
+      desiredPlaying.current = false;
+      resumeAfterSeek.current = false;
       const shouldClose = closingSession.stopSequence !== undefined;
       generation.current += 1;
       pendingArm.current = null;
       armAbort.current?.abort();
+      heartbeatAbort.current?.abort();
+      heartbeatAbort.current = null;
+      heartbeatPending.current = false;
+      for (const controller of sessionRequestControllers.current) controller.abort();
+      sessionRequestControllers.current.clear();
       awaitingMedia.current = false;
       window.clearTimeout(ignoredPlayTimer.current);
       window.clearTimeout(ignoredPauseTimer.current);
       window.clearTimeout(alignSeekTimer.current);
       const player = playerRef.current ?? lastPlayer.current;
       const sequence = closingSession.stopSequence;
+      activeSync.current = false;
+      if (activeSessionID.current === closingSession.id) activeSessionID.current = "";
       if (shouldClose && player && sequence !== undefined) {
         void api.mediaSync(buildSyncEvent(closingVideoID, player, "closed", "closed", closingSession), sequence, undefined, true).catch(() => undefined);
       }
@@ -671,7 +713,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate }
           <div className="media-funscript-head">
             <div>
               <strong>{t("Paired funscript")}</strong>
-              <span>{t("{count} actions / {duration}", { count: script.action_count.toLocaleString(), duration: formatTimelineTime(script.duration_ms) })}</span>
+              <span>{t("{count} actions / {duration}", { count: formatNumber(script.action_count), duration: formatTimelineTime(script.duration_ms) })}</span>
               {durationMismatch && <span className="media-script-length-warning">{t("Length differs from {duration} video", { duration: formatTimelineTime(video.duration_ms ?? 0) })}</span>}
             </div>
             <button

@@ -369,6 +369,62 @@ func TestSettingsAPIReadsAndSavesSettings(t *testing.T) {
 	}
 }
 
+func TestSettingsAPIMediaPatchPreservesImmediatePlaybackFilters(t *testing.T) {
+	server := newTestServer(t)
+	_, _, err := server.store.Update(func(current config.Settings) (config.Settings, error) {
+		current.Media.ScriptSmoothingPercent = 3
+		current.Media.PeakRoundingMillis = 84
+		return current, nil
+	})
+	if err != nil {
+		t.Fatalf("seed media filters: %v", err)
+	}
+
+	body := `{
+		"server": {"port": 49717},
+		"media": {
+			"library_paths": [],
+			"script_offset_ms": 125
+		},
+		"device": {
+			"hsp_dispatch_owner": "cloud_rest",
+			"intiface_server_address": "ws://127.0.0.1:12345",
+			"firmware_api_requirement": "firmware_v4_api_v3_required",
+			"api_application_id_source": "bundled_app_id"
+		},
+		"motion": {
+			"speed_min_percent": 20,
+			"speed_max_percent": 80,
+			"stroke_min_percent": 0,
+			"stroke_max_percent": 100,
+			"focus_min_percent": 0,
+			"focus_max_percent": 100,
+			"reverse_direction": false,
+			"style": "balanced"
+		},
+		"llm": {
+			"provider": "llama_cpp",
+			"llama_cpp_mode": "managed",
+			"llama_cpp_base_url": "http://127.0.0.1:8080",
+			"ollama_base_url": "http://127.0.0.1:11434",
+			"prompt_set": "magichandy_motion_v1",
+			"request_timeout_ms": 120000
+		},
+		"diagnostics": {"verbosity": "normal"}
+	}`
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body)))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	settings, _ := server.store.Snapshot()
+	if settings.Media.ScriptOffsetMillis != 125 || settings.Media.ScriptSmoothingPercent != 3 || settings.Media.PeakRoundingMillis != 84 {
+		t.Fatalf("media settings after general save = %+v", settings.Media)
+	}
+}
+
 func TestSettingsAPIRejectsInvalidSettings(t *testing.T) {
 	server := newTestServer(t)
 	body := `{

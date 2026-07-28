@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 // The single authoritative visualizer. It renders engine state only and labels
 // position as a commanded estimate — never a guessed or device-confirmed value.
 import type { CSSProperties } from "react";
@@ -30,7 +30,13 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   } else if (running) {
     state = "running";
   }
-  const stateLabel = state === "completing" ? "Completing" : state.charAt(0).toUpperCase() + state.slice(1);
+  const stateLabel = state === "unavailable" ? t("Unavailable")
+    : state === "error" ? t("Error")
+      : state === "paused" ? t("Paused")
+        : state === "completing" ? t("Completing")
+          : state === "starting" ? t("Starting")
+            : state === "running" ? t("Running")
+              : t("Idle");
   const roundedPosition = Math.round(pos);
   const active = running || starting || paused || engine?.completing === true;
   const speed = active && typeof engine?.target?.speed_percent === "number"
@@ -38,11 +44,11 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
     : "--";
   const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
   const resolvedMediaName = engine?.target?.source === "media"
-    ? engine.target.label?.trim() || "Video funscript"
+    ? engine.target.label?.trim() || t("Video funscript")
     : "";
   const patternName = active
-    ? resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? "Program playback" : "Unknown pattern")
-    : "No active pattern";
+    ? resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? t("Program playback") : t("Unknown pattern"))
+    : t("No active pattern");
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";
   // The stroking sleeve rides a vertical channel on the body's right edge, the
@@ -53,7 +59,13 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const rangeTop = toChannelY(max);
   const rangeBottom = toChannelY(min);
   const carriageStyle = { "--viz-carriage-y": `${toChannelY(pos)}px` } as CSSProperties;
-  const label = `Motion ${state}; pattern ${patternName}; commanded position estimate ${roundedPosition} percent; stroke range ${Math.round(min)} to ${Math.round(max)} percent`;
+  const label = t("Motion {state}; pattern {pattern}; commanded position estimate {position} percent; stroke range {minimum} to {maximum} percent", {
+    state: stateLabel,
+    pattern: patternName,
+    position: formatNumber(roundedPosition),
+    minimum: formatNumber(Math.round(min)),
+    maximum: formatNumber(Math.round(max)),
+  });
 
   return (
     <div className={`visualizer${mini ? " mini" : ""}`} data-state={state} role="img" aria-label={label}>

@@ -1219,9 +1219,11 @@ func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	settings, _ := s.store.Snapshot()
-	settings.Voice.SpeakReplies = body.SpeakReplies
-	if _, err := s.store.Save(settings); err != nil {
+	_, _, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
+		settings.Voice.SpeakReplies = body.SpeakReplies
+		return settings, nil
+	})
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("voice preference could not be saved"))
 		return
 	}
@@ -1279,14 +1281,10 @@ func (s *Server) handleVoiceInputPreferences(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	settings, _ := s.store.Snapshot()
-	body.apply(&settings)
-	normalized, err := config.NormalizeSettings(settings)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	saved, err := s.store.Save(normalized)
+	_, saved, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
+		body.apply(&settings)
+		return settings, nil
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("voice input preferences could not be saved"))
 		return

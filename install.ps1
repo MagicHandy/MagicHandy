@@ -135,6 +135,9 @@ if (-not $StatePath) {
     $StatePath = Get-MagicHandyInstallStatePath
 }
 $StatePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($StatePath)
+if (-not [string]::IsNullOrWhiteSpace($DataDir)) {
+    $DataDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DataDir)
+}
 Set-Location $Repo
 
 $preloadedState = $null
@@ -374,7 +377,13 @@ $state = if ($UseSavedChoices -or $Reconfigure) {
 Write-InstallerHeading (Get-MagicHandyText -Key 'selected_heading')
 Show-MagicHandyInstallState -State $state
 $runningPort = if ($null -ne $existing) { [int]$existing.port } else { [int]$state.port }
-Invoke-MagicHandyProvision -State $state -RepositoryPath $Repo -RunningPort $runningPort -AssumeYes:$Yes -PlanOnly:$PlanOnly
+Invoke-MagicHandyProvision `
+    -State $state `
+    -RepositoryPath $Repo `
+    -RunningPort $runningPort `
+    -AssumeYes:$Yes `
+    -PlanOnly:$PlanOnly `
+    -PreserveAppLanguages:$UseSavedChoices
 
 if ($PlanOnly) {
     Write-Host ''

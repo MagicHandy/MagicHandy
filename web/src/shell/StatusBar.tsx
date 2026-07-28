@@ -27,6 +27,7 @@ export function StatusBar() {
   );
   let phaseState = "idle";
   let phaseLabel = motion?.available === false ? "unavailable" : "idle";
+  let phaseLabelIsUserAuthored = false;
   if (awaitingState) {
     phaseState = "pending";
     phaseLabel = "state pending";
@@ -41,7 +42,12 @@ export function StatusBar() {
     phaseLabel = "motion starting";
   } else if (engine?.running) {
     phaseState = "running";
-    phaseLabel = engine.target?.label || "running";
+    if (engine.target?.label) {
+      phaseLabel = engine.target.label;
+      phaseLabelIsUserAuthored = true;
+    } else {
+      phaseLabel = "running";
+    }
   }
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
@@ -50,7 +56,7 @@ export function StatusBar() {
     <div className="status-bar" role="region" aria-label={t("Status")}>
       <span className="status-readout">
         <span className="status-dot" data-state={phaseState} />
-        <span className="status-text">{translateKnown(phaseLabel)}</span>
+        <span className="status-text">{phaseLabelIsUserAuthored ? phaseLabel : translateKnown(phaseLabel)}</span>
       </span>
       <span className="status-divider" aria-hidden="true" />
       <span className="status-readout">

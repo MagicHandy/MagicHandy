@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/media"
 )
 
@@ -218,25 +219,24 @@ func (s *Server) handleMediaPlayback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	current, _ := s.store.Snapshot()
-	previous := current
-	if body.ScriptSmoothingPercent != nil {
-		current.Media.ScriptSmoothingPercent = *body.ScriptSmoothingPercent
-	}
-	if body.PeakRoundingMillis != nil {
-		current.Media.PeakRoundingMillis = *body.PeakRoundingMillis
-	}
-	if body.ApplyVideoSpeedLimit != nil {
-		current.Motion.ApplyVideoSpeedLimit = *body.ApplyVideoSpeedLimit
-	}
-	saved, err := s.store.Save(current)
+	_, saved, err, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		if body.ScriptSmoothingPercent != nil {
+			current.Media.ScriptSmoothingPercent = *body.ScriptSmoothingPercent
+		}
+		if body.PeakRoundingMillis != nil {
+			current.Media.PeakRoundingMillis = *body.PeakRoundingMillis
+		}
+		if body.ApplyVideoSpeedLimit != nil {
+			current.Motion.ApplyVideoSpeedLimit = *body.ApplyVideoSpeedLimit
+		}
+		return current, nil
+	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	// Filters change the points a run was built from, so the shared settings
 	// transition stops an active clock-locked run exactly as a full save would.
-	runtimeErr := s.applySettingsRuntimeTransition(r.Context(), previous, saved)
 	payload := map[string]any{
 		"media":  saved.Public().Media,
 		"motion": saved.Public().Motion,

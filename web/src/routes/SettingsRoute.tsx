@@ -125,12 +125,28 @@ export function SettingsRoute() {
   }
   function patchMedia(libraryPaths: string[]) {
     setS((cur) => (cur
-      ? { ...cur, media: { library_paths: libraryPaths, script_offset_ms: cur.media?.script_offset_ms ?? 0 } }
+      ? {
+        ...cur,
+        media: {
+          library_paths: libraryPaths,
+          script_offset_ms: cur.media?.script_offset_ms ?? 0,
+          script_smoothing_percent: cur.media?.script_smoothing_percent ?? 0,
+          peak_rounding_ms: cur.media?.peak_rounding_ms ?? 0,
+        },
+      }
       : cur));
   }
   function patchScriptOffset(millis: number) {
     setS((cur) => (cur
-      ? { ...cur, media: { library_paths: cur.media?.library_paths ?? [], script_offset_ms: millis } }
+      ? {
+        ...cur,
+        media: {
+          library_paths: cur.media?.library_paths ?? [],
+          script_offset_ms: millis,
+          script_smoothing_percent: cur.media?.script_smoothing_percent ?? 0,
+          peak_rounding_ms: cur.media?.peak_rounding_ms ?? 0,
+        },
+      }
       : cur));
   }
   function patchMotion(p: Partial<PublicSettings["motion"]>) {
@@ -159,6 +175,8 @@ export function SettingsRoute() {
     const update: SettingsUpdate = {
       server: { port: s.server.port },
       ui: { locale: normalizeLocale(s.ui?.locale) },
+      // Playback filters save through their immediate endpoint. Omitting them
+      // here prevents a stale Settings draft from overwriting newer values.
       media: {
         library_paths: s.media?.library_paths ?? [],
         script_offset_ms: s.media?.script_offset_ms ?? 0,

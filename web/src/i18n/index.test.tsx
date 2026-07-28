@@ -8,6 +8,7 @@ import chinese from "./locales/zh-Hans.json";
 import japanese from "./locales/ja.json";
 import {
   getActiveLocale,
+  formatNumber,
   I18nProvider,
   normalizeLocale,
   setLocaleForTest,
@@ -54,6 +55,12 @@ describe("localization", () => {
     setLocaleForTest("es", spanish);
     expect(translateKnown("Ready")).toBe("Listo");
     expect(translateKnown("llama.cpp exited with code 17")).toBe("llama.cpp exited with code 17");
+  });
+
+  it("formats numbers with the selected UI locale", () => {
+    setLocaleForTest("es", spanish);
+    expect(formatNumber(12345.5)).toBe(new Intl.NumberFormat("es").format(12345.5));
+    expect(formatNumber(12345.5)).not.toBe(new Intl.NumberFormat("en").format(12345.5));
   });
 
   it("loads the saved catalog, updates the document language, and reacts to changes", async () => {

@@ -50,17 +50,21 @@ The browser UI language and default chat reply language are separate choices:
 The source installer asks for both choices before any other decision. Changing
 the UI language immediately changes all later decision-tree questions. Schema 2
 of `install-state.json` stores `ui_locale` and `chat_locale`; schema 1 migrates
-to English without discarding any prior choice. After a successful build, the
-installer invokes MagicHandy's language-only configuration mode so the SQLite
-settings, not installer state, remain authoritative.
+to English without discarding any prior choice. First installation and explicit
+reconfiguration invoke MagicHandy's language-only configuration mode. Ordinary
+updates preserve the current SQLite UI locale and prompt selection, including a
+custom prompt; installer state controls only the update script's own language.
 
 `update.ps1` restores the saved UI language before showing its banner or asking
 a question. `change-language.ps1` always starts with the native-name language
-list, updates both app settings and existing installer state, and safely stops
-and restarts a running checkout. Low-level package-manager, compiler, download,
-and source-control diagnostics may remain English so exact upstream failures
-stay searchable; all choices, explanations around choices, safety confirmation,
-plans, summaries, and completion text use the selected installer locale.
+list. It updates app settings and matching installer state only after it proves
+the running process, service identity, and data profile; ambiguous process forms
+or profile mismatches are refused. If a later write fails after a verified app
+was stopped, the script attempts to restore that app before reporting partial
+success. Low-level package-manager, compiler, download, and source-control
+diagnostics may remain English so exact upstream failures stay searchable; all
+choices, explanations around choices, safety confirmation, plans, summaries,
+and completion text use the selected installer locale.
 
 ## Wording Rules
 
@@ -126,8 +130,9 @@ backend errors remain verbatim rather than being guessed, partially translated,
 or stripped of diagnostic detail.
 
 The provider lazy-loads non-English catalogs. English is bundled with the main
-chunk; changing locale remounts the translated application tree while settings,
-motion, transport, and controller state continue to come from the backend.
+chunk; changing locale updates translation context without remounting the
+application, so drafts, request guards, and browser-owned connections survive.
+A failed chunk load retains the prior catalog and exposes an explicit retry.
 
 ## Prompt Contract
 
@@ -136,7 +141,10 @@ Prompt localization is hybrid:
 - Localize behavior, persona, anatomy, mood, memory headers, recent-reply
   framing, voice instructions, reply-language reminders, and repair-language
   reminders.
-- Preserve user/model-authored values verbatim inside quoted boundaries.
+- Do not translate user/model-authored values. Persona, anatomy, and recent
+  replies are normalized, bounded, and JSON-quoted; saved memories are bounded
+  list entries.
+- Keep authoritative motion-state framing in English.
 - Keep JSON keys, enum values, pattern IDs, and the final machine contract in
   English.
 - Keep the code-owned final output guard last.
@@ -172,8 +180,10 @@ go test ./internal/config ./internal/chat ./cmd/magichandy
 The checks enforce:
 
 - JSON and UTF-8 integrity with no replacement characters;
-- exact key and placeholder parity across all five locales;
-- compile-time browser key coverage and a static rendered-string audit;
+- duplicate-key rejection plus exact key and placeholder parity across all five
+  locales;
+- compile-time browser key coverage, a static direct-string audit, and focused
+  runtime tests for computed accessibility/error paths;
 - no adjacent translated/dynamic sentence fragments;
 - installer catalog runtime lookup and no hard-coded decision prompts;
 - installer schema migration and localized update-plan behavior;

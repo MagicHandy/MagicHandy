@@ -136,13 +136,13 @@ describe("SyncedVideoPlayer", () => {
     fireEvent.play(player);
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ event: "play" }), 9, expect.any(AbortSignal), false));
     fireEvent.pause(player);
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 9, undefined, false));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 9, expect.any(AbortSignal), false));
 
     fireEvent.play(player);
     await waitFor(() => expect(mediaSync.mock.calls.filter(([event]) => event.event === "play")).toHaveLength(2));
     fireEvent.seeking(player);
     fireEvent.seeked(player);
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "seeking", event: "seeking" }), 9, undefined, false));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "seeking", event: "seeking" }), 9, expect.any(AbortSignal), false));
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "playing", event: "seeked" }), 9, expect.any(AbortSignal), false));
   });
 
@@ -194,7 +194,7 @@ describe("SyncedVideoPlayer", () => {
     // Some browsers pause first for one scrubber gesture. The pause still
     // stops motion immediately, but playback intent survives into the seek.
     fireEvent.pause(player);
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 12, undefined, false));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 12, expect.any(AbortSignal), false));
     Object.defineProperty(player, "currentTime", { configurable: true, writable: true, value: 4.5 });
     fireEvent.seeking(player);
     expect(screen.getByText("Seeking to 00:04.500; stopping prior motion")).toBeInTheDocument();
@@ -220,13 +220,13 @@ describe("SyncedVideoPlayer", () => {
     await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
     nowSpy.mockReturnValue(10_000);
     fireEvent.pause(player);
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 13, undefined, false));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 13, expect.any(AbortSignal), false));
 
     nowSpy.mockReturnValue(20_000);
     fireEvent.seeking(player);
     fireEvent.seeked(player);
 
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "seeked" }), 13, undefined, false));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "seeked" }), 13, expect.any(AbortSignal), false));
     expect(play).toHaveBeenCalledOnce();
     nowSpy.mockRestore();
   });
@@ -350,7 +350,7 @@ describe("SyncedVideoPlayer", () => {
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
       state: "paused",
       event: "waiting",
-    }), 15, undefined, false));
+    }), 15, expect.any(AbortSignal), false));
   });
 
   it("cancels an obsolete arm and re-arms at the latest seek timestamp", async () => {
@@ -438,6 +438,47 @@ vi.mock("../state/app-state", () => ({
     expect(closeEvent?.event_sequence).toBeGreaterThan(playEvent?.event_sequence ?? 0);
   });
 
+  it("aborts an in-flight heartbeat and cannot re-arm after unmount", async () => {
+    let heartbeatSignal: AbortSignal | undefined;
+    let releaseHeartbeat!: () => void;
+    mediaSync.mockImplementation((event, _sequence, signal) => {
+      if (event.event === "heartbeat") {
+        heartbeatSignal = signal;
+        return new Promise<{ sync: MediaSyncStatus }>((resolve) => {
+          releaseHeartbeat = () => resolve({
+            sync: { ...following, last_event: "heartbeat", requires_reanchor: true },
+          });
+        });
+      }
+      return Promise.resolve({
+        sync: event.state === "playing" ? { ...following, last_event: event.event } : {
+          active: false,
+          video_id: event.video_id,
+          state: event.state === "closed" ? "idle" : event.state,
+          last_event: event.event,
+        },
+      });
+    });
+
+    const result = render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={7} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    Object.defineProperty(player, "paused", { configurable: true, get: () => false });
+    fireEvent.play(player);
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    await waitFor(
+      () => expect(mediaSync.mock.calls.some(([event]) => event.event === "heartbeat")).toBe(true),
+      { timeout: 2_500 },
+    );
+
+    result.unmount();
+    expect(heartbeatSignal?.aborted).toBe(true);
+    releaseHeartbeat();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mediaSync.mock.calls.some(([event]) => event.event === "resync")).toBe(false);
+  });
+
   it("recovers when readyState advances without another canplay event", async () => {
     mediaReadyState = 2;
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={7} />);
@@ -471,7 +512,7 @@ vi.mock("../state/app-state", () => ({
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
       state: "paused",
       event: "waiting",
-    }), 7, undefined, false));
+    }), 7, expect.any(AbortSignal), false));
     expect(screen.getByText("Buffering video; motion stopped")).toBeInTheDocument();
 
     mediaReadyState = 3;

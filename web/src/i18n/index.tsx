@@ -49,6 +49,10 @@ export function t(message: MessageKey, values?: MessageValues): string {
   return interpolate(activeCatalog[message] ?? english[message], values);
 }
 
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat(activeLocale).format(value);
+}
+
 // Server and model status text is not always a compile-time literal. Translate
 // it when it matches a catalog key and preserve the diagnostic otherwise.
 export function translateKnown(message: string, values?: MessageValues): string {

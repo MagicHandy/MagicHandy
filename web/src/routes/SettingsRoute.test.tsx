@@ -49,6 +49,12 @@ function settings(verbosity: string): PublicSettings {
     version: 1,
     server: { port: 49717 },
     ui: { locale: "en" },
+    media: {
+      library_paths: ["C:\\Media"],
+      script_offset_ms: 125,
+      script_smoothing_percent: 3,
+      peak_rounding_ms: 84,
+    },
     device: {
       hsp_dispatch_owner: "cloud_rest",
       intiface_server_address: "ws://127.0.0.1:12345",
@@ -148,6 +154,20 @@ describe("SettingsRoute", () => {
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "ja" });
+  });
+
+  it("does not overwrite immediate playback filters from a stale settings draft", async () => {
+    app.hash = "#/settings/general";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].media).toEqual({
+      library_paths: ["C:\\Media"],
+      script_offset_ms: 125,
+    });
   });
 
   it("localizes settings navigation, firmware guidance, and chat option labels", async () => {

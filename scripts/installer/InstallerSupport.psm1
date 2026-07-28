@@ -90,7 +90,11 @@ function Set-MagicHandyInstallerLocale {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$Locale)
 
-    $script:InstallerLocale = $Locale
+    $resolved = ConvertTo-MagicHandyLocale -Value $Locale
+    if ($null -eq $resolved) {
+        throw "Unsupported installer locale '$Locale'."
+    }
+    $script:InstallerLocale = $resolved
 }
 
 function Get-MagicHandyInstallerLocale {
@@ -549,6 +553,8 @@ function New-MagicHandyInstallState {
         [string]$InstalledAt = ''
     )
 
+    $UILocale = ConvertTo-MagicHandyLocale -Value $UILocale
+    $ChatLocale = ConvertTo-MagicHandyLocale -Value $ChatLocale
     $now = [DateTimeOffset]::UtcNow.ToString('o')
     if ([string]::IsNullOrWhiteSpace($InstalledAt)) {
         $InstalledAt = $now
@@ -644,16 +650,23 @@ function Show-MagicHandyInstallState {
 
 function Get-MagicHandyProvisionPlan {
     [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][object]$State)
+    param(
+        [Parameter(Mandatory = $true)][object]$State,
+        [switch]$PreserveAppLanguages
+    )
 
     $plan = New-Object System.Collections.Generic.List[string]
     $plan.Add((Get-MagicHandyText -Key 'plan_go'))
     $plan.Add((Get-MagicHandyText -Key 'plan_build_app'))
     $plan.Add((Get-MagicHandyText -Key 'plan_build_workers'))
-    $plan.Add((Get-MagicHandyText -Key 'plan_languages' -Values @(
-        (Get-MagicHandyLanguageName -Locale $State.ui_locale),
-        (Get-MagicHandyLanguageName -Locale $State.chat_locale)
-    )))
+    if ($PreserveAppLanguages) {
+        $plan.Add((Get-MagicHandyText -Key 'plan_languages_preserved'))
+    } else {
+        $plan.Add((Get-MagicHandyText -Key 'plan_languages' -Values @(
+            (Get-MagicHandyLanguageName -Locale $State.ui_locale),
+            (Get-MagicHandyLanguageName -Locale $State.chat_locale)
+        )))
+    }
     if ([bool]$State.build_managed_llama) {
         $plan.Add((Get-MagicHandyText -Key 'plan_git_cmake'))
         $plan.Add((Get-MagicHandyText -Key 'plan_cpp'))
@@ -2133,14 +2146,29 @@ function Set-MagicHandyAppLanguages {
         [Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$ChatLocale
     )
 
+    $resolvedUILocale = ConvertTo-MagicHandyLocale -Value $UILocale
+    $resolvedChatLocale = ConvertTo-MagicHandyLocale -Value $ChatLocale
+    if ($null -eq $resolvedUILocale -or $null -eq $resolvedChatLocale) {
+        throw 'MagicHandy language settings must use a supported locale.'
+    }
     $executable = Join-Path $RepositoryPath 'magichandy.exe'
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
         throw "MagicHandy executable not found at '$executable'. Run install.ps1 or update.ps1 first."
     }
-    & $executable -data-dir $DataDir -set-ui-locale $UILocale -set-chat-locale $ChatLocale | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "MagicHandy could not apply language settings (exit $LASTEXITCODE)."
+    $argumentLine = '-data-dir {0} -set-ui-locale {1} -set-chat-locale {2}' -f `
+        (ConvertTo-MagicHandyNativeArgument -Value $DataDir), `
+        (ConvertTo-MagicHandyNativeArgument -Value $resolvedUILocale), `
+        (ConvertTo-MagicHandyNativeArgument -Value $resolvedChatLocale)
+    $process = Start-Process `
+        -FilePath $executable `
+        -ArgumentList $argumentLine `
+        -PassThru `
+        -Wait `
+        -WindowStyle Hidden
+    if ($process.ExitCode -ne 0) {
+        throw "MagicHandy could not apply language settings (exit $($process.ExitCode))."
     }
+    Write-Host "Language settings updated: UI=$resolvedUILocale chat=$resolvedChatLocale" -ForegroundColor Green
 }
 
 function Remove-MagicHandyBuildBackups {
@@ -2302,7 +2330,7 @@ function Assert-MagicHandyRebuildStopResponse {
         ($locallyStopped -or ($hasTransportResult -and -not $hasEngineState))
     if ($recognizedLegacyResponse) {
         if ($AllowPhysicalStopConfirmation) {
-            Write-Warning "Physical transport Stop delivery was not confirmed: $errorMessage"
+            Write-Warning (Get-MagicHandyText -Key 'physical_stop_warning' -Values @($errorMessage))
             $confirmation = if ($null -ne $PhysicalStopConfirmation) {
                 & $PhysicalStopConfirmation
             } else {
@@ -2312,9 +2340,9 @@ function Assert-MagicHandyRebuildStopResponse {
                 return
             }
         }
-        throw "Physical Stop delivery was not confirmed. Verify the device is stopped, close the app, and rerun update.ps1. Transport error: $errorMessage"
+        throw (Get-MagicHandyText -Key 'physical_stop_required' -Values @($errorMessage))
     }
-    throw "Emergency Stop failed before rebuild: $errorMessage"
+    throw (Get-MagicHandyText -Key 'emergency_stop_failed' -Values @($errorMessage))
 }
 
 function Stop-MagicHandyAppForRebuild {
@@ -2448,12 +2476,13 @@ function Invoke-MagicHandyProvision {
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [int]$RunningPort = 0,
         [switch]$AssumeYes,
-        [switch]$PlanOnly
+        [switch]$PlanOnly,
+        [switch]$PreserveAppLanguages
     )
 
     if ($PlanOnly) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'provision_plan_heading')
-        foreach ($item in (Get-MagicHandyProvisionPlan -State $State)) {
+        foreach ($item in (Get-MagicHandyProvisionPlan -State $State -PreserveAppLanguages:$PreserveAppLanguages)) {
             Write-Host "  - $item"
         }
         return
@@ -2511,7 +2540,11 @@ function Invoke-MagicHandyProvision {
     }
 
     Write-InstallerHeading (Get-MagicHandyText -Key 'languages_heading')
-    Set-MagicHandyAppLanguages -RepositoryPath $RepositoryPath -DataDir $State.data_dir -UILocale $State.ui_locale -ChatLocale $State.chat_locale
+    if ($PreserveAppLanguages) {
+        Write-Host (Get-MagicHandyText -Key 'plan_languages_preserved') -ForegroundColor DarkGray
+    } else {
+        Set-MagicHandyAppLanguages -RepositoryPath $RepositoryPath -DataDir $State.data_dir -UILocale $State.ui_locale -ChatLocale $State.chat_locale
+    }
 
     if ([bool]$State.create_launcher) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'launcher_heading')
@@ -2693,6 +2726,7 @@ Export-ModuleMember -Function @(
     'Get-MagicHandySupportedLocales',
     'Set-MagicHandyInstallerLocale',
     'Get-MagicHandyInstallerLocale',
+    'ConvertTo-MagicHandyLocale',
     'Get-MagicHandyText',
     'Get-MagicHandyLanguageName',
     'Read-MagicHandyLanguage',

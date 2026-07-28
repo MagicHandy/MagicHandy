@@ -83,6 +83,46 @@ func TestMediaScanCatalogAndRangeStreaming(t *testing.T) {
 	assertMediaFunscriptResponse(t, server, payload.Videos[0].ID, root)
 }
 
+func TestMediaScriptCacheInvalidatesAfterInPlaceEdit(t *testing.T) {
+	server := newTestServer(t)
+	root := t.TempDir()
+	writeMediaPair(t, root, "Edited", `{"actions":[{"at":0,"pos":0},{"at":1000,"pos":100}]}`)
+	if _, err := server.media.StartScan([]string{root}); err != nil {
+		t.Fatalf("StartScan: %v", err)
+	}
+	waitForMediaScan(t, server)
+	video := mustSingleMediaVideo(t, server)
+
+	first, err := server.mediaSync.scriptFor(t.Context(), video.ID)
+	if err != nil {
+		t.Fatalf("initial scriptFor: %v", err)
+	}
+	if first.Actions[0].Position != 0 {
+		t.Fatalf("initial actions = %+v", first.Actions)
+	}
+
+	scriptPath := filepath.Join(root, "Edited.funscript")
+	if err := os.WriteFile(
+		scriptPath,
+		[]byte(`{"actions":[{"at":0,"pos":9},{"at":1000,"pos":91}]}`),
+		0o600,
+	); err != nil {
+		t.Fatalf("replace funscript: %v", err)
+	}
+	modified := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(scriptPath, modified, modified); err != nil {
+		t.Fatalf("advance funscript modification time: %v", err)
+	}
+
+	updated, err := server.mediaSync.scriptFor(t.Context(), video.ID)
+	if err != nil {
+		t.Fatalf("updated scriptFor: %v", err)
+	}
+	if updated.Actions[0].Position != 9 || updated.Actions[len(updated.Actions)-1].Position != 91 {
+		t.Fatalf("updated actions = %+v, want reloaded in-place edit", updated.Actions)
+	}
+}
+
 func assertMediaFunscriptResponse(t *testing.T, server *Server, videoID, root string) {
 	t.Helper()
 	funscript := httptest.NewRecorder()

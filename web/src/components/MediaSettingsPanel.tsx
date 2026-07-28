@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaScanState, MediaVideo } from "../api/types";
@@ -53,7 +53,7 @@ export function MediaSettingsPanel({
       setError("");
     } catch (reason) {
       if (mounted.current && generation === refreshGeneration.current) {
-        setError(reason instanceof Error ? reason.message : "Media library status could not be loaded.");
+        setError(reason instanceof Error ? reason.message : t("Media library status could not be loaded."));
       }
     }
   }, []);
@@ -88,7 +88,7 @@ export function MediaSettingsPanel({
     const value = draft.trim();
     if (!value) return;
     if (locations.some((location) => location.localeCompare(value, undefined, { sensitivity: "base" }) === 0)) {
-      setError("That library location is already listed.");
+      setError(t("That library location is already listed."));
       return;
     }
     onChange([...locations, value]);
@@ -107,7 +107,7 @@ export function MediaSettingsPanel({
       const response = await api.startMediaScan();
       setScan(response.scan);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Media scan could not be started.");
+      setError(reason instanceof Error ? reason.message : t("Media scan could not be started."));
     }
   }
 
@@ -116,7 +116,7 @@ export function MediaSettingsPanel({
       const response = await api.cancelMediaScan();
       setScan(response.scan);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Media scan could not be cancelled.");
+      setError(reason instanceof Error ? reason.message : t("Media scan could not be cancelled."));
     }
   }
 
@@ -159,7 +159,7 @@ export function MediaSettingsPanel({
           const count = counts.get(location) ?? { total: 0, missing: 0 };
           return (
             <div className="media-location-row" key={location}>
-              <span><strong>{location}</strong><small>{count.missing > 0 ? t("{total} videos · {missing} missing", { total: count.total.toLocaleString(), missing: count.missing.toLocaleString() }) : t("{count} videos", { count: count.total.toLocaleString() })}</small></span>
+              <span><strong>{location}</strong><small>{count.missing > 0 ? t("{total} videos · {missing} missing", { total: formatNumber(count.total), missing: formatNumber(count.missing) }) : t("{count} videos", { count: formatNumber(count.total) })}</small></span>
               <button type="button" className="icon-button" aria-label={t("Remove {location}", { location: location })} title={t("Remove location")} disabled={locked || scan?.running} onClick={() => removeLocation(location)}><TrashIcon /></button>
             </div>
           );
@@ -173,7 +173,7 @@ export function MediaSettingsPanel({
       <div className="media-scan-controls">
         <div>
           <strong>{t("Catalog scan")}</strong>
-          <span>{dirty ? t("Save location changes before scanning.") : scan?.running ? t("{files} files checked / {videos} videos found", { files: scan.files_visited.toLocaleString(), videos: scan.videos_found.toLocaleString() }) : t("{count} catalog entries", { count: videos.length.toLocaleString() })}</span>
+          <span>{dirty ? t("Save location changes before scanning.") : scan?.running ? t("{files} files checked / {videos} videos found", { files: formatNumber(scan.files_visited), videos: formatNumber(scan.videos_found) }) : t("{count} catalog entries", { count: formatNumber(videos.length) })}</span>
         </div>
         {scan?.running
           ? <button type="button" className="btn btn-secondary" disabled={locked || !scan.cancellable} onClick={() => void cancelScan()}>{t("Cancel scan")}</button>
