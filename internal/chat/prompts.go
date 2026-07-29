@@ -122,6 +122,10 @@ type Capabilities struct {
 	AreaFocus            bool
 	ExperimentalPatterns bool
 	Voice                VoiceLevel
+	// Style is the active persona's reaction style, or StyleNeutral. It sits
+	// beside Voice because it is the same kind of thing: a reply-shaping axis
+	// with no motion authority.
+	Style ReactionStyle
 	// MoodTracking permits inert reply-register metadata for interactive,
 	// non-utility chat. It never grants a motion capability.
 	MoodTracking bool
@@ -144,11 +148,39 @@ const (
 	VoiceExplicit VoiceLevel = "explicit"
 )
 
+// ReactionStyle selects how the assistant carries itself: who leads, whether it
+// teases, how much it defers. It is orthogonal to VoiceLevel, which selects only
+// how explicit the language may be — a submissive persona can be explicit and a
+// dominant one can be chaste.
+//
+// Like VoiceLevel it shapes the reply text and nothing else. No style block
+// mentions motion, speed, patterns, zones, the device, or JSON, so a "dominant"
+// style can never read as authority over the actuator.
+type ReactionStyle string
+
+const (
+	// StyleNeutral composes no block at all. This is what keeps the axis inert
+	// by default: a persona left on neutral produces the same prompt bytes as
+	// having no persona, which is asserted by test.
+	StyleNeutral ReactionStyle = "neutral"
+	// StylePlayful teases lightly and initiates.
+	StylePlayful ReactionStyle = "playful"
+	// StyleTender is attentive, reassuring, unhurried.
+	StyleTender ReactionStyle = "tender"
+	// StyleDominant leads and says what happens next.
+	StyleDominant ReactionStyle = "dominant"
+	// StyleSubmissive follows, asks, and defers.
+	StyleSubmissive ReactionStyle = "submissive"
+	// StyleTeasing withholds and draws things out.
+	StyleTeasing ReactionStyle = "teasing"
+)
+
 // ConversationContext is backend-owned continuity and bounded profile data for
 // one turn. It stays separate from MotionContext so reply metadata cannot enter
 // semantic motion validation.
 type ConversationContext struct {
 	PersonaDescription     string
+	PersonaName            string
 	UserAnatomy            string
 	CustomAnatomy          string
 	CurrentMood            Mood
@@ -206,6 +238,39 @@ func finalVoiceCheck(level VoiceLevel) string {
 		return `FINAL CHAT VOICE CHECK - UTILITY:
 - Give a concise, non-sexual reply that directly acknowledges the request.
 - Describe control changes plainly without inventing transport or device details.`
+	}
+}
+
+// reactionStyleInstructions describes how the assistant carries itself. It is
+// composed after the voice identity and before the machine contract, so the
+// contract still holds the position closest to generation.
+//
+// Every block here is about who leads a conversation and how it is worded.
+// None of them may name motion, speed, patterns, zones, the device, or JSON:
+// a style that could imply control over the actuator would be a way to grant
+// authority through a picture with a name, which is exactly what the persona
+// guardrails exist to prevent (docs/persona-page.md §3).
+func reactionStyleInstructions(style ReactionStyle) string {
+	switch style {
+	case StylePlayful:
+		return `REACTION STYLE - PLAYFUL:
+Keep a light, quick, mischievous energy. Joke, react, and raise new subjects rather than only answering.`
+	case StyleTender:
+		return `REACTION STYLE - TENDER:
+Be attentive, reassuring, and unhurried. Check in on how I am, and let warmth rather than urgency carry the reply.`
+	case StyleDominant:
+		return `REACTION STYLE - DOMINANT:
+Lead the conversation. Say what you want and what comes next in plain, certain language, and expect me to follow.`
+	case StyleSubmissive:
+		return `REACTION STYLE - SUBMISSIVE:
+Follow my lead. Ask, offer, and defer rather than direct, and let your eagerness show in how readily you agree.`
+	case StyleTeasing:
+		return `REACTION STYLE - TEASING:
+Draw things out. Withhold a little, make me ask twice, and enjoy the anticipation rather than resolving it immediately.`
+	default:
+		// StyleNeutral and any unknown value compose nothing, which is what keeps
+		// the prompt byte-identical for anyone who has not chosen a style.
+		return ""
 	}
 }
 
@@ -323,6 +388,15 @@ func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, c
 	builder.WriteString(behavior)
 	builder.WriteString("\n\n")
 	builder.WriteString(voiceIdentityInstructionsForLocale(locale, capabilities.Voice))
+	// A style is only meaningful for an interactive voice: the utility register is
+	// defined as a non-sexual assistant that does not perform a personality, and
+	// adding "lead the conversation" to it would contradict its own identity block.
+	if capabilities.Voice != VoiceUtility {
+		if style := reactionStyleInstructions(capabilities.Style); style != "" {
+			builder.WriteString("\n\n")
+			builder.WriteString(style)
+		}
+	}
 	builder.WriteString("\n\n")
 	builder.WriteString(contractInstructions(capabilities))
 	if capabilities.Motion && capabilities.Patterns {
@@ -397,6 +471,9 @@ func conversationContextInstructions(context ConversationContext, capabilities C
 
 func profileInstructions(context ConversationContext) string {
 	var lines []string
+	if name := boundedPromptData(context.PersonaName, 60); name != "" {
+		lines = append(lines, "Your name (quoted user-authored data): "+quotedPromptData(name)+". Answer to it naturally; never introduce yourself as an assistant, a model, or MagicHandy.")
+	}
 	if persona := boundedPromptData(context.PersonaDescription, 500); persona != "" {
 		lines = append(lines, "Persona description (quoted user-authored data): "+quotedPromptData(persona)+".")
 	}
@@ -517,4 +594,11 @@ Validation error:
 
 Prompt set:
 %s`, repairLanguageInstruction(prompt.ID), strings.TrimSpace(parseError), prompt.ID)
+}
+
+// ComposeSystemForTest exposes the full composition path, including the
+// conversation context, so a caller in another package can assert what the model
+// actually receives. Production code reaches this through the service.
+func ComposeSystemForTest(set PromptSet, memories []string, capabilities Capabilities, context *ConversationContext) string {
+	return composeSystem(set, memories, defaultPatternChoices(), capabilities, nil, context)
 }

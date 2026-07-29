@@ -24,6 +24,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/media"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
+	"github.com/mapledaemon/MagicHandy/internal/persona"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
@@ -70,6 +71,7 @@ type Server struct {
 	managedLLM             *llm.ManagedLlamaRuntimeManager
 	controller             controllerRuntime
 	personalization        personalizationRuntime
+	personas               *persona.Store
 	modes                  *modes.Manager
 	voice                  *voice.Manager
 	voiceExecutable        string
@@ -202,12 +204,22 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 }
 
 func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings config.ChatSettings) error {
+	// Personas open first: a new session inherits the last-used persona, so the
+	// table has to be readable before the chat log reconciles startup.
+	personaStore, err := persona.OpenWithDatabase(s.store.Datastore())
+	if err != nil {
+		return err
+	}
+	s.personas = personaStore
+
 	chatLog, err := chat.OpenMessageLogWithDatabase(s.store.Datastore())
 	if err != nil {
+		_ = personaStore.Close()
 		return err
 	}
 	if _, err := chatLog.ReconcileStartup(chatSettings.StartupBehavior, chatSettings.KeepUnsavedOnExit); err != nil {
 		_ = chatLog.Close()
+		_ = personaStore.Close()
 		return err
 	}
 	s.chatLog = chatLog
@@ -215,6 +227,7 @@ func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings con
 	patternLibrary, err := patterns.OpenWithDatabase(s.store.Datastore())
 	if err != nil {
 		_ = chatLog.Close()
+		_ = personaStore.Close()
 		return err
 	}
 	s.patterns = patternLibrary
@@ -223,6 +236,7 @@ func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings con
 	if err != nil {
 		_ = patternLibrary.Close()
 		_ = chatLog.Close()
+		_ = personaStore.Close()
 		return err
 	}
 	removed, err := mediaCatalog.RetainLocations(context.Background(), mediaLocations)
@@ -230,6 +244,7 @@ func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings con
 		_ = mediaCatalog.Close()
 		_ = patternLibrary.Close()
 		_ = chatLog.Close()
+		_ = personaStore.Close()
 		return fmt.Errorf("reconcile media catalog locations: %w", err)
 	}
 	if removed > 0 {
@@ -272,6 +287,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
 	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
+	s.personaRoutes(mux)
 	s.llmRoutes(mux)
 	s.chatRoutes(mux)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)

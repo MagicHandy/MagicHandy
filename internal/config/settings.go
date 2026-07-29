@@ -83,6 +83,21 @@ const (
 	// LLMChatVoiceExplicit permits direct erotic language (STGPT-RV parity).
 	LLMChatVoiceExplicit = "explicit"
 
+	// LLMReactionStyleNeutral composes no style block at all, so a persona left
+	// on the default produces a byte-identical prompt to having no persona.
+	LLMReactionStyleNeutral = "neutral"
+	// LLMReactionStylePlayful teases lightly and initiates.
+	LLMReactionStylePlayful = "playful"
+	// LLMReactionStyleTender is attentive, reassuring, unhurried.
+	LLMReactionStyleTender = "tender"
+	// LLMReactionStyleDominant leads and says what happens next. It shapes reply
+	// wording only: no style may claim authority over the device.
+	LLMReactionStyleDominant = "dominant"
+	// LLMReactionStyleSubmissive follows, asks, and defers.
+	LLMReactionStyleSubmissive = "submissive"
+	// LLMReactionStyleTeasing withholds and draws things out.
+	LLMReactionStyleTeasing = "teasing"
+
 	// LLMUserAnatomyPenis selects penis-specific prompt vocabulary.
 	LLMUserAnatomyPenis = "penis"
 	// LLMUserAnatomyVagina selects vagina/vulva-specific prompt vocabulary.
@@ -426,6 +441,7 @@ type PublicSettingsOptionHints struct {
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
 	LLMChatVoices           []string `json:"llm_chat_voices"`
 	LLMUserAnatomies        []string `json:"llm_user_anatomies"`
+	LLMReactionStyles       []string `json:"llm_reaction_styles"`
 	PromptSets              []string `json:"prompt_sets"`
 	TTSProviders            []string `json:"tts_providers"`
 	ASRProviders            []string `json:"asr_providers"`
@@ -1165,7 +1181,7 @@ func validateLLMSettings(settings LLMSettings) error {
 	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
 		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
 	}
-	if !oneOf(settings.ChatVoice, LLMChatVoiceUtility, LLMChatVoiceWarm, LLMChatVoiceIntimate, LLMChatVoiceExplicit) {
+	if !ValidLLMChatVoice(settings.ChatVoice) {
 		return fmt.Errorf("unknown LLM chat voice %q", settings.ChatVoice)
 	}
 	if !oneOf(settings.UserAnatomy, LLMUserAnatomyPenis, LLMUserAnatomyVagina, LLMUserAnatomyCustom) {
@@ -1319,6 +1335,33 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.CustomAnatomy = strings.Join(strings.Fields(settings.CustomAnatomy), " ")
 	settings.PersonaDescription = strings.Join(strings.Fields(settings.PersonaDescription), " ")
 	return settings
+}
+
+// LLMChatVoices lists the reply registers in escalation order. Exported so the
+// persona store validates against the same list the settings form offers,
+// rather than keeping a second copy that can drift from this one.
+func LLMChatVoices() []string {
+	return []string{LLMChatVoiceUtility, LLMChatVoiceWarm, LLMChatVoiceIntimate, LLMChatVoiceExplicit}
+}
+
+// LLMReactionStyles lists the reaction styles, neutral first because it is the
+// default and the only one that composes nothing.
+func LLMReactionStyles() []string {
+	return []string{
+		LLMReactionStyleNeutral, LLMReactionStylePlayful, LLMReactionStyleTender,
+		LLMReactionStyleDominant, LLMReactionStyleSubmissive, LLMReactionStyleTeasing,
+	}
+}
+
+// ValidLLMChatVoice reports whether a reply register is one this build composes.
+func ValidLLMChatVoice(voice string) bool {
+	return oneOf(voice, LLMChatVoices()...)
+}
+
+// ValidLLMReactionStyle reports whether a reaction style is one this build
+// composes.
+func ValidLLMReactionStyle(style string) bool {
+	return oneOf(style, LLMReactionStyles()...)
 }
 
 func oneOf(value string, allowed ...string) bool {

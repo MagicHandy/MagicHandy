@@ -688,6 +688,9 @@ func (s *Server) Close() {
 		if s.models != nil {
 			_ = s.models.Close()
 		}
+		if s.personas != nil {
+			_ = s.personas.Close()
+		}
 		s.personalization.Close()
 		if s.store != nil {
 			_ = s.store.Close()

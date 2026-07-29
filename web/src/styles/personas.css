@@ -1,0 +1,366 @@
+/* Personas page: a portrait tile grid with a leading create tile, and an editor
+   drawer over it. Sibling to .media-grid rather than a reuse of it — video covers
+   are 16/9 with copy below, personas are portraits with copy overlaid — but every
+   interaction state is borrowed verbatim so the two grids feel like one app
+   (docs/persona-page.md §5.2). */
+
+.persona-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 12px;
+}
+
+.persona-card {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.persona-card:hover,
+.persona-card:focus-visible {
+  border-color: var(--accent);
+}
+.persona-card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.persona-card[aria-current="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Taken out of flow deliberately. A portrait that contributes layout height
+   pushes the scrim past the card and clips the badges under overflow: hidden —
+   the same bug a media thumbnail caused before it gained inset: 0. */
+.persona-card-portrait {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* No portrait is not a failure state, so it gets a monogram plate rather than a
+   broken-image frame. Matches the .nav-brand-mark and .startup-mark idiom. */
+.persona-card-monogram {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg-inset);
+}
+.persona-card-monogram span {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+/* Copy sits on the scrim, never on raw image, so contrast does not depend on
+   which picture the user chose. */
+.persona-card-copy {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 34px 11px 11px;
+  background: linear-gradient(to bottom,
+    rgb(0 0 0 / 0%) 0%,
+    color-mix(in srgb, var(--bg) 84%, transparent) 45%,
+    color-mix(in srgb, var(--bg) 96%, transparent) 100%);
+}
+.persona-card-copy strong {
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.persona-card-copy span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.persona-card-badges {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  left: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+.persona-card-badges .badge {
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+}
+.persona-active-badge {
+  margin-right: auto;
+  border-color: var(--accent);
+  background: var(--accent) !important;
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.persona-lore-badge {
+  position: absolute;
+  bottom: 9px;
+  left: 9px;
+}
+
+/* The create tile: same footprint, dashed, first in DOM order so keyboard users
+   reach it before the cards. */
+.persona-card-new {
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  justify-items: center;
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+.persona-card-new:hover,
+.persona-card-new:focus-visible {
+  border-color: var(--accent);
+  border-style: dashed;
+}
+.persona-card-new .icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+}
+.persona-card-new span {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.persona-count {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+/* --- Editor drawer ------------------------------------------------------- */
+
+/* Exactly one layer, never a modal over a modal (docs/ui-design.md). The grid
+   stays visible so the persona being edited stays in context. */
+.persona-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(390px, 100vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: -14px 0 34px rgb(0 0 0 / 34%);
+}
+.persona-drawer-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.persona-drawer-head h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-portrait-field {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.persona-portrait-preview {
+  position: relative;
+  flex: 0 0 auto;
+  width: 78px;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+.persona-portrait-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.persona-portrait-preview .persona-card-monogram span {
+  width: 42px;
+  height: 42px;
+  font-size: 1.05rem;
+}
+.persona-portrait-actions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.persona-drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.persona-drawer-actions .btn-danger-outline {
+  margin-left: auto;
+}
+
+/* --- Chat header switcher ----------------------------------------------- */
+
+.persona-chip {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  max-width: 190px;
+  padding: 3px 9px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.persona-chip:hover,
+.persona-chip:focus-visible {
+  border-color: var(--accent);
+}
+.persona-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.persona-chip-avatar {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  object-fit: cover;
+}
+.persona-chip-avatar-text {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.persona-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-switcher {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 232px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 14px 30px rgb(0 0 0 / 40%);
+}
+.persona-switcher-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+.persona-switcher-option:hover,
+.persona-switcher-option:focus-visible {
+  background: var(--surface-3);
+}
+.persona-switcher-option[aria-current="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.persona-switcher-empty {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+/* A conversation that changed persona mid-stream says so. Derived from adjacent
+   message provenance rather than a stored marker row, which is why no new
+   message role was needed (docs/persona-page.md §4). */
+.persona-divider {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.persona-divider::before,
+.persona-divider::after {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line);
+  content: "";
+}
+
+@media (width <= 640px) {
+  .persona-grid {
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  }
+  .persona-drawer {
+    width: 100vw;
+    border-left: 0;
+  }
+}

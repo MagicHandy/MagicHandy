@@ -129,11 +129,15 @@ memory. Concretely:
 An LSO persona row then imports as *values across these axes* plus a preset
 name, which is a mapping job rather than an architecture merge.
 
-**Designed 2026-07-29:** [persona-page.md](persona-page.md) takes this option A
-shape literally — a routed Personas page whose tiles are named, portrait-bearing
-presets over the axes above, plus the reaction-style enum this section asks for.
-It carries the `personas` table, the guardrail table of what a persona may and
-may never set, and a separate dispositioned catalog for lore and longer context.
+**Decision 3 is closed, implemented 2026-07-29.** Option A shipped in the shape
+[persona-page.md](persona-page.md) describes: a routed Personas page whose tiles
+are named, portrait-bearing presets over the axes above, plus the reaction-style
+enum this section asks for (`chat.ReactionStyle`, composed in code between the
+voice identity and the contract, `neutral` composing nothing). An LSO persona row
+now imports as values across `personas.chat_voice`, `reaction_style`,
+`prompt_set_id`, `default_focus_area`, `name`, and `description` — a field mapping
+rather than an architecture merge. Personalization remains one model: nothing was
+added that carries voice, anatomy, and memory a second time.
 
 ---
 

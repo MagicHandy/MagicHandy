@@ -16,6 +16,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
+	"github.com/mapledaemon/MagicHandy/internal/persona"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
@@ -41,6 +42,10 @@ type interactiveChatPromptContext struct {
 	History             []llm.Message
 	ConversationContext *chat.ConversationContext
 	CurrentMood         chat.Mood
+	// Persona is the active session's persona, or nil for the global axis values.
+	// It is carried so the status event and per-message provenance can report who
+	// the reply came from without resolving it a second time.
+	Persona *persona.Persona
 }
 
 type sseEmitter func(string, any) error
@@ -131,7 +136,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	setSSEHeaders(w)
 
-	if err := emitChatStarted(emit, settings.LLM, prompt.ID, sessionID, userSeq, promptContext.CurrentMood); err != nil {
+	if err := emitChatStarted(emit, settings.LLM, prompt.ID, sessionID, userSeq, promptContext.CurrentMood, promptContext.Persona); err != nil {
 		return
 	}
 
@@ -141,12 +146,27 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}, func(event chat.StreamEvent) error {
 		return emitChatStreamEvent(emit, event)
 	})
-	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, err, sessionID, chat.MessageDiagnostics{
+	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, err, sessionID,
+		interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona),
+		promptContext.CurrentMood, started)
+}
+
+// interactiveDiagnostics is the bounded, non-secret provenance stored on the
+// assistant row. Recording the persona name beside its id is what keeps a
+// transcript readable after the persona is renamed or deleted, and it is what a
+// mid-conversation persona divider is derived from.
+func interactiveDiagnostics(settings config.LLMSettings, promptID string, active *persona.Persona) chat.MessageDiagnostics {
+	diagnostics := chat.MessageDiagnostics{
 		Source:    "interactive",
-		Provider:  settings.LLM.Provider,
-		Model:     settings.LLM.Model,
-		PromptSet: prompt.ID,
-	}, promptContext.CurrentMood, started)
+		Provider:  settings.Provider,
+		Model:     settings.Model,
+		PromptSet: promptID,
+	}
+	if active != nil {
+		diagnostics.PersonaID = active.ID
+		diagnostics.PersonaName = active.Name
+	}
+	return diagnostics
 }
 
 func decodeChatStreamRequest(w http.ResponseWriter, r *http.Request) (chatStreamRequest, bool) {
@@ -186,9 +206,11 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
+	active := s.sessionPersona(sessionID)
 	result := interactiveChatPromptContext{
-		Capabilities: chatCapabilities(settings),
+		Capabilities: chatCapabilities(settings, active),
 		History:      make([]llm.Message, 0, len(loggedHistory)),
+		Persona:      active,
 	}
 	for _, message := range loggedHistory {
 		result.History = append(result.History, llm.Message{Role: message.Role, Content: message.Content})
@@ -202,8 +224,20 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 	}
 	result.Capabilities.MoodTracking = true
 	result.CurrentMood = persisted.CurrentMood
+	description, personaName := settings.PersonaDescription, ""
+	if active != nil {
+		// A persona's own description replaces the global one rather than joining
+		// it: two partner descriptions in one prompt is a contradiction, not extra
+		// context. An empty persona description falls back to the global value so
+		// selecting a persona never silently discards what the user wrote.
+		if active.Description != "" {
+			description = active.Description
+		}
+		personaName = active.Name
+	}
 	result.ConversationContext = &chat.ConversationContext{
-		PersonaDescription:     settings.PersonaDescription,
+		PersonaDescription:     description,
+		PersonaName:            personaName,
 		UserAnatomy:            settings.UserAnatomy,
 		CustomAnatomy:          settings.CustomAnatomy,
 		CurrentMood:            persisted.CurrentMood,
@@ -212,8 +246,27 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 	return result, nil
 }
 
-func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, sessionID string, userSeq int64, currentMood chat.Mood) error {
-	return emit("status", map[string]any{
+// sessionPersona resolves the persona bound to one conversation. Every failure
+// resolves to nil, which means "use the global axis values from Settings": a
+// deleted persona, an unreadable store, or a session with no binding all reduce
+// to the same safe answer rather than failing a turn.
+func (s *Server) sessionPersona(sessionID string) *persona.Persona {
+	if s.personas == nil || s.chatLog == nil {
+		return nil
+	}
+	personaID, err := s.chatLog.SessionPersona(sessionID)
+	if err != nil || personaID == "" {
+		return nil
+	}
+	item, err := s.personas.Get(context.Background(), personaID)
+	if err != nil {
+		return nil
+	}
+	return &item
+}
+
+func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, sessionID string, userSeq int64, currentMood chat.Mood, active *persona.Persona) error {
+	payload := map[string]any{
 		"state":        "streaming",
 		"provider":     settings.Provider,
 		"model":        settings.Model,
@@ -221,7 +274,12 @@ func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, ses
 		"session_id":   sessionID,
 		"user_seq":     userSeq,
 		"current_mood": currentMood,
-	})
+	}
+	if active != nil {
+		payload["persona_id"] = active.ID
+		payload["persona_name"] = active.Name
+	}
+	return emit("status", payload)
 }
 
 func emitChatStreamEvent(emit sseEmitter, event chat.StreamEvent) error {
@@ -1070,16 +1128,26 @@ func (s *Server) chatPatternChoicesFor(capabilities chat.Capabilities) ([]chat.P
 	return result, nil
 }
 
-// chatCapabilities resolves the settings gates into the chat-layer shape.
-func chatCapabilities(settings config.LLMSettings) chat.Capabilities {
+// chatCapabilities resolves the settings gates into the chat-layer shape. An
+// active persona overrides the two reply-shaping axes and nothing else.
+//
+// The capability gates come from settings on every path, deliberately: a persona
+// is a portrait with a name, and it must never be able to grant a motion
+// capability the user did not switch on (docs/persona-page.md §3).
+func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat.Capabilities {
 	resolved := settings.Capabilities()
-	return chat.Capabilities{
+	capabilities := chat.Capabilities{
 		Motion:               resolved.Motion,
 		Patterns:             resolved.Patterns,
 		AreaFocus:            resolved.AreaFocus,
 		ExperimentalPatterns: resolved.ExperimentalPatterns,
 		Voice:                chatVoiceLevel(settings.ChatVoice),
 	}
+	if active != nil {
+		capabilities.Voice = chatVoiceLevel(active.ChatVoice)
+		capabilities.Style = chatReactionStyle(active.ReactionStyle)
+	}
+	return capabilities
 }
 
 func chatVoiceLevel(voice string) chat.VoiceLevel {
@@ -1092,6 +1160,26 @@ func chatVoiceLevel(voice string) chat.VoiceLevel {
 		return chat.VoiceExplicit
 	default:
 		return chat.VoiceUtility
+	}
+}
+
+// chatReactionStyle maps the stored style token onto the prompt-layer enum. An
+// unrecognized token resolves to neutral, which composes nothing — the same
+// answer a persona that never chose a style gets.
+func chatReactionStyle(style string) chat.ReactionStyle {
+	switch style {
+	case config.LLMReactionStylePlayful:
+		return chat.StylePlayful
+	case config.LLMReactionStyleTender:
+		return chat.StyleTender
+	case config.LLMReactionStyleDominant:
+		return chat.StyleDominant
+	case config.LLMReactionStyleSubmissive:
+		return chat.StyleSubmissive
+	case config.LLMReactionStyleTeasing:
+		return chat.StyleTeasing
+	default:
+		return chat.StyleNeutral
 	}
 }
 

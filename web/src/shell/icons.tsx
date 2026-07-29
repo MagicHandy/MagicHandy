@@ -79,6 +79,13 @@ export const VideoIcon = ({ size = 18, className }: P) => (
     <path d="m17 10 4-2v8l-4-2" />
   </svg>
 );
+export const PersonaIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <rect x="4" y="4" width="16" height="16" rx="3" />
+    <circle cx="12" cy="10" r="2.4" />
+    <path d="M7.6 17.4a4.6 4.6 0 0 1 8.8 0" />
+  </svg>
+);
 export const PauseIcon = ({ size = 18, className }: P) => (
   <svg {...base(size, className)} fill="currentColor" stroke="none">
     <rect x="6" y="5" width="4" height="14" rx="1" />

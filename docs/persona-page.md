@@ -5,8 +5,9 @@ first tile, each persona carrying a portrait, name, and description — plus a
 dispositioned set of ideas for giving the model deeper "lore" and longer
 conversational context without degrading motion control.
 
-Nothing here is scheduled. Sections 1–6 are a buildable design; section 7 is a
-ranked idea catalog in the style of [feature-ideas.md](feature-ideas.md).
+**Status: sections 1–6 shipped 2026-07-29.** Section 7 remains a ranked idea
+catalog in the style of [feature-ideas.md](feature-ideas.md); nothing in it is
+scheduled, and lore is deliberately not built (see §6).
 
 [persona-page-sketch.svg](persona-page-sketch.svg) is the layout: the rail with
 its new entry, the tile grid with its leading create tile, and the editor drawer
@@ -359,18 +360,45 @@ confirmed and says what survives — sessions keep their transcripts.
 
 Each is independently shippable and independently revertible.
 
-| # | Scope | Notes |
+| # | Scope | Status |
 | --- | --- | --- |
-| 1 | Store + migration v16, validation, tests | No UI. Includes the `neutral`-composes-nothing test. |
-| 2 | `personas` CRUD API + portrait upload/serve | Reuses the thumbnail path-safety helper. |
-| 3 | Route, grid, new-persona tile, monogram fallback | Read-only tiles over slice 2. |
-| 4 | Editor drawer, duplicate, delete | Full CRUD in the UI. |
-| 5 | Session binding + chat header switcher + provenance | The point where personas actually change replies. |
-| 6 | Reaction-style axis composition | Deliberately last: it touches prompt composition, so it lands with nothing else in flight. |
-| 7 | Lore (section 7, its own design pass) | Gated on the budget work. |
+| 1 | Store + migration v16, validation, tests | **Shipped.** `internal/persona`; `personas` table plus `chat_sessions.persona_id` by guarded `ALTER`. |
+| 2 | `personas` CRUD API + portrait upload/serve | **Shipped.** `internal/httpapi/personas.go`; reuses the thumbnail path-safety and atomic-replace shape. |
+| 3 | Route, grid, new-persona tile, monogram fallback | **Shipped.** `#/personas`, second in the rail. |
+| 4 | Editor drawer, duplicate, delete | **Shipped.** Browser-side canvas resize to JPEG at max edge 512. |
+| 5 | Session binding + chat header switcher + provenance | **Shipped.** `PUT /api/chat/sessions/{id}/persona`; provenance carries `persona_id` and `persona_name`. |
+| 6 | Reaction-style axis composition | **Shipped.** `chat.ReactionStyle`, composed between the voice identity and the contract. |
+| 7 | Lore | **Not built.** Gated on the §7.2-A composition inspector and the §7.4 measurement, because the budget control it needs cannot be honest without them. `persona_lore` is deliberately not in the v16 schema: an unused column is a claim the feature exists. |
 
-Slices 1–5 change **no prompt bytes** for anyone who does not create a persona.
-That is the property that makes this safe to ship incrementally.
+Slices 1–5 change **no prompt bytes** for anyone who does not create a persona,
+and slice 6 changes none for a persona left on `neutral`. Both are asserted by
+test (`TestNeutralStyleLeavesThePromptByteIdentical`), which is the property that
+made this safe to ship in one pass.
+
+### What the live pass caught
+
+Two things that source reading did not, recorded because both generalize:
+
+- **`<label>` is `display: inline`, so the container-owned vertical rhythm did
+  not apply to it.** The measured gaps in the editor drawer were 1px where 10 or
+  12 was intended and 23px where 12 was — the same "spacing declared in the wrong
+  place" family as the earlier settings pass, arriving through a different door.
+  The fix is the existing convention: a field label is `<label className="field">`,
+  which supplies `display: flex; flex-direction: column`. After it, every gap in
+  the drawer measures exactly 10 / 12 / 18.
+- **A 200 response with an unexpected body shape crashed the chat route.** The
+  switcher renders in the chat header, so `payload.personas` being absent threw
+  during render and the error boundary took out the whole conversation. Normalized
+  at the client boundary instead of in each component: a persona is decoration on
+  top of chat and must never be able to break it.
+
+Verified live against the running app: the persona axes reach the composed prompt
+(`REACTION STYLE - TENDER`, the quoted name, the intimate identity block), the
+settings document is untouched by a selection, a portrait round-trips
+byte-for-byte with `nosniff`, a non-image is refused with 415, an unknown style
+is refused with 400, and the drawer never takes Stop's click — Stop is
+`z-index: 1200` against the drawer's 40, confirmed with `elementFromPoint` at
+mobile width where the drawer covers the full viewport.
 
 ---
 
