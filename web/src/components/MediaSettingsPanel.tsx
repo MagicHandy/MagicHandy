@@ -123,7 +123,8 @@ export function MediaSettingsPanel({
   const summary = scan?.summary;
   return (
     <div className="media-settings">
-      <h2 className="section-title">{t("Video script playback")}</h2>
+      <div className="group">
+      <h3 className="group-title">{t("Video script playback")}</h3>
       <label className="toggle-line">
         <span className="toggle">
           <input
@@ -151,8 +152,9 @@ export function MediaSettingsPanel({
         />
         <small>{t("Positive delays the device against the picture, negative advances it. Some offset is normal and is not a fault in the video or the script: scripts are authored to a particular sense of timing, screens add their own display delay, and the device takes real time to move. Start at 0, and adjust only if motion consistently feels early or late. A change during playback requires Play again.")}</small>
       </label>
-      <div className="divider" />
-      <h2 className="section-title">{t("Library locations")}</h2>
+      </div>
+      <div className="group">
+      <h3 className="group-title">{t("Library locations")}</h3>
       <div className="media-location-list" aria-label={t("Video library locations")}>
         {locations.length === 0 && <p className="form-status">{t("No locations configured.")}</p>}
         {locations.map((location) => {
@@ -169,7 +171,6 @@ export function MediaSettingsPanel({
         <HostPathField label={t("New location")} value={draft} kind="directory" disabled={locked || scan?.running} placeholder={t("Choose a video folder")} onChange={setDraft} />
         <button type="button" className="btn btn-secondary" disabled={locked || scan?.running || !draft.trim()} onClick={addLocation}>{t("Add location")}</button>
       </div>
-      <div className="divider" />
       <div className="media-scan-controls">
         <div>
           <strong>{t("Catalog scan")}</strong>
@@ -186,7 +187,7 @@ export function MediaSettingsPanel({
       {(summary?.issues ?? []).map((issue) => <p className="form-status media-playback-error" role="alert" key={`${issue.location}:${issue.message}`}>{issue.location}: {issue.message}</p>)}
       {scan?.error && <p className="form-status media-playback-error" role="alert">{scan.error}</p>}
       {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
-      <div className="divider" />
+      </div>
       <MediaToolsSettings media={media} locked={locked} onChange={onChange} />
     </div>
   );

@@ -46,7 +46,8 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > workspaces as routed pages under a hash router. The shell-owned connection
 > manager stays available on every route and owns live provider actions plus
 > speed/stroke limits. Chat keeps Autopilot, live motion behavior, and the
-> visualizer; the manual device test lives under Settings > Diagnostics.
+> visualizer; the manual device test lives under Settings > Device, beside the
+> connection it exercises.
 > Settings is a routed page with sibling sections
 > (`#/settings/device|model|voice|prompts|diagnostics` — provider-scoped
 > compaction implemented in Slice 13.5; see
@@ -57,7 +58,7 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > (status bar + single control sidebar + settings window). They are kept
 > because their rationale shaped the current shell — especially the compact
 > control column and immediate-apply grouping — but they no longer describe
-> the build. The testing-badged manual motion group now lives in Diagnostics.
+> the build. The testing-badged manual motion group now lives under Device.
 
 ### Historical: persistent control bar (pre-React shell)
 
@@ -142,7 +143,9 @@ current unsaved draft is retained after shutdown; saved tabs are unaffected.
 Starting clean always discards the prior draft, so its retention toggle is off
 and unavailable in that mode. A clean exit applies the choice immediately and
 the next startup repeats it after a crash.
-The testing-badged Manual motion group lives in `#/settings/diagnostics`; it
+The testing-badged Manual motion group lives in `#/settings/device` — it drives
+the device, so it belongs with the connection that carries it rather than among
+read-only diagnostics — and it
 identifies an active test from the backend motion target's `manual_ui` source,
 never from the generic engine-running flag. Starting a manual test stops any
 active run and drains its autonomous owner before the diagnostic claims the
@@ -154,6 +157,12 @@ limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
 Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
 the local media catalog and player, and
+Within a section, distinct categories are `.group` cards rather than runs of
+content separated by rules. A rule says "something changed"; a bordered card
+says "this is a different thing", which is what a reader scanning a long section
+needs. Sections long enough to scroll — media, prompts, diagnostics, voice —
+are grouped this way; a section that fits on one screen does not need it.
+
 `#/settings/device|media|model|chat|voice|prompts|diagnostics` are sibling sections
 of the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the
@@ -447,10 +456,15 @@ sections below; none remains an active parity regression:
    next to Stop, including chat-driven pause. MagicHandy has only Stop; the
    engine has no pause state (Phase 11 with the mode work, since resume must
    preserve phase).
-6. **Copyable diagnostics.** The old app had one-click copyable system status
-   for bug reports. MagicHandy shows a diagnostics grid and raw trace export
-   but no copyable summary bundle (Phase 9B — needed for hardware-validation
-   bug reports).
+6. **Copyable diagnostics.** *Closed.* Diagnostics is now a sectioned
+   plain-text report with a Copy button, in the shape StrokeGPT-ReVibed used:
+   `Section` / `- key: value`, readable in place and pasteable into a bug
+   report. What is displayed is byte-for-byte what is copied, so nobody has to
+   trust a hidden bundle. It adds a **Browser** section reporting which video
+   codecs this browser will actually decode, which is the one thing a user
+   cannot learn from the app's own state and the usual reason a video will not
+   play. Secrets cannot reach it: the report is built from the public settings
+   projection, where keys exist only as `*_key_set` booleans.
 7. **Reset to defaults.** The old app had an explicit settings reset;
    MagicHandy only auto-recovers from a corrupt file (Phase 10 with the
    settings UI).

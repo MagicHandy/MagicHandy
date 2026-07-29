@@ -1123,5 +1123,18 @@
   "Set an FFmpeg location in Settings > Media to enable conversion.": "在“设置 > 媒体”中设置 FFmpeg 位置以启用转换。",
   "needs conversion": "需转换",
   "{count} files cannot be played by this browser.": "此浏览器无法播放 {count} 个文件。",
-  "{count} files could not be converted.": "有 {count} 个文件无法转换。"
+  "{count} files could not be converted.": "有 {count} 个文件无法转换。",
+  "Status report": "状态报告",
+  "Copy report": "复制报告",
+  "Diagnostics report": "诊断报告",
+  "Diagnostics report copied.": "已复制诊断报告。",
+  "Everything below is what gets copied. No keys or credentials are included.": "下面显示的内容就是将被复制的内容。不包含任何密钥或凭据。",
+  "Trace export": "导出跟踪",
+  "A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.": "近期运行活动的详细机器可读记录，可附在缺陷报告中。",
+  "Logging": "日志",
+  "Higher levels record more detail in the trace export. They do not change what the report below shows.": "级别越高，导出的跟踪记录越详细。这不会改变下方报告显示的内容。",
+  "Local server": "本地服务器",
+  "FFmpeg": "FFmpeg",
+  "Reply style": "回复风格",
+  "Persona and anatomy": "角色与身体设定"
 }

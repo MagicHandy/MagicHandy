@@ -85,7 +85,8 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
 
   return (
     <div className="media-tools-settings">
-      <h2 className="section-title">{t("Thumbnails and conversion")}</h2>
+      <div className="group">
+      <h3 className="group-title">{t("FFmpeg")}</h3>
       <p className="form-status media-tool-hint">{t("Thumbnails for unopened videos, and repairing files this browser cannot play, both need FFmpeg. Nothing else in the app does, and everything else keeps working without it.")}</p>
 
       <HostPathField
@@ -105,8 +106,9 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
       </p>
       <p className="form-status media-tool-hint">{t("ffprobe must sit beside ffmpeg; conversion uses it to decide whether a file needs re-encoding at all. A build that can encode H.265 is a GPL build — MagicHandy runs it as a separate program and never links it.")}</p>
 
-      <div className="divider" />
-      <h3 className="section-title media-tool-subsection">{t("Thumbnails")}</h3>
+      </div>
+      <div className="group">
+      <h3 className="group-title">{t("Thumbnails")}</h3>
       <p className="form-status media-tool-hint">{t("Videos you play get a cover automatically from the frame the browser already decoded. This fills in the rest.")}</p>
       <div className="media-tool-actions">
         <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => void run(() => api.generateMediaThumbnails(false), t("Thumbnail generation started."))}>{t("Generate missing")}</button>
@@ -114,8 +116,9 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(() => api.clearMediaThumbnails(), t("Thumbnails cleared."))}>{t("Clear thumbnails")}</button>
       </div>
 
-      <div className="divider" />
-      <h3 className="section-title media-tool-subsection">{t("Conversion")}</h3>
+      </div>
+      <div className="group">
+      <h3 className="group-title">{t("Conversion")}</h3>
       <p className="form-status media-tool-hint">{t("Conversion repairs files that cannot play. A file that already plays is never converted, by any path — not by a button, not by a scan, not to save space. The original is never modified or deleted; the converted copy is written beside it and the original is hidden from the library.")}</p>
 
       <label className="toggle-line">
@@ -188,8 +191,9 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => void run(() => api.convertMedia([]), t("Conversion started."))}>{t("Convert everything that cannot play")}</button>
       </div>
 
-      <div className="divider" />
-      <h3 className="section-title media-tool-subsection">{t("During a scan")}</h3>
+      </div>
+      <div className="group">
+      <h3 className="group-title">{t("During a scan")}</h3>
       <p className="form-status media-tool-hint">{t("These ride a scan you start. Never at startup, never on a timer.")}</p>
       <label className="toggle-line">
         <span className="toggle">
@@ -244,6 +248,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
       ))}
       {status && <p className="form-status" role="status">{status}</p>}
       {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
+      </div>
     </div>
   );
 }

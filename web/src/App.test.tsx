@@ -1262,12 +1262,17 @@ describe("app shell safety invariants", () => {
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/diagnostics");
-    expect(await screen.findByText("8 queued / 875ms")).toBeInTheDocument();
-    expect(screen.getByText("11ms last / 29ms max")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /copy summary/i }));
+    // The report is one text block, so pacing is asserted against its content
+    // rather than as separate elements.
+    const report = await screen.findByLabelText("Diagnostics report");
+    expect(report.textContent).toContain("8 queued / 875ms");
+    expect(report.textContent).toContain("11ms last / 29ms max");
+    expect(report.textContent).toContain("Intiface pending ACKs: 2");
+
+    fireEvent.click(screen.getByRole("button", { name: /copy report/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-    expect(String(writeText.mock.calls[0][0])).toContain('"intiface_transport"');
-    expect(String(writeText.mock.calls[0][0])).toContain('"pending_acks": 2');
+    // What is shown is exactly what is copied.
+    expect(String(writeText.mock.calls[0][0])).toBe(report.textContent);
   });
 
   it("seeds chat history from the shared server log", async () => {

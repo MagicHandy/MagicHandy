@@ -1,11 +1,12 @@
 import { t, translateKnown } from "../i18n";
-// Diagnostics: a read-only status grid from backend state, a one-click copyable
-// summary for bug reports, trace export, and a double-confirm settings reset
-// (memories and prompt sets are deliberately untouched by reset).
-import { useState } from "react";
+// Diagnostics: one copyable plain-text report, a trace export, and a
+// double-confirm settings reset. Each is a separate group because they are
+// separate things — reading state, exporting a file, and destroying settings.
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
-import type { PublicSettings } from "../api/types";
+import type { MediaToolStatus, PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
+import { buildDiagnosticsReport } from "./diagnostics-report";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
@@ -39,61 +40,44 @@ export function DiagnosticsPanel({
   const { show } = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const engine = state?.motion?.engine;
-  const intiface = state?.intiface_transport?.status;
-  let engineState = "idle";
-  if (engine?.starting) {
-    engineState = "starting";
-  } else if (engine?.completing) {
-    engineState = "stopping";
-  } else if (engine?.running) {
-    engineState = "running";
-  } else if (engine?.paused) {
-    engineState = "paused";
-  }
+  const [tools, setTools] = useState<MediaToolStatus | null>(null);
+  // Regenerating on a timestamp rather than on every render keeps the report
+  // stable while it is being read and selected.
+  const [generatedAt, setGeneratedAt] = useState(() => new Date());
 
-  const rows: Array<[string, string]> = [
-    ["Version", String(state?.version ?? "dev")],
-    ["Commit", String(state?.commit ?? "unknown")],
-    ["Uptime", `${state?.uptime_seconds ?? 0}s`],
-    ["Engine", engineState],
-    ["Estimated position", engine?.last_sample ? `${Math.round(engine.last_sample.position_percent)}%` : "—"],
-    ["Data dir", String(state?.data_dir ?? "—")],
-    ["Datastore", String(state?.datastore_path ?? "—")],
-  ];
-  if (intiface) {
-    rows.push(
-      ["Intiface playback", intiface.playback_state || "idle"],
-      ["Intiface buffer", `${intiface.queue_depth} queued / ${intiface.queue_coverage_ms ?? 0}ms`],
-      ["Intiface pending ACKs", String(intiface.pending_acks ?? 0)],
-      ["Intiface ACK latency", `${intiface.last_ack_latency_ms ?? 0}ms last / ${intiface.max_ack_latency_ms ?? 0}ms max`],
-      ["Intiface send lateness", `${intiface.last_send_lateness_ms ?? 0}ms last / ${intiface.max_send_lateness_ms ?? 0}ms max`],
-      ["Intiface resolution", intiface.selected_resolution_percent ? `${intiface.selected_resolution_percent.toFixed(3)}%` : "—"],
-    );
-  }
+  const loadTools = useCallback(async () => {
+    try {
+      const response = await api.mediaTools();
+      setTools(response.tools);
+    } catch {
+      // FFmpeg status is one line of the report; failing to read it must not
+      // cost the user the other six sections.
+      setTools(null);
+    }
+  }, []);
+
+  useEffect(() => { void loadTools(); }, [loadTools]);
+
+  const report = useMemo(
+    () => buildDiagnosticsReport({ state, tools, generatedAt }),
+    [state, tools, generatedAt],
+  );
 
   async function copy() {
-    const bundle = JSON.stringify(
-      {
-        version: state?.version,
-        commit: state?.commit,
-        uptime_seconds: state?.uptime_seconds,
-        motion: state?.motion,
-        transport: state?.transport,
-        intiface_transport: state?.intiface_transport,
-        controller: state?.controller,
-        settings_status: state?.settings_status,
-      },
-      null,
-      2,
-    );
     try {
-      await navigator.clipboard.writeText(bundle);
-      show(t("Diagnostics summary copied."));
+      await navigator.clipboard.writeText(report);
+      show(t("Diagnostics report copied."));
     } catch {
       show(t("Clipboard unavailable."), "error");
     }
   }
+
+  async function regenerate() {
+    refresh();
+    await loadTools();
+    setGeneratedAt(new Date());
+  }
+
   async function exportTrace() {
     try {
       const data = await api.exportTrace();
@@ -102,6 +86,7 @@ export function DiagnosticsPanel({
       show(msg(e), "error");
     }
   }
+
   async function reset() {
     if (resetting) return;
     if (!confirmReset) {
@@ -129,19 +114,22 @@ export function DiagnosticsPanel({
 
   return (
     <>
-      <div className="row-actions hint-block">
-        <button type="button" className="btn btn-secondary" onClick={() => void copy()}>{t("Copy summary")}</button>
+      <div className="group">
+        <h3 className="group-title">{t("Status report")}</h3>
+        <p className="hint-block">{t("Everything below is what gets copied. No keys or credentials are included.")}</p>
+        <div className="row-actions">
+          <button type="button" className="btn btn-primary" onClick={() => void copy()}>{t("Copy report")}</button>
+          <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void regenerate()}>{t("Refresh")}</button>
+        </div>
+        <pre className="diagnostics-report" aria-label={t("Diagnostics report")}>{report}</pre>
+      </div>
+
+      <div className="group">
+        <h3 className="group-title">{t("Trace export")}</h3>
+        <p className="hint-block">{t("A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.")}</p>
         <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>{t("Export trace")}</button>
       </div>
-      <dl className="meta-grid">
-        {rows.map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="divider" />
+
       <div className="group">
         <h3 className="group-title">{t("Reset")}</h3>
         <p className="hint-block">{t("Restores every setting to factory defaults, including the connection key. Saved memories and prompt sets are not touched.")}</p>

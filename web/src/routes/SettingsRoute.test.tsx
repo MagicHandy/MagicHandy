@@ -194,6 +194,18 @@ describe("SettingsRoute", () => {
     expect(screen.getByRole("option", { name: "ペニス" })).toBeInTheDocument();
   });
 
+  // Driving the device by hand is a device tool, not a diagnostic, so it sits
+  // with the connection that carries it.
+  it("offers the manual motion test from the device section", async () => {
+    app.hash = "#/settings/device";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    expect(await screen.findByRole("heading", { name: /Manual motion/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start test" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Stop test" })).toBeDisabled();
+  });
+
   it("reloads the routed form after factory reset before it can be saved again", async () => {
     let current = settings("trace");
     getSettings.mockImplementation(async () => ({ settings: current }));
@@ -203,9 +215,6 @@ describe("SettingsRoute", () => {
     });
     render(<SettingsRoute />);
     expect(await screen.findByRole("combobox", { name: "Diagnostics verbosity" })).toHaveValue("trace");
-    expect(screen.getByRole("heading", { name: /Manual motion/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start test" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Stop test" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Reset all settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm reset all settings" }));
