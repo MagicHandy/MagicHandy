@@ -26,7 +26,30 @@ const (
 
 var errFileLimit = errors.New("media scan file limit reached")
 
-// ScanSummary is the durable-catalog delta from one explicit scan.
+// ScanTrigger identifies why a catalog scan started.
+type ScanTrigger string
+
+const (
+	// ScanTriggerManual is a controller-requested scan.
+	ScanTriggerManual ScanTrigger = "manual"
+	// ScanTriggerStartup is an opted-in background scan during core startup.
+	ScanTriggerStartup ScanTrigger = "startup"
+)
+
+// ScanOptions are snapshotted when a scan starts.
+type ScanOptions struct {
+	// RemoveMissing deletes rows absent from a completely enumerated root.
+	// Partial and unavailable roots are preserved regardless of this value.
+	RemoveMissing bool
+	Trigger       ScanTrigger
+}
+
+// DefaultScanOptions returns the product defaults for direct callers.
+func DefaultScanOptions() ScanOptions {
+	return ScanOptions{RemoveMissing: true, Trigger: ScanTriggerManual}
+}
+
+// ScanSummary is the durable-catalog delta from one scan.
 type ScanSummary struct {
 	Locations int         `json:"locations"`
 	Added     int         `json:"added"`
@@ -46,6 +69,7 @@ type ScanIssue struct {
 // ScanState is safe to poll while a scan runs.
 type ScanState struct {
 	Running         bool        `json:"running"`
+	Trigger         ScanTrigger `json:"trigger,omitempty"`
 	Cancellable     bool        `json:"cancellable"`
 	Cancelled       bool        `json:"cancelled"`
 	StartedAt       string      `json:"started_at,omitempty"`
@@ -99,17 +123,34 @@ func emptyScanState() ScanState {
 
 // StartScan snapshots configured roots and starts one cancellable scan.
 func (c *Catalog) StartScan(locations []string) (ScanState, error) {
-	return c.StartScanThen(locations, nil)
+	return c.StartScanWithOptions(locations, DefaultScanOptions())
+}
+
+// StartScanWithOptions starts a scan with an explicit missing-file policy.
+func (c *Catalog) StartScanWithOptions(locations []string, options ScanOptions) (ScanState, error) {
+	return c.StartScanThenWithOptions(locations, options, nil)
 }
 
 // StartScanThen starts a scan and runs after() once it has finished, which is
-// how the opt-in generate-and-convert options ride a scan the user started.
+// how the opt-in generate-and-convert options ride a scan.
 // The callback receives the final state so it can decline: a cancelled or
 // failed scan should not silently launch an hour of encoding.
 func (c *Catalog) StartScanThen(locations []string, after func(ScanState)) (ScanState, error) {
+	return c.StartScanThenWithOptions(locations, DefaultScanOptions(), after)
+}
+
+// StartScanThenWithOptions starts a scan with explicit policy and follow-up.
+func (c *Catalog) StartScanThenWithOptions(
+	locations []string,
+	options ScanOptions,
+	after func(ScanState),
+) (ScanState, error) {
 	roots, err := normalizeRoots(locations)
 	if err != nil {
 		return ScanState{}, err
+	}
+	if options.Trigger != ScanTriggerStartup {
+		options.Trigger = ScanTriggerManual
 	}
 
 	c.scanMu.Lock()
@@ -124,13 +165,14 @@ func (c *Catalog) StartScanThen(locations []string, after func(ScanState)) (Scan
 	c.scanCancel = cancel
 	c.scanState = ScanState{
 		Running:     true,
+		Trigger:     options.Trigger,
 		Cancellable: true,
 		StartedAt:   time.Now().UTC().Format(time.RFC3339Nano),
 		Summary:     ScanSummary{Locations: len(roots), Issues: []ScanIssue{}},
 	}
 	state := cloneScanState(c.scanState)
 	c.scanWG.Add(1)
-	go c.runScan(ctx, roots, after)
+	go c.runScan(ctx, roots, options, after)
 	return state, nil
 }
 
@@ -152,7 +194,7 @@ func (c *Catalog) CancelScan() ScanState {
 	return cloneScanState(c.scanState)
 }
 
-func (c *Catalog) runScan(ctx context.Context, roots []string, after func(ScanState)) {
+func (c *Catalog) runScan(ctx context.Context, roots []string, options ScanOptions, after func(ScanState)) {
 	defer c.scanWG.Done()
 	summary := ScanSummary{Locations: len(roots), Issues: []ScanIssue{}}
 	var runErr error
@@ -180,7 +222,7 @@ func (c *Catalog) runScan(ctx context.Context, roots []string, after func(ScanSt
 				Message:  "location was only partially scanned; existing catalog entries were preserved",
 			})
 		}
-		delta, err := c.applyRootScan(ctx, result)
+		delta, err := c.applyRootScan(ctx, result, options)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				runErr = err
@@ -206,15 +248,17 @@ func (c *Catalog) runScan(ctx context.Context, roots []string, after func(ScanSt
 	state := cloneScanState(c.scanState)
 	c.scanMu.Unlock()
 
-	// A cancelled or failed scan does not trigger follow-up work. The catalog
-	// it produced is incomplete, and launching an hour of encoding off a scan
-	// the user just stopped would be the opposite of what they asked for.
+	// A cancelled or failed scan does not trigger follow-up work. Its catalog
+	// is incomplete, and launching an hour of encoding from incomplete input
+	// would be surprising for both manual and startup scans.
 	if after != nil && !state.Cancelled && state.Error == "" {
 		after(state)
 	}
 
 	level := slogLevelForScan(state)
 	c.logger.Log(context.Background(), level, "media library scan finished",
+		"trigger", state.Trigger,
+		"remove_missing", options.RemoveMissing,
 		"cancelled", state.Cancelled,
 		"locations", state.Summary.Locations,
 		"added", state.Summary.Added,
@@ -417,7 +461,7 @@ func containsKey(keys map[string]struct{}, key string) bool {
 	return ok
 }
 
-func (c *Catalog) applyRootScan(ctx context.Context, result rootScan) (ScanSummary, error) {
+func (c *Catalog) applyRootScan(ctx context.Context, result rootScan, options ScanOptions) (ScanSummary, error) {
 	delta := ScanSummary{Issues: []ScanIssue{}}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var dropped []string
@@ -449,12 +493,15 @@ func (c *Catalog) applyRootScan(ctx context.Context, result rootScan) (ScanSumma
 			if _, ok := found[id]; ok {
 				continue
 			}
-			if current.Missing {
+			if options.RemoveMissing {
 				if _, err := tx.ExecContext(ctx, `DELETE FROM media_videos WHERE id = ?`, id); err != nil {
 					return err
 				}
 				dropped = append(dropped, id)
 				delta.Removed++
+				continue
+			}
+			if current.Missing {
 				continue
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE media_videos SET missing = 1, scanned_at = ? WHERE id = ?`, now, id); err != nil {

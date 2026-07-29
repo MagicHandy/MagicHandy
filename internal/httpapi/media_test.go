@@ -19,6 +19,55 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
+func TestMediaAutoScanStartsAfterPersistentDomainsOpen(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "startup.mp4"), []byte("video"), 0o600); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+	store, err := config.OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	saveSettings(t, store, func(settings config.Settings) config.Settings {
+		settings.Media.LibraryPaths = []string{root}
+		settings.Media.AutoScanOnStartup = true
+		settings.Media.RemoveMissingOnScan = true
+		return settings
+	})
+
+	server := newTestServerWithStore(t, store, Runtime{})
+	waitForMediaScan(t, server)
+	state := server.media.ScanState()
+	if state.Trigger != media.ScanTriggerStartup || state.StartedAt == "" || state.Summary.Added != 1 {
+		t.Fatalf("startup scan state = %+v", state)
+	}
+	videos, err := server.media.List(t.Context())
+	if err != nil || len(videos) != 1 {
+		t.Fatalf("startup catalog: videos=%+v err=%v", videos, err)
+	}
+}
+
+func TestMediaAutoScanRemainsOptIn(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "manual.mp4"), []byte("video"), 0o600); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+	store, err := config.OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	saveSettings(t, store, func(settings config.Settings) config.Settings {
+		settings.Media.LibraryPaths = []string{root}
+		settings.Media.AutoScanOnStartup = false
+		return settings
+	})
+
+	server := newTestServerWithStore(t, store, Runtime{})
+	if state := server.media.ScanState(); state.Running || state.StartedAt != "" {
+		t.Fatalf("unexpected startup scan = %+v", state)
+	}
+}
+
 func TestMediaScanCatalogAndRangeStreaming(t *testing.T) {
 	server := newTestServer(t)
 	root := t.TempDir()

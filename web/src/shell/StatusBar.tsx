@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
-// connection disclosure. Motion controls remain in their routed workspaces.
+// disclosures. Motion controls remain in their routed workspaces.
 import { MotionVisualizer } from "../components/MotionVisualizer";
 import { useAppState } from "../state/app-state";
 import { formatClock } from "../util/format";
 import { ConnectionManager } from "./ConnectionManager";
+import { NotificationCenter } from "./NotificationCenter";
 import { ClockIcon } from "./icons";
+
+type ShellMenu = "connection" | "notifications" | null;
 
 export function StatusBar() {
   const { backendOnline, motion, readOnly, state } = useAppState();
+  const [openMenu, setOpenMenu] = useState<ShellMenu>(null);
   const engine = motion?.engine;
   const awaitingState = state == null;
 
@@ -84,7 +89,16 @@ export function StatusBar() {
       </span>
       <span className="status-spacer" />
       <MotionVisualizer motion={motion} mini />
-      <ConnectionManager />
+      <NotificationCenter
+        open={openMenu === "notifications"}
+        restoreFocusOnClose={openMenu === null}
+        onOpenChange={(open) => setOpenMenu(open ? "notifications" : null)}
+      />
+      <ConnectionManager
+        open={openMenu === "connection"}
+        restoreFocusOnClose={openMenu === null}
+        onOpenChange={(open) => setOpenMenu(open ? "connection" : null)}
+      />
     </div>
   );
 }

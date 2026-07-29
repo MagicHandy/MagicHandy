@@ -1108,3 +1108,38 @@ matched Browser Bluetooth/Intiface evidence.
 
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).
+
+## R26: Library Auto-Scan And Catalog Cleanup
+
+Level: Medium
+
+Description:
+An opted-in startup scan performs bounded filesystem IO without a foreground
+browser action. Automatic cleanup could also erase useful catalog state when a
+removable/network location is offline, only partly readable, or truncated by a
+scan bound. Follow-up thumbnail generation or conversion can amplify that work.
+
+Mitigation:
+
+- startup scanning is off by default, runs at most once per core start, and has
+  no timer or watcher
+- manual and startup triggers use one scanner, one polled backend state, one
+  cancellation path, and one structured scan summary
+- cleanup deletes catalog rows and owned cached thumbnails only, never source
+  media, and only after the corresponding root was enumerated completely
+- unavailable, cancelled, permission-failed, and file-limit-truncated roots
+  preserve every unseen row regardless of the cleanup preference
+- a cancelled or failed scan never starts thumbnail or conversion follow-up
+  work; successful follow-ups remain bounded, cancellable, and visible in the
+  shell notification center
+- tests cover startup opt-in, cleanup on/off, complete-root deletion, partial
+  root preservation, and legacy-setting defaults
+
+Exit evidence:
+
+- automated scanner/config/HTTP tests stay green and a temporary-root UI run
+  shows startup activity, completion, warning, and cleanup summaries without
+  touching source media
+
+Status 2026-07-28: mitigations are implemented. The risk remains Medium pending
+a Windows removable-drive and unavailable-network-root acceptance pass.

@@ -51,6 +51,8 @@ function settings(verbosity: string): PublicSettings {
     ui: { locale: "en" },
     media: {
       library_paths: ["C:\\Media"],
+      auto_scan_on_startup: false,
+      remove_missing_on_scan: true,
       script_offset_ms: 125,
       script_smoothing_percent: 3,
       peak_rounding_ms: 84,
@@ -346,5 +348,25 @@ describe("SettingsRoute", () => {
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].motion.apply_video_speed_limit).toBe(true);
+  });
+
+  it("persists startup and missing-file scan policy", async () => {
+    app.hash = "#/settings/media";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const autoScan = await screen.findByRole("checkbox", { name: /Scan library when MagicHandy starts/ });
+    const removeMissing = screen.getByRole("checkbox", { name: /Remove missing catalog entries/ });
+    expect(autoScan).not.toBeChecked();
+    expect(removeMissing).toBeChecked();
+    fireEvent.click(autoScan);
+    fireEvent.click(removeMissing);
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].media).toMatchObject({
+      auto_scan_on_startup: true,
+      remove_missing_on_scan: false,
+    });
   });
 });

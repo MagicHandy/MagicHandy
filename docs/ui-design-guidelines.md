@@ -142,6 +142,22 @@ by the backend rather than inferred from client controls.
 - Disabled: `opacity .45`, `--surface-2`, `--muted`, no shadow — visibly inert,
   with a reason nearby (never a silent no-op).
 
+### Top-bar notification center
+
+- Shell-owned and route-independent. A compact bell sits immediately before the
+  connection disclosure. It may show a numeric unread badge or a small activity
+  marker, but no decorative glow, pulse, or semantic red badge.
+- The panel is one popover surface, no wider than 390px, with three scan-friendly
+  regions: backend-derived **Activity**, current **Attention**, and bounded
+  current-session **Recent** history. Activity rows show honest progress and
+  link to their owning Settings section.
+- Toasts feed the same history. Mark-read and clear are icon commands with
+  labels/tooltips; notification history is UI feedback, not durable application
+  state. Backend scan/job/health snapshots remain authoritative.
+- Only one shell popover is open at a time. Opening notifications closes the
+  connection manager and vice versa; selecting a linked item closes the panel.
+  The trigger and close button preserve keyboard focus.
+
 ### Top-bar connection manager
 
 - Shell-owned and route-independent. The compact trigger sits at the far right
@@ -262,7 +278,11 @@ by the backend rather than inferred from client controls.
 ### Feedback layer
 
 - Toast: fixed bottom-center, `--surface-3`, `--line-strong`, `--shadow`,
-  `--radius-sm`; slides up on show. One at a time.
+  `--radius-sm`; slides up on show. One at a time. Each toast also enters the
+  top-bar notification center's bounded current-session history.
+- Notification center: anchored below the top bar, one overlay surface with
+  dividers rather than nested cards; constrained height and vertical scrolling
+  keep the shell usable on short viewports.
 - Backend banner: full-width alert, translucent `--danger` fill + border, white
   text; lives at the top of the workspace, immediately below the status bar and
   above routed content.

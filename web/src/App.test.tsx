@@ -8,6 +8,7 @@ import type {
   ConnectionCheckResult,
   IntifaceTransportSnapshot,
   LLMModelManagerSnapshot,
+  MediaSummary,
   TransportDiagnostics,
 } from "./api/types";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
@@ -129,6 +130,7 @@ type TestState = typeof baseState & {
   bluetooth_bridge?: BluetoothBridgeSnapshot;
   cloud_transport?: TransportDiagnostics;
   intiface_transport?: IntifaceTransportSnapshot;
+  media?: MediaSummary;
 };
 
 interface InstallFetchOptions {
@@ -271,14 +273,45 @@ describe("app shell safety invariants", () => {
     }
   });
 
-  it("keeps only the connection disclosure in the compact top bar", async () => {
+  it("keeps only shell disclosures in the compact top bar", async () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     const status = screen.getByRole("region", { name: /status/i });
     expect(within(status).queryByRole("slider")).toBeNull();
-    expect(within(status).getAllByRole("button")).toHaveLength(1);
+    expect(within(status).getAllByRole("button")).toHaveLength(2);
+    expect(within(status).getByRole("button", { name: /^notifications/i })).toBeInTheDocument();
     expect(within(status).getByRole("button", { name: /open connection manager/i })).toBeInTheDocument();
+  });
+
+  it("shows a running startup scan as live activity without duplicating it in history", async () => {
+    installFetch({
+      state: {
+        ...baseState,
+        media: {
+          available: true,
+          scan: {
+            running: true,
+            trigger: "startup",
+            cancellable: true,
+            cancelled: false,
+            started_at: "2026-07-28T12:00:00Z",
+            files_visited: 42,
+            videos_found: 11,
+            summary: { locations: 1, added: 0, updated: 0, missing: 0, removed: 0, skipped: 0, issues: [] },
+          },
+        },
+      },
+    });
+    renderApp();
+
+    const trigger = await screen.findByRole("button", { name: /notifications, activity in progress/i });
+    fireEvent.click(trigger);
+
+    const panel = screen.getByRole("region", { name: "Notifications" });
+    expect(within(panel).getByText("Startup library scan")).toBeInTheDocument();
+    expect(within(panel).getByText("42 files checked · 11 videos found")).toBeInTheDocument();
+    expect(within(panel).getByText("No recent notifications.")).toBeInTheDocument();
   });
 
   it("keeps connection and live limits in one floating manager on every route", async () => {
@@ -1078,9 +1111,10 @@ describe("app shell safety invariants", () => {
     installFetch({ state });
     renderApp();
     expect(await screen.findByText(/voice not ready/i)).toBeInTheDocument();
-    // Voice remains a readout; the connection disclosure is the only top-bar control.
+    // Voice remains a readout; only the two shell disclosures are controls.
     const status = screen.getByRole("region", { name: /status/i });
-    expect(within(status).getAllByRole("button")).toHaveLength(1);
+    expect(within(status).getAllByRole("button")).toHaveLength(2);
+    expect(within(status).getByRole("button", { name: /^notifications/i })).toBeInTheDocument();
     expect(within(status).getByRole("button", { name: /open connection manager/i })).toBeInTheDocument();
   });
 

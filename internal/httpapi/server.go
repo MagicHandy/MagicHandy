@@ -196,6 +196,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.routes(mux)
 	server.handler = logRequests(logger, protectBrowserRequests(mux))
 	server.startVoiceAutoload(settings.Voice)
+	server.startMediaAutoScan(settings.Media)
 
 	return server, nil
 }

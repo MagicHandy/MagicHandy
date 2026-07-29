@@ -42,10 +42,15 @@ const emptyBluetooth: BluetoothBridgeState = {
   deviceName: "",
 };
 
-export function ConnectionManager() {
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  restoreFocusOnClose?: boolean;
+}
+
+export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = true }: Props) {
   const { backendOnline, readOnly, refresh, state } = useAppState();
   const { show } = useToast();
-  const [open, setOpen] = useState(false);
   const [cloudAction, setCloudAction] = useState<"check" | "connect" | "disconnect" | null>(null);
   const cloudBusy = cloudAction !== null;
   const [cloudAttemptFailed, setCloudAttemptFailed] = useState(false);
@@ -71,10 +76,10 @@ export function ConnectionManager() {
 
   useEffect(() => {
     if (open) closeRef.current?.focus();
-    else if (wasOpen.current && restoreFocus.current) triggerRef.current?.focus();
+    else if (wasOpen.current && restoreFocus.current && restoreFocusOnClose) triggerRef.current?.focus();
     wasOpen.current = open;
     restoreFocus.current = true;
-  }, [open]);
+  }, [open, restoreFocusOnClose]);
 
   const onBluetoothState = useCallback((next: BluetoothBridgeState) => setBluetooth(next), []);
   const onIntifaceSnapshot = useCallback((next: IntifaceTransportSnapshot) => setIntiface(next), []);
@@ -175,7 +180,7 @@ export function ConnectionManager() {
             <h2>{t("Connection")}</h2>
             <p>{translateKnown(provider)}</p>
           </div>
-          <button ref={closeRef} type="button" className="icon-button" aria-label={t("Close connection manager")} onClick={() => setOpen(false)}>
+          <button ref={closeRef} type="button" className="icon-button" aria-label={t("Close connection manager")} onClick={() => onOpenChange(false)}>
             <CloseIcon />
           </button>
         </header>
@@ -255,7 +260,7 @@ export function ConnectionManager() {
           />
           <div className="connection-provider-meta">
             {owner === "cloud_rest" && <span>{bundledApplicationID ? t("Built-in Handy API v3 ID") : t("Developer API v3 ID override")}</span>}
-            <a className="connection-configure" href="#/settings/device" onClick={() => { restoreFocus.current = false; setOpen(false); }}>
+            <a className="connection-configure" href="#/settings/device" onClick={() => { restoreFocus.current = false; onOpenChange(false); }}>
               <SettingsIcon />{t("Configure device")}</a>
           </div>
         </div>
@@ -275,7 +280,7 @@ export function ConnectionManager() {
         aria-label={t("{device} {status}; {action} connection manager", { device: deviceName, status: translateKnown(statusText), action: open ? t("close") : t("open") })}
         aria-controls="connection-manager-panel"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => onOpenChange(!open)}
       >
         <span className="connection-trigger-icon" aria-hidden="true"><WirelessIcon size={20} /></span>
         <span className="connection-trigger-copy">

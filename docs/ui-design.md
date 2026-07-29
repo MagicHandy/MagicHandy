@@ -288,13 +288,22 @@ hoc per-widget colors) are not.
 
 ## Feedback And Status
 
-- One notification system, layered above content, that a modal or route cannot
-  cover. (In the old app the global status bar sat behind the settings modal,
-  which forced per-section status spans to be added as a workaround.)
+- One shell-owned feedback system, layered above content, that a modal or route
+  cannot cover. A transient bottom toast and the top-bar notification center are
+  two presentations of the same channel: toast feedback is retained in a
+  bounded current-session history instead of disappearing without a trace.
 - Every status carries severity as text + icon + color, never color alone.
 - Transient confirmations appear inline next to the control that changed; system
   events (connection lost, device offline, worker crash) use the persistent
   notification area.
+- The notification center separates live **Activity** (library scan, thumbnail
+  generation, conversion), current **Attention** states (core/voice failures),
+  and **Recent** history. It reads activity and health from backend snapshots;
+  it does not invent a second job state. Read/clear state is session-local UI
+  feedback and is not persisted to the application database.
+- The notification and connection disclosures occupy the top bar and are
+  mutually exclusive: opening either closes the other. Their panels link to the
+  owning Settings route and close after navigation.
 - Errors state what failed and what to do, surfacing safe backend/transport
   detail (path, status) per the diagnostics contract, not a generic "error".
 

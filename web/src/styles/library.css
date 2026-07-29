@@ -914,6 +914,32 @@ input[type="search"] {
 .media-settings {
   min-width: 0;
 }
+.media-settings-subtitle {
+  margin: 18px 0 8px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.media-scan-options {
+  min-width: 0;
+  margin: 18px 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.media-scan-options legend {
+  padding: 0;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.media-scan-options .toggle-line {
+  align-items: flex-start;
+  margin-top: 12px;
+}
+.media-scan-options:disabled .toggle-line {
+  cursor: not-allowed;
+}
 .media-location-list {
   border-top: 1px solid var(--line);
 }

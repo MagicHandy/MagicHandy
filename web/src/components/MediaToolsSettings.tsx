@@ -134,6 +134,19 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <span>{t("Convert H.265 for wider compatibility")}<small>{t("Off assumes this browser plays HEVC, which most do — Firefox commonly does not. On, H.265 files count as needing repair and every re-encode targets H.264. You do not have to guess: a file that fails to play is detected and offered for conversion regardless of this setting.")}</small></span>
       </label>
 
+      <label className="toggle-line">
+        <span className="toggle">
+          <input
+            type="checkbox"
+            checked={media.show_superseded_originals ?? false}
+            disabled={locked}
+            onChange={(event) => onChange({ show_superseded_originals: event.target.checked })}
+          />
+          <span className="track" aria-hidden="true" />
+        </span>
+        <span>{t("Show originals that have been converted")}<small>{t("Off hides a source file once a converted copy sits beside it. Nothing is deleted: delete the converted file and the original returns on the next scan.")}</small></span>
+      </label>
+
       <label className="field">
         <span className="label">{t("Re-encode codec")}</span>
         <select
@@ -192,63 +205,29 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
       </div>
 
       </div>
-      <div className="group">
-      <h3 className="group-title">{t("During a scan")}</h3>
-      <p className="form-status media-tool-hint">{t("These ride a scan you start. Never at startup, never on a timer.")}</p>
-      <label className="toggle-line">
-        <span className="toggle">
-          <input
-            type="checkbox"
-            checked={media.generate_thumbnails_on_scan ?? false}
-            disabled={locked}
-            onChange={(event) => onChange({ generate_thumbnails_on_scan: event.target.checked })}
-          />
-          <span className="track" aria-hidden="true" />
-        </span>
-        <span>{t("Generate missing thumbnails after scanning")}</span>
-      </label>
-      <label className="toggle-line">
-        <span className="toggle">
-          <input
-            type="checkbox"
-            checked={media.convert_incompatible_on_scan ?? false}
-            disabled={locked}
-            onChange={(event) => onChange({ convert_incompatible_on_scan: event.target.checked })}
-          />
-          <span className="track" aria-hidden="true" />
-        </span>
-        <span>{t("Convert unplayable files after scanning")}<small>{t("Only files established as unplayable. This can take hours on a large library.")}</small></span>
-      </label>
-      <label className="toggle-line">
-        <span className="toggle">
-          <input
-            type="checkbox"
-            checked={media.show_superseded_originals ?? false}
-            disabled={locked}
-            onChange={(event) => onChange({ show_superseded_originals: event.target.checked })}
-          />
-          <span className="track" aria-hidden="true" />
-        </span>
-        <span>{t("Show originals that have been converted")}<small>{t("Off hides a source file once a converted copy sits beside it. Nothing is deleted: delete the converted file and the original returns on the next scan.")}</small></span>
-      </label>
 
-      {job?.running && (
-        <div className="form-status media-job-status" role="status">
-          <span>{job.kind === "conversion"
-            ? t("Converting {name} ({done} of {total}, {percent}%)", { name: job.current_name ?? "", done: formatNumber(job.processed + 1), total: formatNumber(job.total), percent: formatNumber(job.item_percent) })
-            : t("Generating thumbnails ({done} of {total})", { done: formatNumber(job.processed), total: formatNumber(job.total) })}</span>
-          <button type="button" className="btn btn-secondary compact-command" disabled={!job.cancellable} onClick={() => void run(() => api.cancelMediaJob(), t("Cancelling."))}>{t("Cancel")}</button>
+      {Boolean(job?.running || job?.completed_at || job?.issues?.length || status || error) && (
+        <div className="group">
+          <h3 className="group-title">{t("Media task status")}</h3>
+
+          {job?.running && (
+            <div className="form-status media-job-status" role="status">
+              <span>{job.kind === "conversion"
+                ? t("Converting {name} ({done} of {total}, {percent}%)", { name: job.current_name ?? "", done: formatNumber(job.processed + 1), total: formatNumber(job.total), percent: formatNumber(job.item_percent) })
+                : t("Generating thumbnails ({done} of {total})", { done: formatNumber(job.processed), total: formatNumber(job.total) })}</span>
+              <button type="button" className="btn btn-secondary compact-command" disabled={!job.cancellable} onClick={() => void run(() => api.cancelMediaJob(), t("Cancelling."))}>{t("Cancel")}</button>
+            </div>
+          )}
+          {!job?.running && job?.completed_at && (
+            <p className="form-status" role="status">{t("Last job: {succeeded} done, {failed} failed.", { succeeded: formatNumber(job.succeeded), failed: formatNumber(job.failed) })}</p>
+          )}
+          {(job?.issues ?? []).map((issue) => (
+            <p className="form-status media-playback-error" role="alert" key={`${issue.name}:${issue.message}`}>{issue.name}: {issue.message}</p>
+          ))}
+          {status && <p className="form-status" role="status">{status}</p>}
+          {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
         </div>
       )}
-      {!job?.running && job?.completed_at && (
-        <p className="form-status" role="status">{t("Last job: {succeeded} done, {failed} failed.", { succeeded: formatNumber(job.succeeded), failed: formatNumber(job.failed) })}</p>
-      )}
-      {(job?.issues ?? []).map((issue) => (
-        <p className="form-status media-playback-error" role="alert" key={`${issue.name}:${issue.message}`}>{issue.name}: {issue.message}</p>
-      ))}
-      {status && <p className="form-status" role="status">{status}</p>}
-      {error && <p className="form-status media-playback-error" role="alert">{error}</p>}
-      </div>
     </div>
   );
 }

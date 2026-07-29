@@ -167,7 +167,13 @@ func (s *Server) handleMediaScanStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	state, err := s.media.StartScanThen(settings.Media.LibraryPaths, s.scanFollowUp(settings.Media))
+	options := media.ScanOptions{
+		RemoveMissing: settings.Media.RemoveMissingOnScan,
+		Trigger:       media.ScanTriggerManual,
+	}
+	state, err := s.media.StartScanThenWithOptions(
+		settings.Media.LibraryPaths, options, s.scanFollowUp(settings.Media),
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, media.ErrNoLocations):
@@ -179,8 +185,36 @@ func (s *Server) handleMediaScanStart(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	s.logger.Info("media library scan started", "locations", len(settings.Media.LibraryPaths))
+	s.logger.Info("media library scan started",
+		"trigger", state.Trigger,
+		"locations", len(settings.Media.LibraryPaths),
+		"remove_missing", options.RemoveMissing,
+	)
 	writeJSON(w, http.StatusAccepted, map[string]any{"scan": state})
+}
+
+// startMediaAutoScan starts the same scanner and follow-up path as the manual
+// route after persistent domains are ready. It never blocks core startup.
+func (s *Server) startMediaAutoScan(settings config.MediaSettings) {
+	if !settings.AutoScanOnStartup || len(settings.LibraryPaths) == 0 {
+		return
+	}
+	options := media.ScanOptions{
+		RemoveMissing: settings.RemoveMissingOnScan,
+		Trigger:       media.ScanTriggerStartup,
+	}
+	state, err := s.media.StartScanThenWithOptions(
+		settings.LibraryPaths, options, s.scanFollowUp(settings),
+	)
+	if err != nil {
+		s.logger.Warn("automatic media library scan could not start", "error", err)
+		return
+	}
+	s.logger.Info("media library scan started",
+		"trigger", state.Trigger,
+		"locations", len(settings.LibraryPaths),
+		"remove_missing", options.RemoveMissing,
+	)
 }
 
 func (s *Server) handleMediaScanState(w http.ResponseWriter, _ *http.Request) {

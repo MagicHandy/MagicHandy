@@ -164,6 +164,8 @@ export function SettingsRoute() {
       // be listed here or the form would appear to save and change nothing.
       media: {
         library_paths: s.media?.library_paths ?? [],
+        auto_scan_on_startup: s.media?.auto_scan_on_startup ?? false,
+        remove_missing_on_scan: s.media?.remove_missing_on_scan ?? true,
         script_offset_ms: s.media?.script_offset_ms ?? 0,
         ffmpeg_path: s.media?.ffmpeg_path ?? "",
         convert_h265_for_compatibility: s.media?.convert_h265_for_compatibility ?? false,
@@ -380,7 +382,7 @@ export function SettingsRoute() {
         {section === "media" && (
           <MediaSettingsPanel
             media={s.media ?? { library_paths: [] }}
-            savedLocations={saved?.media?.library_paths ?? []}
+            savedMedia={saved?.media ?? { library_paths: [] }}
             limitVideoScriptSpeed={s.motion.apply_video_speed_limit ?? false}
             onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
             locked={locked}

@@ -1,6 +1,6 @@
 // Backend-authoritative app state. Polls /api/state, streams live motion over
 // SSE, tracks backend availability and the controller read-only lock, and hosts
-// the single toast channel. React holds no parallel motion/settings model.
+// the single feedback channel. React holds no parallel motion/settings model.
 import {
   createContext,
   useCallback,
@@ -128,11 +128,46 @@ export function useAppState(): AppStateValue {
   return value;
 }
 
-// ---- Toast (single feedback channel) ----
-interface ToastValue {
-  show: (message: string, tone?: "info" | "error") => void;
+// ---- Feedback: transient toast plus bounded notification history ----
+export type NotificationTone = "info" | "success" | "warning" | "error";
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  detail?: string;
+  category: "app" | "library" | "system" | "voice";
+  tone: NotificationTone;
+  createdAt: string;
+  read: boolean;
+  href?: string;
+  sourceKey?: string;
 }
+
+export interface NotificationDraft {
+  title: string;
+  detail?: string;
+  category?: AppNotification["category"];
+  tone?: NotificationTone;
+  href?: string;
+  sourceKey?: string;
+}
+
+interface ToastValue {
+  show: (message: string, tone?: NotificationTone) => void;
+}
+
+interface NotificationsValue {
+  items: AppNotification[];
+  unreadCount: number;
+  push: (notification: NotificationDraft) => void;
+  markRead: (id: string) => void;
+  markAllRead: () => void;
+  clear: () => void;
+}
+
 const ToastContext = createContext<ToastValue | null>(null);
+const NotificationsContext = createContext<NotificationsValue | null>(null);
+const MAX_NOTIFICATIONS = 40;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<{ message: string; tone: string; visible: boolean }>({
@@ -140,27 +175,69 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     tone: "info",
     visible: false,
   });
+  const [items, setItems] = useState<AppNotification[]>([]);
   const timer = useRef<number | undefined>(undefined);
+  const sequence = useRef(0);
 
-  const show = useCallback((message: string, tone: "info" | "error" = "info") => {
-    window.clearTimeout(timer.current);
-    setToast({ message, tone, visible: true });
-    timer.current = window.setTimeout(() => setToast((t) => ({ ...t, visible: false })), 3200);
+  const push = useCallback((draft: NotificationDraft) => {
+    setItems((current) => {
+      if (draft.sourceKey && current.some((item) => item.sourceKey === draft.sourceKey)) return current;
+      const next: AppNotification = {
+        id: `notification-${Date.now()}-${++sequence.current}`,
+        title: draft.title,
+        detail: draft.detail,
+        category: draft.category ?? "app",
+        tone: draft.tone ?? "info",
+        createdAt: new Date().toISOString(),
+        read: false,
+        href: draft.href,
+        sourceKey: draft.sourceKey,
+      };
+      return [next, ...current].slice(0, MAX_NOTIFICATIONS);
+    });
   }, []);
 
+  const show = useCallback((message: string, tone: NotificationTone = "info") => {
+    window.clearTimeout(timer.current);
+    setToast({ message, tone, visible: true });
+    push({ title: message, tone });
+    timer.current = window.setTimeout(() => setToast((t) => ({ ...t, visible: false })), 3200);
+  }, [push]);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const markRead = useCallback((id: string) => {
+    setItems((current) => current.map((item) => item.id === id ? { ...item, read: true } : item));
+  }, []);
+
+  const markAllRead = useCallback(() => {
+    setItems((current) => current.map((item) => item.read ? item : { ...item, read: true }));
+  }, []);
+
+  const clear = useCallback(() => setItems([]), []);
+  const unreadCount = items.reduce((count, item) => count + (item.read ? 0 : 1), 0);
+
   return (
-    <ToastContext.Provider value={{ show }}>
-      {children}
-      <div className="toast" role="status" aria-live="polite" data-visible={toast.visible} data-tone={toast.tone}>
-        {toast.message}
-      </div>
-    </ToastContext.Provider>
+    <NotificationsContext.Provider value={{ items, unreadCount, push, markRead, markAllRead, clear }}>
+      <ToastContext.Provider value={{ show }}>
+        {children}
+        <div className="toast" role="status" aria-live="polite" data-visible={toast.visible} data-tone={toast.tone}>
+          {toast.message}
+        </div>
+      </ToastContext.Provider>
+    </NotificationsContext.Provider>
   );
 }
 
 export function useToast(): ToastValue {
   const value = useContext(ToastContext);
   if (!value) throw new Error("useToast must be used within ToastProvider");
+  return value;
+}
+
+export function useNotifications(): NotificationsValue {
+  const value = useContext(NotificationsContext);
+  if (!value) throw new Error("useNotifications must be used within ToastProvider");
   return value;
 }
 
