@@ -161,7 +161,26 @@ Within a section, distinct categories are `.group` cards rather than runs of
 content separated by rules. A rule says "something changed"; a bordered card
 says "this is a different thing", which is what a reader scanning a long section
 needs. Sections long enough to scroll — media, prompts, diagnostics, voice —
-are grouped this way; a section that fits on one screen does not need it.
+are grouped this way; a section that fits on one screen does not need it. Two
+adjacent cards need no rule between them: the borders already draw the
+boundary, and a divider states it twice.
+
+**Vertical rhythm is owned by the container, not by each control.** Settings
+spacing is exactly three values: `10px` from a heading to what it labels, `12px`
+between stacked controls, `18px` before the section's own actions. The rule
+lives on `.group` / `.media-settings` / `.media-tools-settings` as an
+adjacent-sibling ("owl") rule that also zeroes the children's own bottom
+margins. This is not stylistic tidiness: when each control type declared its own
+margin, `.field` and `.hint-block` had one and `.toggle-line` had none, so a
+toggle followed by a field sat flush against it with no gap at all. Declaring it
+once means a control type added later cannot arrive with no spacing, and cannot
+double it either. The selectors are deliberately doubled (`.group.group > …`)
+so a control's own margin, which carries equal specificity and often appears
+later in the cascade, cannot silently win.
+
+The same applies to the video player: `.media-player` owns a flow gap so the
+incompatible-file notice, the playback error row, and the funscript timeline
+cannot render flush against the picture.
 
 `#/settings/device|media|model|chat|voice|prompts|diagnostics` are sibling sections
 of the routed Settings page — deep-linkable, no window, no stacked overlays.

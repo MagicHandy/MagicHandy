@@ -356,12 +356,10 @@ export function SettingsRoute() {
             {owner === "intiface" && <>
               <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
             </>}
-            <div className="divider" />
             <div className="group">
               <h3 className="group-title">{t("Local server")}</h3>
               <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
             </div>
-            <div className="divider" />
             <ManualMotionTest />
           </>
         )}
@@ -502,7 +500,6 @@ export function SettingsRoute() {
             <p className="hint">{t("Anatomy context and persona apply to interactive Warm, Intimate, and Explicit replies. Direct anatomy wording is reserved for Explicit; the other levels keep references indirect. This bounded context cannot change motion permissions or limits.")}</p>
             </div>
             <PromptSetEditor locked={locked} />
-            <div className="divider" />
             <MemoryManager locked={locked} />
           </>
         )}
