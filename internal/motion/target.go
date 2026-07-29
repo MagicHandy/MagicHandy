@@ -181,9 +181,8 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 }
 
 // resolveAreaFocus keeps a requested zone in full-stroke coordinates so that
-// normalizing a target twice is the same as normalizing it once. The user's
-// configured range is composed in later, when the plan builds its projection.
-// Clock-locked media is never focused — a video follows authored positions.
+// normalizing a target twice is the same as normalizing it once. Clock-locked
+// media is never focused — a video follows authored positions.
 func resolveAreaFocus(target MotionTarget) *AreaFocus {
 	if target.Media != nil {
 		return nil
