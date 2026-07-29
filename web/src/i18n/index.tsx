@@ -111,6 +111,12 @@ export function I18nProvider({
     return () => { cancelled = true; };
   }, [catalogLoader, requested, retrySequence]);
 
+  // Assigned during render so t() and formatNumber, which are plain functions
+  // called from render, see the active catalog in the same pass that renders
+  // with it. This is a side effect in render, which React may discard or
+  // reorder, so the globals can trail the committed tree by a tick. Readers
+  // that need certainty should observe the context value instead; callers that
+  // only format text are unaffected because a discarded render is not shown.
   activeLocale = loaded.locale;
   activeCatalog = loaded.catalog;
 
