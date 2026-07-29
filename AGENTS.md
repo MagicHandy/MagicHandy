@@ -133,6 +133,16 @@ encodes the safety architecture, not taste.
 - **Scope per branch; merge by PR.** Use a clear branch name (agents/tools use
   their own prefix; feature branches are fine). Every branch — regardless of who
   or what authored it — meets this same bar before it merges to `main`.
+- **Leave a reviewable app at every turn boundary.** Before the final response
+  of every completed work turn, ensure the app represented by the current
+  worktree is running and leave a browser open at the route and UI state most
+  relevant to the work. Reuse an existing process only when it already reflects
+  the current app source; otherwise start a current build on an unused localhost
+  port. Preserve user-launched sessions: do not stop or replace one without
+  permission, and use a parallel isolated data directory when needed. Report the
+  review URL and visible state in the final response, and leave both the process
+  and review tab running. Opening the review state is not permission to connect
+  hardware or issue motion.
 - When real-device behavior is touched, capture the scenario, transport mode,
   latency summary, trace export, and what was intentionally left unchanged.
 

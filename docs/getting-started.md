@@ -134,6 +134,28 @@ go run ./cmd/magichandy
   embedded in the binary), see [`web/`](../web/) and
   [ADR 0009](decisions/0009-react-frontend.md).
 
+## End-of-turn review handoff
+
+Every completed contributor or agent turn ends with a reviewable app, including
+docs-only turns:
+
+- Ensure a process representing the current worktree is running. A healthy
+  existing process may be reused when app source and embedded assets have not
+  changed; otherwise build or run the current tree.
+- Leave a browser open at the route and UI state most relevant to the completed
+  work. Preserve the user's current route when that is the intended review
+  state; do not hand off only a terminal, a blank tab, or an unrelated default
+  page.
+- Verify `/healthz` before handoff, then include the exact review URL and visible
+  state in the final response. Leave both the app process and browser tab
+  running after the response.
+- Do not stop or replace a user-launched app session without explicit
+  permission. If it does not represent the current worktree, start a parallel
+  instance with `-addr 127.0.0.1:PORT -data-dir .\.scratch\review-data` on an
+  unused port and open that instance instead.
+- A review handoff never authorizes device discovery, connection, or motion.
+  Keep hardware idle unless the user separately requested a live-device test.
+
 ## Validate a change
 
 Before pushing:
