@@ -1123,5 +1123,18 @@
   "Set an FFmpeg location in Settings > Media to enable conversion.": "変換を有効にするには、設定 > メディアで FFmpeg の場所を指定してください。",
   "needs conversion": "要変換",
   "{count} files cannot be played by this browser.": "このブラウザーでは {count} 件のファイルを再生できません。",
-  "{count} files could not be converted.": "{count} 件のファイルを変換できませんでした。"
+  "{count} files could not be converted.": "{count} 件のファイルを変換できませんでした。",
+  "Status report": "ステータスレポート",
+  "Copy report": "レポートをコピー",
+  "Diagnostics report": "診断レポート",
+  "Diagnostics report copied.": "診断レポートをコピーしました。",
+  "Everything below is what gets copied. No keys or credentials are included.": "以下に表示されている内容がそのままコピーされます。キーや認証情報は含まれません。",
+  "Trace export": "トレースの書き出し",
+  "A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.": "直近の実行内容を機械可読形式で詳細に記録したもので、不具合報告への添付用です。",
+  "Logging": "ログ",
+  "Higher levels record more detail in the trace export. They do not change what the report below shows.": "レベルを上げるとトレースに記録される情報が詳しくなります。下のレポートの内容は変わりません。",
+  "Local server": "ローカルサーバー",
+  "FFmpeg": "FFmpeg",
+  "Reply style": "返答のスタイル",
+  "Persona and anatomy": "ペルソナと身体設定"
 }

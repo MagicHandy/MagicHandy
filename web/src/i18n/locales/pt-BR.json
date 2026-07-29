@@ -1123,5 +1123,18 @@
   "Set an FFmpeg location in Settings > Media to enable conversion.": "Defina um local do FFmpeg em Configurações > Mídia para habilitar a conversão.",
   "needs conversion": "precisa converter",
   "{count} files cannot be played by this browser.": "Este navegador não consegue reproduzir {count} arquivos.",
-  "{count} files could not be converted.": "{count} arquivos não puderam ser convertidos."
+  "{count} files could not be converted.": "{count} arquivos não puderam ser convertidos.",
+  "Status report": "Relatório de status",
+  "Copy report": "Copiar relatório",
+  "Diagnostics report": "Relatório de diagnóstico",
+  "Diagnostics report copied.": "Relatório de diagnóstico copiado.",
+  "Everything below is what gets copied. No keys or credentials are included.": "O que aparece abaixo é exatamente o que será copiado. Nenhuma chave ou credencial é incluída.",
+  "Trace export": "Exportar rastreamento",
+  "A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.": "Uma captura detalhada e legível por máquina da atividade recente, para anexar a um relatório de erro.",
+  "Logging": "Registro",
+  "Higher levels record more detail in the trace export. They do not change what the report below shows.": "Níveis mais altos registram mais detalhes no rastreamento exportado. Não alteram o que o relatório abaixo mostra.",
+  "Local server": "Servidor local",
+  "FFmpeg": "FFmpeg",
+  "Reply style": "Estilo de resposta",
+  "Persona and anatomy": "Persona e anatomia"
 }

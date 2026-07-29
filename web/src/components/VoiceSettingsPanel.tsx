@@ -78,7 +78,7 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       {voiceRuntime.loading && !voiceRuntime.error && <p className="form-status" role="status">{t("Checking voice runtime...")}</p>}
       <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.enabled} disabled={locked} onChange={(event) => patch({ enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Enable voice workers")}</span></label>
 
-      <div className="divider" />
+      <div className="group">
       <h3 className="group-title">{t("Speech input (ASR)")}</h3>
       <label className="field"><span className="label">{t("Provider")}</span>{providerSelect(t("Speech input provider"), voice.asr_provider, s.options.asr_providers, (asr_provider) => patch({ asr_provider }))}</label>
       {voice.asr_provider === "parakeet_managed" && <>
@@ -109,7 +109,8 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         {...voiceRuntime}
       />
 
-      <div className="divider" />
+      </div>
+      <div className="group">
       <h3 className="group-title">{t("Speech output (TTS)")}</h3>
       <label className="field"><span className="label">{t("Provider")}</span>{providerSelect(t("Speech output provider"), voice.tts_provider, s.options.tts_providers, (tts_provider) => patch({ tts_provider }))}</label>
       {voice.tts_provider === "elevenlabs" && <>
@@ -189,7 +190,7 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
         showNeuTTSModule={voice.tts_provider === "neutts_air"}
         {...voiceRuntime}
       />
-      <div className="divider" />
+      </div>
       <VoiceRequestQueue locked={locked} requests={voiceRuntime.requests} refresh={voiceRuntime.refresh} />
       {referenceOpen && <NeuTTSReferenceDialog
         initialWAV={voice.neutts_reference_wav ?? ""}

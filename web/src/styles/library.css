@@ -548,6 +548,11 @@ input[type="search"] {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Scanning is a distinct action from listing the folders it scans, so it
+     gets a rule and breathing room inside the same group. */
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 .media-toolbar-actions {
   margin-left: auto;

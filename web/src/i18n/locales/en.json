@@ -1123,5 +1123,18 @@
   "Set an FFmpeg location in Settings > Media to enable conversion.": "Set an FFmpeg location in Settings > Media to enable conversion.",
   "needs conversion": "needs conversion",
   "{count} files cannot be played by this browser.": "{count} files cannot be played by this browser.",
-  "{count} files could not be converted.": "{count} files could not be converted."
+  "{count} files could not be converted.": "{count} files could not be converted.",
+  "Status report": "Status report",
+  "Copy report": "Copy report",
+  "Diagnostics report": "Diagnostics report",
+  "Diagnostics report copied.": "Diagnostics report copied.",
+  "Everything below is what gets copied. No keys or credentials are included.": "Everything below is what gets copied. No keys or credentials are included.",
+  "Trace export": "Trace export",
+  "A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.": "A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.",
+  "Logging": "Logging",
+  "Higher levels record more detail in the trace export. They do not change what the report below shows.": "Higher levels record more detail in the trace export. They do not change what the report below shows.",
+  "Local server": "Local server",
+  "FFmpeg": "FFmpeg",
+  "Reply style": "Reply style",
+  "Persona and anatomy": "Persona and anatomy"
 }

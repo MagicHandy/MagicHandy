@@ -10,10 +10,10 @@ const localeNames = ["en", "es", "pt-BR", "zh-Hans", "ja"];
 const visibleAttributes = new Set(["alt", "aria-label", "aria-valuetext", "placeholder", "title", "label", "hint", "accessibleLabel", "unavailableTitle"]);
 const iconText = /^(?:M|Y|MH|MagicHandy|[\s+\-−–—×%/#:;,.…•·]+|\d+(?:\.\d+)?%?)$/u;
 const sameValueAllowed = {
-  es: new Set(["CRF {value}", "{rate} kbps", "{count} tokens", "{count} videos", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Chat", "Commit", "Error", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable"]),
-  "pt-BR": new Set(["CRF {value}", "{rate} kbps", "{count} tokens", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Chat", "Commit", "Esc", "Funscript", "Interface", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva"]),
-  "zh-Hans": new Set(["CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Esc", "Funscript", "Intiface Central", "MagicHandy", "NeuTTS Air"]),
-  ja: new Set(["CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy", "NeuTTS Air"]),
+  es: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{count} videos", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Chat", "Commit", "Error", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable"]),
+  "pt-BR": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{rounding} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Chat", "Commit", "Esc", "Funscript", "Interface", "Intiface Central", "local / {owner}", "MagicHandy", "NeuTTS Air", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva"]),
+  "zh-Hans": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Esc", "Funscript", "Intiface Central", "MagicHandy", "NeuTTS Air"]),
+  ja: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy", "NeuTTS Air"]),
 };
 
 function walk(directory) {

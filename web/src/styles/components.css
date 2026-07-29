@@ -17,7 +17,8 @@
   border-radius: var(--radius-sm);
   padding: 14px;
 }
-.group + .group {
+.group + .group,
+.group + .voice-request-queue {
   margin-top: 12px;
 }
 .group-title {
@@ -1441,4 +1442,22 @@ textarea:disabled {
 }
 .range-slider[data-disabled] .range-slider-track {
   cursor: not-allowed;
+}
+
+/* The diagnostics report is read and selected as text, so it keeps its own
+   line breaks, scrolls rather than reflowing, and stays selectable. */
+.diagnostics-report {
+  margin: 12px 0 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.55;
+  white-space: pre;
+  user-select: text;
 }

@@ -354,7 +354,13 @@ export function SettingsRoute() {
             {owner === "intiface" && <>
               <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
             </>}
-            <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
+            <div className="divider" />
+            <div className="group">
+              <h3 className="group-title">{t("Local server")}</h3>
+              <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
+            </div>
+            <div className="divider" />
+            <ManualMotionTest />
           </>
         )}
 
@@ -433,6 +439,8 @@ export function SettingsRoute() {
         {section === "prompts" && (
           <>
             <h2 className="section-title">{t("Prompts & memory")}</h2>
+            <div className="group">
+            <h3 className="group-title">{t("Reply style")}</h3>
             <label className="field">
               <span className="label">{t("Active prompt set")}<span className="hint-inline">{t("saved with Save settings")}</span></span>
               <select value={s.llm.prompt_set} disabled={locked} onChange={(event) => patchLLM({ prompt_set: event.target.value })}>
@@ -451,6 +459,9 @@ export function SettingsRoute() {
               </select>
             </label>
             <p className="hint">{t("Utility keeps the neutral assistant register. Warm is flirtatious but never explicit. Intimate speaks as a partner with sensual language. Explicit permits direct sexual language like the legacy app. Voice changes wording only; motion limits, capability gates, and Stop are identical at every level.")}</p>
+            </div>
+            <div className="group">
+            <h3 className="group-title">{t("Persona and anatomy")}</h3>
             <label className="field">
               <span className="label">{t("User anatomy")}<span className="hint-inline">{t("separate from partner persona")}</span></span>
               <select
@@ -487,7 +498,7 @@ export function SettingsRoute() {
               />
             </label>
             <p className="hint">{t("Anatomy context and persona apply to interactive Warm, Intimate, and Explicit replies. Direct anatomy wording is reserved for Explicit; the other levels keep references indirect. This bounded context cannot change motion permissions or limits.")}</p>
-            <div className="divider" />
+            </div>
             <PromptSetEditor locked={locked} />
             <div className="divider" />
             <MemoryManager locked={locked} />
@@ -497,10 +508,11 @@ export function SettingsRoute() {
         {section === "diagnostics" && (
           <>
             <h2 className="section-title">{t("Diagnostics")}</h2>
-            <label className="field"><span className="label">{t("Diagnostics verbosity")}</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
-            <div className="divider" />
-            <ManualMotionTest />
-            <div className="divider" />
+            <div className="group">
+              <h3 className="group-title">{t("Logging")}</h3>
+              <label className="field"><span className="label">{t("Diagnostics verbosity")}</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
+              <p className="hint-block">{t("Higher levels record more detail in the trace export. They do not change what the report below shows.")}</p>
+            </div>
             <DiagnosticsPanel locked={locked} onReset={applyReset} />
           </>
         )}
