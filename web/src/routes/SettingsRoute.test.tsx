@@ -25,6 +25,8 @@ vi.mock("../api/client", () => ({
     mediaScan: vi.fn(() => Promise.resolve({ scan: { running: false, cancellable: false, cancelled: false, files_visited: 0, videos_found: 0 } })),
     getPromptSets: vi.fn(() => Promise.resolve({ prompt_sets: [], selected: "default" })),
     getMemory: vi.fn(() => Promise.resolve({ enabled: false, items: [] })),
+    llmModels: vi.fn(() => Promise.reject(new Error("model store unavailable"))),
+    llmStatus: vi.fn(() => Promise.resolve({ provider: "llama_cpp", base_url: "", model: "", available: false, message: "No model loaded" })),
   },
 }));
 
@@ -206,6 +208,34 @@ describe("SettingsRoute", () => {
     expect(await screen.findByRole("heading", { name: /Manual motion/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start test" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Stop test" })).toBeDisabled();
+  });
+
+  it("keeps device settings to one card layer", async () => {
+    app.hash = "#/settings/device";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    const view = render(<SettingsRoute />);
+
+    await screen.findByRole("heading", { level: 2, name: "Device" });
+    const panel = view.container.querySelector(".panel");
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Device");
+    expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
+    expect(panel?.querySelectorAll(":scope > label.field, :scope > label.toggle-line")).toHaveLength(0);
+  });
+
+  it("uses one top-level card layer for model settings", async () => {
+    app.hash = "#/settings/model";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    const view = render(<SettingsRoute />);
+
+    await screen.findByRole("heading", { level: 2, name: "Model" });
+    await screen.findByRole("alert");
+    const panel = view.container.querySelector(".panel");
+    expect(panel).not.toBeNull();
+    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Model");
+    expect(panel?.querySelectorAll(":scope > .group")).toHaveLength(3);
+    expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
+    expect(screen.getByRole("group", { name: "Model permissions" })).toBeInTheDocument();
   });
 
   it("reloads the routed form after factory reset before it can be saved again", async () => {

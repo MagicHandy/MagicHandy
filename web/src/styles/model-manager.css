@@ -7,7 +7,22 @@
   margin-bottom: 12px;
 }
 
-.model-section-head .section-title {
+.model-runtime-section-head {
+  display: grid;
+  justify-content: stretch;
+  gap: 4px;
+}
+
+.model-runtime-section-head .model-health {
+  max-width: none;
+  min-height: 0;
+  justify-self: stretch;
+  text-align: left;
+}
+
+/* The group card supplies the rhythm below a heading, so the head row only
+   has to lay the heading out beside its status or actions. */
+.model-section-head .group-title {
   margin-bottom: 0;
 }
 
@@ -76,13 +91,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.capability-gates legend {
-  padding: 0 4px;
+  margin: 0;
 }
 .capability-gate {
   display: flex;
@@ -144,12 +153,6 @@
 
 .form-status-error {
   color: var(--danger);
-}
-
-.model-subtitle {
-  margin: 0;
-  font-size: 0.96rem;
-  font-weight: 600;
 }
 
 .model-store-path {

@@ -9,7 +9,11 @@ import { HostPathField } from "./HostPathField";
 const MIN_CRF = 18;
 const MAX_CRF = 30;
 const PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
-const AUDIO_BITRATES = [128, 192, 256] as const;
+// Mirrors config.MinReencodeAudioKbps / MaxReencodeAudioKbps.
+const MIN_AUDIO_KBPS = 96;
+const MAX_AUDIO_KBPS = 576;
+// Every standard AAC bitrate is a multiple of 16, so the step lands on them.
+const AUDIO_KBPS_STEP = 16;
 const JOB_POLL_MILLIS = 700;
 
 interface Props {
@@ -189,15 +193,17 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
       </label>
 
       <label className="field">
-        <span className="label">{t("Audio bitrate")}</span>
-        <select
+        <span className="label">{t("Audio bitrate")}<span className="hint-inline">{t("{rate} kbps", { rate: formatNumber(media.reencode_audio_kbps ?? 192) })}</span></span>
+        <input
+          type="range"
+          min={MIN_AUDIO_KBPS}
+          max={MAX_AUDIO_KBPS}
+          step={AUDIO_KBPS_STEP}
           value={media.reencode_audio_kbps ?? 192}
           disabled={locked}
           onChange={(event) => onChange({ reencode_audio_kbps: Number(event.target.value) })}
-        >
-          {AUDIO_BITRATES.map((rate) => <option key={rate} value={rate}>{t("{rate} kbps", { rate: formatNumber(rate) })}</option>)}
-        </select>
-        <small>{t("Only used when the source audio is not already AAC. Audio that is already AAC is copied, which is faster and lossless.")}</small>
+        />
+        <small>{t("Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.")}</small>
       </label>
 
       <div className="media-tool-actions">

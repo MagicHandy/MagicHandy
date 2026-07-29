@@ -123,6 +123,29 @@ Ranked by threat to the stated goals:
 
 ## History
 
+
+- **2026-07-29** - Recovered the interrupted post-PR #146 media and settings
+  follow-up. Converting the open video now follows only the new output from the
+  matching successful job, ignores older same-name rows and late stale job
+  snapshots, and returns to the catalog with an explicit fallback instead of
+  flashing or stranding the user on "Video unavailable." Device and Model
+  settings use one top-level card layer; Model permissions are no longer a
+  framed fieldset nested inside the Local LLM card. The AAC target is adjustable
+  from 96 through 576 kbps in 16 kbps steps, with existing AAC copied and the UI
+  identifying the value as a target that FFmpeg may clamp for the source format.
+  The localization audit covers 1,194 keys in all five locales. All 286 frontend
+  tests, typecheck, production build, `go test ./...`, vet, lint, and
+  plain/stripped `CGO_ENABLED=0` builds pass. Local race execution remains
+  unavailable because MinGW `gcc` is absent; CI retains the mandatory Ubuntu
+  race gate. Responsive browser capture was attempted against an isolated
+  fake-transport server but the Windows browser-automation sandbox failed during
+  ACL setup before it could connect; DOM hierarchy regressions and the
+  production render path are covered, but no new visual viewport claim is made.
+  No hardware motion was issued. Against the 2026-07-28 measurement, the English
+  startup payload is 633,490 raw / 171,965 gzip bytes (+3,573 / +824);
+  all HTML/CSS/JS is 960,903 / 282,672 (+6,959 / +2,098), and complete embedded
+  output is 1,405,139 / 720,069 (+6,959 / +2,098). Plain/stripped binaries are
+  22,316,032 / 15,903,744 bytes (+8,704 / +8,192), both within the 30 MB budget.
 - **2026-07-28** - Consolidated media library management and shell feedback.
   Settings > Media now keeps locations, startup behavior, missing-entry cleanup,
   thumbnail generation, and compatibility conversion in one scan-options group.

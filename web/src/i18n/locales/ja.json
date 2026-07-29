@@ -1107,6 +1107,7 @@
   "Conversion started.": "変換を開始しました。",
   "Cancelling.": "キャンセルしています。",
   "Conversion could not be started.": "変換を開始できませんでした。",
+  "Conversion completed, but the repaired file must be opened from the library.": "変換は完了しましたが、修復済みファイルはライブラリから開く必要があります。",
   "This browser cannot play this file": "このブラウザーではこのファイルを再生できません",
   "This browser cannot play this file. Open it to convert.": "このブラウザーではこのファイルを再生できません。開くと変換できます。",
   "This file cannot be played here": "このファイルはここでは再生できません",
@@ -1188,5 +1189,8 @@
   "{name} cancelled": "{name}をキャンセルしました",
   "{name} completed with errors": "{name}がエラー付きで完了しました",
   "{name} complete": "{name}が完了しました",
-  "{done} completed · {failed} failed": "完了 {done} · 失敗 {failed}"
+  "{done} completed · {failed} failed": "完了 {done} · 失敗 {failed}",
+  "Sessions": "セッション",
+  "Workers": "ワーカー",
+  "Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.": "元の音声が AAC でない場合にのみ使用します。既存の AAC は品質を損なわずにコピーされます。192 kbps は音声や多くのサウンドトラックに適しており、音楽では高くできます。これは目標ビットレートです。FFmpeg はより低い値を使うか、元のチャンネル数とサンプルレートに応じて上限を適用する場合があります。"
 }

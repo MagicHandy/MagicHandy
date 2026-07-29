@@ -1218,3 +1218,38 @@ func TestScriptOffsetIsBoundedAndDefaultsToZero(t *testing.T) {
 		}
 	}
 }
+
+func TestAudioBitrateRangeSupportsHighQualityStereo(t *testing.T) {
+	if MaxReencodeAudioKbps != 576 {
+		t.Fatalf("MaxReencodeAudioKbps = %d, want 576", MaxReencodeAudioKbps)
+	}
+	settings := DefaultSettings()
+	settings.Media.ReencodeAudioKbps = MaxReencodeAudioKbps
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Media.ReencodeAudioKbps != MaxReencodeAudioKbps {
+		t.Fatalf("the ceiling was clamped away: %d", normalized.Media.ReencodeAudioKbps)
+	}
+
+	settings.Media.ReencodeAudioKbps = 640
+	normalized, err = NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Media.ReencodeAudioKbps != MaxReencodeAudioKbps {
+		t.Fatalf("above-range request = %d, want %d", normalized.Media.ReencodeAudioKbps, MaxReencodeAudioKbps)
+	}
+
+	for _, kbps := range []int{96, 128, 160, 192, 256, 320, 384, 448, 512, 576} {
+		settings.Media.ReencodeAudioKbps = kbps
+		normalized, err = NormalizeSettings(settings)
+		if err != nil {
+			t.Fatalf("NormalizeSettings(%d): %v", kbps, err)
+		}
+		if normalized.Media.ReencodeAudioKbps != kbps {
+			t.Fatalf("%d kbps was altered to %d", kbps, normalized.Media.ReencodeAudioKbps)
+		}
+	}
+}

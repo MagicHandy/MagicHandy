@@ -1107,6 +1107,7 @@
   "Conversion started.": "已开始转换。",
   "Cancelling.": "正在取消。",
   "Conversion could not be started.": "无法开始转换。",
+  "Conversion completed, but the repaired file must be opened from the library.": "转换已完成，但修复后的文件需要从媒体库中打开。",
   "This browser cannot play this file": "此浏览器无法播放该文件",
   "This browser cannot play this file. Open it to convert.": "此浏览器无法播放该文件。打开它即可转换。",
   "This file cannot be played here": "该文件无法在此播放",
@@ -1188,5 +1189,8 @@
   "{name} cancelled": "{name}已取消",
   "{name} completed with errors": "{name}完成，但有错误",
   "{name} complete": "{name}已完成",
-  "{done} completed · {failed} failed": "完成 {done} · 失败 {failed}"
+  "{done} completed · {failed} failed": "完成 {done} · 失败 {failed}",
+  "Sessions": "会话",
+  "Workers": "工作进程",
+  "Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.": "仅当源音频不是 AAC 时使用；现有 AAC 会直接复制，不损失质量。192 kbps 适合语音和大多数配乐；音乐可调高。这是目标码率：FFmpeg 可能使用更低码率，或根据源声道数和采样率进行限制。"
 }

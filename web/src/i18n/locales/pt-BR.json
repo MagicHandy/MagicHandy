@@ -1107,6 +1107,7 @@
   "Conversion started.": "Conversão iniciada.",
   "Cancelling.": "Cancelando.",
   "Conversion could not be started.": "Não foi possível iniciar a conversão.",
+  "Conversion completed, but the repaired file must be opened from the library.": "A conversão terminou, mas o arquivo reparado precisa ser aberto pela biblioteca.",
   "This browser cannot play this file": "Este navegador não consegue reproduzir este arquivo",
   "This browser cannot play this file. Open it to convert.": "Este navegador não consegue reproduzir este arquivo. Abra-o para converter.",
   "This file cannot be played here": "Este arquivo não pode ser reproduzido aqui",
@@ -1188,5 +1189,8 @@
   "{name} cancelled": "{name} cancelado",
   "{name} completed with errors": "{name} terminou com erros",
   "{name} complete": "{name} concluído",
-  "{done} completed · {failed} failed": "{done} concluídos · {failed} falharam"
+  "{done} completed · {failed} failed": "{done} concluídos · {failed} falharam",
+  "Sessions": "Sessões",
+  "Workers": "Processos",
+  "Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.": "Usado apenas quando o áudio de origem não é AAC; o AAC existente é copiado sem perda de qualidade. 192 kbps é adequado para fala e a maioria das trilhas; aumente para música. Esta é uma taxa de bits alvo: o FFmpeg pode usar menos ou limitá-la conforme o número de canais e a taxa de amostragem de origem."
 }

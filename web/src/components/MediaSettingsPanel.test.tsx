@@ -147,4 +147,26 @@ describe("MediaSettingsPanel", () => {
 
     expect(speedLimitProps.onLimitVideoScriptSpeedChange).toHaveBeenCalledWith(true);
   });
+
+  it("offers the full high-quality stereo AAC target range", async () => {
+    const onChange = vi.fn();
+    render(
+      <MediaSettingsPanel
+        {...speedLimitProps}
+        media={{ library_paths: [], reencode_audio_kbps: 512 }}
+        savedMedia={{ library_paths: [], reencode_audio_kbps: 512 }}
+        locked={false}
+        onChange={onChange}
+      />,
+    );
+
+    const bitrate = await screen.findByRole("slider", { name: /Audio bitrate/ });
+    expect(bitrate).toHaveAttribute("min", "96");
+    expect(bitrate).toHaveAttribute("max", "576");
+    expect(bitrate).toHaveAttribute("step", "16");
+    expect(bitrate).toHaveValue("512");
+
+    fireEvent.change(bitrate, { target: { value: "576" } });
+    expect(onChange).toHaveBeenCalledWith({ reencode_audio_kbps: 576 });
+  });
 });

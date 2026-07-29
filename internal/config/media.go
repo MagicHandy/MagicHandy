@@ -96,9 +96,15 @@ const (
 	// x265 scale, which is offset from x264's by about five points.
 	DefaultReencodeCRFH265 = 28
 	// MinReencodeAudioKbps and MaxReencodeAudioKbps bound AAC output.
+	//
+	// FFmpeg's native AAC encoder caps a frame at 6144 bits per channel. At
+	// 48 kHz with 1024 samples per frame that permits 288 kbps per channel, or
+	// 576 kbps for stereo. This setting is a target: the encoder may use less,
+	// and lower sample rates or channel counts have lower effective ceilings.
 	MinReencodeAudioKbps = 96
-	MaxReencodeAudioKbps = 320
-	// DefaultReencodeAudioKbps is transparent for stereo AAC.
+	MaxReencodeAudioKbps = 576
+	// DefaultReencodeAudioKbps balances size and quality for stereo speech and
+	// most soundtracks. Music being re-encoded is the case for raising it.
 	DefaultReencodeAudioKbps = 192
 	// DefaultReencodePreset balances encode time against size.
 	DefaultReencodePreset = "medium"

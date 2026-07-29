@@ -309,188 +309,196 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
 
   return (
     <>
-      <div className="model-section-head">
-        <h2 className="section-title">{t("Local LLM")}</h2>
-        <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite">
-          <span className="status-dot" aria-hidden="true" />
-          <span>{statusMessage}</span>
-        </div>
-      </div>
+      <h2 className="section-title">{t("Model")}</h2>
       {managerMessage && <p className="form-status form-status-error" role="alert">{t("Model list unavailable: {message}", { message: managerMessage })}</p>}
 
-      <div className="model-runtime-grid">
-        <label className="field">
-          <span className="label">{t("Provider")}</span>
-          <select value={settings.provider} disabled={locked} onChange={(event) => patch({ provider: event.target.value })}>
-            {(providers.length ? providers : [settings.provider]).map((provider) => (
-              <option key={provider} value={provider}>{providerLabel(provider)}</option>
-            ))}
-          </select>
-        </label>
-        {settings.provider === "llama_cpp" && (
+      <div className="group">
+        <div className="model-section-head model-runtime-section-head">
+          <h3 className="group-title">{t("Local LLM")}</h3>
+          <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite">
+            <span className="status-dot" aria-hidden="true" />
+            <span>{statusMessage}</span>
+          </div>
+        </div>
+
+        <div className="model-runtime-grid">
           <label className="field">
-            <span className="label">{t("llama.cpp mode")}</span>
-            <select value={settings.llama_cpp_mode} disabled={locked} onChange={(event) => patch({ llama_cpp_mode: event.target.value })}>
-              {(llamaModes.length ? llamaModes : [settings.llama_cpp_mode]).map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+            <span className="label">{t("Provider")}</span>
+            <select value={settings.provider} disabled={locked} onChange={(event) => patch({ provider: event.target.value })}>
+              {(providers.length ? providers : [settings.provider]).map((provider) => (
+                <option key={provider} value={provider}>{providerLabel(provider)}</option>
+              ))}
             </select>
           </label>
+          {settings.provider === "llama_cpp" && (
+            <label className="field">
+              <span className="label">{t("llama.cpp mode")}</span>
+              <select value={settings.llama_cpp_mode} disabled={locked} onChange={(event) => patch({ llama_cpp_mode: event.target.value })}>
+                {(llamaModes.length ? llamaModes : [settings.llama_cpp_mode]).map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+
+        {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+          manager ? (
+            <ManagedRuntime
+              runtime={manager.runtime}
+              build={manager.runtime_build}
+              selectedModel={selectedManagedModel}
+              backend={runtimeBackend}
+              locked={locked}
+              busy={busy}
+              setBackend={setRuntimeBackend}
+              onBuild={buildRuntime}
+              onCancel={cancelRuntimeBuild}
+            />
+          ) : !managerMessage ? <p className="form-status" role="status">{t("Checking managed runtime...")}</p> : null
         )}
-      </div>
 
-      {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
-        manager ? (
-          <ManagedRuntime
-            runtime={manager.runtime}
-            build={manager.runtime_build}
-            selectedModel={selectedManagedModel}
-            backend={runtimeBackend}
-            locked={locked}
-            busy={busy}
-            setBackend={setRuntimeBackend}
-            onBuild={buildRuntime}
-            onCancel={cancelRuntimeBuild}
-          />
-        ) : !managerMessage ? <p className="form-status" role="status">{t("Checking managed runtime...")}</p> : null
-      )}
+        {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "external" && (
+          <>
+            <div className="model-runtime-grid">
+              <label className="field"><span className="label">{t("llama.cpp URL")}</span><input type="text" value={settings.llama_cpp_base_url} disabled={locked} onChange={(event) => patch({ llama_cpp_base_url: event.target.value })} /></label>
+              <label className="field"><span className="label">{t("Model")}</span><input type="text" list="llama-server-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="llama-server-model-options">{status?.models?.map((model) => <option key={model} value={model} />)}</datalist></label>
+            </div>
+            <LlamaServerModels models={status?.models ?? []} selected={settings.model} locked={locked} onUse={(model) => patch({ model })} />
+          </>
+        )}
 
-      {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "external" && (
-        <>
-          <div className="model-runtime-grid">
-            <label className="field"><span className="label">{t("llama.cpp URL")}</span><input type="text" value={settings.llama_cpp_base_url} disabled={locked} onChange={(event) => patch({ llama_cpp_base_url: event.target.value })} /></label>
-            <label className="field"><span className="label">{t("Model")}</span><input type="text" list="llama-server-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="llama-server-model-options">{status?.models?.map((model) => <option key={model} value={model} />)}</datalist></label>
+        {settings.provider === "ollama" && (
+          <>
+            <div className="model-runtime-grid">
+              <label className="field"><span className="label">{t("Ollama URL")}</span><input type="text" value={settings.ollama_base_url} disabled={locked} onChange={(event) => patch({ ollama_base_url: event.target.value })} /></label>
+              <label className="field"><span className="label">{t("Model")}</span><input type="text" list="ollama-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="ollama-model-options">{ollamaModels.map((model) => <option key={model.name} value={model.name} />)}</datalist></label>
+            </div>
+            {ollamaError && <p className="form-status form-status-error" role="alert">{t("Ollama model list unavailable: {message}", { message: ollamaError })}</p>}
+            {(!ollamaError || ollamaModels.length > 0) && <OllamaDaemonModels models={ollamaModels} selected={settings.model} message={ollamaMessage} locked={locked} onUse={useOllamaModel} />}
+          </>
+        )}
+
+        <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
+          <label className="field">
+            <span className="label">{t("Maximum output")}</span>
+            <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
+              {outputOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">{t("Thinking / reasoning")}</span>
+            <select value={settings.reasoning_mode} disabled={locked} onChange={(event) => patch({ reasoning_mode: event.target.value })}>
+              {(reasoningModes.length ? reasoningModes : [settings.reasoning_mode]).map((mode) => <option key={mode} value={mode}>{translateKnown(reasoningLabel(mode))}</option>)}
+            </select>
+          </label>
+          <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
+        </div>
+        <div className="generation-notes" role="note">
+          <p>{t("The selected cap covers reasoning plus visible JSON, so low limits can truncate JSON. The current pinned managed llama.cpp limits automatic reasoning to half that budget; every repair requests reasoning off to leave more budget for JSON.")}</p>
+          <p>{settings.reasoning_mode === "off"
+            ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })
+            : t("Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply.")}</p>
+        </div>
+
+        {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+          <div className="row-actions model-runtime-actions">
+            <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== ""} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
+            <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? t("Unloading...") : t("Unload")}</button>
+            {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
           </div>
-          <LlamaServerModels models={status?.models ?? []} selected={settings.model} locked={locked} onUse={(model) => patch({ model })} />
-        </>
-      )}
+        )}
 
-      {settings.provider === "ollama" && (
-        <>
-          <div className="model-runtime-grid">
-            <label className="field"><span className="label">{t("Ollama URL")}</span><input type="text" value={settings.ollama_base_url} disabled={locked} onChange={(event) => patch({ ollama_base_url: event.target.value })} /></label>
-            <label className="field"><span className="label">{t("Model")}</span><input type="text" list="ollama-model-options" value={settings.model} disabled={locked} onChange={(event) => patch({ model: event.target.value })} /><datalist id="ollama-model-options">{ollamaModels.map((model) => <option key={model.name} value={model.name} />)}</datalist></label>
+      </div>
+
+      <div className="group">
+        <h3 id="model-permissions-title" className="group-title">{t("Model permissions")}</h3>
+        <div className="capability-gates" role="group" aria-labelledby="model-permissions-title">
+          <label className="capability-gate" title={t("Allow chat and Autopilot to issue motion commands")}>
+            <input
+              type="checkbox"
+              checked={capabilities.motion}
+              disabled={locked}
+              onChange={(event) => patchCapability("motion", event.target.checked)}
+            />
+            <span>{t("Motion commands")}</span>
+          </label>
+          <label className="capability-gate" title={t("Allow selection from enabled library patterns")}>
+            <input
+              type="checkbox"
+              checked={capabilities.patterns}
+              disabled={locked || !capabilities.motion}
+              onChange={(event) => patchCapability("patterns", event.target.checked)}
+            />
+            <span>{t("Pattern selection")}</span>
+          </label>
+          <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
+            <input
+              type="checkbox"
+              checked={capabilities.area_focus}
+              disabled={locked || !capabilities.motion}
+              onChange={(event) => patchCapability("area_focus", event.target.checked)}
+            />
+            <span>{t("Area focus")}</span>
+          </label>
+          <label className="capability-gate" title={t("Allow experimental-tagged library patterns")}>
+            <input
+              type="checkbox"
+              checked={capabilities.experimental_patterns}
+              disabled={locked || !capabilities.motion || !capabilities.patterns}
+              onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
+            />
+            <span>{t("Experimental patterns")}</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="group">
+        <div className="model-section-head">
+          <div>
+            <h3 className="group-title">{t("Managed models")}</h3>
+            <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
           </div>
-          {ollamaError && <p className="form-status form-status-error" role="alert">{t("Ollama model list unavailable: {message}", { message: ollamaError })}</p>}
-          {(!ollamaError || ollamaModels.length > 0) && <OllamaDaemonModels models={ollamaModels} selected={settings.model} message={ollamaMessage} locked={locked} onUse={useOllamaModel} />}
-        </>
-      )}
-
-      <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
-        <label className="field">
-          <span className="label">{t("Maximum output")}</span>
-          <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
-            {outputOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
-          </select>
-        </label>
-        <label className="field">
-          <span className="label">{t("Thinking / reasoning")}</span>
-          <select value={settings.reasoning_mode} disabled={locked} onChange={(event) => patch({ reasoning_mode: event.target.value })}>
-            {(reasoningModes.length ? reasoningModes : [settings.reasoning_mode]).map((mode) => <option key={mode} value={mode}>{translateKnown(reasoningLabel(mode))}</option>)}
-          </select>
-        </label>
-        <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
-      </div>
-      <div className="generation-notes" role="note">
-        <p>{t("The selected cap covers reasoning plus visible JSON, so low limits can truncate JSON. The current pinned managed llama.cpp limits automatic reasoning to half that budget; every repair requests reasoning off to leave more budget for JSON.")}</p>
-        <p>{settings.reasoning_mode === "off"
-          ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })
-          : t("Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply.")}</p>
-      </div>
-
-      <fieldset className="capability-gates">
-        <legend className="label">{t("Model permissions")}</legend>
-        <label className="capability-gate" title={t("Allow chat and Autopilot to issue motion commands")}>
-          <input
-            type="checkbox"
-            checked={capabilities.motion}
-            disabled={locked}
-            onChange={(event) => patchCapability("motion", event.target.checked)}
-          />
-          <span>{t("Motion commands")}</span>
-        </label>
-        <label className="capability-gate" title={t("Allow selection from enabled library patterns")}>
-          <input
-            type="checkbox"
-            checked={capabilities.patterns}
-            disabled={locked || !capabilities.motion}
-            onChange={(event) => patchCapability("patterns", event.target.checked)}
-          />
-          <span>{t("Pattern selection")}</span>
-        </label>
-        <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
-          <input
-            type="checkbox"
-            checked={capabilities.area_focus}
-            disabled={locked || !capabilities.motion}
-            onChange={(event) => patchCapability("area_focus", event.target.checked)}
-          />
-          <span>{t("Area focus")}</span>
-        </label>
-        <label className="capability-gate" title={t("Allow experimental-tagged library patterns")}>
-          <input
-            type="checkbox"
-            checked={capabilities.experimental_patterns}
-            disabled={locked || !capabilities.motion || !capabilities.patterns}
-            onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
-          />
-          <span>{t("Experimental patterns")}</span>
-        </label>
-      </fieldset>
-
-      {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
-        <div className="row-actions model-runtime-actions">
-          <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== ""} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
-          <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? t("Unloading...") : t("Unload")}</button>
-          {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
-        </div>
-      )}
-
-      <div className="divider" />
-      <div className="model-section-head">
-        <div>
-          <h3 className="model-subtitle">{t("Managed models")}</h3>
-          <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
-        </div>
-        <div className="row-actions model-import-actions">
-          <button type="button" className="icon-btn model-refresh" aria-label={t("Refresh model list")} title={t("Refresh model list")} disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
-          <button type="button" className="btn btn-secondary" aria-expanded={showGGUFImport} disabled={locked || !manager} onClick={() => setShowGGUFImport((value) => !value)}><UploadIcon size={16} />{t("Import GGUF")}</button>
-          <button type="button" className="btn btn-secondary" aria-expanded={showOllamaImport} disabled={locked || !manager} onClick={() => setShowOllamaImport((value) => !value)}><UploadIcon size={16} />{t("Import from Ollama")}</button>
-        </div>
-      </div>
-
-      {showGGUFImport && (
-        <div className="model-import-form" aria-label={t("Import GGUF model")}>
-          <HostPathField label={t("GGUF file path")} kind="gguf" value={ggufPath} disabled={locked || busy === "gguf"} onChange={setGGUFPath} />
-          <label className="field"><span className="label">{t("Display name")}<span className="hint-inline">{t("optional")}</span></span><input type="text" value={ggufName} disabled={locked || busy === "gguf"} onChange={(event) => setGGUFName(event.target.value)} /></label>
-          <button type="button" className="btn btn-primary" disabled={locked || !ggufPath.trim() || busy === "gguf"} onClick={() => void importGGUF()}>{busy === "gguf" ? t("Starting...") : t("Import copy")}</button>
-        </div>
-      )}
-
-      {showOllamaImport && (
-        <div className="ollama-import" aria-label={t("Import models from Ollama")}>
-          <div className="model-import-path">
-            <HostPathField label={t("Ollama models path")} kind="directory" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(ollama_models_path) => { setScan(null); patch({ ollama_models_path }); }} />
-            <button type="button" className="btn btn-primary" disabled={locked || scanning} onClick={() => void scanOllama()}>{scanning ? t("Scanning...") : t("Scan library")}</button>
+          <div className="row-actions model-import-actions">
+            <button type="button" className="icon-btn model-refresh" aria-label={t("Refresh model list")} title={t("Refresh model list")} disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
+            <button type="button" className="btn btn-secondary" aria-expanded={showGGUFImport} disabled={locked || !manager} onClick={() => setShowGGUFImport((value) => !value)}><UploadIcon size={16} />{t("Import GGUF")}</button>
+            <button type="button" className="btn btn-secondary" aria-expanded={showOllamaImport} disabled={locked || !manager} onClick={() => setShowOllamaImport((value) => !value)}><UploadIcon size={16} />{t("Import from Ollama")}</button>
           </div>
-          {scan && <OllamaCandidates candidates={scan.candidates} managed={manager?.models ?? []} locked={locked} busy={busy} onImport={importOllama} />}
         </div>
-      )}
 
-      {manager ? (
-        <>
-          <ImportProgress jobs={manager.imports ?? []} locked={locked} busy={busy} onCancel={cancelImport} />
-          <ManagedModels
-            models={manager.models ?? []}
-            selectedID={settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" ? settings.model : ""}
-            protectedID={protectedManagedModelID}
-            locked={locked}
-            busy={busy}
-            confirmRemove={confirmRemove}
-            setConfirmRemove={setConfirmRemove}
-            onUse={useManagedModel}
-            onRemove={removeModel}
-          />
-        </>
-      ) : !managerMessage && <p className="form-status" role="status">{t("Loading model list...")}</p>}
+        {showGGUFImport && (
+          <div className="model-import-form" aria-label={t("Import GGUF model")}>
+            <HostPathField label={t("GGUF file path")} kind="gguf" value={ggufPath} disabled={locked || busy === "gguf"} onChange={setGGUFPath} />
+            <label className="field"><span className="label">{t("Display name")}<span className="hint-inline">{t("optional")}</span></span><input type="text" value={ggufName} disabled={locked || busy === "gguf"} onChange={(event) => setGGUFName(event.target.value)} /></label>
+            <button type="button" className="btn btn-primary" disabled={locked || !ggufPath.trim() || busy === "gguf"} onClick={() => void importGGUF()}>{busy === "gguf" ? t("Starting...") : t("Import copy")}</button>
+          </div>
+        )}
+
+        {showOllamaImport && (
+          <div className="ollama-import" aria-label={t("Import models from Ollama")}>
+            <div className="model-import-path">
+              <HostPathField label={t("Ollama models path")} kind="directory" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(ollama_models_path) => { setScan(null); patch({ ollama_models_path }); }} />
+              <button type="button" className="btn btn-primary" disabled={locked || scanning} onClick={() => void scanOllama()}>{scanning ? t("Scanning...") : t("Scan library")}</button>
+            </div>
+            {scan && <OllamaCandidates candidates={scan.candidates} managed={manager?.models ?? []} locked={locked} busy={busy} onImport={importOllama} />}
+          </div>
+        )}
+
+        {manager ? (
+          <>
+            <ImportProgress jobs={manager.imports ?? []} locked={locked} busy={busy} onCancel={cancelImport} />
+            <ManagedModels
+              models={manager.models ?? []}
+              selectedID={settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" ? settings.model : ""}
+              protectedID={protectedManagedModelID}
+              locked={locked}
+              busy={busy}
+              confirmRemove={confirmRemove}
+              setConfirmRemove={setConfirmRemove}
+              onUse={useManagedModel}
+              onRemove={removeModel}
+            />
+          </>
+        ) : !managerMessage && <p className="form-status" role="status">{t("Loading model list...")}</p>}
+      </div>
     </>
   );
 }
