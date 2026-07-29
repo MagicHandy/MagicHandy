@@ -323,21 +323,21 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">{t("General")}</h2>
             <div className="group">
-            <h3 className="group-title">{t("Interface")}</h3>
-            <label className="field">
-              <span className="label">{t("Language")}</span>
-              <select
-                aria-label={t("Language")}
-                value={normalizeLocale(s.ui?.locale)}
-                disabled={locked}
-                onChange={(event) => patchUI({ locale: event.target.value })}
-              >
-                {LOCALE_OPTIONS.filter((locale) => !(opt.locales?.length) || opt.locales.includes(locale.value)).map((locale) => (
-                  <option key={locale.value} value={locale.value}>{locale.label}</option>
-                ))}
-              </select>
-              <span className="hint-block">{t("The saved language is shared by every open tab and applies after Save settings.")}</span>
-            </label>
+              <h3 className="group-title">{t("Interface")}</h3>
+              <label className="field">
+                <span className="label">{t("Language")}</span>
+                <select
+                  aria-label={t("Language")}
+                  value={normalizeLocale(s.ui?.locale)}
+                  disabled={locked}
+                  onChange={(event) => patchUI({ locale: event.target.value })}
+                >
+                  {LOCALE_OPTIONS.filter((locale) => !(opt.locales?.length) || opt.locales.includes(locale.value)).map((locale) => (
+                    <option key={locale.value} value={locale.value}>{locale.label}</option>
+                  ))}
+                </select>
+                <span className="hint-block">{t("The saved language is shared by every open tab and applies after Save settings.")}</span>
+              </label>
             </div>
           </>
         )}
@@ -346,21 +346,21 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">{t("Device")}</h2>
             <div className="group">
-            <h3 className="group-title">{t("Connection")}</h3>
-            <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
-            {owner === "cloud_rest" && <>
-              <div className="group device-requirement" role="note" aria-labelledby="device-firmware-requirement">
-                <h3 id="device-firmware-requirement" className="group-title">{t("Firmware / API requirement")}</h3>
-                <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
-              </div>
-              <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
-              {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
-              <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
-              <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
-            </>}
-            {owner === "intiface" && <>
-              <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
-            </>}
+              <h3 className="group-title">{t("Connection")}</h3>
+              <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
+              {owner === "cloud_rest" && <>
+                <div className="device-requirement" role="note" aria-labelledby="device-firmware-requirement">
+                  <span id="device-firmware-requirement" className="label">{t("Firmware / API requirement")}</span>
+                  <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
+                </div>
+                <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
+                {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
+                <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
+                <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
+              </>}
+              {owner === "intiface" && <>
+                <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
+              </>}
             </div>
             <div className="group">
               <h3 className="group-title">{t("Local server")}</h3>
@@ -384,53 +384,55 @@ export function SettingsRoute() {
         )}
 
         {section === "media" && (
-          <><h2 className="section-title">{t("Media library")}</h2>
-          <MediaSettingsPanel
-            media={s.media ?? { library_paths: [] }}
-            savedMedia={saved?.media ?? { library_paths: [] }}
-            limitVideoScriptSpeed={s.motion.apply_video_speed_limit ?? false}
-            onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
-            locked={locked}
-            onChange={patchMedia}
-          /></>
+          <>
+            <h2 className="section-title">{t("Media library")}</h2>
+            <MediaSettingsPanel
+              media={s.media ?? { library_paths: [] }}
+              savedMedia={saved?.media ?? { library_paths: [] }}
+              limitVideoScriptSpeed={s.motion.apply_video_speed_limit ?? false}
+              onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
+              locked={locked}
+              onChange={patchMedia}
+            />
+          </>
         )}
 
         {section === "chat" && (
           <>
             <h2 className="section-title">{t("Chat")}</h2>
             <div className="group">
-            <h3 className="group-title">{t("Sessions")}</h3>
-            <label className="field">
-              <span className="label">{t("When MagicHandy starts")}</span>
-              <select
-                value={s.chat?.startup_behavior ?? "previous"}
-                disabled={locked}
-                onChange={(event) => patchChat({
-                  startup_behavior: event.target.value,
-                  ...(event.target.value === "new" ? { keep_unsaved_on_exit: false } : {}),
-                })}
-              >
-                {(opt.chat_startup_behaviors ?? ["previous", "new"]).map((behavior) => (
-                  <option key={behavior} value={behavior}>{behavior === "new" ? t("Start a new chat") : t("Open the previous chat")}</option>
-                ))}
-              </select>
-              <span className="hint-block">{t("Previous restores the last retained chat. New creates a blank, unsaved tab on every launch.")}</span>
-            </label>
-            <label className="toggle-line">
-              <span className="toggle">
-                <input
-                  type="checkbox"
-                  checked={s.chat?.keep_unsaved_on_exit ?? false}
-                  disabled={locked || s.chat?.startup_behavior === "new"}
-                  onChange={(event) => patchChat({ keep_unsaved_on_exit: event.target.checked })}
-                />
-                <span className="track" aria-hidden="true" />
-              </span>
-              <span>{t("Keep an unsaved current chat after closing MagicHandy")}<small>{s.chat?.startup_behavior === "new"
-                  ? t("Starting with a new chat always removes the prior unsaved draft.")
-                  : t("Off by default. Saved tabs are always kept; use Save chat from the tab menu or its right-click menu.")}</small>
-              </span>
-            </label>
+              <h3 className="group-title">{t("Sessions")}</h3>
+              <label className="field">
+                <span className="label">{t("When MagicHandy starts")}</span>
+                <select
+                  value={s.chat?.startup_behavior ?? "previous"}
+                  disabled={locked}
+                  onChange={(event) => patchChat({
+                    startup_behavior: event.target.value,
+                    ...(event.target.value === "new" ? { keep_unsaved_on_exit: false } : {}),
+                  })}
+                >
+                  {(opt.chat_startup_behaviors ?? ["previous", "new"]).map((behavior) => (
+                    <option key={behavior} value={behavior}>{behavior === "new" ? t("Start a new chat") : t("Open the previous chat")}</option>
+                  ))}
+                </select>
+                <span className="hint-block">{t("Previous restores the last retained chat. New creates a blank, unsaved tab on every launch.")}</span>
+              </label>
+              <label className="toggle-line">
+                <span className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={s.chat?.keep_unsaved_on_exit ?? false}
+                    disabled={locked || s.chat?.startup_behavior === "new"}
+                    onChange={(event) => patchChat({ keep_unsaved_on_exit: event.target.checked })}
+                  />
+                  <span className="track" aria-hidden="true" />
+                </span>
+                <span>{t("Keep an unsaved current chat after closing MagicHandy")}<small>{s.chat?.startup_behavior === "new"
+                    ? t("Starting with a new chat always removes the prior unsaved draft.")
+                    : t("Off by default. Saved tabs are always kept; use Save chat from the tab menu or its right-click menu.")}</small>
+                </span>
+              </label>
             </div>
           </>
         )}

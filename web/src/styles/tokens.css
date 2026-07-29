@@ -99,7 +99,7 @@ body {
   margin: 0 0 6px;
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   color: var(--accent);
   font-weight: 600;
 }

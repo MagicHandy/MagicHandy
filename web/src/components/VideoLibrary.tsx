@@ -15,6 +15,13 @@ interface Props {
 // every file already carrying it.
 const CONVERTED_SUFFIX = "_MHConverted";
 
+interface ConversionFollowTarget {
+  convertedName: string;
+  locationPath: string;
+  knownVideoIDs: string[];
+  jobStartedAt?: string;
+}
+
 export function VideoLibrary({ locked, stopSequence }: Props) {
   const [videos, setVideos] = useState<MediaVideo[]>([]);
   const [selectedID, setSelectedID] = useState("");
@@ -28,10 +35,20 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   const [job, setJob] = useState<MediaJobState | null>(null);
   const [tools, setTools] = useState<MediaToolStatus | null>(null);
   const [conversionError, setConversionError] = useState("");
-  // The display name of the video being converted, so the open page can follow
-  // the conversion to its result. Named rather than identified because the
-  // output's identifier is derived server-side from a path the client never sees.
-  const [convertingName, setConvertingName] = useState("");
+  // The output ID is derived from a server-only relative path. Remember enough
+  // catalog identity to follow only the new sibling produced by this run,
+  // without selecting an older same-name video from another folder.
+  const [conversionTarget, setConversionTarget] = useState<ConversionFollowTarget | null>(null);
+  const updateJob = useCallback((next: MediaJobState) => {
+    setJob((current) => {
+      // A status request issued before a new job started may resolve late.
+      // Never let that older snapshot stop polling the job we just accepted.
+      if (current?.running && current.started_at && next.started_at !== current.started_at) {
+        return current;
+      }
+      return next;
+    });
+  }, []);
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
 
@@ -74,14 +91,14 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       // conversion stays offered but disabled with a reason.
     });
     void api.mediaJob(controller.signal).then((response) => {
-      if (mounted.current && !controller.signal.aborted) setJob(response.job);
+      if (mounted.current && !controller.signal.aborted) updateJob(response.job);
     }).catch(() => {});
     return () => {
       mounted.current = false;
       loadGeneration.current += 1;
       controller.abort();
     };
-  }, [load]);
+  }, [load, updateJob]);
 
   useEffect(() => {
     if (!scan?.running) return undefined;
@@ -119,7 +136,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       try {
         const response = await api.mediaJob();
         if (stopped || !mounted.current) return;
-        setJob(response.job);
+        updateJob(response.job);
         if (response.job.running) timer = window.setTimeout(() => void poll(), 700);
         else await load();
       } catch {
@@ -131,7 +148,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, [job?.running, load]);
+  }, [job?.running, load, updateJob]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -149,21 +166,47 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   }, [query, sort, videos]);
   const selected = videos.find((video) => video.id === selectedID);
 
-  // Converting the video you are watching hides the original and adds the
-  // repaired copy under a new identifier, so the open selection would resolve
-  // to nothing and the page would report the file unavailable — immediately
-  // after successfully repairing it. Follow the conversion to its result.
+  // Converting the open video hides the original and adds a repaired sibling
+  // under a new identifier. Match the new row by root/name and exclude every ID
+  // that existed when conversion started. Display names alone are not unique.
   useEffect(() => {
-    if (!convertingName || selected || loading || videos.length === 0) return;
-    const replacement = videos.find((video) => video.display_name === `${convertingName}${CONVERTED_SUFFIX}`);
-    if (replacement) {
-      setSelectedID(replacement.id);
-      setConvertingName("");
+    if (!conversionTarget || selected || loading) return;
+    const knownIDs = new Set(conversionTarget.knownVideoIDs);
+    const followedJobSucceeded = !job?.running
+      && Boolean(job?.completed_at)
+      && (!conversionTarget.jobStartedAt || job?.started_at === conversionTarget.jobStartedAt)
+      && !job?.cancelled
+      && (job?.failed ?? 0) === 0
+      && !job?.error;
+    const replacements = videos.filter((video) => (
+      video.location_path === conversionTarget.locationPath
+      && video.display_name === conversionTarget.convertedName
+      && !knownIDs.has(video.id)
+    ));
+    if (replacements.length === 1 && followedJobSucceeded) {
+      setSelectedID(replacements[0].id);
+      setConversionTarget(null);
+    } else if (replacements.length > 1 || followedJobSucceeded) {
+      setSelectedID("");
+      setConversionTarget(null);
+      setConversionError(t("Conversion completed, but the repaired file must be opened from the library."));
     }
-  }, [convertingName, loading, selected, videos]);
+  }, [conversionTarget, job, loading, selected, videos]);
+
+  useEffect(() => {
+    if (!conversionTarget || job?.running || !job?.completed_at) return;
+    if (conversionTarget.jobStartedAt && job.started_at !== conversionTarget.jobStartedAt) return;
+    if (job.cancelled || job.failed > 0 || job.error) setConversionTarget(null);
+  }, [conversionTarget, job]);
+
   const pairedCount = videos.filter((video) => video.has_funscript).length;
   const brokenCount = videos.filter(needsConversion).length;
   const conversionBusy = job?.running === true && job.kind === "conversion";
+
+  function leaveVideo(): void {
+    setSelectedID("");
+    setConversionTarget(null);
+  }
 
   // startConversion repairs files that cannot play. Named identifiers or the
   // whole library; either way the server converts only what it has established
@@ -171,19 +214,29 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   async function startConversion(ids: string[]) {
     setConversionError("");
     // Only follow along when the open video is the one being repaired.
-    setConvertingName(ids.length === 1 && ids[0] === selectedID ? (selected?.display_name ?? "") : "");
+    const followTarget = ids.length === 1 && ids[0] === selectedID && selected ? {
+      convertedName: `${selected.display_name}${CONVERTED_SUFFIX}`,
+      locationPath: selected.location_path,
+      knownVideoIDs: videos.map((video) => video.id),
+    } : null;
     try {
       const response = await api.convertMedia(ids);
-      if (mounted.current) setJob(response.job);
+      if (mounted.current) {
+        setConversionTarget(followTarget ? { ...followTarget, jobStartedAt: response.job.started_at } : null);
+        updateJob(response.job);
+        if (!response.job.running) void load();
+      }
     } catch (reason) {
-      if (mounted.current) setConversionError(reason instanceof Error ? reason.message : t("Conversion could not be started."));
+      if (mounted.current) {
+        setConversionError(reason instanceof Error ? reason.message : t("Conversion could not be started."));
+      }
     }
   }
 
   async function cancelJob() {
     try {
       const response = await api.cancelMediaJob();
-      if (mounted.current) setJob(response.job);
+      if (mounted.current) updateJob(response.job);
     } catch {
       // Cancellation is advisory; the next poll reports the real state.
     }
@@ -219,14 +272,23 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
     setVideos((current) => current.map((entry) => entry.id === video.id ? video : entry));
   }
 
+  if (selectedID && !loading && !selected && conversionTarget) {
+    return (
+      <section className="library-view video-player-view" aria-label={t("Video playback")} aria-busy="true">
+        <button type="button" className="btn btn-secondary compact-command" onClick={leaveVideo}><ArrowLeftIcon />{t("Videos")}</button>
+        <div className="empty-state compact-empty" role="status"><h2>{t("Refreshing catalog")}</h2></div>
+      </section>
+    );
+  }
+
   if (selectedID && !loading && (!selected || selected.missing)) {
     return (
       <section className="library-view video-player-view" aria-label={t("Video playback")}>
-        <button type="button" className="btn btn-secondary compact-command" onClick={() => setSelectedID("")}><ArrowLeftIcon />{t("Videos")}</button>
+        <button type="button" className="btn btn-secondary compact-command" onClick={leaveVideo}><ArrowLeftIcon />{t("Videos")}</button>
         <div className="empty-state compact-empty" role="alert">
           <h2>{t("Video unavailable")}</h2>
           <p>{t("The catalog entry is missing or no longer available.")}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => { setSelectedID(""); void load(); }}>{t("Return to videos")}</button>
+          <button type="button" className="btn btn-secondary" onClick={() => { leaveVideo(); void load(); }}>{t("Return to videos")}</button>
         </div>
       </section>
     );
@@ -236,7 +298,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
     return (
       <section className="library-view video-player-view" aria-label={t("Video playback")}>
         <div className="media-player-heading">
-          <button type="button" className="btn btn-secondary compact-command" onClick={() => setSelectedID("")}><ArrowLeftIcon />{t("Videos")}</button>
+          <button type="button" className="btn btn-secondary compact-command" onClick={leaveVideo}><ArrowLeftIcon />{t("Videos")}</button>
           <div><h2>{selected.display_name}</h2><span>{selected.has_funscript ? t("{size} / {location} / script found", { size: formatFileSize(selected.size_bytes), location: formatLocation(selected.location_path) }) : t("{size} / {location}", { size: formatFileSize(selected.size_bytes), location: formatLocation(selected.location_path) })}</span></div>
         </div>
         <SyncedVideoPlayer

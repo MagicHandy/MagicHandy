@@ -566,7 +566,7 @@
 .playback-panel-label {
   color: var(--muted);
   font-size: 0.72rem;
-  letter-spacing: 0.03em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 .playback-panel-legend span {

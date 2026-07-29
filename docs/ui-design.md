@@ -156,14 +156,12 @@ saved dispatch owner's connect/check/discover actions and immediate speed/stroke
 limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
 Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
-the local media catalog and player, and
+the local media catalog and player, and `#/settings` hosts configuration.
+
 **Every settings tab has the same shape**: an `h2.section-title` naming the tab,
 then `.group` cards with an `h3.group-title` naming each category. No control
 sits loose under the h2, and no panel invents its own heading class. The model
-tab was the last holdout — it used a bespoke `section-title` / `model-subtitle`
-/ `divider` structure and no cards at all, which is why it read as the messy
-one. A `<legend>` used as a heading gets `display: block` so it flows and spaces
-like every other heading rather than sitting in the fieldset's border box.
+tab follows this structure without a separate heading or divider system.
 
 Within a section, distinct categories are `.group` cards rather than runs of
 content separated by rules. A rule says "something changed"; a bordered card

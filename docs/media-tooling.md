@@ -376,7 +376,7 @@ All under `media`, all with a working default, none required to use the app:
 | `reencode_crf_h264` | 23 | Separate per codec, because the scales differ |
 | `reencode_crf_h265` | 28 | |
 | `reencode_preset` | `medium` | `ultrafast` … `veryslow` |
-| `reencode_audio_kbps` | 192 | 128 / 192 / 256, or copy when already AAC |
+| `reencode_audio_kbps` | 192 | 96–576 kbps target in 16 kbps steps; existing AAC is copied; FFmpeg may clamp by source format |
 | `generate_thumbnails_on_scan` | false | Rides a successful manual or opted-in startup scan |
 | `convert_incompatible_on_scan` | false | Rides a successful manual or opted-in startup scan; incompatible files only |
 | `show_superseded_originals` | false | Reveals files hidden by the suffix rule |

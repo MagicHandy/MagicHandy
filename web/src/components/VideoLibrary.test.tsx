@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { MediaScanState, MediaVideo } from "../api/types";
+import type { MediaJobState, MediaScanState, MediaVideo } from "../api/types";
 import { VideoLibrary } from "./VideoLibrary";
 
 vi.mock("../api/client", () => ({
@@ -198,16 +198,31 @@ vi.mock("../state/app-state", () => ({
   it("follows a conversion of the open video to the repaired file", async () => {
     const broken = { ...video("broken", "Clip", "2026-07-19T12:00:00Z"), compatibility: "unsupported_codec" as const, container_type: "video/mp4" };
     const repaired = { ...video("repaired", "Clip_MHConverted", "2026-07-19T12:05:00Z"), container_type: "video/mp4" };
-    mediaVideos.mockResolvedValue({ videos: [broken] });
-    convertMedia.mockResolvedValue({ job: { ...idleJob, running: true, kind: "conversion" as const, cancellable: true, total: 1 } });
-    mediaJob.mockResolvedValue({ job: { ...idleJob, succeeded: 1, completed_at: "2026-07-29T00:00:00Z" } });
+    // A same-name converted video may already exist elsewhere under the same
+    // library root. Follow the row created by this run, not the first name match.
+    const olderNamesake = { ...video("older-repaired", "Clip_MHConverted", "2026-07-18T12:00:00Z"), container_type: "video/mp4" };
+    mediaVideos
+      .mockResolvedValueOnce({ videos: [broken, olderNamesake] })
+      .mockResolvedValue({ videos: [olderNamesake, repaired] });
+    const startedAt = "2026-07-29T00:00:00Z";
+    convertMedia.mockResolvedValue({ job: {
+      ...idleJob,
+      running: true,
+      kind: "conversion" as const,
+      cancellable: true,
+      total: 1,
+      started_at: startedAt,
+    } });
+    mediaJob
+      .mockResolvedValueOnce({ job: { ...idleJob, failed: 1, error: "previous job failed", started_at: "2026-07-28T00:00:00Z", completed_at: "2026-07-28T00:01:00Z" } })
+      .mockResolvedValue({ job: { ...idleJob, succeeded: 1, started_at: startedAt, completed_at: "2026-07-29T00:01:00Z" } });
 
     // The repair offer only appears once the browser has actually refused the
     // file, so the failure is raised the way a real one arrives: an error event
     // carrying MEDIA_ERR_SRC_NOT_SUPPORTED, with the bytes still reachable.
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: null }));
     render(<VideoLibrary locked={false} />);
-    fireEvent.click(await screen.findByRole("button", { name: /Play Clip/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Play Clip" }));
     expect(await screen.findByRole("heading", { name: "Clip" })).toBeInTheDocument();
 
     const player = screen.getByLabelText("Clip") as HTMLVideoElement;
@@ -215,11 +230,46 @@ vi.mock("../state/app-state", () => ({
     fireEvent.error(player);
 
     // The conversion hides the original and publishes the repaired copy.
-    mediaVideos.mockResolvedValue({ videos: [repaired] });
     fireEvent.click(await screen.findByRole("button", { name: "Convert this video" }));
 
     expect(await screen.findByRole("heading", { name: "Clip_MHConverted" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Clip_MHConverted")).toHaveAttribute("src", "/stream/repaired");
     expect(screen.queryByText("Video unavailable")).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("ignores a pre-conversion job status response that arrives late", async () => {
+    const broken = {
+      ...video("broken", "Delayed status", "2026-07-29T00:00:00Z"),
+      compatibility: "unsupported_codec" as const,
+      container_type: "video/mp4",
+    };
+    mediaVideos.mockResolvedValue({ videos: [broken] });
+    let resolveInitialJob!: (value: { job: MediaJobState }) => void;
+    mediaJob.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveInitialJob = resolve;
+    }));
+    convertMedia.mockResolvedValue({ job: {
+      ...idleJob,
+      running: true,
+      kind: "conversion",
+      cancellable: true,
+      total: 1,
+      started_at: "2026-07-29T00:01:00Z",
+    } });
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: null }));
+    render(<VideoLibrary locked={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Play Delayed status" }));
+    const player = screen.getByLabelText("Delayed status") as HTMLVideoElement;
+    Object.defineProperty(player, "error", { configurable: true, value: { code: 4 } });
+    fireEvent.error(player);
+    fireEvent.click(await screen.findByRole("button", { name: "Convert this video" }));
+    expect(await screen.findByRole("button", { name: "Converting" })).toBeDisabled();
+
+    await act(async () => resolveInitialJob({ job: idleJob }));
+
+    expect(screen.getByRole("button", { name: "Converting" })).toBeDisabled();
     vi.unstubAllGlobals();
   });
 

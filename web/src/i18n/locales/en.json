@@ -1107,6 +1107,7 @@
   "Conversion started.": "Conversion started.",
   "Cancelling.": "Cancelling.",
   "Conversion could not be started.": "Conversion could not be started.",
+  "Conversion completed, but the repaired file must be opened from the library.": "Conversion completed, but the repaired file must be opened from the library.",
   "This browser cannot play this file": "This browser cannot play this file",
   "This browser cannot play this file. Open it to convert.": "This browser cannot play this file. Open it to convert.",
   "This file cannot be played here": "This file cannot be played here",
@@ -1191,5 +1192,5 @@
   "{done} completed · {failed} failed": "{done} completed · {failed} failed",
   "Sessions": "Sessions",
   "Workers": "Workers",
-  "Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it.": "Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it."
+  "Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.": "Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate."
 }

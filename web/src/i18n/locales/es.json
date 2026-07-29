@@ -1107,6 +1107,7 @@
   "Conversion started.": "Conversión iniciada.",
   "Cancelling.": "Cancelando.",
   "Conversion could not be started.": "No se pudo iniciar la conversión.",
+  "Conversion completed, but the repaired file must be opened from the library.": "La conversión terminó, pero el archivo reparado debe abrirse desde la biblioteca.",
   "This browser cannot play this file": "Este navegador no puede reproducir este archivo",
   "This browser cannot play this file. Open it to convert.": "Este navegador no puede reproducir este archivo. Ábrelo para convertirlo.",
   "This file cannot be played here": "Este archivo no se puede reproducir aquí",
@@ -1191,5 +1192,5 @@
   "{done} completed · {failed} failed": "{done} completados · {failed} fallidos",
   "Sessions": "Sesiones",
   "Workers": "Procesos",
-  "Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it.": "Solo se usa cuando el audio de origen no es ya AAC; el audio que ya es AAC se copia, lo que es más rápido y sin pérdidas. 192 es transparente para voz y la mayoría de bandas sonoras: súbelo para música. AAC gasta solo lo que el material necesita, así que una pista exigente usará todo el presupuesto y una sencilla quedará por debajo."
+  "Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.": "Solo se usa cuando el audio de origen no es AAC; el AAC existente se copia sin pérdida de calidad. 192 kbps es adecuado para voz y la mayoría de bandas sonoras; auméntalo para música. Es una tasa de bits objetivo: FFmpeg puede usar menos o limitarla según el número de canales y la frecuencia de muestreo de origen."
 }

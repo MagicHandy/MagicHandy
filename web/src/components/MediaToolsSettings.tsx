@@ -9,11 +9,9 @@ import { HostPathField } from "./HostPathField";
 const MIN_CRF = 18;
 const MAX_CRF = 30;
 const PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"] as const;
-// Mirrors config.MinReencodeAudioKbps / MaxReencodeAudioKbps. The ceiling is
-// where FFmpeg's native AAC encoder stops responding to the request, not a
-// round number — see the measurement recorded beside those constants.
+// Mirrors config.MinReencodeAudioKbps / MaxReencodeAudioKbps.
 const MIN_AUDIO_KBPS = 96;
-const MAX_AUDIO_KBPS = 448;
+const MAX_AUDIO_KBPS = 576;
 // Every standard AAC bitrate is a multiple of 16, so the step lands on them.
 const AUDIO_KBPS_STEP = 16;
 const JOB_POLL_MILLIS = 700;
@@ -205,7 +203,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
           disabled={locked}
           onChange={(event) => onChange({ reencode_audio_kbps: Number(event.target.value) })}
         />
-        <small>{t("Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it.")}</small>
+        <small>{t("Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.")}</small>
       </label>
 
       <div className="media-tool-actions">
