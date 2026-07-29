@@ -197,23 +197,20 @@ One component, one source of truth.
 
 ## Quick Controls
 
-Speed limits, stroke range, pattern focus range, reverse direction, and motion
-style.
+Speed limits, stroke range, reverse direction, and motion style.
 
 - Apply immediately to active motion (ADR 0002, invariant 9). No save step.
-- Speed, stroke, and focus live in the persistent floating connection manager;
-  reverse and style stay in Chat's motion-behavior group. The collapsed manager
+- Speed and stroke live in the persistent floating connection manager; reverse
+  and style stay in Chat's motion-behavior group. The collapsed manager
   remains visible on every route and clears the reserved mobile Stop footer.
 - Each uses one dual-thumb control. Thumb changes send only the changed backend
   field; Stroke always keeps at least one percentage point between its minimum
   and maximum to match backend validation.
-- Focus is deliberately a separate control from Stroke, not a second name for
-  it. Stroke is the physical envelope every source obeys, including video and
-  startup positioning. Focus is where a repeating pattern's shape plays: the
-  pattern fills whatever range is set, and a chat zone request subdivides that
-  range instead of escaping it. Its minimum span of 20 points is enforced by
-  the slider's gap as well as by the backend, because narrower windows
-  measurably stall at reversals on whole-percent devices
+- Named chat area focus is automatic engine target state, not a persistent
+  connection limit. A focused repeating pattern expands its own authored span
+  to fill the requested zone, and requests narrower than 20 points are widened
+  because smaller windows measurably stall at reversals on whole-percent
+  devices
   ([measurements](motion-pathway-review-2026-07-20.md#follow-up-review---2026-07-24)).
 - Reflect engine state live; if the engine clamps or resolves a value, the
   control shows the resolved value inline rather than via a status line

@@ -220,6 +220,20 @@ Ranked by threat to the stated goals:
   HTML/CSS/JS 500,789 / 138,912; binaries 21,530,112 plain and 15,197,184
   stripped. Hardware timing is not verified here.
 
+- **2026-07-28** - Retired the manual pattern Focus range. The authored-span
+  correction already expands a focused loop pattern into its requested named
+  area automatically; the separate persisted range was a niche outer envelope,
+  not part of that fix, and its placement beside global connection limits
+  implied that video obeyed it when video deliberately does not. The slider,
+  quick API fields, and persisted settings fields are removed; legacy values
+  are ignored so they cannot survive invisibly. Named area focus, the automatic
+  20-point minimum, and clock-locked media exclusion remain unchanged. All 276
+  frontend tests, localization audit, typecheck/build, the full Go suite, and
+  vet pass. The English startup payload is 610,898 raw / 167,075 gzip bytes;
+  all HTML/CSS/JS is 918,498 / 271,938 and complete embedded output is
+  1,362,734 / 709,335. Plain/stripped `CGO_ENABLED=0` binaries are 22,259,200 /
+  15,848,960 bytes.
+
 - **2026-07-24** - Motion focus and reversal follow-up. Two reports shared one
   cause: the reversal ramp was a fixed 75 ms of authored curve time, so it did
   not shrink when playback slowed or a focus window compressed the stroke, and a

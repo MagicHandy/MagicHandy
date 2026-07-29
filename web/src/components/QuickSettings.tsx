@@ -9,9 +9,6 @@ import { RangeSlider } from "./RangeSlider";
 import { useAppState, useToast } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
-// Mirrors config.MinimumFocusWidthPercent. Narrower windows measurably stall at
-// reversals on whole-percent devices, so the slider will not offer them.
-const MINIMUM_FOCUS_WIDTH = 20;
 type QuickPatch = Parameters<typeof api.applyQuick>[0];
 type QuickKey = keyof QuickPatch;
 
@@ -114,7 +111,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   return (
     <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
-      <legend className="visually-hidden">{section === "limits" ? t("Speed, stroke, and focus ranges") : section === "behavior" ? t("Direction and motion style") : t("Speed, stroke, focus, direction, and style")}</legend>
+      <legend className="visually-hidden">{section === "limits" ? t("Speed and stroke ranges") : section === "behavior" ? t("Direction and motion style") : t("Speed, stroke, direction, and style")}</legend>
       {showLimits && (
         <RangeSlider
           label={t("Speed")}
@@ -140,21 +137,6 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           onChange={({ min, max }, changed) => {
             setVals((s) => (s ? { ...s, stroke_min_percent: min, stroke_max_percent: max } : s));
             push(changed === "min" ? { stroke_min_percent: min } : { stroke_max_percent: max });
-          }}
-        />
-      )}
-      {showLimits && (
-        <RangeSlider
-          label={t("Focus")}
-          hint={t("Patterns fill this range")}
-          floor={0}
-          minGap={MINIMUM_FOCUS_WIDTH}
-          minValue={vals.focus_min_percent}
-          maxValue={vals.focus_max_percent}
-          disabled={locked}
-          onChange={({ min, max }, changed) => {
-            setVals((s) => (s ? { ...s, focus_min_percent: min, focus_max_percent: max } : s));
-            push(changed === "min" ? { focus_min_percent: min } : { focus_max_percent: max });
           }}
         />
       )}

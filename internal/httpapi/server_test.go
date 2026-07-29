@@ -397,8 +397,6 @@ func TestSettingsAPIMediaPatchPreservesImmediatePlaybackFilters(t *testing.T) {
 			"speed_max_percent": 80,
 			"stroke_min_percent": 0,
 			"stroke_max_percent": 100,
-			"focus_min_percent": 0,
-			"focus_max_percent": 100,
 			"reverse_direction": false,
 			"style": "balanced"
 		},

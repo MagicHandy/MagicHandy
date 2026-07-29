@@ -214,8 +214,6 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 		SpeedMaxPercent  *int    `json:"speed_max_percent,omitempty"`
 		StrokeMinPercent *int    `json:"stroke_min_percent,omitempty"`
 		StrokeMaxPercent *int    `json:"stroke_max_percent,omitempty"`
-		FocusMinPercent  *int    `json:"focus_min_percent,omitempty"`
-		FocusMaxPercent  *int    `json:"focus_max_percent,omitempty"`
 		ReverseDirection *bool   `json:"reverse_direction,omitempty"`
 		Style            *string `json:"style,omitempty"`
 	}
@@ -237,12 +235,6 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.StrokeMaxPercent != nil {
 			motionSettings.StrokeMaxPercent = *body.StrokeMaxPercent
-		}
-		if body.FocusMinPercent != nil {
-			motionSettings.FocusMinPercent = *body.FocusMinPercent
-		}
-		if body.FocusMaxPercent != nil {
-			motionSettings.FocusMaxPercent = *body.FocusMaxPercent
 		}
 		if body.ReverseDirection != nil {
 			motionSettings.ReverseDirection = *body.ReverseDirection
