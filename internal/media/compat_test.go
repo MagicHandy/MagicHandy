@@ -247,6 +247,22 @@ func TestThumbnailRejectsNonJPEGPayloads(t *testing.T) {
 	}
 }
 
+func TestThumbnailArgsPinQualityAndScaling(t *testing.T) {
+	args := strings.Join(thumbnailFFmpegArgs("input.mp4", "cover.partial", "12.5"), " ")
+	for _, required := range []string{
+		"-ss 12.5",
+		"-vf scale='min(640,iw)':-2:flags=spline",
+		"-f image2",
+		"-c:v mjpeg",
+		"-q:v 3",
+		"-y cover.partial",
+	} {
+		if !strings.Contains(args, required) {
+			t.Fatalf("thumbnail arguments missing %q in %s", required, args)
+		}
+	}
+}
+
 // TestThumbnailIdentifiersCannotEscapeTheirDirectory keeps a catalog ID from
 // becoming a path traversal, since the ID reaches the filesystem as a filename.
 func TestThumbnailIdentifiersCannotEscapeTheirDirectory(t *testing.T) {

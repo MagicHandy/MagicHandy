@@ -28,6 +28,10 @@ const (
 	// far smaller; this leaves room for a high-density display without storing
 	// a second copy of the video.
 	thumbnailMaxEdge = 640
+	// thumbnailJPEGQuality is FFmpeg's fixed MJPEG quantizer. Lower is better;
+	// three keeps small covers crisp without the storage cost of near-lossless
+	// output and avoids FFmpeg's content-dependent default bitrate control.
+	thumbnailJPEGQuality = 3
 	// thumbnailCaptureFraction is how far into a video a batch capture seeks.
 	// Not frame zero: the first frame of a video is very often black, and a
 	// library of black tiles is indistinguishable from a broken feature.
@@ -205,21 +209,7 @@ func captureFrame(ctx context.Context, tools Tools, sourcePath, targetPath, offs
 	temporary := targetPath + ".partial"
 	_ = os.Remove(temporary)
 	if _, err := runTool(ctx, thumbnailTimeout, tools.FFmpegPath,
-		"-nostdin",
-		"-loglevel", "error",
-		// Seeking before -i is the fast form: FFmpeg jumps to the keyframe
-		// instead of decoding everything up to that point.
-		"-ss", offsetSeconds,
-		"-i", sourcePath,
-		"-frames:v", "1",
-		// Downscale only when the source is larger, and keep the aspect ratio
-		// on an even height so the JPEG encoder accepts the result.
-		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", thumbnailMaxEdge),
-		// Muxer and encoder are both named. Output goes to a ".partial" path,
-		// and FFmpeg would otherwise try to infer them from that extension.
-		"-f", "image2",
-		"-c:v", "mjpeg",
-		"-y", temporary,
+		thumbnailFFmpegArgs(sourcePath, temporary, offsetSeconds)...,
 	); err != nil {
 		_ = os.Remove(temporary)
 		return err
@@ -229,6 +219,28 @@ func captureFrame(ctx context.Context, tools Tools, sourcePath, targetPath, offs
 		return fmt.Errorf("finalize thumbnail: %w", err)
 	}
 	return nil
+}
+
+func thumbnailFFmpegArgs(sourcePath, targetPath, offsetSeconds string) []string {
+	return []string{
+		"-nostdin",
+		"-loglevel", "error",
+		// Seeking before -i is the fast form: FFmpeg jumps to the keyframe
+		// instead of decoding everything up to that point.
+		"-ss", offsetSeconds,
+		"-i", sourcePath,
+		"-frames:v", "1",
+		// Downscale only when the source is larger, and keep the aspect ratio
+		// on an even height so the JPEG encoder accepts the result. Spline is a
+		// high-quality compromise that rings less than Lanczos around hard edges.
+		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2:flags=spline", thumbnailMaxEdge),
+		// Muxer and encoder are both named. Output goes to a ".partial" path,
+		// and FFmpeg would otherwise try to infer them from that extension.
+		"-f", "image2",
+		"-c:v", "mjpeg",
+		"-q:v", strconv.Itoa(thumbnailJPEGQuality),
+		"-y", targetPath,
+	}
 }
 
 // captureOffsetSeconds picks a frame a fraction of the way in.
