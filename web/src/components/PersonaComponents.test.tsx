@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { Persona, PersonasPayload } from "../api/types";
+import type { Persona, PersonaLorePayload, PersonasPayload } from "../api/types";
 import { PersonaEditor } from "./PersonaEditor";
 import { PersonaGrid, monogram } from "./PersonaGrid";
 import { PersonaSwitcher } from "./PersonaSwitcher";
@@ -14,6 +14,10 @@ vi.mock("../api/client", () => ({
     deletePersona: vi.fn(),
     savePersonaPortrait: vi.fn(),
     deletePersonaPortrait: vi.fn(),
+    personaLore: vi.fn(),
+    createPersonaLore: vi.fn(),
+    updatePersonaLore: vi.fn(),
+    deletePersonaLore: vi.fn(),
     selectSessionPersona: vi.fn(),
     personaPortraitURL: (item: Persona) => (item.has_portrait ? `/api/personas/${item.id}/portrait?v=1` : ""),
   },
@@ -33,6 +37,8 @@ function persona(overrides: Partial<Persona> = {}): Persona {
     reaction_style: "tender",
     prompt_set_id: "",
     default_focus_area: "full",
+    lore_mode: "off",
+    lore_count: 0,
     has_portrait: false,
     created_at: "2026-07-29T10:00:00Z",
     updated_at: "2026-07-29T10:00:00Z",
@@ -50,11 +56,29 @@ function payload(overrides: Partial<PersonasPayload> = {}): PersonasPayload {
       chat_voices: ["utility", "warm", "intimate", "explicit"],
       reaction_styles: ["neutral", "playful", "tender", "dominant", "submissive", "teasing"],
       focus_areas: ["tip", "shaft", "base", "full"],
+      lore_modes: ["off", "relevant", "full"],
       max_name: 60,
       max_description: 500,
       max_portrait_edge: 1024,
+      max_lore_entries: 8,
+      max_lore_text: 500,
+      max_lore_total: 2000,
+      max_lore_keywords: 12,
     },
     ...overrides,
+  };
+}
+
+function lorePayload(item = persona()): PersonaLorePayload {
+  return {
+    persona: item,
+    entries: [],
+    options: {
+      max_entries: 8,
+      max_text: 500,
+      max_total: 2000,
+      max_keywords: 12,
+    },
   };
 }
 
@@ -119,7 +143,7 @@ describe("PersonaGrid", () => {
     expect(screen.getByRole("button", { name: "Edit Rowan" })).toBeEnabled();
   });
 
-  it("takes the first grapheme of a name, not the first code unit", () => {
+  it("takes the first Unicode code point of a name, not the first code unit", () => {
     expect(monogram("Rowan")).toBe("R");
     expect(monogram("  ash  ")).toBe("A");
     expect(monogram("")).toBe("?");
@@ -132,12 +156,18 @@ describe("PersonaEditor", () => {
     vi.resetAllMocks();
     updatePersona.mockResolvedValue(payload());
     deletePersonaPortrait.mockResolvedValue(payload());
+    // Most PersonaEditor tests exercise the existing axes and do not need to
+    // settle the independently loaded lore group. Leaving that request pending
+    // avoids unrelated post-assertion state updates; the lore-specific test
+    // below resolves it and waits for the rendered result.
+    vi.mocked(api.personaLore).mockImplementation(() => new Promise(() => {}));
   });
   afterEach(() => vi.unstubAllGlobals());
 
   const renderEditor = (item = persona(), locked = false) => {
     const state = payload();
     const onApplied = vi.fn();
+    const onPersonaChanged = vi.fn();
     const onError = vi.fn();
     render(
       <PersonaEditor
@@ -146,11 +176,12 @@ describe("PersonaEditor", () => {
         promptSets={state.prompt_sets ?? []}
         locked={locked}
         onApplied={onApplied}
+        onPersonaChanged={onPersonaChanged}
         onClose={vi.fn()}
         onError={onError}
       />,
     );
-    return { onApplied, onError };
+    return { onApplied, onPersonaChanged, onError };
   };
 
   it("applies selects immediately and holds text behind Save", async () => {
@@ -221,6 +252,31 @@ describe("PersonaEditor", () => {
     fireEvent.change(screen.getByRole("combobox", { name: /Reaction style/ }), { target: { value: "playful" } });
     await waitFor(() => expect(onError).toHaveBeenCalledWith("unknown reaction style"));
     expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it("loads lore separately and applies its prompt policy immediately", async () => {
+    const current = persona({ lore_mode: "relevant", lore_count: 1 });
+    const next = persona({ lore_mode: "full", lore_count: 1 });
+    vi.mocked(api.personaLore).mockResolvedValueOnce({
+      ...lorePayload(current),
+      entries: [{
+        id: "lore-0123456789ab",
+        persona_id: current.id,
+        text: "Blue velvet is familiar.",
+        keywords: ["velvet"],
+        enabled: true,
+        created_at: "2026-07-29T10:00:00Z",
+        updated_at: "2026-07-29T10:00:00Z",
+      }],
+    });
+    updatePersona.mockResolvedValueOnce(payload({ personas: [next], persona: next }));
+    const { onPersonaChanged } = renderEditor(current);
+
+    expect(await screen.findByDisplayValue("Blue velvet is familiar.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Prompt use" }), { target: { value: "full" } });
+
+    await waitFor(() => expect(updatePersona).toHaveBeenCalledWith(current.id, { lore_mode: "full" }));
+    await waitFor(() => expect(onPersonaChanged).toHaveBeenCalledWith(next));
   });
 });
 

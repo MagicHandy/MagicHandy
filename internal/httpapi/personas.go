@@ -21,6 +21,10 @@ func (s *Server) personaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/personas/{id}/portrait", s.handlePersonaPortrait)
 	mux.HandleFunc("POST /api/personas/{id}/portrait", s.handlePersonaPortraitUpload)
 	mux.HandleFunc("DELETE /api/personas/{id}/portrait", s.handlePersonaPortraitDelete)
+	mux.HandleFunc("GET /api/personas/{id}/lore", s.handlePersonaLoreGet)
+	mux.HandleFunc("POST /api/personas/{id}/lore", s.handlePersonaLoreCreate)
+	mux.HandleFunc("PATCH /api/personas/{id}/lore/{lore_id}", s.handlePersonaLoreUpdate)
+	mux.HandleFunc("DELETE /api/personas/{id}/lore/{lore_id}", s.handlePersonaLoreDelete)
 	mux.HandleFunc("PUT /api/chat/sessions/{id}/persona", s.handleChatSessionPersona)
 }
 
@@ -57,9 +61,14 @@ func (s *Server) personasPayload(ctx context.Context) (map[string]any, error) {
 			"chat_voices":       config.LLMChatVoices(),
 			"reaction_styles":   config.LLMReactionStyles(),
 			"focus_areas":       chat.AreaZones(),
+			"lore_modes":        persona.LoreModes(),
 			"max_name":          persona.MaxNameChars,
 			"max_description":   persona.MaxDescriptionChars,
 			"max_portrait_edge": persona.MaxPortraitEdge,
+			"max_lore_entries":  persona.MaxLoreEntries,
+			"max_lore_text":     persona.MaxLoreTextChars,
+			"max_lore_total":    persona.MaxLoreTotalChars,
+			"max_lore_keywords": persona.MaxLoreKeywords,
 		},
 	}, nil
 }
@@ -184,6 +193,64 @@ func (s *Server) handlePersonaPortraitDelete(w http.ResponseWriter, r *http.Requ
 	s.writePersonasPayload(w, r, http.StatusOK, &item)
 }
 
+func (s *Server) handlePersonaLoreGet(w http.ResponseWriter, r *http.Request) {
+	s.writePersonaLorePayload(w, r, http.StatusOK, nil)
+}
+
+func (s *Server) handlePersonaLoreCreate(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var draft persona.LoreDraft
+	if err := decodeJSON(r, &draft); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	entry, err := s.personas.CreateLore(r.Context(), strings.TrimSpace(r.PathValue("id")), draft)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	s.writePersonaLorePayload(w, r, http.StatusCreated, &entry)
+}
+
+func (s *Server) handlePersonaLoreUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var draft persona.LoreDraft
+	if err := decodeJSON(r, &draft); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	entry, err := s.personas.UpdateLore(
+		r.Context(),
+		strings.TrimSpace(r.PathValue("id")),
+		strings.TrimSpace(r.PathValue("lore_id")),
+		draft,
+	)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	s.writePersonaLorePayload(w, r, http.StatusOK, &entry)
+}
+
+func (s *Server) handlePersonaLoreDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	if err := s.personas.DeleteLore(
+		r.Context(),
+		strings.TrimSpace(r.PathValue("id")),
+		strings.TrimSpace(r.PathValue("lore_id")),
+	); err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	s.writePersonaLorePayload(w, r, http.StatusOK, nil)
+}
+
 // handleChatSessionPersona binds a persona to one conversation. This is the only
 // way a persona takes effect: it is a property of the session, never a settings
 // write, so the values in Settings stay exactly as the user left them and remain
@@ -236,6 +303,34 @@ func (s *Server) writePersonasPayload(w http.ResponseWriter, r *http.Request, st
 	}
 	if item != nil {
 		payload["persona"] = *item
+	}
+	writeJSON(w, status, payload)
+}
+
+func (s *Server) writePersonaLorePayload(w http.ResponseWriter, r *http.Request, status int, entry *persona.LoreEntry) {
+	personaID := strings.TrimSpace(r.PathValue("id"))
+	item, err := s.personas.Get(r.Context(), personaID)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	entries, err := s.personas.ListLore(r.Context(), personaID)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	payload := map[string]any{
+		"persona": item,
+		"entries": entries,
+		"options": map[string]any{
+			"max_entries":  persona.MaxLoreEntries,
+			"max_text":     persona.MaxLoreTextChars,
+			"max_total":    persona.MaxLoreTotalChars,
+			"max_keywords": persona.MaxLoreKeywords,
+		},
+	}
+	if entry != nil {
+		payload["entry"] = *entry
 	}
 	writeJSON(w, status, payload)
 }

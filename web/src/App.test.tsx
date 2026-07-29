@@ -212,6 +212,20 @@ function installFetch(opts: InstallFetchOptions = {}) {
     if (u.includes("/api/llm/runtime/build")) return jsonRes({ build: { id: "runtime-build-1", backend: "auto", status: "queued", message: "Queued managed llama.cpp source build.", started_at: "now", updated_at: "now" } });
     if (u.includes("/api/llm/models")) return jsonRes(opts.modelManager ?? modelManagerFixture);
     if (u.includes("/api/llm/status")) return jsonRes({ provider: state.settings.llm.provider, base_url: "http://127.0.0.1:8080", model: state.settings.llm.model, available: false, managed: state.settings.llm.llama_cpp_mode === "managed", loaded: false, models: state.settings.llm.llama_cpp_mode === "external" ? ["server-model-a", "server-model-b"] : undefined, message: `llama.cpp runner is not loaded${state.settings.llm.model ? ` (saved model: ${state.settings.llm.model})` : ""}` });
+    if (u.includes("/api/diagnostics/prompt-composition")) return jsonRes({
+      provider: state.settings.llm.provider,
+      model: state.settings.llm.model,
+      prompt_set: state.settings.llm.prompt_set,
+      persona_id: "",
+      persona_name: "",
+      lore: { mode: "off", considered: 0, selected: 0, characters: 0, entry_ids: [] },
+      composition: {
+        prompt: "Fixture system prompt.",
+        characters: 22,
+        bytes: 22,
+        sections: [{ id: "behavior", title: "Behavior profile", text: "Fixture system prompt.", characters: 22, bytes: 22 }],
+      },
+    });
     if (u.includes("/api/settings")) {
       if (_init?.method === "PUT" && _init.body) {
         const update = JSON.parse(String(_init.body)) as { connection_key?: string; llm?: typeof state.settings.llm };

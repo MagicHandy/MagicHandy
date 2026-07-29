@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { Persona, PersonaDraft, PersonasPayload, PromptSet } from "../api/types";
 import { CloseIcon } from "../shell/icons";
 import { monogram } from "./PersonaGrid";
+import { PersonaLoreEditor } from "./PersonaLoreEditor";
 import { AREA_LABELS, STYLE_LABELS, VOICE_LABELS, personaOptionLabel } from "./persona-labels";
 
 // Portraits are downscaled in the browser, on the same canvas path video covers
@@ -48,11 +49,12 @@ interface EditorProps {
   promptSets: PromptSet[];
   locked: boolean;
   onApplied: (payload: PersonasPayload) => void;
+  onPersonaChanged: (persona: Persona) => void;
   onClose: () => void;
   onError: (message: string) => void;
 }
 
-export function PersonaEditor({ item, options, promptSets, locked, onApplied, onClose, onError }: EditorProps) {
+export function PersonaEditor({ item, options, promptSets, locked, onApplied, onPersonaChanged, onClose, onError }: EditorProps) {
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description);
   const [busy, setBusy] = useState(false);
@@ -259,6 +261,13 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
           {t("A persona never changes your speed limits, your stroke range, or what the model is allowed to control. Those stay in Settings.")}
         </p>
       </section>
+
+      <PersonaLoreEditor
+        persona={item}
+        locked={locked}
+        onPersonaChanged={onPersonaChanged}
+        onError={onError}
+      />
 
       <div className="persona-drawer-actions">
         <button

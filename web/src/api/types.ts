@@ -146,6 +146,8 @@ export interface ChatMessageDiagnostics {
   provider?: string;
   model?: string;
   prompt_set?: string;
+  persona_id?: string;
+  persona_name?: string;
   request_ms?: number;
   repaired?: boolean;
   semantic_fallback?: boolean;
@@ -200,6 +202,8 @@ export interface Persona {
   reaction_style: string;
   prompt_set_id: string;
   default_focus_area: string;
+  lore_mode: string;
+  lore_count: number;
   has_portrait: boolean;
   // Doubles as the portrait cache-buster: replacing a picture in place moves
   // this, which is what makes the tile refetch it.
@@ -216,6 +220,35 @@ export interface PersonaDraft {
   reaction_style?: string;
   prompt_set_id?: string;
   default_focus_area?: string;
+  lore_mode?: string;
+}
+
+export interface PersonaLoreEntry {
+  id: string;
+  persona_id: string;
+  text: string;
+  keywords: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonaLoreDraft {
+  text?: string;
+  keywords?: string[];
+  enabled?: boolean;
+}
+
+export interface PersonaLorePayload {
+  persona: Persona;
+  entries: PersonaLoreEntry[];
+  entry?: PersonaLoreEntry;
+  options: {
+    max_entries: number;
+    max_text: number;
+    max_total: number;
+    max_keywords: number;
+  };
 }
 
 export interface PersonasPayload {
@@ -228,9 +261,42 @@ export interface PersonasPayload {
     chat_voices: string[];
     reaction_styles: string[];
     focus_areas: string[];
+    lore_modes: string[];
     max_name: number;
     max_description: number;
     max_portrait_edge: number;
+    max_lore_entries: number;
+    max_lore_text: number;
+    max_lore_total: number;
+    max_lore_keywords: number;
+  };
+}
+
+export interface PromptSection {
+  id: string;
+  title: string;
+  text: string;
+  characters: number;
+  bytes: number;
+}
+
+export interface PromptCompositionPayload {
+  session_id: string;
+  provider: string;
+  model: string;
+  prompt_set: string;
+  persona_id?: string;
+  persona_name?: string;
+  lore_mode?: string;
+  lore: {
+    entry_ids?: string[];
+    characters?: number;
+  };
+  composition: {
+    prompt: string;
+    sections: PromptSection[];
+    characters: number;
+    bytes: number;
   };
 }
 
@@ -987,7 +1053,7 @@ export interface MotionTarget {
 }
 
 export type ChatStreamEvent =
-  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; session_id?: string; user_seq?: number; current_mood?: AssistantMood | ""; stop_sequence?: number } }
+  | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; persona_id?: string; persona_name?: string; session_id?: string; user_seq?: number; current_mood?: AssistantMood | ""; stop_sequence?: number } }
   | { event: "delta" | "repair_delta"; data: { phase?: string; text?: string } }
   | { event: "message"; data: { reply?: string; motion?: Record<string, unknown>; new_mood?: AssistantMood | null; current_mood?: AssistantMood | ""; initial_malformed?: boolean; diagnostics?: ChatMessageDiagnostics; seq?: number } }
   | { event: "speech"; data: { request_id?: string } }

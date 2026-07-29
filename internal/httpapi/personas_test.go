@@ -22,11 +22,28 @@ type personasResponse struct {
 	ActiveSessionID string            `json:"active_session_id"`
 	Persona         *persona.Persona  `json:"persona"`
 	Options         struct {
-		ChatVoices     []string `json:"chat_voices"`
-		ReactionStyles []string `json:"reaction_styles"`
-		FocusAreas     []string `json:"focus_areas"`
-		MaxName        int      `json:"max_name"`
-		MaxDescription int      `json:"max_description"`
+		ChatVoices      []string `json:"chat_voices"`
+		ReactionStyles  []string `json:"reaction_styles"`
+		FocusAreas      []string `json:"focus_areas"`
+		LoreModes       []string `json:"lore_modes"`
+		MaxName         int      `json:"max_name"`
+		MaxDescription  int      `json:"max_description"`
+		MaxLoreEntries  int      `json:"max_lore_entries"`
+		MaxLoreText     int      `json:"max_lore_text"`
+		MaxLoreTotal    int      `json:"max_lore_total"`
+		MaxLoreKeywords int      `json:"max_lore_keywords"`
+	} `json:"options"`
+}
+
+type personaLoreResponse struct {
+	Persona persona.Persona     `json:"persona"`
+	Entries []persona.LoreEntry `json:"entries"`
+	Entry   *persona.LoreEntry  `json:"entry"`
+	Options struct {
+		MaxEntries  int `json:"max_entries"`
+		MaxText     int `json:"max_text"`
+		MaxTotal    int `json:"max_total"`
+		MaxKeywords int `json:"max_keywords"`
 	} `json:"options"`
 }
 
@@ -106,8 +123,17 @@ func TestPersonasEndpointReportsTheServersOwnVocabulary(t *testing.T) {
 	if strings.Join(decoded.Options.FocusAreas, ",") != strings.Join(chat.AreaZones(), ",") {
 		t.Fatalf("focus areas = %v, want %v", decoded.Options.FocusAreas, chat.AreaZones())
 	}
+	if strings.Join(decoded.Options.LoreModes, ",") != strings.Join(persona.LoreModes(), ",") {
+		t.Fatalf("lore modes = %v, want %v", decoded.Options.LoreModes, persona.LoreModes())
+	}
 	if decoded.Options.MaxName != persona.MaxNameChars || decoded.Options.MaxDescription != persona.MaxDescriptionChars {
 		t.Fatal("bounds were not reported to the client")
+	}
+	if decoded.Options.MaxLoreEntries != persona.MaxLoreEntries ||
+		decoded.Options.MaxLoreText != persona.MaxLoreTextChars ||
+		decoded.Options.MaxLoreTotal != persona.MaxLoreTotalChars ||
+		decoded.Options.MaxLoreKeywords != persona.MaxLoreKeywords {
+		t.Fatal("lore bounds were not reported to the client")
 	}
 	if decoded.ActiveSessionID == "" {
 		t.Fatal("the payload must name the active session so the page can bind to it")
@@ -163,6 +189,7 @@ func TestPersonaAPIMapsFailuresToDistinctStatuses(t *testing.T) {
 		{"empty name", http.MethodPost, "/api/personas", map[string]any{"name": "  "}, http.StatusBadRequest},
 		{"unknown register", http.MethodPatch, "/api/personas/" + created.ID, map[string]any{"chat_voice": "seductive"}, http.StatusBadRequest},
 		{"unknown style", http.MethodPatch, "/api/personas/" + created.ID, map[string]any{"reaction_style": "bratty"}, http.StatusBadRequest},
+		{"unknown lore mode", http.MethodPatch, "/api/personas/" + created.ID, map[string]any{"lore_mode": "automatic"}, http.StatusBadRequest},
 		{"long name", http.MethodPatch, "/api/personas/" + created.ID, map[string]any{"name": strings.Repeat("n", persona.MaxNameChars+1)}, http.StatusBadRequest},
 	}
 	for _, testCase := range cases {
@@ -467,6 +494,9 @@ func TestPersonaWritesRequireTheController(t *testing.T) {
 		{http.MethodPost, "/api/personas/" + created.ID + "/duplicate"},
 		{http.MethodPost, "/api/personas/" + created.ID + "/portrait"},
 		{http.MethodDelete, "/api/personas/" + created.ID + "/portrait"},
+		{http.MethodPost, "/api/personas/" + created.ID + "/lore"},
+		{http.MethodPatch, "/api/personas/" + created.ID + "/lore/lore-0123456789ab"},
+		{http.MethodDelete, "/api/personas/" + created.ID + "/lore/lore-0123456789ab"},
 	} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader("{}"))
@@ -476,6 +506,169 @@ func TestPersonaWritesRequireTheController(t *testing.T) {
 			t.Fatalf("%s %s: status %d, want 409 for a non-controller",
 				testCase.method, testCase.path, recorder.Code)
 		}
+	}
+}
+
+func TestPersonaLoreCRUDRoundTripsThroughTheAPI(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	created := createPersonaVia(t, server, "Rowan")
+
+	recorder, _ := personaRequest(t, server, http.MethodPost,
+		"/api/personas/"+created.ID+"/lore",
+		map[string]any{
+			"text":     "Blue velvet is familiar.",
+			"keywords": []string{"Velvet", "slow burn"},
+		})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create lore: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var createdLore personaLoreResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &createdLore); err != nil {
+		t.Fatalf("decode created lore: %v", err)
+	}
+	if createdLore.Entry == nil || len(createdLore.Entries) != 1 ||
+		strings.Join(createdLore.Entry.Keywords, ",") != "velvet,slow burn" {
+		t.Fatalf("created lore payload = %+v", createdLore)
+	}
+	if createdLore.Persona.LoreCount != 1 {
+		t.Fatalf("persona lore count = %d, want 1", createdLore.Persona.LoreCount)
+	}
+	if createdLore.Options.MaxEntries != persona.MaxLoreEntries ||
+		createdLore.Options.MaxTotal != persona.MaxLoreTotalChars {
+		t.Fatal("lore endpoint omitted its server-owned bounds")
+	}
+
+	recorder, _ = personaRequest(t, server, http.MethodPatch,
+		"/api/personas/"+created.ID+"/lore/"+createdLore.Entry.ID,
+		map[string]any{"enabled": false})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("disable lore: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var disabled personaLoreResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &disabled); err != nil {
+		t.Fatalf("decode disabled lore: %v", err)
+	}
+	if disabled.Entry == nil || disabled.Entry.Enabled {
+		t.Fatal("lore entry was not disabled")
+	}
+
+	recorder, _ = personaRequest(t, server, http.MethodDelete,
+		"/api/personas/"+created.ID+"/lore/"+createdLore.Entry.ID, nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("delete lore: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var deleted personaLoreResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &deleted); err != nil {
+		t.Fatalf("decode deleted lore: %v", err)
+	}
+	if len(deleted.Entries) != 0 || deleted.Persona.LoreCount != 0 {
+		t.Fatalf("delete lore payload = %+v", deleted)
+	}
+
+	// Reads remain available to a read-only client; only mutation requires the
+	// controller lease.
+	request := httptest.NewRequest(http.MethodGet, "/api/personas/"+created.ID+"/lore", nil)
+	request.Header.Set(controllerHeaderName, "someone-else")
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("read-only lore GET: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestPersonaPromptSetReachesTheProviderRequest(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Present.","motion":{"action":"none"}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	set, err := server.personalization.prompts.Create("Persona behavior", "PERSONA PROMPT SET SENTINEL")
+	if err != nil {
+		t.Fatalf("create prompt set: %v", err)
+	}
+	created := createPersonaVia(t, server, "Rowan")
+	recorder, _ := personaRequest(t, server, http.MethodPatch, "/api/personas/"+created.ID,
+		map[string]any{
+			"chat_voice":    config.LLMChatVoiceIntimate,
+			"prompt_set_id": set.ID,
+		})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("configure persona: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	_, payload := personaRequest(t, server, http.MethodGet, "/api/personas", nil)
+	personaRequest(t, server, http.MethodPut,
+		"/api/chat/sessions/"+payload.ActiveSessionID+"/persona",
+		map[string]any{"persona_id": created.ID})
+
+	body := postChatStream(t, server, `{"message":"hello"}`)
+	if !strings.Contains(body, `"prompt_set":"`+set.ID+`"`) {
+		t.Fatalf("status event did not report the persona prompt set:\n%s", body)
+	}
+	if provider.callCount() != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.callCount())
+	}
+	system := provider.requests[0].Messages[0].Content
+	if !strings.Contains(system, "PERSONA PROMPT SET SENTINEL") {
+		t.Fatalf("provider prompt did not use the persona prompt set:\n%s", system)
+	}
+}
+
+func TestPersonaStartingAreaOnlyDefaultsANewUnscopedCommand(t *testing.T) {
+	base := &persona.Persona{DefaultFocusArea: chat.AreaZoneBase}
+	full := &persona.Persona{DefaultFocusArea: chat.AreaZoneFull}
+	tests := []struct {
+		name         string
+		capabilities chat.Capabilities
+		persona      *persona.Persona
+		command      *chat.MotionCommand
+		want         string
+	}{
+		{
+			name:         "new unscoped motion",
+			capabilities: chat.Capabilities{AreaFocus: true},
+			persona:      base,
+			command:      &chat.MotionCommand{Action: chat.MotionActionStart},
+			want:         chat.AreaZoneBase,
+		},
+		{
+			name:         "explicit model area wins",
+			capabilities: chat.Capabilities{AreaFocus: true},
+			persona:      base,
+			command:      &chat.MotionCommand{Action: chat.MotionActionStart, Area: chat.AreaZoneTip},
+			want:         chat.AreaZoneTip,
+		},
+		{
+			name:         "target does not reassert default",
+			capabilities: chat.Capabilities{AreaFocus: true},
+			persona:      base,
+			command:      &chat.MotionCommand{Action: chat.MotionActionTarget},
+			want:         "",
+		},
+		{
+			name:         "disabled capability stays inert",
+			capabilities: chat.Capabilities{},
+			persona:      base,
+			command:      &chat.MotionCommand{Action: chat.MotionActionStart},
+			want:         "",
+		},
+		{
+			name:         "full range adds no redundant field",
+			capabilities: chat.Capabilities{AreaFocus: true},
+			persona:      full,
+			command:      &chat.MotionCommand{Action: chat.MotionActionStart},
+			want:         "",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := chat.Result{Response: chat.AssistantResponse{Motion: testCase.command}}
+			applyPersonaStartingArea(&result, testCase.capabilities, testCase.persona)
+			if result.Response.Motion.Area != testCase.want {
+				t.Fatalf("area = %q, want %q", result.Response.Motion.Area, testCase.want)
+			}
+		})
 	}
 }
 

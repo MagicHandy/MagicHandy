@@ -85,6 +85,16 @@ export function PersonasRoute() {
               setPayload(next);
               setError("");
             }}
+            onPersonaChanged={(changed) => {
+              setPayload((current) => current
+                ? {
+                    ...current,
+                    personas: current.personas.map((item) => item.id === changed.id ? changed : item),
+                    persona: current.persona?.id === changed.id ? changed : current.persona,
+                  }
+                : current);
+              setError("");
+            }}
             onClose={() => setEditingID("")}
             onError={reportError}
           />

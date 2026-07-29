@@ -39,7 +39,10 @@ import type {
   PatternFeedback,
   Persona,
   PersonaDraft,
+  PersonaLoreDraft,
+  PersonaLorePayload,
   PersonasPayload,
+  PromptCompositionPayload,
   PublicSettings,
   SettingsUpdate,
   VoiceRequestSnapshot,
@@ -201,9 +204,14 @@ function normalizePersonas(payload: PersonasPayload): PersonasPayload {
       chat_voices: payload?.options?.chat_voices ?? [],
       reaction_styles: payload?.options?.reaction_styles ?? [],
       focus_areas: payload?.options?.focus_areas ?? [],
+      lore_modes: payload?.options?.lore_modes ?? ["off", "relevant", "full"],
       max_name: payload?.options?.max_name ?? 60,
       max_description: payload?.options?.max_description ?? 500,
       max_portrait_edge: payload?.options?.max_portrait_edge ?? 1024,
+      max_lore_entries: payload?.options?.max_lore_entries ?? 8,
+      max_lore_text: payload?.options?.max_lore_text ?? 500,
+      max_lore_total: payload?.options?.max_lore_total ?? 2000,
+      max_lore_keywords: payload?.options?.max_lore_keywords ?? 12,
     },
   };
 }
@@ -305,6 +313,21 @@ export const api = {
     item.has_portrait
       ? `/api/personas/${encodeURIComponent(item.id)}/portrait?v=${encodeURIComponent(item.portrait_updated_at ?? "")}`
       : "",
+  personaLore: (id: string, signal?: AbortSignal) =>
+    request<PersonaLorePayload>("GET", `/api/personas/${encodeURIComponent(id)}/lore`, undefined, signal),
+  createPersonaLore: (id: string, draft: PersonaLoreDraft) =>
+    request<PersonaLorePayload>("POST", `/api/personas/${encodeURIComponent(id)}/lore`, draft),
+  updatePersonaLore: (id: string, loreID: string, draft: PersonaLoreDraft) =>
+    request<PersonaLorePayload>(
+      "PATCH",
+      `/api/personas/${encodeURIComponent(id)}/lore/${encodeURIComponent(loreID)}`,
+      draft,
+    ),
+  deletePersonaLore: (id: string, loreID: string) =>
+    request<PersonaLorePayload>(
+      "DELETE",
+      `/api/personas/${encodeURIComponent(id)}/lore/${encodeURIComponent(loreID)}`,
+    ),
 
   // Media tooling. Thumbnails and conversion both need the optional external
   // FFmpeg; the compatibility report does not, because the browser produced it.
@@ -344,6 +367,14 @@ export const api = {
     request("PATCH", `/api/memory/${encodeURIComponent(id)}`, { enabled }),
   removeMemory: (id: string) => request("DELETE", `/api/memory/${encodeURIComponent(id)}`),
   clearMemory: () => request("POST", "/api/memory/clear", {}),
+
+  promptComposition: (signal?: AbortSignal) =>
+    request<PromptCompositionPayload>(
+      "GET",
+      "/api/diagnostics/prompt-composition",
+      undefined,
+      signal,
+    ),
 
   // Prompt sets.
   getPromptSets: () => request<PromptSetsPayload>("GET", "/api/prompt-sets"),

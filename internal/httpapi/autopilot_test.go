@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -252,6 +253,38 @@ func TestAutopilotAnnouncementCarriesSessionMood(t *testing.T) {
 	last := messages[len(messages)-1]
 	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodLoving {
 		t.Fatalf("autopilot diagnostics = %+v, want carried mood", last.Diagnostics)
+	}
+}
+
+func TestAutopilotAnnouncementCarriesPersonaProvenance(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	set, err := server.personalization.prompts.Create("Autopilot persona", "Keep this persona voice.")
+	if err != nil {
+		t.Fatalf("create prompt set: %v", err)
+	}
+	created := createPersonaVia(t, server, "Rowan")
+	recorder, _ := personaRequest(t, server, http.MethodPatch, "/api/personas/"+created.ID,
+		map[string]any{"prompt_set_id": set.ID})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("configure persona: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	_, payload := personaRequest(t, server, http.MethodGet, "/api/personas", nil)
+	recorder, _ = personaRequest(t, server, http.MethodPut,
+		"/api/chat/sessions/"+payload.ActiveSessionID+"/persona",
+		map[string]any{"persona_id": created.ID})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("bind persona: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+
+	server.autopilotAnnounce(t.Context(), "Autonomous follow-up.")
+	messages, _, _ := getChatMessages(t, server, "")
+	last := messages[len(messages)-1]
+	if last.Diagnostics == nil ||
+		last.Diagnostics.PersonaID != created.ID ||
+		last.Diagnostics.PersonaName != "Rowan" ||
+		last.Diagnostics.PromptSet != set.ID {
+		t.Fatalf("autopilot persona diagnostics = %+v", last.Diagnostics)
 	}
 }
 

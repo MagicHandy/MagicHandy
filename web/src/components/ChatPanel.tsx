@@ -6,7 +6,7 @@ import { t, translateKnown } from "../i18n";
 // malformed-response state. Chat can start, adjust, and stop motion through
 // the backend contract; the frontend sends only text. When speak-replies is
 // on, the controller tab (the audio-lease owner) plays completed TTS clips.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api, streamChat } from "../api/client";
 import type { ChatMessageDiagnostics } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
@@ -202,7 +202,16 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
       await streamChat(sessionId, text, (ev) => {
         if (!mounted.current || streamGeneration.current !== requestGeneration || controller.signal.aborted) return;
         if (ev.event === "status") {
-          const status = ev.data as { state?: string; provider?: string; model?: string; prompt_set?: string; user_seq?: number; stop_sequence?: number };
+          const status = ev.data as {
+            state?: string;
+            provider?: string;
+            model?: string;
+            prompt_set?: string;
+            persona_id?: string;
+            persona_name?: string;
+            user_seq?: number;
+            stop_sequence?: number;
+          };
           const userSeq = Number(status.user_seq ?? 0);
           if (userSeq > lastSeq.current) lastSeq.current = userSeq;
           if (status.state === "deterministic_stop") mustRefreshStopState = true;
@@ -211,6 +220,8 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             provider: status.provider,
             model: status.model,
             prompt_set: status.prompt_set,
+            persona_id: status.persona_id,
+            persona_name: status.persona_name,
           };
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, diagnostics: statusDiagnostics } : x)));
         } else if (ev.event === "speech") {
@@ -308,15 +319,23 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             </div>
           )}
           {!historyLoading && !historyError && messages.length === 0 && <div className="chat-history-state chat-history-empty">{t("No messages yet")}</div>}
-          {messages.map((m) => (
-            <div key={m.id} className="chat-message" data-role={m.role} data-streaming={m.streaming || undefined} data-state={m.warning ? "warning" : undefined}>
-              {m.role === "assistant" ? <AssistantAvatar message={m} /> : <span className="chat-avatar" aria-hidden="true">Y</span>}
-              <div className="chat-body">
-                <span className="chat-speaker">{m.role === "user" ? t("You") : "MagicHandy"}</span>
-                <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
-              </div>
-            </div>
-          ))}
+          {messages.map((m, index) => {
+            const divider = personaDivider(messages, index);
+            return (
+              <Fragment key={m.id}>
+                {divider && <div className="persona-divider" role="separator">{divider}</div>}
+                <div className="chat-message" data-role={m.role} data-streaming={m.streaming || undefined} data-state={m.warning ? "warning" : undefined}>
+                  {m.role === "assistant" ? <AssistantAvatar message={m} /> : <span className="chat-avatar" aria-hidden="true">Y</span>}
+                  <div className="chat-body">
+                    <span className="chat-speaker">
+                      {m.role === "user" ? t("You") : m.diagnostics?.persona_name || "MagicHandy"}
+                    </span>
+                    <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
+                  </div>
+                </div>
+              </Fragment>
+            );
+          })}
           {tailError && <p className="form-status chat-sync-status" role="status">{tailError}</p>}
         </div>
         {showJump && (
@@ -374,15 +393,16 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
 
 function AssistantAvatar({ message }: { message: Msg }) {
   const diagnostics = message.diagnostics;
+  const initial = Array.from(diagnostics?.persona_name?.trim() || "MagicHandy")[0]?.toUpperCase() || "M";
   if (!diagnostics || !Object.values(diagnostics).some((value) => value !== undefined && value !== "" && value !== false)) {
-    return <span className="chat-avatar" aria-hidden="true">M</span>;
+    return <span className="chat-avatar" aria-hidden="true">{initial}</span>;
   }
   const tooltipID = `chat-diagnostics-${message.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const rows = diagnosticRows(diagnostics);
   const title = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
   return (
     <span className="chat-avatar-diagnostics">
-      <button type="button" className="chat-avatar" aria-label={t("Show response diagnostics")} aria-describedby={tooltipID} title={title}>M</button>
+      <button type="button" className="chat-avatar" aria-label={t("Show response diagnostics")} aria-describedby={tooltipID} title={title}>{initial}</button>
       <span id={tooltipID} className="chat-diagnostics-tooltip" role="tooltip">
         <strong>{t("Response diagnostics")}</strong>
         <dl>
@@ -404,12 +424,32 @@ function diagnosticRows(diagnostics: ChatMessageDiagnostics): Array<[string, str
   if (diagnostics.provider) rows.push([t("Provider"), diagnostics.provider]);
   if (diagnostics.model) rows.push([t("Model"), diagnostics.model]);
   if (diagnostics.prompt_set) rows.push([t("Prompt set"), diagnostics.prompt_set]);
+  if (diagnostics.persona_name) rows.push([t("Persona"), diagnostics.persona_name]);
   if (Number.isFinite(diagnostics.request_ms)) rows.push([t("Run time"), `${Math.max(0, Math.round(diagnostics.request_ms ?? 0))} ms`]);
   if (diagnostics.motion_action) rows.push([t("Motion"), translateKnown(diagnostics.motion_action)]);
   if (diagnostics.repaired) rows.push([t("Parser"), t("Repaired response")]);
   if (diagnostics.semantic_fallback) rows.push([t("Fallback"), t("Semantic fallback used")]);
   if (diagnostics.initial_malformed) rows.push([t("Initial response"), t("Malformed JSON")]);
   return rows;
+}
+
+function personaDivider(messages: Msg[], index: number): string {
+  const current = messages[index];
+  if (current.role !== "assistant" || current.streaming) return "";
+  let previous: Msg | undefined;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (messages[cursor].role === "assistant" && !messages[cursor].streaming) {
+      previous = messages[cursor];
+      break;
+    }
+  }
+  if (!previous) return "";
+  const previousID = previous.diagnostics?.persona_id ?? "";
+  const currentID = current.diagnostics?.persona_id ?? "";
+  if (previousID === currentID) return "";
+  return currentID
+    ? t("Persona changed to {name}", { name: current.diagnostics?.persona_name || t("Unknown persona") })
+    : t("Persona cleared; using Settings");
 }
 
 function sourceLabel(source: string): string {

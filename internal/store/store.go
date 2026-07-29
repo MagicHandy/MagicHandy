@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 16
+	CurrentSchemaVersion = 17
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -498,33 +498,15 @@ var migrations = [][]string{
 	// actually play the file, and whether a converted copy supersedes this row.
 	// All three are guarded Go steps for the same reason as v14.
 	{`SELECT 1`},
-	// v15 -> v16: personas. A persona is a named, portrait-bearing preset over
-	// the personalization axes that already exist (docs/persona-page.md), not a
-	// second personalization system: nothing here can weaken the motion
-	// contract, and every column maps to a value the prompt already composes.
-	//
-	// The enums deliberately carry no CHECK constraint. patterns.origin and
-	// messages.role use one because those value sets are structural; reply
-	// register and reaction style are product vocabulary that will gain values,
-	// and a CHECK would turn each addition into a table rebuild. Validation
-	// lives in Go beside the existing chat-voice validation, which is where the
-	// option lists are already single-sourced.
-	{
-		`CREATE TABLE IF NOT EXISTS personas (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			chat_voice TEXT NOT NULL DEFAULT 'warm',
-			reaction_style TEXT NOT NULL DEFAULT 'neutral',
-			prompt_set_id TEXT NOT NULL DEFAULT '',
-			default_focus_area TEXT NOT NULL DEFAULT 'full',
-			portrait_updated_at TEXT NOT NULL DEFAULT '',
-			last_used_at TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS personas_used ON personas(last_used_at DESC, name, id)`,
-	},
+	// v15 -> v16: canonical personas. This runs in a guarded Go hook because
+	// the preserved Rockfire/LSO schema already has an incompatible table named
+	// personas. CREATE TABLE IF NOT EXISTS would silently retain that shape and
+	// the following index would fail on its missing last_used_at column.
+	{`SELECT 1`},
+	// v16 -> v17: bounded, per-persona lore entries. The guarded hook owns the
+	// table as well as the mode column so it can first repair any manually
+	// versioned database that still carries the Rockfire table name.
+	{`SELECT 1`},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -718,8 +700,9 @@ func migrateChatSessionRows(ctx context.Context, tx *sql.Tx, activeID string) er
 
 // reconcileRockfireSchema repairs the two table-shape differences created by
 // the unmerged Rockfire branch. Its motion_blocks, funscript_files, queues,
-// personas, and UI tables are deliberately left intact for the explicit LSO
-// data-import phase; Phase 14 must not guess how to reinterpret that content.
+// personas, and UI tables are preserved for the explicit LSO data-import
+// phase; later migrations rename the incompatible personas table before
+// creating the canonical one rather than guessing how to reinterpret it.
 func reconcileRockfireSchema(ctx context.Context, tx *sql.Tx) error {
 	integerSettingsID, err := columnHasType(ctx, tx, "settings", "id", "INTEGER")
 	if err != nil {
@@ -794,7 +777,9 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 	case 15:
 		err = migrateVideoMediaTooling(ctx, tx)
 	case 16:
-		err = migrateSessionPersona(ctx, tx)
+		err = migratePersonas(ctx, tx)
+	case 17:
+		err = migratePersonaLore(ctx, tx)
 	default:
 		return nil
 	}
@@ -862,6 +847,101 @@ func migrateSessionPersona(ctx context.Context, tx *sql.Tx) error {
 	_, err = tx.ExecContext(ctx,
 		`ALTER TABLE chat_sessions ADD COLUMN persona_id TEXT NOT NULL DEFAULT ''`)
 	return err
+}
+
+// migratePersonas creates the canonical persona table without overwriting the
+// incompatible Rockfire/LSO table preserved for explicit import. A direct
+// CREATE TABLE IF NOT EXISTS is unsafe here: both lineages use the same name.
+func migratePersonas(ctx context.Context, tx *sql.Tx) error {
+	canonical, err := columnExists(ctx, tx, "personas", "chat_voice")
+	if err != nil {
+		return err
+	}
+	existing, err := tableExists(ctx, tx, "personas")
+	if err != nil {
+		return err
+	}
+	if existing && !canonical {
+		legacyExists, legacyErr := tableExists(ctx, tx, "personas_rockfire_legacy")
+		if legacyErr != nil {
+			return legacyErr
+		}
+		if legacyExists {
+			return errors.New("both personas and personas_rockfire_legacy exist with non-canonical schemas")
+		}
+		if _, err := tx.ExecContext(ctx,
+			`ALTER TABLE personas RENAME TO personas_rockfire_legacy`); err != nil {
+			return fmt.Errorf("preserve Rockfire personas table: %w", err)
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS personas (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			chat_voice TEXT NOT NULL DEFAULT 'warm',
+			reaction_style TEXT NOT NULL DEFAULT 'neutral',
+			prompt_set_id TEXT NOT NULL DEFAULT '',
+			default_focus_area TEXT NOT NULL DEFAULT 'full',
+			portrait_updated_at TEXT NOT NULL DEFAULT '',
+			last_used_at TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS personas_used
+			ON personas(last_used_at DESC, name, id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return migrateSessionPersona(ctx, tx)
+}
+
+func migratePersonaLore(ctx context.Context, tx *sql.Tx) error {
+	if err := migratePersonas(ctx, tx); err != nil {
+		return err
+	}
+	exists, err := columnExists(ctx, tx, "personas", "lore_mode")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if _, err := tx.ExecContext(ctx,
+			`ALTER TABLE personas ADD COLUMN lore_mode TEXT NOT NULL DEFAULT 'off'`); err != nil {
+			return err
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS persona_lore (
+			id TEXT PRIMARY KEY,
+			persona_id TEXT NOT NULL,
+			text TEXT NOT NULL,
+			keywords_json TEXT NOT NULL DEFAULT '[]',
+			enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			FOREIGN KEY(persona_id) REFERENCES personas(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS persona_lore_persona_created
+			ON persona_lore(persona_id, created_at, id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func tableExists(ctx context.Context, tx *sql.Tx, table string) (bool, error) {
+	var count int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`,
+		table,
+	).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func columnHasType(ctx context.Context, tx *sql.Tx, table, column, columnType string) (bool, error) {

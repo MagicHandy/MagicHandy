@@ -181,6 +181,58 @@ describe("ChatPanel history", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Run time\s*184 ms/);
   });
 
+  it("marks persona changes from persisted assistant provenance", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [
+        {
+          seq: 1,
+          role: "assistant",
+          content: "Rowan line",
+          created_at: "now",
+          diagnostics: {
+            source: "interactive",
+            persona_id: "persona-rowan",
+            persona_name: "Rowan",
+          },
+        },
+        { seq: 2, role: "user", content: "Switch", created_at: "now" },
+        {
+          seq: 3,
+          role: "assistant",
+          content: "Mara line",
+          created_at: "now",
+          diagnostics: {
+            source: "interactive",
+            persona_id: "persona-mara",
+            persona_name: "Mara",
+          },
+        },
+        {
+          seq: 4,
+          role: "assistant",
+          content: "Still Mara",
+          created_at: "now",
+          diagnostics: {
+            source: "autopilot",
+            persona_id: "persona-mara",
+            persona_name: "Mara",
+          },
+        },
+      ],
+      latest_seq: 4,
+      cursor: 4,
+      session_id: SESSION_ID,
+    });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+
+    expect(await screen.findByText("Mara line")).toBeInTheDocument();
+    expect(screen.getAllByRole("separator")).toHaveLength(1);
+    expect(screen.getByRole("separator")).toHaveTextContent("Persona changed to Mara");
+    expect(screen.queryByText("Persona changed to Rowan")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Mara").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("refreshes authoritative state before completing a chat turn", async () => {
     getChatMessages.mockResolvedValueOnce({
       messages: [],

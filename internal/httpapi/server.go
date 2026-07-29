@@ -288,6 +288,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
 	s.personaRoutes(mux)
+	mux.HandleFunc("GET /api/diagnostics/prompt-composition", s.handlePromptComposition)
 	s.llmRoutes(mux)
 	s.chatRoutes(mux)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)

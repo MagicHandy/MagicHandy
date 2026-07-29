@@ -1,0 +1,56 @@
+.prompt-inspector-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.prompt-inspector-summary div {
+  min-width: 0;
+}
+.prompt-inspector-summary dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.prompt-inspector-summary dd {
+  overflow: hidden;
+  margin: 3px 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prompt-section-list {
+  border-top: 1px solid var(--line);
+}
+.prompt-section {
+  border-bottom: 1px solid var(--line);
+}
+.prompt-section summary,
+.prompt-exact summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  cursor: pointer;
+}
+.prompt-section summary span:last-child {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.prompt-section pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--muted);
+  font: 0.72rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+}
+.prompt-exact > .diagnostics-report {
+  max-height: 420px;
+}

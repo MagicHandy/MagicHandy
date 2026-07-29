@@ -5,9 +5,10 @@ first tile, each persona carrying a portrait, name, and description — plus a
 dispositioned set of ideas for giving the model deeper "lore" and longer
 conversational context without degrading motion control.
 
-**Status: sections 1–6 shipped 2026-07-29.** Section 7 remains a ranked idea
-catalog in the style of [feature-ideas.md](feature-ideas.md); nothing in it is
-scheduled, and lore is deliberately not built (see §6).
+**Status: sections 1–7 implemented 2026-07-29.** Slice 7 ships bounded lore,
+keyword-triggered selection, and a backend-exact prompt inspector. The opt-in
+live scorecard exists, but no model-specific baseline is recorded yet, so the
+UI labels Full-mode adherence as unmeasured rather than implying a result.
 
 [persona-page-sketch.svg](persona-page-sketch.svg) is the layout: the rail with
 its new entry, the tile grid with its leading create tile, and the editor drawer
@@ -83,7 +84,7 @@ Two additions the axes do not cover today:
 
 ## 2. Data model
 
-### 2.1 Schema — migration v15 → v16
+### 2.1 Schema — migrations v15 → v17
 
 ```sql
 CREATE TABLE IF NOT EXISTS personas (
@@ -93,10 +94,7 @@ CREATE TABLE IF NOT EXISTS personas (
     chat_voice        TEXT NOT NULL DEFAULT 'warm',
     reaction_style    TEXT NOT NULL DEFAULT 'neutral',
     prompt_set_id     TEXT NOT NULL DEFAULT '',
-    tts_voice_id      TEXT NOT NULL DEFAULT '',
-    preferred_tags_json TEXT NOT NULL DEFAULT '[]',
     default_focus_area  TEXT NOT NULL DEFAULT 'full',
-    lore              TEXT NOT NULL DEFAULT '',
     portrait_updated_at TEXT NOT NULL DEFAULT '',
     last_used_at      TEXT NOT NULL DEFAULT '',
     created_at        TEXT NOT NULL,
@@ -105,7 +103,26 @@ CREATE TABLE IF NOT EXISTS personas (
 CREATE INDEX IF NOT EXISTS personas_used ON personas(last_used_at DESC, name);
 
 ALTER TABLE chat_sessions ADD COLUMN persona_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE personas ADD COLUMN lore_mode TEXT NOT NULL DEFAULT 'off';
+
+CREATE TABLE IF NOT EXISTS persona_lore (
+    id            TEXT PRIMARY KEY,
+    persona_id    TEXT NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+    text          TEXT NOT NULL,
+    keywords_json TEXT NOT NULL DEFAULT '[]',
+    enabled       INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
 ```
+
+The first migration is a guarded Go hook rather than an unconditional
+`CREATE TABLE IF NOT EXISTS`. The Rockfire/LSO lineage already used the name
+`personas` for an incompatible shape. That table is preserved as
+`personas_rockfire_legacy`; the canonical table is then created separately.
+The migration does not guess how legacy prompt, tone, or motion-bias JSON maps
+onto current safety-owned axes.
 
 `CHECK` constraints are deliberately **not** used for the enums. The existing
 tables (`patterns.origin`, `messages.role`) use them because those value sets
@@ -127,7 +144,7 @@ Bounds, matching the existing style (`MaxLLMPersonaDescriptionChars = 500`,
 | --- | --- | --- |
 | `name` | 60 runes | Tile-legible; longer names truncate rather than wrap to three lines |
 | `description` | 500 runes | Reuses the validated `persona_description` bound and its prompt path verbatim |
-| `lore` | 2000 runes | See section 7; enters the prompt only under a budget |
+| lore entries | 8 rows, 500 runes each, 2000 runes total | See section 7; only selected enabled rows enter the prompt |
 | personas | 200 rows | Same ceiling as memories |
 
 ### 2.2 Portraits
@@ -235,7 +252,12 @@ POST   /api/personas/{id}/duplicate      -> copy incl. portrait, name + " copy"
 GET    /api/personas/{id}/portrait       -> JPEG; 404 when unset
 POST   /api/personas/{id}/portrait       -> upload; 415 non-JPEG, 413 oversize
 DELETE /api/personas/{id}/portrait       -> revert to the generated monogram
-POST   /api/chat/sessions/{id}/persona    -> { persona_id } ; "" clears
+GET    /api/personas/{id}/lore           -> entries + server-owned bounds
+POST   /api/personas/{id}/lore           -> create a bounded entry
+PATCH  /api/personas/{id}/lore/{lore_id} -> text, keywords, or enabled state
+DELETE /api/personas/{id}/lore/{lore_id} -> remove one entry
+PUT    /api/chat/sessions/{id}/persona   -> { persona_id } ; "" clears
+GET    /api/diagnostics/prompt-composition -> exact active system prompt + sections
 ```
 
 `options` carries the enum lists (registers, styles, focus areas) from the same
@@ -368,12 +390,34 @@ Each is independently shippable and independently revertible.
 | 4 | Editor drawer, duplicate, delete | **Shipped.** Browser-side canvas resize to JPEG at max edge 512. |
 | 5 | Session binding + chat header switcher + provenance | **Shipped.** `PUT /api/chat/sessions/{id}/persona`; provenance carries `persona_id` and `persona_name`. |
 | 6 | Reaction-style axis composition | **Shipped.** `chat.ReactionStyle`, composed between the voice identity and the contract. |
-| 7 | Lore | **Not built.** Gated on the §7.2-A composition inspector and the §7.4 measurement, because the budget control it needs cannot be honest without them. `persona_lore` is deliberately not in the v16 schema: an unused column is a claim the feature exists. |
+| 7 | Lore | **Implemented.** Schema v17 stores bounded entries and off/relevant/full policy; relevant matching uses Unicode word boundaries; the exact backend composition is inspectable and copyable; an opt-in live scorecard measures 0/500/1000/2000-character budgets. Model-specific baseline numbers remain unmeasured and the Full-mode copy says so. |
 
 Slices 1–5 change **no prompt bytes** for anyone who does not create a persona,
 and slice 6 changes none for a persona left on `neutral`. Both are asserted by
 test (`TestNeutralStyleLeavesThePromptByteIdentical`), which is the property that
 made this safe to ship in one pass.
+
+### Post-implementation review corrections and open scope
+
+The Slice 7 review also found three earlier fields that were presented as live
+but were not fully wired. The persona's `prompt_set_id` now selects the actual
+interactive and Autopilot prompt; `default_focus_area` now defaults only an
+unscoped `start` command while respecting the area-focus capability gate; and
+Autopilot announcements persist the effective persona/prompt provenance rather
+than the global settings values. The migration test now includes the real
+Rockfire `personas` shape so that collision cannot regress unnoticed.
+
+The following design rows remain deliberately open rather than being implied
+by the editor:
+
+- Per-persona TTS voice selection is not stored or applied.
+- Preferred pattern tags are not stored or used for weighting.
+- Per-model lore budgets and recorded adherence defaults are not implemented;
+  the current hard bounds are model-independent.
+- Autopilot uses the persona's code-owned register, reaction style, and prompt
+  set, but does not receive persona lore. Passing free-text identity into an
+  autonomous motion decision remains a separate design decision.
+- Configurable history depth and an editable session recap remain ideas B and E.
 
 ### What the live pass caught
 
@@ -440,6 +484,11 @@ every other idea here tunable instead of guessed at, and it is squarely in the
 app's inspectability stance. **Build this first** — before any lore feature —
 because it is also how a user diagnoses "why is my model ignoring me".
 
+**Implemented.** Settings > Diagnostics reads
+`/api/diagnostics/prompt-composition`; the backend returns the exact string and
+the section index produced by the same composition function used by
+`chat.Service`. The browser neither rebuilds nor redacts a second prompt model.
+
 **B. Configurable history depth — strong candidate, small.**
 Replace hard-coded `maxHistoryMessages = 12` with a setting (6 / 12 / 24 / 40)
 carrying a plain-language note that higher values cost latency and, on small
@@ -457,6 +506,10 @@ screenshot's `+ Memory` chip is this feature.
 Ships as: `persona_lore(id, persona_id, text, keywords_json, enabled, created_at)`,
 a hard cap on injected entries per turn, and the same quoted-as-data treatment
 every user string already gets.
+
+**Implemented.** Matching is case-insensitive and requires whole Unicode word
+or phrase boundaries, avoiding short-keyword substring matches such as `he`
+inside `the`. Disabled entries never enter either relevant or full selection.
 
 **D. Per-model context budget — worth scoping.**
 The tradeoff depends on the model, and the app already has a managed model
@@ -507,9 +560,9 @@ beside it:
 
 - **Off** (default) — lore never enters the prompt.
 - **Relevant only** — keyword-triggered entries, capped (idea C).
-- **Full** — everything, up to the budget, with the measured cost stated: what
-  it adds in characters and what the adherence numbers were for the selected
-  model.
+- **Full** — everything, up to the budget. Until a baseline exists for the
+  selected model, the UI explicitly says adherence is unmeasured and directs
+  the user to the exact prompt in Diagnostics.
 
 "With the measured cost stated" is load-bearing. The numbers have to come from
 somewhere real:
@@ -521,12 +574,24 @@ The evidence path already exists: `internal/chat/live_prompt_eval_test.go` and
 2026-07-20 matrix they produced (13/13 on Gemma 4 11.9B Q4_0; a Granite 4.1 3B
 Q4_K_M completing every scenario with repair where needed) is the template.
 
-Extend that into a lore-budget scorecard: for each (model, budget) pair, run the
-existing turn matrix and record **first-pass valid %, repair rate, p50 latency
+`live_lore_budget_eval_test.go` extends that into a lore-budget scorecard. For
+each (model, budget) pair, it runs the
+existing turn matrix and records **first-pass valid %, repair rate, p50 latency
 to motion dispatch, and speed-band violations**. That table is what the warning
 text quotes and what idea D's per-model defaults are derived from. Without it,
 the toggle's warning is a guess wearing a lab coat — and a guess is exactly what
 "maybe this decreases motion control ability" deserves to have replaced.
+
+Run it against the model already served by local llama.cpp:
+
+```powershell
+go test -tags liveeval -run TestLivePersonaLoreBudgetScorecard -v ./internal/chat
+```
+
+The harness constructs no engine or transport. Its dispatch-ready latency ends
+when `chat.Service` returns a validated semantic command, so it cannot move a
+connected device. The current PR does not promote an unrecorded local run into
+a product default; per-model defaults and in-UI baseline storage remain idea D.
 
 ---
 
@@ -550,9 +615,9 @@ the toggle's warning is a guess wearing a lab coat — and a guess is exactly wh
   the constraint this design implements; personas-as-presets closes that
   decision, and an LSO persona row imports as values across the axes.
 - [lso-merge-integration.md](lso-merge-integration.md) — the Rockfire lineage
-  has its own `personas` table, deliberately left intact for the explicit data
-  import phase. That import becomes a field mapping against §2.1 rather than a
-  schema negotiation.
+  has its own incompatible `personas` table, preserved under
+  `personas_rockfire_legacy` for the explicit data-import phase. That import
+  becomes a field mapping against §2.1 rather than a schema negotiation.
 - [feature-ideas.md](feature-ideas.md) §A — the "AI display name, profile
   picture, splash personalization" row is scoped by §2 here.
 - [chat-voice.md](chat-voice.md) — the measurements that produced the axis

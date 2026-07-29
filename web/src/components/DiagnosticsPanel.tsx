@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import type { MediaToolStatus, PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { buildDiagnosticsReport } from "./diagnostics-report";
+import { PromptCompositionInspector } from "./PromptCompositionInspector";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
@@ -114,6 +115,8 @@ export function DiagnosticsPanel({
 
   return (
     <>
+      <PromptCompositionInspector />
+
       <div className="group">
         <h3 className="group-title">{t("Status report")}</h3>
         <p className="hint-block">{t("Everything below is what gets copied. No keys or credentials are included.")}</p>

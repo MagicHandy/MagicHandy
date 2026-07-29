@@ -69,6 +69,8 @@ type Persona struct {
 	ReactionStyle     string `json:"reaction_style"`
 	PromptSetID       string `json:"prompt_set_id"`
 	DefaultFocusArea  string `json:"default_focus_area"`
+	LoreMode          string `json:"lore_mode"`
+	LoreCount         int    `json:"lore_count"`
 	HasPortrait       bool   `json:"has_portrait"`
 	PortraitUpdatedAt string `json:"portrait_updated_at,omitempty"`
 	LastUsedAt        string `json:"last_used_at,omitempty"`
@@ -86,6 +88,7 @@ type Draft struct {
 	ReactionStyle    *string `json:"reaction_style,omitempty"`
 	PromptSetID      *string `json:"prompt_set_id,omitempty"`
 	DefaultFocusArea *string `json:"default_focus_area,omitempty"`
+	LoreMode         *string `json:"lore_mode,omitempty"`
 }
 
 // Store owns persona rows and their portrait files.
@@ -176,6 +179,7 @@ func (s *Store) Create(ctx context.Context, draft Draft) (Persona, error) {
 		ChatVoice:        config.LLMChatVoiceWarm,
 		ReactionStyle:    config.LLMReactionStyleNeutral,
 		DefaultFocusArea: chat.AreaZoneFull,
+		LoreMode:         LoreModeOff,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -229,10 +233,12 @@ func (s *Store) Update(ctx context.Context, id string, draft Draft) (Persona, er
 		_, execErr := tx.ExecContext(ctx, `
 			UPDATE personas SET
 				name = ?, description = ?, chat_voice = ?, reaction_style = ?,
-				prompt_set_id = ?, default_focus_area = ?, updated_at = ?
+				prompt_set_id = ?, default_focus_area = ?, lore_mode = ?,
+				updated_at = ?
 			WHERE id = ?
 		`, updated.Name, updated.Description, updated.ChatVoice, updated.ReactionStyle,
-			updated.PromptSetID, updated.DefaultFocusArea, updated.UpdatedAt, id)
+			updated.PromptSetID, updated.DefaultFocusArea, updated.LoreMode,
+			updated.UpdatedAt, id)
 		return execErr
 	})
 	if err != nil {
@@ -273,7 +279,10 @@ func (s *Store) Duplicate(ctx context.Context, id string) (Persona, error) {
 		if count >= maxPersonas {
 			return fmt.Errorf("%w (%d)", ErrLimit, maxPersonas)
 		}
-		return insert(ctx, tx, copied)
+		if err := insert(ctx, tx, copied); err != nil {
+			return err
+		}
+		return duplicateLoreEntries(ctx, tx, source.ID, copied.ID)
 	}); err != nil {
 		return Persona{}, err
 	}
@@ -368,7 +377,9 @@ func ValidID(id string) bool {
 
 const selectColumns = `
 	SELECT id, name, description, chat_voice, reaction_style, prompt_set_id,
-		default_focus_area, portrait_updated_at, last_used_at, created_at, updated_at
+		default_focus_area, lore_mode,
+		(SELECT COUNT(*) FROM persona_lore WHERE persona_id = personas.id),
+		portrait_updated_at, last_used_at, created_at, updated_at
 `
 
 // rowScanner covers both *sql.Row and *sql.Rows so one scan helper serves the
@@ -381,6 +392,7 @@ func scanPersona(row rowScanner) (Persona, error) {
 	var item Persona
 	if err := row.Scan(&item.ID, &item.Name, &item.Description, &item.ChatVoice,
 		&item.ReactionStyle, &item.PromptSetID, &item.DefaultFocusArea,
+		&item.LoreMode, &item.LoreCount,
 		&item.PortraitUpdatedAt, &item.LastUsedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return Persona{}, err
 	}
@@ -391,12 +403,12 @@ func scanPersona(row rowScanner) (Persona, error) {
 func insert(ctx context.Context, tx *sql.Tx, item Persona) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO personas(id, name, description, chat_voice, reaction_style,
-			prompt_set_id, default_focus_area, portrait_updated_at, last_used_at,
-			created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			prompt_set_id, default_focus_area, lore_mode, portrait_updated_at,
+			last_used_at, created_at, updated_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, item.ID, item.Name, item.Description, item.ChatVoice, item.ReactionStyle,
-		item.PromptSetID, item.DefaultFocusArea, item.PortraitUpdatedAt,
-		item.LastUsedAt, item.CreatedAt, item.UpdatedAt)
+		item.PromptSetID, item.DefaultFocusArea, item.LoreMode,
+		item.PortraitUpdatedAt, item.LastUsedAt, item.CreatedAt, item.UpdatedAt)
 	return err
 }
 
@@ -418,6 +430,9 @@ func applyDraft(item Persona, draft Draft) Persona {
 	}
 	if draft.DefaultFocusArea != nil {
 		item.DefaultFocusArea = normalizeToken(*draft.DefaultFocusArea)
+	}
+	if draft.LoreMode != nil {
+		item.LoreMode = normalizeToken(*draft.LoreMode)
 	}
 	return item
 }
@@ -443,6 +458,9 @@ func validate(item Persona) error {
 	}
 	if !validFocusArea(item.DefaultFocusArea) {
 		return fmt.Errorf("%w: unknown starting zone %q", ErrInvalid, item.DefaultFocusArea)
+	}
+	if !ValidLoreMode(item.LoreMode) {
+		return fmt.Errorf("%w: unknown lore mode %q", ErrInvalid, item.LoreMode)
 	}
 	return nil
 }
