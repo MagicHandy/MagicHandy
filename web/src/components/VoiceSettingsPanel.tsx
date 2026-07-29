@@ -76,7 +76,11 @@ export function VoiceSettingsPanel({ settings: s, locked, dirty, patch, newKey, 
       <h2 className="section-title">{t("Voice")}</h2>
       {voiceRuntime.error && <p className="form-status form-status-error" role="alert">{t("Voice runtime unavailable: {message}", { message: voiceRuntime.error })}</p>}
       {voiceRuntime.loading && !voiceRuntime.error && <p className="form-status" role="status">{t("Checking voice runtime...")}</p>}
-      <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.enabled} disabled={locked} onChange={(event) => patch({ enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Enable voice workers")}</span></label>
+
+      <div className="group">
+        <h3 className="group-title">{t("Workers")}</h3>
+        <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={voice.enabled} disabled={locked} onChange={(event) => patch({ enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Enable voice workers")}</span></label>
+      </div>
 
       <div className="group">
       <h3 className="group-title">{t("Speech input (ASR)")}</h3>

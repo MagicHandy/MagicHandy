@@ -7,7 +7,10 @@
   margin-bottom: 12px;
 }
 
-.model-section-head .section-title {
+/* The group card supplies the rhythm below a heading, so the head row only
+   has to lay the heading out beside its status or actions. */
+.model-section-head .section-title,
+.model-section-head .group-title {
   margin-bottom: 0;
 }
 
@@ -76,13 +79,23 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 0 14px;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
 .capability-gates legend {
-  padding: 0 4px;
+  /* display:block takes the legend out of the fieldset's border box, where its
+     spacing cannot be controlled, so it flows and spaces like every other
+     heading in settings. Matches .media-scan-options. */
+  display: block;
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 .capability-gate {
   display: flex;
@@ -144,12 +157,6 @@
 
 .form-status-error {
   color: var(--danger);
-}
-
-.model-subtitle {
-  margin: 0;
-  font-size: 0.96rem;
-  font-weight: 600;
 }
 
 .model-store-path {

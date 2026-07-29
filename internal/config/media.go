@@ -96,9 +96,22 @@ const (
 	// x265 scale, which is offset from x264's by about five points.
 	DefaultReencodeCRFH265 = 28
 	// MinReencodeAudioKbps and MaxReencodeAudioKbps bound AAC output.
+	//
+	// The ceiling is where FFmpeg's native AAC encoder stops responding rather
+	// than a round number. It allocates by content and will not spend bits a
+	// signal does not need, so the achieved rate depends on the material:
+	// measured at 48 kHz stereo, decorrelated noise tracked the request to
+	// ~438k at a 448k ask and then flattened at ~441k for 512k, 576k and 640k,
+	// while correlated pink noise flattened much earlier at ~243k.
+	//
+	// 448 is therefore the highest request that can still change the output for
+	// the most demanding stereo material. Asking for more is never harmful, but
+	// it cannot help either, and offering it would invite someone to believe a
+	// file is better for a number the encoder ignored.
 	MinReencodeAudioKbps = 96
-	MaxReencodeAudioKbps = 320
-	// DefaultReencodeAudioKbps is transparent for stereo AAC.
+	MaxReencodeAudioKbps = 448
+	// DefaultReencodeAudioKbps is transparent for stereo speech and most
+	// soundtracks. Music being re-encoded is the case for raising it.
 	DefaultReencodeAudioKbps = 192
 	// DefaultReencodePreset balances encode time against size.
 	DefaultReencodePreset = "medium"

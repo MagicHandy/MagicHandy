@@ -1188,5 +1188,8 @@
   "{name} cancelled": "{name} cancelado",
   "{name} completed with errors": "{name} terminou com erros",
   "{name} complete": "{name} concluído",
-  "{done} completed · {failed} failed": "{done} concluídos · {failed} falharam"
+  "{done} completed · {failed} failed": "{done} concluídos · {failed} falharam",
+  "Sessions": "Sessões",
+  "Workers": "Processos",
+  "Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it.": "Usado apenas quando o áudio de origem ainda não é AAC; áudio que já é AAC é copiado, o que é mais rápido e sem perdas. 192 é transparente para fala e a maioria das trilhas — aumente para música. O AAC gasta apenas o que o material precisa, então uma faixa exigente usará todo o orçamento e uma simples ficará abaixo dele."
 }

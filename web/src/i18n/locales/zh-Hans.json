@@ -1188,5 +1188,8 @@
   "{name} cancelled": "{name}已取消",
   "{name} completed with errors": "{name}完成，但有错误",
   "{name} complete": "{name}已完成",
-  "{done} completed · {failed} failed": "完成 {done} · 失败 {failed}"
+  "{done} completed · {failed} failed": "完成 {done} · 失败 {failed}",
+  "Sessions": "会话",
+  "Workers": "工作进程",
+  "Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it.": "仅当源音频不是 AAC 时使用；已是 AAC 的音频会直接复制，更快且无损。192 对语音和多数配乐已是透明——音乐可调高。AAC 只花费素材所需的码率，因此复杂音轨会用满预算，简单音轨则用不到。"
 }

@@ -321,7 +321,9 @@ export function SettingsRoute() {
       <section className="panel">
         {section === "general" && (
           <>
-            <h2 className="section-title">{t("Interface")}</h2>
+            <h2 className="section-title">{t("General")}</h2>
+            <div className="group">
+            <h3 className="group-title">{t("Interface")}</h3>
             <label className="field">
               <span className="label">{t("Language")}</span>
               <select
@@ -336,12 +338,15 @@ export function SettingsRoute() {
               </select>
               <span className="hint-block">{t("The saved language is shared by every open tab and applies after Save settings.")}</span>
             </label>
+            </div>
           </>
         )}
 
         {section === "device" && (
           <>
-            <h2 className="section-title">{t("Device connection")}</h2>
+            <h2 className="section-title">{t("Device")}</h2>
+            <div className="group">
+            <h3 className="group-title">{t("Connection")}</h3>
             <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
             {owner === "cloud_rest" && <>
               <div className="group device-requirement" role="note" aria-labelledby="device-firmware-requirement">
@@ -356,6 +361,7 @@ export function SettingsRoute() {
             {owner === "intiface" && <>
               <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
             </>}
+            </div>
             <div className="group">
               <h3 className="group-title">{t("Local server")}</h3>
               <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
@@ -378,6 +384,7 @@ export function SettingsRoute() {
         )}
 
         {section === "media" && (
+          <><h2 className="section-title">{t("Media library")}</h2>
           <MediaSettingsPanel
             media={s.media ?? { library_paths: [] }}
             savedMedia={saved?.media ?? { library_paths: [] }}
@@ -385,12 +392,14 @@ export function SettingsRoute() {
             onLimitVideoScriptSpeedChange={(enabled) => patchMotion({ apply_video_speed_limit: enabled })}
             locked={locked}
             onChange={patchMedia}
-          />
+          /></>
         )}
 
         {section === "chat" && (
           <>
-            <h2 className="section-title">{t("Chat sessions")}</h2>
+            <h2 className="section-title">{t("Chat")}</h2>
+            <div className="group">
+            <h3 className="group-title">{t("Sessions")}</h3>
             <label className="field">
               <span className="label">{t("When MagicHandy starts")}</span>
               <select
@@ -422,6 +431,7 @@ export function SettingsRoute() {
                   : t("Off by default. Saved tabs are always kept; use Save chat from the tab menu or its right-click menu.")}</small>
               </span>
             </label>
+            </div>
           </>
         )}
 

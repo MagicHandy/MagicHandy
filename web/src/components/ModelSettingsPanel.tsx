@@ -309,14 +309,17 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
 
   return (
     <>
+      <h2 className="section-title">{t("Model")}</h2>
+      {managerMessage && <p className="form-status form-status-error" role="alert">{t("Model list unavailable: {message}", { message: managerMessage })}</p>}
+
+      <div className="group">
       <div className="model-section-head">
-        <h2 className="section-title">{t("Local LLM")}</h2>
+        <h3 className="group-title">{t("Local LLM")}</h3>
         <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite">
           <span className="status-dot" aria-hidden="true" />
           <span>{statusMessage}</span>
         </div>
       </div>
-      {managerMessage && <p className="form-status form-status-error" role="alert">{t("Model list unavailable: {message}", { message: managerMessage })}</p>}
 
       <div className="model-runtime-grid">
         <label className="field">
@@ -397,7 +400,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
       </div>
 
       <fieldset className="capability-gates">
-        <legend className="label">{t("Model permissions")}</legend>
+        <legend>{t("Model permissions")}</legend>
         <label className="capability-gate" title={t("Allow chat and Autopilot to issue motion commands")}>
           <input
             type="checkbox"
@@ -444,10 +447,12 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
         </div>
       )}
 
-      <div className="divider" />
+      </div>
+
+      <div className="group">
       <div className="model-section-head">
         <div>
-          <h3 className="model-subtitle">{t("Managed models")}</h3>
+          <h3 className="group-title">{t("Managed models")}</h3>
           <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
         </div>
         <div className="row-actions model-import-actions">
@@ -491,6 +496,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
           />
         </>
       ) : !managerMessage && <p className="form-status" role="status">{t("Loading model list...")}</p>}
+      </div>
     </>
   );
 }

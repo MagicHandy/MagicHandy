@@ -1218,3 +1218,49 @@ func TestScriptOffsetIsBoundedAndDefaultsToZero(t *testing.T) {
 		}
 	}
 }
+
+// TestAudioBitrateRangeReachesTheEncoderCeiling pins the bound to a measurement
+// rather than a round number. FFmpeg's native AAC encoder allocates by content,
+// so the achieved rate depends on the material: at 48 kHz stereo, decorrelated
+// noise tracked the request to ~438k at a 448k ask and flattened at ~441k for
+// 512k and above, while correlated pink noise flattened at ~243k. 448 is the
+// highest request that can still change the output for demanding material;
+// offering more would invite someone to believe a file is better for a number
+// the encoder ignored.
+func TestAudioBitrateRangeReachesTheEncoderCeiling(t *testing.T) {
+	if MaxReencodeAudioKbps != 448 {
+		t.Fatalf("MaxReencodeAudioKbps = %d, want the measured 448", MaxReencodeAudioKbps)
+	}
+	settings := DefaultSettings()
+	settings.Media.ReencodeAudioKbps = 448
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Media.ReencodeAudioKbps != 448 {
+		t.Fatalf("the ceiling was clamped away: %d", normalized.Media.ReencodeAudioKbps)
+	}
+
+	// Above the ceiling the encoder returns nothing extra, so the request is
+	// brought back to what it can actually deliver.
+	settings.Media.ReencodeAudioKbps = 640
+	normalized, err = NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings: %v", err)
+	}
+	if normalized.Media.ReencodeAudioKbps != MaxReencodeAudioKbps {
+		t.Fatalf("beyond-ceiling request = %d, want %d", normalized.Media.ReencodeAudioKbps, MaxReencodeAudioKbps)
+	}
+
+	// Music is the reason to raise it, so the whole ladder has to survive.
+	for _, kbps := range []int{96, 128, 160, 192, 256, 320, 384, 448} {
+		settings.Media.ReencodeAudioKbps = kbps
+		normalized, err = NormalizeSettings(settings)
+		if err != nil {
+			t.Fatalf("NormalizeSettings(%d): %v", kbps, err)
+		}
+		if normalized.Media.ReencodeAudioKbps != kbps {
+			t.Fatalf("%d kbps was altered to %d", kbps, normalized.Media.ReencodeAudioKbps)
+		}
+	}
+}

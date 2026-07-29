@@ -1188,5 +1188,8 @@
   "{name} cancelled": "{name}をキャンセルしました",
   "{name} completed with errors": "{name}がエラー付きで完了しました",
   "{name} complete": "{name}が完了しました",
-  "{done} completed · {failed} failed": "完了 {done} · 失敗 {failed}"
+  "{done} completed · {failed} failed": "完了 {done} · 失敗 {failed}",
+  "Sessions": "セッション",
+  "Workers": "ワーカー",
+  "Only used when the source audio is not already AAC; audio that is already AAC is copied, which is faster and lossless. 192 is transparent for speech and most soundtracks — raise it for music. AAC spends only what the material needs, so a demanding track will use the whole budget and a simple one will finish under it.": "元の音声が AAC でない場合にのみ使われます。すでに AAC の音声はコピーされ、より速く劣化もありません。192 は音声や多くのサウンドトラックには十分ですが、音楽ではより高い値が有効です。AAC は素材が必要とする分だけを使うため、要求の高い音源は上限まで使い、単純な音源はそこまで使いません。"
 }
