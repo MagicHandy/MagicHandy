@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
 import { I18nProvider } from "./i18n";
 import "./styles/tokens.css";
+import "./styles/themes.css";
 import "./styles/shell.css";
 import "./styles/components.css";
 import "./styles/chat.css";

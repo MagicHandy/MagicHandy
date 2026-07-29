@@ -303,8 +303,9 @@ input[type="search"] {
   pointer-events: none;
 }
 .import-timeline-selection {
-  fill: rgba(91, 157, 217, 0.22);
-  stroke: rgba(91, 157, 217, 0.68);
+  fill: var(--accent-tint);
+  stroke: var(--accent);
+  stroke-opacity: 0.68;
   stroke-width: 1px;
   vector-effect: non-scaling-stroke;
 }

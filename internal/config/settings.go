@@ -433,6 +433,7 @@ type PublicSettingsOptionHints struct {
 	NeuTTSSamplingModes     []string `json:"neutts_sampling_modes"`
 	ChatStartupBehaviors    []string `json:"chat_startup_behaviors"`
 	Locales                 []string `json:"locales"`
+	Themes                  []string `json:"themes"`
 }
 
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
@@ -515,6 +516,7 @@ func DefaultSettings() Settings {
 		},
 		UI: UISettings{
 			Locale: LocaleEnglish,
+			Theme:  ThemeSteelAzure,
 		},
 		Media: MediaSettings{
 			RemoveMissingOnScan: true,
@@ -659,6 +661,10 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Server = update.Server
 	if update.UI != nil {
 		next.UI.Locale = strings.TrimSpace(update.UI.Locale)
+		theme := strings.TrimSpace(update.UI.Theme)
+		if theme != "" {
+			next.UI.Theme = theme
+		}
 	}
 	if update.Media != nil {
 		next.Media = normalizeMediaSettings(mergeMediaUpdate(next.Media, *update.Media))
@@ -876,9 +882,15 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 		settings.UI.Locale = LocaleEnglish
 		localeFallback = true
 	}
+	themeFallback := false
+	settings.UI.Theme = strings.TrimSpace(settings.UI.Theme)
+	if !IsSupportedUITheme(settings.UI.Theme) {
+		settings.UI.Theme = ThemeSteelAzure
+		themeFallback = true
+	}
 
 	migratedSettings, migrated, err := MigrateSettings(settings, header.Version)
-	return migratedSettings, migrated || localeFallback, err
+	return migratedSettings, migrated || localeFallback || themeFallback, err
 }
 
 func validateSettings(settings Settings) error {
@@ -887,6 +899,9 @@ func validateSettings(settings Settings) error {
 	}
 	if !oneOf(settings.UI.Locale, LocaleEnglish, LocaleSpanish, LocalePortugueseBrazil, LocaleSimplifiedChinese, LocaleJapanese) {
 		return fmt.Errorf("unknown UI locale %q", settings.UI.Locale)
+	}
+	if !IsSupportedUITheme(settings.UI.Theme) {
+		return fmt.Errorf("unknown UI theme %q", settings.UI.Theme)
 	}
 	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
@@ -929,6 +944,10 @@ func applyMissingDefaults(settings Settings) Settings {
 	settings.UI.Locale = strings.TrimSpace(settings.UI.Locale)
 	if settings.UI.Locale == "" {
 		settings.UI.Locale = defaults.UI.Locale
+	}
+	settings.UI.Theme = strings.TrimSpace(settings.UI.Theme)
+	if settings.UI.Theme == "" {
+		settings.UI.Theme = defaults.UI.Theme
 	}
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner

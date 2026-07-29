@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-26, multilingual UI and prompt localization
+## Snapshot — 2026-07-29, opt-in appearance themes
 
 ### Goal 1: Maintainability
 
@@ -32,7 +32,7 @@ Scoring key:
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,401 lines after locale and public-option extraction, `internal/config/settings_test.go` 1,180, `internal/httpapi/chat.go` 1,153, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 961, `internal/motion/engine_test.go` 1,079, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/App.test.tsx` 1,390 lines, `web/src/components/SyncedVideoPlayer.tsx` 811, `web/src/styles/components.css` 1,444, `web/src/styles/library.css` 1,385, and retired reference-only `web/legacy/app.css` 846. Locale catalogs are data and lazy-load outside the English startup chunk; `web/dist` remains the single shipped build. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/App.test.tsx` 1,390 lines, `web/src/components/SyncedVideoPlayer.tsx` 811, `web/src/styles/components.css` 1,493, `web/src/styles/library.css` 1,385, and retired reference-only `web/legacy/app.css` 846. Theme token overrides and their compact picker live in the focused 507-line `web/src/styles/themes.css`; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,712 physical lines after adding the shared localized decision-tree runtime. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating locale, updater state, or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 21,971,968 bytes plain and 15,614,976 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,335,488 bytes plain and 15,923,200 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,11 +110,11 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,276,070 raw / 683,607 gzip bytes because four
-   non-English catalogs add 257,063 raw / 88,340 gzip bytes and the unchanged
-   connection artwork contributes 437,397 gzip bytes. Lazy loading limits the
-   English startup path to 574,771 raw / 157,870 gzip bytes (+64,718 / +16,445
-   from `origin/main`). These remain within budget, but future locales and bitmap
+   browser payload is 1,419,446 raw / 724,190 gzip bytes. Lazy loading limits
+   the English startup path to 646,754 raw / 175,842 gzip bytes. The 21 opt-in
+   palettes add only CSS tokens and compact catalog metadata: +14,307 raw /
+   +4,121 gzip complete and +13,264 / +3,877 on startup versus the preceding
+   build. These remain within budget, but future locales, palettes, and bitmap
    additions must keep startup and total payload growth explicit.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
    latency but keeps a second llama.cpp context resident. It passed isolated
@@ -124,6 +124,31 @@ Ranked by threat to the stated goals:
 ## History
 
 
+- **2026-07-29** - Added 21 opt-in appearance palettes from the surviving
+  scratch mockups while preserving Steel Azure as the default. The backend
+  owns the closed theme catalog, validates and persists selection in SQLite,
+  publishes supported choices with the settings snapshot, preserves selection
+  across updates from older clients, and falls back safely when a retired value
+  is loaded. Settings presents concise names and color swatches in a compact,
+  accessible radio list; all palettes change neutral and interactive tokens
+  only. Canonical green, amber, and red safety semantics remain unchanged, and
+  the emergency Stop button has no shadow or glow in any theme. A static
+  contrast audit passed WCAG AA text pairs and 3:1 interactive boundaries for
+  every palette. The localization audit covers 1,197 keys in all five locales.
+  All 291 frontend tests, typecheck, production build, `go test ./...`, vet,
+  lint, and the `CGO_ENABLED=0` build pass. An isolated fake-transport browser
+  run covered Steel Azure, Deep Violet, Warm Titanium, and High Contrast at
+  1280x720 plus the one-column picker and fixed Stop clearance at 390x844.
+  Saving changed the backend snapshot and survived reload; all views remained
+  free of horizontal overflow and console errors, and computed Stop shadow was
+  `none`. The first desktop pass exposed an incomplete tinted half-row, so the
+  final picker uses container-aware one/two/four-column tracks and balances its
+  two-item final row. No hardware motion was issued. Against the preceding
+  2026-07-29 build, the English startup payload is 646,754 raw / 175,842 gzip
+  bytes (+13,264 / +3,877); all HTML/CSS/JS is 975,210 / 286,793
+  (+14,307 / +4,121), and complete embedded output is 1,419,446 / 724,190
+  (+14,307 / +4,121). Plain/stripped binaries are 22,335,488 / 15,923,200
+  bytes (+19,456 / +19,456), both within the 30 MB budget.
 - **2026-07-29** - Recovered the interrupted post-PR #146 media and settings
   follow-up. Converting the open video now follows only the new output from the
   matching successful job, ignores older same-name rows and late stale job

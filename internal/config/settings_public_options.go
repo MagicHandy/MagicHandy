@@ -83,5 +83,6 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LocaleSimplifiedChinese,
 			LocaleJapanese,
 		},
+		Themes: SupportedUIThemes(),
 	}
 }

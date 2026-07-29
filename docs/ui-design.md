@@ -34,6 +34,10 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
    artwork), status as text + icon + color, defined focus order, reduced-motion.
 10. Exactly one client controls the device. Others open read-only by design,
     not by after-the-fact warning.
+11. Appearance is optional customization, not a second UI implementation.
+    Steel Azure remains the default; a saved theme changes shared color tokens
+    from the backend settings snapshot while Stop/Go/Warning roles, layout,
+    typography, motion behavior, and control semantics remain unchanged.
 
 ## Layout
 

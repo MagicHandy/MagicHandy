@@ -1,7 +1,5 @@
-/* tokens.css — the MagicHandy visual system, ported verbatim from the legacy
-   app.css :root per docs/ui-design-guidelines.md. One interactive hue (steel
-   azure); green = go; amber = warn; red = stop; everything else graphite.
-   No purple, no blue-green decorative tone, no web fonts. */
+/* Steel Azure is the default visual system. themes.css may replace neutral and
+   interactive tokens; green = go, amber = warn, and red = Stop in every theme. */
 :root {
   --bg: #0e0f11;
   --bg-inset: #101215;

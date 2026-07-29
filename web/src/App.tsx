@@ -9,12 +9,23 @@ import { AppShell } from "./shell/AppShell";
 import { routeBase } from "./shell/NavRail";
 import { useAppState, useHashRoute } from "./state/app-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { normalizeTheme } from "./theme";
 
 export function App() {
   useLocale();
   const route = useHashRoute();
   const base = routeBase(route);
   const { state, startupError, refresh } = useAppState();
+  const theme = normalizeTheme(state?.settings?.ui?.theme);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    return () => {
+      if (root.dataset.theme === theme) {
+        delete root.dataset.theme;
+      }
+    };
+  }, [theme]);
   useEffect(() => {
     const workspace = document.getElementById("workspace");
     if (!workspace) return;
