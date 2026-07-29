@@ -149,8 +149,8 @@ a later slice."
 
 - Captured a fraction of the way in rather than at frame zero, because the first
   frame of a video is very often black.
-- Bounded output: one small JPEG or WebP at a fixed max edge, produced by the
-  canvas rather than by the app.
+- Bounded output: one JPEG at a 640 px max edge, encoded at quality 0.85 with
+  the browser's high-quality smoothing hint.
 - Only for videos the user actually opens, so it costs nothing for a library
   that is never browsed.
 - Controller-gated and skipped for read-only tabs, like the duration write.
@@ -170,6 +170,8 @@ cannot decode at all.
 - One at a time, like scans. Two long media jobs at once is a way to make the
   app feel broken.
 - Skips videos that already have a cover unless explicitly asked to redo them.
+- Uses spline downscaling and an explicit MJPEG quantizer of 3. This keeps batch
+  quality deterministic while avoiding Lanczos ringing around hard edges.
 
 ### Storage
 

@@ -15,6 +15,7 @@ vi.mock("../api/client", () => ({
 
 const saveMediaDuration = vi.mocked(api.saveMediaDuration);
 const reportMediaCompatibility = vi.mocked(api.reportMediaCompatibility);
+const saveMediaThumbnail = vi.mocked(api.saveMediaThumbnail);
 
 function video(id: string, duration: number | null = null): MediaVideo {
   return {
@@ -35,6 +36,8 @@ describe("MediaVideoPlayer", () => {
     saveMediaDuration.mockReset();
     saveMediaDuration.mockResolvedValue({ status: "saved" });
     reportMediaCompatibility.mockReset();
+    saveMediaThumbnail.mockReset();
+    saveMediaThumbnail.mockResolvedValue({ status: "saved" });
   });
 
   it("backfills browser-decoded duration once and reports it to the caller", async () => {
@@ -85,6 +88,41 @@ describe("MediaVideoPlayer", () => {
     fireEvent.loadedMetadata(player);
 
     expect(saveMediaDuration).not.toHaveBeenCalled();
+  });
+
+  it("captures a high-quality smoothed JPEG cover", async () => {
+    const context = {
+      drawImage: vi.fn(),
+      imageSmoothingEnabled: false,
+      imageSmoothingQuality: "low",
+    } as unknown as CanvasRenderingContext2D;
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context);
+    const toBlob = vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback, type, quality) => {
+      expect(type).toBe("image/jpeg");
+      expect(quality).toBe(0.85);
+      callback(new Blob(["cover"], { type: "image/jpeg" }));
+    });
+
+    try {
+      render(<MediaVideoPlayer video={video("thumbnail")} allowMetadataWrite />);
+      const player = screen.getByLabelText("thumbnail") as HTMLVideoElement;
+      Object.defineProperties(player, {
+        currentTime: { configurable: true, value: 4 },
+        videoHeight: { configurable: true, value: 1080 },
+        videoWidth: { configurable: true, value: 1920 },
+      });
+
+      fireEvent.timeUpdate(player);
+
+      await waitFor(() => expect(saveMediaThumbnail).toHaveBeenCalledOnce());
+      expect(context.imageSmoothingEnabled).toBe(true);
+      expect(context.imageSmoothingQuality).toBe("high");
+      expect(context.drawImage).toHaveBeenCalledWith(player, 0, 0, 640, 360);
+      expect(saveMediaThumbnail).toHaveBeenCalledWith("thumbnail", expect.any(Blob));
+    } finally {
+      getContext.mockRestore();
+      toBlob.mockRestore();
+    }
   });
 
   it("does not write from read-only playback and offers recovery from decode errors", async () => {

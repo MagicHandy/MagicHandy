@@ -33,7 +33,7 @@ const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 // frame of a video is very often black.
 const THUMBNAIL_MIN_CAPTURE_SECONDS = 3;
 const THUMBNAIL_MAX_EDGE = 640;
-const THUMBNAIL_QUALITY = 0.75;
+const THUMBNAIL_QUALITY = 0.85;
 
 export function MediaVideoPlayer({
   video,
@@ -130,6 +130,8 @@ export function MediaVideoPlayer({
       canvas.height = Math.max(1, Math.round(player.videoHeight * scale));
       const context = canvas.getContext("2d");
       if (!context) return;
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
       context.drawImage(player, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, "image/jpeg", THUMBNAIL_QUALITY);
