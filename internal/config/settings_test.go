@@ -264,9 +264,54 @@ func TestDefaultMediaSettingsPublishAnEmptyArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NormalizeSettings: %v", err)
 	}
+	if normalized.Media.AutoScanOnStartup {
+		t.Fatal("startup scan should be opt-in")
+	}
+	if !normalized.Media.RemoveMissingOnScan {
+		t.Fatal("completed scans should remove missing files by default")
+	}
 	public := normalized.Public()
 	if public.Media.LibraryPaths == nil || len(public.Media.LibraryPaths) != 0 {
 		t.Fatalf("default public media paths = %#v, want non-nil empty slice", public.Media.LibraryPaths)
+	}
+	if public.Media.AutoScanOnStartup || !public.Media.RemoveMissingOnScan {
+		t.Fatalf("public scan policy = auto:%t remove:%t", public.Media.AutoScanOnStartup, public.Media.RemoveMissingOnScan)
+	}
+}
+
+func TestLegacyMediaSettingsReceiveScanPolicyDefaults(t *testing.T) {
+	encoded, err := json.Marshal(DefaultSettings())
+	if err != nil {
+		t.Fatalf("marshal defaults: %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatalf("decode defaults: %v", err)
+	}
+	mediaSettings := document["media"].(map[string]any)
+	delete(mediaSettings, "auto_scan_on_startup")
+	delete(mediaSettings, "remove_missing_on_scan")
+	encoded, err = json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal legacy settings: %v", err)
+	}
+
+	loaded, _, err := loadSettingsFromBytes(encoded)
+	if err != nil {
+		t.Fatalf("load legacy settings: %v", err)
+	}
+	if loaded.Media.AutoScanOnStartup || !loaded.Media.RemoveMissingOnScan {
+		t.Fatalf("legacy scan policy = auto:%t remove:%t", loaded.Media.AutoScanOnStartup, loaded.Media.RemoveMissingOnScan)
+	}
+
+	mediaSettings["remove_missing_on_scan"] = false
+	encoded, err = json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal explicit policy: %v", err)
+	}
+	loaded, _, err = loadSettingsFromBytes(encoded)
+	if err != nil || loaded.Media.RemoveMissingOnScan {
+		t.Fatalf("explicit retained-missing policy = %+v err=%v", loaded.Media, err)
 	}
 }
 

@@ -200,16 +200,19 @@ layout change — the slot already exists at the right size.
 
 ## 3. Generation attached to a scan
 
-The requested "automatic sync setup" is the Stash shape: checkboxes chosen
-*before* an explicit scan, not a background service.
+The requested "automatic sync setup" uses the Stash task shape: related
+checkboxes are consolidated and chosen *before* a scan rather than split across
+unrelated settings groups.
 
 - `Settings > Media` gains **Generate missing thumbnails after scanning**, off
   by default.
-- It rides the scan the user already started, so the work is still
-  user-initiated. The guardrail is unchanged: **never at startup, never on a
-  timer**.
+- It rides the same bounded scan whether that scan was started manually or by
+  the user's explicit **Scan library when MagicHandy starts** preference.
+  Startup scanning is off by default and there is still no timer or watcher.
 - Bounded, cancellable, and reported in the same scan summary. A scan that would
   generate 4,000 covers must say so before it starts, not after.
+- A cancelled or failed scan never launches thumbnail or conversion follow-up
+  work. Startup and manual scans share this rule.
 
 If FFmpeg is absent, the option is visible but disabled with the reason, rather
 than hidden — otherwise the feature is undiscoverable for exactly the people who
@@ -365,6 +368,8 @@ All under `media`, all with a working default, none required to use the app:
 
 | Field | Default | Notes |
 | --- | --- | --- |
+| `auto_scan_on_startup` | false | One bounded background scan after catalog startup; never a timer |
+| `remove_missing_on_scan` | true | Removes absent catalog rows only after a complete root scan; never source files |
 | `ffmpeg_path` | empty | Empty means absent; features that need it say so |
 | `convert_h265_for_compatibility` | false | On: H.265 counts as incompatible, and re-encodes target H.264 |
 | `reencode_codec` | `h264` | Only used when a remux is impossible; forced to `h264` by the toggle above |
@@ -372,8 +377,8 @@ All under `media`, all with a working default, none required to use the app:
 | `reencode_crf_h265` | 28 | |
 | `reencode_preset` | `medium` | `ultrafast` … `veryslow` |
 | `reencode_audio_kbps` | 192 | 128 / 192 / 256, or copy when already AAC |
-| `generate_thumbnails_on_scan` | false | Rides an explicit scan only |
-| `convert_incompatible_on_scan` | false | Rides an explicit scan only; incompatible files only |
+| `generate_thumbnails_on_scan` | false | Rides a successful manual or opted-in startup scan |
+| `convert_incompatible_on_scan` | false | Rides a successful manual or opted-in startup scan; incompatible files only |
 | `show_superseded_originals` | false | Reveals files hidden by the suffix rule |
 
 ### Output naming, and the marker that ties it together

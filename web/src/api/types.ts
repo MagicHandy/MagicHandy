@@ -412,6 +412,8 @@ export interface MediaScanIssue {
 
 export interface MediaSettingsPayload {
   library_paths: string[];
+  auto_scan_on_startup?: boolean;
+  remove_missing_on_scan?: boolean;
   script_offset_ms?: number;
   script_smoothing_percent?: number;
   peak_rounding_ms?: number;
@@ -429,6 +431,7 @@ export interface MediaSettingsPayload {
 
 export interface MediaScanState {
   running: boolean;
+  trigger?: "manual" | "startup";
   cancellable: boolean;
   cancelled: boolean;
   started_at?: string;

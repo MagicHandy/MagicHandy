@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestExplicitScanPairsVideosAndTracksMissingLifecycle(t *testing.T) {
+func TestExplicitScanPairsVideosAndRemovesMissingFiles(t *testing.T) {
 	catalog := openTestCatalog(t)
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "Session.mp4"), "video-one")
@@ -58,13 +58,38 @@ func TestExplicitScanPairsVideosAndTracksMissingLifecycle(t *testing.T) {
 	if err := os.Remove(filepath.Join(root, "Session.mp4")); err != nil {
 		t.Fatalf("remove video: %v", err)
 	}
-	missing := runTestScan(t, catalog, root)
-	if missing.Summary.Missing != 1 || len(listTestVideos(t, catalog)) != 1 || !listTestVideos(t, catalog)[0].Missing {
-		t.Fatalf("missing lifecycle summary=%+v videos=%+v", missing.Summary, listTestVideos(t, catalog))
-	}
 	removed := runTestScan(t, catalog, root)
 	if removed.Summary.Removed != 1 || len(listTestVideos(t, catalog)) != 0 {
-		t.Fatalf("removal lifecycle summary=%+v videos=%+v", removed.Summary, listTestVideos(t, catalog))
+		t.Fatalf("removal summary=%+v videos=%+v", removed.Summary, listTestVideos(t, catalog))
+	}
+}
+
+func TestScanCanRetainMissingRowsUntilCleanupIsEnabled(t *testing.T) {
+	catalog := openTestCatalog(t)
+	root := t.TempDir()
+	path := filepath.Join(root, "kept.mp4")
+	writeTestFile(t, path, "video")
+	runTestScan(t, catalog, root)
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove video: %v", err)
+	}
+
+	retain := ScanOptions{RemoveMissing: false, Trigger: ScanTriggerManual}
+	missing := runTestScanWithOptions(t, catalog, retain, root)
+	videos := listTestVideos(t, catalog)
+	if missing.Summary.Missing != 1 || missing.Summary.Removed != 0 || len(videos) != 1 || !videos[0].Missing {
+		t.Fatalf("retained summary=%+v videos=%+v", missing.Summary, videos)
+	}
+
+	repeated := runTestScanWithOptions(t, catalog, retain, root)
+	videos = listTestVideos(t, catalog)
+	if repeated.Summary.Missing != 0 || repeated.Summary.Removed != 0 || len(videos) != 1 || !videos[0].Missing {
+		t.Fatalf("repeated retained summary=%+v videos=%+v", repeated.Summary, videos)
+	}
+
+	removed := runTestScanWithOptions(t, catalog, DefaultScanOptions(), root)
+	if removed.Summary.Removed != 1 || len(listTestVideos(t, catalog)) != 0 {
+		t.Fatalf("enabled cleanup summary=%+v videos=%+v", removed.Summary, listTestVideos(t, catalog))
 	}
 }
 
@@ -75,7 +100,7 @@ func TestPartialRootScanNeverMarksUnseenRowsMissing(t *testing.T) {
 	runTestScan(t, catalog, root)
 	before := listTestVideos(t, catalog)
 
-	delta, err := catalog.applyRootScan(t.Context(), rootScan{root: root, complete: false})
+	delta, err := catalog.applyRootScan(t.Context(), rootScan{root: root, complete: false}, DefaultScanOptions())
 	if err != nil {
 		t.Fatalf("apply partial root: %v", err)
 	}
@@ -212,8 +237,13 @@ func openTestCatalog(t *testing.T) *Catalog {
 
 func runTestScan(t *testing.T, catalog *Catalog, roots ...string) ScanState {
 	t.Helper()
-	if _, err := catalog.StartScan(roots); err != nil {
-		t.Fatalf("StartScan: %v", err)
+	return runTestScanWithOptions(t, catalog, DefaultScanOptions(), roots...)
+}
+
+func runTestScanWithOptions(t *testing.T, catalog *Catalog, options ScanOptions, roots ...string) ScanState {
+	t.Helper()
+	if _, err := catalog.StartScanWithOptions(roots, options); err != nil {
+		t.Fatalf("StartScanWithOptions: %v", err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -253,7 +283,7 @@ func insertDiscoveredVideo(t *testing.T, catalog *Catalog, video discoveredVideo
 	t.Helper()
 	if _, err := catalog.applyRootScan(context.Background(), rootScan{
 		root: video.LocationPath, videos: []discoveredVideo{video}, complete: false,
-	}); err != nil {
+	}, DefaultScanOptions()); err != nil {
 		t.Fatalf("insert catalog row: %v", err)
 	}
 }

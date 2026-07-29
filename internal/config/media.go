@@ -9,10 +9,16 @@ import (
 	"strings"
 )
 
-// MediaSettings contains user-selected roots for explicit video catalog scans.
+// MediaSettings contains user-selected roots and video catalog scan policy.
 // Paths are not secrets, but the scanner never accepts them from media routes.
 type MediaSettings struct {
 	LibraryPaths []string `json:"library_paths"`
+	// AutoScanOnStartup starts a background scan after the core has opened its
+	// persistent domains. RemoveMissingOnScan controls whether a fully
+	// enumerated root drops absent rows immediately or retains them as missing.
+	// An unavailable or partial root is always preserved regardless of policy.
+	AutoScanOnStartup   bool `json:"auto_scan_on_startup"`
+	RemoveMissingOnScan bool `json:"remove_missing_on_scan"`
 	// ScriptOffsetMillis shifts a paired script against its video. Positive
 	// delays the script, negative advances it. Some offset is not a defect the
 	// app can remove: scripts are authored against a particular sense of "on
@@ -48,8 +54,8 @@ type MediaSettings struct {
 	ReencodePreset string `json:"reencode_preset"`
 	// ReencodeAudioKbps applies only when the source audio is not already AAC.
 	ReencodeAudioKbps int `json:"reencode_audio_kbps"`
-	// GenerateThumbnailsOnScan and ConvertIncompatibleOnScan ride an explicit
-	// scan the user started. Never at startup, never on a timer.
+	// GenerateThumbnailsOnScan and ConvertIncompatibleOnScan ride any scan,
+	// including an opted-in startup scan.
 	GenerateThumbnailsOnScan  bool `json:"generate_thumbnails_on_scan"`
 	ConvertIncompatibleOnScan bool `json:"convert_incompatible_on_scan"`
 	// ShowSupersededOriginals reveals rows hidden because a converted copy of
@@ -138,6 +144,8 @@ const MaxPeakRoundingMillis = 200
 // the latest durable values rather than being reset by a stale form snapshot.
 type MediaUpdate struct {
 	LibraryPaths                *[]string `json:"library_paths,omitempty"`
+	AutoScanOnStartup           *bool     `json:"auto_scan_on_startup,omitempty"`
+	RemoveMissingOnScan         *bool     `json:"remove_missing_on_scan,omitempty"`
 	ScriptOffsetMillis          *int      `json:"script_offset_ms,omitempty"`
 	ScriptSmoothingPercent      *int      `json:"script_smoothing_percent,omitempty"`
 	PeakRoundingMillis          *int      `json:"peak_rounding_ms,omitempty"`
@@ -161,6 +169,8 @@ func mergeMediaUpdate(media MediaSettings, update MediaUpdate) MediaSettings {
 	if update.LibraryPaths != nil {
 		media.LibraryPaths = append([]string{}, (*update.LibraryPaths)...)
 	}
+	assignBool(&media.AutoScanOnStartup, update.AutoScanOnStartup)
+	assignBool(&media.RemoveMissingOnScan, update.RemoveMissingOnScan)
 	assignInt(&media.ScriptOffsetMillis, update.ScriptOffsetMillis)
 	assignInt(&media.ScriptSmoothingPercent, update.ScriptSmoothingPercent)
 	assignInt(&media.PeakRoundingMillis, update.PeakRoundingMillis)

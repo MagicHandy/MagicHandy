@@ -158,9 +158,8 @@ func (s *Server) handleMediaCompatibility(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "compatibility": state})
 }
 
-// scanFollowUp builds the opt-in work that rides an explicit scan. Both options
-// are off by default and neither can run at startup or on a timer: the only way
-// either one starts is a scan the user pressed a button for.
+// scanFollowUp builds the opt-in work that rides a successful scan. A startup
+// scan uses the same saved choices as a manually started scan.
 //
 // Conversion is queued after thumbnails because it is the far longer job, and
 // because StartConversionJob would be refused while the other still holds the

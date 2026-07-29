@@ -1616,15 +1616,17 @@ Status: **M0-M2 implemented; M3 hardware acceptance in progress (2026-07-22).**
 A first-class Videos page with a searchable local catalog; a funscript with the exact
 same base name as a video plays in time with it through the one motion
 engine; the OSD carries a hideable compact position trace with a separate
-single-hue activity rail; library
-locations are added and scanned from Settings.
+single-hue activity rail; library locations and scan policy are consolidated in
+Settings; ongoing scans and media jobs remain visible in the shell notification
+center.
 
 ## Scope
 
 Designed in full in [docs/video-playback.md](docs/video-playback.md),
 including the architecture (`internal/media`, media never imports transport,
 the shared engine's finite linear media target), the schema v11 catalog, the
-explicit bounded scanner, the video-clock-master sync session with calibrated
+bounded manual/opt-in-startup scanner with complete-root cleanup safety, the
+video-clock-master sync session with calibrated
 and confirmed-drift detection, the design-system intensity ramp, and safety
 inheritance (authored media timing and position by default, optional semantic
 speed cap with active-run Stop/re-arm, bounded startup acquisition,

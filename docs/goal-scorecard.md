@@ -123,6 +123,29 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-28** - Consolidated media library management and shell feedback.
+  Settings > Media now keeps locations, startup behavior, missing-entry cleanup,
+  thumbnail generation, and compatibility conversion in one scan-options group.
+  Manual and explicitly opted-in startup scans use the same bounded scanner,
+  cancellation state, structured summary, and follow-up path. Cleanup defaults
+  on but deletes only catalog rows and owned thumbnails after a root is read
+  completely; source media and unseen entries under unavailable or partial
+  roots are always preserved. A shell notification center adapts Stash's
+  visible task model into backend-derived Activity, current Attention, and
+  bounded session Recent sections, with toasts retained in the same history and
+  only one top-bar disclosure open at a time. Desktop 1440x900 and mobile
+  390x844 rendered checks found no overflow, clipping, fixed-Stop overlap, or
+  blank state card; testing used the fake transport and issued no hardware
+  motion. All 281 frontend tests, the 1,190-key localization audit, typecheck,
+  production build, `go test ./...`, vet, lint, and plain/stripped
+  `CGO_ENABLED=0` builds pass. Local race execution remains unavailable because
+  MinGW `gcc` is absent; CI retains the mandatory Ubuntu race gate. Against the
+  prior checked-in build, the English startup payload is 629,917 raw / 171,141
+  gzip bytes (+19,019 / +4,066); all HTML/CSS/JS is 953,944 / 280,574
+  (+35,446 / +8,636), and complete embedded output is 1,398,180 / 717,971.
+  Plain/stripped binaries are 22,307,328 / 15,895,552 bytes (+48,128 /
+  +46,592), both within the 30 MB budget.
+
 - **2026-07-26** - Multilingual UI, installer, and chat prompts. English,
   Spanish, Brazilian Portuguese, Simplified Chinese, and Japanese now share
   1,028-key browser catalogs with strict key, placeholder, encoding, static

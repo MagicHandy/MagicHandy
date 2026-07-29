@@ -127,8 +127,10 @@ also enables an optional client-captured poster frame in a later slice.
 
 ## Scanning
 
-- **Explicit action only** (Settings button and Videos-tab empty state);
-  never on startup, never on a timer (goals-and-guardrails download/IO rule).
+- **Manual by default** (Settings button and Videos-tab empty state). Settings
+  can opt into one background scan after the core opens the catalog at startup.
+  There is no timer or file watcher, and startup scanning stays off until the
+  user enables it.
 - Walks each registered root with bounds: max depth 6, max 10,000 files per
   root, symlinks not followed, hidden directories skipped. Extensions:
   `.mp4 .m4v .webm .mov` plus a second set of containers the element cannot
@@ -140,16 +142,21 @@ also enables an optional client-captured poster frame in a later slice.
 - Pairing: a sibling `NAME.funscript` for `NAME.mp4` in the **same
   directory** is recorded at scan (requirement 2 says exact same name;
   multi-axis variants like `NAME.roll.funscript` are ignored in v1).
-- Rescan is idempotent: existing ids update in place, vanished files are
-  marked `missing` (kept for one rescan cycle so a temporarily unplugged
-  drive does not wipe the grid), and a scan summary (added/updated/missing/
-  skipped) is returned and shown.
-- Permission failures and file-limit truncation make a root explicitly
-  partial. Discovered rows may still update, but unseen existing rows are not
-  marked missing and Settings shows the preservation warning.
+- Rescan is idempotent: existing ids update in place. **Remove missing catalog
+  entries** is on by default and removes absent catalog rows plus their cached
+  thumbnails only after that root was enumerated completely; it never deletes
+  source media. Turning it off retains absent rows as `missing` until a later
+  complete scan with removal enabled.
+- An unavailable root, permission failure, cancellation, or file-limit
+  truncation makes the root explicitly unavailable or partial. Discovered rows
+  may still update, but unseen existing rows are never marked or removed,
+  regardless of the cleanup setting. Settings and the scan summary show the
+  preservation warning.
 - Scans run server-side with progress polling like model imports
   (`/api/media/scan` returns a scan-state object; one scan at a time;
-  cancellable; controller-gated).
+  cancellable). Manual start/cancel is controller-gated; an opted-in startup
+  scan uses the same scanner, state, cancellation, cleanup, and follow-up-job
+  path without requiring a browser tab to own control.
 
 ## Serving video safely
 
@@ -465,7 +472,7 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
 | --- | --- | --- | --- |
 | `GET /api/media/videos` | read | M0 | catalog list (id, name, badges, duration) |
 | `GET /api/media/videos/{id}/stream` | read | M0 | Range-capable file streaming |
-| `POST /api/media/scan` / `GET /api/media/scan` / `DELETE /api/media/scan` | controller / read / controller | M0 | start, poll, or cancel an explicit scan |
+| `POST /api/media/scan` / `GET /api/media/scan` / `DELETE /api/media/scan` | controller / read / controller | M0 | manually start, poll, or cancel the shared scanner |
 | `PUT /api/settings` (`media.library_paths`) | controller | M0 | manage locations |
 | `POST /api/media/duration` | controller | M0 | browser-reported `duration_ms` backfill |
 | `GET /api/media/videos/{id}/funscript` | read | M1 | bounded paired script for the timeline |
@@ -474,13 +481,15 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
 ## Slices (each is one reviewable PR with its own validation)
 
 - **M0 — catalog foundation (implemented)**: settings field, schema v11,
-  explicit scanner with
-  bounds + summary, Settings section (add/remove/scan), dedicated Videos page +
-  search, Range streaming, plain video playback with **no motion**, reusable
-  video player, and optional video-above-timeline funscript import preview.
+  bounded scanner with manual and opt-in startup triggers, complete-root cleanup
+  policy + summary, consolidated Settings section (locations/options/scan),
+  dedicated Videos page + search, Range streaming, plain video playback with
+  **no motion**, reusable video player, and optional video-above-timeline
+  funscript import preview.
   Exact-basename pairing metadata is recorded now so the grid can label it;
   the script is not read or played. Automated gates cover explicit scan,
-  bounds, missing-file retention, partial-scan preservation, catalog path
+  opted-in startup scan, cleanup enabled/disabled, bounds,
+  partial/unavailable-root preservation, catalog path
   jailing, byte-range responses, controller gates, frontend search/playback,
   and the import preview. The 2026-07-19 resumed acceptance scan covered two
   roots, four encountered files, three videos, and one exact-basename pair
