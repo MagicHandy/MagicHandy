@@ -180,11 +180,58 @@ export interface ChatSession {
   id: string;
   title: string;
   saved: boolean;
+  // Which persona this conversation is held with, or absent for the global axis
+  // values from Settings. It can name a persona that has since been deleted.
+  persona_id?: string;
   active: boolean;
   message_count: number;
   latest_seq: number;
   created_at: string;
   updated_at: string;
+}
+
+// Persona is a named preset over the personalization axes plus a portrait. It
+// never carries capability gates or limits — see docs/persona-page.md §3.
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+  chat_voice: string;
+  reaction_style: string;
+  prompt_set_id: string;
+  default_focus_area: string;
+  has_portrait: boolean;
+  // Doubles as the portrait cache-buster: replacing a picture in place moves
+  // this, which is what makes the tile refetch it.
+  portrait_updated_at?: string;
+  last_used_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonaDraft {
+  name?: string;
+  description?: string;
+  chat_voice?: string;
+  reaction_style?: string;
+  prompt_set_id?: string;
+  default_focus_area?: string;
+}
+
+export interface PersonasPayload {
+  personas: Persona[];
+  active_persona_id: string;
+  active_session_id: string;
+  prompt_sets?: PromptSet[];
+  persona?: Persona;
+  options: {
+    chat_voices: string[];
+    reaction_styles: string[];
+    focus_areas: string[];
+    max_name: number;
+    max_description: number;
+    max_portrait_edge: number;
+  };
 }
 
 export interface ChatSessionsResponse {

@@ -161,6 +161,12 @@ limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
 Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
 the local media catalog and player, and `#/settings` hosts configuration.
+`#/personas` sits second in the rail, directly under Chat, because a persona is
+chat furniture rather than a content library; its portrait tile grid is a sibling
+of the video grid rather than a reuse of it (portrait aspect, copy overlaid on a
+scrim), while every interaction state — hover/focus border, focus ring, disabled
+opacity — is borrowed verbatim so the two grids read as one app
+([persona-page.md](persona-page.md) §5).
 
 **Every settings tab has the same shape**: an `h2.section-title` naming the tab,
 then `.group` cards with an `h3.group-title` naming each category. No control
@@ -187,6 +193,16 @@ once means a control type added later cannot arrive with no spacing, and cannot
 double it either. The selectors are deliberately doubled (`.group.group > …`)
 so a control's own margin, which carries equal specificity and often appears
 later in the cascade, cannot silently win.
+
+**A container-owned rhythm still needs its children to be block-level.** Vertical
+margins do not apply to inline boxes, so a bare `<label>` inside a `.group`
+silently ignores the whole rule — the persona editor measured 1px where 10 was
+intended and 23px where 12 was, until its labels used the existing
+`<label className="field">`, which supplies `display: flex; flex-direction: column`.
+A field wrapper is therefore not decoration: it is what makes the container's
+spacing reach the control. This is the same failure as the `<legend>` case (a
+legend used as a heading needs `display: block`, or it sits in the fieldset's
+border box where spacing cannot reach it) arriving through a different element.
 
 The same applies to the video player: `.media-player` owns a flow gap so the
 incompatible-file notice, the playback error row, and the funscript timeline

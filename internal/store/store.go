@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 15
+	CurrentSchemaVersion = 16
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -498,6 +498,33 @@ var migrations = [][]string{
 	// actually play the file, and whether a converted copy supersedes this row.
 	// All three are guarded Go steps for the same reason as v14.
 	{`SELECT 1`},
+	// v15 -> v16: personas. A persona is a named, portrait-bearing preset over
+	// the personalization axes that already exist (docs/persona-page.md), not a
+	// second personalization system: nothing here can weaken the motion
+	// contract, and every column maps to a value the prompt already composes.
+	//
+	// The enums deliberately carry no CHECK constraint. patterns.origin and
+	// messages.role use one because those value sets are structural; reply
+	// register and reaction style are product vocabulary that will gain values,
+	// and a CHECK would turn each addition into a table rebuild. Validation
+	// lives in Go beside the existing chat-voice validation, which is where the
+	// option lists are already single-sourced.
+	{
+		`CREATE TABLE IF NOT EXISTS personas (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			chat_voice TEXT NOT NULL DEFAULT 'warm',
+			reaction_style TEXT NOT NULL DEFAULT 'neutral',
+			prompt_set_id TEXT NOT NULL DEFAULT '',
+			default_focus_area TEXT NOT NULL DEFAULT 'full',
+			portrait_updated_at TEXT NOT NULL DEFAULT '',
+			last_used_at TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS personas_used ON personas(last_used_at DESC, name, id)`,
+	},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -766,6 +793,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migrateVideoScriptOffset(ctx, tx)
 	case 15:
 		err = migrateVideoMediaTooling(ctx, tx)
+	case 16:
+		err = migrateSessionPersona(ctx, tx)
 	default:
 		return nil
 	}
@@ -818,6 +847,21 @@ func migrateVideoMediaTooling(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+// migrateSessionPersona records which persona a conversation was held with.
+// The column is a plain string rather than a foreign key, and persona deletion
+// deliberately does not cascade: an old session should keep reading as it was
+// written even after the persona is gone. Callers resolve a dangling id to the
+// global axis values and say so.
+func migrateSessionPersona(ctx context.Context, tx *sql.Tx) error {
+	exists, err := columnExists(ctx, tx, "chat_sessions", "persona_id")
+	if err != nil || exists {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`ALTER TABLE chat_sessions ADD COLUMN persona_id TEXT NOT NULL DEFAULT ''`)
+	return err
 }
 
 func columnHasType(ctx context.Context, tx *sql.Tx, table, column, columnType string) (bool, error) {

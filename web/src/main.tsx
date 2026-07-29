@@ -12,6 +12,7 @@ import "./styles/chat.css";
 import "./styles/voice.css";
 import "./styles/library.css";
 import "./styles/media.css";
+import "./styles/personas.css";
 import "./styles/model-manager.css";
 
 const root = document.getElementById("root");

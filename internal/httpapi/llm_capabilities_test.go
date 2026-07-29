@@ -73,7 +73,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 
-	defaults := chatCapabilities(config.LLMSettings{})
+	defaults := chatCapabilities(config.LLMSettings{}, nil)
 	if defaults.ExperimentalPatterns {
 		t.Fatal("experimental patterns must default off")
 	}

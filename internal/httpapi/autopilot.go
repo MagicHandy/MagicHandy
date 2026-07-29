@@ -40,7 +40,10 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve memories: %w", err)
 	}
-	capabilities := chatCapabilities(settings.LLM)
+	// Autopilot speaks into the active conversation, so it uses that
+	// conversation's persona. Anything else would have the assistant change
+	// character the moment it started speaking on its own.
+	capabilities := chatCapabilities(settings.LLM, s.activeSessionPersona())
 	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve pattern catalog: %w", err)

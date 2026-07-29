@@ -34,17 +34,13 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LLMReasoningAuto,
 		},
 		LLMMaxOutputTokens: []int{128, 256, 512, 1024},
-		LLMChatVoices: []string{
-			LLMChatVoiceUtility,
-			LLMChatVoiceWarm,
-			LLMChatVoiceIntimate,
-			LLMChatVoiceExplicit,
-		},
+		LLMChatVoices:      LLMChatVoices(),
 		LLMUserAnatomies: []string{
 			LLMUserAnatomyPenis,
 			LLMUserAnatomyVagina,
 			LLMUserAnatomyCustom,
 		},
+		LLMReactionStyles: LLMReactionStyles(),
 		PromptSets: []string{
 			PromptSetMagicHandyMotionV1,
 			PromptSetMagicHandyMotionV1ES,

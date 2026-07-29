@@ -35,10 +35,16 @@ var (
 // assistant reply. Prompts, memories, request bodies, and credentials never
 // enter this payload.
 type MessageDiagnostics struct {
-	Source           string `json:"source,omitempty"`
-	Provider         string `json:"provider,omitempty"`
-	Model            string `json:"model,omitempty"`
-	PromptSet        string `json:"prompt_set,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Provider  string `json:"provider,omitempty"`
+	Model     string `json:"model,omitempty"`
+	PromptSet string `json:"prompt_set,omitempty"`
+	// PersonaID and PersonaName record who the reply came from. Storing the name
+	// alongside the id is what lets the transcript stay readable after a persona
+	// is renamed or deleted, and it is what a mid-conversation persona divider is
+	// derived from — no new message role required.
+	PersonaID        string `json:"persona_id,omitempty"`
+	PersonaName      string `json:"persona_name,omitempty"`
 	RequestMillis    int64  `json:"request_ms,omitempty"`
 	Repaired         bool   `json:"repaired,omitempty"`
 	SemanticFallback bool   `json:"semantic_fallback,omitempty"`
@@ -69,9 +75,14 @@ type LogMessage struct {
 // Session is one retained or process-local conversation tab. Exactly one row
 // is active through the chat_workspace singleton.
 type Session struct {
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	Saved        bool   `json:"saved"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Saved bool   `json:"saved"`
+	// PersonaID is which persona this conversation is being held with, or empty
+	// for the global axis values from Settings. It can name a deleted persona:
+	// a past conversation should still read as the conversation it was, so
+	// callers resolve a dangling id rather than the log rewriting history.
+	PersonaID    string `json:"persona_id,omitempty"`
 	Active       bool   `json:"active"`
 	MessageCount int    `json:"message_count"`
 	LatestSeq    int64  `json:"latest_seq"`
@@ -159,7 +170,7 @@ func (l *MessageLog) ReconcileStartup(startupBehavior string, keepUnsaved bool) 
 		}
 		if startupBehavior == "new" || activeID == "" {
 			var err error
-			activeID, err = insertSession(ctx, tx)
+			activeID, err = insertSession(ctx, tx, lastUsedPersona(ctx, tx))
 			if err != nil {
 				return err
 			}
@@ -216,13 +227,13 @@ func (l *MessageLog) ActiveSessionID() (string, error) {
 // Sessions lists retained tabs in stable creation order.
 func (l *MessageLog) Sessions() ([]Session, error) {
 	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT s.id, s.title, s.saved, s.id = w.active_session_id,
+		SELECT s.id, s.title, s.saved, s.persona_id, s.id = w.active_session_id,
 			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
 		FROM chat_sessions s
 		CROSS JOIN chat_workspace w
 		LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
 		WHERE w.id = 'current'
-		GROUP BY s.id, s.title, s.saved, w.active_session_id, s.created_at, s.updated_at
+		GROUP BY s.id, s.title, s.saved, s.persona_id, w.active_session_id, s.created_at, s.updated_at
 		ORDER BY s.created_at ASC, s.id ASC
 	`)
 	if err != nil {
@@ -232,7 +243,7 @@ func (l *MessageLog) Sessions() ([]Session, error) {
 	var sessions []Session
 	for rows.Next() {
 		var session Session
-		if err := rows.Scan(&session.ID, &session.Title, &session.Saved, &session.Active,
+		if err := rows.Scan(&session.ID, &session.Title, &session.Saved, &session.PersonaID, &session.Active,
 			&session.MessageCount, &session.LatestSeq, &session.CreatedAt, &session.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan chat session: %w", err)
 		}
@@ -241,18 +252,60 @@ func (l *MessageLog) Sessions() ([]Session, error) {
 	return sessions, rows.Err()
 }
 
+// SetSessionPersona records which persona a conversation is held with. An empty
+// id clears the binding back to the global axis values.
+//
+// It deliberately does not touch updated_at: that column orders the tab strip,
+// and changing who you are talking to is not the same event as the conversation
+// gaining a message.
+func (l *MessageLog) SetSessionPersona(sessionID, personaID string) (Session, error) {
+	err := l.db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		result, execErr := tx.ExecContext(context.Background(),
+			`UPDATE chat_sessions SET persona_id = ? WHERE id = ?`, personaID, sessionID)
+		if execErr != nil {
+			return execErr
+		}
+		affected, affectedErr := result.RowsAffected()
+		if affectedErr != nil {
+			return affectedErr
+		}
+		if affected == 0 {
+			return ErrChatSessionNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	return l.Session(sessionID)
+}
+
+// SessionPersona returns the persona bound to one session, or empty.
+func (l *MessageLog) SessionPersona(sessionID string) (string, error) {
+	var personaID string
+	err := l.db.SQL().QueryRowContext(context.Background(),
+		`SELECT persona_id FROM chat_sessions WHERE id = ?`, sessionID).Scan(&personaID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrChatSessionNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("read chat session persona: %w", err)
+	}
+	return personaID, nil
+}
+
 // Session returns one retained tab and its current summary.
 func (l *MessageLog) Session(id string) (Session, error) {
 	var session Session
 	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT s.id, s.title, s.saved, s.id = w.active_session_id,
+		SELECT s.id, s.title, s.saved, s.persona_id, s.id = w.active_session_id,
 			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
 		FROM chat_sessions s
 		CROSS JOIN chat_workspace w
 		LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
 		WHERE s.id = ? AND w.id = 'current'
-		GROUP BY s.id, s.title, s.saved, w.active_session_id, s.created_at, s.updated_at
-	`, id).Scan(&session.ID, &session.Title, &session.Saved, &session.Active,
+		GROUP BY s.id, s.title, s.saved, s.persona_id, w.active_session_id, s.created_at, s.updated_at
+	`, id).Scan(&session.ID, &session.Title, &session.Saved, &session.PersonaID, &session.Active,
 		&session.MessageCount, &session.LatestSeq, &session.CreatedAt, &session.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return Session{}, ErrChatSessionNotFound
@@ -286,7 +339,7 @@ func (l *MessageLog) CreateSession(discardCurrentUnsaved bool) (Session, error) 
 			return ErrUnsavedSessionConflict
 		}
 		var err error
-		id, err = insertSession(ctx, tx)
+		id, err = insertSession(ctx, tx, lastUsedPersona(ctx, tx))
 		if err != nil {
 			return err
 		}
@@ -403,17 +456,38 @@ func (l *MessageLog) DeleteSession(id string) error {
 	return nil
 }
 
-func insertSession(ctx context.Context, tx *sql.Tx) (string, error) {
+func insertSession(ctx context.Context, tx *sql.Tx, personaID string) (string, error) {
 	id, err := newSessionID()
 	if err != nil {
 		return "", err
 	}
 	now := nowUTC()
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO chat_sessions(id, title, saved, created_at, updated_at)
-		VALUES(?, ?, 0, ?, ?)
-	`, id, defaultSessionTitle, now, now)
+		INSERT INTO chat_sessions(id, title, saved, persona_id, created_at, updated_at)
+		VALUES(?, ?, 0, ?, ?, ?)
+	`, id, defaultSessionTitle, personaID, now, now)
 	return id, err
+}
+
+// lastUsedPersona is what a new conversation inherits. Starting a fresh chat and
+// finding the assistant reverted to a stranger would make the persona feel like
+// it had been forgotten, so continuity is the default.
+//
+// It reads the persona table directly rather than taking the id as a parameter,
+// because it runs inside the session transaction and the alternative is threading
+// a persona store through the whole chat-log constructor for one string. A
+// missing table (an older database mid-migration) resolves to no persona.
+func lastUsedPersona(ctx context.Context, tx *sql.Tx) string {
+	var personaID string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id FROM personas
+		WHERE last_used_at != ''
+		ORDER BY last_used_at DESC, id DESC
+		LIMIT 1
+	`).Scan(&personaID); err != nil {
+		return ""
+	}
+	return personaID
 }
 
 func newSessionID() (string, error) {

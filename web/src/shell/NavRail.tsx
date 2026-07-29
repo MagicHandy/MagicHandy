@@ -2,11 +2,14 @@ import { t, translateKnown } from "../i18n";
 // Permanent left navigation rail: product identity, page links, and the pinned
 // Stop footer. The rail is present on every route (docs/ui-navigation-redesign.md).
 import { useAppState, useHashRoute } from "../state/app-state";
-import { ChatIcon, LibraryIcon, ModesIcon, SettingsIcon, VideoIcon } from "./icons";
+import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, SettingsIcon, VideoIcon } from "./icons";
 import { StopButton } from "./StopButton";
 
+// Personas sits second, directly under Chat: a persona is chat furniture, closer
+// to the conversation than the content libraries are (docs/persona-page.md §5.1).
 const LINKS = [
   { base: "chat", href: "#/chat", label: "Chat", Icon: ChatIcon },
+  { base: "personas", href: "#/personas", label: "Personas", Icon: PersonaIcon },
   { base: "modes", href: "#/modes", label: "Preset modes", Icon: ModesIcon },
   { base: "library", href: "#/library", label: "Pattern library", Icon: LibraryIcon },
   { base: "videos", href: "#/videos", label: "Videos", Icon: VideoIcon },

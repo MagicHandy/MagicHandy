@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { PatternLibraryRoute } from "./routes/PatternLibraryRoute";
 import { PresetModesRoute } from "./routes/PresetModesRoute";
 import { ChatRoute } from "./routes/ChatRoute";
+import { PersonasRoute } from "./routes/PersonasRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { VideoRoute } from "./routes/VideoRoute";
 import { AppShell } from "./shell/AppShell";
@@ -44,7 +45,9 @@ export function App() {
           )}
         </section>
       ) : <ErrorBoundary key={base}>
-        {base === "modes" ? (
+        {base === "personas" ? (
+          <PersonasRoute />
+        ) : base === "modes" ? (
           <PresetModesRoute />
         ) : base === "library" ? (
           <PatternLibraryRoute />

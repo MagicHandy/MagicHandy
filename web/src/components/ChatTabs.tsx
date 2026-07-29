@@ -2,6 +2,7 @@ import { t, translateKnown } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import type { ChatSession } from "../api/types";
 import { MoreHorizontalIcon, PlusIcon, SaveIcon, TrashIcon } from "../shell/icons";
+import { PersonaSwitcher } from "./PersonaSwitcher";
 
 interface Props {
   sessions: ChatSession[];
@@ -117,6 +118,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
   return (
     <header className="chat-tabs-bar">
       <h1 className="chat-tabs-title">{t("Chat")}</h1>
+      {activeId && <PersonaSwitcher sessionID={activeId} disabled={disabled} />}
       {assistantMood && (
         <div className="chat-mood-readout" role="status" aria-label={t("Assistant mood: {mood}", { mood: translateKnown(assistantMood) })}>
           <span>{t("Mood")}</span>

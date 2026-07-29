@@ -37,6 +37,9 @@ import type {
   OllamaModelInfo,
   OllamaModelScan,
   PatternFeedback,
+  Persona,
+  PersonaDraft,
+  PersonasPayload,
   PublicSettings,
   SettingsUpdate,
   VoiceRequestSnapshot,
@@ -155,6 +158,56 @@ async function uploadThumbnail(id: string, image: Blob): Promise<{ status: strin
   return parsed as { status: string };
 }
 
+// uploadPortrait posts a persona portrait as raw bytes, for the same reason
+// uploadThumbnail exists: request() JSON-encodes its body, which a JPEG cannot
+// survive. The browser has already downscaled it on the canvas path.
+async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload> {
+  const res = await fetch(`/api/personas/${encodeURIComponent(id)}/portrait`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    body: image,
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
+  if (!res.ok) {
+    const message = parsed && typeof parsed === "object" && "error" in parsed
+      ? String((parsed as { error: unknown }).error)
+      : `Portrait upload failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed as PersonasPayload;
+}
+
+// normalizePersonas keeps a malformed or partial body from reaching a component.
+// The persona chip renders inside the chat header, so an unexpected shape here
+// would take down the conversation — a persona is decoration on top of chat and
+// must never be able to break it. A 200 with the wrong body is a real case: an
+// older backend, a proxy, or a half-applied migration all produce one.
+function normalizePersonas(payload: PersonasPayload): PersonasPayload {
+  return {
+    ...payload,
+    personas: Array.isArray(payload?.personas) ? payload.personas : [],
+    active_persona_id: payload?.active_persona_id ?? "",
+    active_session_id: payload?.active_session_id ?? "",
+    prompt_sets: Array.isArray(payload?.prompt_sets) ? payload.prompt_sets : [],
+    options: {
+      chat_voices: payload?.options?.chat_voices ?? [],
+      reaction_styles: payload?.options?.reaction_styles ?? [],
+      focus_areas: payload?.options?.focus_areas ?? [],
+      max_name: payload?.options?.max_name ?? 60,
+      max_description: payload?.options?.max_description ?? 500,
+      max_portrait_edge: payload?.options?.max_portrait_edge ?? 1024,
+    },
+  };
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly body: unknown) {
     super(message);
@@ -228,6 +281,30 @@ export const api = {
     peak_rounding_ms: number;
     apply_video_speed_limit: boolean;
   }>) => request("POST", "/api/media/playback", patch),
+
+  // Personas — named presets over the personalization axes, plus a portrait.
+  // Selecting one writes the chat session, never the settings document.
+  personas: (signal?: AbortSignal) =>
+    request<PersonasPayload>("GET", "/api/personas", undefined, signal).then(normalizePersonas),
+  createPersona: (draft: PersonaDraft) =>
+    request<PersonasPayload>("POST", "/api/personas", draft).then(normalizePersonas),
+  updatePersona: (id: string, draft: PersonaDraft) =>
+    request<PersonasPayload>("PATCH", `/api/personas/${encodeURIComponent(id)}`, draft).then(normalizePersonas),
+  deletePersona: (id: string) =>
+    request<PersonasPayload>("DELETE", `/api/personas/${encodeURIComponent(id)}`).then(normalizePersonas),
+  duplicatePersona: (id: string) =>
+    request<PersonasPayload>("POST", `/api/personas/${encodeURIComponent(id)}/duplicate`, {}).then(normalizePersonas),
+  savePersonaPortrait: (id: string, image: Blob) => uploadPortrait(id, image).then(normalizePersonas),
+  deletePersonaPortrait: (id: string) =>
+    request<PersonasPayload>("DELETE", `/api/personas/${encodeURIComponent(id)}/portrait`).then(normalizePersonas),
+  // Empty clears the binding back to the global axis values.
+  selectSessionPersona: (sessionID: string, personaID: string) =>
+    request<PersonasPayload>("PUT", `/api/chat/sessions/${encodeURIComponent(sessionID)}/persona`,
+      { persona_id: personaID }).then(normalizePersonas),
+  personaPortraitURL: (item: Persona) =>
+    item.has_portrait
+      ? `/api/personas/${encodeURIComponent(item.id)}/portrait?v=${encodeURIComponent(item.portrait_updated_at ?? "")}`
+      : "",
 
   // Media tooling. Thumbnails and conversion both need the optional external
   // FFmpeg; the compatibility report does not, because the browser produced it.
