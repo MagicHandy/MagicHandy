@@ -135,13 +135,13 @@
   padding: 12px 16px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #ea5459, var(--danger-strong));
+  background: linear-gradient(180deg, var(--danger), var(--danger-strong));
   color: #fff;
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: 0;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(229, 72, 77, 0.35);
+  box-shadow: none;
   transition: filter 0.15s ease, transform 0.05s ease;
 }
 .stop-button:hover {

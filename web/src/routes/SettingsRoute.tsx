@@ -12,9 +12,11 @@ import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
 import { PromptSetEditor } from "../components/PromptSetEditor";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { WorkspaceHead } from "../components/WorkspaceHead";
+import { ThemePicker } from "../components/ThemePicker";
 import { LOCALE_OPTIONS, normalizeLocale, t, translateKnown, type MessageKey } from "../i18n";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 import type { MediaSettingsPayload } from "../api/types";
+import { DEFAULT_THEME, normalizeTheme } from "../theme";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -116,7 +118,14 @@ export function SettingsRoute() {
   }, []);
 
   function patchUI(p: Partial<NonNullable<PublicSettings["ui"]>>) {
-    setS((cur) => (cur ? { ...cur, ui: { locale: cur.ui?.locale ?? "en", ...p } } : cur));
+    setS((cur) => (cur ? {
+      ...cur,
+      ui: {
+        locale: cur.ui?.locale ?? "en",
+        theme: cur.ui?.theme ?? DEFAULT_THEME,
+        ...p,
+      },
+    } : cur));
   }
   function patchDevice(p: Partial<PublicSettings["device"]>) {
     setS((cur) => (cur ? { ...cur, device: { ...cur.device, ...p } } : cur));
@@ -157,7 +166,10 @@ export function SettingsRoute() {
     const elevenLabsKey = newElevenLabsKey.trim();
     const update: SettingsUpdate = {
       server: { port: s.server.port },
-      ui: { locale: normalizeLocale(s.ui?.locale) },
+      ui: {
+        locale: normalizeLocale(s.ui?.locale),
+        theme: normalizeTheme(s.ui?.theme),
+      },
       // Playback filters save through their immediate endpoint. Omitting them
       // here prevents a stale Settings draft from overwriting newer values.
       // Everything else in this section has no immediate endpoint, so it has to
@@ -290,6 +302,7 @@ export function SettingsRoute() {
     neutts_sampling_modes: [],
     chat_startup_behaviors: [],
     locales: [],
+    themes: [],
   };
   const sel = (value: string, onChange: (v: string) => void, options: string[] = []) => (
     <select value={value} disabled={locked} onChange={(e) => onChange(e.target.value)}>
@@ -338,6 +351,12 @@ export function SettingsRoute() {
                 </select>
                 <span className="hint-block">{t("The saved language is shared by every open tab and applies after Save settings.")}</span>
               </label>
+              <ThemePicker
+                value={s.ui?.theme}
+                allowedThemes={opt.themes}
+                disabled={locked}
+                onChange={(theme) => patchUI({ theme })}
+              />
             </div>
           </>
         )}

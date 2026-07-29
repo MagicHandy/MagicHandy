@@ -31,9 +31,9 @@ reusing it elsewhere.
 
 ### Color roles
 
-The app is dark graphite with one interactive hue: graphite + steel azure,
-no purple or blue-green decorative tone. Named tokens below live in
-`web/src/styles/tokens.css :root`.
+Steel Azure is the default palette: dark graphite with one steel-azure
+interactive hue and no purple or blue-green decoration. The values below live
+in `web/src/styles/tokens.css :root` and remain the no-settings fallback.
 
 | Token | Value | Role |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ no purple or blue-green decorative tone. Named tokens below live in
 | `--line-strong` | `#3d434c` | Emphasized border |
 | `--text` | `#eae9e4` | Primary text |
 | `--muted` | `#98a0a9` | Secondary text, labels, hints |
-| `--accent` | `#5b9dd9` | **The one interactive hue** (steel azure): headings' eyebrow, nav state, app actions, toggles, focus |
+| `--accent` | `#5b9dd9` | Default interactive hue (steel azure): headings' eyebrow, nav state, app actions, toggles, focus |
 | `--accent-strong` | `#497fb5` | Interactive hover/border/checked |
 | `--accent-ink` | `#0b131c` | Text on an accent fill |
 | `--steel-deep` | `#3a5a7c` | Accent gradient partner (brand, avatar) |
@@ -57,8 +57,42 @@ no purple or blue-green decorative tone. Named tokens below live in
 | `--user-bubble` / `--user-bubble-line` | `#28303b` / `#3a4450` | User chat bubble |
 
 Rule: a new surface picks an existing role. `--accent` = "you can act on this",
-`--ok` = "it is running", `--warn` = "caution", `--danger` = "stop". Everything
-else is neutral graphite.
+`--ok` = "it is running", `--warn` = "caution", `--danger` = "stop".
+
+### Opt-in palettes
+
+Settings > General exposes one dense radio list with color swatches. The saved
+`ui.theme` value is validated by the core, persisted in the SQLite settings
+document, published in settings option hints, and applied to the document only
+from the backend state snapshot. Steel Azure remains first and is the default
+for fresh, missing, invalid, or retired values.
+
+The 21 opt-in palettes correspond to the retained design mockups:
+
+- Readability and neutral: High Contrast, Carbon Stealth, Platinum, Zenith
+  Monochrome, Sage.
+- Cool: Polar Frost, Iceberg Slate, Nordic Dusk, Cyber Midnight, Midnight
+  Graphite, Ocean Trench, Obsidian Teal, Carbon Emerald.
+- Violet: Moonlight Lavender, Deep Violet, Obsidian Violet.
+- Warm and terminal: Warm Titanium, Solaris Amber, Amber Phosphor, Green
+  Phosphor, Paperwhite CRT.
+
+Palette selectors live in `web/src/styles/themes.css` and override existing
+neutral and interactive tokens only. They must not ship component-specific
+layouts, type changes, decorative glows, or a second source of UI state. These
+invariants apply to every palette:
+
+- `--ok`, `--warn`, `--danger`, and their strong/ink partners inherit the
+  canonical safety colors from `tokens.css`; color is reinforced by text and
+  control shape.
+- Emergency Stop remains a red gradient with white text and **no box shadow or
+  glow**.
+- Small text and accent-ink pairs meet WCAG AA (4.5:1); focus and graphical
+  accent pairs meet 3:1.
+- Adding a palette requires the core catalog ID, one `themes.css` token
+  selector, frontend label/swatches, contrast evidence, and catalog tests.
+  Deleting any one of those pieces must fail review rather than leave a
+  selectable partial theme.
 
 ### Radius scale (capped — the anti-bubble rule)
 
@@ -107,8 +141,9 @@ pill.
   and `--accent` icon on the rounded row, with no edge bar. It is not a
   saturated pill and carries `aria-current="page"`.
 - **Pinned Stop** (bottom, `margin-top:auto`): the existing `.stop-button`
-  treatment (full-width here) — `--danger`/`--danger-strong` red gradient, white
-  `700`, `--radius-sm`, `--shadow`, with the `Esc` keycap. Present on every page.
+  treatment (full-width here) — `--danger`/`--danger-strong` red gradient,
+  white `700`, `--radius-sm`, no shadow/glow, with the `Esc` keycap. Present on
+  every page.
 
 ### Status readouts
 

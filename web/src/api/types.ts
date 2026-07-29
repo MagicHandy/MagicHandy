@@ -648,12 +648,13 @@ export interface OptionHints {
   neutts_sampling_modes?: string[];
   chat_startup_behaviors?: string[];
   locales?: string[];
+  themes?: string[];
 }
 
 export interface PublicSettings {
   version: number;
   server: { port: number };
-  ui?: { locale: string };
+  ui?: { locale: string; theme?: string };
   media?: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;
@@ -805,7 +806,7 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
-  ui?: { locale: string };
+  ui?: { locale: string; theme: string };
   media: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;

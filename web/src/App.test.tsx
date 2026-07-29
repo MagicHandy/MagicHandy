@@ -24,6 +24,7 @@ const baseState = {
   settings: {
     version: 1,
     server: { port: 49717 },
+    ui: { locale: "en", theme: "steel-azure" },
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, apply_video_speed_limit: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
@@ -44,6 +45,7 @@ const baseState = {
       parakeet_sources: ["app_managed", "custom_local"],
       neutts_sampling_modes: ["fixed", "random"],
       chat_startup_behaviors: ["previous", "new"],
+      themes: ["steel-azure", "deep-violet"],
     },
   },
   controller: { active: true, read_only: false },
@@ -256,6 +258,7 @@ function renderApp() {
 beforeEach(() => {
   vi.stubGlobal("EventSource", FakeEventSource);
   window.location.hash = "#/chat";
+  delete document.documentElement.dataset.theme;
 });
 
 describe("app shell safety invariants", () => {
@@ -271,6 +274,22 @@ describe("app shell safety invariants", () => {
       expect(screen.getByRole("button", { name: /emergency stop/i })).toBeInTheDocument();
       if (hash === "#/chat") await screen.findByText("No messages yet");
     }
+  });
+
+  it("applies the backend theme snapshot to the whole document", async () => {
+    installFetch({
+      state: {
+        ...baseState,
+        settings: {
+          ...baseState.settings,
+          ui: { locale: "en", theme: "deep-violet" },
+        },
+      },
+    });
+    renderApp();
+
+    await screen.findByRole("button", { name: /emergency stop/i });
+    await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "deep-violet"));
   });
 
   it("keeps only shell disclosures in the compact top bar", async () => {

@@ -16,6 +16,7 @@ const (
 // UISettings contains presentation preferences shared by every browser client.
 type UISettings struct {
 	Locale string `json:"locale"`
+	Theme  string `json:"theme"`
 }
 
 // IsSupportedLocale reports whether locale has bundled UI and prompt catalogs.

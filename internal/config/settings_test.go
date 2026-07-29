@@ -20,6 +20,9 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.UI.Locale != LocaleEnglish {
 		t.Fatalf("UI locale = %q, want %q", settings.UI.Locale, LocaleEnglish)
 	}
+	if settings.UI.Theme != ThemeSteelAzure {
+		t.Fatalf("UI theme = %q, want %q", settings.UI.Theme, ThemeSteelAzure)
+	}
 	if settings.Device.HSPDispatchOwner != DispatchOwnerCloudREST {
 		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST)
 	}
@@ -77,6 +80,64 @@ func TestUILocaleDefaultsPublishesAndValidatesSupportedLocales(t *testing.T) {
 	settings.UI.Locale = "fr"
 	if _, err := NormalizeSettings(settings); err == nil || !strings.Contains(err.Error(), "unknown UI locale") {
 		t.Fatalf("invalid locale error = %v", err)
+	}
+}
+
+func TestUIThemeDefaultsPublishesAndValidatesBundledThemes(t *testing.T) {
+	settings := DefaultSettings()
+	settings.UI.Theme = ""
+	normalized, err := NormalizeSettings(settings)
+	if err != nil {
+		t.Fatalf("NormalizeSettings empty theme: %v", err)
+	}
+	if normalized.UI.Theme != ThemeSteelAzure {
+		t.Fatalf("normalized theme = %q, want %q", normalized.UI.Theme, ThemeSteelAzure)
+	}
+
+	want := SupportedUIThemes()
+	if len(want) != 22 {
+		t.Fatalf("supported themes = %d, want default plus 21 surviving mockups", len(want))
+	}
+	if want[0] != ThemeSteelAzure {
+		t.Fatalf("first theme = %q, want default %q", want[0], ThemeSteelAzure)
+	}
+	public := normalized.Public()
+	if len(public.Options.Themes) != len(want) {
+		t.Fatalf("theme options = %v, want %v", public.Options.Themes, want)
+	}
+	for index, theme := range want {
+		if public.Options.Themes[index] != theme {
+			t.Fatalf("theme option %d = %q, want %q", index, public.Options.Themes[index], theme)
+		}
+		candidate := DefaultSettings()
+		candidate.UI.Theme = theme
+		if _, err := NormalizeSettings(candidate); err != nil {
+			t.Errorf("NormalizeSettings bundled theme %q: %v", theme, err)
+		}
+	}
+
+	want[0] = "mutated"
+	if SupportedUIThemes()[0] != ThemeSteelAzure {
+		t.Fatal("SupportedUIThemes returned mutable catalog storage")
+	}
+
+	settings = DefaultSettings()
+	settings.UI.Theme = "removed-theme"
+	if _, err := NormalizeSettings(settings); err == nil || !strings.Contains(err.Error(), "unknown UI theme") {
+		t.Fatalf("invalid theme error = %v", err)
+	}
+
+	loaded, migrated, err := loadSettingsFromBytes([]byte(
+		`{"version":1,"server":{"port":49717},"ui":{"locale":"en","theme":"removed-theme"}}`,
+	))
+	if err != nil {
+		t.Fatalf("load obsolete theme: %v", err)
+	}
+	if !migrated {
+		t.Fatal("obsolete saved theme did not report fallback")
+	}
+	if loaded.UI.Theme != ThemeSteelAzure {
+		t.Fatalf("obsolete saved theme fallback = %q, want %q", loaded.UI.Theme, ThemeSteelAzure)
 	}
 }
 
@@ -157,6 +218,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	settings, _ := store.Snapshot()
 	settings.Server.Port = 49720
 	settings.UI.Locale = LocaleJapanese
+	settings.UI.Theme = ThemeObsidianViolet
 	settings.Device.HSPDispatchOwner = DispatchOwnerIntiface
 	settings.Device.IntifaceServerAddress = "wss://intiface.example.test/socket"
 	settings.Device.APIApplicationIDSource = ApplicationIDSourceDeveloperOverride
@@ -185,6 +247,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if got.UI.Locale != LocaleJapanese {
 		t.Fatalf("UI locale = %q, want %q", got.UI.Locale, LocaleJapanese)
+	}
+	if got.UI.Theme != ThemeObsidianViolet {
+		t.Fatalf("UI theme = %q, want %q", got.UI.Theme, ThemeObsidianViolet)
 	}
 	if got.Device.HandyConnectionKey != "secret" {
 		t.Fatal("connection key did not persist")
@@ -395,6 +460,7 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 
 func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	current := DefaultSettings()
+	current.UI.Theme = ThemeMoonlight
 	current.LLM.MaxOutputTokens = 1024
 	current.LLM.ReasoningMode = LLMReasoningOff
 	current.Voice.ParakeetSource = ParakeetSourceApp
@@ -411,6 +477,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 
 	oldUpdate := SettingsUpdate{
 		Server: current.Server,
+		UI:     &UISettings{Locale: current.UI.Locale},
 		Device: DeviceUpdate{
 			HSPDispatchOwner:       current.Device.HSPDispatchOwner,
 			IntifaceServerAddress:  current.Device.IntifaceServerAddress,
@@ -455,6 +522,9 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	}
 	if next.Chat != current.Chat {
 		t.Fatalf("older update reset chat settings: %+v", next.Chat)
+	}
+	if next.UI.Theme != ThemeMoonlight {
+		t.Fatalf("older UI update reset theme to %q", next.UI.Theme)
 	}
 }
 
