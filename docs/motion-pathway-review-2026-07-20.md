@@ -361,10 +361,11 @@ catalog at 20% speed with whole-percent output over two cycles each:
 | 5 | 5.2% | 47 | 4,000 ms |
 
 The line between usable and unusable falls sharply between 10 and 20, so 20 is
-the minimum window width (`config.MinimumFocusWidthPercent`). Narrower requests
-are widened around their own center, the settings validator rejects them, and
-the slider will not offer them. This replaces the 2026-07-21 position that a
-5-10% window "can intentionally collapse a pattern to only a few physical
+the engine-owned minimum window width. Narrower requests
+are widened around their own center. The manual settings validator and slider
+that originally accompanied this rule were retired on 2026-07-28; target
+normalization remains authoritative. This replaces the 2026-07-21 position that
+a 5-10% window "can intentionally collapse a pattern to only a few physical
 steps": the sweep shows that is not subtle motion, it is a four-second stop.
 
 Every remaining run over 150 ms at full and `tip` width belongs to
@@ -386,7 +387,7 @@ Rounded stationary time falls 91% with fewer points on the wire. The cost is
 near the apex. The bound is now one full wire step, because a whole-percent
 owner cannot assert sub-step fidelity in the first place.
 
-### The user's own focus range
+### Manual focus range (retired 2026-07-28)
 
 `Settings > Limits > Focus` is a live quick control, separate from the stroke
 window on purpose. The stroke window is the physical envelope every source
@@ -397,6 +398,14 @@ the region the user chose. Requested zones stay in full-stroke coordinates on
 the target and are composed with the configured range when the plan builds its
 projection, so re-normalizing a running target - which happens on every
 retarget and settings refresh - cannot walk the window inward.
+
+The control was later removed. It was not part of the double-shrink fix above:
+the engine already measures a loop pattern's authored span and expands it into
+the requested semantic zone. As a persistent pattern-only setting beside
+global connection limits, it added a niche outer envelope while implying that
+all motion sources obeyed it; video deliberately did not. Retired persisted
+fields are ignored so an old non-default range cannot remain as an invisible
+constraint. Named area requests and their automatic 20-point minimum remain.
 
 ### Area requests in chat
 

@@ -176,8 +176,6 @@ export const api = {
     speed_max_percent: number;
     stroke_min_percent: number;
     stroke_max_percent: number;
-    focus_min_percent: number;
-    focus_max_percent: number;
     reverse_direction: boolean;
     style: MotionStyle | string;
   }>) => request("POST", "/api/motion/quick", patch),

@@ -62,7 +62,7 @@ func NewMotionPlan(
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
-	focus := newFocusProjection(target, content, settings)
+	focus := newFocusProjection(target, content)
 	periodMillis := periodForContent(content.duration, target.SpeedPercent, content.loop, patternKind(target))
 	if target.Media != nil {
 		periodMillis = content.duration
@@ -361,14 +361,13 @@ type focusProjection struct {
 func newFocusProjection(
 	target MotionTarget,
 	content resolvedContent,
-	settings config.MotionSettings,
 ) focusProjection {
 	projection := focusProjection{
 		sourceMin: 0, sourceSpan: 100,
 		targetMin: 0, targetSpan: 100,
 		anchor: target.SoftAnchor,
 	}
-	focus := effectiveAreaFocus(target, settings)
+	focus := effectiveAreaFocus(target)
 	if focus == nil {
 		return projection
 	}

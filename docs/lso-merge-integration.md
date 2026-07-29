@@ -52,9 +52,9 @@ between maintainers working different hours. This is that list. It is a
 disagree.
 
 **Recently landed, so it does not need rebuilding:** the chat
-voice/persona/anatomy/mood axes (#126, #127) and the motion focus range plus
-acceleration-budget reversal ramp (#128). Anything starting from "make the
-replies feel in character" or "motion pauses at the turn" should read
+voice/persona/anatomy/mood axes (#126, #127), automatic named-area pattern
+projection, and the acceleration-budget reversal ramp (#128). Anything starting
+from "make the replies feel in character" or "motion pauses at the turn" should read
 [chat-voice.md](chat-voice.md) and the
 [2026-07-24 motion review](motion-pathway-review-2026-07-20.md#follow-up-review---2026-07-24)
 first.

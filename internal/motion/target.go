@@ -1,11 +1,17 @@
 package motion
 
 import (
-	"math"
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
+
+// minimumFocusWidthPercent keeps a requested area focus wide enough to still
+// be motion. Measured across the whole built-in catalog at slow speed with
+// whole-percent device output, a 20-point window is stationary for 0.2% of
+// playback; 10 points reaches 1.0% with 643 ms stalls, and 5 points reaches a
+// four-second dead stop. Narrower than this, "move here" becomes "stop moving".
+const minimumFocusWidthPercent = 20
 
 const defaultSpeedPercent = 50
 
@@ -185,28 +191,13 @@ func resolveAreaFocus(target MotionTarget) *AreaFocus {
 	return normalizeAreaFocus(target.AreaFocus, 0, 100)
 }
 
-// effectiveAreaFocus places any requested zone inside the user's configured
-// focus range. The configured range is the working range: a zone request
-// subdivides it instead of escaping it, so nothing the model asks for can move
-// motion outside the region the user chose.
-func effectiveAreaFocus(target MotionTarget, settings config.MotionSettings) *AreaFocus {
+// effectiveAreaFocus returns the requested semantic area. Pattern projection
+// later expands the pattern's own authored span to fill this area automatically.
+func effectiveAreaFocus(target MotionTarget) *AreaFocus {
 	if target.Media != nil {
 		return nil
 	}
-	outerMin, outerMax, configured := settings.FocusRange()
-	if !configured {
-		return normalizeAreaFocus(target.AreaFocus, 0, 100)
-	}
-	focus := target.AreaFocus
-	if focus == nil {
-		focus = &AreaFocus{MinPercent: 0, MaxPercent: 100}
-	}
-	span := float64(outerMax - outerMin)
-	placed := AreaFocus{
-		MinPercent: outerMin + int(math.Round(span*float64(clamp(focus.MinPercent, 0, 100))/100)),
-		MaxPercent: outerMin + int(math.Round(span*float64(clamp(focus.MaxPercent, 0, 100))/100)),
-	}
-	return normalizeAreaFocus(&placed, outerMin, outerMax)
+	return normalizeAreaFocus(target.AreaFocus, 0, 100)
 }
 
 func normalizeAreaFocus(focus *AreaFocus, outerMin, outerMax int) *AreaFocus {
@@ -228,7 +219,7 @@ func normalizeAreaFocus(focus *AreaFocus, outerMin, outerMax int) *AreaFocus {
 	if normalized.MinPercent <= 0 && normalized.MaxPercent >= 100 {
 		return nil
 	}
-	width := min(config.MinimumFocusWidthPercent, outerMax-outerMin)
+	width := min(minimumFocusWidthPercent, outerMax-outerMin)
 	if normalized.MaxPercent-normalized.MinPercent < width {
 		center := (normalized.MinPercent + normalized.MaxPercent) / 2
 		normalized.MinPercent = clamp(center-width/2, outerMin, outerMax-width)

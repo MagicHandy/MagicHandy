@@ -107,42 +107,29 @@ func TestUnfocusedPatternKeepsAuthoredAmplitude(t *testing.T) {
 	}
 }
 
-// The configured range is the working range. A zone request subdivides it, so
-// no model request can move motion outside the region the user chose.
-func TestConfiguredFocusRangeContainsEveryZoneRequest(t *testing.T) {
-	settings := focusTestSettings()
-	settings.FocusMinPercent = 20
-	settings.FocusMaxPercent = 80
+// A requested area that is too narrow to produce reliable whole-percent motion
+// is widened automatically. This safety behavior does not depend on a manual
+// focus setting.
+func TestNarrowAreaFocusWidensToMinimumMotion(t *testing.T) {
 	definition, _ := BuiltinPatternDefinition(PatternStroke)
-
-	for _, zone := range []*AreaFocus{
-		nil,
-		{MinPercent: 66, MaxPercent: 100},
-		{MinPercent: 33, MaxPercent: 67},
-		{MinPercent: 0, MaxPercent: 34},
-	} {
-		plan := NewMotionPlan("zoned", MotionTarget{
-			PatternID: definition.ID, Pattern: &definition,
-			SpeedPercent: 100, AreaFocus: zone,
-		}, settings, 0, 0, time.Unix(0, 0))
-		minimum, maximum := planPositionBounds(plan)
-		if minimum < 19.5 || maximum > 80.5 {
-			t.Fatalf("zone %+v escaped the configured 20-80 range: %.2f..%.2f", zone, minimum, maximum)
-		}
-		if maximum-minimum < config.MinimumFocusWidthPercent-1 {
-			t.Fatalf("zone %+v collapsed to %.2f wide, want at least %d",
-				zone, maximum-minimum, config.MinimumFocusWidthPercent)
-		}
+	plan := NewMotionPlan("zoned", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition,
+		SpeedPercent: 100, AreaFocus: &AreaFocus{MinPercent: 48, MaxPercent: 53},
+	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
+	minimum, maximum := planPositionBounds(plan)
+	if math.Abs(minimum-40) > 0.5 || math.Abs(maximum-60) > 0.5 {
+		t.Fatalf("narrow focus span = %.2f..%.2f, want widened 40..60", minimum, maximum)
+	}
+	if maximum-minimum < minimumFocusWidthPercent-1 {
+		t.Fatalf("narrow focus remained %.2f wide, want at least %d",
+			maximum-minimum, minimumFocusWidthPercent)
 	}
 }
 
 // The engine re-normalizes a running target on every retarget and settings
-// refresh. A zone kept in full-stroke coordinates survives that; a zone
-// rewritten into the configured range would drift inward each time.
+// refresh. A semantic zone must survive that without drifting inward.
 func TestNormalizingATargetTwiceDoesNotDriftTheZone(t *testing.T) {
 	settings := focusTestSettings()
-	settings.FocusMinPercent = 20
-	settings.FocusMaxPercent = 80
 	target := MotionTarget{
 		PatternID: PatternStroke, SpeedPercent: 50,
 		AreaFocus: &AreaFocus{MinPercent: 66, MaxPercent: 100},
@@ -159,10 +146,8 @@ func TestNormalizingATargetTwiceDoesNotDriftTheZone(t *testing.T) {
 
 // A video must follow its authored positions. Contracting them toward a focus
 // window is the defect docs/motion-pathway-review recorded on 2026-07-22.
-func TestConfiguredFocusRangeNeverTouchesClockLockedMedia(t *testing.T) {
+func TestAreaFocusNeverTouchesClockLockedMedia(t *testing.T) {
 	settings := focusTestSettings()
-	settings.FocusMinPercent = 40
-	settings.FocusMaxPercent = 60
 	media := MediaTimelineDefinition{
 		ID: "clip", Name: "Clip", DurationMillis: 2000,
 		Points: []CurvePoint{

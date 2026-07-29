@@ -1094,41 +1094,36 @@ func TestLegacySettingsWithoutAnatomyLoadNeutral(t *testing.T) {
 	}
 }
 
-// Settings files written before the focus range existed decode with zeroes.
-// Zero-to-zero is not a valid window, so the defaults pass has to read it as
-// "no focus" rather than as a request to hold at position zero.
-func TestFocusRangeDefaultsAndValidation(t *testing.T) {
-	settings := DefaultSettings()
-	settings.Motion.FocusMinPercent = 0
-	settings.Motion.FocusMaxPercent = 0
-	normalized, err := NormalizeSettings(settings)
+// The retired manual pattern-focus fields may still exist in persisted settings.
+// They must be ignored rather than silently constraining motion with no control
+// left in the UI to reveal or reset them.
+func TestLegacyManualFocusRangeIsDiscarded(t *testing.T) {
+	encoded, err := json.Marshal(DefaultSettings())
 	if err != nil {
-		t.Fatalf("NormalizeSettings: %v", err)
+		t.Fatalf("marshal defaults: %v", err)
 	}
-	if normalized.Motion.FocusMinPercent != 0 || normalized.Motion.FocusMaxPercent != 100 {
-		t.Fatalf("legacy focus = %d-%d, want the full 0-100 range",
-			normalized.Motion.FocusMinPercent, normalized.Motion.FocusMaxPercent)
+	var document map[string]any
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatalf("decode defaults: %v", err)
 	}
-	if _, _, configured := normalized.Motion.FocusRange(); configured {
-		t.Fatal("a full range reported itself as a configured focus")
-	}
-
-	narrowed := normalized
-	narrowed.Motion.FocusMinPercent = 40
-	narrowed.Motion.FocusMaxPercent = 70
-	if _, err := NormalizeSettings(narrowed); err != nil {
-		t.Fatalf("usable focus range rejected: %v", err)
-	}
-	minimum, maximum, configured := narrowed.Motion.FocusRange()
-	if !configured || minimum != 40 || maximum != 70 {
-		t.Fatalf("focus range = %d-%d configured=%v, want 40-70 configured", minimum, maximum, configured)
+	motionSettings := document["motion"].(map[string]any)
+	motionSettings["focus_min_percent"] = 40
+	motionSettings["focus_max_percent"] = 60
+	encoded, err = json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal legacy settings: %v", err)
 	}
 
-	tooNarrow := normalized
-	tooNarrow.Motion.FocusMinPercent = 48
-	tooNarrow.Motion.FocusMaxPercent = 53
-	if _, err := NormalizeSettings(tooNarrow); err == nil {
-		t.Fatal("a focus window too narrow to move was accepted")
+	loaded, _, err := loadSettingsFromBytes(encoded)
+	if err != nil {
+		t.Fatalf("load legacy settings: %v", err)
+	}
+	motionJSON, err := json.Marshal(loaded.Motion)
+	if err != nil {
+		t.Fatalf("marshal loaded motion settings: %v", err)
+	}
+	if strings.Contains(string(motionJSON), "focus_") {
+		t.Fatalf("retired focus range survived loading: %s", motionJSON)
 	}
 }
 
