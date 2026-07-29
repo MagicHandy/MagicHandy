@@ -129,6 +129,12 @@ memory. Concretely:
 An LSO persona row then imports as *values across these axes* plus a preset
 name, which is a mapping job rather than an architecture merge.
 
+**Designed 2026-07-29:** [persona-page.md](persona-page.md) takes this option A
+shape literally — a routed Personas page whose tiles are named, portrait-bearing
+presets over the axes above, plus the reaction-style enum this section asks for.
+It carries the `personas` table, the guardrail table of what a persona may and
+may never set, and a separate dispositioned catalog for lore and longer context.
+
 ---
 
 ## Decision 4 — Motion content (LSO blocks vs Pattern Library + arrangement)

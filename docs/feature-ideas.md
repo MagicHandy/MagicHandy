@@ -37,7 +37,7 @@ row of their own.
 | **Mood display** (`mood-display` chip) — model-reported mood as a top-bar chip | **Shipped 2026-07-23 in a safer location.** A compact, uncolored Chat-header status reads the active session's strict model-reported mood from `/api/state`; it is never inferred sentiment and never mapped to motion style. |
 | **Live motion sequence log** (timecoded scrolling log of motion events in the chat UI; repeatedly refined in history 2026-04-22) | **Strong candidate.** MagicHandy has trace export but no user-facing live log. This is the concrete form of the "trace-visible what changed" requirement — a compact, session-clock-timecoded strip of model/mode motion changes. |
 | **Per-message model provenance** (hover on a reply's avatar shows model name/run details; history 2026-05-17) | **Shipped with backend-owned chat sessions (2026-07-20).** Assistant replies retain bounded, non-secret source/provider/model/prompt-set/timing/parser/motion provenance in SQLite and expose it on avatar hover or keyboard focus. Prompt text, memories, raw requests, and credentials are excluded. |
-| **AI display name, profile picture, splash personalization** (`ai_name`, `profile_picture_b64`, splash) | **Worth scoping (cosmetic tier).** Persona text is covered by prompt sets; the *identity cosmetics* are not. Cheap goodwill; images stay local. |
+| **AI display name, profile picture, splash personalization** (`ai_name`, `profile_picture_b64`, splash) | **Scoped 2026-07-29 in [persona-page.md](persona-page.md).** A routed Personas page makes the display name and portrait fields of a named preset over the existing personalization axes, rather than loose cosmetic settings. Images stay local, in a purgeable store beside thumbnails. |
 | **User anatomy selector** (`user_genitalia`, `_custom`) feeding prompt context (history 2026-05-15: model used wrong-anatomy language) | **Shipped 2026-07-23.** Settings exposes `penis`, `vagina`, and 120-character custom wording separately from the bounded persona description. Values are local, editable, resettable, quoted as prompt data, and used only by interactive non-utility reply voice. |
 | **Per-capability LLM permission gates** (`allow_llm_edge_in_chat`, `allow_llm_mode_actions_in_chat`, per-mode hands-free gates …) | **Covered by a better shape.** MagicHandy's planned control-style selector (paradigm 2) generalizes this pile of checkboxes into Manual/Assist/Director; keep voice-initiated mode changes behind their own gate (the one STGPT-RV lesson to preserve verbatim). |
 | **Per-mode session time bounds** (`auto/edging/milking_min/max_time`) | **Covered/superseded** by the arrangement contract's segment bounds and the session-goal idea (paradigm 4). |
@@ -205,6 +205,14 @@ independent of everything.
   next matrix refresh should absorb.
 - [llm-control-surface.md](llm-control-surface.md) gains historical demand
   evidence (§B) for paradigms 1, 4, and 5 — no edits required there.
+- [persona-page.md](persona-page.md) §7 is a sibling catalog with the same
+  disposition vocabulary, covering lore depth and longer conversational context:
+  a prompt-composition inspector, configurable history depth, keyword-triggered
+  lore, per-model context budgets, a visible session recap, and the two-pass
+  motion/prose split that would remove the accuracy tradeoff instead of managing
+  it. Those ideas live there rather than here because each one is only
+  meaningful against that document's account of *why* a longer prompt can cost
+  motion accuracy.
 - Nothing in this catalog is scheduled. The plan's priority question
   (voice-quality depth vs parity milestones) is unchanged and remains the
   maintainers' call.
