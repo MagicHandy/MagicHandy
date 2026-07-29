@@ -12,6 +12,7 @@ type localizedPromptCase struct {
 	profileMarker  string
 	anatomyMarker  string
 	recentMarker   string
+	loreMarker     string
 	languageMarker string
 	repairMarker   string
 }
@@ -25,6 +26,7 @@ func TestBuiltinLocalizedPromptsLocalizeHumanProseAndPreserveProtocol(t *testing
 			profileMarker:  "PERFIL DEL CHAT:",
 			anatomyMarker:  "Mi anatomía se describe como",
 			recentMarker:   "LÍNEAS RECIENTES DE LA ASISTENTE",
+			loreMarker:     "HISTORIA DE LA PERSONA",
 			languageMarker: "IDIOMA FINAL:",
 			repairMarker:   "debe permanecer en español",
 		},
@@ -35,6 +37,7 @@ func TestBuiltinLocalizedPromptsLocalizeHumanProseAndPreserveProtocol(t *testing
 			profileMarker:  "PERFIL DO CHAT:",
 			anatomyMarker:  "Minha anatomia é descrita como",
 			recentMarker:   "FALAS RECENTES DA ASSISTENTE",
+			loreMarker:     "HISTÓRIA DA PERSONA",
 			languageMarker: "IDIOMA FINAL:",
 			repairMarker:   "deve permanecer em português do Brasil",
 		},
@@ -45,6 +48,7 @@ func TestBuiltinLocalizedPromptsLocalizeHumanProseAndPreserveProtocol(t *testing
 			profileMarker:  "聊天配置：",
 			anatomyMarker:  "我的身体部位描述为",
 			recentMarker:   "助手最近的回复",
+			loreMarker:     "角色背景",
 			languageMarker: "最终语言：",
 			repairMarker:   "必须保持为简体中文",
 		},
@@ -55,6 +59,7 @@ func TestBuiltinLocalizedPromptsLocalizeHumanProseAndPreserveProtocol(t *testing
 			profileMarker:  "チャットプロフィール：",
 			anatomyMarker:  "私の身体は",
 			recentMarker:   "直近のアシスタント発言",
+			loreMarker:     "ペルソナの背景",
 			languageMarker: "最終言語：",
 			repairMarker:   "日本語のままにしてください",
 		},
@@ -77,7 +82,9 @@ func assertLocalizedPrompt(t *testing.T, test localizedPromptCase) {
 	capabilities.Voice = VoiceExplicit
 	capabilities.MoodTracking = true
 	context := ConversationContext{
+		PersonaName:            `NAME "SENTINEL"`,
 		PersonaDescription:     `PERSONA "SENTINEL"`,
+		PersonaLore:            []string{`LORE "SENTINEL"`},
 		UserAnatomy:            "custom",
 		CustomAnatomy:          `CUSTOM "TERM"`,
 		CurrentMood:            MoodCurious,
@@ -97,8 +104,11 @@ func assertLocalizedPrompt(t *testing.T, test localizedPromptCase) {
 		test.profileMarker,
 		test.anatomyMarker,
 		test.recentMarker,
+		test.loreMarker,
 		test.languageMarker,
+		`NAME \"SENTINEL\"`,
 		`PERSONA \"SENTINEL\"`,
+		`LORE \"SENTINEL\"`,
 		`CUSTOM \"TERM\"`,
 		`RECENT \"LINE\"`,
 		"MEMORY_SENTINEL",

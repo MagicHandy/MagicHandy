@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-29, opt-in appearance themes
+## Snapshot — 2026-07-29, bounded persona lore
 
 ### Goal 1: Maintainability
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,335,488 bytes plain and 15,923,200 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,695,424 bytes plain and 16,199,680 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,11 +110,11 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,419,446 raw / 724,190 gzip bytes. Lazy loading limits
-   the English startup path to 646,754 raw / 175,842 gzip bytes. The 21 opt-in
-   palettes add only CSS tokens and compact catalog metadata: +14,307 raw /
-   +4,121 gzip complete and +13,264 / +3,877 on startup versus the preceding
-   build. These remain within budget, but future locales, palettes, and bitmap
+   browser payload is 1,477,079 raw / 740,978 gzip bytes. Lazy loading limits
+   the English startup path to 682,550 raw / 183,902 gzip bytes. Bounded persona
+   lore, the editor, and backend-exact prompt inspector add +57,633 raw /
+   +16,788 gzip complete and +35,796 / +8,060 on startup versus the preceding
+   build. These remain within budget, but future locales, personas, and bitmap
    additions must keep startup and total payload growth explicit.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
    latency but keeps a second llama.cpp context resident. It passed isolated
@@ -124,6 +124,34 @@ Ranked by threat to the stated goals:
 ## History
 
 
+- **2026-07-29** - Completed the bounded persona-lore slice and corrected the
+  preceding persona foundation after review. Persona prompt sets now select the
+  actual interactive and Autopilot prompt, default focus applies only to an
+  unscoped start when area focus is enabled, and assistant provenance drives
+  portraits, speaker names, and mid-session persona dividers. Schema v17 stores
+  at most 8 enabled-or-disabled lore entries, 500 characters each and 2,000 in
+  aggregate, with Off, Relevant only, and Full prompt modes; relevant matching
+  uses normalized whole-word or phrase boundaries and unknown persisted modes
+  fail closed. Lore is JSON-quoted as data before the code-owned response and
+  motion contracts. A backend-exact diagnostics inspector reports prompt
+  sections, character counts, model, prompt set, persona, and included lore,
+  while an opt-in `liveeval` harness measures 0/500/1,000/2,000-character model
+  budgets without reaching the motion engine or a transport. The v16 migration
+  now preserves an incompatible legacy Rockfire `personas` table instead of
+  failing or overwriting it. Full `go test ./...`, vet, lint (zero issues), the
+  live-evaluation compile check, localization audit, all 312 frontend tests,
+  typecheck, production build, and plain/stripped `CGO_ENABLED=0` builds pass.
+  Local race execution remains unavailable because MinGW `gcc` is absent; CI
+  retains the mandatory Ubuntu race gate. The configured llama.cpp model was
+  not loaded, so model-specific lore baselines remain explicitly unmeasured.
+  Isolated fake-transport browser checks covered the persona grid/editor and
+  prompt inspector at 1280x720, plus 390x844 overflow metrics, with no console
+  errors or horizontal overflow. No hardware motion was issued. Against the
+  preceding build, the English startup payload is 682,550 raw / 183,902 gzip
+  bytes (+35,796 / +8,060); all HTML/CSS/JS and complete embedded output are
+  1,032,843 / 303,581 (+57,633 / +16,788) and 1,477,079 / 740,978
+  (+57,633 / +16,788). Plain/stripped binaries are 22,695,424 / 16,199,680
+  bytes (+359,936 / +276,480), both within the 30 MB budget.
 - **2026-07-29** - Added 21 opt-in appearance palettes from the surviving
   scratch mockups while preserving Steel Azure as the default. The backend
   owns the closed theme catalog, validates and persists selection in SQLite,

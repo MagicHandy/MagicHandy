@@ -4,8 +4,8 @@ import type { Persona } from "../api/types";
 import { PlusIcon } from "../shell/icons";
 import { VOICE_CHIP_LABELS, personaOptionLabel } from "./persona-labels";
 
-// monogram takes the first grapheme rather than the first char, so an emoji or a
-// combining-mark name does not render as half a code point.
+// monogram takes the first Unicode code point rather than the first UTF-16 code
+// unit, so an astral symbol is not rendered as a broken surrogate.
 export function monogram(name: string): string {
   const first = Array.from(name.trim())[0] ?? "?";
   return first.toUpperCase();
@@ -43,8 +43,15 @@ export function PersonaTile({
         <span className="badge">{personaOptionLabel(VOICE_CHIP_LABELS, item.chat_voice)}</span>
       </span>
       <span className="persona-card-copy">
+        {item.lore_count > 0 && (
+          <span className="badge persona-lore-badge">
+            {item.lore_count === 1
+              ? t("1 lore entry")
+              : t("{count} lore entries", { count: item.lore_count })}
+          </span>
+        )}
         <strong>{item.name}</strong>
-        {item.description && <span>{item.description}</span>}
+        {item.description && <span className="persona-card-description">{item.description}</span>}
       </span>
     </button>
   );

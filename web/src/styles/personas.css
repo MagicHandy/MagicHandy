@@ -92,7 +92,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.persona-card-copy span {
+.persona-card-description {
   display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
@@ -123,9 +123,8 @@
   font-weight: 700;
 }
 .persona-lore-badge {
-  position: absolute;
-  bottom: 9px;
-  left: 9px;
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
 }
 
 /* The create tile: same footprint, dashed, first in DOM order so keyboard users
@@ -239,6 +238,37 @@
 }
 .persona-drawer-actions .btn-danger-outline {
   margin-left: auto;
+}
+
+.persona-lore-heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.persona-lore-heading .group-title {
+  margin: 0;
+}
+.persona-lore-list {
+  display: flex;
+  flex-direction: column;
+}
+.persona-lore-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.persona-lore-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.persona-lore-enabled {
+  min-height: 28px;
+}
+.persona-lore-actions {
+  justify-content: flex-start;
 }
 
 /* --- Chat header switcher ----------------------------------------------- */

@@ -29,7 +29,9 @@ const (
 // stops because a model call failed.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
 	settings, _ := s.store.Snapshot()
-	prompt, ok, err := s.personalization.prompts.Resolve(settings.LLM.PromptSet)
+	activePersona := s.activeSessionPersona()
+	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, activePersona)
+	prompt, ok, err := s.personalization.prompts.Resolve(promptID)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve prompt set: %w", err)
 	}
@@ -43,7 +45,7 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	// Autopilot speaks into the active conversation, so it uses that
 	// conversation's persona. Anything else would have the assistant change
 	// character the moment it started speaking on its own.
-	capabilities := chatCapabilities(settings.LLM, s.activeSessionPersona())
+	capabilities := chatCapabilities(settings.LLM, activePersona)
 	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		return modes.Decision{}, fmt.Errorf("resolve pattern catalog: %w", err)
@@ -197,11 +199,20 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	activePersona := s.activeSessionPersona()
+	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, activePersona)
+	if _, found, resolveErr := s.personalization.prompts.Resolve(promptID); resolveErr != nil || !found {
+		promptID = chat.DefaultPromptSetID
+	}
 	diagnostics := &chat.MessageDiagnostics{
 		Source:    "autopilot",
 		Provider:  settings.LLM.Provider,
 		Model:     settings.LLM.Model,
-		PromptSet: settings.LLM.PromptSet,
+		PromptSet: promptID,
+	}
+	if activePersona != nil {
+		diagnostics.PersonaID = activePersona.ID
+		diagnostics.PersonaName = activePersona.Name
 	}
 	if promptContext, err := s.chatLog.PromptContext(sessionID); err != nil {
 		s.logger.Warn("read Autopilot chat mood", "error", err)

@@ -475,6 +475,25 @@ func TestMigrationReconcilesRockfireV7WithoutDeletingLibraryData(t *testing.T) {
 			actions_json TEXT NOT NULL
 		)`,
 		`INSERT INTO motion_blocks(id, actions_json) VALUES('b1', '[{"at":0,"pos":10}]')`,
+		`CREATE TABLE personas (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL,
+			system_prompt TEXT NOT NULL,
+			tone_json TEXT NOT NULL,
+			mood_json TEXT NOT NULL,
+			boundaries_json TEXT NOT NULL,
+			motion_bias_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`INSERT INTO personas(
+			id, name, description, system_prompt, tone_json, mood_json,
+			boundaries_json, motion_bias_json, created_at, updated_at
+		) VALUES(
+			'rockfire-persona', 'Legacy Rowan', 'Preserve this row', 'Legacy prompt',
+			'{}', '{}', '{}', '{}', '2026-07-10T00:00:00Z', '2026-07-10T00:00:00Z'
+		)`,
 		`PRAGMA user_version = 7`,
 	}
 	for _, statement := range statements {
@@ -519,9 +538,7 @@ func TestMigrationReconcilesRockfireV7WithoutDeletingLibraryData(t *testing.T) {
 	if actions != `[{"at":0,"pos":10}]` {
 		t.Fatalf("motion block actions = %q", actions)
 	}
-	for _, table := range []string{"messages", "client_cursors", "patterns", "programs", "pattern_feedback", "llm_models"} {
-		assertTableExists(t, db.SQL(), table)
-	}
+	assertRockfirePersonaPreserved(t, db.SQL())
 }
 
 func TestMigrationReconcilesKnownRockfireShapesAtCurrentVersion(t *testing.T) {
@@ -803,5 +820,44 @@ func assertTableExists(t *testing.T, db *sql.DB, table string) {
 	}
 	if count != 1 {
 		t.Fatalf("table %s count = %d, want 1", table, count)
+	}
+}
+
+func columnExistsForTest(db *sql.DB, table, column string) (bool, error) {
+	var count int
+	err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`,
+		table,
+		column,
+	).Scan(&count)
+	return count > 0, err
+}
+
+func assertRockfirePersonaPreserved(t *testing.T, db *sql.DB) {
+	t.Helper()
+	var legacyPersonaName string
+	if err := db.QueryRow(
+		`SELECT name FROM personas_rockfire_legacy WHERE id = 'rockfire-persona'`,
+	).Scan(&legacyPersonaName); err != nil {
+		t.Fatalf("Rockfire persona was not preserved: %v", err)
+	}
+	if legacyPersonaName != "Legacy Rowan" {
+		t.Fatalf("legacy persona name = %q", legacyPersonaName)
+	}
+	var canonicalPersonaCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM personas`).Scan(&canonicalPersonaCount); err != nil {
+		t.Fatalf("read canonical personas table: %v", err)
+	}
+	if canonicalPersonaCount != 0 {
+		t.Fatalf("canonical personas contains %d guessed legacy rows", canonicalPersonaCount)
+	}
+	for _, table := range []string{
+		"messages", "client_cursors", "patterns", "programs", "pattern_feedback",
+		"llm_models", "personas", "personas_rockfire_legacy", "persona_lore",
+	} {
+		assertTableExists(t, db, table)
+	}
+	if exists, err := columnExistsForTest(db, "personas", "lore_mode"); err != nil || !exists {
+		t.Fatalf("canonical lore_mode column exists = %v, err = %v", exists, err)
 	}
 }

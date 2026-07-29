@@ -42,6 +42,7 @@ type interactiveChatPromptContext struct {
 	History             []llm.Message
 	ConversationContext *chat.ConversationContext
 	CurrentMood         chat.Mood
+	Lore                persona.LoreSelection
 	// Persona is the active session's persona, or nil for the global axis values.
 	// It is carried so the status event and per-message provenance can report who
 	// the reply came from without resolving it a second time.
@@ -87,14 +88,15 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	defer finishChat()
 	started := time.Now()
 
-	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(settings.LLM.PromptSet)
-	if err != nil {
-		s.writePersonalizationStorageError(w, storageDomain, err)
-		return
-	}
-	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM)
+	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM, body.Message)
 	if err != nil {
 		s.writeChatStorageError(w, err)
+		return
+	}
+	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
+	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(promptID)
+	if err != nil {
+		s.writePersonalizationStorageError(w, storageDomain, err)
 		return
 	}
 	capabilities := promptContext.Capabilities
@@ -146,6 +148,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}, func(event chat.StreamEvent) error {
 		return emitChatStreamEvent(emit, event)
 	})
+	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
 	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, err, sessionID,
 		interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona),
 		promptContext.CurrentMood, started)
@@ -201,7 +204,7 @@ func (s *Server) resolveInteractiveChatPersonalization(promptID string) (chat.Pr
 	return prompt, memories, "", nil
 }
 
-func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings config.LLMSettings) (interactiveChatPromptContext, error) {
+func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings config.LLMSettings, currentMessage ...string) (interactiveChatPromptContext, error) {
 	loggedHistory, err := s.chatLog.RecentSession(sessionID, interactiveChatHistoryLimit)
 	if err != nil {
 		return interactiveChatPromptContext{}, err
@@ -234,16 +237,47 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 			description = active.Description
 		}
 		personaName = active.Name
+		recentText := make([]string, 0, len(loggedHistory)+1)
+		for _, message := range loggedHistory {
+			recentText = append(recentText, message.Content)
+		}
+		if len(currentMessage) > 0 && strings.TrimSpace(currentMessage[0]) != "" {
+			recentText = append(recentText, currentMessage[0])
+		}
+		result.Lore, err = s.personas.SelectLore(context.Background(), active.ID, recentText)
+		if err != nil {
+			return interactiveChatPromptContext{}, fmt.Errorf("resolve persona lore: %w", err)
+		}
 	}
 	result.ConversationContext = &chat.ConversationContext{
 		PersonaDescription:     description,
 		PersonaName:            personaName,
+		PersonaLore:            result.Lore.Texts,
 		UserAnatomy:            settings.UserAnatomy,
 		CustomAnatomy:          settings.CustomAnatomy,
 		CurrentMood:            persisted.CurrentMood,
 		RecentAssistantReplies: persisted.RecentAssistantReplies,
 	}
 	return result, nil
+}
+
+func effectivePersonaPromptSet(globalPromptID string, active *persona.Persona) string {
+	if active != nil && strings.TrimSpace(active.PromptSetID) != "" {
+		return active.PromptSetID
+	}
+	return globalPromptID
+}
+
+func applyPersonaStartingArea(result *chat.Result, capabilities chat.Capabilities, active *persona.Persona) {
+	if result == nil || result.Response.Motion == nil || active == nil || !capabilities.AreaFocus {
+		return
+	}
+	command := result.Response.Motion
+	if command.Action != chat.MotionActionStart || command.Area != "" ||
+		active.DefaultFocusArea == "" || active.DefaultFocusArea == chat.AreaZoneFull {
+		return
+	}
+	command.Area = active.DefaultFocusArea
 }
 
 // sessionPersona resolves the persona bound to one conversation. Every failure
