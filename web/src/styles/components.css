@@ -18,8 +18,32 @@
   padding: 14px;
 }
 .group + .group,
-.group + .voice-request-queue {
+.group + .voice-request-queue,
+.group + .media-tools-settings {
   margin-top: 12px;
+}
+
+/* ---- Settings vertical rhythm ----
+   One gap between stacked controls, owned by the container rather than by each
+   control type. Before this, .field and .hint-block carried their own bottom
+   margin and .toggle-line carried none, so a toggle followed by a field — or
+   by another toggle — sat flush against it with no gap at all. Declaring the
+   rhythm once on the container means a new control type cannot arrive without
+   spacing, and cannot double it either. */
+.group.group > * + *,
+.media-settings.media-settings > * + *,
+.media-tools-settings.media-tools-settings > * + * {
+  margin-top: 12px;
+}
+.group.group > *,
+.media-settings.media-settings > *,
+.media-tools-settings.media-tools-settings > * {
+  margin-bottom: 0;
+}
+/* A heading labels what follows it, so it sits closer to its content than
+   content items sit to each other. */
+.group.group > .group-title + * {
+  margin-top: 10px;
 }
 .group-title {
   margin: 0 0 10px;

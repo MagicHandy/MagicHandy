@@ -76,6 +76,16 @@ func (c *Catalog) adoptConvertedFile(ctx context.Context, source Video, info Str
 				size_bytes = excluded.size_bytes,
 				modified_at = excluded.modified_at,
 				funscript_relative_path = excluded.funscript_relative_path,
+				-- A row can already exist here: a scan may have indexed the
+				-- output before this adoption runs, or a previous conversion
+				-- may be being replaced. Either way the file on disk is the one
+				-- just produced, so what is known about it has to be rewritten
+				-- rather than left describing the file it replaced.
+				duration_ms = excluded.duration_ms,
+				compatibility = excluded.compatibility,
+				video_codec = excluded.video_codec,
+				audio_codec = excluded.audio_codec,
+				thumbnail_generated_at = NULL,
 				missing = 0,
 				superseded = 0,
 				scanned_at = excluded.scanned_at
@@ -85,7 +95,7 @@ func (c *Catalog) adoptConvertedFile(ctx context.Context, source Video, info Str
 			nullableString(source.FunscriptRelativePath), now, source.ScriptOffsetMillis,
 			// The output is not asserted playable: it has not been played yet,
 			// and unknown is the honest state until the browser says otherwise.
-			string(CompatibilityUnknown), info.VideoCodec, info.AudioCodec,
+			string(CompatibilityUnknown), nullableText(info.VideoCodec), nullableText(info.AudioCodec),
 		); err != nil {
 			return err
 		}
@@ -93,6 +103,15 @@ func (c *Catalog) adoptConvertedFile(ctx context.Context, source Video, info Str
 			`UPDATE media_videos SET superseded = 1 WHERE id = ?`, source.ID)
 		return err
 	})
+}
+
+// nullableText stores an unknown codec as NULL rather than an empty string, so
+// a reader cannot mistake "not probed" for "probed and found nothing".
+func nullableText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func nullableInt64(value *int64) any {

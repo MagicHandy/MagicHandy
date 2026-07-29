@@ -82,8 +82,13 @@ describe("localization", () => {
     app.locale = "es";
     const view = render(<I18nProvider><Probe /></I18nProvider>);
     expect(await screen.findByText("Guardar ajustes")).toBeInTheDocument();
-    expect(getActiveLocale()).toBe("es");
-    expect(document.documentElement.lang).toBe("es");
+    // getActiveLocale reads a module global that I18nProvider assigns during
+    // render. React may discard or reorder a render, so the global can trail
+    // the committed DOM by a tick — asserting it synchronously right after the
+    // text appears is a race, and it fails on slower CI runners. See the note
+    // on render-time assignment in the provider.
+    await waitFor(() => expect(getActiveLocale()).toBe("es"));
+    await waitFor(() => expect(document.documentElement.lang).toBe("es"));
     fireEvent.change(screen.getByLabelText("draft"), { target: { value: "keep me" } });
 
     app.locale = "ja";

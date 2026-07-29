@@ -22,13 +22,18 @@
   min-height: 0;
 }
 
+/* The rule matters: without it the product identity reads as the first item in
+   the link list rather than as the header above it. It lives on the brand
+   rather than on a separate divider element, so the separator cannot drift
+   away from the thing it separates. */
 .nav-brand {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-height: 48px;
-  padding: 4px 10px 10px;
+  padding: 4px 2px 12px;
+  border-bottom: 1px solid var(--line);
   color: var(--text);
   user-select: none;
 }

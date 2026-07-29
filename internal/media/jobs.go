@@ -325,7 +325,21 @@ func (c *Catalog) convertVideo(
 	if err != nil {
 		return err
 	}
-	return c.adoptConvertedFile(ctx, video, info)
+	// Probe the output rather than reusing the source's stream info. A
+	// re-encode changes the codecs by definition, and carrying the source's
+	// across would leave the new row claiming the very codec it was converted
+	// away from — which the UI would then name as the reason it will not play.
+	converted := info
+	if probed, probeErr := tools.Inspect(ctx, targetPath); probeErr == nil {
+		converted = probed
+	} else {
+		// Unknown beats wrong: an unprobeable output has no codecs to report.
+		converted.VideoCodec = ""
+		converted.AudioCodec = ""
+		c.logger.Warn("converted file could not be probed",
+			"video_id", video.ID, "error", probeErr)
+	}
+	return c.adoptConvertedFile(ctx, video, converted)
 }
 
 func checkFreeSpace(targetPath string, sourceBytes int64) error {

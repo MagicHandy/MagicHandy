@@ -410,3 +410,68 @@ func defaultMediaSettings(t *testing.T) config.MediaSettings {
 	}
 	return settings.Media
 }
+
+// TestConvertedRowDoesNotInheritSourceCodecs pins a real defect: the converted
+// row used to be written with the *source* file's stream info. After a
+// re-encode that is the codec the file was converted away from, and the UI
+// names the stored codec when it explains why something will not play — so the
+// row would blame H.264 output for being the MPEG-4 it replaced.
+func TestConvertedRowDoesNotInheritSourceCodecs(t *testing.T) {
+	catalog := openTestCatalog(t)
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Clip.mkv"), "video")
+	writeTestFile(t, filepath.Join(root, "Clip_MHConverted.mp4"), "converted video")
+	runTestScan(t, catalog, root)
+
+	var source Video
+	for _, video := range listTestVideos(t, catalog) {
+		if video.DisplayName == "Clip" {
+			source = video
+		}
+	}
+	if source.ID == "" {
+		t.Fatal("source fixture was not cataloged")
+	}
+
+	// What the encoder actually produced, not what went into it.
+	if err := catalog.adoptConvertedFile(t.Context(), source, StreamInfo{
+		VideoCodec: "h264", AudioCodec: "aac", HasVideo: true,
+	}); err != nil {
+		t.Fatalf("adoptConvertedFile: %v", err)
+	}
+	for _, video := range listTestVideos(t, catalog) {
+		if video.DisplayName != "Clip_MHConverted" {
+			continue
+		}
+		if video.VideoCodec == nil || *video.VideoCodec != "h264" {
+			t.Fatalf("converted row video codec = %v, want h264", video.VideoCodec)
+		}
+		return
+	}
+	t.Fatal("converted row was not cataloged")
+}
+
+// TestUnprobeableConversionReportsNoCodec keeps "not probed" distinguishable
+// from "probed and found nothing".
+func TestUnprobeableConversionReportsNoCodec(t *testing.T) {
+	catalog := openTestCatalog(t)
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Clip.mkv"), "video")
+	writeTestFile(t, filepath.Join(root, "Clip_MHConverted.mp4"), "converted video")
+	runTestScan(t, catalog, root)
+
+	var source Video
+	for _, video := range listTestVideos(t, catalog) {
+		if video.DisplayName == "Clip" {
+			source = video
+		}
+	}
+	if err := catalog.adoptConvertedFile(t.Context(), source, StreamInfo{}); err != nil {
+		t.Fatalf("adoptConvertedFile: %v", err)
+	}
+	for _, video := range listTestVideos(t, catalog) {
+		if video.DisplayName == "Clip_MHConverted" && video.VideoCodec != nil {
+			t.Fatalf("unprobed conversion reported a codec: %q", *video.VideoCodec)
+		}
+	}
+}
