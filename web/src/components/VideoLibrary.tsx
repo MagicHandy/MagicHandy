@@ -11,6 +11,10 @@ interface Props {
   stopSequence?: number;
 }
 
+// Mirrors media.ConvertedSuffix. Fixed on both sides: changing it would orphan
+// every file already carrying it.
+const CONVERTED_SUFFIX = "_MHConverted";
+
 export function VideoLibrary({ locked, stopSequence }: Props) {
   const [videos, setVideos] = useState<MediaVideo[]>([]);
   const [selectedID, setSelectedID] = useState("");
@@ -24,6 +28,10 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   const [job, setJob] = useState<MediaJobState | null>(null);
   const [tools, setTools] = useState<MediaToolStatus | null>(null);
   const [conversionError, setConversionError] = useState("");
+  // The display name of the video being converted, so the open page can follow
+  // the conversion to its result. Named rather than identified because the
+  // output's identifier is derived server-side from a path the client never sees.
+  const [convertingName, setConvertingName] = useState("");
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
 
@@ -140,6 +148,19 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
     return filtered;
   }, [query, sort, videos]);
   const selected = videos.find((video) => video.id === selectedID);
+
+  // Converting the video you are watching hides the original and adds the
+  // repaired copy under a new identifier, so the open selection would resolve
+  // to nothing and the page would report the file unavailable — immediately
+  // after successfully repairing it. Follow the conversion to its result.
+  useEffect(() => {
+    if (!convertingName || selected || loading || videos.length === 0) return;
+    const replacement = videos.find((video) => video.display_name === `${convertingName}${CONVERTED_SUFFIX}`);
+    if (replacement) {
+      setSelectedID(replacement.id);
+      setConvertingName("");
+    }
+  }, [convertingName, loading, selected, videos]);
   const pairedCount = videos.filter((video) => video.has_funscript).length;
   const brokenCount = videos.filter(needsConversion).length;
   const conversionBusy = job?.running === true && job.kind === "conversion";
@@ -149,6 +170,8 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   // is broken, so this cannot re-encode a working file.
   async function startConversion(ids: string[]) {
     setConversionError("");
+    // Only follow along when the open video is the one being repaired.
+    setConvertingName(ids.length === 1 && ids[0] === selectedID ? (selected?.display_name ?? "") : "");
     try {
       const response = await api.convertMedia(ids);
       if (mounted.current) setJob(response.job);

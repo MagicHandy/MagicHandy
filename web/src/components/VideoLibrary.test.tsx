@@ -191,4 +191,36 @@ vi.mock("../state/app-state", () => ({
     result.unmount();
     expect(screen.queryByLabelText("Session")).not.toBeInTheDocument();
   });
+
+  // Converting the video you are watching replaces it with a differently named
+  // row, so without follow-through the page reports "Video unavailable" the
+  // instant the repair succeeds — the worst possible moment to say that.
+  it("follows a conversion of the open video to the repaired file", async () => {
+    const broken = { ...video("broken", "Clip", "2026-07-19T12:00:00Z"), compatibility: "unsupported_codec" as const, container_type: "video/mp4" };
+    const repaired = { ...video("repaired", "Clip_MHConverted", "2026-07-19T12:05:00Z"), container_type: "video/mp4" };
+    mediaVideos.mockResolvedValue({ videos: [broken] });
+    convertMedia.mockResolvedValue({ job: { ...idleJob, running: true, kind: "conversion" as const, cancellable: true, total: 1 } });
+    mediaJob.mockResolvedValue({ job: { ...idleJob, succeeded: 1, completed_at: "2026-07-29T00:00:00Z" } });
+
+    // The repair offer only appears once the browser has actually refused the
+    // file, so the failure is raised the way a real one arrives: an error event
+    // carrying MEDIA_ERR_SRC_NOT_SUPPORTED, with the bytes still reachable.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: null }));
+    render(<VideoLibrary locked={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Play Clip/ }));
+    expect(await screen.findByRole("heading", { name: "Clip" })).toBeInTheDocument();
+
+    const player = screen.getByLabelText("Clip") as HTMLVideoElement;
+    Object.defineProperty(player, "error", { configurable: true, value: { code: 4 } });
+    fireEvent.error(player);
+
+    // The conversion hides the original and publishes the repaired copy.
+    mediaVideos.mockResolvedValue({ videos: [repaired] });
+    fireEvent.click(await screen.findByRole("button", { name: "Convert this video" }));
+
+    expect(await screen.findByRole("heading", { name: "Clip_MHConverted" })).toBeInTheDocument();
+    expect(screen.queryByText("Video unavailable")).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
 });
