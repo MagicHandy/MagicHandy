@@ -202,6 +202,25 @@
   font-size: 0.76rem;
 }
 
+/* --- Import from URL ----------------------------------------------------- */
+
+.persona-import-url {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 18px;
+}
+
+.persona-import-url .persona-import-url-field {
+  min-width: 0;
+}
+
+.persona-import-url .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 /* --- Editor window ------------------------------------------------------- */
 
 .persona-editor-overlay {

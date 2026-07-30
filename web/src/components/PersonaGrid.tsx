@@ -138,7 +138,7 @@ export function PersonaGrid({
             ref={importInput}
             type="file"
             className="visually-hidden"
-            accept=".mhpersona,application/vnd.magichandy.persona+zip,application/zip"
+            accept=".mhpersona,.png,.json,application/vnd.magichandy.persona+zip,application/zip,image/png,application/json"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) onImport(file);

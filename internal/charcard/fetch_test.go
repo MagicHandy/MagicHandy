@@ -16,7 +16,7 @@ func fetchFrom(t *testing.T, server *httptest.Server, path string) (FetchResult,
 
 func TestFetchDirectPNGCard(t *testing.T) {
 	card := buildCardPNG(t, "chara", v2CardJSON(t))
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(card)
 	}))
@@ -36,7 +36,7 @@ func TestFetchDirectPNGCard(t *testing.T) {
 
 func TestFetchDirectJSONCard(t *testing.T) {
 	payload := v2CardJSON(t)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(payload)
 	}))
@@ -69,7 +69,7 @@ func TestFetchHTMLWithEmbeddedCardJSON(t *testing.T) {
 	page := `<html><head><title>x</title></head><body>
 		<script type="application/json">{"page":"state","nested":` + string(embedded) + `}</script>
 	</body></html>`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(page))
 	}))
@@ -87,11 +87,11 @@ func TestFetchHTMLWithEmbeddedCardJSON(t *testing.T) {
 func TestFetchHTMLFollowsCardFileLink(t *testing.T) {
 	card := buildCardPNG(t, "chara", v2CardJSON(t))
 	mux := http.NewServeMux()
-	mux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/page", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`<html><body><a href="/downloads/card.png">Download card</a></body></html>`))
 	})
-	mux.HandleFunc("/downloads/card.png", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/downloads/card.png", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(card)
 	})
@@ -108,7 +108,7 @@ func TestFetchHTMLFollowsCardFileLink(t *testing.T) {
 }
 
 func TestFetchHTMLWithoutCardDataFails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`<html><body><p>Log in to view this character.</p></body></html>`))
 	}))
@@ -130,7 +130,7 @@ func TestFetchRejectsNonHTTPSchemes(t *testing.T) {
 }
 
 func TestFetchRejectsOversizedBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		chunk := make([]byte, 1<<20)
 		for range 20 {

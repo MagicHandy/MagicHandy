@@ -91,6 +91,7 @@ func (s *Server) personasPayload(ctx context.Context) (map[string]any, error) {
 			"lore_modes":        persona.LoreModes(),
 			"max_name":          persona.MaxNameChars,
 			"max_description":   persona.MaxDescriptionChars,
+			"max_greeting":      persona.MaxGreetingChars,
 			"max_portrait_edge": persona.MaxPortraitEdge,
 			"max_lore_entries":  persona.MaxLoreEntries,
 			"max_lore_text":     persona.MaxLoreTextChars,

@@ -245,6 +245,8 @@ export interface Persona {
   prompt_set_id: string;
   default_focus_area: string;
   lore_mode: string;
+  // The opening line an imported character card starts a new chat with.
+  greeting: string;
   lore_count: number;
   has_portrait: boolean;
   // Doubles as the portrait cache-buster: replacing a picture in place moves
@@ -263,6 +265,7 @@ export interface PersonaDraft {
   prompt_set_id?: string;
   default_focus_area?: string;
   lore_mode?: string;
+  greeting?: string;
 }
 
 // DefaultPersona is the global Settings-backed fallback presented as a
@@ -311,6 +314,9 @@ export interface PersonasPayload {
   active_session_id: string;
   prompt_sets: PromptSet[];
   persona?: Persona;
+  // Present after a character card import when something did not fit the
+  // persona bounds and was shortened.
+  import_warnings?: string[];
   options: {
     chat_voices: string[];
     reaction_styles: string[];
@@ -318,6 +324,7 @@ export interface PersonasPayload {
     lore_modes: string[];
     max_name: number;
     max_description: number;
+    max_greeting: number;
     max_portrait_edge: number;
     max_lore_entries: number;
     max_lore_text: number;

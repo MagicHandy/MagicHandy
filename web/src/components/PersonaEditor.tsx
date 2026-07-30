@@ -148,6 +148,7 @@ export function PersonaEditor({
 }: EditorProps) {
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description);
+  const [greeting, setGreeting] = useState(item.greeting);
   const [busy, setBusy] = useState(false);
   const [loreExportBlocked, setLoreExportBlocked] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -159,8 +160,9 @@ export function PersonaEditor({
   useEffect(() => {
     setName(item.name);
     setDescription(item.description);
+    setGreeting(item.greeting);
     setLoreExportBlocked(false);
-  }, [item.id, item.name, item.description]);
+  }, [item.id, item.name, item.description, item.greeting]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -199,7 +201,9 @@ export function PersonaEditor({
   // that needs a button is the idiom mismatch docs/ui-design.md warns about.
   const patch = (draft: PersonaDraft) => run(() => api.updatePersona(item.id, draft));
 
-  const dirty = name.trim() !== item.name || description.trim() !== item.description;
+  const dirty = name.trim() !== item.name
+    || description.trim() !== item.description
+    || greeting.trim() !== item.greeting;
   const disabled = locked || busy;
   const portrait = api.personaPortraitURL(item);
 
@@ -349,6 +353,25 @@ export function PersonaEditor({
           </section>
 
           <section className="group">
+            <h3 className="group-title">{t("Greeting")}</h3>
+            <label className="field">
+              <span className="label">
+                {t("Opening message")}
+                <span className="hint-inline">{codePointLength(greeting)} / {options.max_greeting}</span>
+              </span>
+              <textarea
+                rows={3}
+                value={greeting}
+                disabled={disabled}
+                onChange={(event) => setGreeting(limitCodePoints(event.target.value, options.max_greeting))}
+              />
+            </label>
+            <p className="hint">
+              {t("Starts an empty chat when this persona is chosen. Leave it blank to open chats yourself.")}
+            </p>
+          </section>
+
+          <section className="group">
             <h3 className="group-title">{t("Voice and style")}</h3>
             <div className="persona-editor-fields">
               <label className="field">
@@ -430,7 +453,7 @@ export function PersonaEditor({
             type="button"
             className="btn btn-primary"
             disabled={disabled || !dirty || name.trim() === ""}
-            onClick={() => void patch({ name: name.trim(), description: description.trim() })}
+            onClick={() => void patch({ name: name.trim(), description: description.trim(), greeting: greeting.trim() })}
           >
             {t("Save")}
           </button>

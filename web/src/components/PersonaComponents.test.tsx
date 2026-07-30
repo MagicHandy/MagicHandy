@@ -41,6 +41,7 @@ function persona(overrides: Partial<Persona> = {}): Persona {
     prompt_set_id: "",
     default_focus_area: "full",
     lore_mode: "off",
+    greeting: "",
     lore_count: 0,
     has_portrait: false,
     created_at: "2026-07-29T10:00:00Z",
@@ -73,6 +74,7 @@ function payload(overrides: Partial<PersonasPayload> = {}): PersonasPayload {
       lore_modes: ["off", "relevant", "full"],
       max_name: 60,
       max_description: 500,
+      max_greeting: 2000,
       max_portrait_edge: 1024,
       max_lore_entries: 8,
       max_lore_text: 500,
@@ -298,6 +300,7 @@ describe("PersonaEditor", () => {
     await waitFor(() => expect(updatePersona).toHaveBeenLastCalledWith("persona-0123456789ab", {
       name: "Rowan Vale",
       description: "Steady, low-voiced.",
+      greeting: "",
     }));
   });
 
@@ -319,7 +322,7 @@ describe("PersonaEditor", () => {
 
     await waitFor(() => expect(updatePersona).toHaveBeenLastCalledWith(
       "persona-0123456789ab",
-      { name: accepted, description: "Steady, low-voiced." },
+      { name: accepted, description: "Steady, low-voiced.", greeting: "" },
     ));
   });
 

@@ -217,7 +217,7 @@ func scaleWithin(source image.Image, maxEdge int) image.Image {
 	if width <= maxEdge && height <= maxEdge {
 		return source
 	}
-	targetWidth, targetHeight := width, height
+	var targetWidth, targetHeight int
 	if width >= height {
 		targetWidth = maxEdge
 		targetHeight = height * maxEdge / width
@@ -256,12 +256,21 @@ func scaleWithin(source image.Image, maxEdge int) image.Image {
 				}
 			}
 			target.SetRGBA(x, y, color.RGBA{
-				R: uint8(r / count >> 8),
-				G: uint8(g / count >> 8),
-				B: uint8(b / count >> 8),
+				R: channelByte(r / count),
+				G: channelByte(g / count),
+				B: channelByte(b / count),
 				A: 0xFF,
 			})
 		}
 	}
 	return target
+}
+
+// channelByte folds one averaged 16-bit color channel into its 8-bit form.
+func channelByte(value uint64) uint8 {
+	value >>= 8
+	if value > 0xFF {
+		value = 0xFF
+	}
+	return uint8(value)
 }

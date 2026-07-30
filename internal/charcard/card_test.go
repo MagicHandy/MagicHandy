@@ -28,7 +28,7 @@ func buildCardPNG(t *testing.T, keyword string, payload []byte) []byte {
 	var out bytes.Buffer
 	out.Write(data[:len(data)-12]) // everything before the IEND chunk
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(chunk)))
+	binary.BigEndian.PutUint32(length[:], uint32(len(chunk))) // #nosec G115 -- fixture chunk is tiny
 	out.Write(length[:])
 	body := append([]byte("tEXt"), chunk...)
 	out.Write(body)
@@ -204,7 +204,7 @@ func textChunk(t *testing.T, keyword string, payload []byte) []byte {
 	body := append(append(append([]byte("tEXt"), []byte(keyword)...), 0), []byte(encoded)...)
 	var out bytes.Buffer
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(body)-4))
+	binary.BigEndian.PutUint32(length[:], uint32(len(body)-4)) // #nosec G115 -- fixture chunk is tiny
 	out.Write(length[:])
 	out.Write(body)
 	var crc [4]byte

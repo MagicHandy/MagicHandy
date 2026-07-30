@@ -14,6 +14,7 @@ export function PersonasRoute() {
   const [error, setError] = useState("");
   const [editingID, setEditingID] = useState("");
   const [adding, setAdding] = useState(false);
+  const [importURL, setImportURL] = useState("");
   const autopilotActive = state?.modes?.mode === "autopilot"
     || state?.modes?.active_mode === "autopilot";
   const locked = !backendOnline || readOnly || autopilotActive;
@@ -73,16 +74,38 @@ export function PersonasRoute() {
     }
   };
 
+  const applyImport = useCallback((imported: PersonasPayload) => {
+    setPayload(imported);
+    setError("");
+    if (imported.persona) {
+      setEditingID(imported.persona.id);
+      show(t("{name} imported.", { name: imported.persona.name }), "success");
+    }
+    // Card text that did not fit the persona bounds was shortened, not
+    // silently dropped — say so once, while the editor is open to review it.
+    for (const warning of imported.import_warnings ?? []) {
+      show(warning, "warning");
+    }
+  }, [show]);
+
   const importPersona = async (file: File) => {
     setAdding(true);
     try {
-      const imported = await api.importPersona(file);
-      setPayload(imported);
-      setError("");
-      if (imported.persona) {
-        setEditingID(imported.persona.id);
-        show(t("{name} imported.", { name: imported.persona.name }), "success");
-      }
+      applyImport(await api.importPersona(file));
+    } catch (importError) {
+      reportError(importError instanceof Error ? importError.message : String(importError));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const importFromURL = async () => {
+    const url = importURL.trim();
+    if (!url) return;
+    setAdding(true);
+    try {
+      applyImport(await api.importPersonaFromURL(url));
+      setImportURL("");
     } catch (importError) {
       reportError(importError instanceof Error ? importError.message : String(importError));
     } finally {
@@ -113,6 +136,35 @@ export function PersonasRoute() {
             onCreate={() => void create()}
             onImport={(file) => void importPersona(file)}
           />
+        )}
+        {payload && (
+          <form
+            className="persona-import-url"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void importFromURL();
+            }}
+          >
+            <label className="field persona-import-url-field">
+              <span className="label">{t("Import a character from a URL")}</span>
+              <input
+                type="url"
+                value={importURL}
+                disabled={locked || adding}
+                onChange={(event) => setImportURL(event.target.value)}
+              />
+            </label>
+            <button
+              type="submit"
+              className="btn btn-secondary"
+              disabled={locked || adding || importURL.trim() === ""}
+            >
+              {t("Import from URL")}
+            </button>
+            <p className="hint">
+              {t("Works with links to character card files (PNG or JSON) and pages that publish them. Sites that need a login cannot be read; download the card and import the file instead.")}
+            </p>
+          </form>
         )}
         {payload && editing && (
           <PersonaEditor

@@ -95,6 +95,7 @@ function completePayload(): PersonasPayload {
       lore_modes: ["off"],
       max_name: 60,
       max_description: 500,
+      max_greeting: 2000,
       max_portrait_edge: 1024,
       max_lore_entries: 8,
       max_lore_text: 500,

@@ -94,11 +94,11 @@ func TestDuplicateCarriesGreeting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	copy, err := store.Duplicate(context.Background(), item.ID)
+	duplicated, err := store.Duplicate(context.Background(), item.ID)
 	if err != nil {
 		t.Fatalf("duplicate: %v", err)
 	}
-	if copy.Greeting != "Welcome back." {
-		t.Fatalf("duplicate greeting = %q", copy.Greeting)
+	if duplicated.Greeting != "Welcome back." {
+		t.Fatalf("duplicate greeting = %q", duplicated.Greeting)
 	}
 }

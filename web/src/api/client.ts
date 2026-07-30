@@ -234,11 +234,13 @@ async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload>
 }
 
 async function uploadPersonaArchive(file: File): Promise<PersonasPayload> {
+  // The endpoint sniffs the body — .mhpersona archive, card PNG, or card
+  // JSON — so the declared type only needs to be honest, not negotiated.
   const res = await fetch("/api/personas/import", {
     method: "POST",
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/vnd.magichandy.persona+zip",
+      "Content-Type": file.type || "application/vnd.magichandy.persona+zip",
       [CLIENT_HEADER]: clientId,
     },
     body: file,
@@ -280,6 +282,7 @@ function normalizePersonas(payload: PersonasPayload): PersonasPayload {
       && typeof item.prompt_set_id === "string"
       && typeof item.default_focus_area === "string"
       && typeof item.lore_mode === "string"
+      && typeof item.greeting === "string"
       && typeof item.lore_count === "number"
       && typeof item.has_portrait === "boolean"
       && typeof item.created_at === "string"
@@ -309,6 +312,7 @@ function normalizePersonas(payload: PersonasPayload): PersonasPayload {
     && stringList(options?.lore_modes)
     && positiveInteger(options?.max_name)
     && positiveInteger(options?.max_description)
+    && positiveInteger(options?.max_greeting)
     && positiveInteger(options?.max_portrait_edge)
     && positiveInteger(options?.max_lore_entries)
     && positiveInteger(options?.max_lore_text)
@@ -414,6 +418,8 @@ export const api = {
   createPersona: (draft: PersonaDraft) =>
     request<PersonasPayload>("POST", "/api/personas", draft).then(normalizePersonas),
   importPersona: (file: File) => uploadPersonaArchive(file).then(normalizePersonas),
+  importPersonaFromURL: (url: string) =>
+    request<PersonasPayload>("POST", "/api/personas/import-url", { url }).then(normalizePersonas),
   updatePersona: (id: string, draft: PersonaDraft) =>
     request<PersonasPayload>("PATCH", `/api/personas/${encodeURIComponent(id)}`, draft).then(normalizePersonas),
   deletePersona: (id: string) =>

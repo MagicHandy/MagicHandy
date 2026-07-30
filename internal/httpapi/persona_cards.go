@@ -102,7 +102,12 @@ func (s *Server) seedPersonaGreeting(sessionID string, selected persona.Persona)
 	if err != nil || latest != 0 {
 		return
 	}
-	if _, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, selected.Greeting, "", nil); err != nil {
+	diagnostics := &chat.MessageDiagnostics{
+		Source:      "greeting",
+		PersonaID:   selected.ID,
+		PersonaName: selected.Name,
+	}
+	if _, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleAssistant, selected.Greeting, "", diagnostics); err != nil {
 		s.logger.Warn("persona greeting was not seeded", "session_id", sessionID, "error", err)
 	}
 }

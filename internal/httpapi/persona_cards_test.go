@@ -29,7 +29,7 @@ func cardPNG(t *testing.T, payload []byte) []byte {
 	var out bytes.Buffer
 	out.Write(data[:len(data)-12])
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(body)-4))
+	binary.BigEndian.PutUint32(length[:], uint32(len(body)-4)) // #nosec G115 -- fixture chunk is tiny
 	out.Write(length[:])
 	out.Write(body)
 	var crc [4]byte
@@ -178,6 +178,9 @@ func TestAttachingPersonaSeedsGreetingIntoEmptySession(t *testing.T) {
 	}
 	if messages[0].Content != "*Annabelle looks up.* Oh, it's you." {
 		t.Fatalf("content = %q", messages[0].Content)
+	}
+	if messages[0].Diagnostics == nil || messages[0].Diagnostics.PersonaName != "Annabelle" {
+		t.Fatalf("diagnostics = %+v, want the persona name for chat display", messages[0].Diagnostics)
 	}
 }
 

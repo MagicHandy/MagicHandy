@@ -40,15 +40,15 @@ type Card struct {
 // cardFields is the on-disk field set shared by V1 (top level) and V2/V3
 // (nested under data). Unknown fields are deliberately ignored.
 type cardFields struct {
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	Personality     string `json:"personality"`
-	Scenario        string `json:"scenario"`
-	FirstMes        string `json:"first_mes"`
-	MesExample      string `json:"mes_example"`
-	CreatorNotes    string `json:"creator_notes"`
-	CreatorComment  string `json:"creatorcomment"`
-	Data            *cardFields
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	Personality    string `json:"personality"`
+	Scenario       string `json:"scenario"`
+	FirstMes       string `json:"first_mes"`
+	MesExample     string `json:"mes_example"`
+	CreatorNotes   string `json:"creator_notes"`
+	CreatorComment string `json:"creatorcomment"`
+	Data           *cardFields
 }
 
 var pngMagic = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
