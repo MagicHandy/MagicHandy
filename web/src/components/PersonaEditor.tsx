@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t, translateKnown } from "../i18n";
 import { api } from "../api/client";
 import type { Persona, PersonaDraft, PersonasPayload, PromptSet } from "../api/types";
-import { CloseIcon } from "../shell/icons";
+import { CloseIcon, PencilIcon, TrashIcon } from "../shell/icons";
 import { trapModalTab } from "../util/modal";
 import { monogram } from "./PersonaGrid";
 import { PersonaLoreEditor } from "./PersonaLoreEditor";
@@ -157,6 +157,11 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
           <section className="group">
             <h3 className="group-title">{t("Identity")}</h3>
             <div className="persona-portrait-field">
+              {/* The portrait carries its own controls rather than a pair of wide
+                  text buttons beside it: the picture is the target, so the edit
+                  affordance belongs on it. They stay visible instead of appearing
+                  on hover, because a hover-only control does not exist on touch
+                  and gives a keyboard user nothing to find. */}
               <span className="persona-portrait-preview">
                 {portrait ? (
                   <img src={portrait} alt="" />
@@ -165,64 +170,71 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
                     <span>{monogram(item.name)}</span>
                   </span>
                 )}
-              </span>
-              <span className="persona-portrait-actions">
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="image/*"
-                  className="visually-hidden"
-                  onChange={(event) => void choosePortrait(event.target.files?.[0])}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={disabled}
-                  onClick={() => fileInput.current?.click()}
-                >
-                  {portrait ? t("Replace portrait") : t("Choose portrait")}
-                </button>
-                {portrait && (
+                <span className="persona-portrait-overlay">
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/*"
+                    className="visually-hidden"
+                    onChange={(event) => void choosePortrait(event.target.files?.[0])}
+                  />
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="icon-button persona-portrait-action"
                     disabled={disabled}
-                    onClick={() => void run(() => api.deletePersonaPortrait(item.id))}
+                    onClick={() => fileInput.current?.click()}
+                    aria-label={portrait ? t("Replace portrait") : t("Choose portrait")}
+                    title={portrait ? t("Replace portrait") : t("Choose portrait")}
                   >
-                    {t("Remove portrait")}
+                    <PencilIcon size={15} />
                   </button>
-                )}
-                <span className="hint">
-                  {t("Scaled to {edge}px and stored locally beside your other app data.", { edge: PORTRAIT_MAX_EDGE })}
+                  {portrait && (
+                    <button
+                      type="button"
+                      className="icon-button persona-portrait-action"
+                      disabled={disabled}
+                      onClick={() => void run(() => api.deletePersonaPortrait(item.id))}
+                      aria-label={t("Remove portrait")}
+                      title={t("Remove portrait")}
+                    >
+                      <TrashIcon size={15} />
+                    </button>
+                  )}
                 </span>
               </span>
+              <span className="persona-identity-copy">
+                <label className="field">
+                  <span className="label">
+                    {t("Name")}
+                    <span className="hint-inline">{Array.from(name).length} / {options.max_name}</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={name}
+                    maxLength={options.max_name}
+                    disabled={disabled}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span className="label">
+                    {t("Description")}
+                    <span className="hint-inline">{Array.from(description).length} / {options.max_description}</span>
+                  </span>
+                  <textarea
+                    rows={3}
+                    value={description}
+                    maxLength={options.max_description}
+                    disabled={disabled}
+                    onChange={(event) => setDescription(event.target.value)}
+                  />
+                </label>
+              </span>
             </div>
-            <label className="field">
-              <span className="label">
-                {t("Name")}
-                <span className="hint-inline">{Array.from(name).length} / {options.max_name}</span>
-              </span>
-              <input
-                type="text"
-                value={name}
-                maxLength={options.max_name}
-                disabled={disabled}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span className="label">
-                {t("Description")}
-                <span className="hint-inline">{Array.from(description).length} / {options.max_description}</span>
-              </span>
-              <textarea
-                rows={3}
-                value={description}
-                maxLength={options.max_description}
-                disabled={disabled}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </label>
+            {/* Ends the group with a hint, matching Voice and style and Behavior. */}
+            <p className="hint">
+              {t("Scaled to {edge}px and stored locally beside your other app data.", { edge: PORTRAIT_MAX_EDGE })}
+            </p>
           </section>
 
           <section className="group">

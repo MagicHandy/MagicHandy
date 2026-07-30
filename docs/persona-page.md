@@ -386,6 +386,16 @@ viewport allows, for the same reason: a scrolling body means extra height buys a
 little less scrolling in exchange for the dialog reading as a full-screen
 takeover, and the cap keeps it a window on a tall monitor too.
 
+**The portrait carries its own controls.** Replace and Remove are icon buttons on
+a scrim over the bottom of the picture, not a pair of wide text buttons beside it:
+the picture is the target, so the edit affordance belongs on it. They stay visible
+rather than appearing on hover, because a hover-only control does not exist on
+touch and gives a keyboard user nothing to find; each keeps its full label as
+`aria-label` and `title`, so the accessible name is unchanged and the existing
+tests still address them by name. Freeing that column let name and description sit
+beside the portrait — the shape a profile editor is expected to have — which took
+the Identity section from 360px to 283px.
+
 Fields use the settings idiom so the editor reads as one app: `h2` naming the
 persona, then unframed sections separated by rules with `h3.group-title` per
 category — **Identity** (portrait, name, description), **Voice and style**
