@@ -56,6 +56,35 @@ func TestGreetingOverLimitRejected(t *testing.T) {
 	}
 }
 
+func TestPortableArchiveCarriesGreeting(t *testing.T) {
+	store := newTestStore(t)
+	item, err := store.Create(context.Background(), Draft{
+		Name:     name("Exported"),
+		Greeting: name("Opening line."),
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	archive, _, err := store.ExportArchive(context.Background(), item.ID, nil)
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	portable, err := DecodeArchive(archive)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if portable.Persona.Greeting != "Opening line." {
+		t.Fatalf("portable greeting = %q", portable.Persona.Greeting)
+	}
+	imported, err := store.ImportPortable(context.Background(), portable, "")
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if imported.Greeting != "Opening line." {
+		t.Fatalf("imported greeting = %q", imported.Greeting)
+	}
+}
+
 func TestDuplicateCarriesGreeting(t *testing.T) {
 	store := newTestStore(t)
 	item, err := store.Create(context.Background(), Draft{

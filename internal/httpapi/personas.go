@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mapledaemon/MagicHandy/internal/charcard"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/persona"
@@ -18,6 +19,7 @@ func (s *Server) personaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/personas", s.handlePersonasGet)
 	mux.HandleFunc("POST /api/personas", s.handlePersonaCreate)
 	mux.HandleFunc("POST /api/personas/import", s.handlePersonaImport)
+	mux.HandleFunc("POST /api/personas/import-url", s.handlePersonaImportURL)
 	mux.HandleFunc("PATCH /api/personas/{id}", s.handlePersonaUpdate)
 	mux.HandleFunc("DELETE /api/personas/{id}", s.handlePersonaDelete)
 	mux.HandleFunc("POST /api/personas/{id}/duplicate", s.handlePersonaDuplicate)
@@ -135,9 +137,20 @@ func (s *Server) handlePersonaImport(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	data, err := io.ReadAll(io.LimitReader(r.Body, persona.MaxArchiveBytes+1))
+	data, err := io.ReadAll(io.LimitReader(r.Body, cardImportMaxBytes+1))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, errors.New("persona archive could not be read"))
+		return
+	}
+	if len(data) > cardImportMaxBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, errors.New("import is too large"))
+		return
+	}
+	// One import endpoint, two formats: .mhpersona archives and character
+	// cards (card PNG or card JSON). Cards are sniffed, not negotiated, so a
+	// dragged-in file just works.
+	if charcard.LooksLikeCard(data) {
+		s.handleCardUpload(w, r, data)
 		return
 	}
 	if len(data) > persona.MaxArchiveBytes {
@@ -578,6 +591,7 @@ func (s *Server) handleChatSessionPersona(w http.ResponseWriter, r *http.Request
 			selected = marked
 		}
 		upsertPersonaPayload(payload, selected)
+		s.seedPersonaGreeting(sessionID, selected)
 	}
 	if activeSessionID, _ := payload["active_session_id"].(string); activeSessionID == sessionID {
 		payload["active_persona_id"] = personaID

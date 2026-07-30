@@ -53,6 +53,20 @@ type cardFields struct {
 
 var pngMagic = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
 
+// IsPNG reports whether data starts like a PNG file.
+func IsPNG(data []byte) bool {
+	return bytes.HasPrefix(data, pngMagic)
+}
+
+// LooksLikeCard reports whether data could be a card payload rather than some
+// other upload format: a PNG file or a JSON document.
+func LooksLikeCard(data []byte) bool {
+	if IsPNG(data) {
+		return true
+	}
+	return bytes.HasPrefix(bytes.TrimLeft(data, " \t\r\n"), []byte("{"))
+}
+
 // Parse sniffs the payload and dispatches to ParsePNG or ParseJSON.
 func Parse(data []byte) (Card, error) {
 	if bytes.HasPrefix(data, pngMagic) {

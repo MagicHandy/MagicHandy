@@ -47,6 +47,7 @@ type PortableArchive struct {
 }
 
 // PortablePersona contains only user-authored and code-owned persona axes.
+// Greeting is optional so archives from before it existed stay importable.
 type PortablePersona struct {
 	Name             string `json:"name"`
 	Description      string `json:"description"`
@@ -55,6 +56,7 @@ type PortablePersona struct {
 	PromptSetID      string `json:"prompt_set_id"`
 	DefaultFocusArea string `json:"default_focus_area"`
 	LoreMode         string `json:"lore_mode"`
+	Greeting         string `json:"greeting,omitempty"`
 }
 
 // PortableLoreEntry leaves identity and timestamps to the importing install.
@@ -136,6 +138,7 @@ func (s *Store) ExportArchive(
 			PromptSetID:      item.PromptSetID,
 			DefaultFocusArea: item.DefaultFocusArea,
 			LoreMode:         item.LoreMode,
+			Greeting:         item.Greeting,
 		},
 		Lore:            make([]PortableLoreEntry, 0, len(entries)),
 		BehaviorProfile: portableProfile,
@@ -260,6 +263,7 @@ func (s *Store) ImportPortable(
 		PromptSetID:      strings.TrimSpace(promptSetID),
 		DefaultFocusArea: portable.Persona.DefaultFocusArea,
 		LoreMode:         portable.Persona.LoreMode,
+		Greeting:         portable.Persona.Greeting,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -409,6 +413,7 @@ func normalizePortablePersona(portable *PortableArchive) error {
 		PromptSetID:      strings.TrimSpace(portable.Persona.PromptSetID),
 		DefaultFocusArea: normalizeToken(portable.Persona.DefaultFocusArea),
 		LoreMode:         normalizeToken(portable.Persona.LoreMode),
+		Greeting:         strings.TrimSpace(strings.ReplaceAll(portable.Persona.Greeting, "\r\n", "\n")),
 	}
 	if err := validate(item); err != nil {
 		return err
@@ -421,6 +426,7 @@ func normalizePortablePersona(portable *PortableArchive) error {
 		PromptSetID:      item.PromptSetID,
 		DefaultFocusArea: item.DefaultFocusArea,
 		LoreMode:         item.LoreMode,
+		Greeting:         item.Greeting,
 	}
 	return nil
 }
