@@ -59,6 +59,17 @@ export interface ControllerSnapshot {
   read_only: boolean;
   reason?: string;
   active_client_id?: string;
+  active_client_age_ms?: number;
+  lease_expires_in_ms?: number;
+  takeover_in_progress?: boolean;
+}
+
+export interface ControllerTakeoverResponse {
+  controller: ControllerSnapshot;
+  changed: boolean;
+  stop_confirmed: boolean;
+  stop_sequence: number;
+  warning?: string;
 }
 
 export interface MemoryItem {

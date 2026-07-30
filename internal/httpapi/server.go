@@ -282,6 +282,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
+	mux.HandleFunc("POST /api/controller/takeover", s.handleControllerTakeover)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)

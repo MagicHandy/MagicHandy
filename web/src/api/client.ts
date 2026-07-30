@@ -1,4 +1,4 @@
-// Typed wrappers over the existing Go API. Every request carries a stable
+// Typed wrappers over the existing Go API. Every request carries a tab-scoped
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
@@ -18,6 +18,7 @@ import type {
   ChatSessionsResponse,
   ConnectionCheckResult,
   CloudDisconnectResponse,
+  ControllerTakeoverResponse,
   PromptSetsPayload,
   PatternInput,
   PatternLibrary,
@@ -51,21 +52,63 @@ import type {
   VoiceWorkerStatus,
 } from "./types";
 
-const CLIENT_ID_KEY = "magichandy-client-id";
+const CLIENT_ID_KEY = "magichandy-controller-tab-id";
 const STOP_SEQUENCE_HEADER = "X-MagicHandy-Stop-Sequence";
 
-export const clientId: string = (() => {
+type ControllerNavigationType = "navigate" | "reload" | "back_forward" | "prerender" | undefined;
+
+function newControllerClientID(): string {
   try {
-    let id = localStorage.getItem(CLIENT_ID_KEY);
-    if (!id) {
-      id = "ui-" + Math.random().toString(36).slice(2, 12);
-      localStorage.setItem(CLIENT_ID_KEY, id);
+    if (typeof globalThis.crypto?.randomUUID === "function") {
+      return "ui-" + globalThis.crypto.randomUUID();
     }
-    return id;
   } catch {
-    return "ui-" + Math.random().toString(36).slice(2, 12);
+    // Math.random remains sufficient for this non-secret, process-local lease ID.
   }
-})();
+  return "ui-" + Math.random().toString(36).slice(2, 12);
+}
+
+function browserNavigationType(): ControllerNavigationType {
+  try {
+    return (globalThis.performance?.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type;
+  } catch {
+    return undefined;
+  }
+}
+
+function browserSessionStorage(): Pick<Storage, "getItem" | "setItem"> | undefined {
+  try {
+    return globalThis.window?.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveControllerClientID(
+  storage: Pick<Storage, "getItem" | "setItem"> | undefined,
+  navigationType: ControllerNavigationType,
+  generate: () => string = newControllerClientID,
+): string {
+  let previous = "";
+  try {
+    previous = storage?.getItem(CLIENT_ID_KEY) ?? "";
+  } catch {
+    // Storage may be blocked; the in-memory ID still scopes this document.
+  }
+  if (previous && (navigationType === "reload" || navigationType === "back_forward")) {
+    return previous;
+  }
+
+  const id = generate();
+  try {
+    storage?.setItem(CLIENT_ID_KEY, id);
+  } catch {
+    // The exported in-memory ID remains valid when storage cannot persist it.
+  }
+  return id;
+}
+
+export const clientId = resolveControllerClientID(browserSessionStorage(), browserNavigationType());
 
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 
@@ -289,6 +332,7 @@ export class ApiError extends Error {
 
 export const api = {
   getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
+  takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
 
   // Motion — semantic commands only.
   stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),

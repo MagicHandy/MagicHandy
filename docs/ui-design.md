@@ -405,6 +405,14 @@ hoc per-widget colors) are not.
 - Exactly one client may command the device. Additional clients open read-only:
   they can watch state and trigger Stop, but cannot send motion, rather than
   racing and showing a warning banner after the fact.
+- Read-only clients show a compact **Take control** action in the status bar.
+  Activation requires confirmation because the backend runs global Emergency
+  Stop before transferring ownership. During handoff every client is visibly
+  read-only; concurrent handoffs are rejected. A physical Stop delivery failure
+  is reported as a warning instead of being mistaken for a clean handoff.
+- The current owner remains a status readout rather than an action. At compact
+  widths the read-only takeover action keeps its icon and accessible label so
+  ownership recovery is not hidden on mobile.
 - Controls that require a backend or a connection are disabled with a visible
   reason (inline text/tooltip), never a silent no-op.
 

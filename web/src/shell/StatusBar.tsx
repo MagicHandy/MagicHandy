@@ -2,20 +2,25 @@ import { useState } from "react";
 import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // disclosures. Motion controls remain in their routed workspaces.
+import { api, ApiError } from "../api/client";
 import { MotionVisualizer } from "../components/MotionVisualizer";
-import { useAppState } from "../state/app-state";
+import { useAppState, useToast } from "../state/app-state";
+import { stopAllAudioPlayback } from "../util/audio";
 import { formatClock } from "../util/format";
 import { ConnectionManager } from "./ConnectionManager";
 import { NotificationCenter } from "./NotificationCenter";
-import { ClockIcon } from "./icons";
+import { ClockIcon, TakeControlIcon } from "./icons";
 
 type ShellMenu = "connection" | "notifications" | null;
 
 export function StatusBar() {
-  const { backendOnline, motion, readOnly, state } = useAppState();
+  const { backendOnline, motion, readOnly, refresh, state } = useAppState();
+  const { show } = useToast();
   const [openMenu, setOpenMenu] = useState<ShellMenu>(null);
+  const [takingControl, setTakingControl] = useState(false);
   const engine = motion?.engine;
   const awaitingState = state == null;
+  const handoffInProgress = Boolean(state?.controller?.takeover_in_progress);
 
   // Voice earns a readout only when it is enabled and unhealthy: a crashed
   // worker, or speak-replies promised while the TTS worker cannot deliver.
@@ -57,6 +62,31 @@ export function StatusBar() {
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
 
+  async function takeControl() {
+    if (takingControl || handoffInProgress || !backendOnline) return;
+    if (!window.confirm(t("Take control of MagicHandy? Active motion, Autopilot, video synchronization, speech playback, and queued voice work will stop before this tab becomes the controller."))) {
+      return;
+    }
+
+    setTakingControl(true);
+    stopAllAudioPlayback();
+    window.dispatchEvent(new Event("magichandy:emergency-stop"));
+    try {
+      const response = await api.takeControl();
+      await refresh();
+      show(
+        response.warning
+          ? t("Control transferred, but physical Stop could not be confirmed.")
+          : t("This tab now controls MagicHandy."),
+        response.warning ? "warning" : "success",
+      );
+    } catch (error) {
+      show(error instanceof ApiError ? translateKnown(error.message) : t("Control transfer failed."), "error");
+    } finally {
+      setTakingControl(false);
+    }
+  }
+
   return (
     <div className="status-bar" role="region" aria-label={t("Status")}>
       <span className="status-readout">
@@ -68,14 +98,30 @@ export function StatusBar() {
         <span className="status-dot" data-state={coreState} />
         <span className="status-text">{translateKnown(coreLabel)}</span>
       </span>
-      {state && <span
-        className="status-readout status-readout-controller"
-        title={readOnly ? t("Read-only client") : t("This tab is the controller")}
-        aria-label={readOnly ? t("Read-only client") : t("This tab is the controller")}
-      >
-        <span className="status-dot" data-state={readOnly ? "warn" : "ok"} />
-        <span className="status-text">{readOnly ? t("read-only") : t("controller: you")}</span>
-      </span>}
+      {state && (readOnly ? (
+        <button
+          type="button"
+          className="status-readout status-readout-controller status-controller-action"
+          title={handoffInProgress || takingControl ? t("Controller handoff in progress") : t("Read-only client. Take control.")}
+          aria-label={handoffInProgress || takingControl ? t("Controller handoff in progress") : t("Take control")}
+          aria-busy={takingControl}
+          disabled={!backendOnline || handoffInProgress || takingControl}
+          onClick={() => void takeControl()}
+        >
+          <span className="status-dot" data-state={handoffInProgress || takingControl ? "pending" : "warn"} />
+          <TakeControlIcon size={16} className="icon" />
+          <span className="status-text">{t("Take control")}</span>
+        </button>
+      ) : (
+        <span
+          className="status-readout status-readout-controller"
+          title={t("This tab is the controller")}
+          aria-label={t("This tab is the controller")}
+        >
+          <span className="status-dot" data-state="ok" />
+          <span className="status-text">{t("controller: you")}</span>
+        </span>
+      ))}
       {(voiceCrashed || speakNotReady) && (
         <span className="status-readout">
           <span className="status-dot" data-state={voiceCrashed ? "error" : "warn"} />

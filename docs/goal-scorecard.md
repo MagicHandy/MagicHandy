@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-30, portable persona archives
+## Snapshot — 2026-07-30, explicit controller takeover
 
 ### Goal 1: Maintainability
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,987,776 bytes plain and 16,424,448 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 23,008,256 bytes plain and 16,441,344 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -78,7 +78,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. This predates PR #63's visible connection/limit refinements, whose rendered QA refresh remains open (`docs/perf-baseline.md`, "Phase 14B Intiface Hardware Evidence"). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
-| Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE (`docs/controller-dispatch-semantics.md`, PR #16) |
+| Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE, and explicit stop-first takeover with a globally locked handoff (`docs/controller-dispatch-semantics.md`) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)
 
@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,503,641 raw / 747,839 gzip bytes. Lazy loading limits
-   the English startup path to 702,999 raw / 188,757 gzip bytes; all HTML/CSS/JS
-   is 1,059,405 raw / 310,442 gzip bytes. Independent Autopilot clocks,
+   browser payload is 1,510,270 raw / 749,617 gzip bytes. Lazy loading limits
+   the English startup path to 706,223 raw / 189,486 gzip bytes; all HTML/CSS/JS
+   is 1,066,034 raw / 312,220 gzip bytes. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
    3,315 gzip bytes against their preceding checked-in bundle; browser-session
    notification persistence adds another 1,424 raw / 481 gzip bytes. These
@@ -124,6 +124,22 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-30** - Replaced passive read-only controller status with an
+  explicit **Take control** action. Handoff marks every browser read-only,
+  invokes global Emergency Stop on a detached bounded context, and transfers
+  ownership only after the Stop attempt completes; concurrent takeover is
+  rejected and an unconfirmed physical Stop remains a visible warning. Browser
+  controller IDs are now tab-scoped instead of shared through `localStorage`;
+  reloads retain their ID while new and duplicated tabs replace copied session
+  state. Backend concurrency/failure tests, eight focused frontend tests, all
+  337 frontend tests, the 1,318-key localization audit, full Go tests/vet,
+  TypeScript, production build, and golangci-lint pass. English startup is
+  706,223 / 189,486 raw/gzip (+3,224 / +729); all HTML/CSS/JS is
+  1,066,034 / 312,220 (+6,629 / +1,778); complete embedded output is
+  1,510,270 / 749,617. Pure-Go binaries are
+  23,008,256 plain / 16,441,344 stripped bytes. Windows race testing cannot
+  start without `gcc`; the unchanged Ubuntu CI race gate remains authoritative.
 
 - **2026-07-30** - Added versioned local persona portability. The leading
   persona utility tile now has equal New and Import halves, while the editor
