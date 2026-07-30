@@ -10,11 +10,16 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const running = engine?.running === true;
   const starting = engine?.starting === true;
   const paused = engine?.paused === true;
-  const pos = clampPercent(engine?.last_sample?.position_percent, 50);
   const firstBound = clampPercent(engine?.settings?.stroke_min_percent, 0);
   const secondBound = clampPercent(engine?.settings?.stroke_max_percent, 100);
   const min = Math.min(firstBound, secondBound);
   const max = Math.max(firstBound, secondBound);
+  const semanticPosition = clampPercent(
+    engine?.current_sample?.position_percent ?? engine?.last_sample?.position_percent,
+    50,
+  );
+  const wirePosition = engine?.settings?.reverse_direction ? 100 - semanticPosition : semanticPosition;
+  const pos = min + (wirePosition / 100) * (max - min);
   const hasError = Boolean(engine?.last_error || motion?.error);
   let state = "idle";
   if (motion?.available === false) {

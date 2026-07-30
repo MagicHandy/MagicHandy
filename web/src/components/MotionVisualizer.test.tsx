@@ -98,6 +98,61 @@ describe("MotionVisualizer", () => {
     expect(screen.getByText("media")).toBeInTheDocument();
   });
 
+  it("tracks the current playback sample through the active stroke window", () => {
+    render(
+      <MotionVisualizer
+        motion={{
+          available: true,
+          engine: {
+            running: true,
+            paused: false,
+            current_sample: { position_percent: 25, time_ms: 250 },
+            last_sample: { position_percent: 90, time_ms: 1500 },
+            settings: {
+              speed_min_percent: 10,
+              speed_max_percent: 40,
+              stroke_min_percent: 20,
+              stroke_max_percent: 80,
+              reverse_direction: false,
+              apply_video_speed_limit: false,
+              style: "balanced",
+            },
+          },
+        }}
+      />,
+    );
+
+    const visualizer = screen.getByRole("img", { name: /commanded position estimate 35 percent/i });
+    expect(visualizer.querySelector(".viz-device")).toHaveAttribute("data-position", "35");
+  });
+
+  it("reflects transport-boundary direction reversal in physical carriage position", () => {
+    render(
+      <MotionVisualizer
+        motion={{
+          available: true,
+          engine: {
+            running: true,
+            paused: false,
+            current_sample: { position_percent: 25, time_ms: 250 },
+            settings: {
+              speed_min_percent: 10,
+              speed_max_percent: 40,
+              stroke_min_percent: 20,
+              stroke_max_percent: 80,
+              reverse_direction: true,
+              apply_video_speed_limit: false,
+              style: "balanced",
+            },
+          },
+        }}
+      />,
+    );
+
+    const visualizer = screen.getByRole("img", { name: /commanded position estimate 65 percent/i });
+    expect(visualizer.querySelector(".viz-device")).toHaveAttribute("data-position", "65");
+  });
+
   it("localizes its computed state and accessibility description without renaming user content", () => {
     setLocaleForTest("es", spanish);
     render(

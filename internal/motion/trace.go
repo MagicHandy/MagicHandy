@@ -9,12 +9,23 @@ import (
 )
 
 func (e *Engine) snapshotLocked() ActiveMotionState {
+	now := e.now()
+	playbackMillis := int64(0)
+	if e.running {
+		playbackMillis = e.estimatedPlaybackMillisLocked(now)
+	}
+	runningMillis := int64(0)
+	if e.running {
+		runningMillis = e.runMillisAccum + playbackMillis
+	} else if e.paused {
+		runningMillis = e.runMillisAccum
+	}
 	state := ActiveMotionState{
 		Running:                    e.running,
 		Starting:                   e.starting,
 		Completing:                 e.completing,
 		Paused:                     e.paused,
-		RunningMillis:              e.runningMillisLocked(),
+		RunningMillis:              runningMillis,
 		Generation:                 e.generation,
 		StreamID:                   e.streamID,
 		PlanID:                     e.plan.ID,
@@ -30,8 +41,22 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 	if e.plan.ID != "" {
 		state.Phase = e.frozenPhase
 		if e.running {
-			state.Phase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
+			state.Phase = e.plan.PhaseAt(playbackMillis)
 		}
+	}
+	if e.running && e.plan.ID != "" {
+		current := e.currentSample
+		if !e.starting {
+			live := sampleMotionPath(e.plan, e.transition, playbackMillis)
+			current = &live
+		}
+		if current != nil {
+			sample := *current
+			state.CurrentSample = &sample
+		}
+	} else if (e.paused || e.completing) && e.currentSample != nil {
+		sample := *e.currentSample
+		state.CurrentSample = &sample
 	}
 	if e.lastSample != nil {
 		sample := *e.lastSample
@@ -42,18 +67,6 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		state.LastResult = &result
 	}
 	return state
-}
-
-// runningMillisLocked is the stopwatch value: accumulated run time across
-// pauses, plus the live segment while running. Stop resets it to zero.
-func (e *Engine) runningMillisLocked() int64 {
-	if e.running {
-		return e.runMillisAccum + e.estimatedPlaybackMillisLocked(e.now())
-	}
-	if e.paused {
-		return e.runMillisAccum
-	}
-	return 0
 }
 
 func (e *Engine) traceStateLocked(reason string, annotation string) {

@@ -368,18 +368,11 @@ reflowing its tiles when the editor opens. It is centered inside the routed
 workspace rather than the full viewport, keeping the desktop navigation rail and
 global Stop clear.
 
-**A dialog is sized by its content, a page by its column.** The window uses
-`min(720px, 100%)` — the same width `.reference-dialog` already uses, making it
-consistent with the app's only other modal. It briefly used
-`--content-wide-max` (1,180px) instead, which is the *page content* token, and
-the difference was not subtle: at a 1280×720 viewport that produced a 1010×680
-window covering 79% × 94% of the screen for a form whose widest control needs
-266px. Measured waste per control ran 36–87% — a 962px-wide text input for a
-60-character name, a 962px select for a three-word lore mode, a 475px select for
-"Full range" — and because the body still scrolled (1004px of content in a 554px
-viewport), the extra width bought nothing at all. At 720px the five selects all
-share one 330px column pair on two consistent left edges, waste drops to 7–64%,
-and the window is 48% × 67% of a 1512×982 screen.
+The desktop window uses `min(960px, 100%)`. Its paired field groups and
+portrait-plus-identity row therefore use the available workspace instead of
+being compressed into a narrow reference-dialog width, while the percentage
+fallback keeps the window inside smaller workspaces. It remains below the
+1,180px page-content cap so the overlay retains visible context and margins.
 
 Height is capped at `min(660px, 100dvh - 40px)` rather than taking whatever the
 viewport allows, for the same reason: a scrolling body means extra height buys a

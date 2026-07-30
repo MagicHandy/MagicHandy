@@ -168,8 +168,8 @@ export function ChatRoute() {
           <div className="divider" />
           <VoiceQuickControls />
           <div className="divider" />
-          <h2 className="section-title">{t("Motion behavior")}</h2>
-          <QuickSettings section="behavior" />
+          <h2 className="section-title">{t("Motion style")}</h2>
+          <QuickSettings section="style" />
           <div className="chat-motion-status">
             <h3 className="group-title">{t("Motion status")}</h3>
             <MotionVisualizer motion={motion} />

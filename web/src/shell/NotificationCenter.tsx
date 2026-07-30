@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { MediaJobState, MediaScanState } from "../api/types";
 import { formatNumber, t } from "../i18n";
 import { useAppState, useNotifications, type NotificationDraft } from "../state/app-state";
-import { BellIcon, CheckIcon, ClearIcon, CloseIcon } from "./icons";
+import { BellIcon, CheckIcon, CloseIcon, TrashIcon } from "./icons";
 
 interface Props {
   open: boolean;
@@ -88,12 +88,14 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
             <p>{unreadCount > 0 ? t("{count} unread", { count: formatNumber(unreadCount) }) : t("Up to date")}</p>
           </div>
           <div className="notification-head-actions">
-            <button type="button" className="icon-button" disabled={unreadCount === 0} aria-label={t("Mark all notifications read")} title={t("Mark all read")} onClick={markAllRead}>
-              <CheckIcon />
-            </button>
-            <button type="button" className="icon-button" disabled={items.length === 0} aria-label={t("Clear notification history")} title={t("Clear history")} onClick={clear}>
-              <ClearIcon />
-            </button>
+            <div className="notification-management-actions">
+              <button type="button" className="icon-button" disabled={unreadCount === 0} aria-label={t("Mark all notifications read")} title={t("Mark all read")} onClick={markAllRead}>
+                <CheckIcon />
+              </button>
+              <button type="button" className="icon-button" disabled={items.length === 0} aria-label={t("Clear notification history")} title={t("Clear history")} onClick={clear}>
+                <TrashIcon />
+              </button>
+            </div>
             <button ref={closeRef} type="button" className="icon-button" aria-label={t("Close notifications")} onClick={() => onOpenChange(false)}>
               <CloseIcon />
             </button>

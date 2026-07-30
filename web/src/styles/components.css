@@ -414,7 +414,7 @@ textarea:disabled {
 .viz-carriage {
   color: var(--muted);
   transform: translateY(var(--viz-carriage-y));
-  transition: transform 0.24s ease, color 0.18s ease;
+  transition: transform 0.13s linear, color 0.18s ease;
 }
 /* Collar is the position indicator, coloured by engine state. */
 .viz-carriage-collar {

@@ -267,10 +267,10 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
 
         <div className="connection-divider" />
         <div className="connection-limits-head">
-          <h3>{t("Limits")}</h3>
+          <h3>{t("Motion")}</h3>
           <span>{t("Applies immediately")}</span>
         </div>
-        <QuickSettings section="limits" />
+        <QuickSettings section="connection" />
       </section>
 
       <button

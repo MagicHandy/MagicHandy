@@ -29,6 +29,7 @@ export interface EngineSnapshot {
   phase?: number;
   recent_command_latency_ms?: number;
   target?: { label?: string; source?: string; speed_percent?: number; pattern_id?: string; pattern_name?: string; program_id?: string; media_id?: string };
+  current_sample?: MotionSample;
   last_sample?: MotionSample;
   settings?: MotionSettings;
   last_error?: string;

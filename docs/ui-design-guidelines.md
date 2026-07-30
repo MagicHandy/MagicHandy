@@ -161,7 +161,9 @@ The one authoritative visualizer keeps a compact vertical Handy 2-inspired body
 and sleeve in the status bar and its detailed form in an attached motion-status
 band at the bottom of Chat's control rail. One component, engine-driven, with
 position labeled as a commanded estimate and the active pattern name resolved
-by the backend rather than inferred from client controls.
+by the backend rather than inferred from client controls. It renders the
+backend's clock-sampled current path point, projected through the active stroke
+window and direction; the buffered queue tail is diagnostics, not position.
 
 ### Buttons
 
@@ -182,13 +184,14 @@ by the backend rather than inferred from client controls.
 - Shell-owned and route-independent. A compact bell sits immediately before the
   connection disclosure. It may show a numeric unread badge or a small activity
   marker, but no decorative glow, pulse, or semantic red badge.
-- The panel is one popover surface, no wider than 390px, with three scan-friendly
+- The panel is one popover surface, no wider than 360px, with three scan-friendly
   regions: backend-derived **Activity**, current **Attention**, and bounded
   current-session **Recent** history. Activity rows show honest progress and
   link to their owning Settings section.
-- Toasts feed the same history. Mark-read and clear are icon commands with
-  labels/tooltips; notification history is UI feedback, not durable application
-  state. Backend scan/job/health snapshots remain authoritative.
+- Toasts feed the same history. Mark-read and clear are a compact management
+  group separated from Close; clear uses the standard trash icon. All icon
+  commands retain labels/tooltips. Notification history is UI feedback, not
+  durable application state. Backend scan/job/health snapshots remain authoritative.
 - Only one shell popover is open at a time. Opening notifications closes the
   connection manager and vice versa; selecting a linked item closes the panel.
   The trigger and close button preserve keyboard focus.
@@ -201,8 +204,9 @@ by the backend rather than inferred from client controls.
   accessible while rendering only its state icon.
 - The expanded non-modal panel is at most 360px wide, one overlay surface with
   dividers rather than nested cards. It contains the current provider's live
-  actions, a Settings link, and dual-thumb immediate controls for speed and
-  stroke limits.
+  actions, a Settings link, and compact immediate controls for speed, stroke,
+  and reverse direction. Direction is right-aligned below the two range rows
+  without increasing the panel's previous control-section height.
   Cloud REST includes one compact write-only connection-key row and identifies
   whether the bundled or developer API v3 application ID is active.
 - Cloud REST keeps three actions distinct: the quiet refresh icon performs a
@@ -359,8 +363,9 @@ label for a control.
 
 ## Motion And Accessibility
 
-- Transitions are quiet (`0.15s ease` on interactive state; `0.24s` on the
-  visualizer position). No bouncing, pulsing glows, or moving gradients.
+- Transitions are quiet (`0.15s ease` on interactive state; `0.13s linear` on
+  visualizer position between 125ms backend samples). No bouncing, pulsing
+  glows, or moving gradients.
 - `prefers-reduced-motion: reduce` disables the visualizer/toast/toggle
   transitions and the chat entry animation (wired in
   `web/src/styles/components.css`).

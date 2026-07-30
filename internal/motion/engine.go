@@ -73,6 +73,7 @@ type Engine struct {
 	startedAt                      time.Time
 	nextSampleMillis               int64
 	lastSample                     *MotionSample
+	currentSample                  *MotionSample
 	lastResult                     *transport.CommandResult
 	lastError                      string
 	latencyMillis                  []int64
@@ -90,6 +91,8 @@ type Engine struct {
 }
 
 // ActiveMotionState is a safe snapshot of the current motion loop.
+// CurrentSample follows the playback clock; LastSample is the accepted
+// transport-buffer tail and may be ahead of playback.
 type ActiveMotionState struct {
 	Running                    bool                     `json:"running"`
 	Starting                   bool                     `json:"starting"`
@@ -105,6 +108,7 @@ type ActiveMotionState struct {
 	Phase                      float64                  `json:"phase"`
 	NextSampleMillis           int64                    `json:"next_sample_ms"`
 	RecentCommandLatencyMillis int64                    `json:"recent_command_latency_ms"`
+	CurrentSample              *MotionSample            `json:"current_sample,omitempty"`
 	LastSample                 *MotionSample            `json:"last_sample,omitempty"`
 	LastResult                 *transport.CommandResult `json:"last_result,omitempty"`
 	LastError                  string                   `json:"last_error,omitempty"`
@@ -428,6 +432,7 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	plan := NewMotionPlan(e.planIDLocked(), e.pausedTarget, e.settings, e.pausedPhase, 0, e.startedAt)
 	plan.PhasePreserved = true
 	e.plan = plan
+	e.captureCurrentSampleLocked(0)
 	e.paused = false
 	e.starting = true
 	e.running = true
@@ -513,6 +518,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.startedAt = e.now()
 	e.nextSampleMillis = 0
 	e.lastSample = nil
+	e.currentSample = nil
 	e.lastResult = nil
 	e.lastError = ""
 	e.latencyMillis = nil
@@ -530,6 +536,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.runCtx = loopCtx
 	e.done = nil
 	e.plan = NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
+	e.captureCurrentSampleLocked(0)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")
 	return e.runEpoch, nil
@@ -655,10 +662,12 @@ func (e *Engine) runLoop(ctx context.Context, runEpoch uint64) {
 // path. Repeating patterns never enter this branch.
 func (e *Engine) completeProgramIfNeeded(ctx context.Context, runEpoch uint64) bool {
 	e.mu.Lock()
-	if e.validateRunLocked(runEpoch) != nil || e.plan.Loop || !e.plan.CompleteAt(e.estimatedPlaybackMillisLocked(e.now())) {
+	playbackMillis := e.estimatedPlaybackMillisLocked(e.now())
+	if e.validateRunLocked(runEpoch) != nil || e.plan.Loop || !e.plan.CompleteAt(playbackMillis) {
 		e.mu.Unlock()
 		return false
 	}
+	e.captureCurrentSampleLocked(playbackMillis)
 	e.running = false
 	e.starting = false
 	e.completing = true
@@ -699,7 +708,9 @@ func (e *Engine) stopLoopLocked() (context.CancelFunc, <-chan struct{}, bool) {
 	if !e.running {
 		return func() {}, nil, false
 	}
-	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
+	playbackMillis := e.estimatedPlaybackMillisLocked(e.now())
+	e.frozenPhase = e.plan.PhaseAt(playbackMillis)
+	e.captureCurrentSampleLocked(playbackMillis)
 	e.running = false
 	e.starting = false
 	cancel := e.cancel
@@ -795,7 +806,9 @@ func (e *Engine) prepareRecovery(runEpoch uint64, message string) (recoveryState
 	}
 	e.stopBarriers++
 	recovery := recoveryState{cancel: e.cancel, done: e.done}
-	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
+	playbackMillis := e.estimatedPlaybackMillisLocked(e.now())
+	e.frozenPhase = e.plan.PhaseAt(playbackMillis)
+	e.captureCurrentSampleLocked(playbackMillis)
 	e.running = false
 	e.starting = false
 	e.cancel = nil
@@ -864,6 +877,15 @@ func (e *Engine) estimatedPlaybackMillisLocked(now time.Time) int64 {
 		return 0
 	}
 	return elapsed
+}
+
+func (e *Engine) captureCurrentSampleLocked(streamMillis int64) {
+	if e.plan.ID == "" {
+		e.currentSample = nil
+		return
+	}
+	sample := sampleMotionPath(e.plan, e.transition, streamMillis)
+	e.currentSample = &sample
 }
 
 func (e *Engine) alignPlaybackStart(runEpoch uint64) {

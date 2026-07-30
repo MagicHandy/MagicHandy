@@ -49,7 +49,7 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > readouts, stopwatch, mini visualizer, and the connection disclosure), and
 > workspaces as routed pages under a hash router. The shell-owned connection
 > manager stays available on every route and owns live provider actions plus
-> speed/stroke limits. Chat keeps Autopilot, live motion behavior, and the
+> speed/stroke limits and direction. Chat keeps Autopilot, motion style, and the
 > visualizer; the manual device test lives under Settings > Device, beside the
 > connection it exercises.
 > Settings is a routed page with sibling sections
@@ -120,7 +120,7 @@ with Save reachable.
 
 `#/chat` is the primary workspace: the main column holds the canonical
 conversation, while the control column holds the compact Autopilot session
-control, voice shortcuts, reverse/style motion behavior, and the motion
+control, voice shortcuts, motion style, and the motion
 visualizer in an attached bottom status band. Autopilot Pause/Resume stays in
 that control sidebar and its generated lines appear in the conversation instead
 of a duplicate status card.
@@ -225,8 +225,10 @@ One component, one source of truth.
   envelope, relative speed, active pattern/label, and transport health.
 - Has explicit visual states for moving, idle, paused, starved/recovering, and
   disconnected. A still frame is never ambiguous between "idle" and "stalled".
-- Reads engine state pushed from the backend (SSE/WebSocket). If state is stale
-  it says so; it does not extrapolate a guessed position.
+- Reads the engine's current clock-sampled path position pushed from the backend
+  at the engine sampling cadence. The buffered queue tail remains separate
+  diagnostics and is never rendered as current position. If state is stale it
+  says so; it does not extrapolate a guessed position.
 - Distinguishes commanded/estimated position from device-confirmed position, and
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
@@ -237,7 +239,7 @@ One component, one source of truth.
   without adding controls to the artwork. On Chat, this compact telemetry is an
   attached status band in the control rail rather than a floating panel.
 - Is never itself a click target: controls are separate, labeled elements
-  (limits live in the connection manager and behavior lives in Chat), not
+  (limits and direction live in the connection manager; style lives in Chat), not
   artwork turned into a mystery button.
 
 ## Quick Controls
@@ -245,8 +247,8 @@ One component, one source of truth.
 Speed limits, stroke range, reverse direction, and motion style.
 
 - Apply immediately to active motion (ADR 0002, invariant 9). No save step.
-- Speed and stroke live in the persistent floating connection manager; reverse
-  and style stay in Chat's motion-behavior group. The collapsed manager
+- Speed, stroke, and reverse direction live in the persistent floating
+  connection manager; style stays in Chat's motion-style group. The collapsed manager
   remains visible on every route and clears the reserved mobile Stop footer.
 - Each uses one dual-thumb control. Thumb changes send only the changed backend
   field; Stroke always keeps at least one percentage point between its minimum

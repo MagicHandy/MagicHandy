@@ -345,6 +345,8 @@ describe("app shell safety invariants", () => {
     expect(within(panel).getByText("Startup library scan")).toBeInTheDocument();
     expect(within(panel).getByText("42 files checked · 11 videos found")).toBeInTheDocument();
     expect(within(panel).getByText("No recent notifications.")).toBeInTheDocument();
+    const clearHistory = within(panel).getByRole("button", { name: "Clear notification history" });
+    expect(clearHistory.querySelector('path[d="M5 7h14"]')).toBeInTheDocument();
   });
 
   it("keeps connection and live limits in one floating manager on every route", async () => {
@@ -365,8 +367,11 @@ describe("app shell safety invariants", () => {
     for (const name of [/speed min/i, /speed max/i, /stroke min/i, /stroke max/i]) {
       expect(within(manager).getByRole("slider", { name })).toBeInTheDocument();
     }
+    expect(within(manager).getByRole("switch", { name: /reverse direction/i })).toBeInTheDocument();
     const motionControls = screen.getByRole("complementary", { name: /motion controls/i });
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
+    expect(within(motionControls).queryByRole("switch", { name: /reverse direction/i })).toBeNull();
+    expect(within(motionControls).getByRole("combobox", { name: /style/i })).toBeInTheDocument();
   });
 
   it("shows a neutral connection state until the first backend snapshot arrives", async () => {
@@ -1362,7 +1367,8 @@ describe("app shell safety invariants", () => {
         engine: {
           running: true,
           paused: false,
-          last_sample: { position_percent: 72, time_ms: 1000 },
+          current_sample: { position_percent: 72, time_ms: 1000 },
+          last_sample: { position_percent: 90, time_ms: 1750 },
           settings: { ...baseState.settings.motion, stroke_min_percent: 20, stroke_max_percent: 80 },
           target: { label: "Steady stroke", source: "chat", pattern_id: "stroke", pattern_name: "Stroke", speed_percent: 35 },
         },
@@ -1371,18 +1377,18 @@ describe("app shell safety invariants", () => {
     installFetch({ state });
     const { container } = renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    expect(screen.getAllByRole("img", { name: /commanded position estimate 72 percent/i })).toHaveLength(2);
+    expect(screen.getAllByRole("img", { name: /commanded position estimate 63 percent/i })).toHaveLength(2);
     const detailed = container.querySelector(".visualizer:not(.mini)");
     expect(detailed).toHaveAttribute("data-state", "running");
     expect(detailed?.querySelector(".viz-body")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-track")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-stroke-range")).toBeInTheDocument();
     expect(detailed?.querySelector(".viz-carriage")).toBeInTheDocument();
-    expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-position", "72");
+    expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-position", "63");
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-min", "20");
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-max", "80");
     expect(within(detailed as HTMLElement).getByText("commanded")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("72%")).toBeInTheDocument();
+    expect(within(detailed as HTMLElement).getByText("63%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("20-80%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("35%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("Stroke")).toBeInTheDocument();
