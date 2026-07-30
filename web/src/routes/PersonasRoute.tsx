@@ -8,13 +8,15 @@ import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast } from "../state/app-state";
 
 export function PersonasRoute() {
-  const { backendOnline, readOnly } = useAppState();
+  const { backendOnline, readOnly, state } = useAppState();
   const { show } = useToast();
   const [payload, setPayload] = useState<PersonasPayload | null>(null);
   const [error, setError] = useState("");
   const [editingID, setEditingID] = useState("");
   const [creating, setCreating] = useState(false);
-  const locked = !backendOnline || readOnly;
+  const autopilotActive = state?.modes?.mode === "autopilot"
+    || state?.modes?.active_mode === "autopilot";
+  const locked = !backendOnline || readOnly || autopilotActive;
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {

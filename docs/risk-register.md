@@ -667,8 +667,9 @@ saying "works on your phone".
 
 Mitigation:
 
-- treat localhost as the supported default; the app binds to 127.0.0.1 unless
-  the user opts in to LAN exposure
+- treat localhost as the supported boundary; the app binds to 127.0.0.1 and
+  rejects wildcard, hostname, and LAN-IP `--addr` values while the local API has
+  no authentication
 - decide the LAN/mobile scope explicitly in Phase 13 (voice input) and record
   the HTTPS/certificate decision in Phase 16's exposure decision doc
 - if LAN HTTPS is shipped, reuse the StrokeGPT lessons: generated local CA,
@@ -685,6 +686,12 @@ Exit evidence:
 Status 2026-07-09: Phase 13 records **localhost-only** microphone support.
 MagicHandy does not claim LAN/mobile voice input. HTTPS, local CA, exact-IP
 SANs, and Android certificate support remain a Phase 16 exposure decision.
+
+Status 2026-07-29: localhost-only is now enforced at startup. `localhost`,
+IPv4 loopback, and IPv6 loopback binds are accepted; wildcard and non-loopback
+binds fail before serving persona, lore, prompt-inspector, or other private API
+data. Any future LAN mode must replace this guard with authenticated HTTPS, not
+weaken it in isolation.
 
 ## R19: Datastore Migration And Budget Risk
 

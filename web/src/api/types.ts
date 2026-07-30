@@ -259,6 +259,7 @@ export interface PersonaLorePayload {
     max_text: number;
     max_total: number;
     max_keywords: number;
+    max_keyword: number;
   };
 }
 
@@ -267,7 +268,7 @@ export interface PersonasPayload {
   default_persona: DefaultPersona;
   active_persona_id: string;
   active_session_id: string;
-  prompt_sets?: PromptSet[];
+  prompt_sets: PromptSet[];
   persona?: Persona;
   options: {
     chat_voices: string[];
@@ -281,6 +282,7 @@ export interface PersonasPayload {
     max_lore_text: number;
     max_lore_total: number;
     max_lore_keywords: number;
+    max_lore_keyword: number;
   };
 }
 

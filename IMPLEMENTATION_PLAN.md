@@ -100,7 +100,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0-M2 implemented; M3 hardware acceptance in progress** | #104 |
-| 19 | Personas — named presets over the personalization axes (design: `docs/persona-page.md`) | **Slices 1-7 implemented; model-specific lore baselines, TTS voice, and preferred pattern tags remain open** | — |
+| 19 | Personas — named presets over the personalization axes (design: `docs/persona-page.md`) | **Slices 1-7 and release-hardening review implemented; model-specific lore baselines, TTS voice, and preferred pattern tags remain open** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 

@@ -8,6 +8,7 @@ interface Props {
   sessions: ChatSession[];
   activeId: string;
   disabled: boolean;
+  personaDisabled?: boolean;
   onActivate: (session: ChatSession) => void;
   onNew: () => void;
   onSave: (session: ChatSession) => void;
@@ -32,7 +33,17 @@ function preferredTabStripWidth(tabCount: number) {
     + TAB_STRIP_INLINE_PADDING;
 }
 
-export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSave, onDelete, assistantMood }: Props) {
+export function ChatTabs({
+  sessions,
+  activeId,
+  disabled,
+  personaDisabled = disabled,
+  onActivate,
+  onNew,
+  onSave,
+  onDelete,
+  assistantMood,
+}: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
@@ -118,7 +129,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
   return (
     <header className="chat-tabs-bar">
       <h1 className="visually-hidden">{t("Chat")}</h1>
-      {activeId && <PersonaSwitcher sessionID={activeId} disabled={disabled} />}
+      {activeId && <PersonaSwitcher sessionID={activeId} disabled={personaDisabled} />}
       {assistantMood && (
         <div className="chat-mood-readout" role="status" aria-label={t("Assistant mood: {mood}", { mood: translateKnown(assistantMood) })}>
           <span>{t("Mood")}</span>

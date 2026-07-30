@@ -29,7 +29,10 @@ const (
 // stops because a model call failed.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
 	settings, _ := s.store.Snapshot()
-	activePersona := s.activeSessionPersona()
+	activePersona, err := s.activeSessionPersona()
+	if err != nil {
+		return modes.Decision{}, fmt.Errorf("resolve active persona: %w", err)
+	}
 	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, activePersona)
 	prompt, ok, err := s.personalization.prompts.Resolve(promptID)
 	if err != nil {
@@ -199,7 +202,11 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	activePersona := s.activeSessionPersona()
+	activePersona, err := s.activeSessionPersona()
+	if err != nil {
+		s.logger.Warn("resolve Autopilot persona", "error", err)
+		return
+	}
 	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, activePersona)
 	if _, found, resolveErr := s.personalization.prompts.Resolve(promptID); resolveErr != nil || !found {
 		promptID = chat.DefaultPromptSetID

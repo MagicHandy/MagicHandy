@@ -383,6 +383,13 @@ func keywordMatch(text, keyword string) bool {
 	if len(needle) == 0 || len(needle) > len(haystack) {
 		return false
 	}
+	// Han, kana, and Hangul text normally has no ASCII-style word separators.
+	// Requiring both neighboring runes to be non-letters makes every useful
+	// keyword inside a sentence fail. Latin/digit keywords keep the stricter
+	// whole-word rule below so short strings do not match inside other words.
+	if usesUnsegmentedScript(needle) {
+		return strings.Contains(string(haystack), string(needle))
+	}
 	for start := 0; start+len(needle) <= len(haystack); start++ {
 		if string(haystack[start:start+len(needle)]) != string(needle) {
 			continue
@@ -391,6 +398,15 @@ func keywordMatch(text, keyword string) bool {
 		end := start + len(needle)
 		rightOK := end == len(haystack) || !isKeywordRune(haystack[end])
 		if leftOK && rightOK {
+			return true
+		}
+	}
+	return false
+}
+
+func usesUnsegmentedScript(value []rune) bool {
+	for _, current := range value {
+		if unicode.In(current, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul) {
 			return true
 		}
 	}

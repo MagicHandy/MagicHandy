@@ -3,9 +3,12 @@ import { api } from "../api/client";
 import type { Persona, PersonaLoreDraft, PersonaLoreEntry, PersonaLorePayload } from "../api/types";
 import { t } from "../i18n";
 import { PlusIcon, SaveIcon, TrashIcon } from "../shell/icons";
+import { codePointLength, limitCodePoints } from "../util/text";
+import { LORE_MODE_LABELS, personaOptionLabel } from "./persona-labels";
 
 interface Props {
   persona: Persona;
+  loreModes: string[];
   locked: boolean;
   onPersonaChanged: (persona: Persona) => void;
   onError: (message: string) => void;
@@ -17,7 +20,7 @@ function parseKeywords(value: string): string[] {
   return [...new Set(value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))];
 }
 
-export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }: Props) {
+export function PersonaLoreEditor({ persona, loreModes, locked, onPersonaChanged, onError }: Props) {
   const [payload, setPayload] = useState<PersonaLorePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -93,9 +96,9 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
             });
           }}
         >
-          <option value="off">{t("Off")}</option>
-          <option value="relevant">{t("Relevant only")}</option>
-          <option value="full">{t("Full")}</option>
+          {loreModes.map((mode) => (
+            <option key={mode} value={mode}>{personaOptionLabel(LORE_MODE_LABELS, mode)}</option>
+          ))}
         </select>
       </label>
       </div>
@@ -116,8 +119,12 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
                 key={entry.id}
                 entry={entry}
                 mode={persona.lore_mode}
-                maxText={payload.options.max_text}
+                maxText={Math.min(
+                  payload.options.max_text,
+                  payload.options.max_total - total + codePointLength(entry.text),
+                )}
                 maxKeywords={payload.options.max_keywords}
+                maxKeyword={payload.options.max_keyword}
                 disabled={disabled}
                 onSave={(draft) => apply(() => api.updatePersonaLore(persona.id, entry.id, draft))}
                 onDelete={() => apply(() => api.deletePersonaLore(persona.id, entry.id))}
@@ -126,8 +133,9 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
             {adding && (
               <LoreRow
                 mode={persona.lore_mode}
-                maxText={payload.options.max_text}
+                maxText={Math.min(payload.options.max_text, payload.options.max_total - total)}
                 maxKeywords={payload.options.max_keywords}
+                maxKeyword={payload.options.max_keyword}
                 disabled={disabled}
                 onSave={async (draft) => {
                   const saved = await apply(() => api.createPersonaLore(persona.id, draft));
@@ -142,7 +150,9 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={disabled || payload.entries.length >= payload.options.max_entries}
+              disabled={disabled
+                || payload.entries.length >= payload.options.max_entries
+                || total >= payload.options.max_total}
               onClick={() => setAdding(true)}
             >
               <PlusIcon size={16} />
@@ -163,6 +173,7 @@ function LoreRow({
   mode,
   maxText,
   maxKeywords,
+  maxKeyword,
   disabled,
   onSave,
   onDelete,
@@ -172,6 +183,7 @@ function LoreRow({
   mode: string;
   maxText: number;
   maxKeywords: number;
+  maxKeyword: number;
   disabled: boolean;
   onSave: (draft: PersonaLoreDraft) => Promise<boolean>;
   onDelete?: () => Promise<boolean>;
@@ -180,10 +192,15 @@ function LoreRow({
   const [text, setText] = useState(entry?.text ?? "");
   const [keywords, setKeywords] = useState(entry?.keywords.join(", ") ?? "");
   const parsedKeywords = parseKeywords(keywords);
+  const longestKeyword = parsedKeywords.reduce(
+    (longest, keyword) => Math.max(longest, codePointLength(keyword)),
+    0,
+  );
   const dirty = !entry || text.trim() !== entry.text || keywords.trim() !== entry.keywords.join(", ");
   const valid = text.trim() !== "" &&
-    Array.from(text).length <= maxText &&
-    parsedKeywords.length <= maxKeywords;
+    codePointLength(text) <= maxText &&
+    parsedKeywords.length <= maxKeywords &&
+    longestKeyword <= maxKeyword;
 
   useEffect(() => {
     setText(entry?.text ?? "");
@@ -209,20 +226,21 @@ function LoreRow({
       <label className="field">
         <span className="label">
           {t("Lore text")}
-          <span className="hint-inline">{Array.from(text).length} / {maxText}</span>
+          <span className="hint-inline">{codePointLength(text)} / {maxText}</span>
         </span>
         <textarea
           rows={3}
           value={text}
-          maxLength={maxText}
           disabled={disabled}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => setText(limitCodePoints(event.target.value, maxText))}
         />
       </label>
       <label className="field">
         <span className="label">
           {t("Keywords")}
-          <span className="hint-inline">{parsedKeywords.length} / {maxKeywords}</span>
+          <span className="hint-inline">
+            {parsedKeywords.length} / {maxKeywords} · {longestKeyword} / {maxKeyword}
+          </span>
         </span>
         <input
           type="text"

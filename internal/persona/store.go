@@ -104,7 +104,12 @@ func Open(dataDir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: database, ownsDB: true}, nil
+	personas := &Store{db: database, ownsDB: true}
+	if err := personas.reconcilePortraitFiles(context.Background()); err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	return personas, nil
 }
 
 // OpenWithDatabase borrows the process-owned datastore.
@@ -112,7 +117,11 @@ func OpenWithDatabase(database *dbstore.DB) (*Store, error) {
 	if database == nil {
 		return nil, errors.New("persona datastore is required")
 	}
-	return &Store{db: database}, nil
+	personas := &Store{db: database}
+	if err := personas.reconcilePortraitFiles(context.Background()); err != nil {
+		return nil, err
+	}
+	return personas, nil
 }
 
 // Close releases the handle only when this store opened it.
@@ -307,8 +316,12 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !ValidID(id) {
-		return ErrNotFound
+	if _, err := s.getLocked(ctx, id); err != nil {
+		return err
+	}
+	previous, hadFile, err := s.removePortraitFiles(id)
+	if err != nil {
+		return err
 	}
 	if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `DELETE FROM personas WHERE id = ?`, id)
@@ -324,23 +337,23 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 		}
 		return nil
 	}); err != nil {
-		return err
+		return s.restorePortraitAfterFailure(id, previous, hadFile, err)
 	}
-	s.removePortraitFile(id)
 	return nil
 }
 
 // MarkUsed records selection. This is what orders the grid, and it is
 // deliberately not an update of updated_at: "last talked to" and "last edited"
 // are different questions.
-func (s *Store) MarkUsed(ctx context.Context, id string) error {
+func (s *Store) MarkUsed(ctx context.Context, id string) (Persona, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if !ValidID(id) {
-		return ErrNotFound
+		return Persona{}, ErrNotFound
 	}
-	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
+	var item Persona
+	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx,
 			`UPDATE personas SET last_used_at = ? WHERE id = ?`, timestamp(), id)
 		if err != nil {
@@ -353,8 +366,10 @@ func (s *Store) MarkUsed(ctx context.Context, id string) error {
 		if affected == 0 {
 			return ErrNotFound
 		}
-		return nil
+		item, err = getPersonaFrom(ctx, tx, id)
+		return err
 	})
+	return item, err
 }
 
 // ValidID reports whether an identifier is one this package minted. Portrait

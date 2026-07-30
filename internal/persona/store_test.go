@@ -143,10 +143,10 @@ func TestListOrdersRecentlyUsedFirstThenUnused(t *testing.T) {
 	second := createPersona(t, store, "Mara")
 	createPersona(t, store, "Zephyr")
 
-	if err := store.MarkUsed(ctx, second.ID); err != nil {
+	if _, err := store.MarkUsed(ctx, second.ID); err != nil {
 		t.Fatalf("mark second used: %v", err)
 	}
-	if err := store.MarkUsed(ctx, first.ID); err != nil {
+	if _, err := store.MarkUsed(ctx, first.ID); err != nil {
 		t.Fatalf("mark first used: %v", err)
 	}
 
@@ -171,7 +171,7 @@ func TestMarkUsedDoesNotCountAsAnEdit(t *testing.T) {
 	ctx := context.Background()
 	item := createPersona(t, store, "Rowan")
 
-	if err := store.MarkUsed(ctx, item.ID); err != nil {
+	if _, err := store.MarkUsed(ctx, item.ID); err != nil {
 		t.Fatalf("mark used: %v", err)
 	}
 	reloaded, err := store.Get(ctx, item.ID)
@@ -380,7 +380,7 @@ func TestUnknownPersonaIsNotFoundRatherThanAnError(t *testing.T) {
 	if _, err := store.Duplicate(ctx, missing); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("duplicate: err = %v, want ErrNotFound", err)
 	}
-	if err := store.MarkUsed(ctx, missing); !errors.Is(err, ErrNotFound) {
+	if _, err := store.MarkUsed(ctx, missing); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("mark used: err = %v, want ErrNotFound", err)
 	}
 }

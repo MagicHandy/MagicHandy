@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { Persona, PersonaDraft, PersonasPayload, PromptSet } from "../api/types";
 import { CloseIcon, PencilIcon, TrashIcon } from "../shell/icons";
 import { trapModalTab } from "../util/modal";
+import { codePointLength, limitCodePoints } from "../util/text";
 import { monogram } from "./PersonaGrid";
 import { PersonaLoreEditor } from "./PersonaLoreEditor";
 import { AREA_LABELS, STYLE_LABELS, VOICE_LABELS, personaOptionLabel } from "./persona-labels";
@@ -282,27 +283,25 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
                 <label className="field">
                   <span className="label">
                     {t("Name")}
-                    <span className="hint-inline">{Array.from(name).length} / {options.max_name}</span>
+                    <span className="hint-inline">{codePointLength(name)} / {options.max_name}</span>
                   </span>
                   <input
                     type="text"
                     value={name}
-                    maxLength={options.max_name}
                     disabled={disabled}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) => setName(limitCodePoints(event.target.value, options.max_name))}
                   />
                 </label>
                 <label className="field">
                   <span className="label">
                     {t("Description")}
-                    <span className="hint-inline">{Array.from(description).length} / {options.max_description}</span>
+                    <span className="hint-inline">{codePointLength(description)} / {options.max_description}</span>
                   </span>
                   <textarea
                     rows={3}
                     value={description}
-                    maxLength={options.max_description}
                     disabled={disabled}
-                    onChange={(event) => setDescription(event.target.value)}
+                    onChange={(event) => setDescription(limitCodePoints(event.target.value, options.max_description))}
                   />
                 </label>
               </span>
@@ -382,6 +381,7 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
 
           <PersonaLoreEditor
             persona={item}
+            loreModes={options.lore_modes}
             locked={locked}
             onPersonaChanged={onPersonaChanged}
             onError={onError}

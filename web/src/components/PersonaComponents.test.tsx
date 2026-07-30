@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { DefaultPersona, Persona, PersonaLorePayload, PersonasPayload } from "../api/types";
@@ -75,6 +75,7 @@ function payload(overrides: Partial<PersonasPayload> = {}): PersonasPayload {
       max_lore_text: 500,
       max_lore_total: 2000,
       max_lore_keywords: 12,
+      max_lore_keyword: 40,
     },
     ...overrides,
   };
@@ -89,6 +90,7 @@ function lorePayload(item = persona()): PersonaLorePayload {
       max_text: 500,
       max_total: 2000,
       max_keywords: 12,
+      max_keyword: 40,
     },
   };
 }
@@ -269,6 +271,22 @@ describe("PersonaEditor", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
+  it("applies character limits by Unicode code point", async () => {
+    renderEditor();
+    const requested = "😀".repeat(61);
+    const accepted = "😀".repeat(60);
+    const nameInput = screen.getByRole("textbox", { name: /Name/ });
+
+    fireEvent.change(nameInput, { target: { value: requested } });
+    expect(nameInput).toHaveValue(accepted);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(updatePersona).toHaveBeenLastCalledWith(
+      "persona-0123456789ab",
+      { name: accepted, description: "Steady, low-voiced." },
+    ));
+  });
+
   it("offers exactly the axes the server sent and no capability controls", () => {
     renderEditor();
 
@@ -337,6 +355,45 @@ describe("PersonaEditor", () => {
 
     await waitFor(() => expect(updatePersona).toHaveBeenCalledWith(current.id, { lore_mode: "full" }));
     await waitFor(() => expect(onPersonaChanged).toHaveBeenCalledWith(next));
+  });
+
+  it("uses server-provided lore modes and rejects an overlong keyword before Save", async () => {
+    const current = persona({ lore_mode: "off" });
+    vi.mocked(api.personaLore).mockResolvedValue(lorePayload(current));
+    const state = payload();
+    state.options.lore_modes = ["off", "full"];
+    render(
+      <PersonaEditor
+        item={current}
+        options={state.options}
+        promptSets={state.prompt_sets}
+        locked={false}
+        onApplied={vi.fn()}
+        onPersonaChanged={vi.fn()}
+        onClose={vi.fn()}
+        onError={vi.fn()}
+      />,
+    );
+
+    const mode = await screen.findByRole("combobox", { name: "Prompt use" });
+    expect(within(mode).getAllByRole("option").map((option) => option.getAttribute("value")))
+      .toEqual(["off", "full"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add lore entry" }));
+    const row = document.querySelector(".persona-lore-row");
+    expect(row).not.toBeNull();
+    fireEvent.change(within(row as HTMLElement).getByRole("textbox", { name: /Lore text/ }), {
+      target: { value: "A remembered detail." },
+    });
+    fireEvent.change(within(row as HTMLElement).getByRole("textbox", { name: /Keywords/ }), {
+      target: { value: "😀".repeat(41) },
+    });
+    expect(within(row as HTMLElement).getByRole("button", { name: "Save" })).toBeDisabled();
+
+    fireEvent.change(within(row as HTMLElement).getByRole("textbox", { name: /Keywords/ }), {
+      target: { value: "😀".repeat(40) },
+    });
+    expect(within(row as HTMLElement).getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
   it("keeps loaded lore and the scroll region stable when parent callbacks change", async () => {

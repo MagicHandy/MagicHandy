@@ -42,6 +42,12 @@ export const AREA_LABELS: Partial<Record<string, MessageKey>> = {
   base: "Deep end",
 };
 
+export const LORE_MODE_LABELS: Partial<Record<string, MessageKey>> = {
+  off: "Off",
+  relevant: "Relevant only",
+  full: "Full",
+};
+
 export function personaOptionLabel(
   labels: Partial<Record<string, MessageKey>>,
   value: string,
