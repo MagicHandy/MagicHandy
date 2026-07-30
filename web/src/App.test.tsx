@@ -271,6 +271,7 @@ function renderApp() {
 
 beforeEach(() => {
   vi.stubGlobal("EventSource", FakeEventSource);
+  window.sessionStorage.clear();
   window.location.hash = "#/chat";
   delete document.documentElement.dataset.theme;
 });

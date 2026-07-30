@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ToastProvider, useNotifications, useToast } from "./app-state";
 
+beforeEach(() => {
+  window.sessionStorage.clear();
+});
+
 function NotificationHarness() {
   const { show } = useToast();
   const { items, unreadCount, push, markAllRead, clear } = useNotifications();
@@ -18,6 +22,17 @@ function NotificationHarness() {
         })}
       >
         Push scan result
+      </button>
+      <button
+        type="button"
+        onClick={() => push({
+          title: "New library scan complete",
+          tone: "success",
+          category: "library",
+          sourceKey: "scan-complete:two",
+        })}
+      >
+        Push newer scan result
       </button>
       <button type="button" onClick={markAllRead}>Mark read</button>
       <button type="button" onClick={clear}>Clear</button>
@@ -63,5 +78,55 @@ describe("notification feedback channel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByRole("list", { name: "Notification history" })).toBeEmptyDOMElement();
+
+    fireEvent.click(push);
+    expect(screen.getByRole("list", { name: "Notification history" })).toBeEmptyDOMElement();
+  });
+
+  it("keeps cleared backend events dismissed across provider remounts", () => {
+    const first = render(
+      <ToastProvider>
+        <NotificationHarness />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Push scan result" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    first.unmount();
+
+    render(
+      <ToastProvider>
+        <NotificationHarness />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Push scan result" }));
+
+    expect(screen.getByRole("list", { name: "Notification history" })).toBeEmptyDOMElement();
+    expect(screen.getByRole("status", { name: "Unread count" })).toHaveTextContent("0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Push newer scan result" }));
+    expect(screen.getByRole("list", { name: "Notification history" })).toHaveTextContent("New library scan complete");
+    expect(screen.getByRole("status", { name: "Unread count" })).toHaveTextContent("1");
+  });
+
+  it("restores current-session history and read state after a remount", () => {
+    const first = render(
+      <ToastProvider>
+        <NotificationHarness />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Push scan result" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark read" }));
+    first.unmount();
+
+    render(
+      <ToastProvider>
+        <NotificationHarness />
+      </ToastProvider>,
+    );
+
+    expect(screen.getByRole("list", { name: "Notification history" })).toHaveTextContent("Library scan complete");
+    expect(screen.getByRole("status", { name: "Unread count" })).toHaveTextContent("0");
   });
 });

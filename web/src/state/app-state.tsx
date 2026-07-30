@@ -168,6 +168,13 @@ interface NotificationsValue {
 const ToastContext = createContext<ToastValue | null>(null);
 const NotificationsContext = createContext<NotificationsValue | null>(null);
 const MAX_NOTIFICATIONS = 40;
+const MAX_NOTIFICATION_SOURCE_KEYS = 160;
+const NOTIFICATION_SESSION_KEY = "magichandy-notifications-v1";
+
+interface NotificationSession {
+  items: AppNotification[];
+  sourceKeys: string[];
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<{ message: string; tone: string; visible: boolean }>({
@@ -175,13 +182,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     tone: "info",
     visible: false,
   });
-  const [items, setItems] = useState<AppNotification[]>([]);
+  const [initialSession] = useState(readNotificationSession);
+  const [items, setItems] = useState<AppNotification[]>(initialSession.items);
+  const consumedSourceKeys = useRef(new Set(initialSession.sourceKeys));
   const timer = useRef<number | undefined>(undefined);
   const sequence = useRef(0);
 
   const push = useCallback((draft: NotificationDraft) => {
+    if (draft.sourceKey && !rememberNotificationSource(consumedSourceKeys.current, draft.sourceKey)) return;
     setItems((current) => {
-      if (draft.sourceKey && current.some((item) => item.sourceKey === draft.sourceKey)) return current;
       const next: AppNotification = {
         id: `notification-${Date.now()}-${++sequence.current}`,
         title: draft.title,
@@ -196,6 +205,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       return [next, ...current].slice(0, MAX_NOTIFICATIONS);
     });
   }, []);
+
+  useEffect(() => {
+    writeNotificationSession({
+      items,
+      sourceKeys: Array.from(consumedSourceKeys.current),
+    });
+  }, [items]);
 
   const show = useCallback((message: string, tone: NotificationTone = "info") => {
     window.clearTimeout(timer.current);
@@ -227,6 +243,85 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </ToastContext.Provider>
     </NotificationsContext.Provider>
   );
+}
+
+function readNotificationSession(): NotificationSession {
+  try {
+    const raw = window.sessionStorage.getItem(NOTIFICATION_SESSION_KEY);
+    if (!raw) return { items: [], sourceKeys: [] };
+    const stored = JSON.parse(raw) as { items?: unknown; sourceKeys?: unknown };
+    const items = Array.isArray(stored.items)
+      ? stored.items.map(readStoredNotification).filter((item): item is AppNotification => item !== null).slice(0, MAX_NOTIFICATIONS)
+      : [];
+    const sourceKeys = new Set<string>();
+    if (Array.isArray(stored.sourceKeys)) {
+      for (const key of stored.sourceKeys) {
+        if (typeof key === "string" && key) sourceKeys.add(key);
+      }
+    }
+    for (const item of [...items].reverse()) {
+      if (item.sourceKey) sourceKeys.add(item.sourceKey);
+    }
+    return {
+      items,
+      sourceKeys: Array.from(sourceKeys).slice(-MAX_NOTIFICATION_SOURCE_KEYS),
+    };
+  } catch {
+    return { items: [], sourceKeys: [] };
+  }
+}
+
+function readStoredNotification(value: unknown): AppNotification | null {
+  if (!value || typeof value !== "object") return null;
+  const stored = value as Record<string, unknown>;
+  if (
+    typeof stored.id !== "string" ||
+    typeof stored.title !== "string" ||
+    typeof stored.createdAt !== "string" ||
+    typeof stored.read !== "boolean" ||
+    !isNotificationCategory(stored.category) ||
+    !isNotificationTone(stored.tone)
+  ) {
+    return null;
+  }
+  return {
+    id: stored.id,
+    title: stored.title,
+    category: stored.category,
+    tone: stored.tone,
+    createdAt: stored.createdAt,
+    read: stored.read,
+    detail: typeof stored.detail === "string" ? stored.detail : undefined,
+    href: typeof stored.href === "string" ? stored.href : undefined,
+    sourceKey: typeof stored.sourceKey === "string" ? stored.sourceKey : undefined,
+  };
+}
+
+function isNotificationCategory(value: unknown): value is AppNotification["category"] {
+  return value === "app" || value === "library" || value === "system" || value === "voice";
+}
+
+function isNotificationTone(value: unknown): value is NotificationTone {
+  return value === "info" || value === "success" || value === "warning" || value === "error";
+}
+
+function rememberNotificationSource(sourceKeys: Set<string>, sourceKey: string): boolean {
+  if (sourceKeys.has(sourceKey)) return false;
+  sourceKeys.add(sourceKey);
+  while (sourceKeys.size > MAX_NOTIFICATION_SOURCE_KEYS) {
+    const oldest = sourceKeys.values().next();
+    if (oldest.done) break;
+    sourceKeys.delete(oldest.value);
+  }
+  return true;
+}
+
+function writeNotificationSession(session: NotificationSession): void {
+  try {
+    window.sessionStorage.setItem(NOTIFICATION_SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Notifications still work in memory when browser storage is unavailable.
+  }
 }
 
 export function useToast(): ToastValue {

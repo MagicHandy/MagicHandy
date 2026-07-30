@@ -346,8 +346,10 @@ hoc per-widget colors) are not.
 - The notification center separates live **Activity** (library scan, thumbnail
   generation, conversion), current **Attention** states (core/voice failures),
   and **Recent** history. It reads activity and health from backend snapshots;
-  it does not invent a second job state. Read/clear state is session-local UI
-  feedback and is not persisted to the application database.
+  it does not invent a second job state. Read/clear state and consumed backend
+  event IDs survive page reloads in browser-session storage, but are not
+  persisted to the application database. Clearing history must not let a stale
+  completion snapshot recreate a notification; a new backend event ID may.
 - The notification and connection disclosures occupy the top bar and are
   mutually exclusive: opening either closes the other. Their panels link to the
   owning Settings route and close after navigation.
