@@ -11,8 +11,8 @@ live scorecard exists, but no model-specific baseline is recorded yet, so the
 UI labels Full-mode adherence as unmeasured rather than implying a result.
 
 [persona-page-sketch.svg](persona-page-sketch.svg) is the layout: the rail with
-its new entry, the tile grid with its leading create tile, and the editor drawer
-open on the lore budget and prompt-composition meter.
+its new entry, the tile grid with its leading create tile, and the centered
+editor window open across the identity, behavior, and lore controls.
 
 ---
 
@@ -361,22 +361,30 @@ plus glyph and label. Two details that decide whether it feels right:
 
 ### 5.4 Editor
 
-Right-side drawer over the grid, not a route change and not a stacked modal
-(exactly one layer — [ui-design.md §Settings](ui-design.md)). The grid stays
-visible so the persona being edited stays in context.
+Centered window overlay over the grid, not a route change and not a stacked
+modal (exactly one layer — [ui-design.md §Settings](ui-design.md)). The dimmed
+grid stays visible enough to preserve page context without squeezing or
+reflowing its tiles when the editor opens.
 
-Fields, in the settings idiom so it reads as one app: `h2` naming the persona,
-then `.group` cards with `h3.group-title` per category — **Identity** (portrait,
-name, description), **Voice and style** (register, reaction style, TTS voice),
-**Behavior** (prompt set, preferred tags, default focus area), **Lore**
-(section 7). Spacing is container-owned at the established 10 / 12 / 18.
+Fields use the settings idiom so the editor reads as one app: `h2` naming the
+persona, then unframed sections separated by rules with `h3.group-title` per
+category — **Identity** (portrait, name, description), **Voice and style**
+(register, reaction style), **Behavior** (prompt set, default focus area),
+**Lore** (section 7). The window is already the framed surface, so section cards
+are not nested inside it. Spacing is container-owned at the established
+10 / 12 / 18.
 
 Immediate-apply for toggles and selects; explicit **Save** for the text fields
 (a description is not something to persist per keystroke). Delete is
 confirmed and says what survives — sessions keep their transcripts.
 
-The drawer header and Save / Duplicate / Delete bar remain fixed; only the
-group stack scrolls. Lore loading is keyed to the persona ID, not to callback
+The window header and Save / Duplicate / Delete bar remain fixed; only the
+section stack scrolls. Opening it locks page scroll, moves focus to the Close
+button, traps keyboard focus within the dialog while preserving access to the
+global emergency Stop, and restores focus on close. Escape and the backdrop
+close it. At the mobile rail breakpoint the window reserves the rail and Stop
+bar's height, so the safety control remains above the modal without covering
+its action row. Lore loading is keyed to the persona ID, not to callback
 identity, so app-state polling cannot collapse the lore section or move the
 user's scroll position.
 
@@ -410,7 +418,7 @@ Each is independently shippable and independently revertible.
 | 1 | Store + migration v16, validation, tests | **Shipped.** `internal/persona`; `personas` table plus `chat_sessions.persona_id` by guarded `ALTER`. |
 | 2 | `personas` CRUD API + portrait upload/serve | **Shipped.** `internal/httpapi/personas.go`; reuses the thumbnail path-safety and atomic-replace shape. |
 | 3 | Route, grid, new-persona tile, monogram fallback | **Shipped.** `#/personas`, second in the rail. |
-| 4 | Editor drawer, duplicate, delete | **Shipped.** Browser-side canvas resize to JPEG at max edge 512. |
+| 4 | Editor window, duplicate, delete | **Shipped.** Centered modal over the unchanged grid; browser-side canvas resize to JPEG at max edge 512. |
 | 5 | Session binding + chat header switcher + provenance | **Shipped.** `PUT /api/chat/sessions/{id}/persona`; provenance carries `persona_id` and `persona_name`. |
 | 6 | Reaction-style axis composition | **Shipped.** `chat.ReactionStyle`, composed between the voice identity and the contract. |
 | 7 | Lore | **Implemented.** Schema v17 stores bounded entries and off/relevant/full policy; relevant matching uses Unicode word boundaries; the exact backend composition is inspectable and copyable; an opt-in live scorecard measures 0/500/1000/2000-character budgets. Model-specific baseline numbers remain unmeasured and the Full-mode copy says so. |
@@ -447,12 +455,12 @@ by the editor:
 Two things that source reading did not, recorded because both generalize:
 
 - **`<label>` is `display: inline`, so the container-owned vertical rhythm did
-  not apply to it.** The measured gaps in the editor drawer were 1px where 10 or
+  not apply to it.** The measured gaps in the editor window were 1px where 10 or
   12 was intended and 23px where 12 was — the same "spacing declared in the wrong
   place" family as the earlier settings pass, arriving through a different door.
   The fix is the existing convention: a field label is `<label className="field">`,
   which supplies `display: flex; flex-direction: column`. After it, every gap in
-  the drawer measures exactly 10 / 12 / 18.
+  the editor measures exactly 10 / 12 / 18.
 - **A 200 response with an unexpected body shape crashed the chat route.** The
   switcher renders in the chat header, so `payload.personas` being absent threw
   during render and the error boundary took out the whole conversation. Normalized
@@ -463,9 +471,9 @@ Verified live against the running app: the persona axes reach the composed promp
 (`REACTION STYLE - TENDER`, the quoted name, the intimate identity block), the
 settings document is untouched by a selection, a portrait round-trips
 byte-for-byte with `nosniff`, a non-image is refused with 415, an unknown style
-is refused with 400, and the drawer never takes Stop's click — Stop is
-`z-index: 1200` against the drawer's 40, confirmed with `elementFromPoint` at
-mobile width where the drawer covers the full viewport.
+is refused with 400, and the editor never takes Stop's click — Stop remains
+above the modal layer and is included in the focus cycle, confirmed with
+`elementFromPoint` at mobile width where the overlay covers the full viewport.
 
 ---
 

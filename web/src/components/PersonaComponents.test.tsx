@@ -207,8 +207,9 @@ describe("PersonaEditor", () => {
     const state = payload();
     const onApplied = vi.fn();
     const onPersonaChanged = vi.fn();
+    const onClose = vi.fn();
     const onError = vi.fn();
-    render(
+    const view = render(
       <PersonaEditor
         item={item}
         options={state.options}
@@ -216,12 +217,32 @@ describe("PersonaEditor", () => {
         locked={locked}
         onApplied={onApplied}
         onPersonaChanged={onPersonaChanged}
-        onClose={vi.fn()}
+        onClose={onClose}
         onError={onError}
       />,
     );
-    return { onApplied, onPersonaChanged, onError };
+    return { ...view, onApplied, onPersonaChanged, onClose, onError };
   };
+
+  it("opens as a focused modal window and closes from its backdrop", () => {
+    const { onClose, unmount } = renderEditor();
+    const dialog = screen.getByRole("dialog");
+    const overlay = dialog.parentElement;
+
+    expect(dialog).toHaveClass("persona-editor-window");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(overlay).toHaveClass("modal-scrim", "persona-editor-overlay");
+    expect(screen.getByRole("button", { name: "Close editor" })).toHaveFocus();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    fireEvent.mouseDown(dialog);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.mouseDown(overlay!);
+    expect(onClose).toHaveBeenCalledOnce();
+
+    unmount();
+    expect(document.body.style.overflow).toBe("");
+  });
 
   it("applies selects immediately and holds text behind Save", async () => {
     renderEditor();
@@ -346,8 +367,8 @@ describe("PersonaEditor", () => {
 
     expect(await screen.findByDisplayValue("Blue velvet is familiar.")).toBeInTheDocument();
     const dialog = screen.getByRole("dialog");
-    const scrollBody = dialog.querySelector<HTMLElement>(".persona-drawer-body");
-    const actions = dialog.querySelector<HTMLElement>(".persona-drawer-actions");
+    const scrollBody = dialog.querySelector<HTMLElement>(".persona-editor-window-body");
+    const actions = dialog.querySelector<HTMLElement>(".persona-editor-window-actions");
     expect(scrollBody).not.toContainElement(actions);
     expect(scrollBody?.nextElementSibling).toBe(actions);
 

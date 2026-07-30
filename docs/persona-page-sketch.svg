@@ -1,239 +1,134 @@
 <svg viewBox="0 0 1000 700" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Segoe UI, system-ui, sans-serif">
-  <title>MagicHandy Personas page — portrait tile grid with a leading "New persona" tile and the editor drawer open</title>
-  <desc>The Personas workspace: a new second entry in the navigation rail, a page heading, and a portrait tile grid whose first cell is a dashed "New persona" button. Persona tiles are full-bleed portraits with a bottom gradient scrim carrying name and a two-line clamped description, a reply-register chip top-right, a lore-count chip over the scrim, and an accent ring on the active persona. A tile without a portrait falls back to a monogram plate. On the right, the editor drawer shows the four groups — Identity, Voice and style, Behavior, Lore — with the lore budget selector set to "Relevant only" and a composition meter reporting what each prompt section currently costs.</desc>
+  <title>MagicHandy Personas page with a centered editor window</title>
+  <desc>The Personas workspace has a navigation rail, a page heading aligned with a portrait tile grid, and a centered modal editor over the dimmed page. The editor has fixed header and action rows with a scrolling section area between them.</desc>
   <defs>
-    <clipPath id="frame"><rect x="6" y="6" width="988" height="688" rx="16"/></clipPath>
-    <clipPath id="drawerclip"><rect x="666" y="60" width="322" height="634" rx="10"/></clipPath>
-    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b9dd9"/><stop offset="1" stop-color="#3a5a7c"/>
+    <clipPath id="frame">
+      <rect x="6" y="6" width="988" height="688" rx="16"/>
+    </clipPath>
+    <linearGradient id="portrait-a" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3c4a58"/>
+      <stop offset="1" stop-color="#22282f"/>
+    </linearGradient>
+    <linearGradient id="portrait-b" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4a4038"/>
+      <stop offset="1" stop-color="#241f1c"/>
     </linearGradient>
     <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1e2126" stop-opacity="0"/><stop offset="0.45" stop-color="#15171b" stop-opacity="0.86"/><stop offset="1" stop-color="#101215" stop-opacity="0.97"/>
-    </linearGradient>
-    <linearGradient id="portraitA" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3c4a58"/><stop offset="1" stop-color="#22282f"/>
-    </linearGradient>
-    <linearGradient id="portraitB" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#4a4038"/><stop offset="1" stop-color="#241f1c"/>
-    </linearGradient>
-    <linearGradient id="portraitC" x1="0" y1="0.1" x2="1" y2="0.9">
-      <stop offset="0" stop-color="#33454a"/><stop offset="1" stop-color="#1c2427"/>
-    </linearGradient>
-    <linearGradient id="portraitD" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#464050"/><stop offset="1" stop-color="#221f28"/>
+      <stop offset="0" stop-color="#101215" stop-opacity="0"/>
+      <stop offset="1" stop-color="#101215" stop-opacity="0.96"/>
     </linearGradient>
   </defs>
 
   <g clip-path="url(#frame)">
     <rect x="6" y="6" width="988" height="688" fill="#0e0f11"/>
 
-    <!-- navigation rail: Personas is new, second, directly under Chat -->
+    <!-- Navigation rail -->
     <rect x="6" y="6" width="150" height="688" fill="#17191d"/>
     <line x1="156" y1="6" x2="156" y2="694" stroke="#2d3138"/>
-    <rect x="22" y="22" width="30" height="30" rx="9" fill="url(#brand)"/>
-    <text x="37" y="43" fill="#0b131c" font-size="15" font-weight="700" text-anchor="middle">M</text>
+    <rect x="22" y="22" width="30" height="30" rx="7" fill="#345f86"/>
+    <text x="37" y="43" fill="#dcecf8" font-size="15" font-weight="700" text-anchor="middle">M</text>
     <text x="62" y="36" fill="#eae9e4" font-size="12" font-weight="600">MagicHandy</text>
-    <text x="62" y="49" fill="#98a0a9" font-size="9">local / cloud rest</text>
+    <text x="62" y="49" fill="#98a0a9" font-size="9">local / Cloud REST</text>
     <line x1="14" y1="64" x2="148" y2="64" stroke="#2d3138"/>
     <text x="26" y="92" fill="#98a0a9" font-size="11">Chat</text>
-    <rect x="14" y="104" width="134" height="26" rx="7" fill="#262a30"/>
+    <rect x="14" y="104" width="134" height="26" rx="7" fill="#26394b"/>
     <text x="26" y="121" fill="#eae9e4" font-size="11" font-weight="600">Personas</text>
     <text x="26" y="148" fill="#98a0a9" font-size="11">Preset modes</text>
     <text x="26" y="174" fill="#98a0a9" font-size="11">Pattern library</text>
     <text x="26" y="200" fill="#98a0a9" font-size="11">Videos</text>
     <text x="26" y="226" fill="#98a0a9" font-size="11">Settings</text>
+
+    <!-- Page heading and explicitly start-aligned tile grid -->
+    <text x="184" y="42" fill="#eae9e4" font-size="19" font-weight="600">Personas</text>
+    <text x="184" y="62" fill="#98a0a9" font-size="10.5">Portrait, name, register, and behavior - saved together.</text>
+
+    <rect x="184" y="84" width="150" height="200" rx="8" fill="#1a1d21" stroke="#3d434c" stroke-dasharray="5 4"/>
+    <circle cx="259" cy="166" r="19" fill="none" stroke="#5b9dd9" stroke-width="1.4"/>
+    <line x1="250" y1="166" x2="268" y2="166" stroke="#5b9dd9" stroke-width="1.6"/>
+    <line x1="259" y1="157" x2="259" y2="175" stroke="#5b9dd9" stroke-width="1.6"/>
+    <text x="259" y="207" fill="#eae9e4" font-size="11" font-weight="600" text-anchor="middle">New persona</text>
+
+    <g>
+      <rect x="346" y="84" width="150" height="200" rx="8" fill="url(#portrait-a)" stroke="#5b9dd9" stroke-width="2"/>
+      <circle cx="421" cy="150" r="31" fill="#536170" opacity="0.55"/>
+      <rect x="346" y="192" width="150" height="92" rx="8" fill="url(#scrim)"/>
+      <rect x="356" y="94" width="42" height="16" rx="7" fill="#5b9dd9"/>
+      <text x="377" y="105" fill="#0b131c" font-size="8.5" font-weight="700" text-anchor="middle">active</text>
+      <text x="357" y="243" fill="#eae9e4" font-size="12" font-weight="600">Rowan</text>
+      <text x="357" y="259" fill="#98a0a9" font-size="9">Steady and low-voiced.</text>
+    </g>
+
+    <g>
+      <rect x="508" y="84" width="150" height="200" rx="8" fill="url(#portrait-b)" stroke="#2d3138"/>
+      <circle cx="583" cy="150" r="31" fill="#61584f" opacity="0.55"/>
+      <rect x="508" y="192" width="150" height="92" rx="8" fill="url(#scrim)"/>
+      <text x="519" y="243" fill="#eae9e4" font-size="12" font-weight="600">Morgan</text>
+      <text x="519" y="259" fill="#98a0a9" font-size="9">Playful and attentive.</text>
+    </g>
+
+    <text x="184" y="306" fill="#98a0a9" font-size="9.5">2 personas</text>
+
+    <!-- One overlay layer. Emergency Stop remains above it in the real app. -->
+    <rect x="6" y="6" width="988" height="688" fill="#000" opacity="0.72"/>
+
+    <!-- Centered editor window -->
+    <rect x="232" y="50" width="630" height="600" rx="8" fill="#17191d" stroke="#3d434c"/>
+    <line x1="232" y1="106" x2="862" y2="106" stroke="#2d3138"/>
+    <text x="252" y="84" fill="#eae9e4" font-size="16" font-weight="600">Edit Rowan</text>
+    <rect x="810" y="62" width="34" height="34" rx="6" fill="none" stroke="#3d434c"/>
+    <text x="827" y="84" fill="#98a0a9" font-size="16" text-anchor="middle">x</text>
+
+    <!-- Scrolling body: unframed sections separated by rules -->
+    <text x="252" y="134" fill="#98a0a9" font-size="10" font-weight="600">IDENTITY</text>
+    <rect x="252" y="148" width="72" height="96" rx="6" fill="url(#portrait-a)" stroke="#2d3138"/>
+    <text x="340" y="158" fill="#98a0a9" font-size="8.5">Name</text>
+    <rect x="340" y="164" width="232" height="30" rx="5" fill="#101215" stroke="#2d3138"/>
+    <text x="350" y="183" fill="#eae9e4" font-size="10">Rowan</text>
+    <text x="590" y="158" fill="#98a0a9" font-size="8.5">Description</text>
+    <rect x="590" y="164" width="246" height="80" rx="5" fill="#101215" stroke="#2d3138"/>
+    <text x="600" y="184" fill="#eae9e4" font-size="9.5">Steady, low-voiced, asks before</text>
+    <text x="600" y="199" fill="#eae9e4" font-size="9.5">changing anything.</text>
+    <line x1="252" y1="264" x2="836" y2="264" stroke="#2d3138"/>
+
+    <text x="252" y="292" fill="#98a0a9" font-size="10" font-weight="600">VOICE AND STYLE</text>
+    <text x="252" y="314" fill="#98a0a9" font-size="8.5">Reply register</text>
+    <rect x="252" y="320" width="280" height="30" rx="5" fill="#101215" stroke="#2d3138"/>
+    <text x="262" y="339" fill="#eae9e4" font-size="10">Intimate</text>
+    <text x="556" y="314" fill="#98a0a9" font-size="8.5">Reaction style</text>
+    <rect x="556" y="320" width="280" height="30" rx="5" fill="#101215" stroke="#2d3138"/>
+    <text x="566" y="339" fill="#eae9e4" font-size="10">Tender</text>
+    <line x1="252" y1="370" x2="836" y2="370" stroke="#2d3138"/>
+
+    <text x="252" y="398" fill="#98a0a9" font-size="10" font-weight="600">BEHAVIOR</text>
+    <text x="252" y="420" fill="#98a0a9" font-size="8.5">Prompt set</text>
+    <rect x="252" y="426" width="280" height="30" rx="5" fill="#101215" stroke="#2d3138"/>
+    <text x="262" y="445" fill="#eae9e4" font-size="10">MagicHandy Motion</text>
+    <text x="556" y="420" fill="#98a0a9" font-size="8.5">Starting zone</text>
+    <rect x="556" y="426" width="280" height="30" rx="5" fill="#101215" stroke="#2d3138"/>
+    <text x="566" y="445" fill="#eae9e4" font-size="10">Full range</text>
+    <line x1="252" y1="476" x2="836" y2="476" stroke="#2d3138"/>
+
+    <text x="252" y="504" fill="#98a0a9" font-size="10" font-weight="600">LORE</text>
+    <text x="836" y="504" fill="#98a0a9" font-size="8.5" text-anchor="end">6 entries</text>
+    <rect x="252" y="516" width="584" height="28" rx="5" fill="#101215" stroke="#2d3138"/>
+    <rect x="447" y="517" width="194" height="26" rx="4" fill="#5b9dd9"/>
+    <text x="349" y="535" fill="#98a0a9" font-size="9" text-anchor="middle">Off</text>
+    <text x="544" y="535" fill="#0b131c" font-size="9" font-weight="700" text-anchor="middle">Relevant only</text>
+    <text x="739" y="535" fill="#98a0a9" font-size="9" text-anchor="middle">Full</text>
+    <text x="252" y="562" fill="#98a0a9" font-size="8.5">Only matching entries enter the prompt, within the configured budget.</text>
+
+    <!-- Fixed action row -->
+    <line x1="232" y1="586" x2="862" y2="586" stroke="#2d3138"/>
+    <rect x="252" y="603" width="72" height="30" rx="6" fill="#5b9dd9"/>
+    <text x="288" y="622" fill="#0b131c" font-size="10" font-weight="700" text-anchor="middle">Save</text>
+    <rect x="334" y="603" width="86" height="30" rx="6" fill="none" stroke="#3d434c"/>
+    <text x="377" y="622" fill="#eae9e4" font-size="10" text-anchor="middle">Duplicate</text>
+    <rect x="716" y="603" width="120" height="30" rx="6" fill="none" stroke="#c93b40"/>
+    <text x="776" y="622" fill="#e5484d" font-size="10" text-anchor="middle">Delete persona</text>
+
+    <!-- Global Stop stays visible and clickable above the modal layer -->
     <rect x="14" y="636" width="134" height="34" rx="8" fill="#c93b40"/>
     <text x="81" y="657" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">Stop everything</text>
-
-    <!-- page heading -->
-    <text x="184" y="42" fill="#eae9e4" font-size="19" font-weight="600">Personas</text>
-    <text x="184" y="62" fill="#98a0a9" font-size="10.5">Portrait, name, register, and behavior — saved together.</text>
-
-    <!-- ============ tile grid: 3 columns x 216px min, 12px gap, 3/4 tiles ============ -->
-
-    <!-- 1. New persona: first child, real button, dashed, same footprint -->
-    <rect x="184" y="84" width="150" height="200" rx="8" fill="#1a1d21" stroke="#3d434c" stroke-width="1" stroke-dasharray="5 4"/>
-    <circle cx="259" cy="168" r="19" fill="none" stroke="#5b9dd9" stroke-width="1.4"/>
-    <line x1="250" y1="168" x2="268" y2="168" stroke="#5b9dd9" stroke-width="1.6"/>
-    <line x1="259" y1="159" x2="259" y2="177" stroke="#5b9dd9" stroke-width="1.6"/>
-    <text x="259" y="209" fill="#eae9e4" font-size="11" font-weight="600" text-anchor="middle">New persona</text>
-
-    <!-- 2. active persona: accent ring + active chip -->
-    <g>
-      <clipPath id="tile2"><rect x="346" y="84" width="150" height="200" rx="8"/></clipPath>
-      <g clip-path="url(#tile2)">
-        <rect x="346" y="84" width="150" height="200" fill="url(#portraitA)"/>
-        <circle cx="421" cy="146" r="30" fill="#4d5b6a" opacity="0.5"/>
-        <rect x="346" y="196" width="150" height="88" fill="url(#scrim)"/>
-        <text x="357" y="234" fill="#eae9e4" font-size="12" font-weight="600">Rowan</text>
-        <text x="357" y="250" fill="#98a0a9" font-size="9">Steady, low-voiced, asks before</text>
-        <text x="357" y="262" fill="#98a0a9" font-size="9">changing anything.</text>
-        <rect x="424" y="94" width="62" height="16" rx="8" fill="#1e2126" fill-opacity="0.9" stroke="#3d434c"/>
-        <text x="455" y="105" fill="#eae9e4" font-size="8.5" text-anchor="middle">intimate</text>
-        <rect x="356" y="94" width="42" height="16" rx="8" fill="#5b9dd9"/>
-        <text x="377" y="105" fill="#0b131c" font-size="8.5" font-weight="700" text-anchor="middle">active</text>
-        <rect x="356" y="205" width="48" height="15" rx="7" fill="#101215" fill-opacity="0.85" stroke="#2d3138"/>
-        <text x="380" y="216" fill="#98a0a9" font-size="8">6 lore</text>
-      </g>
-      <rect x="346" y="84" width="150" height="200" rx="8" fill="none" stroke="#5b9dd9" stroke-width="2"/>
-    </g>
-
-    <!-- 3. no portrait: monogram plate, not a broken-image frame -->
-    <g>
-      <clipPath id="tile3"><rect x="508" y="84" width="150" height="200" rx="8"/></clipPath>
-      <g clip-path="url(#tile3)">
-        <rect x="508" y="84" width="150" height="200" fill="#101215"/>
-        <circle cx="583" cy="152" r="30" fill="#262a30"/>
-        <text x="583" y="163" fill="#98a0a9" font-size="26" font-weight="700" text-anchor="middle">V</text>
-        <rect x="508" y="196" width="150" height="88" fill="url(#scrim)"/>
-        <text x="519" y="234" fill="#eae9e4" font-size="12" font-weight="600">Vesper</text>
-        <text x="519" y="250" fill="#98a0a9" font-size="9">Leads, narrates, never breaks</text>
-        <text x="519" y="262" fill="#98a0a9" font-size="9">the frame.</text>
-        <rect x="588" y="94" width="60" height="16" rx="8" fill="#1e2126" fill-opacity="0.9" stroke="#3d434c"/>
-        <text x="618" y="105" fill="#eae9e4" font-size="8.5" text-anchor="middle">explicit</text>
-      </g>
-      <rect x="508" y="84" width="150" height="200" rx="8" fill="none" stroke="#2d3138"/>
-    </g>
-
-    <!-- second row -->
-    <g>
-      <clipPath id="tile4"><rect x="184" y="296" width="150" height="200" rx="8"/></clipPath>
-      <g clip-path="url(#tile4)">
-        <rect x="184" y="296" width="150" height="200" fill="url(#portraitB)"/>
-        <circle cx="259" cy="358" r="30" fill="#5d5044" opacity="0.55"/>
-        <rect x="184" y="408" width="150" height="88" fill="url(#scrim)"/>
-        <text x="195" y="446" fill="#eae9e4" font-size="12" font-weight="600">Mara</text>
-        <text x="195" y="462" fill="#98a0a9" font-size="9">Teases, withholds, enjoys being</text>
-        <text x="195" y="474" fill="#98a0a9" font-size="9">asked twice.</text>
-        <rect x="271" y="306" width="52" height="16" rx="8" fill="#1e2126" fill-opacity="0.9" stroke="#3d434c"/>
-        <text x="297" y="317" fill="#eae9e4" font-size="8.5" text-anchor="middle">warm</text>
-        <rect x="194" y="417" width="48" height="15" rx="7" fill="#101215" fill-opacity="0.85" stroke="#2d3138"/>
-        <text x="218" y="428" fill="#98a0a9" font-size="8">2 lore</text>
-      </g>
-      <rect x="184" y="296" width="150" height="200" rx="8" fill="none" stroke="#2d3138"/>
-    </g>
-
-    <g>
-      <clipPath id="tile5"><rect x="346" y="296" width="150" height="200" rx="8"/></clipPath>
-      <g clip-path="url(#tile5)">
-        <rect x="346" y="296" width="150" height="200" fill="url(#portraitC)"/>
-        <circle cx="421" cy="358" r="30" fill="#43585e" opacity="0.55"/>
-        <rect x="346" y="408" width="150" height="88" fill="url(#scrim)"/>
-        <text x="357" y="446" fill="#eae9e4" font-size="12" font-weight="600">Ash</text>
-        <text x="357" y="462" fill="#98a0a9" font-size="9">Playful, quick, talks through</text>
-        <text x="357" y="474" fill="#98a0a9" font-size="9">everything.</text>
-        <rect x="433" y="306" width="52" height="16" rx="8" fill="#1e2126" fill-opacity="0.9" stroke="#3d434c"/>
-        <text x="459" y="317" fill="#eae9e4" font-size="8.5" text-anchor="middle">warm</text>
-      </g>
-      <rect x="346" y="296" width="150" height="200" rx="8" fill="none" stroke="#2d3138"/>
-    </g>
-
-    <g>
-      <clipPath id="tile6"><rect x="508" y="296" width="150" height="200" rx="8"/></clipPath>
-      <g clip-path="url(#tile6)">
-        <rect x="508" y="296" width="150" height="200" fill="url(#portraitD)"/>
-        <circle cx="583" cy="358" r="30" fill="#57506a" opacity="0.5"/>
-        <rect x="508" y="408" width="150" height="88" fill="url(#scrim)"/>
-        <text x="519" y="446" fill="#eae9e4" font-size="12" font-weight="600">Assistant</text>
-        <text x="519" y="462" fill="#98a0a9" font-size="9">Plain motion assistant. No</text>
-        <text x="519" y="474" fill="#98a0a9" font-size="9">register, no lore.</text>
-        <rect x="587" y="306" width="61" height="16" rx="8" fill="#1e2126" fill-opacity="0.9" stroke="#3d434c"/>
-        <text x="617" y="317" fill="#eae9e4" font-size="8.5" text-anchor="middle">utility</text>
-      </g>
-      <rect x="508" y="296" width="150" height="200" rx="8" fill="none" stroke="#2d3138"/>
-    </g>
-
-    <text x="184" y="524" fill="#98a0a9" font-size="9.5">5 personas · ordered by last used</text>
-
-    <!-- ============ editor drawer: one layer over the grid, grid stays visible ============ -->
-    <rect x="666" y="60" width="322" height="634" rx="10" fill="#17191d" stroke="#2d3138"/>
-    <g clip-path="url(#drawerclip)">
-      <text x="684" y="88" fill="#eae9e4" font-size="14" font-weight="600">Rowan</text>
-      <text x="960" y="88" fill="#98a0a9" font-size="14" text-anchor="end">✕</text>
-
-      <!-- Identity -->
-      <rect x="680" y="100" width="294" height="132" rx="8" fill="#1e2126" stroke="#2d3138"/>
-      <text x="694" y="120" fill="#eae9e4" font-size="10.5" font-weight="600">Identity</text>
-      <rect x="694" y="130" width="54" height="72" rx="6" fill="url(#portraitA)" stroke="#2d3138"/>
-      <text x="721" y="212" fill="#5b9dd9" font-size="8.5" text-anchor="middle">Replace</text>
-      <text x="760" y="140" fill="#98a0a9" font-size="8.5">Name</text>
-      <rect x="760" y="145" width="200" height="20" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="768" y="159" fill="#eae9e4" font-size="9.5">Rowan</text>
-      <text x="760" y="180" fill="#98a0a9" font-size="8.5">Description</text>
-      <text x="960" y="180" fill="#98a0a9" font-size="8" text-anchor="end">142 / 500</text>
-      <rect x="760" y="185" width="200" height="32" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="768" y="198" fill="#eae9e4" font-size="9">Steady, low-voiced, asks before</text>
-      <text x="768" y="210" fill="#eae9e4" font-size="9">changing anything.</text>
-
-      <!-- Voice and style -->
-      <rect x="680" y="244" width="294" height="98" rx="8" fill="#1e2126" stroke="#2d3138"/>
-      <text x="694" y="264" fill="#eae9e4" font-size="10.5" font-weight="600">Voice and style</text>
-      <text x="694" y="284" fill="#98a0a9" font-size="8.5">Reply register</text>
-      <rect x="810" y="274" width="150" height="20" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="818" y="288" fill="#eae9e4" font-size="9.5">Intimate</text>
-      <text x="950" y="288" fill="#98a0a9" font-size="8" text-anchor="end">▾</text>
-      <text x="694" y="308" fill="#98a0a9" font-size="8.5">Reaction style</text>
-      <rect x="810" y="298" width="150" height="20" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="818" y="312" fill="#eae9e4" font-size="9.5">Tender</text>
-      <text x="950" y="312" fill="#98a0a9" font-size="8" text-anchor="end">▾</text>
-      <text x="694" y="332" fill="#98a0a9" font-size="8.5">Spoken voice</text>
-      <rect x="810" y="322" width="150" height="20" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="818" y="336" fill="#eae9e4" font-size="9.5">NeuTTS · rowan.wav</text>
-
-      <!-- Behavior -->
-      <rect x="680" y="354" width="294" height="86" rx="8" fill="#1e2126" stroke="#2d3138"/>
-      <text x="694" y="374" fill="#eae9e4" font-size="10.5" font-weight="600">Behavior</text>
-      <text x="694" y="394" fill="#98a0a9" font-size="8.5">Prompt set</text>
-      <rect x="810" y="384" width="150" height="20" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="818" y="398" fill="#eae9e4" font-size="9.5">MagicHandy Motion</text>
-      <text x="694" y="418" fill="#98a0a9" font-size="8.5">Starting zone</text>
-      <rect x="810" y="408" width="150" height="20" rx="5" fill="#101215" stroke="#2d3138"/>
-      <text x="818" y="422" fill="#eae9e4" font-size="9.5">Full range</text>
-      <text x="694" y="435" fill="#98a0a9" font-size="8">Never changes your limits or what the model may control.</text>
-
-      <!-- Lore + composition meter -->
-      <rect x="680" y="452" width="294" height="186" rx="8" fill="#1e2126" stroke="#2d3138"/>
-      <text x="694" y="472" fill="#eae9e4" font-size="10.5" font-weight="600">Lore</text>
-      <text x="960" y="472" fill="#98a0a9" font-size="8.5" text-anchor="end">6 entries</text>
-      <rect x="694" y="482" width="266" height="22" rx="6" fill="#101215" stroke="#2d3138"/>
-      <rect x="695" y="483" width="88" height="20" rx="5" fill="#262a30"/>
-      <text x="739" y="497" fill="#98a0a9" font-size="9" text-anchor="middle">Off</text>
-      <rect x="783" y="483" width="88" height="20" rx="5" fill="#5b9dd9"/>
-      <text x="827" y="497" fill="#0b131c" font-size="9" font-weight="700" text-anchor="middle">Relevant only</text>
-      <text x="915" y="497" fill="#98a0a9" font-size="9" text-anchor="middle">Full</text>
-      <text x="694" y="519" fill="#98a0a9" font-size="8">Only entries whose keywords appear in recent turns are sent. Max 3 per turn.</text>
-
-      <line x1="694" y1="530" x2="960" y2="530" stroke="#2d3138"/>
-      <text x="694" y="548" fill="#eae9e4" font-size="9.5" font-weight="600">What the model receives this turn</text>
-      <text x="694" y="566" fill="#98a0a9" font-size="8.5">Contract and guards</text>
-      <rect x="820" y="559" width="98" height="7" rx="3" fill="#101215"/>
-      <rect x="820" y="559" width="62" height="7" rx="3" fill="#497fb5"/>
-      <text x="960" y="566" fill="#98a0a9" font-size="8" text-anchor="end">3 140</text>
-      <text x="694" y="582" fill="#98a0a9" font-size="8.5">Pattern catalog</text>
-      <rect x="820" y="575" width="98" height="7" rx="3" fill="#101215"/>
-      <rect x="820" y="575" width="34" height="7" rx="3" fill="#497fb5"/>
-      <text x="960" y="582" fill="#98a0a9" font-size="8" text-anchor="end">1 720</text>
-      <text x="694" y="598" fill="#98a0a9" font-size="8.5">Persona and memories</text>
-      <rect x="820" y="591" width="98" height="7" rx="3" fill="#101215"/>
-      <rect x="820" y="591" width="19" height="7" rx="3" fill="#497fb5"/>
-      <text x="960" y="598" fill="#98a0a9" font-size="8" text-anchor="end">960</text>
-      <text x="694" y="614" fill="#eae9e4" font-size="8.5">Lore (3 of 6 matched)</text>
-      <rect x="820" y="607" width="98" height="7" rx="3" fill="#101215"/>
-      <rect x="820" y="607" width="16" height="7" rx="3" fill="#5b9dd9"/>
-      <text x="960" y="614" fill="#eae9e4" font-size="8" text-anchor="end">810</text>
-      <text x="694" y="631" fill="#98a0a9" font-size="8.5">History (12 messages)</text>
-      <rect x="820" y="624" width="98" height="7" rx="3" fill="#101215"/>
-      <rect x="820" y="624" width="44" height="7" rx="3" fill="#497fb5"/>
-      <text x="960" y="631" fill="#98a0a9" font-size="8" text-anchor="end">2 240</text>
-
-      <!-- section actions: 18px above, per the settings rhythm -->
-      <rect x="680" y="656" width="86" height="26" rx="7" fill="#5b9dd9"/>
-      <text x="723" y="673" fill="#0b131c" font-size="10" font-weight="700" text-anchor="middle">Save</text>
-      <rect x="774" y="656" width="86" height="26" rx="7" fill="none" stroke="#3d434c"/>
-      <text x="817" y="673" fill="#eae9e4" font-size="10" text-anchor="middle">Duplicate</text>
-      <rect x="868" y="656" width="106" height="26" rx="7" fill="none" stroke="#c93b40"/>
-      <text x="921" y="673" fill="#e5484d" font-size="10" text-anchor="middle">Delete persona</text>
-    </g>
   </g>
   <rect x="6" y="6" width="988" height="688" rx="16" fill="none" stroke="#2d3138"/>
 </svg>
