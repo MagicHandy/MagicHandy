@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Persona, PersonaLoreDraft, PersonaLoreEntry, PersonaLorePayload } from "../api/types";
 import { t } from "../i18n";
@@ -12,6 +12,7 @@ interface Props {
   locked: boolean;
   onPersonaChanged: (persona: Persona) => void;
   onError: (message: string) => void;
+  onExportBlockedChange: (blocked: boolean) => void;
 }
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -20,11 +21,20 @@ function parseKeywords(value: string): string[] {
   return [...new Set(value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))];
 }
 
-export function PersonaLoreEditor({ persona, loreModes, locked, onPersonaChanged, onError }: Props) {
+export function PersonaLoreEditor({
+  persona,
+  loreModes,
+  locked,
+  onPersonaChanged,
+  onError,
+  onExportBlockedChange,
+}: Props) {
   const [payload, setPayload] = useState<PersonaLorePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [dirtyCount, setDirtyCount] = useState(0);
+  const dirtyRows = useRef(new Set<string>());
   const onErrorRef = useRef(onError);
 
   useEffect(() => {
@@ -45,6 +55,26 @@ export function PersonaLoreEditor({ persona, loreModes, locked, onPersonaChanged
       });
     return () => controller.abort();
   }, [persona.id]);
+
+  useEffect(() => {
+    dirtyRows.current.clear();
+    setDirtyCount(0);
+    onExportBlockedChange(false);
+  }, [onExportBlockedChange, persona.id]);
+
+  useEffect(() => {
+    onExportBlockedChange(busy || dirtyCount > 0);
+    return () => onExportBlockedChange(false);
+  }, [busy, dirtyCount, onExportBlockedChange]);
+
+  const reportRowDirty = useCallback((key: string, dirty: boolean) => {
+    if (dirty) {
+      dirtyRows.current.add(key);
+    } else {
+      dirtyRows.current.delete(key);
+    }
+    setDirtyCount(dirtyRows.current.size);
+  }, []);
 
   const apply = async (action: () => Promise<PersonaLorePayload>) => {
     setBusy(true);
@@ -126,6 +156,8 @@ export function PersonaLoreEditor({ persona, loreModes, locked, onPersonaChanged
                 maxKeywords={payload.options.max_keywords}
                 maxKeyword={payload.options.max_keyword}
                 disabled={disabled}
+                dirtyKey={entry.id}
+                onDirtyChange={reportRowDirty}
                 onSave={(draft) => apply(() => api.updatePersonaLore(persona.id, entry.id, draft))}
                 onDelete={() => apply(() => api.deletePersonaLore(persona.id, entry.id))}
               />
@@ -137,6 +169,8 @@ export function PersonaLoreEditor({ persona, loreModes, locked, onPersonaChanged
                 maxKeywords={payload.options.max_keywords}
                 maxKeyword={payload.options.max_keyword}
                 disabled={disabled}
+                dirtyKey="new"
+                onDirtyChange={reportRowDirty}
                 onSave={async (draft) => {
                   const saved = await apply(() => api.createPersonaLore(persona.id, draft));
                   if (saved) setAdding(false);
@@ -175,6 +209,8 @@ function LoreRow({
   maxKeywords,
   maxKeyword,
   disabled,
+  dirtyKey,
+  onDirtyChange,
   onSave,
   onDelete,
   onCancel,
@@ -185,6 +221,8 @@ function LoreRow({
   maxKeywords: number;
   maxKeyword: number;
   disabled: boolean;
+  dirtyKey: string;
+  onDirtyChange: (key: string, dirty: boolean) => void;
   onSave: (draft: PersonaLoreDraft) => Promise<boolean>;
   onDelete?: () => Promise<boolean>;
   onCancel?: () => void;
@@ -206,6 +244,11 @@ function LoreRow({
     setText(entry?.text ?? "");
     setKeywords(entry?.keywords.join(", ") ?? "");
   }, [entry?.id, entry?.keywords, entry?.text]);
+
+  useEffect(() => {
+    onDirtyChange(dirtyKey, dirty);
+    return () => onDirtyChange(dirtyKey, false);
+  }, [dirty, dirtyKey, onDirtyChange]);
 
   return (
     <div className="persona-lore-row">

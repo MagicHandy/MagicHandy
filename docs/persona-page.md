@@ -306,9 +306,11 @@ Following the existing personalization routes
 ```
 GET    /api/personas                     -> { personas: [...], active_id, options: {...} }
 POST   /api/personas                     -> create; 400 invalid, 409 at limit
+POST   /api/personas/import              -> import one bounded .mhpersona archive
 PATCH  /api/personas/{id}                -> partial update, same validation
 DELETE /api/personas/{id}                -> 404 unknown; sessions keep their id
 POST   /api/personas/{id}/duplicate      -> copy incl. portrait, name + " copy"
+GET    /api/personas/{id}/export         -> versioned .mhpersona archive
 GET    /api/personas/{id}/portrait       -> JPEG; 404 when unset
 POST   /api/personas/{id}/portrait       -> upload; 415 non-JPEG, 413 oversize
 DELETE /api/personas/{id}/portrait       -> revert to the generated monogram
@@ -401,16 +403,21 @@ Structure inside a tile:
   persona editor, and is active whenever the session has no resolvable custom
   persona.
 
-### 5.3 The "New persona" tile
+### 5.3 The create/import tile
 
-First child of the grid, identical footprint, `border-style: dashed`, centred
-plus glyph and label. Two details that decide whether it feels right:
+First child of the grid, identical footprint and `border-style: dashed`, split
+into two equal actions by a horizontal rule: **New persona** above and **Import
+persona** below. Each half is a real button with its own focus treatment. Three
+details decide whether it feels right:
 
-- It is a real `<button>` in DOM order, so keyboard users reach it first and
-  screen readers announce it as a control among cards, not as a card.
+- Both actions are real `<button>` elements in DOM order, so keyboard users
+  reach New then Import before the cards, and screen readers announce controls
+  rather than a synthetic persona card.
 - **On an empty custom library it appears beside the default MagicHandy tile**
   — not inside an empty-state panel that gets swapped for a grid at n=1. That
   transition is jarring and doubles the layout code.
+- Import uses the system file picker and accepts `.mhpersona`; a successful
+  import opens the newly minted persona in the same editor used for creation.
 
 ### 5.4 Editor
 
@@ -478,7 +485,12 @@ Immediate-apply for toggles and selects; explicit **Save** for the text fields
 (a description is not something to persist per keystroke). Delete is
 confirmed and says what survives — sessions keep their transcripts.
 
-The window header and Save / Duplicate / Delete bar remain fixed; only the
+The fixed action bar also carries **Export persona**. Export is read-only and
+therefore remains available to a read-only client, but is disabled while text
+or lore edits are unsaved or in flight so the downloaded document cannot
+silently differ from the visible form.
+
+The window header and Save / Duplicate / Export / Delete bar remain fixed; only the
 section stack scrolls. Opening it locks page scroll, moves focus to the Close
 button, traps keyboard focus within the dialog while preserving access to the
 global emergency Stop, and restores focus on close. Escape and the backdrop
@@ -527,11 +539,42 @@ Each is independently shippable and independently revertible.
 | 5 | Session binding + chat header switcher + provenance | **Shipped.** `PUT /api/chat/sessions/{id}/persona`; provenance carries `persona_id` and `persona_name`. |
 | 6 | Reaction-style axis composition | **Shipped.** `chat.ReactionStyle`, composed between the voice identity and the contract. |
 | 7 | Lore | **Implemented.** Schema v17 stores bounded entries and off/relevant/full policy; relevant matching preserves whole-word boundaries for space-delimited text and phrase-matches Han, kana, and Hangul; the exact backend composition is inspectable and copyable; an opt-in live scorecard measures 0/500/1000/2000-character budgets. Model-specific baseline numbers remain unmeasured and the Full-mode copy says so. |
+| 8 | Portable import/export | **Implemented.** A split create/import tile and editor export action use the versioned `.mhpersona` format described below. |
 
 Slices 1–5 change **no prompt bytes** for anyone who does not create a persona,
 and slice 6 changes none for a persona left on `neutral`. Both are asserted by
 test (`TestNeutralStyleLeavesThePromptByteIdentical`), which is the property that
 made this safe to ship in one pass.
+
+### 6.1 Portable `.mhpersona` archives
+
+A persona export is a ZIP with a distinct extension and media type
+`application/vnd.magichandy.persona+zip`. Version 1 permits exactly:
+
+```
+persona.json
+portrait.jpg  # optional, declared by persona.json
+```
+
+`persona.json` has the fixed schema identifier `magichandy.persona`, version
+`1`, and separate `persona`, `lore`, optional `behavior_profile`, and `assets`
+objects. The persona object contains only name, description, reply register,
+reaction style, behavior-profile reference, default focus area, and lore mode.
+Lore contains only text, normalized keywords, and enabled state. A selected
+custom behavior profile is embedded by value so another installation can mint
+a local profile and preserve behavior; a built-in profile is resolved by ID to
+the importing build's trusted local copy.
+
+Runtime persona/lore IDs, timestamps, last-used ordering, active chat bindings,
+portrait cache stamps, controller state, motion limits, capability gates,
+memories, and user anatomy are never exported. Import generates fresh IDs and
+timestamps and never rewrites an existing persona or chat. This makes an
+archive collision-free and keeps the safety boundary in section 3 intact.
+
+The server rejects unknown schema versions, unknown or duplicate ZIP entries,
+undeclared assets, non-regular entries, malformed JSON, invalid persona/lore
+values, and archives over 4 MiB. It separately bounds the uncompressed manifest
+and JPEG before reading them, preventing path traversal and compression bombs.
 
 ### Post-implementation review corrections and open scope
 
@@ -743,10 +786,10 @@ a product default; per-model defaults and in-UI baseline storage remain idea D.
 
 ## 8. Non-goals
 
-- **No community browsing, importing, or downloading of personas.** The
-  reference is a marketplace; this is a local app. A share-file format could
-  come later under the same checksum/consent machinery as models, but it is not
-  part of this page.
+- **No community browsing or automatic downloading of personas.** The
+  reference is a marketplace; this is a local app. Explicit local `.mhpersona`
+  import/export is supported, but there is no catalog, remote fetch, or
+  executable content.
 - **No image generation.** Portraits are files the user supplies.
 - **No persona-driven limits or capabilities** (§3).
 - **No hidden state.** Every string a persona contributes is visible in the

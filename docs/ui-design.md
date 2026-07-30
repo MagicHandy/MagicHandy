@@ -166,7 +166,11 @@ chat furniture rather than a content library; its portrait tile grid is a siblin
 of the video grid rather than a reuse of it (portrait aspect, copy overlaid on a
 scrim), while every interaction state — hover/focus border, focus ring, disabled
 opacity — is borrowed verbatim so the two grids read as one app
-([persona-page.md](persona-page.md) §5).
+([persona-page.md](persona-page.md) §5). The leading dashed footprint is split
+by a horizontal rule into equal New and Import actions rather than adding a
+second utility card. The editor's fixed action bar owns portable Export beside
+Save and Duplicate; export stays read-only but waits for visible text/lore
+edits to be saved, so the archive cannot disagree with the window.
 
 **Every settings tab has the same shape**: an `h2.section-title` naming the tab,
 then `.group` cards with an `h3.group-title` naming each category. No control

@@ -13,7 +13,7 @@ export function PersonasRoute() {
   const [payload, setPayload] = useState<PersonasPayload | null>(null);
   const [error, setError] = useState("");
   const [editingID, setEditingID] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
   const autopilotActive = state?.modes?.mode === "autopilot"
     || state?.modes?.active_mode === "autopilot";
   const locked = !backendOnline || readOnly || autopilotActive;
@@ -58,7 +58,7 @@ export function PersonasRoute() {
   const closeEditor = useCallback(() => setEditingID(""), []);
 
   const create = async () => {
-    setCreating(true);
+    setAdding(true);
     try {
       const created = await api.createPersona({ name: t("New persona") });
       setPayload(created);
@@ -69,7 +69,24 @@ export function PersonasRoute() {
     } catch (createError) {
       reportError(createError instanceof Error ? createError.message : String(createError));
     } finally {
-      setCreating(false);
+      setAdding(false);
+    }
+  };
+
+  const importPersona = async (file: File) => {
+    setAdding(true);
+    try {
+      const imported = await api.importPersona(file);
+      setPayload(imported);
+      setError("");
+      if (imported.persona) {
+        setEditingID(imported.persona.id);
+        show(t("{name} imported.", { name: imported.persona.name }), "success");
+      }
+    } catch (importError) {
+      reportError(importError instanceof Error ? importError.message : String(importError));
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -91,9 +108,10 @@ export function PersonasRoute() {
             personas={payload.personas}
             defaultPersona={payload.default_persona}
             activeID={payload.active_persona_id}
-            locked={locked || creating}
+            locked={locked || adding}
             onOpen={(item) => setEditingID(item.id)}
             onCreate={() => void create()}
+            onImport={(file) => void importPersona(file)}
           />
         )}
         {payload && editing && (
@@ -102,10 +120,12 @@ export function PersonasRoute() {
             options={payload.options}
             promptSets={payload.prompt_sets ?? []}
             locked={locked}
+            exportAvailable={backendOnline}
             onApplied={applyPayload}
             onPersonaChanged={applyPersona}
             onClose={closeEditor}
             onError={reportError}
+            onExported={(name) => show(t("{name} exported.", { name }), "success")}
           />
         )}
       </div>

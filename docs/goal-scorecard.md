@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-30, session-correct notification lifecycle
+## Snapshot — 2026-07-30, portable persona archives
 
 ### Goal 1: Maintainability
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,873,600 bytes plain and 16,339,968 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,987,776 bytes plain and 16,424,448 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,499,624 raw / 746,749 gzip bytes. Lazy loading limits
-   the English startup path to 699,807 raw / 187,885 gzip bytes; all HTML/CSS/JS
-   is 1,055,388 raw / 309,352 gzip bytes. Independent Autopilot clocks,
+   browser payload is 1,503,641 raw / 747,839 gzip bytes. Lazy loading limits
+   the English startup path to 702,999 raw / 188,757 gzip bytes; all HTML/CSS/JS
+   is 1,059,405 raw / 310,442 gzip bytes. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
    3,315 gzip bytes against their preceding checked-in bundle; browser-session
    notification persistence adds another 1,424 raw / 481 gzip bytes. These
@@ -124,6 +124,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-30** - Added versioned local persona portability. The leading
+  persona utility tile now has equal New and Import halves, while the editor
+  exports the persisted persona and blocks export during unsaved/in-flight text
+  or lore edits. Bounded `.mhpersona` ZIPs carry a strict JSON manifest,
+  optional validated JPEG, lore, and a selected behavior profile; imports mint
+  fresh persona/lore/profile IDs, trust local built-in profiles by ID, and
+  exclude sessions, timestamps, settings, memories, anatomy, capability gates,
+  and motion limits. Unknown paths/fields/schema versions, asset mismatches,
+  oversized compressed or decompressed entries, malformed portraits, and
+  non-controller imports are rejected. Full `go test ./...`, vet, lint (zero
+  issues), all 328 frontend tests, the 1,311-key localization audit, typecheck,
+  and production build pass. Windows cannot run `go test -race` without a C
+  compiler; the unchanged Ubuntu race gate remains authoritative. English
+  startup is 702,999 / 188,757 raw/gzip; all HTML/CSS/JS is 1,059,405 /
+  310,442; complete embedded output is 1,503,641 / 747,839. Pure-Go binaries
+  are 22,987,776 plain / 16,424,448 stripped bytes.
 
 - **2026-07-30** - Separated notification event consumption from visible
   history. A cleared backend completion can no longer be recreated by the next

@@ -137,24 +137,51 @@
   background: color-mix(in srgb, var(--surface-2) 90%, transparent);
 }
 
-/* The create tile: same footprint, dashed, first in DOM order so keyboard users
-   reach it before the cards. */
-.persona-card-new {
+/* The leading tile keeps the portrait footprint but divides it into two real
+   controls. A horizontal divider reads as two actions, not a nested card. */
+.persona-card-actions {
   display: grid;
-  place-content: center;
-  gap: 10px;
-  justify-items: center;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   border-style: dashed;
   border-color: var(--line-strong);
   background: var(--surface);
-  color: var(--text);
+  cursor: default;
 }
-.persona-card-new:hover,
-.persona-card-new:focus-visible {
+.persona-card-actions:hover {
   border-color: var(--accent);
   border-style: dashed;
 }
-.persona-card-new .icon {
+.persona-card-action {
+  display: grid;
+  min-width: 0;
+  place-content: center;
+  gap: 10px;
+  justify-items: center;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.persona-card-action + .persona-card-action {
+  border-top: 1px dashed var(--line-strong);
+}
+.persona-card-action:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.persona-card-action:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+}
+.persona-card-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.persona-card-action .icon {
   display: grid;
   place-items: center;
   width: 38px;
@@ -163,9 +190,10 @@
   border-radius: 50%;
   color: var(--accent);
 }
-.persona-card-new span {
+.persona-card-action > span:last-child {
   font-size: 0.86rem;
   font-weight: 600;
+  text-align: center;
 }
 
 .persona-count {

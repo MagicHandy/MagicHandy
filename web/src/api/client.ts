@@ -189,6 +189,34 @@ async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload>
   return parsed as PersonasPayload;
 }
 
+async function uploadPersonaArchive(file: File): Promise<PersonasPayload> {
+  const res = await fetch("/api/personas/import", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/vnd.magichandy.persona+zip",
+      [CLIENT_HEADER]: clientId,
+    },
+    body: file,
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
+  if (!res.ok) {
+    const message = parsed && typeof parsed === "object" && "error" in parsed
+      ? String((parsed as { error: unknown }).error)
+      : `Persona import failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed as PersonasPayload;
+}
+
 // A partial persona response indicates an incompatible or damaged core. Enum
 // vocabularies and bounds are behavior, not decoration, so the browser must not
 // fabricate values that the backend may reject.
@@ -333,12 +361,15 @@ export const api = {
     request<PersonasPayload>("GET", "/api/personas", undefined, signal).then(normalizePersonas),
   createPersona: (draft: PersonaDraft) =>
     request<PersonasPayload>("POST", "/api/personas", draft).then(normalizePersonas),
+  importPersona: (file: File) => uploadPersonaArchive(file).then(normalizePersonas),
   updatePersona: (id: string, draft: PersonaDraft) =>
     request<PersonasPayload>("PATCH", `/api/personas/${encodeURIComponent(id)}`, draft).then(normalizePersonas),
   deletePersona: (id: string) =>
     request<PersonasPayload>("DELETE", `/api/personas/${encodeURIComponent(id)}`).then(normalizePersonas),
   duplicatePersona: (id: string) =>
     request<PersonasPayload>("POST", `/api/personas/${encodeURIComponent(id)}/duplicate`, {}).then(normalizePersonas),
+  exportPersona: (id: string) =>
+    download(`/api/personas/${encodeURIComponent(id)}/export`, "persona.mhpersona"),
   savePersonaPortrait: (id: string, image: Blob) => uploadPortrait(id, image).then(normalizePersonas),
   deletePersonaPortrait: (id: string) =>
     request<PersonasPayload>("DELETE", `/api/personas/${encodeURIComponent(id)}/portrait`).then(normalizePersonas),
@@ -585,12 +616,12 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
   return parsed as { import: MotionImportResult };
 }
 
-async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+async function download(path: string, fallbackFilename = "motion-content.json"): Promise<{ blob: Blob; filename: string }> {
   const res = await fetch(path, { headers: { [CLIENT_HEADER]: clientId } });
   if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
-  return { blob: await res.blob(), filename: match?.[1] ?? "motion-content.json" };
+  return { blob: await res.blob(), filename: match?.[1] ?? fallbackFilename };
 }
 
 async function requestWithSignal<T>(method: string, path: string, signal?: AbortSignal): Promise<T> {
