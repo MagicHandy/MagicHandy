@@ -295,7 +295,7 @@
   bottom: 0;
   display: flex;
   gap: 5px;
-  justify-content: center;
+  justify-content: flex-end;
   padding: 6px 5px 5px;
   background: linear-gradient(to bottom,
     rgb(0 0 0 / 0%),
