@@ -49,6 +49,27 @@ const (
 	AutopilotDefaultMotionMinSeconds = 20
 	// AutopilotDefaultMotionMaxSeconds is the upper natural motion bound.
 	AutopilotDefaultMotionMaxSeconds = 60
+
+	// AutopilotArcHold keeps the session arc where it is.
+	AutopilotArcHold = "hold"
+	// AutopilotArcAdvance asks the backend to move the arc forward one bounded
+	// step. The model can never write the value itself.
+	AutopilotArcAdvance = "advance"
+	// AutopilotArcEase asks the backend to move the arc back one bounded step, so
+	// the model can wind down as well as build.
+	AutopilotArcEase = "ease"
+
+	// AutopilotMinimumArcMinutes and AutopilotMaximumArcMinutes bound the arc
+	// length. Below the minimum the bar would fill faster than the model could
+	// respond to it.
+	AutopilotMinimumArcMinutes = 5
+	// AutopilotMaximumArcMinutes is the longest arc a user may configure.
+	AutopilotMaximumArcMinutes = 180
+	// AutopilotDefaultArcMinutes is the first-run arc length.
+	AutopilotDefaultArcMinutes = 30
+	// AutopilotArcNudgePercent is the most one model turn may move the arc. A
+	// clamp is what keeps an eager model from sprinting the bar to full.
+	AutopilotArcNudgePercent = 6
 )
 
 // AutopilotSettings contains durable user preferences. Scheduler deadlines,
@@ -64,6 +85,20 @@ type AutopilotSettings struct {
 	AdaptiveSpeechTiming  bool   `json:"adaptive_speech_timing"`
 	AdaptiveMotionTiming  bool   `json:"adaptive_motion_timing"`
 	SpeechMotionAuthority string `json:"speech_motion_authority"`
+	// SessionTracking lets the model see elapsed session time, how long the
+	// current speed has held, and which way speed has been moving. Inert input:
+	// it informs decisions and authorizes nothing. Off removes the facts from the
+	// prompt entirely rather than sending zeros.
+	SessionTracking bool `json:"session_tracking"`
+	// SessionArc enables the visible fill bar the model is encouraged to build
+	// along. It is a separate switch from SessionTracking because knowing how
+	// long a session has run and being encouraged to escalate through it are
+	// different things, and a user may want the first without the second.
+	//
+	// The arc positions intent inside the user's existing speed band. It never
+	// widens the band, the focus range, or any capability gate.
+	SessionArc        bool `json:"session_arc"`
+	SessionArcMinutes int  `json:"session_arc_minutes"`
 }
 
 // DefaultAutopilotSettings returns the conservative first-run profile.
@@ -78,7 +113,19 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		AdaptiveSpeechTiming:  true,
 		AdaptiveMotionTiming:  true,
 		SpeechMotionAuthority: AutopilotSpeechMotionChatOnly,
+		// Tracking defaults on: it is read-only context that makes cadence
+		// decisions better informed. The arc defaults off because it changes what
+		// the model is encouraged to do, which is a choice the user should make.
+		SessionTracking:   true,
+		SessionArc:        false,
+		SessionArcMinutes: AutopilotDefaultArcMinutes,
 	}
+}
+
+// ValidAutopilotArcIntent reports whether a model-supplied arc nudge is one this
+// build honors. Anything else resolves to hold.
+func ValidAutopilotArcIntent(intent string) bool {
+	return oneOf(intent, AutopilotArcHold, AutopilotArcAdvance, AutopilotArcEase)
 }
 
 // SpeechWindow returns the effective bounds and whether autonomous speech is
@@ -148,12 +195,29 @@ func validateAutopilotSettings(settings AutopilotSettings) error {
 	); err != nil {
 		return err
 	}
-	return validateAutopilotWindow(
+	if err := validateAutopilotWindow(
 		"motion",
 		settings.MotionMinSeconds,
 		settings.MotionMaxSeconds,
 		AutopilotMaximumMotionSeconds,
-	)
+	); err != nil {
+		return err
+	}
+	if settings.SessionArcMinutes < AutopilotMinimumArcMinutes ||
+		settings.SessionArcMinutes > AutopilotMaximumArcMinutes {
+		return fmt.Errorf(
+			"autopilot session arc length must be between %d and %d minutes",
+			AutopilotMinimumArcMinutes,
+			AutopilotMaximumArcMinutes,
+		)
+	}
+	// The arc is a reading of session progress, so it cannot exist without the
+	// tracking that produces it. Rejecting the combination keeps the settings
+	// document from expressing a state the runtime would have to silently ignore.
+	if settings.SessionArc && !settings.SessionTracking {
+		return errors.New("autopilot session arc requires session tracking")
+	}
+	return nil
 }
 
 func validateAutopilotWindow(label string, minimum int, maximum int, ceiling int) error {
@@ -200,6 +264,16 @@ func applyMissingAutopilotDefaults(
 	}
 	if settings.MotionMaxSeconds == 0 {
 		settings.MotionMaxSeconds = defaults.MotionMaxSeconds
+	}
+	// A bool cannot distinguish "absent" from "explicitly false", so the new arc
+	// length doubles as the presence marker for this field group: it is zero only
+	// in a document written before the group existed. Without this, a document
+	// saved between the cadence release and this one would silently run with
+	// tracking off while the documented default is on. Once the group has been
+	// saved once, the marker is non-zero and an explicit false is preserved.
+	if settings.SessionArcMinutes == 0 {
+		settings.SessionArcMinutes = defaults.SessionArcMinutes
+		settings.SessionTracking = defaults.SessionTracking
 	}
 	return settings
 }

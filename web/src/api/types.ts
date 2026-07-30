@@ -25,6 +25,24 @@ export interface AutopilotSettings {
   adaptive_speech_timing: boolean;
   adaptive_motion_timing: boolean;
   speech_motion_authority: "chat_only" | "style_only" | "full_motion" | string;
+  // Inert read-only context: elapsed session time, how long the current speed has
+  // held, and which way speed has been moving. Off omits the facts from the
+  // prompt rather than sending zeros.
+  session_tracking: boolean;
+  // The visible progression bar. Separate from tracking because knowing how long
+  // a session has run and being encouraged to build through it are different
+  // things. Requires session_tracking.
+  session_arc: boolean;
+  session_arc_minutes: number;
+}
+
+// SessionArc is the visible progression bar. The backend owns the value; the
+// model may ask to advance or ease it by one bounded step and can never write it.
+export interface SessionArc {
+  enabled: boolean;
+  percent: number;
+  minutes: number;
+  intent?: string;
 }
 
 export interface MotionSample {
@@ -371,6 +389,9 @@ export interface ModesStatus {
   speech_in_ms?: number;
   motion_planned?: boolean;
   speech_waiting_playback?: boolean;
+  // Absent while the user has the bar switched off, so the UI renders nothing
+  // rather than an empty bar.
+  session_arc?: SessionArc;
   [k: string]: unknown;
 }
 

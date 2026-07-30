@@ -18,6 +18,49 @@ type AutopilotContext struct {
 	CurrentSpeed     int
 	CurrentArea      string
 	AreaFocusEnabled bool
+	// SessionTracking gates the three session facts below. When false they are
+	// omitted from the prompt entirely rather than rendered as zeros, so the model
+	// cannot reason from a number that means "unknown".
+	SessionTracking       bool
+	SessionSeconds        int
+	SecondsAtCurrentSpeed int
+	SpeedTrend            string
+	// ArcEnabled gates the session arc. Disabled means the arc is never described,
+	// so the model cannot build along a bar it was never shown.
+	ArcEnabled bool
+	ArcPercent int
+}
+
+// writeSessionProgress renders the backend-owned session facts. They are stated
+// as observations, never as instructions: the model decides what to do with
+// them, and none of them widen a limit.
+func writeSessionProgress(builder *strings.Builder, context AutopilotContext) {
+	if !context.SessionTracking {
+		return
+	}
+	if context.SessionSeconds > 0 {
+		fmt.Fprintf(builder, "Session so far: %s.", formatSessionSpan(context.SessionSeconds))
+		if context.SecondsAtCurrentSpeed > 0 {
+			fmt.Fprintf(builder, " This speed has held for %s.", formatSessionSpan(context.SecondsAtCurrentSpeed))
+		}
+		if trend := strings.TrimSpace(context.SpeedTrend); trend != "" && trend != "steady" {
+			fmt.Fprintf(builder, " Speed has been %s.", trend)
+		}
+		builder.WriteString("\n")
+	}
+	if context.ArcEnabled {
+		fmt.Fprintf(builder,
+			"Session arc: %d%% of the way along, and the user can see this bar. Aim higher within the allowed speed range as it fills and ease back as it empties. The allowed range itself never moves.\n",
+			context.ArcPercent)
+		builder.WriteString("Set arc to \"advance\" to move the bar forward, \"ease\" to move it back, or \"hold\" to leave it. The app bounds each step.\n")
+	}
+}
+
+func formatSessionSpan(seconds int) string {
+	if seconds < 90 {
+		return fmt.Sprintf("%d seconds", seconds)
+	}
+	return fmt.Sprintf("%d minutes", (seconds+30)/60)
 }
 
 // AutopilotMotionMessage renders one motion-planning turn. Its strict model
@@ -36,6 +79,7 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	if len(context.RecentPatternIDs) > 0 {
 		fmt.Fprintf(&builder, "Recently played patterns (oldest first): %s. Treat these as context, not a ban on deliberate reuse.\n", strings.Join(context.RecentPatternIDs, ", "))
 	}
+	writeSessionProgress(&builder, context)
 	builder.WriteString("Decide what happens for the next stretch using the recent conversation as the user's ongoing direction:\n")
 	builder.WriteString("- To change motion, use action \"target\" and include only the pattern_id, intensity, speed_percent, or area fields that should change; omitted fields preserve the live target.\n")
 	builder.WriteString("- A broad request to vary or change things up may change pattern, speed, area, or a fitting combination. Do not reduce every variation request to pattern cycling.\n")
@@ -44,7 +88,8 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	}
 	builder.WriteString("- To deliberately keep the current motion going, set motion to {\"action\":\"none\"} or omit motion.\n")
 	builder.WriteString("- Never use action \"start\" or \"stop\": only the scheduler starts and only the user stops motion.\n")
-	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds.")
+	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds.\n")
+	builder.WriteString("- Set variability to settled, normal, or restless for how much the speed should wander before then. This is separate from next: a long stretch can still breathe, and a short one can stay flat.")
 	return builder.String()
 }
 
@@ -62,6 +107,7 @@ func AutopilotSpeechMessage(context AutopilotContext) string {
 		}
 		fmt.Fprintf(&builder, "Current motion: pattern %q at %d%% speed in area %q.\n", context.CurrentPatternID, context.CurrentSpeed, area)
 	}
+	writeSessionProgress(&builder, context)
 	builder.WriteString("Write one short in-character line that fits the recent conversation (under 150 characters and no question that demands an answer).\n")
 	builder.WriteString("Set next to soon, normal, or later for when another spoken check-in would feel natural. Do not provide seconds.")
 	return builder.String()

@@ -191,4 +191,75 @@ describe("VoicePlaybackProvider", () => {
     expect(voiceRequestAudio).not.toHaveBeenCalled();
     expect(show).not.toHaveBeenCalled();
   });
+
+  // Autopilot restarts its speech clock from this acknowledgement, so the
+  // acknowledgement has to survive the ways playback fails. Skipping it left the
+  // backend waiting out a two-minute fallback and silently turned a Talkative
+  // cadence into one line every two minutes.
+  it("acknowledges a blocked autoplay so the speech clock is not stalled", async () => {
+    voiceRequest.mockResolvedValue({
+      request: {
+        id: "tts-1",
+        role: "tts",
+        type: "speak",
+        state: "done",
+        created_at: "2026-07-15T12:00:00Z",
+        audio_bytes: 48_000,
+      },
+    });
+    playAudio.mockRejectedValue(new Error("play() failed because the user didn't interact with the document first"));
+
+    render(<VoicePlaybackProvider><QueueButton /></VoicePlaybackProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Queue" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(voiceRequestPlayed).toHaveBeenCalledWith("tts-1");
+    expect(show).toHaveBeenCalled();
+  });
+
+  it("acknowledges a failed synthesis so the speech clock is not stalled", async () => {
+    voiceRequest.mockResolvedValue({
+      request: {
+        id: "tts-1",
+        role: "tts",
+        type: "speak",
+        state: "failed",
+        created_at: "2026-07-15T12:00:00Z",
+        error: { code: "inference_failed", message: "decoder failed" },
+      },
+    });
+
+    render(<VoicePlaybackProvider><QueueButton /></VoicePlaybackProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Queue" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(voiceRequestPlayed).toHaveBeenCalledWith("tts-1");
+  });
+
+  // A cancellation is the backend's own doing and it reschedules that case
+  // itself, so acknowledging it would double-schedule the next line.
+  it("does not acknowledge a cancelled request", async () => {
+    voiceRequest.mockResolvedValue({
+      request: {
+        id: "tts-1",
+        role: "tts",
+        type: "speak",
+        state: "canceled",
+        created_at: "2026-07-15T12:00:00Z",
+      },
+    });
+
+    render(<VoicePlaybackProvider><QueueButton /></VoicePlaybackProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Queue" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(voiceRequestPlayed).not.toHaveBeenCalled();
+    expect(show).not.toHaveBeenCalled();
+  });
 });

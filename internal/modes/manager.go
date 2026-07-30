@@ -93,6 +93,9 @@ type Status struct {
 	SpeechMs              int64 `json:"speech_in_ms,omitempty"`
 	MotionPlanned         bool  `json:"motion_planned,omitempty"`
 	SpeechWaitingPlayback bool  `json:"speech_waiting_playback,omitempty"`
+	// Arc is the visible session progression bar. Absent when the user has the
+	// switch off, so the UI shows nothing rather than an empty bar.
+	Arc *SessionArc `json:"session_arc,omitempty"`
 }
 
 // Manager owns at most one active mode loop.
@@ -136,6 +139,14 @@ type Manager struct {
 	lastDecisionTime time.Duration
 	motionCadenceRNG *rand.Rand
 	speechCadenceRNG *rand.Rand
+	swayRNG          *rand.Rand
+	// swayPoints is the remaining intra-segment speed schedule, in time order.
+	swayPoints []swayPoint
+	// speedChangedAt and previousSpeed back the session facts handed to the
+	// model, so it can tell a deliberate plateau from an accidental one.
+	speedChangedAt time.Time
+	previousSpeed  int
+	arc            arcState
 
 	operationID     uint64
 	operationMode   string
@@ -202,6 +213,9 @@ func (m *Manager) Status() Status {
 		status.LastSay = lastSay
 		status.MotionPlanned = pendingMotion
 		status.SpeechWaitingPlayback = speechWaiting
+		if arc := m.SessionArcSnapshot(); arc.Enabled {
+			status.Arc = &arc
+		}
 		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
 			status.MotionChangeMs = remaining
 		}
@@ -236,6 +250,11 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.chatKeepalive = false
 	m.chatTargetPending = false
 	m.driftDone = true
+	m.swayPoints = nil
+	m.previousSpeed = 0
+	m.speedChangedAt = time.Time{}
+	// A new run is a new arc: the bar measures this session, not the last one.
+	m.arc = arcState{startedAt: m.options.Now()}
 	m.deadline = time.Time{}
 	m.nextRetry = time.Time{}
 	if mode == ModeFreestyle || mode == ModeAutopilot {
@@ -359,6 +378,7 @@ func (m *Manager) PrepareChatTarget() uint64 {
 	m.chatTargetPending = true
 	m.generation++
 	m.cancelOperationLocked()
+	m.swayPoints = nil
 	return m.generation
 }
 
@@ -376,6 +396,7 @@ func (m *Manager) NotifyChatActivity() {
 	m.generation++
 	m.cancelOperationLocked()
 	m.pendingMotion = nil
+	m.swayPoints = nil
 	m.speechWaitingID = ""
 	m.speechFallbackAt = time.Time{}
 	m.scheduleSpeechLocked(now, TimingNormal)
@@ -425,6 +446,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 	m.chatKeepalive = adoptable
 	adopted := m.mode == ModeAutopilot && adoptable
 	if adopted {
+		previousSpeed := m.segment.SpeedPercent
 		duration := m.sampleMotionDelayLocked(TimingSoon)
 		if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 			duration = m.options.MaxSegmentDuration
@@ -436,8 +458,13 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 		m.deadline = now.Add(duration)
 		m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(duration))
 		m.pendingMotion = nil
+		m.swayPoints = nil
 		m.driftDone = true
 		m.nextRetry = time.Time{}
+		if segment.SpeedPercent != previousSpeed {
+			m.previousSpeed = previousSpeed
+			m.speedChangedAt = now
+		}
 		m.decisionSource = "interactive"
 		m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
 		if len(m.recentPatternIDs) > 4 {
@@ -830,6 +857,15 @@ func (m *Manager) freezeDeadline() {
 	}
 	if !m.speechFallbackAt.IsZero() {
 		m.speechFallbackAt = m.speechFallbackAt.Add(m.options.Tick)
+	}
+	for index := range m.swayPoints {
+		m.swayPoints[index].at = m.swayPoints[index].at.Add(m.options.Tick)
+	}
+	if !m.speedChangedAt.IsZero() {
+		m.speedChangedAt = m.speedChangedAt.Add(m.options.Tick)
+	}
+	if !m.arc.startedAt.IsZero() {
+		m.arc.startedAt = m.arc.startedAt.Add(m.options.Tick)
 	}
 }
 

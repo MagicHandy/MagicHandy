@@ -149,3 +149,44 @@ func (s *Server) handleModeStop(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, s.modes.Status())
 }
+
+// handleAutopilotArc lets the user place or clear the visible session arc. The
+// bar is as much the user's as the model's: a progression you can see but not
+// move would be a readout, not an override.
+func (s *Server) handleAutopilotArc(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	if s.modes == nil {
+		writeError(w, http.StatusServiceUnavailable, errors.New("mode manager is unavailable"))
+		return
+	}
+	var body struct {
+		// Percent places the bar. Reset clears it and re-anchors the clock.
+		Percent *int `json:"percent,omitempty"`
+		Reset   bool `json:"reset,omitempty"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var applied bool
+	switch {
+	case body.Reset:
+		applied = s.modes.ResetSessionArc()
+	case body.Percent != nil:
+		if *body.Percent < 0 || *body.Percent > 100 {
+			writeError(w, http.StatusBadRequest, errors.New("session arc percent must be between 0 and 100"))
+			return
+		}
+		applied = s.modes.SetSessionArcPercent(*body.Percent)
+	default:
+		writeError(w, http.StatusBadRequest, errors.New("supply percent or reset"))
+		return
+	}
+	if !applied {
+		writeError(w, http.StatusConflict, errors.New("start Autopilot before placing the session arc"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"session_arc": s.modes.SessionArcSnapshot()})
+}
