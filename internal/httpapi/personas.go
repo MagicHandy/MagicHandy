@@ -28,6 +28,13 @@ func (s *Server) personaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/chat/sessions/{id}/persona", s.handleChatSessionPersona)
 }
 
+type defaultPersonaView struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ChatVoice   string `json:"chat_voice"`
+	PromptSetID string `json:"prompt_set_id"`
+}
+
 // personasPayload is the whole page state in one response: the library, which
 // persona the active conversation is using, and the enum vocabularies.
 //
@@ -52,8 +59,15 @@ func (s *Server) personasPayload(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	settings, _ := s.store.Snapshot()
 	return map[string]any{
-		"personas":          personas,
+		"personas": personas,
+		"default_persona": defaultPersonaView{
+			Name:        "MagicHandy",
+			Description: settings.LLM.PersonaDescription,
+			ChatVoice:   settings.LLM.ChatVoice,
+			PromptSetID: settings.LLM.PromptSet,
+		},
 		"active_persona_id": activeID,
 		"active_session_id": sessionID,
 		"prompt_sets":       sets,

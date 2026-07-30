@@ -124,6 +124,27 @@ Ranked by threat to the stated goals:
 ## History
 
 
+- **2026-07-29** - Stabilized the persona editor and aligned its chat selector.
+  Lore loading now follows the persona ID instead of parent callback identity,
+  preventing app-state polling from clearing and rebuilding the lore section.
+  The drawer keeps its header and action bar fixed around one bounded scroll
+  body; the page reserves desktop space for the drawer and uses consistent
+  portrait tracks. Chat now presents the persona selector as a box-shaped
+  dropdown aligned with the session tabs. The generic MagicHandy profile is now
+  listed in both surfaces as a backend-provided view of global model settings;
+  selecting it leaves the session persona ID empty and does not create a second
+  editable database row. Regression tests cover settings synchronization,
+  callback-identity rerenders, one lore request, and persistent content. All 314
+  frontend tests, 1,279-key localization validation, typecheck, production
+  build, `go test ./...`, `go vet ./...`, and lint (zero issues) pass. An
+  isolated 1280x986 browser run held the drawer at the same 806px scroll offset
+  across repeated backend polls; logs showed one lore request after opening
+  instead of the prior repeated requests. No hardware motion was issued.
+  Against the preceding build, the English startup payload is 685,879 raw /
+  184,576 gzip bytes (+3,329 / +674); all HTML/CSS/JS and complete embedded
+  output are 1,036,503 / 304,317 (+3,660 / +736) and 1,480,739 / 741,714
+  (+3,660 / +736). Plain/stripped binaries are 22,703,616 / 16,205,312 bytes
+  (+8,192 / +5,632), both within budget.
 - **2026-07-29** - Completed the bounded persona-lore slice and corrected the
   preceding persona foundation after review. Persona prompt sets now select the
   actual interactive and Autopilot prompt, default focus applies only to an

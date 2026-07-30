@@ -124,6 +124,13 @@ The first migration is a guarded Go hook rather than an unconditional
 The migration does not guess how legacy prompt, tone, or motion-bias JSON maps
 onto current safety-owned axes.
 
+The generic **MagicHandy** persona shown in the UI is a backend-provided view of
+the existing global LLM settings, not a seeded row in `personas`. An empty
+session `persona_id` selects that view. Copying those settings into a migration
+row would create two independently editable defaults and let them drift; the
+API instead returns `default_persona` from the current settings snapshot on
+every read.
+
 `CHECK` constraints are deliberately **not** used for the enums. The existing
 tables (`patterns.origin`, `messages.role`) use them because those value sets
 are structural; `chat_voice` and `reaction_style` are product vocabulary that
@@ -297,8 +304,8 @@ placement (overlaid, not below), and the tile minimum all differ.
 ```css
 .persona-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 220px));
+  gap: 14px;
 }
 .persona-card {              /* <button>, not a div */
   position: relative;
@@ -336,6 +343,10 @@ Structure inside a tile:
   `.badge`.
 - **Active state** — `aria-current="true"` plus a 2px accent ring. The active
   persona must be identifiable at a glance in a grid of twelve.
+- **Default state** — the Settings-backed MagicHandy tile is always pinned
+  after New persona. It links to Model settings instead of opening the custom
+  persona editor, and is active whenever the session has no resolvable custom
+  persona.
 
 ### 5.3 The "New persona" tile
 
@@ -344,9 +355,9 @@ plus glyph and label. Two details that decide whether it feels right:
 
 - It is a real `<button>` in DOM order, so keyboard users reach it first and
   screen readers announce it as a control among cards, not as a card.
-- **On an empty library it is the only tile** — with the page lede doing the
-  explaining. Not an empty-state panel that gets swapped for a grid at n=1;
-  that transition is jarring and doubles the layout code.
+- **On an empty custom library it appears beside the default MagicHandy tile**
+  — not inside an empty-state panel that gets swapped for a grid at n=1. That
+  transition is jarring and doubles the layout code.
 
 ### 5.4 Editor
 
@@ -364,11 +375,23 @@ Immediate-apply for toggles and selects; explicit **Save** for the text fields
 (a description is not something to persist per keystroke). Delete is
 confirmed and says what survives — sessions keep their transcripts.
 
+The drawer header and Save / Duplicate / Delete bar remain fixed; only the
+group stack scrolls. Lore loading is keyed to the persona ID, not to callback
+identity, so app-state polling cannot collapse the lore section or move the
+user's scroll position.
+
 ### 5.5 Chat integration
 
 - The Chat header shows the active persona's portrait and name beside the
-  existing mood chip, and clicking it opens a compact switcher. Going to a
+  existing mood chip in a compact, box-shaped dropdown control aligned with the
+  chat tabs. It occupies the first visible header slot instead of repeating a
+  visible "Chat" label; the page keeps a visually hidden Chat heading for
+  document structure. Clicking the selector opens the switcher. Going to a
   separate page to change who you are talking to is a trip too many.
+- The Settings-backed MagicHandy profile is always the first switcher option
+  and is displayed as active when the session's `persona_id` is empty or no
+  longer resolves. Selecting it clears the stored ID; it does not copy settings
+  into a persona row.
 - New sessions inherit the last-used persona.
 - Switching mid-session is allowed, takes effect on the next turn, and is
   visible via the provenance-derived divider (§4). Silent switching is the

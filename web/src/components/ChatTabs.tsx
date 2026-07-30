@@ -117,7 +117,7 @@ export function ChatTabs({ sessions, activeId, disabled, onActivate, onNew, onSa
 
   return (
     <header className="chat-tabs-bar">
-      <h1 className="chat-tabs-title">{t("Chat")}</h1>
+      <h1 className="visually-hidden">{t("Chat")}</h1>
       {activeId && <PersonaSwitcher sessionID={activeId} disabled={disabled} />}
       {assistantMood && (
         <div className="chat-mood-readout" role="status" aria-label={t("Assistant mood: {mood}", { mood: translateKnown(assistantMood) })}>

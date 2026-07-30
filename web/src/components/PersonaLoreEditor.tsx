@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { Persona, PersonaLoreDraft, PersonaLoreEntry, PersonaLorePayload } from "../api/types";
 import { t } from "../i18n";
@@ -22,6 +22,11 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -30,13 +35,13 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
     void api.personaLore(persona.id, controller.signal)
       .then((next) => setPayload(next))
       .catch((error) => {
-        if (!controller.signal.aborted) onError(errorMessage(error));
+        if (!controller.signal.aborted) onErrorRef.current(errorMessage(error));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [onError, persona.id]);
+  }, [persona.id]);
 
   const apply = async (action: () => Promise<PersonaLorePayload>) => {
     setBusy(true);

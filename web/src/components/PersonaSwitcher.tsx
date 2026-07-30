@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api/client";
-import type { Persona } from "../api/types";
+import type { DefaultPersona, Persona } from "../api/types";
+import { ChevronUpIcon } from "../shell/icons";
 import { monogram } from "./PersonaGrid";
 
 // The chat header's persona control. Going to a separate page to change who you
@@ -21,6 +22,7 @@ export function PersonaSwitcher({
   onChanged?: () => void;
 }) {
   const [personas, setPersonas] = useState<Persona[]>([]);
+  const [defaultPersona, setDefaultPersona] = useState<DefaultPersona | null>(null);
   const [activeID, setActiveID] = useState("");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -30,12 +32,14 @@ export function PersonaSwitcher({
     try {
       const payload = await api.personas(signal);
       setPersonas(payload.personas);
+      setDefaultPersona(payload.default_persona);
       setActiveID(payload.active_persona_id);
     } catch {
       // A persona chip is decoration on top of chat. If the library cannot be
       // read, the header simply shows nothing rather than an error the user can
       // do nothing about mid-conversation.
       setPersonas([]);
+      setDefaultPersona(null);
       setActiveID("");
     }
   }, []);
@@ -63,11 +67,13 @@ export function PersonaSwitcher({
   }, [open]);
 
   const active = personas.find((item) => item.id === activeID);
+  const current = active ?? defaultPersona;
   const select = async (personaID: string) => {
     setBusy(true);
     try {
       const payload = await api.selectSessionPersona(sessionID, personaID);
       setPersonas(payload.personas);
+      setDefaultPersona(payload.default_persona);
       setActiveID(payload.active_persona_id);
       setOpen(false);
       onChanged?.();
@@ -79,11 +85,11 @@ export function PersonaSwitcher({
     }
   };
 
-  if (personas.length === 0) return null;
+  if (!defaultPersona || !current) return null;
   const portrait = active ? api.personaPortraitURL(active) : "";
 
   return (
-    <div ref={wrapper} style={{ position: "relative" }}>
+    <div ref={wrapper} className="persona-switcher-wrap">
       <button
         type="button"
         className="persona-chip"
@@ -96,22 +102,26 @@ export function PersonaSwitcher({
           ? (portrait
             ? <img className="persona-chip-avatar" src={portrait} alt="" />
             : <span className="persona-chip-avatar-text" aria-hidden="true">{monogram(active.name)}</span>)
-          : <span className="persona-chip-avatar-text" aria-hidden="true">—</span>}
-        <span className="persona-chip-name">{active ? active.name : t("No persona")}</span>
+          : <span className="persona-chip-avatar-text" aria-hidden="true">{monogram(defaultPersona.name)}</span>}
+        <span className="persona-chip-name">{current.name}</span>
+        <ChevronUpIcon size={14} className="persona-chip-chevron" />
       </button>
       {open && (
-        <div className="persona-switcher" role="menu" style={{ top: "calc(100% + 6px)", right: 0 }}>
+        <div className="persona-switcher" role="menu">
           <button
             type="button"
             role="menuitemradio"
-            aria-checked={!activeID}
-            aria-current={!activeID ? "true" : undefined}
+            aria-checked={!active}
+            aria-current={!active ? "true" : undefined}
             className="persona-switcher-option"
             disabled={busy}
             onClick={() => void select("")}
           >
-            <span className="persona-chip-avatar-text" aria-hidden="true">—</span>
-            <span>{t("No persona (use Settings)")}</span>
+            <span className="persona-chip-avatar-text" aria-hidden="true">{monogram(defaultPersona.name)}</span>
+            <span className="persona-switcher-option-copy">
+              <strong>{defaultPersona.name}</strong>
+              <small>{t("Default")}</small>
+            </span>
           </button>
           {personas.map((item) => {
             const itemPortrait = api.personaPortraitURL(item);

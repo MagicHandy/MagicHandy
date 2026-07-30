@@ -223,6 +223,16 @@ export interface PersonaDraft {
   lore_mode?: string;
 }
 
+// DefaultPersona is the global Settings-backed fallback presented as a
+// first-class library choice. It is deliberately not a stored persona row:
+// selecting it keeps the session's persona_id empty.
+export interface DefaultPersona {
+  name: string;
+  description: string;
+  chat_voice: string;
+  prompt_set_id: string;
+}
+
 export interface PersonaLoreEntry {
   id: string;
   persona_id: string;
@@ -253,6 +263,7 @@ export interface PersonaLorePayload {
 
 export interface PersonasPayload {
   personas: Persona[];
+  default_persona: DefaultPersona;
   active_persona_id: string;
   active_session_id: string;
   prompt_sets?: PromptSet[];

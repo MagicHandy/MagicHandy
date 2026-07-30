@@ -41,6 +41,7 @@ describe("ChatTabs", () => {
     const tablist = screen.getByRole("tablist", { name: "Chat sessions" });
     const newButton = screen.getByRole("button", { name: "Start a new chat" });
     expect(title.closest(".chat-tabs-bar")).toContainElement(tablist);
+    expect(title).toHaveClass("visually-hidden");
     expect(tablist.closest(".chat-tabs-scroll")?.nextElementSibling).toContainElement(newButton);
     expect(tablist.closest(".chat-tabs-scroll")).toHaveStyle({ width: "482px" });
     expect(newButton).toHaveClass("chat-new-button");

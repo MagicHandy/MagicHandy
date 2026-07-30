@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { api } from "../api/client";
-import type { Persona } from "../api/types";
+import type { DefaultPersona, Persona } from "../api/types";
 import { PlusIcon } from "../shell/icons";
 import { VOICE_CHIP_LABELS, personaOptionLabel } from "./persona-labels";
 
@@ -57,19 +57,54 @@ export function PersonaTile({
   );
 }
 
+export function DefaultPersonaTile({
+  item,
+  active,
+}: {
+  item: DefaultPersona;
+  active: boolean;
+}) {
+  return (
+    <a
+      className="persona-card persona-card-default"
+      href="#/settings/model"
+      aria-current={active ? "true" : undefined}
+      aria-label={t("{name} (Default)", { name: item.name })}
+    >
+      <span className="persona-card-monogram" aria-hidden="true">
+        <span>{monogram(item.name)}</span>
+      </span>
+      <span className="persona-card-badges">
+        {active && <span className="badge persona-active-badge">{t("active")}</span>}
+        <span className="badge">{t("Default")}</span>
+        <span className="badge">{personaOptionLabel(VOICE_CHIP_LABELS, item.chat_voice)}</span>
+      </span>
+      <span className="persona-card-copy">
+        <strong>{item.name}</strong>
+        {item.description && <span className="persona-card-description">{item.description}</span>}
+      </span>
+    </a>
+  );
+}
+
 export function PersonaGrid({
   personas,
+  defaultPersona,
   activeID,
   locked,
   onOpen,
   onCreate,
 }: {
   personas: Persona[];
+  defaultPersona: DefaultPersona;
   activeID: string;
   locked: boolean;
   onOpen: (item: Persona) => void;
   onCreate: () => void;
 }) {
+  const activePersonaExists = personas.some((item) => item.id === activeID);
+  const count = personas.length + 1;
+
   return (
     <>
       <div className="persona-grid">
@@ -85,20 +120,19 @@ export function PersonaGrid({
           <span className="icon" aria-hidden="true"><PlusIcon size={20} /></span>
           <span>{t("New persona")}</span>
         </button>
+        <DefaultPersonaTile item={defaultPersona} active={!activeID || !activePersonaExists} />
         {personas.map((item) => (
           <PersonaTile key={item.id} item={item} active={item.id === activeID} onOpen={onOpen} />
         ))}
       </div>
-      {personas.length > 0 && (
-        <p className="persona-count">
-          {/* An explicit singular key rather than a plural rule: the app has no
-              pluralization machinery, and the catalog count in the video library
-              already reads this way. */}
-          {personas.length === 1
-            ? t("1 persona")
-            : t("{count} personas · ordered by last used", { count: personas.length })}
-        </p>
-      )}
+      <p className="persona-count">
+        {/* An explicit singular key rather than a plural rule: the app has no
+            pluralization machinery, and the catalog count in the video library
+            already reads this way. */}
+        {count === 1
+          ? t("1 persona")
+          : t("{count} personas", { count })}
+      </p>
     </>
   );
 }

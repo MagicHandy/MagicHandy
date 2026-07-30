@@ -197,6 +197,12 @@ function normalizePersonas(payload: PersonasPayload): PersonasPayload {
   return {
     ...payload,
     personas: Array.isArray(payload?.personas) ? payload.personas : [],
+    default_persona: {
+      name: payload?.default_persona?.name || "MagicHandy",
+      description: payload?.default_persona?.description ?? "",
+      chat_voice: payload?.default_persona?.chat_voice || "utility",
+      prompt_set_id: payload?.default_persona?.prompt_set_id ?? "",
+    },
     active_persona_id: payload?.active_persona_id ?? "",
     active_session_id: payload?.active_session_id ?? "",
     prompt_sets: Array.isArray(payload?.prompt_sets) ? payload.prompt_sets : [],

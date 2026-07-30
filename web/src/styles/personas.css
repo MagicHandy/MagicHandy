@@ -6,8 +6,9 @@
 
 .persona-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 220px));
+  align-items: start;
+  gap: 14px;
 }
 
 .persona-card {
@@ -35,6 +36,10 @@
 .persona-card[aria-current="true"] {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+.persona-card-default {
+  display: block;
+  text-decoration: none;
 }
 
 /* Taken out of flow deliberately. A portrait that contributes layout height
@@ -159,6 +164,7 @@
 }
 
 .persona-count {
+  margin: 10px 0 0;
   color: var(--muted);
   font-size: 0.76rem;
 }
@@ -167,6 +173,16 @@
 
 /* Exactly one layer, never a modal over a modal (docs/ui-design.md). The grid
    stays visible so the persona being edited stays in context. */
+@media (width > 900px) {
+  .workspace:has(.persona-drawer) > .workspace-head,
+  .workspace:has(.persona-drawer) > .persona-page {
+    width: calc(100% - 430px);
+    max-width: calc(100% - 430px);
+    margin-right: auto;
+    margin-left: 0;
+  }
+}
+
 .persona-drawer {
   position: fixed;
   top: 0;
@@ -174,20 +190,23 @@
   z-index: 40;
   display: flex;
   flex-direction: column;
-  width: min(390px, 100vw);
+  width: min(430px, 100vw);
   height: 100%;
-  overflow-y: auto;
-  padding: 16px;
+  overflow: hidden;
   border-left: 1px solid var(--line);
   background: var(--surface);
   box-shadow: -14px 0 34px rgb(0 0 0 / 34%);
 }
 .persona-drawer-head {
   display: flex;
+  min-height: 56px;
+  flex: 0 0 auto;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  padding: 10px 14px 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
 }
 .persona-drawer-head h2 {
   overflow: hidden;
@@ -196,16 +215,39 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.persona-drawer-close {
+  width: 34px;
+  min-height: 34px;
+  flex: 0 0 34px;
+  padding: 0;
+}
+.persona-drawer-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 18px;
+  scrollbar-gutter: stable;
+}
+.persona-editor-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.persona-editor-fields .field {
+  min-width: 0;
+  margin: 0;
+}
 
 .persona-portrait-field {
-  display: flex;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
   gap: 12px;
   align-items: flex-start;
 }
 .persona-portrait-preview {
   position: relative;
-  flex: 0 0 auto;
-  width: 78px;
+  width: 84px;
   aspect-ratio: 3 / 4;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -232,9 +274,14 @@
 
 .persona-drawer-actions {
   display: flex;
+  min-height: 64px;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 18px;
+  align-items: center;
+  padding: 11px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
 }
 .persona-drawer-actions .btn-danger-outline {
   margin-left: auto;
@@ -273,34 +320,50 @@
 
 /* --- Chat header switcher ----------------------------------------------- */
 
+.persona-switcher-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  max-width: 160px;
+  flex: 0 1 160px;
+  align-items: stretch;
+  border-right: 1px solid var(--line);
+}
 .persona-chip {
-  display: inline-flex;
-  gap: 7px;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
+  gap: 6px;
   align-items: center;
-  max-width: 190px;
-  padding: 3px 9px 3px 3px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
+  padding: 5px 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-inset);
   color: var(--text);
   font: inherit;
   font-size: 0.76rem;
+  text-align: left;
   cursor: pointer;
 }
 .persona-chip:hover,
 .persona-chip:focus-visible {
-  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.persona-chip[aria-expanded="true"] {
+  background: var(--surface-2);
 }
 .persona-chip:focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 .persona-chip-avatar {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   overflow: hidden;
-  border-radius: 50%;
+  border-radius: 3px;
   background: var(--bg-inset);
   object-fit: cover;
 }
@@ -308,9 +371,9 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
   background: var(--surface-3);
   color: var(--muted);
   font-size: 0.68rem;
@@ -322,14 +385,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.persona-chip-chevron {
+  color: var(--muted);
+  transform: rotate(180deg);
+}
+.persona-chip[aria-expanded="true"] .persona-chip-chevron {
+  color: var(--accent);
+  transform: rotate(0);
+}
 
 .persona-switcher {
   position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
   z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 232px;
+  width: 242px;
+  max-width: calc(100vw - 24px);
   max-height: 320px;
   overflow-y: auto;
   padding: 6px;
@@ -344,7 +418,7 @@
   align-items: center;
   padding: 6px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   background: none;
   color: var(--text);
   font: inherit;
@@ -359,6 +433,22 @@
 .persona-switcher-option[aria-current="true"] {
   color: var(--accent);
   font-weight: 600;
+}
+.persona-switcher-option-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+.persona-switcher-option-copy strong {
+  overflow: hidden;
+  font-size: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.persona-switcher-option-copy small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 400;
 }
 .persona-switcher-empty {
   padding: 8px;
@@ -387,10 +477,24 @@
 
 @media (width <= 640px) {
   .persona-grid {
-    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
   .persona-drawer {
     width: 100vw;
     border-left: 0;
+  }
+  .persona-drawer-body {
+    padding-inline: 12px;
+  }
+  .persona-drawer-actions {
+    padding-inline: 12px;
+  }
+  .persona-switcher-wrap {
+    max-width: 140px;
+    flex-basis: 140px;
+  }
+  .persona-switcher {
+    left: 0;
   }
 }
