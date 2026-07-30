@@ -33,6 +33,10 @@ const (
 	// MaxDescriptionChars reuses the bound the persona description has always
 	// had, because it enters the prompt through the same validated path.
 	MaxDescriptionChars = config.MaxLLMPersonaDescriptionChars
+	// MaxGreetingChars bounds the greeting an imported character card opens a
+	// chat with. It is message content seeded into the log, not prompt data,
+	// so it is bounded like a message rather than like a prompt field.
+	MaxGreetingChars = 2000
 	// MaxPromptSetIDChars bounds the stored behavior-profile reference. Membership
 	// is not checked here: a user prompt set can be deleted after a persona
 	// selects it, and resolution already falls back to the bundled default rather
@@ -70,6 +74,7 @@ type Persona struct {
 	PromptSetID       string `json:"prompt_set_id"`
 	DefaultFocusArea  string `json:"default_focus_area"`
 	LoreMode          string `json:"lore_mode"`
+	Greeting          string `json:"greeting"`
 	LoreCount         int    `json:"lore_count"`
 	HasPortrait       bool   `json:"has_portrait"`
 	PortraitUpdatedAt string `json:"portrait_updated_at,omitempty"`
@@ -89,6 +94,7 @@ type Draft struct {
 	PromptSetID      *string `json:"prompt_set_id,omitempty"`
 	DefaultFocusArea *string `json:"default_focus_area,omitempty"`
 	LoreMode         *string `json:"lore_mode,omitempty"`
+	Greeting         *string `json:"greeting,omitempty"`
 }
 
 // Store owns persona rows and their portrait files.
@@ -243,11 +249,11 @@ func (s *Store) Update(ctx context.Context, id string, draft Draft) (Persona, er
 			UPDATE personas SET
 				name = ?, description = ?, chat_voice = ?, reaction_style = ?,
 				prompt_set_id = ?, default_focus_area = ?, lore_mode = ?,
-				updated_at = ?
+				greeting = ?, updated_at = ?
 			WHERE id = ?
 		`, updated.Name, updated.Description, updated.ChatVoice, updated.ReactionStyle,
 			updated.PromptSetID, updated.DefaultFocusArea, updated.LoreMode,
-			updated.UpdatedAt, id)
+			updated.Greeting, updated.UpdatedAt, id)
 		return execErr
 	})
 	if err != nil {
@@ -392,7 +398,7 @@ func ValidID(id string) bool {
 
 const selectColumns = `
 	SELECT id, name, description, chat_voice, reaction_style, prompt_set_id,
-		default_focus_area, lore_mode,
+		default_focus_area, lore_mode, greeting,
 		(SELECT COUNT(*) FROM persona_lore WHERE persona_id = personas.id),
 		portrait_updated_at, last_used_at, created_at, updated_at
 `
@@ -407,7 +413,7 @@ func scanPersona(row rowScanner) (Persona, error) {
 	var item Persona
 	if err := row.Scan(&item.ID, &item.Name, &item.Description, &item.ChatVoice,
 		&item.ReactionStyle, &item.PromptSetID, &item.DefaultFocusArea,
-		&item.LoreMode, &item.LoreCount,
+		&item.LoreMode, &item.Greeting, &item.LoreCount,
 		&item.PortraitUpdatedAt, &item.LastUsedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return Persona{}, err
 	}
@@ -418,11 +424,11 @@ func scanPersona(row rowScanner) (Persona, error) {
 func insert(ctx context.Context, tx *sql.Tx, item Persona) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO personas(id, name, description, chat_voice, reaction_style,
-			prompt_set_id, default_focus_area, lore_mode, portrait_updated_at,
-			last_used_at, created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			prompt_set_id, default_focus_area, lore_mode, greeting,
+			portrait_updated_at, last_used_at, created_at, updated_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, item.ID, item.Name, item.Description, item.ChatVoice, item.ReactionStyle,
-		item.PromptSetID, item.DefaultFocusArea, item.LoreMode,
+		item.PromptSetID, item.DefaultFocusArea, item.LoreMode, item.Greeting,
 		item.PortraitUpdatedAt, item.LastUsedAt, item.CreatedAt, item.UpdatedAt)
 	return err
 }
@@ -448,6 +454,11 @@ func applyDraft(item Persona, draft Draft) Persona {
 	}
 	if draft.LoreMode != nil {
 		item.LoreMode = normalizeToken(*draft.LoreMode)
+	}
+	if draft.Greeting != nil {
+		// TrimSpace, not collapseSpaces: a greeting is multi-line message
+		// content and its line breaks are part of the writing.
+		item.Greeting = strings.TrimSpace(*draft.Greeting)
 	}
 	return item
 }
@@ -476,6 +487,9 @@ func validate(item Persona) error {
 	}
 	if !ValidLoreMode(item.LoreMode) {
 		return fmt.Errorf("%w: unknown lore mode %q", ErrInvalid, item.LoreMode)
+	}
+	if utf8.RuneCountInString(item.Greeting) > MaxGreetingChars {
+		return fmt.Errorf("%w: greeting must be at most %d characters", ErrInvalid, MaxGreetingChars)
 	}
 	return nil
 }

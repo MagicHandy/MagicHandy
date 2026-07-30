@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 17
+	CurrentSchemaVersion = 18
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -507,6 +507,11 @@ var migrations = [][]string{
 	// table as well as the mode column so it can first repair any manually
 	// versioned database that still carries the Rockfire table name.
 	{`SELECT 1`},
+	// v17 -> v18: a persona greeting, the imported character card's opening
+	// message. Message content, not prompt data: it seeds a new chat's first
+	// assistant row. Guarded Go step because SQLite has no conditional
+	// ADD COLUMN and recovery paths may re-run the step.
+	{`SELECT 1`},
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -780,6 +785,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migratePersonas(ctx, tx)
 	case 17:
 		err = migratePersonaLore(ctx, tx)
+	case 18:
+		err = migratePersonaGreeting(ctx, tx)
 	default:
 		return nil
 	}
@@ -787,6 +794,19 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		return fmt.Errorf("apply SQLite migration hook at v%d: %w", version, err)
 	}
 	return nil
+}
+
+// migratePersonaGreeting adds the greeting column when it is absent.
+func migratePersonaGreeting(ctx context.Context, tx *sql.Tx) error {
+	exists, err := columnExists(ctx, tx, "personas", "greeting")
+	if err != nil || exists {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+		ALTER TABLE personas
+		ADD COLUMN greeting TEXT NOT NULL DEFAULT ''
+	`)
+	return err
 }
 
 // migrateVideoScriptOffset adds the per-video calibration column when it is

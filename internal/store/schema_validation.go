@@ -64,7 +64,7 @@ var requiredSchemaTables = []schemaTable{
 	{name: "chat_session_cursors", columns: columns("client_id:TEXT", "session_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id", "session_id"}},
 	{name: "personas", columns: columns(
 		"id:TEXT", "name:TEXT", "description:TEXT", "chat_voice:TEXT", "reaction_style:TEXT",
-		"prompt_set_id:TEXT", "default_focus_area:TEXT", "lore_mode:TEXT",
+		"prompt_set_id:TEXT", "default_focus_area:TEXT", "lore_mode:TEXT", "greeting:TEXT",
 		"portrait_updated_at:TEXT", "last_used_at:TEXT", "created_at:TEXT", "updated_at:TEXT",
 	), primaryKey: []string{"id"}},
 	{name: "persona_lore", columns: columns(
