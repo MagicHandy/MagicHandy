@@ -29,8 +29,9 @@ export const ModesIcon = ({ size = 18, className }: P) => (
 );
 export const LibraryIcon = ({ size = 18, className }: P) => (
   <svg {...base(size, className)}>
-    <path d="M6 4h11a1 1 0 0 1 1 1v14l-3-2-3 2V4" />
-    <path d="M6 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2" />
+    <path d="M7 3h10" />
+    <path d="M5 7h14" />
+    <rect x="3" y="11" width="18" height="10" rx="2" />
   </svg>
 );
 export const SettingsIcon = ({ size = 18, className }: P) => (

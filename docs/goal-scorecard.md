@@ -110,10 +110,11 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,486,039 raw / 742,958 gzip bytes. Lazy loading limits
-   the English startup path to 691,179 raw / 185,820 gzip bytes; all HTML/CSS/JS
-   is 1,041,803 raw / 305,561 gzip bytes. The persona hardening review adds 818
-   raw / 242 gzip bytes against the checked-in bundle. These remain within
+   browser payload is 1,486,042 raw / 742,953 gzip bytes. Lazy loading limits
+   the English startup path to 691,182 raw / 185,815 gzip bytes; all HTML/CSS/JS
+   is 1,041,806 raw / 305,556 gzip bytes. The persona hardening review and
+   complete pattern-library navigation icon add 821 raw / 237 gzip bytes against
+   the checked-in bundle. These remain within
    budget, but future locales, personas, and bitmap additions must keep startup
    and total payload growth explicit.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -141,10 +142,11 @@ Ranked by threat to the stated goals:
   localization audit, typecheck, production build, and a `CGO_ENABLED=0` build
   pass. Local race compilation remains unavailable because `gcc` is absent; CI
   retains the mandatory race gate. Plain/stripped binaries are 22,768,640 /
-  16,255,488 bytes. English startup is 691,179 / 185,820 raw/gzip;
-  HTML/CSS/JS is 1,041,803 / 305,561; complete embedded output is 1,486,039 /
-  742,958 (+818 / +242 against the checked-in bundle). No hardware motion was
-  issued.
+  16,255,488 bytes. English startup is 691,182 / 185,815 raw/gzip;
+  HTML/CSS/JS is 1,041,806 / 305,556; complete embedded output is 1,486,042 /
+  742,953 (+821 / +237 against the checked-in bundle). The Pattern Library
+  navigation icon was also replaced with a complete stacked-gallery symbol. No
+  hardware motion was issued.
 
 - **2026-07-29** - The engine snapshot now separates a clock-sampled
   `current_sample` from `last_sample`, which remains the accepted buffer tail.
