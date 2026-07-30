@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	wireApproximationTolerance  = 0.3
-	maximumAdaptiveChunkPoints  = 128
-	maximumInternalProbePoints  = 512
-	bufferedProbeIntervalMillis = int64(5)
+	wireApproximationTolerance          = 0.3
+	maximumAdaptiveChunkPoints          = 128
+	maximumInternalProbePoints          = 512
+	bufferedProbeIntervalMillis         = int64(5)
+	maximumNaturalChunkLookaheadWindows = int64(3)
 )
 
 // knotTimesBetween maps authored curve knots onto stream time. Buffered owners
@@ -74,7 +75,12 @@ func motionProbeTimes(
 ) ([]int64, map[int64]struct{}, bool) {
 	transitionInChunk := transitionOverlaps(transition, chunkStart, chunkEnd)
 	times := make([]int64, 0, int((chunkEnd-chunkStart)/probeIntervalMillis)+min(len(plan.curve.authoredKnots), maximumPoints))
-	for streamMillis := chunkStart; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
+	times = append(times, chunkStart)
+	firstAlignedProbe := ((chunkStart + probeIntervalMillis - 1) / probeIntervalMillis) * probeIntervalMillis
+	if firstAlignedProbe == chunkStart {
+		firstAlignedProbe += probeIntervalMillis
+	}
+	for streamMillis := firstAlignedProbe; streamMillis < chunkEnd; streamMillis += probeIntervalMillis {
 		times = append(times, streamMillis)
 	}
 	mandatory := make(map[int64]struct{}, 2)
@@ -99,20 +105,76 @@ func motionProbeTimes(
 func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	intervalMillis := e.sampleInterval.Milliseconds()
 	chunkStart := e.nextSampleMillis
-	chunkEnd := chunkStart + int64(e.chunkSize)*intervalMillis
+	chunkDuration := int64(e.chunkSize) * intervalMillis
+	targetTail := chunkStart + chunkDuration
 	probeIntervalMillis := intervalMillis
 	if e.preservePlanKnots && probeIntervalMillis > bufferedProbeIntervalMillis {
 		probeIntervalMillis = bufferedProbeIntervalMillis
+	}
+	positionResolution := e.effectivePositionResolutionPercentLocked()
+	useNaturalCutoff := e.preservePlanKnots && positionResolution > 0
+	windowEnd := targetTail
+	maximumWindowEnd := targetTail
+	if useNaturalCutoff {
+		windowEnd += chunkDuration
+		maximumWindowEnd = chunkStart + maximumNaturalChunkLookaheadWindows*chunkDuration
 	}
 	maximumPoints := e.maximumChunkPoints
 	if maximumPoints < 2 {
 		maximumPoints = maximumAdaptiveChunkPoints
 	}
-	minimumBoundedProbe := max(int64(1), (chunkEnd-chunkStart+maximumInternalProbePoints-1)/maximumInternalProbePoints)
-	probeIntervalMillis = max(probeIntervalMillis, minimumBoundedProbe)
+
+	for {
+		samples, mandatory := e.fitMotionWindowLocked(
+			chunkStart,
+			windowEnd,
+			probeIntervalMillis,
+			maximumPoints,
+			positionResolution,
+		)
+		if len(samples) == 0 {
+			return nil, errors.New("motion sampler produced an empty output window")
+		}
+
+		cutoff, natural := len(samples)-1, true
+		if useNaturalCutoff {
+			cutoff, natural = naturalMotionChunkCutoff(samples, mandatory, targetTail)
+		}
+		if natural || windowEnd >= maximumWindowEnd {
+			samples = samples[:cutoff+1]
+			if len(samples) > maximumPoints {
+				return nil, fmt.Errorf(
+					"motion content has %d essential points in the %dms output window; trim or slow the content",
+					len(samples), samples[len(samples)-1].TimeMillis-chunkStart,
+				)
+			}
+			lastSample := samples[len(samples)-1]
+			e.nextSampleMillis = targetTail
+			if useNaturalCutoff {
+				e.nextSampleMillis = lastSample.TimeMillis + 1
+			}
+			e.lastSample = &lastSample
+			return samples, nil
+		}
+		windowEnd = min(maximumWindowEnd, windowEnd+chunkDuration)
+	}
+}
+
+func (e *Engine) fitMotionWindowLocked(
+	chunkStart int64,
+	windowEnd int64,
+	probeIntervalMillis int64,
+	maximumPoints int,
+	positionResolution float64,
+) ([]MotionSample, map[int64]struct{}) {
+	minimumBoundedProbe := max(
+		int64(1),
+		(windowEnd-chunkStart+maximumInternalProbePoints-1)/maximumInternalProbePoints,
+	)
+	selectedProbeInterval := max(probeIntervalMillis, minimumBoundedProbe)
 	times, mandatory, transitionInChunk := motionProbeTimes(
 		e.plan, e.transition, e.preservePlanKnots,
-		chunkStart, chunkEnd, probeIntervalMillis, maximumPoints,
+		chunkStart, windowEnd, selectedProbeInterval, maximumPoints,
 	)
 
 	samples := make([]MotionSample, 0, len(times)+1)
@@ -130,7 +192,6 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	if transitionInChunk {
 		samples = stabilizeTransitionSamples(samples, mandatory)
 	}
-	positionResolution := e.effectivePositionResolutionPercentLocked()
 	if positionResolution > 0 {
 		samples = simplifyQuantizedMotionSamples(
 			samples,
@@ -145,20 +206,30 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	if hasPreviousAnchor {
 		samples = samples[1:]
 	}
-	if len(samples) == 0 {
-		return nil, errors.New("motion sampler produced an empty output window")
-	}
-	if len(samples) > maximumPoints {
-		return nil, fmt.Errorf(
-			"motion content has %d essential points in the %dms output window; trim or slow the content",
-			len(samples), chunkEnd-chunkStart,
-		)
-	}
+	return samples, mandatory
+}
 
-	e.nextSampleMillis = chunkEnd
-	lastSample := samples[len(samples)-1]
-	e.lastSample = &lastSample
-	return samples, nil
+// naturalMotionChunkCutoff chooses a point that the trajectory fitter retained
+// with future context. Ending every append at an unrelated sampler-window edge
+// can make buffered firmware restart an otherwise continuous segment. The last
+// point in a fit is forced, so it is natural only when it is an authored knot;
+// otherwise the caller extends lookahead and fits again.
+func naturalMotionChunkCutoff(
+	samples []MotionSample,
+	mandatory map[int64]struct{},
+	targetTail int64,
+) (int, bool) {
+	for index, sample := range samples {
+		if sample.TimeMillis < targetTail {
+			continue
+		}
+		if index < len(samples)-1 {
+			return index, true
+		}
+		_, authored := mandatory[sample.TimeMillis]
+		return index, authored
+	}
+	return len(samples) - 1, false
 }
 
 // nextLinearMediaSamplesLocked emits the media curve's authored knots instead

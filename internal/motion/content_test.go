@@ -131,6 +131,18 @@ func TestOnlyReplacementPatternsAreExperimental(t *testing.T) {
 	}
 }
 
+func TestRetiredPatternsAreAbsentFromDefaultCatalog(t *testing.T) {
+	retired := RetiredBuiltinPatternIDs()
+	if !slices.Contains(retired, PatternCradle) {
+		t.Fatal("Cradle is not recorded as retired after failed physical playback")
+	}
+	for _, definition := range BuiltinPatternDefinitions() {
+		if slices.Contains(retired, definition.ID) {
+			t.Fatalf("retired pattern %q remains in the default catalog", definition.ID)
+		}
+	}
+}
+
 func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 	want := map[PatternID]string{
 		PatternFourLevelCircuit:     "Four-Level Circuit",

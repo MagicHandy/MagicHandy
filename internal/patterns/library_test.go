@@ -83,14 +83,64 @@ func TestLibraryReconcilesRetiredAndPromotedBuiltins(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for index, id := range motion.RetiredBuiltinPatternIDs() {
+		if err := library.insertPattern(Pattern{
+			ID: string(id), Name: fmt.Sprintf("Retired built-in %d", index), Origin: OriginBuiltin,
+			Kind: motion.PatternKindRoutine, Enabled: false, Weight: 1,
+			CycleMillis: motion.RoutineCycleFloorMillis,
+			Points: []motion.CurvePoint{
+				{TimeMillis: 0, PositionPercent: 0},
+				{TimeMillis: motion.RoutineCycleFloorMillis / 2, PositionPercent: 80},
+				{TimeMillis: motion.RoutineCycleFloorMillis, PositionPercent: 0},
+			},
+			CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	for _, id := range motion.RetiredBuiltinPatternIDs() {
+		if _, err := reopened.Pattern(string(id)); !errors.Is(err, ErrPatternNotFound) {
+			t.Fatalf("retired built-in %q error = %v, want ErrPatternNotFound", id, err)
+		}
+	}
+	for index, definition := range promoted {
+		if _, err := reopened.Pattern(legacyUserIDs[definition.ID]); !errors.Is(err, ErrPatternNotFound) {
+			t.Fatalf("promoted duplicate %q error = %v, want ErrPatternNotFound", definition.ID, err)
+		}
+		canonical, err := reopened.Pattern(string(definition.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if canonical.Origin != OriginBuiltin || canonical.Enabled != (index == 1) || canonical.Weight != 1.7+float64(index)/10 {
+			t.Fatalf("promoted canonical %q = %+v", definition.ID, canonical)
+		}
+	}
+}
+
+func TestLibraryPreservesUserPatternWithRetiredBuiltinID(t *testing.T) {
+	dir := t.TempDir()
+	library, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if err := library.insertPattern(Pattern{
-		ID: string(motion.PatternDeepBookends), Name: "Deep Bookends", Origin: OriginBuiltin,
-		Kind: motion.PatternKindRoutine, Enabled: false, Weight: 1,
+		ID: string(motion.PatternCradle), Name: "Personal cradle replacement", Origin: OriginUser,
+		Kind: motion.PatternKindRoutine, Enabled: true, Weight: 1,
 		CycleMillis: motion.RoutineCycleFloorMillis,
 		Points: []motion.CurvePoint{
-			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 0, PositionPercent: 20},
 			{TimeMillis: motion.RoutineCycleFloorMillis / 2, PositionPercent: 80},
-			{TimeMillis: motion.RoutineCycleFloorMillis, PositionPercent: 0},
+			{TimeMillis: motion.RoutineCycleFloorMillis, PositionPercent: 20},
 		},
 		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
@@ -105,20 +155,12 @@ func TestLibraryReconcilesRetiredAndPromotedBuiltins(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	if _, err := reopened.Pattern(string(motion.PatternDeepBookends)); !errors.Is(err, ErrPatternNotFound) {
-		t.Fatalf("retired built-in error = %v, want ErrPatternNotFound", err)
+	pattern, err := reopened.Pattern(string(motion.PatternCradle))
+	if err != nil {
+		t.Fatal(err)
 	}
-	for index, definition := range promoted {
-		if _, err := reopened.Pattern(legacyUserIDs[definition.ID]); !errors.Is(err, ErrPatternNotFound) {
-			t.Fatalf("promoted duplicate %q error = %v, want ErrPatternNotFound", definition.ID, err)
-		}
-		canonical, err := reopened.Pattern(string(definition.ID))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if canonical.Origin != OriginBuiltin || canonical.Enabled != (index == 1) || canonical.Weight != 1.7+float64(index)/10 {
-			t.Fatalf("promoted canonical %q = %+v", definition.ID, canonical)
-		}
+	if pattern.Origin != OriginUser || pattern.Name != "Personal cradle replacement" {
+		t.Fatalf("user pattern with retired ID = %+v", pattern)
 	}
 }
 

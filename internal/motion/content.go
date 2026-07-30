@@ -650,12 +650,6 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Tags:         []string{"alternating", "centered", "swing"},
 	},
 	{
-		ID: PatternCradle, Name: "Cradle", Description: "Restrained centered arcs breathe wider and narrower.",
-		Positions:    []float64{32, 68, 28, 72, 38, 62, 24, 76},
-		TravelMillis: []int64{780, 700, 820, 680, 760, 720, 840, 1300},
-		Tags:         []string{"centered", "gentle", "breathing"},
-	},
-	{
 		ID: PatternSurge, Name: "Surge", Description: "One full sweep settles through progressively smaller echoes.",
 		Positions:    []float64{10, 100, 28, 88, 40, 76, 48, 66},
 		TravelMillis: []int64{900, 620, 800, 620, 720, 620, 660, 1660},

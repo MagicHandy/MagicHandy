@@ -351,6 +351,40 @@ func TestWholePercentSamplingReducesRoundedPlateausWithinWireErrorBound(t *testi
 	}
 }
 
+func TestWholePercentPatternChunksDoNotEndAtFixedSamplerWindows(t *testing.T) {
+	definition, found := BuiltinPatternDefinition(PatternPendulum)
+	if !found {
+		t.Fatal("Pendulum is missing from the default catalog")
+	}
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 100
+	plan := NewMotionPlan("pendulum", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+	}, settings, 0, 0, time.Unix(0, 0))
+	engine := &Engine{
+		plan: plan, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
+		preservePlanKnots: true, positionResolutionPercent: 1,
+		maximumChunkPoints: maximumAdaptiveChunkPoints,
+	}
+
+	for chunkIndex := 0; chunkIndex < 8; chunkIndex++ {
+		chunkStart := engine.nextSampleMillis
+		nominalTail := chunkStart + int64(defaultChunkSize)*defaultSampleInterval.Milliseconds()
+		samples, err := engine.nextMotionSamplesLocked()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tail := samples[len(samples)-1].TimeMillis
+		if tail < nominalTail {
+			t.Fatalf("chunk %d tail = %dms, want fitted coverage through at least %dms", chunkIndex, tail, nominalTail)
+		}
+		fixedTail := nominalTail - bufferedProbeIntervalMillis
+		if tail == fixedTail {
+			t.Fatalf("chunk %d retained unrelated fixed sampler-window tail %dms", chunkIndex, tail)
+		}
+	}
+}
+
 func TestRetargetTransitionIsContinuousAndChains(t *testing.T) {
 	definition := PatternDefinition{
 		ID: "constant", Name: "Constant", Kind: PatternKindRoutine, CycleMillis: 6600,
@@ -662,9 +696,15 @@ func interpolateMotionSamples(samples []MotionSample, at int64) float64 {
 
 func catalogSamples(t *testing.T, plan MotionPlan, resolution float64) []MotionSample {
 	t.Helper()
+	maximumPoints := maximumAdaptiveChunkPoints
+	if resolution >= 1 {
+		// Match the API v3 HSP add limit advertised by CloudRESTTransport.
+		maximumPoints = 100
+	}
 	engine := &Engine{
 		plan: plan, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
 		preservePlanKnots: true, positionResolutionPercent: resolution,
+		maximumChunkPoints: maximumPoints,
 	}
 	var samples []MotionSample
 	for engine.nextSampleMillis < plan.PeriodMillis*2 {
