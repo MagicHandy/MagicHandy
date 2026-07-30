@@ -134,6 +134,14 @@ func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Fatal("condition not reached in time")
 }
 
+func waitForAutonomousStart(t *testing.T, manager *Manager, engine *fakeEngine) {
+	t.Helper()
+	waitFor(t, 2*time.Second, func() bool {
+		starts, _ := engine.counts()
+		return starts == 1 && manager.Status().SegmentIndex >= 1
+	})
+}
+
 func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(0, 0)}
 	manager := &Manager{options: Options{Now: clock.Now}, mode: ModeFreestyle, generation: 1}
@@ -156,8 +164,7 @@ func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
-	waitFor(t, 2*time.Second, func() bool { return manager.Status().SegmentIndex >= 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	// Cross four segment boundaries by jumping the planner clock.
 	for range 4 {
@@ -207,7 +214,7 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	engine.setState(false, true) // user paused
 	clock.Advance(300 * time.Second)
@@ -231,7 +238,7 @@ func TestFreestyleStopsAfterUserStopInsteadOfRestarting(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	manager.NotifyUserStop()
 	engine.setState(false, false)
@@ -284,7 +291,7 @@ func TestFreestyleRetargetFailureHonorsBackoff(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 	clock.Advance(150 * time.Second)
 	waitFor(t, time.Second, func() bool { _, targets := engine.counts(); return targets == 1 })
 	time.Sleep(30 * time.Millisecond)

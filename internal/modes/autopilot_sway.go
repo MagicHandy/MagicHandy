@@ -55,6 +55,7 @@ func swayNote(speedPercent int, remaining int) string {
 
 // swayPoint is one scheduled speed-only adjustment inside the current segment.
 type swayPoint struct {
+	generation   uint64
 	at           time.Time
 	speedPercent int
 }
@@ -65,6 +66,7 @@ func (m *Manager) planSwayLocked(
 	now time.Time,
 	duration time.Duration,
 	choice segmentChoice,
+	generation uint64,
 ) []swayPoint {
 	if choice.segment.PatternID == "" || choice.segment.SpeedPercent <= 0 {
 		return nil
@@ -98,6 +100,7 @@ func (m *Manager) planSwayLocked(
 		return nil
 	}
 	points := make([]swayPoint, 0, allowed)
+	previousSpeed := choice.segment.SpeedPercent
 	for index := 0; index < allowed; index++ {
 		base := swayEdgeGuard + slot*time.Duration(index)
 		jitter := time.Duration(0)
@@ -114,10 +117,15 @@ func (m *Manager) planSwayLocked(
 			}
 		}
 		speed := clampInt(choice.segment.SpeedPercent+delta, low, high)
-		if speed == choice.segment.SpeedPercent {
+		if speed == previousSpeed {
 			continue
 		}
-		points = append(points, swayPoint{at: now.Add(base + jitter), speedPercent: speed})
+		points = append(points, swayPoint{
+			generation:   generation,
+			at:           now.Add(base + jitter),
+			speedPercent: speed,
+		})
+		previousSpeed = speed
 	}
 	return points
 }
@@ -177,6 +185,13 @@ func (m *Manager) dueSway(now time.Time, generation uint64) (swayPoint, bool) {
 		m.chatTargetPending || len(m.swayPoints) == 0 {
 		return swayPoint{}, false
 	}
+	if m.swayPoints[0].generation != generation {
+		// Generation changes invalidate the whole segment schedule. Without
+		// carrying that identity on the waypoint itself, a chat handoff could
+		// adopt a new pattern and then receive a speed sampled for the old one.
+		m.swayPoints = nil
+		return swayPoint{}, false
+	}
 	if now.Before(m.swayPoints[0].at) {
 		return swayPoint{}, false
 	}
@@ -206,6 +221,9 @@ func (m *Manager) applyDueSway(
 	if segment.PatternID == "" {
 		return
 	}
+	if segment.SpeedPercent == point.speedPercent {
+		return
+	}
 	segment.SpeedPercent = point.speedPercent
 	target := segment.Target(modeLabel(ModeAutopilot), ModeAutopilot)
 	target.Pattern = pattern
@@ -217,6 +235,7 @@ func (m *Manager) applyDueSway(
 	}
 	m.mu.Lock()
 	if m.mode == ModeAutopilot && m.generation == generation {
+		m.previousSpeed = m.segment.SpeedPercent
 		m.segment.SpeedPercent = point.speedPercent
 		m.speedChangedAt = m.options.Now()
 	}

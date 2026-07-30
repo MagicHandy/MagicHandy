@@ -47,7 +47,7 @@ func planSway(t *testing.T, manager *Manager, duration time.Duration, variabilit
 	t.Helper()
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
-	return manager.planSwayLocked(time.Unix(0, 0), duration, swayChoice(variability))
+	return manager.planSwayLocked(time.Unix(0, 0), duration, swayChoice(variability), manager.generation)
 }
 
 // Settled is the model's way of asking for a flat stretch, so it must produce no
@@ -136,7 +136,7 @@ func TestSwayNeverLeavesTheUserSpeedBand(t *testing.T) {
 		choice := swayChoice(VariabilityRestless)
 		choice.segment.SpeedPercent = speed
 		manager.mu.Lock()
-		points := manager.planSwayLocked(time.Unix(0, 0), 120*time.Second, choice)
+		points := manager.planSwayLocked(time.Unix(0, 0), 120*time.Second, choice, manager.generation)
 		manager.mu.Unlock()
 		for _, point := range points {
 			if point.speedPercent < settings.SpeedMinPercent || point.speedPercent > settings.SpeedMaxPercent {
@@ -155,10 +155,12 @@ func TestSwayNeverPlansANoOpWaypoint(t *testing.T) {
 	if len(points) == 0 {
 		t.Fatal("expected waypoints for a long restless segment")
 	}
+	previousSpeed := 30
 	for _, point := range points {
-		if point.speedPercent == 30 {
-			t.Fatal("planned a waypoint at the segment speed, which is a no-op retarget")
+		if point.speedPercent == previousSpeed {
+			t.Fatalf("planned consecutive %d%% waypoints, which would be a no-op retarget", previousSpeed)
 		}
+		previousSpeed = point.speedPercent
 	}
 }
 
@@ -219,8 +221,8 @@ func TestDueSwayPopsOnReadSoAFailureCannotStarveSpeech(t *testing.T) {
 	manager.mode = ModeAutopilot
 	manager.generation = 3
 	manager.swayPoints = []swayPoint{
-		{at: now.Add(-time.Second), speedPercent: 34},
-		{at: now.Add(time.Minute), speedPercent: 26},
+		{generation: 3, at: now.Add(-time.Second), speedPercent: 34},
+		{generation: 3, at: now.Add(time.Minute), speedPercent: 26},
 	}
 	manager.mu.Unlock()
 
@@ -239,19 +241,141 @@ func TestDueSwayPopsOnReadSoAFailureCannotStarveSpeech(t *testing.T) {
 	}
 }
 
-// A stale generation belongs to a superseded segment, so its texture must not be
-// applied to whatever is playing now.
-func TestDueSwayIgnoresASupersededGeneration(t *testing.T) {
+// A stale waypoint belongs to a superseded segment, so its texture must not be
+// applied to whatever is playing now even when the tick carries the manager's
+// current generation.
+func TestDueSwayDiscardsASupersededSchedule(t *testing.T) {
 	manager := swayTestManager(t, config.DefaultAutopilotSettings())
 	now := time.Unix(100, 0)
 	manager.mu.Lock()
 	manager.mode = ModeAutopilot
 	manager.generation = 9
-	manager.swayPoints = []swayPoint{{at: now.Add(-time.Second), speedPercent: 40}}
+	manager.swayPoints = []swayPoint{{
+		generation:   8,
+		at:           now.Add(-time.Second),
+		speedPercent: 40,
+	}}
 	manager.mu.Unlock()
 
-	if _, ok := manager.dueSway(now, 8); ok {
+	if _, ok := manager.dueSway(now, 9); ok {
 		t.Fatal("a waypoint from an older generation was applied")
+	}
+	manager.mu.Lock()
+	remaining := len(manager.swayPoints)
+	manager.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("stale schedule retained %d waypoints", remaining)
+	}
+}
+
+func TestPauseShiftsSwayScheduleWithTheSegmentDeadline(t *testing.T) {
+	manager := swayTestManager(t, config.DefaultAutopilotSettings())
+	now := time.Unix(100, 0)
+	manager.mu.Lock()
+	manager.mode = ModeAutopilot
+	manager.generation = 4
+	manager.deadline = now.Add(time.Minute)
+	manager.speedChangedAt = now.Add(-30 * time.Second)
+	manager.arc.startedAt = now.Add(-time.Minute)
+	manager.swayPoints = []swayPoint{{
+		generation:   4,
+		at:           now.Add(10 * time.Second),
+		speedPercent: 34,
+	}}
+	manager.mu.Unlock()
+
+	manager.freezeDeadline()
+
+	manager.mu.Lock()
+	deadline := manager.deadline
+	waypointAt := manager.swayPoints[0].at
+	speedChangedAt := manager.speedChangedAt
+	arcStartedAt := manager.arc.startedAt
+	tick := manager.options.Tick
+	manager.mu.Unlock()
+	if !deadline.Equal(now.Add(time.Minute + tick)) {
+		t.Fatalf("paused deadline = %s, want one tick later", deadline)
+	}
+	if !waypointAt.Equal(now.Add(10*time.Second + tick)) {
+		t.Fatalf("paused waypoint = %s, want one tick later", waypointAt)
+	}
+	if !speedChangedAt.Equal(now.Add(-30*time.Second + tick)) {
+		t.Fatalf("paused speed history = %s, want one tick later", speedChangedAt)
+	}
+	if !arcStartedAt.Equal(now.Add(-time.Minute + tick)) {
+		t.Fatalf("paused arc clock = %s, want one tick later", arcStartedAt)
+	}
+}
+
+func TestAutopilotSpeedHistoryChangesOnlyWhenSpeedChanges(t *testing.T) {
+	manager := swayTestManager(t, config.DefaultAutopilotSettings())
+	now := time.Unix(200, 0)
+	manager.options.Now = func() time.Time { return now }
+	manager.mu.Lock()
+	manager.mode = ModeAutopilot
+	manager.generation = 5
+	manager.segment = Segment{PatternID: motion.PatternStroke, SpeedPercent: 24}
+	manager.speedChangedAt = now.Add(-30 * time.Second)
+	manager.mu.Unlock()
+
+	changed := swayChoice(VariabilitySettled)
+	changed.segment.SpeedPercent = 36
+	if !manager.armAutopilotChoice(ModeAutopilot, &changed, 5) {
+		t.Fatal("failed to arm changed-speed segment")
+	}
+	manager.mu.Lock()
+	previous := manager.previousSpeed
+	changedAt := manager.speedChangedAt
+	trend := manager.speedTrendLocked()
+	manager.mu.Unlock()
+	if previous != 24 || !changedAt.Equal(now) || trend != SpeedTrendRising {
+		t.Fatalf("changed-speed history = previous %d at %s trend %q", previous, changedAt, trend)
+	}
+
+	now = now.Add(45 * time.Second)
+	unchanged := swayChoice(VariabilitySettled)
+	unchanged.segment.SpeedPercent = 36
+	if !manager.armAutopilotChoice(ModeAutopilot, &unchanged, 5) {
+		t.Fatal("failed to arm same-speed segment")
+	}
+	manager.mu.Lock()
+	previous = manager.previousSpeed
+	unchangedAt := manager.speedChangedAt
+	trend = manager.speedTrendLocked()
+	manager.mu.Unlock()
+	if previous != 24 || !unchangedAt.Equal(changedAt) || trend != SpeedTrendRising {
+		t.Fatalf("same-speed boundary reset history = previous %d at %s trend %q",
+			previous, unchangedAt, trend)
+	}
+}
+
+func TestAppliedSwayRecordsItsSpeedTransition(t *testing.T) {
+	manager := swayTestManager(t, config.DefaultAutopilotSettings())
+	now := time.Unix(300, 0)
+	manager.options.Now = func() time.Time { return now }
+	manager.mu.Lock()
+	manager.mode = ModeAutopilot
+	manager.generation = 6
+	manager.segment = Segment{PatternID: motion.PatternStroke, SpeedPercent: 30}
+	manager.mu.Unlock()
+
+	engine := manager.options.Current()
+	manager.applyDueSway(
+		context.Background(),
+		engine,
+		6,
+		swayPoint{generation: 6, at: now, speedPercent: 38},
+	)
+
+	manager.mu.Lock()
+	previous := manager.previousSpeed
+	current := manager.segment.SpeedPercent
+	changedAt := manager.speedChangedAt
+	trend := manager.speedTrendLocked()
+	manager.mu.Unlock()
+	if previous != 30 || current != 38 || !changedAt.Equal(now) || trend != SpeedTrendRising {
+		t.Fatalf("sway history = previous %d current %d at %s trend %q",
+			previous, current, changedAt, trend)
 	}
 }
 

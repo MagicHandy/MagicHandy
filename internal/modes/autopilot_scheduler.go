@@ -197,6 +197,7 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending {
 		return false
 	}
+	previousSpeed := m.segment.SpeedPercent
 	if choice.decisionLatency > 0 {
 		m.lastDecisionTime = choice.decisionLatency
 	}
@@ -214,11 +215,11 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	// tickAutopilot never read driftAt/driftDone, so the old midpoint step was
 	// write-only state here. Intra-segment variation is now the sway schedule.
 	m.driftDone = true
-	if previous := m.previousSpeed; choice.segment.SpeedPercent != previous {
-		m.previousSpeed = previous
+	if choice.segment.SpeedPercent != previousSpeed {
+		m.previousSpeed = previousSpeed
+		m.speedChangedAt = now
 	}
-	m.speedChangedAt = now
-	m.swayPoints = m.planSwayLocked(now, duration, *choice)
+	m.swayPoints = m.planSwayLocked(now, duration, *choice, generation)
 	m.nextRetry = time.Time{}
 	if m.speechDeadline.IsZero() && m.speechWaitingID == "" {
 		m.scheduleSpeechLocked(now, TimingNormal)

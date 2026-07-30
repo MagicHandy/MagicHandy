@@ -130,6 +130,12 @@ segment interior:
   no-op retarget this work removed from the hold path.
 - Waypoints pop on read, not on success. Retrying a failing adjustment would let
   one bad waypoint starve the speech clock queued behind it.
+- Every schedule carries the segment generation that created it. Chat handoffs,
+  settings changes, Stop, and other generation changes discard stale waypoints
+  so texture sampled for one target cannot modify its replacement.
+- Pause shifts waypoint, session-arc, and speed-history clocks with the segment
+  deadline. Resume continues the remaining schedule instead of firing a burst
+  of overdue adjustments or counting paused time as motion progress.
 
 **Measured combined retarget rate** (one boundary plus earned waypoints; the
 pre-change loop produced roughly 4-9/min):
@@ -231,7 +237,8 @@ itself, and `/played` now accepts `done` or `failed` but still refuses
 `canceled`. The bounded fallback covers a genuinely lost HTTP call, which is what
 it was always meant to be for.
 
-Pause freezes both clocks. Emergency Stop cancels both clocks, in-flight model
+Pause freezes both cadence clocks, intra-segment waypoints, session progress,
+and speed-history time. Emergency Stop cancels both clocks, in-flight model
 work, pending speech, and playback exactly as it does today.
 
 ## Model contracts

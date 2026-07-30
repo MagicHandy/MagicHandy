@@ -114,7 +114,7 @@ func TestAutopilotAppliesModelDecisionWithoutCoupledSpeech(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts >= 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	engine.mu.Lock()
 	target := engine.starts[0]
@@ -147,7 +147,7 @@ func TestAutopilotFallsBackToPlannerOnDecisionFailure(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts >= 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	engine.mu.Lock()
 	target := engine.starts[0]
@@ -175,17 +175,16 @@ func TestAutopilotHoldKeepsCurrentSegmentWithoutDrift(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts >= 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	// Cross the first segment boundary so the hold decision runs.
 	clock.Advance(150 * time.Second)
-	waitFor(t, time.Second, func() bool { return decider.callCount() >= 2 })
+	waitFor(t, time.Second, func() bool {
+		return decider.callCount() >= 2 && manager.Status().DecisionSource == "hold"
+	})
 	_, retargets := engine.counts()
 	if retargets != 0 {
 		t.Fatalf("scheduler-only hold produced %d engine retargets", retargets)
-	}
-	if status := manager.Status(); status.DecisionSource != "hold" {
-		t.Fatalf("decision source = %q, want hold", status.DecisionSource)
 	}
 	if announced := announcer.all(); len(announced) != 0 {
 		t.Fatalf("motion hold unexpectedly announced %v", announced)
@@ -213,8 +212,17 @@ func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 
+	// Make the superseded segment's texture deterministically due during the
+	// handoff. The new target must never inherit this speed waypoint.
+	manager.mu.Lock()
+	manager.swayPoints = []swayPoint{{
+		generation:   manager.generation,
+		at:           clock.Now().Add(time.Second),
+		speedPercent: 36,
+	}}
+	manager.mu.Unlock()
 	handoffGeneration := manager.PrepareChatTarget()
 	clock.Advance(150 * time.Second)
 	time.Sleep(20 * time.Millisecond)
@@ -306,7 +314,7 @@ func TestAutopilotAnnouncementContextCancelsWithStop(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 	clock.Advance(9 * time.Second)
 
 	select {
@@ -370,13 +378,13 @@ func TestAutopilotSpeechClockIsIndependentAndPlaybackAware(t *testing.T) {
 	if _, err := manager.Start(t.Context(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	clock.Advance(9 * time.Second)
 	waitFor(t, time.Second, func() bool {
 		speechMu.Lock()
 		defer speechMu.Unlock()
-		return speechCalls == 1
+		return speechCalls == 1 && manager.Status().SpeechWaitingPlayback
 	})
 	if calls := motionDecider.callCount(); calls != 1 {
 		t.Fatalf("speech deadline triggered %d motion decisions, want first start only", calls)
@@ -440,7 +448,7 @@ func TestAutopilotSpeechMotionPreservesSpeechTimingChoice(t *testing.T) {
 	if _, err := manager.Start(t.Context(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	clock.Advance(121 * time.Second)
 	waitFor(t, time.Second, func() bool { return manager.Status().SpeechWaitingPlayback })
@@ -469,7 +477,7 @@ func TestAutopilotChatActivityBlocksAutonomousWorkUntilComplete(t *testing.T) {
 	if _, err := manager.Start(t.Context(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts == 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	manager.NotifyChatActivity()
 	clock.Advance(150 * time.Second)
@@ -529,7 +537,7 @@ func TestAutopilotUserStopEndsModeWithoutRestart(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { starts, _ := engine.counts(); return starts >= 1 })
+	waitForAutonomousStart(t, manager, engine)
 
 	manager.NotifyUserStop()
 	engine.setState(false, false)
