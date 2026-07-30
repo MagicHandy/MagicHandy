@@ -188,38 +188,68 @@ async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload>
   return parsed as PersonasPayload;
 }
 
-// normalizePersonas keeps a malformed or partial body from reaching a component.
-// The persona chip renders inside the chat header, so an unexpected shape here
-// would take down the conversation — a persona is decoration on top of chat and
-// must never be able to break it. A 200 with the wrong body is a real case: an
-// older backend, a proxy, or a half-applied migration all produce one.
+// A partial persona response indicates an incompatible or damaged core. Enum
+// vocabularies and bounds are behavior, not decoration, so the browser must not
+// fabricate values that the backend may reject.
 function normalizePersonas(payload: PersonasPayload): PersonasPayload {
-  return {
-    ...payload,
-    personas: Array.isArray(payload?.personas) ? payload.personas : [],
-    default_persona: {
-      name: payload?.default_persona?.name || "MagicHandy",
-      description: payload?.default_persona?.description ?? "",
-      chat_voice: payload?.default_persona?.chat_voice || "utility",
-      prompt_set_id: payload?.default_persona?.prompt_set_id ?? "",
-    },
-    active_persona_id: payload?.active_persona_id ?? "",
-    active_session_id: payload?.active_session_id ?? "",
-    prompt_sets: Array.isArray(payload?.prompt_sets) ? payload.prompt_sets : [],
-    options: {
-      chat_voices: payload?.options?.chat_voices ?? [],
-      reaction_styles: payload?.options?.reaction_styles ?? [],
-      focus_areas: payload?.options?.focus_areas ?? [],
-      lore_modes: payload?.options?.lore_modes ?? ["off", "relevant", "full"],
-      max_name: payload?.options?.max_name ?? 60,
-      max_description: payload?.options?.max_description ?? 500,
-      max_portrait_edge: payload?.options?.max_portrait_edge ?? 1024,
-      max_lore_entries: payload?.options?.max_lore_entries ?? 8,
-      max_lore_text: payload?.options?.max_lore_text ?? 500,
-      max_lore_total: payload?.options?.max_lore_total ?? 2000,
-      max_lore_keywords: payload?.options?.max_lore_keywords ?? 12,
-    },
+  const stringList = (value: unknown) =>
+    Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string");
+  const positiveInteger = (value: unknown) =>
+    typeof value === "number" && Number.isInteger(value) && value > 0;
+  const personaRecord = (value: unknown): value is Persona => {
+    if (!value || typeof value !== "object") return false;
+    const item = value as Record<string, unknown>;
+    return typeof item.id === "string"
+      && typeof item.name === "string"
+      && typeof item.description === "string"
+      && typeof item.chat_voice === "string"
+      && typeof item.reaction_style === "string"
+      && typeof item.prompt_set_id === "string"
+      && typeof item.default_focus_area === "string"
+      && typeof item.lore_mode === "string"
+      && typeof item.lore_count === "number"
+      && typeof item.has_portrait === "boolean"
+      && typeof item.created_at === "string"
+      && typeof item.updated_at === "string";
   };
+  const promptSetRecord = (value: unknown) => {
+    if (!value || typeof value !== "object") return false;
+    const item = value as Record<string, unknown>;
+    return typeof item.id === "string"
+      && typeof item.name === "string"
+      && typeof item.system === "string"
+      && typeof item.builtin === "boolean";
+  };
+  const options = payload?.options;
+  const complete = Array.isArray(payload?.personas) && payload.personas.every(personaRecord)
+    && Array.isArray(payload?.prompt_sets) && payload.prompt_sets.every(promptSetRecord)
+    && (payload?.persona === undefined || personaRecord(payload.persona))
+    && typeof payload?.active_persona_id === "string"
+    && typeof payload?.active_session_id === "string"
+    && typeof payload?.default_persona?.name === "string"
+    && typeof payload?.default_persona?.description === "string"
+    && typeof payload?.default_persona?.chat_voice === "string"
+    && typeof payload?.default_persona?.prompt_set_id === "string"
+    && stringList(options?.chat_voices)
+    && stringList(options?.reaction_styles)
+    && stringList(options?.focus_areas)
+    && stringList(options?.lore_modes)
+    && positiveInteger(options?.max_name)
+    && positiveInteger(options?.max_description)
+    && positiveInteger(options?.max_portrait_edge)
+    && positiveInteger(options?.max_lore_entries)
+    && positiveInteger(options?.max_lore_text)
+    && positiveInteger(options?.max_lore_total)
+    && positiveInteger(options?.max_lore_keywords)
+    && positiveInteger(options?.max_lore_keyword);
+  if (!complete) {
+    throw new ApiError(
+      "Persona response is incomplete; restart or update the MagicHandy core.",
+      502,
+      payload,
+    );
+  }
+  return payload;
 }
 
 export class ApiError extends Error {

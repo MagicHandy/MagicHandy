@@ -54,6 +54,10 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	s.chatLifecycleMu.Lock()
+	defer s.chatLifecycleMu.Unlock()
+	s.personaMutationMu.Lock()
+	defer s.personaMutationMu.Unlock()
 	status, err := s.modes.Start(r.Context(), body.Mode)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -77,6 +81,10 @@ func (s *Server) handleModeStop(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	s.chatLifecycleMu.Lock()
+	defer s.chatLifecycleMu.Unlock()
+	s.personaMutationMu.Lock()
+	defer s.personaMutationMu.Unlock()
 	stopMotion := true
 	if r.ContentLength != 0 {
 		var body struct {

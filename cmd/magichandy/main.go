@@ -7,9 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -99,8 +101,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	defer api.Close()
 
-	listenAddr := listenAddress(defaults.Server.Address, settings.Server.Port, *addr)
-	server := newHTTPServer(listenAddr, api.Handler())
+	server, err := newHTTPServer(listenAddress(defaults.Server.Address, settings.Server.Port, *addr), api.Handler())
+	if err != nil {
+		return err
+	}
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
@@ -144,14 +148,35 @@ func listenAddress(defaultAddress string, settingsPort int, override string) str
 	return defaultAddress
 }
 
-func newHTTPServer(address string, handler http.Handler) *http.Server {
+func validateListenAddress(address string) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("invalid HTTP listen address %q: %w", address, err)
+	}
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf(
+			"HTTP listen address %q is not loopback; LAN access is unavailable until authentication and HTTPS support are implemented",
+			address,
+		)
+	}
+	return nil
+}
+
+func newHTTPServer(address string, handler http.Handler) (*http.Server, error) {
+	if err := validateListenAddress(address); err != nil {
+		return nil, err
+	}
 	return &http.Server{
 		Addr:              address,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-	}
+	}, nil
 }
 
 func configureLanguagesAndExit(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string, stdout io.Writer) (bool, error) {

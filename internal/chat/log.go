@@ -22,6 +22,7 @@ const (
 	MessageRoleUser      = "user"
 	MessageRoleAssistant = "assistant"
 	defaultSessionTitle  = "New chat"
+	lastPersonaKVKey     = "chat.last_persona_id"
 )
 
 // Session lifecycle errors returned by MessageLog mutations.
@@ -259,8 +260,9 @@ func (l *MessageLog) Sessions() ([]Session, error) {
 // and changing who you are talking to is not the same event as the conversation
 // gaining a message.
 func (l *MessageLog) SetSessionPersona(sessionID, personaID string) (Session, error) {
-	err := l.db.WithTx(context.Background(), func(tx *sql.Tx) error {
-		result, execErr := tx.ExecContext(context.Background(),
+	ctx := context.Background()
+	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		result, execErr := tx.ExecContext(ctx,
 			`UPDATE chat_sessions SET persona_id = ? WHERE id = ?`, personaID, sessionID)
 		if execErr != nil {
 			return execErr
@@ -272,7 +274,18 @@ func (l *MessageLog) SetSessionPersona(sessionID, personaID string) (Session, er
 		if affected == 0 {
 			return ErrChatSessionNotFound
 		}
-		return nil
+		// Persist the explicit empty value too. Absence means an older build has
+		// not recorded a preference yet; empty means the user deliberately chose
+		// the Settings-backed MagicHandy persona and new chats must not resurrect
+		// the most recently stamped custom row.
+		_, execErr = tx.ExecContext(ctx, `
+			INSERT INTO app_kv(key, value, updated_at)
+			VALUES(?, ?, ?)
+			ON CONFLICT(key) DO UPDATE SET
+				value = excluded.value,
+				updated_at = excluded.updated_at
+		`, lastPersonaKVKey, personaID, nowUTC())
+		return execErr
 	})
 	if err != nil {
 		return Session{}, err
@@ -471,7 +484,9 @@ func insertSession(ctx context.Context, tx *sql.Tx, personaID string) (string, e
 
 // lastUsedPersona is what a new conversation inherits. Starting a fresh chat and
 // finding the assistant reverted to a stranger would make the persona feel like
-// it had been forgotten, so continuity is the default.
+// it had been forgotten, so continuity is the default. The explicit app_kv
+// marker includes the empty/default choice; last_used_at is only a one-time
+// compatibility fallback for databases written before that marker existed.
 //
 // It reads the persona table directly rather than taking the id as a parameter,
 // because it runs inside the session transaction and the alternative is threading
@@ -479,6 +494,22 @@ func insertSession(ctx context.Context, tx *sql.Tx, personaID string) (string, e
 // missing table (an older database mid-migration) resolves to no persona.
 func lastUsedPersona(ctx context.Context, tx *sql.Tx) string {
 	var personaID string
+	err := tx.QueryRowContext(ctx,
+		`SELECT value FROM app_kv WHERE key = ?`, lastPersonaKVKey).Scan(&personaID)
+	if err == nil {
+		if personaID == "" {
+			return ""
+		}
+		var exists int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT 1 FROM personas WHERE id = ?`, personaID).Scan(&exists); err != nil {
+			return ""
+		}
+		return personaID
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return ""
+	}
 	if err := tx.QueryRowContext(ctx, `
 		SELECT id FROM personas
 		WHERE last_used_at != ''

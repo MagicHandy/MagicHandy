@@ -209,7 +209,10 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
-	active := s.sessionPersona(sessionID)
+	active, err := s.sessionPersona(sessionID)
+	if err != nil {
+		return interactiveChatPromptContext{}, err
+	}
 	result := interactiveChatPromptContext{
 		Capabilities: chatCapabilities(settings, active),
 		History:      make([]llm.Message, 0, len(loggedHistory)),
@@ -280,23 +283,29 @@ func applyPersonaStartingArea(result *chat.Result, capabilities chat.Capabilitie
 	command.Area = active.DefaultFocusArea
 }
 
-// sessionPersona resolves the persona bound to one conversation. Every failure
-// resolves to nil, which means "use the global axis values from Settings": a
-// deleted persona, an unreadable store, or a session with no binding all reduce
-// to the same safe answer rather than failing a turn.
-func (s *Server) sessionPersona(sessionID string) *persona.Persona {
+// sessionPersona resolves the persona bound to one conversation. No binding and
+// an explicitly deleted row resolve to nil; datastore failures are returned so
+// a selected conservative persona cannot silently become the global language
+// profile for one turn.
+func (s *Server) sessionPersona(sessionID string) (*persona.Persona, error) {
 	if s.personas == nil || s.chatLog == nil {
-		return nil
+		return nil, errors.New("persona store is unavailable")
 	}
 	personaID, err := s.chatLog.SessionPersona(sessionID)
-	if err != nil || personaID == "" {
-		return nil
+	if err != nil {
+		return nil, fmt.Errorf("read chat session persona: %w", err)
+	}
+	if personaID == "" {
+		return nil, nil
 	}
 	item, err := s.personas.Get(context.Background(), personaID)
-	if err != nil {
-		return nil
+	if errors.Is(err, persona.ErrNotFound) {
+		return nil, nil
 	}
-	return &item
+	if err != nil {
+		return nil, fmt.Errorf("resolve chat session persona: %w", err)
+	}
+	return &item, nil
 }
 
 func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, sessionID string, userSeq int64, currentMood chat.Mood, active *persona.Persona) error {

@@ -57,9 +57,20 @@ var requiredSchemaTables = []schemaTable{
 		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT", "committed:INTEGER",
 	), primaryKey: []string{"seq"}},
 	{name: "client_cursors", columns: columns("client_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id"}},
-	{name: "chat_sessions", columns: columns("id:TEXT", "title:TEXT", "saved:INTEGER", "created_at:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
+	{name: "chat_sessions", columns: columns(
+		"id:TEXT", "title:TEXT", "saved:INTEGER", "persona_id:TEXT", "created_at:TEXT", "updated_at:TEXT",
+	), primaryKey: []string{"id"}},
 	{name: "chat_workspace", columns: columns("id:TEXT", "active_session_id:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
 	{name: "chat_session_cursors", columns: columns("client_id:TEXT", "session_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id", "session_id"}},
+	{name: "personas", columns: columns(
+		"id:TEXT", "name:TEXT", "description:TEXT", "chat_voice:TEXT", "reaction_style:TEXT",
+		"prompt_set_id:TEXT", "default_focus_area:TEXT", "lore_mode:TEXT",
+		"portrait_updated_at:TEXT", "last_used_at:TEXT", "created_at:TEXT", "updated_at:TEXT",
+	), primaryKey: []string{"id"}},
+	{name: "persona_lore", columns: columns(
+		"id:TEXT", "persona_id:TEXT", "text:TEXT", "keywords_json:TEXT", "enabled:INTEGER",
+		"created_at:TEXT", "updated_at:TEXT",
+	), primaryKey: []string{"id"}},
 	{name: "patterns", columns: columns(
 		"id:TEXT", "name:TEXT", "description:TEXT", "origin:TEXT", "kind:TEXT", "enabled:INTEGER",
 		"weight:REAL", "cycle_ms:INTEGER", "points_json:TEXT", "tags_json:TEXT", "created_at:TEXT", "updated_at:TEXT",
@@ -88,6 +99,8 @@ var requiredSchemaTables = []schemaTable{
 var requiredSchemaIndexes = []schemaIndex{
 	{table: "messages", name: "messages_session_seq", columns: indexColumns("session_id", "seq")},
 	{table: "chat_sessions", name: "chat_sessions_saved_updated", columns: indexColumns("-saved", "-updated_at", "id")},
+	{table: "personas", name: "personas_used", columns: indexColumns("-last_used_at", "name", "id")},
+	{table: "persona_lore", name: "persona_lore_persona_created", columns: indexColumns("persona_id", "created_at", "id")},
 	{table: "patterns", name: "patterns_enabled_weight", columns: indexColumns("enabled", "-weight", "name")},
 	{table: "pattern_feedback", name: "pattern_feedback_pattern_created", columns: indexColumns("pattern_id", "-id")},
 	{table: "llm_models", name: "llm_models_sha256", unique: true, columns: indexColumns("sha256")},
@@ -101,6 +114,7 @@ var requiredSchemaForeignKeys = []schemaForeignKey{
 	{table: "messages", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "chat_workspace", column: "active_session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "RESTRICT"},
 	{table: "chat_session_cursors", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "persona_lore", column: "persona_id", parentTable: "personas", parentColumn: "id", onDelete: "CASCADE"},
 	{
 		table:        "pattern_feedback",
 		column:       "pattern_id",

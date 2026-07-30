@@ -88,6 +88,7 @@ type Server struct {
 	closeOnce              sync.Once
 	settingsLifecycleMu    sync.Mutex
 	chatLifecycleMu        sync.Mutex
+	personaMutationMu      sync.Mutex
 	chatCancelMu           sync.Mutex
 	chatCancels            map[uint64]context.CancelFunc
 	nextChatID             uint64

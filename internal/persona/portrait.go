@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var (
@@ -90,6 +91,9 @@ func validatePortrait(data []byte) error {
 		return fmt.Errorf("%w: %dx%d exceeds the %d pixel limit",
 			ErrPortraitInvalid, header.Width, header.Height, MaxPortraitEdge)
 	}
+	if _, err := jpeg.Decode(bytes.NewReader(data)); err != nil {
+		return fmt.Errorf("%w: %v", ErrPortraitInvalid, err)
+	}
 	return nil
 }
 
@@ -98,6 +102,11 @@ func (s *Store) writePortrait(ctx context.Context, id string, data []byte) error
 	path, err := s.portraitPath(id)
 	if err != nil {
 		return err
+	}
+	previous, readErr := os.ReadFile(path) // #nosec G304 -- path comes from a validated persona ID.
+	hadPrevious := readErr == nil
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return fmt.Errorf("read portrait before replacement: %w", readErr)
 	}
 	if err := os.MkdirAll(s.PortraitDir(), 0o700); err != nil {
 		return fmt.Errorf("create portrait directory: %w", err)
@@ -112,7 +121,22 @@ func (s *Store) writePortrait(ctx context.Context, id string, data []byte) error
 		_ = os.Remove(temporary)
 		return fmt.Errorf("finalize portrait: %w", err)
 	}
-	return s.stampPortrait(ctx, id, timestamp())
+	if err := s.stampPortrait(ctx, id, timestamp()); err != nil {
+		var restoreErr error
+		if hadPrevious {
+			restoreErr = os.WriteFile(path, previous, 0o600) // #nosec G703 -- validated persona ID.
+		} else {
+			restoreErr = os.Remove(path)
+			if errors.Is(restoreErr, os.ErrNotExist) {
+				restoreErr = nil
+			}
+		}
+		if restoreErr != nil {
+			return errors.Join(err, fmt.Errorf("restore portrait after failed stamp: %w", restoreErr))
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Store) readPortrait(id string) ([]byte, error) {
@@ -176,22 +200,117 @@ func (s *Store) DeletePortrait(ctx context.Context, id string) (Persona, error) 
 	if err != nil {
 		return Persona{}, err
 	}
+	previous, hadFile, err := s.removePortraitFiles(id)
+	if err != nil {
+		return Persona{}, err
+	}
 	if !item.HasPortrait {
 		return item, nil
 	}
 	if err := s.stampPortrait(ctx, id, ""); err != nil {
-		return Persona{}, err
+		return Persona{}, s.restorePortraitAfterFailure(id, previous, hadFile, err)
 	}
-	s.removePortraitFile(id)
 	return s.getLocked(ctx, id)
 }
 
-// removePortraitFile deletes the file without reporting failure. The row is the
-// authority on whether a portrait exists; a leftover file is wasted bytes in a
-// purgeable directory, not a broken persona.
-func (s *Store) removePortraitFile(id string) {
-	if path, err := s.portraitPath(id); err == nil {
-		_ = os.Remove(path)
-		_ = os.Remove(path + ".partial")
+// removePortraitFiles removes the served file before database state is cleared.
+// It returns enough information to restore the file if the database mutation
+// fails, keeping a failed deletion retryable instead of silently leaking bytes.
+func (s *Store) removePortraitFiles(id string) ([]byte, bool, error) {
+	path, err := s.portraitPath(id)
+	if err != nil {
+		return nil, false, err
 	}
+	previous, readErr := os.ReadFile(path) // #nosec G304 -- path comes from a validated persona ID.
+	hadFile := readErr == nil
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return nil, false, fmt.Errorf("read portrait before deletion: %w", readErr)
+	}
+	for _, candidate := range []string{path, path + ".partial"} {
+		if removeErr := os.Remove(candidate); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			if hadFile {
+				_ = os.WriteFile(path, previous, 0o600) // #nosec G703 -- path uses a validated persona ID.
+			}
+			return nil, false, fmt.Errorf("delete portrait file: %w", removeErr)
+		}
+	}
+	return previous, hadFile, nil
+}
+
+func (s *Store) restorePortraitAfterFailure(id string, data []byte, hadFile bool, cause error) error {
+	if !hadFile {
+		return cause
+	}
+	path, pathErr := s.portraitPath(id)
+	if pathErr != nil {
+		return errors.Join(cause, pathErr)
+	}
+	if restoreErr := os.WriteFile(path, data, 0o600); restoreErr != nil { // #nosec G703 -- validated persona ID.
+		return errors.Join(cause, fmt.Errorf("restore portrait after failed deletion: %w", restoreErr))
+	}
+	return cause
+}
+
+// reconcilePortraitFiles makes the database flag and filesystem agree after an
+// interrupted write or delete. It removes temporary/orphaned files and clears a
+// stale portrait flag when its file is gone.
+func (s *Store) reconcilePortraitFiles(ctx context.Context) error {
+	rows, err := s.db.SQL().QueryContext(ctx,
+		`SELECT id FROM personas WHERE portrait_updated_at != ''`)
+	if err != nil {
+		return fmt.Errorf("list portrait records: %w", err)
+	}
+	expected := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan portrait record: %w", scanErr)
+		}
+		expected[id] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close portrait records: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read portrait records: %w", err)
+	}
+
+	entries, err := os.ReadDir(s.PortraitDir())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read portrait directory: %w", err)
+	}
+	present := make(map[string]bool)
+	for _, entry := range entries {
+		name := entry.Name()
+		path := filepath.Join(s.PortraitDir(), name)
+		switch {
+		case strings.HasSuffix(name, ".jpg.partial"):
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("remove interrupted portrait write: %w", err)
+			}
+		case strings.HasSuffix(name, ".jpg"):
+			id := strings.TrimSuffix(name, ".jpg")
+			if !ValidID(id) || !expected[id] {
+				if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("remove orphaned portrait: %w", err)
+				}
+				continue
+			}
+			present[id] = true
+		}
+	}
+
+	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		for id := range expected {
+			if present[id] {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE personas SET portrait_updated_at = '' WHERE id = ?`, id); err != nil {
+				return fmt.Errorf("clear missing portrait record: %w", err)
+			}
+		}
+		return nil
+	})
 }

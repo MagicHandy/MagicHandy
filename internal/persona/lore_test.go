@@ -68,7 +68,6 @@ func TestLoreSelectionHonorsModesKeywordsAndEnabledState(t *testing.T) {
 	if keywordMatch("the rhythm", "he") {
 		t.Fatal("keyword matcher accepted a substring inside a word")
 	}
-
 	setLoreMode(t, store, item.ID, LoreModeFull)
 	selection, err = store.SelectLore(ctx, item.ID, nil)
 	if err != nil {
@@ -94,6 +93,21 @@ func TestLoreSelectionHonorsModesKeywordsAndEnabledState(t *testing.T) {
 	}
 	if len(selection.EntryIDs) != 0 || selection.Characters != 0 {
 		t.Fatalf("off mode selected lore: %+v", selection)
+	}
+}
+
+func TestKeywordMatchSupportsUnsegmentedScripts(t *testing.T) {
+	for _, testCase := range []struct {
+		text    string
+		keyword string
+	}{
+		{text: "她记得蓝色天鹅绒的触感", keyword: "蓝色天鹅绒"},
+		{text: "ゆっくりしたリズムを覚えている", keyword: "リズム"},
+		{text: "부드러운리듬을기억해", keyword: "리듬"},
+	} {
+		if !keywordMatch(testCase.text, testCase.keyword) {
+			t.Fatalf("keyword %q did not match %q", testCase.keyword, testCase.text)
+		}
 	}
 }
 

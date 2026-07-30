@@ -131,6 +131,13 @@ row would create two independently editable defaults and let them drift; the
 API instead returns `default_persona` from the current settings snapshot on
 every read.
 
+The last explicit selection is stored separately in `app_kv`, including the
+empty value that means the user deliberately chose the built-in persona.
+New-chat and startup inheritance consult that marker first; `last_used_at` is a
+compatibility fallback only for databases written before the marker existed.
+This prevents a previously used custom persona from reappearing after the user
+switches back to MagicHandy.
+
 `CHECK` constraints are deliberately **not** used for the enums. The existing
 tables (`patterns.origin`, `messages.role`) use them because those value sets
 are structural; `chat_voice` and `reaction_style` are product vocabulary that
@@ -143,6 +150,10 @@ where the option lists are already single-sourced
 persona deletion does **not** cascade: an old session should keep reading as it
 was written even after its persona is gone. The chat header resolves a missing
 persona to the global axis values and says so.
+
+The current-schema validator requires both persona tables, all persona/session
+columns, both indexes, and the lore cascade foreign key. A database marked
+current cannot bypass migrations with a partial v16/v17 schema.
 
 Bounds, matching the existing style (`MaxLLMPersonaDescriptionChars = 500`,
 `maxPromptNameChars = 80`):
@@ -166,8 +177,13 @@ hard parts (path traversal and atomic replace):
 - Written to `<id>.jpg.partial` and renamed, as thumbnails are.
 - `portrait_updated_at` doubles as existence flag and cache-buster in the tile
   URL (`?v=<timestamp>`).
-- Purgeable, and listed in the Diagnostics disk-usage idea alongside
-  thumbnails, models, and voice trees.
+- A failed database stamp restores the previous image (or removes a first-time
+  upload), so file bytes and the cache-buster cannot diverge.
+- Deletion reports filesystem failures before clearing the row, so the user can
+  retry rather than receiving a false erasure confirmation. Startup removes
+  interrupted/orphaned files and clears stale flags for missing files.
+- Purgeable, and listed in the Diagnostics disk-usage idea alongside thumbnails,
+  models, and voice trees.
 
 **Resize in the browser, not the server.** The client already captures video
 frames to a canvas and POSTs a JPEG blob for media thumbnails; portraits use
@@ -484,11 +500,16 @@ user's scroll position.
   and is displayed as active when the session's `persona_id` is empty or no
   longer resolves. Selecting it clears the stored ID; it does not copy settings
   into a persona row.
-- New sessions inherit the last-used persona.
+- New sessions inherit the last explicit persona choice, including the
+  Settings-backed default.
 - Switching mid-session is allowed, takes effect on the next turn, and is
   visible via the provenance-derived divider (§4). Silent switching is the
   failure mode to avoid: a reply in a different voice with no explanation reads
   as a bug.
+- Persona selection and persona editing are locked while a chat reply or
+  Autopilot decision is in flight. Autopilot start/stop and persona mutations
+  share the same lifecycle ordering, so a line cannot be generated as one
+  persona and persisted as another.
 - `last_used_at` updates on selection, which is what orders the grid.
 
 ---
@@ -505,7 +526,7 @@ Each is independently shippable and independently revertible.
 | 4 | Editor window, duplicate, delete | **Shipped.** Centered modal over the unchanged grid; browser-side high-quality resize to JPEG at max edge 640, quality 0.92. |
 | 5 | Session binding + chat header switcher + provenance | **Shipped.** `PUT /api/chat/sessions/{id}/persona`; provenance carries `persona_id` and `persona_name`. |
 | 6 | Reaction-style axis composition | **Shipped.** `chat.ReactionStyle`, composed between the voice identity and the contract. |
-| 7 | Lore | **Implemented.** Schema v17 stores bounded entries and off/relevant/full policy; relevant matching uses Unicode word boundaries; the exact backend composition is inspectable and copyable; an opt-in live scorecard measures 0/500/1000/2000-character budgets. Model-specific baseline numbers remain unmeasured and the Full-mode copy says so. |
+| 7 | Lore | **Implemented.** Schema v17 stores bounded entries and off/relevant/full policy; relevant matching preserves whole-word boundaries for space-delimited text and phrase-matches Han, kana, and Hangul; the exact backend composition is inspectable and copyable; an opt-in live scorecard measures 0/500/1000/2000-character budgets. Model-specific baseline numbers remain unmeasured and the Full-mode copy says so. |
 
 Slices 1–5 change **no prompt bytes** for anyone who does not create a persona,
 and slice 6 changes none for a persona left on `neutral`. Both are asserted by
@@ -521,6 +542,14 @@ unscoped `start` command while respecting the area-focus capability gate; and
 Autopilot announcements persist the effective persona/prompt provenance rather
 than the global settings values. The migration test now includes the real
 Rockfire `personas` shape so that collision cannot regress unnoticed.
+
+The release-hardening review added authoritative v16/v17 schema checks,
+explicit default-persona inheritance, storage-error propagation, Autopilot
+mutation ordering, retryable portrait erasure with startup reconciliation,
+CJK-aware lore matching, backend-owned lore-mode/keyword bounds, code-point
+browser limits, and pre-commit response assembly for persona/lore mutations.
+The app remains localhost-only: non-loopback `--addr` values are rejected until
+authenticated HTTPS/LAN support has an explicit design.
 
 The following design rows remain deliberately open rather than being implied
 by the editor:
@@ -547,9 +576,9 @@ Two things that source reading did not, recorded because both generalize:
   the editor measures exactly 10 / 12 / 18.
 - **A 200 response with an unexpected body shape crashed the chat route.** The
   switcher renders in the chat header, so `payload.personas` being absent threw
-  during render and the error boundary took out the whole conversation. Normalized
-  at the client boundary instead of in each component: a persona is decoration on
-  top of chat and must never be able to break it.
+  during render and the error boundary took out the whole conversation. The
+  client boundary now rejects incomplete rows, enum vocabularies, and bounds
+  with a compatibility error; it does not invent values the backend may reject.
 
 Verified live against the running app: the persona axes reach the composed prompt
 (`REACTION STYLE - TENDER`, the quoted name, the intimate identity block), the
@@ -622,9 +651,11 @@ Ships as: `persona_lore(id, persona_id, text, keywords_json, enabled, created_at
 a hard cap on injected entries per turn, and the same quoted-as-data treatment
 every user string already gets.
 
-**Implemented.** Matching is case-insensitive and requires whole Unicode word
-or phrase boundaries, avoiding short-keyword substring matches such as `he`
-inside `the`. Disabled entries never enter either relevant or full selection.
+**Implemented.** Matching is case-insensitive. Latin/digit keywords require
+whole-word or phrase boundaries, avoiding short-keyword substring matches such
+as `he` inside `the`; Han, hiragana, katakana, and Hangul keywords use phrase
+matching because those scripts normally do not delimit words with spaces.
+Disabled entries never enter either relevant or full selection.
 
 **D. Per-model context budget — worth scoping.**
 The tradeoff depends on the model, and the app already has a managed model

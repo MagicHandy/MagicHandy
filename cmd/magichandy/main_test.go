@@ -127,3 +127,28 @@ func TestRunLanguageConfigurationRequiresTwoSupportedLocales(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateListenAddressRejectsUnauthenticatedRemoteBinding(t *testing.T) {
+	for _, address := range []string{
+		"127.0.0.1:8080",
+		"127.12.34.56:8080",
+		"localhost:8080",
+		"[::1]:8080",
+	} {
+		if err := validateListenAddress(address); err != nil {
+			t.Errorf("validateListenAddress(%q) = %v, want accepted loopback", address, err)
+		}
+	}
+	for _, address := range []string{
+		":8080",
+		"0.0.0.0:8080",
+		"[::]:8080",
+		"192.168.1.20:8080",
+		"magic-handy.local:8080",
+	} {
+		err := validateListenAddress(address)
+		if err == nil || !strings.Contains(err.Error(), "not loopback") {
+			t.Errorf("validateListenAddress(%q) = %v, want non-loopback rejection", address, err)
+		}
+	}
+}

@@ -33,6 +33,7 @@ type personasResponse struct {
 		MaxLoreText     int      `json:"max_lore_text"`
 		MaxLoreTotal    int      `json:"max_lore_total"`
 		MaxLoreKeywords int      `json:"max_lore_keywords"`
+		MaxLoreKeyword  int      `json:"max_lore_keyword"`
 	} `json:"options"`
 }
 
@@ -45,6 +46,7 @@ type personaLoreResponse struct {
 		MaxText     int `json:"max_text"`
 		MaxTotal    int `json:"max_total"`
 		MaxKeywords int `json:"max_keywords"`
+		MaxKeyword  int `json:"max_keyword"`
 	} `json:"options"`
 }
 
@@ -352,7 +354,11 @@ func TestClearingTheSelectionRestoresTheGlobalAxes(t *testing.T) {
 	if cleared.ActivePersonaID != "" {
 		t.Fatalf("active persona = %q, want empty", cleared.ActivePersonaID)
 	}
-	if server.sessionPersona(sessionID) != nil {
+	resolved, err := server.sessionPersona(sessionID)
+	if err != nil {
+		t.Fatalf("resolve cleared persona: %v", err)
+	}
+	if resolved != nil {
 		t.Fatal("a cleared session still resolves a persona")
 	}
 }
@@ -368,9 +374,12 @@ func TestDeletingABoundPersonaLeavesTheSessionReadable(t *testing.T) {
 	personaRequest(t, server, http.MethodPut, "/api/chat/sessions/"+sessionID+"/persona",
 		map[string]any{"persona_id": created.ID})
 
-	recorder, _ := personaRequest(t, server, http.MethodDelete, "/api/personas/"+created.ID, nil)
+	recorder, deleted := personaRequest(t, server, http.MethodDelete, "/api/personas/"+created.ID, nil)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("delete: status %d", recorder.Code)
+	}
+	if deleted.ActivePersonaID != "" {
+		t.Fatalf("effective active persona = %q after deletion, want built-in default", deleted.ActivePersonaID)
 	}
 	storedID, err := server.chatLog.SessionPersona(sessionID)
 	if err != nil {
@@ -379,7 +388,11 @@ func TestDeletingABoundPersonaLeavesTheSessionReadable(t *testing.T) {
 	if storedID != created.ID {
 		t.Fatalf("session persona = %q, want the deleted id retained", storedID)
 	}
-	if server.sessionPersona(sessionID) != nil {
+	resolved, err := server.sessionPersona(sessionID)
+	if err != nil {
+		t.Fatalf("resolve deleted persona: %v", err)
+	}
+	if resolved != nil {
 		t.Fatal("a deleted persona must resolve to nil, not a phantom row")
 	}
 }
@@ -512,6 +525,7 @@ func TestPersonaWritesRequireTheController(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 	created := createPersonaVia(t, server, "Rowan")
+	_, payload := personaRequest(t, server, http.MethodGet, "/api/personas", nil)
 
 	for _, testCase := range []struct {
 		method string
@@ -526,6 +540,7 @@ func TestPersonaWritesRequireTheController(t *testing.T) {
 		{http.MethodPost, "/api/personas/" + created.ID + "/lore"},
 		{http.MethodPatch, "/api/personas/" + created.ID + "/lore/lore-0123456789ab"},
 		{http.MethodDelete, "/api/personas/" + created.ID + "/lore/lore-0123456789ab"},
+		{http.MethodPut, "/api/chat/sessions/" + payload.ActiveSessionID + "/persona"},
 	} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader("{}"))
@@ -564,7 +579,8 @@ func TestPersonaLoreCRUDRoundTripsThroughTheAPI(t *testing.T) {
 		t.Fatalf("persona lore count = %d, want 1", createdLore.Persona.LoreCount)
 	}
 	if createdLore.Options.MaxEntries != persona.MaxLoreEntries ||
-		createdLore.Options.MaxTotal != persona.MaxLoreTotalChars {
+		createdLore.Options.MaxTotal != persona.MaxLoreTotalChars ||
+		createdLore.Options.MaxKeyword != persona.MaxLoreKeywordChars {
 		t.Fatal("lore endpoint omitted its server-owned bounds")
 	}
 

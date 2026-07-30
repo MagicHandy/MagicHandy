@@ -138,6 +138,7 @@ export function ChatRoute() {
             sessions={sessions}
             activeId={active?.id ?? ""}
             disabled={locked}
+            personaDisabled={locked || autopilotActive}
             onActivate={requestActivate}
             onNew={requestNew}
             onSave={saveSession}
