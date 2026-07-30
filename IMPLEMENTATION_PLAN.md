@@ -322,7 +322,10 @@ Chat / Preset Modes / Pattern Library / Videos / Settings routes with the safety
 invariants (Stop outside routes, backend-loss lock, read-only lock) under
 Vitest. Preset Modes owns deterministic Freestyle; the initial Chat-native
 Autopilot control and curation loop landed in #101 (step 3), with richer
-arrangements and user-configurable autonomous speech cadence still planned.
+arrangements still planned. Independent motion/speech cadence, bounded adaptive
+timing, scheduler-only holds, playback-aware autospeech, and persisted autonomy
+controls are specified in
+[docs/autopilot-cadence.md](docs/autopilot-cadence.md).
 The follow-up in #106 adds named area focus, explicit capability gates,
 state-aware continuity, bounded recent-pattern variation, and twelve opt-in
 experimental built-ins. Interactive chat passed live managed llama.cpp/Gemma

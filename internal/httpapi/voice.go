@@ -615,6 +615,7 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/voice/requests/{id}", s.handleVoiceRequestGet)
 	mux.HandleFunc("GET /api/voice/requests/{id}/audio", s.handleVoiceRequestAudio)
 	mux.HandleFunc("POST /api/voice/requests/{id}/cancel", s.handleVoiceRequestCancel)
+	mux.HandleFunc("POST /api/voice/requests/{id}/played", s.handleVoiceRequestPlayed)
 	mux.HandleFunc("POST /api/voice/transcriptions", s.handleVoiceTranscription)
 	mux.HandleFunc("PUT /api/voice/preferences", s.handleVoicePreferences)
 	mux.HandleFunc("PUT /api/voice/input-preferences", s.handleVoiceInputPreferences)
@@ -1071,6 +1072,28 @@ func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request
 	}
 	s.voice.Worker(pending.Role).Cancel(pending)
 	writeJSON(w, http.StatusOK, map[string]any{"request": pending.Snapshot()})
+}
+
+// handleVoiceRequestPlayed acknowledges completed browser playback. Inference
+// completion is not audible completion, so Autopilot starts its next speech
+// interval only from this controller-owned signal.
+func (s *Server) handleVoiceRequestPlayed(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	pending, ok := s.voice.Request(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, errors.New("unknown voice request"))
+		return
+	}
+	snapshot := pending.Snapshot()
+	if snapshot.Role != voice.RoleTTS || snapshot.Type != voice.RequestSpeak ||
+		snapshot.State != voice.RequestStateDone {
+		writeError(w, http.StatusConflict, errors.New("only completed speech playback can be acknowledged"))
+		return
+	}
+	acknowledged := s.modes.NotifySpeechPlaybackComplete(pending.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"acknowledged": acknowledged})
 }
 
 // applyVoiceSettingsTransition reconfigures workers after a settings save.

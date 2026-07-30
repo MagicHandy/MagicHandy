@@ -15,6 +15,18 @@ export interface MotionSettings {
   style: string;
 }
 
+export interface AutopilotSettings {
+  speech_cadence: "off" | "quiet" | "natural" | "talkative" | "custom" | string;
+  speech_min_seconds: number;
+  speech_max_seconds: number;
+  motion_cadence: "steady" | "natural" | "dynamic" | "custom" | string;
+  motion_min_seconds: number;
+  motion_max_seconds: number;
+  adaptive_speech_timing: boolean;
+  adaptive_motion_timing: boolean;
+  speech_motion_authority: "chat_only" | "style_only" | "full_motion" | string;
+}
+
 export interface MotionSample {
   position_percent: number;
   time_ms: number;
@@ -344,6 +356,10 @@ export interface ModesStatus {
   segment_ends_in_ms?: number;
   decision_source?: string;
   last_say?: string;
+  motion_change_in_ms?: number;
+  speech_in_ms?: number;
+  motion_planned?: boolean;
+  speech_waiting_playback?: boolean;
   [k: string]: unknown;
 }
 
@@ -762,6 +778,9 @@ export interface OptionHints {
   api_application_id_sources?: string[];
   diagnostics_verbosities?: string[];
   motion_styles?: string[];
+  autopilot_speech_cadences?: string[];
+  autopilot_motion_cadences?: string[];
+  autopilot_speech_motion_authorities?: string[];
   llm_providers?: string[];
   llama_cpp_modes?: string[];
   llm_reasoning_modes?: string[];
@@ -792,6 +811,7 @@ export interface PublicSettings {
     connection_key_set: boolean;
   };
   motion: MotionSettings;
+  autopilot: AutopilotSettings;
   llm: {
     provider: string;
     llama_cpp_mode: string;
@@ -944,6 +964,7 @@ export interface SettingsUpdate {
     handy_connection_key?: string;
   };
   motion: MotionSettings;
+  autopilot?: AutopilotSettings;
   llm: PublicSettings["llm"];
   voice: VoiceSettingsUpdate;
   chat?: NonNullable<PublicSettings["chat"]>;

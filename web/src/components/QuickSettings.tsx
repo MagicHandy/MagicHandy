@@ -165,7 +165,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
         <span>{t("Reverse direction")}</span>
       </label>}
       {showStyle && <label className="field">
-        <span className="label">{t("Style")}<span className="hint-inline">{t("biases autonomous pacing")}</span>
+        <span className="label">{t("Style")}<span className="hint-inline">{t("biases motion character")}</span>
         </span>
         <select
           value={vals.style}

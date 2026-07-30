@@ -175,6 +175,7 @@ type Settings struct {
 	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
+	Autopilot   AutopilotSettings   `json:"autopilot"`
 	LLM         LLMSettings         `json:"llm"`
 	Voice       VoiceSettings       `json:"voice"`
 	Chat        ChatSettings        `json:"chat"`
@@ -412,6 +413,7 @@ type PublicSettings struct {
 	Media       MediaSettings             `json:"media"`
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
+	Autopilot   AutopilotSettings         `json:"autopilot"`
 	LLM         LLMSettings               `json:"llm"`
 	Voice       PublicVoiceSettings       `json:"voice"`
 	Chat        ChatSettings              `json:"chat"`
@@ -435,6 +437,9 @@ type PublicSettingsOptionHints struct {
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
 	MotionStyles            []string `json:"motion_styles"`
+	AutopilotSpeechCadences []string `json:"autopilot_speech_cadences"`
+	AutopilotMotionCadences []string `json:"autopilot_motion_cadences"`
+	AutopilotAuthorities    []string `json:"autopilot_speech_motion_authorities"`
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
 	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
@@ -506,6 +511,7 @@ type SettingsUpdate struct {
 	Media              *MediaUpdate        `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
+	Autopilot          *AutopilotSettings  `json:"autopilot,omitempty"`
 	LLM                LLMUpdate           `json:"llm"`
 	Voice              VoiceUpdate         `json:"voice"`
 	Chat               *ChatSettings       `json:"chat,omitempty"`
@@ -555,6 +561,7 @@ func DefaultSettings() Settings {
 			StrokeMaxPercent: 100,
 			Style:            MotionStyleBalanced,
 		},
+		Autopilot: DefaultAutopilotSettings(),
 		LLM: LLMSettings{
 			Provider:             LLMProviderLlamaCPP,
 			LlamaCPPMode:         LlamaCPPModeManaged,
@@ -629,6 +636,7 @@ func (s Settings) Public() PublicSettings {
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
 		Motion:      s.Motion,
+		Autopilot:   s.Autopilot,
 		LLM:         s.LLM,
 		Voice:       publicVoiceSettings(s.Voice),
 		Chat:        s.Chat,
@@ -691,6 +699,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDSource = update.Device.APIApplicationIDSource
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
+	if update.Autopilot != nil {
+		next.Autopilot = *update.Autopilot
+	}
 	maxOutputTokens := s.LLM.MaxOutputTokens
 	if update.LLM.MaxOutputTokens != nil {
 		maxOutputTokens = *update.LLM.MaxOutputTokens
@@ -943,6 +954,9 @@ func validateSettings(settings Settings) error {
 	if err := validateMotionSettings(settings.Motion); err != nil {
 		return err
 	}
+	if err := validateAutopilotSettings(settings.Autopilot); err != nil {
+		return err
+	}
 	if err := validateLLMSettings(settings.LLM); err != nil {
 		return err
 	}
@@ -991,6 +1005,7 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
+	settings.Autopilot = applyMissingAutopilotDefaults(settings.Autopilot, defaults.Autopilot)
 	settings.LLM = applyMissingLLMDefaults(settings.LLM, defaults.LLM)
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)
 	if settings.Chat.StartupBehavior == "" {

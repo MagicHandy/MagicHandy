@@ -32,14 +32,53 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.Motion
 		},
-		Traces:   s.traces,
-		Decide:   s.autopilotDecide,
-		Announce: s.autopilotAnnounce,
+		AutopilotSettings: func() config.AutopilotSettings {
+			settings, _ := s.store.Snapshot()
+			return settings.Autopilot
+		},
+		Traces:       s.traces,
+		Decide:       s.autopilotDecide,
+		DecideSpeech: s.autopilotDecideSpeech,
+		CanAnnounce:  s.autopilotCanAnnounce,
+		Announce:     s.autopilotAnnounce,
 	})
 }
 
 func (s *Server) handleModesGet(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.modes.Status())
+}
+
+func (s *Server) handleAutopilotPreferences(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var preferences config.AutopilotSettings
+	if err := decodeJSON(r, &preferences); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var updateErr error
+	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		current.Autopilot = preferences
+		var next config.Settings
+		next, updateErr = config.NormalizeSettings(current)
+		return next, updateErr
+	})
+	if updateErr != nil {
+		writeError(w, http.StatusBadRequest, updateErr)
+		return
+	}
+	if saveErr != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("autopilot preferences could not be saved"))
+		return
+	}
+	payload := map[string]any{"autopilot": saved.Autopilot}
+	status := http.StatusOK
+	if runtimeErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = "Autopilot preferences were saved, but the active runtime could not apply them"
+	}
+	writeJSON(w, status, payload)
 }
 
 func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {

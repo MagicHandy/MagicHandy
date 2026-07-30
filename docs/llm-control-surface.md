@@ -280,9 +280,12 @@ execution/lifecycle owner. This placement keeps assistant autonomy with the
 conversation and leaves Freestyle as the clearly separate deterministic preset
 behavior.
 
-Remaining work is a visible **session-level autonomy choice** between curated
-authored content (`{pattern_id or program_id, intensity}`) and future freeform
-arrangements, plus bounded user-configurable autonomous speech cadence. A
+The cadence and speech-authority portion is now specified in
+[autopilot-cadence.md](autopilot-cadence.md): motion evolution and speech use
+independent clocks, model timing is categorical and code-bounded, and a hold is
+scheduler-only. Remaining work is a visible **session-level autonomy choice**
+between curated authored content (`{pattern_id or program_id, intensity}`) and
+future freeform arrangements. A
 guarded `mode_action` field is still needed before the model itself may enter or
 leave a session, especially from voice transcripts. Model-triggered mode
 changes remain off until that explicit opt-in exists.

@@ -16,6 +16,24 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			MotionStyleBalanced,
 			MotionStyleIntense,
 		},
+		AutopilotSpeechCadences: []string{
+			AutopilotSpeechOff,
+			AutopilotSpeechQuiet,
+			AutopilotSpeechNatural,
+			AutopilotSpeechTalkative,
+			AutopilotSpeechCustom,
+		},
+		AutopilotMotionCadences: []string{
+			AutopilotMotionSteady,
+			AutopilotMotionNatural,
+			AutopilotMotionDynamic,
+			AutopilotMotionCustom,
+		},
+		AutopilotAuthorities: []string{
+			AutopilotSpeechMotionChatOnly,
+			AutopilotSpeechMotionStyle,
+			AutopilotSpeechMotionFull,
+		},
 		DiagnosticsVerbosities: []string{
 			DiagnosticsVerbosityNormal,
 			DiagnosticsVerbosityDebug,

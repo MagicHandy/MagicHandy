@@ -910,49 +910,6 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
 }
-.autopilot-control {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-.autopilot-control-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--line-strong);
-}
-.autopilot-control[data-active="true"] .autopilot-control-dot {
-  background: var(--success);
-}
-.autopilot-control-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-.autopilot-control-copy strong {
-  font-size: 0.88rem;
-  font-weight: 650;
-}
-.autopilot-control-copy span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.autopilot-control-action {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.autopilot-control-actions {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 8px;
-}
 .chat {
   display: flex;
   flex: 1 1 auto;

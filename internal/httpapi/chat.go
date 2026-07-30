@@ -86,6 +86,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer finishChat()
+	s.modes.NotifyChatActivity()
+	defer s.modes.NotifyChatActivityComplete()
 	started := time.Now()
 
 	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM, body.Message)

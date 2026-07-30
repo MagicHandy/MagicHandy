@@ -199,6 +199,7 @@ export function SettingsRoute() {
         ...(connectionKey ? { handy_connection_key: connectionKey } : {}),
       },
       motion: s.motion,
+      autopilot: s.autopilot,
       llm: s.llm,
       // Exact write shape: the ElevenLabs key is write-only (sent only when
       // newly typed); elevenlabs_key_set never goes back to the server.

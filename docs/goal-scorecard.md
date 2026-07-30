@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-29, shell controls and live motion visualization
+## Snapshot — 2026-07-30, independent Autopilot cadence
 
 ### Goal 1: Maintainability
 
@@ -31,8 +31,8 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,401 lines after locale and public-option extraction, `internal/config/settings_test.go` 1,180, `internal/httpapi/chat.go` 1,153, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Focused current-snapshot coverage lives in the 74-line `internal/motion/snapshot_test.go`. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/App.test.tsx` 1,468 lines, `web/src/components/SyncedVideoPlayer.tsx` 811, `web/src/styles/components.css` 1,493, `web/src/styles/library.css` 1,385, and retired reference-only `web/legacy/app.css` 846. Theme token overrides and their compact picker live in the focused 507-line `web/src/styles/themes.css`; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,389 lines, `internal/config/settings_test.go` 1,325, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,321, `internal/httpapi/voice_test.go` 1,195, `internal/modes/manager.go` 976, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Autopilot cadence logic is isolated in the 475-line `internal/modes/autopilot_scheduler.go` rather than extending the manager further. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,099 lines, `web/src/App.test.tsx` 1,468, `web/src/components/SyncedVideoPlayer.tsx` 858, `web/src/styles/components.css` 1,450, `web/src/styles/shell.css` 1,036, and retired reference-only `web/legacy/app.css` 846. The 335-line Autopilot control and its 129-line stylesheet stay focused; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,712 physical lines after adding the shared localized decision-tree runtime. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating locale, updater state, or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,768,640 bytes plain and 16,255,488 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,873,600 bytes plain and 16,339,968 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,11 +110,11 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,486,042 raw / 742,953 gzip bytes. Lazy loading limits
-   the English startup path to 691,182 raw / 185,815 gzip bytes; all HTML/CSS/JS
-   is 1,041,806 raw / 305,556 gzip bytes. The persona hardening review and
-   complete pattern-library navigation icon add 821 raw / 237 gzip bytes against
-   the checked-in bundle. These remain within
+   browser payload is 1,498,200 raw / 746,268 gzip bytes. Lazy loading limits
+   the English startup path to 698,383 raw / 187,404 gzip bytes; all HTML/CSS/JS
+   is 1,053,964 raw / 308,871 gzip bytes. Independent Autopilot clocks,
+   preferences, localization, and playback acknowledgement add 12,158 raw /
+   3,315 gzip bytes against the preceding checked-in bundle. These remain within
    budget, but future locales, personas, and bitmap additions must keep startup
    and total payload growth explicit.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
@@ -123,6 +123,27 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-30** - Replaced Autopilot's coupled segment/speech loop with
+  independent backend-owned clocks. Motion planning runs ahead of its deadline
+  while the current pattern continues; a model hold only reschedules and never
+  retargets the engine. Motion and speech use separate strict JSON contracts,
+  categorical `soon` / `normal` / `later` timing inside user bounds, and
+  independent random streams so speech preferences cannot perturb pattern
+  selection. Interactive chat cancels and blocks stale autonomous inference.
+  Speech waits for TTS capacity and, when audio is enabled, starts its next
+  interval after browser playback acknowledgement with a bounded fallback.
+  The Chat sidebar exposes separate motion and speech presets, a hard-off
+  speech choice, custom bounds, adaptive timing, and speech-motion authority;
+  its 1280x720 review keeps the complete motion status visible and removes an
+  empty voice-section divider. Full `go test ./...`, vet, lint (zero issues),
+  322 frontend tests, the 1,307-key localization audit, typecheck, production
+  build, and `CGO_ENABLED=0` plain/stripped builds pass. Local race execution
+  remains unavailable because `gcc` is absent; CI retains the mandatory race
+  gate. Plain/stripped binaries are 22,873,600 / 16,339,968 bytes. English
+  startup is 698,383 / 187,404 raw/gzip; all HTML/CSS/JS is 1,053,964 /
+  308,871; complete embedded output is 1,498,200 / 746,268. No hardware motion
+  was issued.
 
 - **2026-07-29** - Hardened Phase 19 after an independent implementation
   review. Current-schema validation now requires every v16/v17 persona column,

@@ -4,24 +4,26 @@ import (
 	"context"
 	"time"
 
-	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
-// Autopilot is Freestyle's loop with the segment choice delegated to an
-// injected LLM curation step. The model curates *what* plays next (an enabled
-// pattern, an intensity, and an optional assistant line); deterministic code owns
-// *how long* it plays, every clamp, and the whole engine/transport path. Any
-// decision failure falls back to the deterministic planner with a visible
-// trace — motion never stalls and never stops on a model failure, and only
-// the user ever stops the device.
-
-// decisionTimeout bounds one LLM curation call. The mode loop context still
-// cancels it immediately on Stop or mode switch.
 const decisionTimeout = 25 * time.Second
 
-// DecisionInput is the bounded, model-visible context for one curation step.
+// TimingPreference is a model-selected semantic timing category. The manager
+// samples the concrete delay inside the user's saved bounds.
+type TimingPreference string
+
+const (
+	// TimingSoon samples the early part of the configured cadence window.
+	TimingSoon TimingPreference = "soon"
+	// TimingNormal samples the middle of the configured cadence window.
+	TimingNormal TimingPreference = "normal"
+	// TimingLater samples the late part of the configured cadence window.
+	TimingLater TimingPreference = "later"
+)
+
+// DecisionInput is bounded, semantic context for one autonomous decision.
 type DecisionInput struct {
 	Style            string
 	SegmentIndex     int
@@ -34,64 +36,105 @@ type DecisionInput struct {
 	CurrentAreaFocus *motion.AreaFocus
 }
 
-// Decision is one curation outcome. Hold keeps the current segment's pattern
-// and speed for another deterministic duration (the model chose to talk or
-// leave motion alone). A model-requested stop is mapped to Hold by the caller:
-// stopping the device belongs to the user.
+// Decision is one motion or speech curation outcome. Hold is scheduler-only:
+// it must never produce an engine retarget.
 type Decision struct {
 	Segment Segment
-	// Pattern optionally carries the resolved enabled library definition for
-	// Segment.PatternID so the engine can play library content.
 	Pattern *motion.PatternDefinition
 	Say     string
 	Hold    bool
+	Next    TimingPreference
 }
 
-// DecideFunc produces one bounded curation decision.
+// Announcement reports whether a line entered canonical chat and whether the
+// scheduler must wait for browser playback before starting the next interval.
+type Announcement struct {
+	Published     bool
+	RequestID     string
+	AwaitPlayback bool
+}
+
+// DecideFunc produces one bounded autonomous decision.
 type DecideFunc func(ctx context.Context, input DecisionInput) (Decision, error)
 
-// segmentChoice is what one autonomous tick actually applies.
+// segmentChoice is what one autonomous motion boundary applies.
 type segmentChoice struct {
-	segment Segment
-	pattern *motion.PatternDefinition
-	scores  []diagnostics.PlannerScore
-	say     string
-	source  string // "planner", "model", "fallback", "hold"
-	note    string
+	segment         Segment
+	pattern         *motion.PatternDefinition
+	scores          []diagnostics.PlannerScore
+	source          string // planner, model, fallback, hold, speech
+	note            string
+	say             string
+	timing          TimingPreference
+	decisionLatency time.Duration
 }
 
-// nextSegmentChoice picks the next segment for an autonomous mode. Freestyle
-// is purely deterministic; Autopilot asks the injected decision step and
-// falls back to the deterministic planner on any failure.
+// nextSegmentChoice picks the next segment for Freestyle or Autopilot.
 func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentChoice {
 	if mode != ModeAutopilot || m.options.Decide == nil {
 		segment, scores := m.nextPlannedSegment()
-		return segmentChoice{segment: segment, scores: scores, source: "planner"}
+		return segmentChoice{segment: segment, scores: scores, source: "planner", timing: TimingNormal}
 	}
+	return m.runDecision(ctx, m.options.Decide, true)
+}
 
+// runDecision executes one model decision. Motion decisions fall back to the
+// deterministic planner; speech decisions return their error to the speech
+// scheduler so they can be postponed without disturbing motion.
+func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback bool) segmentChoice {
 	input := m.decisionInput()
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
-	defer cancel()
-	decision, err := m.options.Decide(decideCtx, input)
-	if err != nil {
-		segment, scores := m.nextPlannedSegment()
-		return segmentChoice{segment: segment, scores: scores, source: "fallback", note: err.Error()}
+	started := m.options.Now()
+	decision, err := decide(decideCtx, input)
+	cancel()
+	latency := m.options.Now().Sub(started)
+	if latency < 0 {
+		latency = 0
 	}
-	if decision.Hold {
-		if segment, pattern, ok := m.heldSegment(); ok {
-			return segmentChoice{segment: segment, pattern: pattern, say: decision.Say, source: "hold"}
+	if err != nil {
+		if !fallback {
+			return segmentChoice{source: "speech_error", note: err.Error(), decisionLatency: latency}
 		}
 		segment, scores := m.nextPlannedSegment()
-		return segmentChoice{segment: segment, scores: scores, say: decision.Say, source: "fallback", note: "hold_without_segment"}
+		segment.DriftToSpeedPercent = 0
+		return segmentChoice{
+			segment: segment, scores: scores, source: "fallback", note: err.Error(),
+			timing: TimingNormal, decisionLatency: latency,
+		}
 	}
+	timing := normalizeTiming(decision.Next)
+	if decision.Hold {
+		if segment, pattern, ok := m.heldSegment(); ok {
+			return segmentChoice{
+				segment: segment, pattern: pattern, source: "hold",
+				say: decision.Say, timing: timing, decisionLatency: latency,
+			}
+		}
+		if !fallback {
+			return segmentChoice{
+				source: "hold", say: decision.Say, timing: timing, decisionLatency: latency,
+			}
+		}
+		segment, scores := m.nextPlannedSegment()
+		segment.DriftToSpeedPercent = 0
+		return segmentChoice{
+			segment: segment, scores: scores, source: "fallback",
+			note: "hold_without_segment", say: decision.Say, timing: timing, decisionLatency: latency,
+		}
+	}
+	return segmentChoice{
+		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
+		source: "model", say: decision.Say, timing: timing, decisionLatency: latency,
+	}
+}
 
-	segment := NormalizeSegment(decision.Segment)
-	if decision.Segment.DurationMillis == 0 {
-		// The model curates what plays; deterministic style bounds decide how
-		// long it plays so one decision can never pin an endless segment.
-		segment.DurationMillis = m.plannedDurationMillis()
+func normalizeTiming(timing TimingPreference) TimingPreference {
+	switch timing {
+	case TimingSoon, TimingNormal, TimingLater:
+		return timing
+	default:
+		return TimingNormal
 	}
-	return segmentChoice{segment: segment, pattern: decision.Pattern, say: decision.Say, source: "model"}
 }
 
 // decisionInput snapshots the bounded model-visible context.
@@ -134,14 +177,11 @@ func (m *Manager) decisionInput() DecisionInput {
 	return input
 }
 
-// heldSegment re-arms the current segment (same pattern, same speed) for a
-// fresh deterministic duration.
 func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
-	duration := m.plannedDurationMillis()
 	if engine := m.options.Current(); engine != nil {
 		snapshot := engine.Snapshot()
 		if snapshot.Running || snapshot.Paused {
-			if segment, pattern, ok := segmentFromMotionTarget(snapshot.Target, duration); ok {
+			if segment, pattern, ok := segmentFromMotionTarget(snapshot.Target, 0); ok {
 				return segment, pattern, true
 			}
 		}
@@ -152,7 +192,7 @@ func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
 	target.Pattern = m.pattern
 	target = cloneTarget(target)
 	m.mu.Unlock()
-	return segmentFromMotionTarget(target, duration)
+	return segmentFromMotionTarget(target, 0)
 }
 
 func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (Segment, *motion.PatternDefinition, bool) {
@@ -169,28 +209,8 @@ func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (
 	return segment, copied.Pattern, true
 }
 
-func (m *Manager) currentStyleProfile() styleProfile {
-	settings := m.options.Settings()
-	profile, ok := styleProfiles[settings.Style]
-	if !ok {
-		profile = styleProfiles[config.MotionStyleBalanced]
-	}
-	return profile
-}
-
-// plannedDurationMillis borrows the deterministic style duration bounds.
-func (m *Manager) plannedDurationMillis() int64 {
-	profile := m.currentStyleProfile()
-	m.mu.Lock()
-	planner := m.planner
-	m.mu.Unlock()
-	if planner == nil {
-		return profile.minDurationMillis
-	}
-	return planner.durationFor(profile)
-}
-
-// rememberChoice records segment provenance for status and future decisions.
+// rememberChoice records motion provenance and recent changed patterns. Holds
+// do not pollute recency because no new content was played.
 func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -199,9 +219,9 @@ func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	}
 	if mode == ModeAutopilot {
 		m.decisionSource = choice.source
-		if choice.say != "" {
-			m.lastSay = choice.say
-		}
+	}
+	if choice.source == "hold" || choice.segment.PatternID == "" {
+		return
 	}
 	m.recentPatternIDs = append(m.recentPatternIDs, string(choice.segment.PatternID))
 	if len(m.recentPatternIDs) > 4 {
@@ -209,7 +229,6 @@ func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	}
 }
 
-// modeLabel names targets for the UI/status ("Label") per autonomous mode.
 func modeLabel(mode string) string {
 	if mode == ModeAutopilot {
 		return "Autopilot"

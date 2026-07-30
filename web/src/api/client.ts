@@ -4,6 +4,7 @@
 // payloads — only the semantic endpoints below.
 import type {
   AppState,
+  AutopilotSettings,
   ChatStreamEvent,
   MemoryState,
   MotionStyle,
@@ -523,9 +524,13 @@ export const api = {
     request<{ request: VoiceRequestSnapshot }>("GET", `/api/voice/requests/${encodeURIComponent(id)}`, undefined, signal),
   voiceRequestCancel: (id: string) =>
     request<{ request: VoiceRequestSnapshot }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/cancel`),
+  voiceRequestPlayed: (id: string) =>
+    request<{ acknowledged: boolean }>("POST", `/api/voice/requests/${encodeURIComponent(id)}/played`),
   voiceTranscribe: (audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal) => uploadVoiceTranscription(audio, format, stopSequence, signal),
   saveVoicePreferences: (speak_replies: boolean) =>
     request<{ speak_replies: boolean }>("PUT", "/api/voice/preferences", { speak_replies }),
+  saveAutopilotPreferences: (autopilot: AutopilotSettings) =>
+    request<{ autopilot: AutopilotSettings }>("PUT", "/api/modes/autopilot/preferences", autopilot),
   saveVoiceInputPreferences: (patch: Partial<{
     input_mode: "hands_free" | "hold";
     input_sensitivity: number;

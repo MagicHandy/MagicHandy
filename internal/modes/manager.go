@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -50,20 +51,24 @@ type Options struct {
 	Current func() Engine
 	// Settings returns the current motion settings snapshot.
 	Settings func() config.MotionSettings
-	Traces   *diagnostics.TraceRing
-	Now      func() time.Time
-	Tick     time.Duration
-	Seed     int64
+	// AutopilotSettings returns durable cadence and speech-authority settings.
+	AutopilotSettings func() config.AutopilotSettings
+	Traces            *diagnostics.TraceRing
+	Now               func() time.Time
+	Tick              time.Duration
+	Seed              int64
 	// MaxSegmentDuration caps armed segment deadlines. It exists for tests
 	// that need many segment boundaries quickly; production leaves it zero.
 	MaxSegmentDuration time.Duration
 	// Decide is Autopilot's injected LLM curation step. Autopilot cannot
 	// start without it; Freestyle and chat keepalive never use it.
 	Decide DecideFunc
-	// Announce publishes an Autopilot line to the chat surface after its
-	// segment is armed. The mode context cancels it on Stop or mode switch.
-	// Optional; failures never affect motion.
-	Announce func(ctx context.Context, say string)
+	// DecideSpeech runs the independent autonomous speech contract.
+	DecideSpeech DecideFunc
+	// CanAnnounce is false while autonomous speech would deepen a TTS backlog.
+	CanAnnounce func() bool
+	// Announce publishes an Autopilot line and optionally queues browser audio.
+	Announce func(ctx context.Context, say string) Announcement
 }
 
 // Status is the UI-facing mode state.
@@ -83,6 +88,11 @@ type Status struct {
 	// LastSay is the most recent Autopilot line. The planner uses it to avoid
 	// repetition; the API retains it as diagnostic state while Chat owns display.
 	LastSay string `json:"last_say,omitempty"`
+	// MotionChangeMs and SpeechMs are independent backend-owned clocks.
+	MotionChangeMs        int64 `json:"motion_change_in_ms,omitempty"`
+	SpeechMs              int64 `json:"speech_in_ms,omitempty"`
+	MotionPlanned         bool  `json:"motion_planned,omitempty"`
+	SpeechWaitingPlayback bool  `json:"speech_waiting_playback,omitempty"`
 }
 
 // Manager owns at most one active mode loop.
@@ -107,6 +117,7 @@ type Manager struct {
 	chatTarget        *motion.MotionTarget
 	chatKeepalive     bool
 	chatTargetPending bool
+	chatActivity      bool
 	lastEvent         string
 	lastEventAt       time.Time
 	segmentIdx        int
@@ -116,6 +127,15 @@ type Manager struct {
 	recentPatternIDs []string
 	decisionSource   string
 	lastSay          string
+	motionPlanAt     time.Time
+	pendingMotion    *segmentChoice
+	speechDeadline   time.Time
+	speechWaitingID  string
+	speechFallbackAt time.Time
+	speechNextTiming TimingPreference
+	lastDecisionTime time.Duration
+	motionCadenceRNG *rand.Rand
+	speechCadenceRNG *rand.Rand
 
 	operationID     uint64
 	operationMode   string
@@ -133,6 +153,14 @@ func NewManager(options Options) (*Manager, error) {
 	if options.Tick <= 0 {
 		options.Tick = defaultTickInterval
 	}
+	if options.AutopilotSettings == nil {
+		options.AutopilotSettings = func() config.AutopilotSettings {
+			return config.DefaultAutopilotSettings()
+		}
+	}
+	if options.CanAnnounce == nil {
+		options.CanAnnounce = func() bool { return true }
+	}
 	return &Manager{options: options}, nil
 }
 
@@ -147,6 +175,9 @@ func (m *Manager) Status() Status {
 	waitingForChat := m.chatTarget == nil
 	decisionSource := m.decisionSource
 	lastSay := m.lastSay
+	pendingMotion := m.pendingMotion != nil
+	speechDeadline := m.speechDeadline
+	speechWaiting := m.speechWaitingID != ""
 	m.mu.Unlock()
 
 	status := Status{
@@ -169,6 +200,14 @@ func (m *Manager) Status() Status {
 	if mode == ModeAutopilot {
 		status.DecisionSource = decisionSource
 		status.LastSay = lastSay
+		status.MotionPlanned = pendingMotion
+		status.SpeechWaitingPlayback = speechWaiting
+		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
+			status.MotionChangeMs = remaining
+		}
+		if remaining := speechDeadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
+			status.SpeechMs = remaining
+		}
 	}
 	if mode == ModeChat {
 		status.WaitingForChat = waitingForChat
@@ -207,6 +246,15 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 		m.recentPatternIDs = nil
 		m.decisionSource = ""
 		m.lastSay = ""
+		m.motionPlanAt = time.Time{}
+		m.pendingMotion = nil
+		m.speechDeadline = time.Time{}
+		m.speechWaitingID = ""
+		m.speechFallbackAt = time.Time{}
+		m.speechNextTiming = TimingNormal
+		m.lastDecisionTime = 0
+		m.motionCadenceRNG = nil
+		m.speechCadenceRNG = nil
 	}
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	m.cancel = cancel
@@ -272,6 +320,7 @@ func (m *Manager) BeginUserStop() func() {
 	m.chatTarget = nil
 	m.chatKeepalive = false
 	m.chatTargetPending = false
+	m.chatActivity = false
 	m.chatVersion++
 	m.generation++
 	m.cancelOperationLocked()
@@ -313,6 +362,36 @@ func (m *Manager) PrepareChatTarget() uint64 {
 	return m.generation
 }
 
+// NotifyChatActivity invalidates stale autonomous planning and postpones the
+// independent speech clock even when the interactive turn does not change
+// motion.
+func (m *Manager) NotifyChatActivity() {
+	now := m.options.Now()
+	m.mu.Lock()
+	m.chatActivity = true
+	if m.mode != ModeAutopilot || m.userStopped {
+		m.mu.Unlock()
+		return
+	}
+	m.generation++
+	m.cancelOperationLocked()
+	m.pendingMotion = nil
+	m.speechWaitingID = ""
+	m.speechFallbackAt = time.Time{}
+	m.scheduleSpeechLocked(now, TimingNormal)
+	m.mu.Unlock()
+	m.trace(ModeAutopilot, "chat_activity", nil, "autonomous speech postponed")
+}
+
+// NotifyChatActivityComplete releases autonomous planning after the canonical
+// interactive turn has finished. beginChat serializes interactive turns, so a
+// boolean is sufficient and cannot release a newer chat request.
+func (m *Manager) NotifyChatActivityComplete() {
+	m.mu.Lock()
+	m.chatActivity = false
+	m.mu.Unlock()
+}
+
 // CancelChatTarget releases a failed interactive handoff so the active mode can
 // resume planning on its next tick.
 func (m *Manager) CancelChatTarget(generation uint64) {
@@ -327,10 +406,8 @@ func (m *Manager) CancelChatTarget(generation uint64) {
 // as Autopilot's authoritative current segment.
 func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget) bool {
 	copied := cloneTarget(target)
-	// Re-evaluate an interactive focus after the shortest style dwell instead
-	// of letting a random long segment make a conversational area feel sticky.
-	durationMillis := m.currentStyleProfile().minDurationMillis
-	segment, pattern, adoptable := segmentFromMotionTarget(copied, durationMillis)
+	// Re-evaluate an interactive target on the independent motion cadence.
+	segment, pattern, adoptable := segmentFromMotionTarget(copied, 0)
 	now := m.options.Now()
 
 	m.mu.Lock()
@@ -348,15 +425,17 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 	m.chatKeepalive = adoptable
 	adopted := m.mode == ModeAutopilot && adoptable
 	if adopted {
-		duration := time.Duration(segment.DurationMillis) * time.Millisecond
+		duration := m.sampleMotionDelayLocked(TimingSoon)
 		if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 			duration = m.options.MaxSegmentDuration
-			segment.DurationMillis = duration.Milliseconds()
 		}
+		segment.DurationMillis = duration.Milliseconds()
 		m.segment = segment
 		m.pattern = pattern
 		m.segmentIdx++
 		m.deadline = now.Add(duration)
+		m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(duration))
+		m.pendingMotion = nil
 		m.driftDone = true
 		m.nextRetry = time.Time{}
 		m.decisionSource = "interactive"
@@ -386,6 +465,7 @@ func (m *Manager) NotifyChatStop() {
 	m.chatTarget = nil
 	m.chatKeepalive = false
 	m.chatTargetPending = false
+	m.chatActivity = false
 	m.userStopped = true
 	m.chatVersion++
 	m.generation++
@@ -414,10 +494,17 @@ func (m *Manager) run(ctx context.Context, mode string) {
 	}
 }
 
-// tickAutonomous advances Freestyle and Autopilot: both run the same bounded
-// segment loop; only the segment source differs (deterministic planner vs
-// injected LLM curation with planner fallback — see nextSegmentChoice).
+// tickAutonomous routes each autonomous mode through its owned scheduler.
 func (m *Manager) tickAutonomous(ctx context.Context, mode string) {
+	if mode == ModeAutopilot {
+		m.tickAutopilot(ctx)
+		return
+	}
+	m.tickFreestyle(ctx, mode)
+}
+
+// tickFreestyle advances the deterministic segment and drift clocks.
+func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
 	if ctx.Err() != nil || !m.modeActive(mode) {
 		return
 	}
@@ -571,18 +658,22 @@ func (m *Manager) choiceTarget(mode string, choice segmentChoice) motion.MotionT
 	return target
 }
 
-// finishSegmentChoice arms the segment, records provenance, traces the
-// decision, and publishes any Autopilot assistant line strictly after the
-// segment is armed, so a raced stop or mode switch never speaks.
-func (m *Manager) finishSegmentChoice(ctx context.Context, mode string, reason string, choice segmentChoice, recentLatencyMillis int64, generation uint64) {
+// finishSegmentChoice arms a first/recovered segment. Autopilot uses its own
+// cadence scheduler; Freestyle keeps the segment-duration clock.
+func (m *Manager) finishSegmentChoice(_ context.Context, mode string, reason string, choice segmentChoice, recentLatencyMillis int64, generation uint64) {
+	if mode == ModeAutopilot {
+		if !m.armAutopilotChoice(mode, &choice, generation) {
+			return
+		}
+		m.rememberChoice(mode, choice)
+		m.tracePlanned(mode, reason, choice)
+		return
+	}
 	if !m.armSegment(mode, choice.segment, choice.pattern, recentLatencyMillis, generation) {
 		return
 	}
 	m.rememberChoice(mode, choice)
 	m.tracePlanned(mode, reason, choice)
-	if mode == ModeAutopilot && choice.say != "" && m.options.Announce != nil && ctx.Err() == nil {
-		m.options.Announce(ctx, choice.say)
-	}
 }
 
 func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
@@ -700,13 +791,15 @@ func (m *Manager) tickChat(ctx context.Context) {
 func (m *Manager) modeActive(mode string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && !m.userStopped && !m.chatTargetPending
+	return m.mode == mode && !m.userStopped && !m.chatTargetPending &&
+		(mode != ModeAutopilot || !m.chatActivity)
 }
 
 func (m *Manager) modeGenerationActive(mode string, generation uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && m.generation == generation && !m.userStopped && !m.chatTargetPending
+	return m.mode == mode && m.generation == generation && !m.userStopped &&
+		!m.chatTargetPending && (mode != ModeAutopilot || !m.chatActivity)
 }
 
 func (m *Manager) chatOperationActive(generation, chatVersion uint64) bool {
@@ -723,8 +816,21 @@ func (m *Manager) freezeDeadline() {
 		m.wasPaused = true
 	}
 	// Shift the clock forward every paused tick so remaining time is intact.
-	m.deadline = m.deadline.Add(m.options.Tick)
-	m.driftAt = m.driftAt.Add(m.options.Tick)
+	if !m.deadline.IsZero() {
+		m.deadline = m.deadline.Add(m.options.Tick)
+	}
+	if !m.driftAt.IsZero() {
+		m.driftAt = m.driftAt.Add(m.options.Tick)
+	}
+	if !m.motionPlanAt.IsZero() {
+		m.motionPlanAt = m.motionPlanAt.Add(m.options.Tick)
+	}
+	if !m.speechDeadline.IsZero() {
+		m.speechDeadline = m.speechDeadline.Add(m.options.Tick)
+	}
+	if !m.speechFallbackAt.IsZero() {
+		m.speechFallbackAt = m.speechFallbackAt.Add(m.options.Tick)
+	}
 }
 
 func (m *Manager) thawDeadline() {
@@ -752,6 +858,7 @@ func (m *Manager) beginStartOperation(
 ) (context.Context, func(), bool) {
 	m.mu.Lock()
 	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending ||
+		(mode == ModeAutopilot && m.chatActivity) ||
 		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil || !m.chatKeepalive)) {
 		m.mu.Unlock()
 		return nil, nil, false
@@ -824,9 +931,15 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 	}
 	note := choice.note
 	if mode == ModeAutopilot {
-		// The decision source and say-presence stay visible in the trace so
-		// "why did it do that?" always has an answer.
-		note = strings.TrimSpace(choice.source + " " + note)
+		// Preserve source, semantic timing, and inference latency so a sampled
+		// dwell can be explained after either a planned or immediate decision.
+		note = strings.TrimSpace(fmt.Sprintf(
+			"%s %s next=%s latency=%s",
+			choice.source,
+			note,
+			normalizeTiming(choice.timing),
+			choice.decisionLatency,
+		))
 		if choice.say != "" {
 			note += " say"
 		}
