@@ -39,6 +39,7 @@ import type {
   OllamaModelInfo,
   OllamaModelScan,
   PatternFeedback,
+  SessionArc,
   Persona,
   PersonaDraft,
   PersonaLoreDraft,
@@ -398,6 +399,13 @@ export const api = {
     peak_rounding_ms: number;
     apply_video_speed_limit: boolean;
   }>) => request("POST", "/api/media/playback", patch),
+
+  // The session arc is the user's as much as the model's: a progression you can
+  // see but not move would be a readout, not an override.
+  setAutopilotArc: (percent: number) =>
+    request<{ session_arc: SessionArc }>("PUT", "/api/modes/autopilot/arc", { percent }),
+  resetAutopilotArc: () =>
+    request<{ session_arc: SessionArc }>("PUT", "/api/modes/autopilot/arc", { reset: true }),
 
   // Personas — named presets over the personalization axes, plus a portrait.
   // Selecting one writes the chat session, never the settings document.

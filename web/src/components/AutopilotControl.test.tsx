@@ -15,6 +15,7 @@ const app = vi.hoisted(() => ({
       speech_in_ms?: number;
       motion_planned?: boolean;
       speech_waiting_playback?: boolean;
+      session_arc?: { enabled: boolean; percent: number; minutes: number; intent?: string };
     };
     settings: Record<string, unknown>;
   },
@@ -32,6 +33,7 @@ vi.mock("../api/client", () => ({
     pauseMotion: vi.fn(),
     resumeMotion: vi.fn(),
     saveAutopilotPreferences: vi.fn(),
+    resetAutopilotArc: vi.fn(),
   },
 }));
 
@@ -45,6 +47,7 @@ const stopMode = vi.mocked(api.stopMode);
 const pauseMotion = vi.mocked(api.pauseMotion);
 const resumeMotion = vi.mocked(api.resumeMotion);
 const saveAutopilotPreferences = vi.mocked(api.saveAutopilotPreferences);
+const resetAutopilotArc = vi.mocked(api.resetAutopilotArc);
 
 const autopilotPreferences = {
   speech_cadence: "natural",
@@ -56,6 +59,9 @@ const autopilotPreferences = {
   adaptive_speech_timing: true,
   adaptive_motion_timing: true,
   speech_motion_authority: "chat_only",
+  session_tracking: true,
+  session_arc: false,
+  session_arc_minutes: 30,
 };
 
 describe("AutopilotControl", () => {
@@ -164,5 +170,87 @@ describe("AutopilotControl", () => {
       ...autopilotPreferences,
       motion_cadence: "dynamic",
     });
+  });
+
+  // The arc is only defensible because it is visible. If the bar can be enabled
+  // without appearing, the safety argument for the whole feature is gone.
+  it("renders the session arc bar with its value when the backend reports one", () => {
+    app.state = {
+      modes: {
+        mode: "autopilot",
+        segment_index: 3,
+        session_arc: { enabled: true, percent: 42, minutes: 30 },
+      },
+      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
+    };
+    render(<AutopilotControl />);
+
+    const meter = screen.getByRole("meter", { name: "Session arc" });
+    expect(meter).toHaveAttribute("aria-valuenow", "42");
+    expect(meter).toHaveAttribute("aria-valuemin", "0");
+    expect(meter).toHaveAttribute("aria-valuemax", "100");
+    expect(screen.getByText("42% of 30 min")).toBeInTheDocument();
+    // The copy has to say the limits do not move, because that is the guarantee.
+    expect(screen.getByText(/limits never move/i)).toBeInTheDocument();
+  });
+
+  it("shows no arc while the switch is off", () => {
+    app.state = {
+      modes: { mode: "autopilot", segment_index: 3 },
+      settings: { autopilot: autopilotPreferences },
+    };
+    render(<AutopilotControl />);
+    expect(screen.queryByRole("meter", { name: "Session arc" })).not.toBeInTheDocument();
+  });
+
+  // A bar the user cannot pull back would be a readout, not an override.
+  it("lets the user reset the arc", async () => {
+    resetAutopilotArc.mockResolvedValue({ session_arc: { enabled: true, percent: 0, minutes: 30 } });
+    app.state = {
+      modes: {
+        mode: "autopilot",
+        segment_index: 3,
+        session_arc: { enabled: true, percent: 80, minutes: 30 },
+      },
+      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
+    };
+    render(<AutopilotControl />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset arc" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(resetAutopilotArc).toHaveBeenCalledOnce();
+  });
+
+  // The arc is a reading of session progress, so the UI must not offer a
+  // combination the backend rejects.
+  it("cannot enable the arc without session tracking", () => {
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: { ...autopilotPreferences, session_tracking: false } },
+    };
+    render(<AutopilotControl />);
+    fireEvent.click(screen.getByText("Advanced"));
+
+    expect(screen.getByRole("checkbox", { name: /Session arc bar/ })).toBeDisabled();
+  });
+
+  it("clears the arc when session tracking is switched off", async () => {
+    saveAutopilotPreferences.mockResolvedValue({ autopilot: autopilotPreferences });
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
+    };
+    render(<AutopilotControl />);
+    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Session tracking/ }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ session_tracking: false, session_arc: false }),
+    );
   });
 });

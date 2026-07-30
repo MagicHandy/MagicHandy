@@ -93,6 +93,9 @@ type Status struct {
 	SpeechMs              int64 `json:"speech_in_ms,omitempty"`
 	MotionPlanned         bool  `json:"motion_planned,omitempty"`
 	SpeechWaitingPlayback bool  `json:"speech_waiting_playback,omitempty"`
+	// Arc is the visible session progression bar. Absent when the user has the
+	// switch off, so the UI shows nothing rather than an empty bar.
+	Arc *SessionArc `json:"session_arc,omitempty"`
 }
 
 // Manager owns at most one active mode loop.
@@ -136,6 +139,14 @@ type Manager struct {
 	lastDecisionTime time.Duration
 	motionCadenceRNG *rand.Rand
 	speechCadenceRNG *rand.Rand
+	swayRNG          *rand.Rand
+	// swayPoints is the remaining intra-segment speed schedule, in time order.
+	swayPoints []swayPoint
+	// speedChangedAt and previousSpeed back the session facts handed to the
+	// model, so it can tell a deliberate plateau from an accidental one.
+	speedChangedAt time.Time
+	previousSpeed  int
+	arc            arcState
 
 	operationID     uint64
 	operationMode   string
@@ -202,6 +213,9 @@ func (m *Manager) Status() Status {
 		status.LastSay = lastSay
 		status.MotionPlanned = pendingMotion
 		status.SpeechWaitingPlayback = speechWaiting
+		if arc := m.SessionArcSnapshot(); arc.Enabled {
+			status.Arc = &arc
+		}
 		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
 			status.MotionChangeMs = remaining
 		}
@@ -236,6 +250,11 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.chatKeepalive = false
 	m.chatTargetPending = false
 	m.driftDone = true
+	m.swayPoints = nil
+	m.previousSpeed = 0
+	m.speedChangedAt = time.Time{}
+	// A new run is a new arc: the bar measures this session, not the last one.
+	m.arc = arcState{startedAt: m.options.Now()}
 	m.deadline = time.Time{}
 	m.nextRetry = time.Time{}
 	if mode == ModeFreestyle || mode == ModeAutopilot {
@@ -376,6 +395,7 @@ func (m *Manager) NotifyChatActivity() {
 	m.generation++
 	m.cancelOperationLocked()
 	m.pendingMotion = nil
+	m.swayPoints = nil
 	m.speechWaitingID = ""
 	m.speechFallbackAt = time.Time{}
 	m.scheduleSpeechLocked(now, TimingNormal)

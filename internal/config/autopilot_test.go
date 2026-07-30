@@ -76,3 +76,83 @@ func TestValidateAutopilotSettingsRejectsUnsafeWindows(t *testing.T) {
 		})
 	}
 }
+
+// Two switches, and the arc cannot exist without the tracking that produces it.
+// Rejecting the combination keeps the settings document from expressing a state
+// the runtime would have to silently ignore.
+func TestSessionArcRequiresSessionTracking(t *testing.T) {
+	settings := DefaultAutopilotSettings()
+	settings.SessionArc = true
+	settings.SessionTracking = false
+	if err := validateAutopilotSettings(settings); err == nil {
+		t.Fatal("arc without tracking should be rejected")
+	}
+	settings.SessionTracking = true
+	if err := validateAutopilotSettings(settings); err != nil {
+		t.Fatalf("arc with tracking should be accepted: %v", err)
+	}
+}
+
+func TestSessionArcLengthIsBounded(t *testing.T) {
+	for _, minutes := range []int{
+		0,
+		1,
+		AutopilotMinimumArcMinutes - 1,
+		AutopilotMaximumArcMinutes + 1,
+	} {
+		settings := DefaultAutopilotSettings()
+		settings.SessionArcMinutes = minutes
+		if err := validateAutopilotSettings(settings); err == nil {
+			t.Fatalf("%d minutes should be rejected", minutes)
+		}
+	}
+}
+
+// A bool cannot tell "absent" from "explicitly false", so a document written
+// before this field group existed would have run with tracking off while the
+// documented default is on. The arc length doubles as the presence marker.
+func TestPreArcDocumentAdoptsTheTrackingDefault(t *testing.T) {
+	stored := AutopilotSettings{
+		SpeechCadence:         AutopilotSpeechNatural,
+		MotionCadence:         AutopilotMotionNatural,
+		SpeechMotionAuthority: AutopilotSpeechMotionChatOnly,
+		SpeechMinSeconds:      35,
+		SpeechMaxSeconds:      120,
+		MotionMinSeconds:      20,
+		MotionMaxSeconds:      60,
+	}
+	resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings())
+	if !resolved.SessionTracking {
+		t.Fatal("a pre-arc document should adopt the tracking default")
+	}
+	if resolved.SessionArcMinutes != AutopilotDefaultArcMinutes {
+		t.Fatalf("arc minutes = %d, want the default", resolved.SessionArcMinutes)
+	}
+	if resolved.SessionArc {
+		t.Fatal("the arc itself must stay opt-in")
+	}
+}
+
+// Once the group has been saved once, an explicit false must survive.
+func TestExplicitTrackingOffIsPreserved(t *testing.T) {
+	stored := DefaultAutopilotSettings()
+	stored.SessionTracking = false
+	stored.SessionArc = false
+	resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings())
+	if resolved.SessionTracking {
+		t.Fatal("an explicit tracking-off choice was overwritten by the default")
+	}
+}
+
+func TestArcIntentVocabulary(t *testing.T) {
+	for _, intent := range []string{AutopilotArcHold, AutopilotArcAdvance, AutopilotArcEase} {
+		if !ValidAutopilotArcIntent(intent) {
+			t.Fatalf("%q should be a valid arc intent", intent)
+		}
+	}
+	for _, intent := range []string{"", "sprint", "ADVANCE", "100"} {
+		if ValidAutopilotArcIntent(intent) {
+			t.Fatalf("%q should not be a valid arc intent", intent)
+		}
+	}
+}

@@ -91,6 +91,15 @@ func (s *Server) autopilotModelTurn(
 		CurrentSpeed:     input.CurrentSpeed,
 		CurrentArea:      chatAreaZone(input.CurrentAreaFocus),
 		AreaFocusEnabled: capabilities.AreaFocus,
+		// The manager already applied the tracking and arc switches when it built
+		// the input, so a disabled switch arrives as false here and the prompt
+		// omits the section entirely.
+		SessionTracking:       input.SessionTracking,
+		SessionSeconds:        input.SessionSeconds,
+		SecondsAtCurrentSpeed: input.SecondsAtCurrentSpeed,
+		SpeedTrend:            input.SpeedTrend,
+		ArcEnabled:            input.ArcEnabled,
+		ArcPercent:            input.ArcPercent,
 	}
 	message := chat.AutopilotMotionMessage(modelContext)
 	if kind == chat.AutopilotKindSpeech {
@@ -125,10 +134,12 @@ func (s *Server) mapAutopilotResponse(
 ) (modes.Decision, error) {
 	say := strings.TrimSpace(response.Reply)
 	next := modes.TimingPreference(response.Next)
+	variability := modes.VariabilityPreference(response.Variability)
+	arc := strings.TrimSpace(response.Arc)
 	command := response.Motion
 	if command == nil || command.Action == chat.MotionActionNone ||
 		command.Action == chat.MotionActionStop || command.Action == chat.MotionActionStart {
-		return modes.Decision{Hold: true, Say: say, Next: next}, nil
+		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability, ArcIntent: arc}, nil
 	}
 
 	patternID := strings.TrimSpace(command.PatternID)
@@ -149,16 +160,16 @@ func (s *Server) mapAutopilotResponse(
 	if command.Area != "" {
 		focus, ok := zoneAreaFocus(command.Area)
 		if !ok {
-			return modes.Decision{Hold: true, Say: say, Next: next}, nil
+			return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability, ArcIntent: arc}, nil
 		}
 		areaFocus = focus
 	}
 	if patternID == "" || speed <= 0 {
-		return modes.Decision{Hold: true, Say: say, Next: next}, nil
+		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability, ArcIntent: arc}, nil
 	}
 	if strings.EqualFold(patternID, string(input.CurrentPatternID)) &&
 		speed == input.CurrentSpeed && sameAreaFocus(areaFocus, input.CurrentAreaFocus) {
-		return modes.Decision{Hold: true, Say: say, Next: next}, nil
+		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability, ArcIntent: arc}, nil
 	}
 
 	resolved, found, err := s.patterns.ResolveEnabled(patternID)
@@ -166,7 +177,7 @@ func (s *Server) mapAutopilotResponse(
 		return modes.Decision{}, fmt.Errorf("resolve Autopilot pattern: %w", err)
 	}
 	if !found {
-		return modes.Decision{Hold: true, Say: say, Next: next}, nil
+		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability, ArcIntent: arc}, nil
 	}
 	return modes.Decision{
 		Segment: modes.Segment{
@@ -174,9 +185,11 @@ func (s *Server) mapAutopilotResponse(
 			SpeedPercent: speed,
 			AreaFocus:    areaFocus,
 		},
-		Pattern: &resolved,
-		Say:     say,
-		Next:    next,
+		Pattern:     &resolved,
+		Say:         say,
+		Next:        next,
+		Variability: variability,
+		ArcIntent:   arc,
 	}, nil
 }
 

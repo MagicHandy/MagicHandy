@@ -1087,9 +1087,14 @@ func (s *Server) handleVoiceRequestPlayed(w http.ResponseWriter, r *http.Request
 		return
 	}
 	snapshot := pending.Snapshot()
-	if snapshot.Role != voice.RoleTTS || snapshot.Type != voice.RequestSpeak ||
-		snapshot.State != voice.RequestStateDone {
-		writeError(w, http.StatusConflict, errors.New("only completed speech playback can be acknowledged"))
+	// Done and failed both end the turn as far as the speech clock is concerned:
+	// a failed synthesis produces no audio, so waiting out the playback fallback
+	// would stall autonomous speech for two minutes over a request that already
+	// finished. Canceled is deliberately excluded — the backend cancels, and it
+	// reschedules that case itself.
+	terminal := snapshot.State == voice.RequestStateDone || snapshot.State == voice.RequestStateFailed
+	if snapshot.Role != voice.RoleTTS || snapshot.Type != voice.RequestSpeak || !terminal {
+		writeError(w, http.StatusConflict, errors.New("only a finished speech request can be acknowledged"))
 		return
 	}
 	acknowledged := s.modes.NotifySpeechPlaybackComplete(pending.ID)

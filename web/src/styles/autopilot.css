@@ -127,3 +127,58 @@
   padding: 6px;
   text-align: center;
 }
+
+/* --- Session arc ---------------------------------------------------------- */
+
+/* The bar is what makes the arc defensible rather than hidden escalation, so it
+   is a real element in the card, not a tooltip or a diagnostics line. */
+.autopilot-arc {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.autopilot-arc-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.autopilot-arc-track {
+  overflow: hidden;
+  height: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-inset);
+}
+.autopilot-arc-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent-strong), var(--accent));
+  /* Eased rather than instant: the fill answers a poll, and a bar that jumps in
+     steps reads as broken rather than as progress. */
+  transition: width 400ms ease-out;
+}
+.autopilot-arc-actions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.autopilot-arc-actions .hint {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.autopilot-arc-actions .btn {
+  flex: 0 0 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .autopilot-arc-fill {
+    transition: none;
+  }
+}

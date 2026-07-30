@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { AutopilotSettings } from "../api/types";
+import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { PauseIcon, PlayIcon } from "../shell/icons";
 import { useAppState, useToast } from "../state/app-state";
@@ -33,6 +33,45 @@ const authorityOptions = [
   ["style_only", "Style only"],
   ["full_motion", "Full motion"],
 ] as const satisfies ReadonlyArray<readonly [string, MessageKey]>;
+
+// SessionArcBar renders the visible session progression. The arc is only
+// defensible because it is visible: a model encouraged to build intensity through
+// a hidden counter is the escalation pattern the goals doc rules out, and a bar on
+// screen with a reset beside it is the difference.
+function SessionArcBar({
+  arc,
+  disabled,
+  onReset,
+}: {
+  arc: SessionArc;
+  disabled: boolean;
+  onReset: () => void;
+}) {
+  return (
+    <div className="autopilot-arc">
+      <div className="autopilot-arc-head">
+        <span className="label">{t("Session arc")}</span>
+        <span className="hint-inline">{t("{percent}% of {minutes} min", { percent: arc.percent, minutes: arc.minutes })}</span>
+      </div>
+      <div
+        className="autopilot-arc-track"
+        role="meter"
+        aria-label={t("Session arc")}
+        aria-valuenow={arc.percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <span className="autopilot-arc-fill" style={{ width: `${arc.percent}%` }} />
+      </div>
+      <div className="autopilot-arc-actions">
+        <span className="hint">{t("The assistant aims higher in your speed range as this fills. Your limits never move.")}</span>
+        <button type="button" className="btn btn-secondary" disabled={disabled} onClick={onReset}>
+          {t("Reset arc")}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? translateKnown(error.message) : t("Autopilot request failed.");
@@ -118,6 +157,14 @@ export function AutopilotControl() {
   }
 
   const preferences = state?.settings?.autopilot;
+  const resetArc = async () => {
+    try {
+      await api.resetAutopilotArc();
+      refresh();
+    } catch (error) {
+      show(errorMessage(error), "error");
+    }
+  };
   let clockStatus = "";
   if (active && preferences) {
     const speech = preferences.speech_cadence === "off"
@@ -161,6 +208,13 @@ export function AutopilotControl() {
           {pending === "start" ? t("Starting…") : pending === "stop" ? t("Stopping…") : active ? t("Stop Autopilot") : t("Start Autopilot")}
         </button>
       </div>
+      {active && modes?.session_arc?.enabled && (
+        <SessionArcBar
+          arc={modes.session_arc}
+          disabled={locked}
+          onReset={() => void resetArc()}
+        />
+      )}
       {preferences && (
         <AutopilotPreferences
           value={preferences}
@@ -208,6 +262,14 @@ function AutopilotPreferences({
       savingRef.current = false;
       setSaving(false);
     }
+  }
+
+  // The arc length is a single bounded value in minutes, not one end of a paired
+  // seconds window, so it gets its own saver rather than branches inside one.
+  function saveArcMinutes(raw: string) {
+    const parsed = Number.parseInt(raw, 10);
+    const minutes = Number.isFinite(parsed) ? Math.min(180, Math.max(5, parsed)) : 30;
+    void save({ ...draft, session_arc_minutes: minutes });
   }
 
   function saveNumber(
@@ -279,6 +341,55 @@ function AutopilotPreferences({
           </span>
           <span>{t("Adaptive speech timing")}</span>
         </label>
+        <label className="toggle-line">
+          <span className="toggle">
+            <input
+              type="checkbox"
+              checked={draft.session_tracking}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                // The arc is a reading of session progress, so it cannot outlive
+                // the tracking that produces it. Clearing both together keeps the
+                // UI from offering a combination the backend rejects.
+                void save({
+                  ...draft,
+                  session_tracking: enabled,
+                  session_arc: enabled ? draft.session_arc : false,
+                });
+              }}
+            />
+            <span className="track" aria-hidden="true" />
+          </span>
+          <span>{t("Session tracking")}</span>
+        </label>
+        <p className="hint">{t("Lets the assistant see how long the session has run and whether the pace has been holding. It informs decisions and changes no limits.")}</p>
+        <label className="toggle-line">
+          <span className="toggle">
+            <input
+              type="checkbox"
+              checked={draft.session_arc}
+              disabled={!draft.session_tracking}
+              onChange={(event) => void save({ ...draft, session_arc: event.target.checked })}
+            />
+            <span className="track" aria-hidden="true" />
+          </span>
+          <span>{t("Session arc bar")}</span>
+        </label>
+        {draft.session_arc && (
+          <div className="autopilot-window">
+            <span>{t("Arc length")}</span>
+            <input
+              type="number"
+              min={5}
+              max={180}
+              value={draft.session_arc_minutes}
+              aria-label={t("Session arc minutes")}
+              onChange={(event) => setDraft({ ...draft, session_arc_minutes: Number(event.target.value) })}
+              onBlur={(event) => saveArcMinutes(event.target.value)}
+            />
+            <span>{t("minutes")}</span>
+          </div>
+        )}
         {draft.motion_cadence === "custom" && (
           <div className="autopilot-window">
             <span>{t("Motion range")}</span>

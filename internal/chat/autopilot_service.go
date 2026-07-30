@@ -39,6 +39,14 @@ type AutopilotResponse struct {
 	Reply  string
 	Motion *MotionCommand
 	Next   AutopilotTiming
+	// Variability is how much the target should wander before the next boundary.
+	// Unlike Next it is optional on the wire: a model that omits it gets ordinary
+	// texture rather than a rejected turn, because it was added after the
+	// contract shipped and a missing field is not a malformed response.
+	Variability string
+	// Arc is a request to move the visible session arc by one bounded step. It is
+	// read only while the arc is enabled and can never set the value.
+	Arc string
 }
 
 // AutopilotService runs the dedicated autonomous contracts through the same
@@ -143,19 +151,25 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	switch kind {
 	case AutopilotKindMotion:
 		var wire struct {
-			Motion *MotionCommand  `json:"motion,omitempty"`
-			Next   AutopilotTiming `json:"next"`
+			Motion      *MotionCommand  `json:"motion,omitempty"`
+			Next        AutopilotTiming `json:"next"`
+			Variability string          `json:"variability,omitempty"`
+			Arc         string          `json:"arc,omitempty"`
 		}
 		if err := decodeAutopilotJSON(raw, &wire); err != nil {
 			return AutopilotResponse{}, err
 		}
 		response.Motion = wire.Motion
 		response.Next = wire.Next
+		response.Variability = strings.TrimSpace(wire.Variability)
+		response.Arc = strings.TrimSpace(wire.Arc)
 	case AutopilotKindSpeech:
 		var wire struct {
-			Reply  string          `json:"reply"`
-			Motion *MotionCommand  `json:"motion,omitempty"`
-			Next   AutopilotTiming `json:"next"`
+			Reply       string          `json:"reply"`
+			Motion      *MotionCommand  `json:"motion,omitempty"`
+			Next        AutopilotTiming `json:"next"`
+			Variability string          `json:"variability,omitempty"`
+			Arc         string          `json:"arc,omitempty"`
 		}
 		if err := decodeAutopilotJSON(raw, &wire); err != nil {
 			return AutopilotResponse{}, err
@@ -163,6 +177,8 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 		response.Reply = strings.TrimSpace(wire.Reply)
 		response.Motion = wire.Motion
 		response.Next = wire.Next
+		response.Variability = strings.TrimSpace(wire.Variability)
+		response.Arc = strings.TrimSpace(wire.Arc)
 		if response.Reply == "" {
 			return AutopilotResponse{}, errors.New("autopilot speech reply is required")
 		}

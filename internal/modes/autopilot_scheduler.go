@@ -79,6 +79,13 @@ func (m *Manager) tickAutopilot(ctx context.Context) {
 		return
 	}
 
+	// Sway is texture inside the live segment, so it is applied after boundary
+	// work but before speech, and it never moves the segment deadline.
+	if point, ok := m.dueSway(now, generation); ok {
+		m.applyDueSway(ctx, engine, generation, point)
+		return
+	}
+
 	if waitingID != "" {
 		if !fallbackAt.IsZero() && !now.Before(fallbackAt) {
 			m.completeSpeechWait(waitingID, "playback_ack_timeout")
@@ -111,7 +118,8 @@ func (m *Manager) planAutopilotMotion(ctx context.Context, engine Engine, genera
 		m.pendingMotion = &copied
 		m.mu.Unlock()
 		m.trace(ModeAutopilot, "motion_planned", nil,
-			fmt.Sprintf("%s next=%s latency=%s", choice.source, choice.timing, choice.decisionLatency))
+			fmt.Sprintf("%s next=%s variability=%s latency=%s",
+				choice.source, choice.timing, normalizeVariability(choice.variability), choice.decisionLatency))
 		return
 	}
 	m.mu.Unlock()
@@ -203,12 +211,14 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	m.deadline = now.Add(duration)
 	m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(duration))
 	m.pendingMotion = nil
-	if choice.segment.DriftToSpeedPercent != 0 {
-		m.driftAt = now.Add(duration / 2)
-		m.driftDone = false
-	} else {
-		m.driftDone = true
+	// tickAutopilot never read driftAt/driftDone, so the old midpoint step was
+	// write-only state here. Intra-segment variation is now the sway schedule.
+	m.driftDone = true
+	if previous := m.previousSpeed; choice.segment.SpeedPercent != previous {
+		m.previousSpeed = previous
 	}
+	m.speedChangedAt = now
+	m.swayPoints = m.planSwayLocked(now, duration, *choice)
 	m.nextRetry = time.Time{}
 	if m.speechDeadline.IsZero() && m.speechWaitingID == "" {
 		m.scheduleSpeechLocked(now, TimingNormal)
@@ -355,6 +365,7 @@ func (m *Manager) NotifyAutopilotSettingsChanged() {
 	m.generation++
 	m.cancelOperationLocked()
 	m.pendingMotion = nil
+	m.swayPoints = nil
 	m.deadline = now.Add(m.sampleMotionDelayLocked(TimingNormal))
 	m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(m.deadline.Sub(now)))
 	m.speechWaitingID = ""

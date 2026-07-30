@@ -100,6 +100,111 @@ to an overlapping portion of the selected range and samples a concrete delay.
 When disabled, code samples the full selected range. The model never emits
 seconds or a deadline.
 
+### Intra-segment sway
+
+Longer cadence windows created a second problem the first pass did not solve.
+The pre-existing midpoint drift fired one speed step at exactly `duration/2` and
+only when a segment carried `DriftToSpeedPercent`, which **only the Freestyle
+planner sets** — so Autopilot's model-chosen segments never had intra-segment
+variation at all, before or after the cadence work. Routing Autopilot to its own
+scheduler then left `driftAt`/`driftDone` write-only, and a Steady target could
+hold perfectly constant for two minutes.
+
+Sway replaces it with a sampled schedule of **speed-only** waypoints across the
+segment interior:
+
+- Speed only, inside the current pattern and area, so a waypoint can never be a
+  semantic change in disguise and does not disturb the recognizable feel that
+  longer segments exist to establish.
+- Offsets are sampled inside evenly divided slots rather than fixed at the
+  midpoint, so the texture is not metronomic. Two consecutive schedules for the
+  same segment length differ.
+- Count is earned by segment length (one per 20s, hard cap 3), then scaled by the
+  model's variability category. This **self-balances against the cadence
+  preset**: a 10s Dynamic segment has no room and gets none because it is already
+  changing constantly, while a 120s Steady segment earns the most because it is
+  the one at risk of feeling static.
+- Amplitude is a share of the user's own speed band (14% normal, 26% restless),
+  and every waypoint is clamped inside it. Sway widens nothing.
+- A waypoint equal to the current speed is dropped, because that is exactly the
+  no-op retarget this work removed from the hold path.
+- Waypoints pop on read, not on success. Retrying a failing adjustment would let
+  one bad waypoint starve the speech clock queued behind it.
+
+**Measured combined retarget rate** (one boundary plus earned waypoints; the
+pre-change loop produced roughly 4-9/min):
+
+| Preset | Segment | settled | normal | restless |
+| --- | --- | --- | --- | --- |
+| Dynamic | 10s | 6.0 | 6.0 | 6.0 |
+| Dynamic | 35s | 1.7 | 3.4 | 3.4 |
+| Natural | 20s | 3.0 | 6.0 | 6.0 |
+| Natural | 60s | 1.0 | 3.0 | 4.0 |
+| Steady | 45s | 1.3 | 2.7 | 4.0 |
+| Steady | 120s | 0.5 | 1.5 | 2.0 |
+
+Worst case is 6.0/min, under the churn this work removed, and the texture lands
+where it was missing: a two-minute Steady target went from 0.5 changes/min to
+2.0. `TestCombinedRetargetRateStaysUnderThePreChangeChurn` prints this table and
+fails if any cell exceeds 9.
+
+### Variability
+
+`variability` is a second model axis beside `next`, and the two are independent:
+a long stretch can still breathe, and a short one can stay flat.
+
+| Category | Effect |
+| --- | --- |
+| `settled` | No waypoints. The target holds flat until the next boundary. |
+| `normal` | About half the earned allowance, 14% amplitude. |
+| `restless` | The full allowance, 26% amplitude. |
+
+It is a category rather than a number for the same reason `next` is: a local
+model emits a category reliably, and backend sampling guarantees variety even
+when the model answers `normal` every turn. It is optional on the wire — it was
+added after the contract shipped, so an omitted field resolves to `normal` rather
+than failing the turn.
+
+### Session tracking
+
+An independent switch, on by default, that lets the model see elapsed session
+time, how long the current speed has held, and whether speed has been rising or
+easing. It is **inert read-only input**: backend-computed so the model cannot
+fabricate it, visible in traces, and authorizing nothing. Off omits the facts
+from the prompt entirely rather than sending zeros, because a model cannot reason
+from a number that means "unknown".
+
+### Session arc
+
+A separate switch, **off by default**, that renders a visible fill bar and tells
+the model to aim higher within the allowed speed range as it fills.
+
+The reason this is not the hidden-escalation pattern
+[goals-and-guardrails.md](goals-and-guardrails.md) rules out comes down to four
+properties, all load bearing:
+
+- **Visible.** The value is rendered in the Autopilot card, so nothing about the
+  progression is hidden from the person it is happening to.
+- **User-armed.** Off is the default, and off removes the arc from the prompt
+  entirely — the same discipline the capability gates use.
+- **Bounded.** A percentage with a full mark, not a counter that grows.
+- **Backend-owned.** The model may return `arc: advance|ease|hold` to move the
+  bar by at most 6 points per turn. It can never write the value, so it cannot
+  sprint the bar to full, and every nudge appears in the trace.
+
+The arc positions intent *inside* the user's existing speed band. It never widens
+the band, the focus range, or any capability gate — asserted by
+`TestArcNudgeDoesNotTouchSpeedLimits`, which advances the bar 40 times and checks
+the motion settings are untouched.
+
+Time is the floor, so a session left running still progresses; nudges let the
+model lead or lag that baseline. `ease` exists so the bar is not a ratchet. The
+user can place or reset it, and placement is refused with a 409 while no
+Autopilot session exists — `Start` clears the arc for a fresh run, so accepting a
+placement beforehand would store a value discarded a moment later. The arc
+requires session tracking; the settings validator rejects the combination rather
+than letting the document express a state the runtime would silently ignore.
+
 ## Scheduling
 
 Motion is the higher-priority clock. The manager starts the first target
@@ -113,6 +218,18 @@ queueing its audio remain lockstep operations through the canonical chat and
 voice paths. Browser playback reports completion to the backend so the next
 speech interval begins from what the user actually heard, not from inference
 completion.
+
+**The acknowledgement fires on any terminal outcome, not only on success.** The
+first implementation acknowledged only after audio played, so failed synthesis or
+blocked autoplay skipped it and the backend waited out its full two-minute
+fallback — silently turning a Talkative 15-60s cadence into one line every two
+minutes with nothing on screen to explain it. Autoplay blocking is the common
+trigger: Chrome rejects `play()` without a prior user gesture. Whether the audio
+was heard or not, the turn is over and the clock should restart. A worker-side
+cancellation is excluded, because the backend cancels and reschedules that case
+itself, and `/played` now accepts `done` or `failed` but still refuses
+`canceled`. The bounded fallback covers a genuinely lost HTTP call, which is what
+it was always meant to be for.
 
 Pause freezes both clocks. Emergency Stop cancels both clocks, in-flight model
 work, pending speech, and playback exactly as it does today.
@@ -157,7 +274,14 @@ Acceptance requires:
 - user chat discards a stale plan and postpones autonomous speech;
 - TTS backlog produces no additional line or request;
 - playback completion starts the next speech interval;
-- a missing playback acknowledgement eventually uses the bounded fallback;
+- failed synthesis and blocked autoplay also start the next interval, and a
+  worker-side cancellation does not;
+- a missing playback acknowledgement eventually uses the bounded fallback
+  (covered by `TestSpeechPlaybackFallbackRecoversALostAcknowledgement`, which the
+  first pass left untested);
+- sway never leaves the user speed band and never plans a no-op waypoint;
+- the session arc never widens a limit, and a disabled switch keeps its section
+  out of the prompt entirely;
 - pause preserves remaining time and Stop leaves no autonomous goroutine or
   voice request alive; and
 - frontend controls render backend snapshots and remain locked while offline or

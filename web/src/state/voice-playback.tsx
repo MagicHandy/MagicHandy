@@ -94,9 +94,22 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
       while (pending.current.length > 0) {
         const entry = pending.current.shift();
         if (!entry) continue;
+        // Acknowledged on any terminal outcome, not only on success. Autopilot
+        // starts its next speech interval from this signal, so skipping it after
+        // failed synthesis or blocked autoplay left the backend waiting out its
+        // full two-minute fallback — turning a Talkative 15-60s cadence into one
+        // line every two minutes with nothing on screen to explain it. Autoplay
+        // blocking is the common case: Chrome rejects play() without a prior user
+        // gesture. Whether the audio was heard or not, the turn is over.
+        let acknowledge = false;
         try {
           const result = await entry.audio;
           if (!result.ok) {
+            // prepareSpeech reports a worker-side cancellation as "not ok" with no
+            // error at all, and an abort as an AbortError. Neither is a completed
+            // turn — the backend cancels and reschedules those itself — so only a
+            // genuine failure is acknowledged.
+            acknowledge = result.error !== undefined && !isAbort(result.error);
             if (result.error && !isAbort(result.error) && !disposed.current) {
               const reason = normalizePlaybackReason(result.error instanceof Error ? translateKnown(result.error.message) : t("unknown playback error"));
               show(t("Speech output could not play: {reason}.", { reason }), "error");
@@ -105,20 +118,22 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
           }
           const playbackToken = audioPlaybackToken();
           await playBlob(result.audio, playbackToken);
-          // Inference completion is not audible completion. Autopilot uses
-          // this acknowledgement to start its next independent speech interval.
-          try {
-            await api.voiceRequestPlayed(entry.id);
-          } catch {
-            // A bounded backend fallback prevents a dropped acknowledgement
-            // from freezing autonomous speech; playback itself already worked.
-          }
+          acknowledge = true;
         } catch (error) {
+          acknowledge = !isAbort(error);
           if (!isAbort(error) && !disposed.current) {
             const reason = normalizePlaybackReason(error instanceof Error ? translateKnown(error.message) : t("unknown playback error"));
             show(t("Speech output could not play: {reason}.", { reason }), "error");
           }
         } finally {
+          if (acknowledge) {
+            try {
+              await api.voiceRequestPlayed(entry.id);
+            } catch {
+              // The bounded backend fallback covers a genuinely lost call, which
+              // is what it was always meant to be for.
+            }
+          }
           if (controllers.current.get(entry.id) === entry.controller) {
             tracked.current.delete(entry.id);
             controllers.current.delete(entry.id);

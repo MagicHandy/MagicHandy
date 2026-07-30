@@ -23,6 +23,34 @@ const (
 	TimingLater TimingPreference = "later"
 )
 
+// VariabilityPreference is a model-selected category for how much the motion
+// should wander *inside* the current target, as distinct from how often the
+// target is reconsidered. The two are independent: a persona can hold one
+// pattern for a long stretch while still breathing within it, or change target
+// often while each stretch stays flat.
+//
+// Like TimingPreference it is a category rather than a number, because a local
+// model emits a category reliably and the backend samples the concrete values —
+// so a model that always answers "normal" still produces varied motion.
+type VariabilityPreference string
+
+const (
+	// VariabilitySettled holds the target flat until the next boundary.
+	VariabilitySettled VariabilityPreference = "settled"
+	// VariabilityNormal takes about half the earned waypoint allowance.
+	VariabilityNormal VariabilityPreference = "normal"
+	// VariabilityRestless takes the full allowance at a wider amplitude.
+	VariabilityRestless VariabilityPreference = "restless"
+)
+
+// SpeedTrend summarizes where speed has been going, so the model can answer
+// "have I been sitting still?" without being told to guess.
+const (
+	SpeedTrendSteady = "steady"
+	SpeedTrendRising = "rising"
+	SpeedTrendEasing = "easing"
+)
+
 // DecisionInput is bounded, semantic context for one autonomous decision.
 type DecisionInput struct {
 	Style            string
@@ -34,6 +62,23 @@ type DecisionInput struct {
 	CurrentPatternID motion.PatternID
 	CurrentSpeed     int
 	CurrentAreaFocus *motion.AreaFocus
+	// SessionSeconds, SecondsAtCurrentSpeed, and SpeedTrend are backend-computed
+	// session facts. They are read-only input: the model cannot fabricate them,
+	// they appear in traces, and they authorize nothing on their own. This is
+	// deliberately not a model-maintained score — an accumulating counter that
+	// feeds back into intensity is the hidden-escalation shape
+	// docs/goals-and-guardrails.md rules out.
+	SessionSeconds        int
+	SecondsAtCurrentSpeed int
+	SpeedTrend            string
+	// SessionTracking reports whether the three fields above are meaningful. When
+	// it is false the prompt omits them rather than sending zeros, because a model
+	// cannot act on a field it never saw.
+	SessionTracking bool
+	// ArcEnabled and ArcPercent describe the visible session arc. Absent from the
+	// prompt entirely when disabled.
+	ArcEnabled bool
+	ArcPercent int
 }
 
 // Decision is one motion or speech curation outcome. Hold is scheduler-only:
@@ -44,6 +89,11 @@ type Decision struct {
 	Say     string
 	Hold    bool
 	Next    TimingPreference
+	// Variability is how much the target should wander before the next boundary.
+	Variability VariabilityPreference
+	// ArcIntent is a request to advance or ease the session arc by one clamped
+	// step. It is honored only while the arc is enabled, and never sets a value.
+	ArcIntent string
 }
 
 // Announcement reports whether a line entered canonical chat and whether the
@@ -66,6 +116,7 @@ type segmentChoice struct {
 	note            string
 	say             string
 	timing          TimingPreference
+	variability     VariabilityPreference
 	decisionLatency time.Duration
 }
 
@@ -73,7 +124,10 @@ type segmentChoice struct {
 func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentChoice {
 	if mode != ModeAutopilot || m.options.Decide == nil {
 		segment, scores := m.nextPlannedSegment()
-		return segmentChoice{segment: segment, scores: scores, source: "planner", timing: TimingNormal}
+		return segmentChoice{
+			segment: segment, scores: scores, source: "planner",
+			timing: TimingNormal, variability: VariabilityNormal,
+		}
 	}
 	return m.runDecision(ctx, m.options.Decide, true)
 }
@@ -103,28 +157,38 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		}
 	}
 	timing := normalizeTiming(decision.Next)
+	variability := normalizeVariability(decision.Variability)
+	if decision.ArcIntent != "" {
+		m.mu.Lock()
+		m.applyArcIntentLocked(m.options.Now(), decision.ArcIntent)
+		m.mu.Unlock()
+	}
 	if decision.Hold {
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{
 				segment: segment, pattern: pattern, source: "hold",
-				say: decision.Say, timing: timing, decisionLatency: latency,
+				say: decision.Say, timing: timing, variability: variability,
+				decisionLatency: latency,
 			}
 		}
 		if !fallback {
 			return segmentChoice{
-				source: "hold", say: decision.Say, timing: timing, decisionLatency: latency,
+				source: "hold", say: decision.Say, timing: timing,
+				variability: variability, decisionLatency: latency,
 			}
 		}
 		segment, scores := m.nextPlannedSegment()
 		segment.DriftToSpeedPercent = 0
 		return segmentChoice{
 			segment: segment, scores: scores, source: "fallback",
-			note: "hold_without_segment", say: decision.Say, timing: timing, decisionLatency: latency,
+			note: "hold_without_segment", say: decision.Say, timing: timing,
+			variability: variability, decisionLatency: latency,
 		}
 	}
 	return segmentChoice{
 		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
-		source: "model", say: decision.Say, timing: timing, decisionLatency: latency,
+		source: "model", say: decision.Say, timing: timing,
+		variability: variability, decisionLatency: latency,
 	}
 }
 
@@ -134,6 +198,18 @@ func normalizeTiming(timing TimingPreference) TimingPreference {
 		return timing
 	default:
 		return TimingNormal
+	}
+}
+
+// normalizeVariability resolves an absent or unrecognized category to normal, so
+// a model that omits the field or invents a word still gets ordinary texture
+// rather than either extreme.
+func normalizeVariability(variability VariabilityPreference) VariabilityPreference {
+	switch variability {
+	case VariabilitySettled, VariabilityNormal, VariabilityRestless:
+		return variability
+	default:
+		return VariabilityNormal
 	}
 }
 
@@ -149,6 +225,17 @@ func (m *Manager) decisionInput() DecisionInput {
 		}
 	}
 
+	autopilot := m.options.AutopilotSettings()
+	// Session elapsed comes from the engine's own run clock rather than a mode
+	// counter, so a pause or a restart cannot inflate it.
+	sessionSeconds := 0
+	if engine := m.options.Current(); engine != nil {
+		if running := engine.Snapshot().RunningMillis; running > 0 {
+			sessionSeconds = int(running / 1000)
+		}
+	}
+
+	now := m.options.Now()
 	m.mu.Lock()
 	input := DecisionInput{
 		Style:            settings.Style,
@@ -157,6 +244,20 @@ func (m *Manager) decisionInput() DecisionInput {
 		SpeedMinPercent:  settings.SpeedMinPercent,
 		SpeedMaxPercent:  settings.SpeedMaxPercent,
 		LastSay:          m.lastSay,
+		SessionTracking:  autopilot.SessionTracking,
+	}
+	if autopilot.SessionTracking {
+		input.SessionSeconds = sessionSeconds
+		input.SpeedTrend = m.speedTrendLocked()
+		if !m.speedChangedAt.IsZero() {
+			if held := now.Sub(m.speedChangedAt); held > 0 {
+				input.SecondsAtCurrentSpeed = int(held / time.Second)
+			}
+		}
+		if autopilot.SessionArc {
+			input.ArcEnabled = true
+			input.ArcPercent = m.arcPercentLocked(now)
+		}
 	}
 	if current == nil && m.segment.PatternID != "" {
 		fallback := m.segment.Target(modeLabel(m.mode), m.mode)
@@ -175,6 +276,19 @@ func (m *Manager) decisionInput() DecisionInput {
 		}
 	}
 	return input
+}
+
+// speedTrendLocked reports the direction of the last speed change. Callers hold
+// the lock.
+func (m *Manager) speedTrendLocked() string {
+	if m.previousSpeed <= 0 || m.segment.SpeedPercent <= 0 ||
+		m.segment.SpeedPercent == m.previousSpeed {
+		return SpeedTrendSteady
+	}
+	if m.segment.SpeedPercent > m.previousSpeed {
+		return SpeedTrendRising
+	}
+	return SpeedTrendEasing
 }
 
 func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
