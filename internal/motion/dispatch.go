@@ -306,7 +306,9 @@ func (e *Engine) forceStopped(runEpoch uint64, err error) bool {
 	}
 	cancel := e.cancel
 	e.stopBarriers++
-	e.frozenPhase = e.plan.PhaseAt(e.estimatedPlaybackMillisLocked(e.now()))
+	playbackMillis := e.estimatedPlaybackMillisLocked(e.now())
+	e.frozenPhase = e.plan.PhaseAt(playbackMillis)
+	e.captureCurrentSampleLocked(playbackMillis)
 	e.running = false
 	e.starting = false
 	e.completing = false

@@ -19,6 +19,8 @@ import (
 var errMotionUnavailable = errors.New("motion engine is unavailable for the configured transport")
 var errServerQuiescing = errors.New("MagicHandy is shutting down")
 
+const motionEventInterval = 125 * time.Millisecond
+
 // motionRuntime owns the live motion engine used by the manual UI controls.
 // It is nil-safe: when the configured transport is not a full command
 // transport, the engine is absent and motion endpoints report unavailable
@@ -114,7 +116,7 @@ func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticker := time.NewTicker(250 * time.Millisecond)
+	ticker := time.NewTicker(motionEventInterval)
 	defer ticker.Stop()
 	for {
 		select {

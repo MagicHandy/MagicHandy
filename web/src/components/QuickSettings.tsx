@@ -13,7 +13,7 @@ type QuickPatch = Parameters<typeof api.applyQuick>[0];
 type QuickKey = keyof QuickPatch;
 
 interface QuickSettingsProps {
-  section?: "all" | "limits" | "behavior";
+  section?: "all" | "limits" | "style" | "connection";
 }
 
 export function QuickSettings({ section = "all" }: QuickSettingsProps) {
@@ -106,12 +106,20 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
-  const showLimits = section !== "behavior";
-  const showBehavior = section !== "limits";
+  const showLimits = section === "all" || section === "limits" || section === "connection";
+  const showDirection = section === "all" || section === "connection";
+  const showStyle = section === "all" || section === "style";
+  const legend = section === "limits"
+    ? t("Speed and stroke ranges")
+    : section === "style"
+      ? t("Motion style")
+      : section === "connection"
+        ? t("Motion controls")
+        : t("Speed, stroke, direction, and style");
 
   return (
     <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
-      <legend className="visually-hidden">{section === "limits" ? t("Speed and stroke ranges") : section === "behavior" ? t("Direction and motion style") : t("Speed, stroke, direction, and style")}</legend>
+      <legend className="visually-hidden">{legend}</legend>
       {showLimits && (
         <RangeSlider
           label={t("Speed")}
@@ -140,7 +148,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           }}
         />
       )}
-      {showBehavior && <label className="toggle-line">
+      {showDirection && <label className="toggle-line quick-direction-toggle">
         <span className="toggle">
           <input
             type="checkbox"
@@ -156,7 +164,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
         </span>
         <span>{t("Reverse direction")}</span>
       </label>}
-      {showBehavior && <label className="field">
+      {showStyle && <label className="field">
         <span className="label">{t("Style")}<span className="hint-inline">{t("biases autonomous pacing")}</span>
         </span>
         <select

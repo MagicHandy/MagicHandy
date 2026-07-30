@@ -93,6 +93,25 @@ describe("QuickSettings", () => {
     expect(screen.getByRole("slider", { name: "Stroke minimum" })).toBeInTheDocument();
   });
 
+  it("places direction with connection limits and keeps style separate", async () => {
+    applyQuick.mockResolvedValue(undefined);
+    const result = render(<QuickSettings section="connection" />);
+
+    expect(screen.getByRole("slider", { name: "Speed minimum" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Stroke minimum" })).toBeInTheDocument();
+    const reverse = screen.getByRole("switch", { name: "Reverse direction" });
+    expect(screen.queryByRole("combobox", { name: /style/i })).not.toBeInTheDocument();
+
+    fireEvent.click(reverse);
+    await act(async () => vi.advanceTimersByTimeAsync(180));
+    expect(applyQuick).toHaveBeenCalledWith({ reverse_direction: true });
+
+    result.rerender(<QuickSettings section="style" />);
+    expect(screen.queryByRole("switch", { name: "Reverse direction" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /style/i })).toBeInTheDocument();
+  });
+
   it("reverts the latest optimistic value when the patch fails", async () => {
     applyQuick.mockRejectedValue(new Error("backend rejected the range"));
     render(<QuickSettings section="limits" />);

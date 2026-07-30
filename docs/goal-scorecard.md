@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-29, persona editor overlay
+## Snapshot — 2026-07-29, shell controls and live motion visualization
 
 ### Goal 1: Maintainability
 
@@ -31,8 +31,8 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes never touch transport; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,401 lines after locale and public-option extraction, `internal/config/settings_test.go` 1,180, `internal/httpapi/chat.go` 1,153, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 961, `internal/motion/engine_test.go` 1,079, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/App.test.tsx` 1,390 lines, `web/src/components/SyncedVideoPlayer.tsx` 811, `web/src/styles/components.css` 1,493, `web/src/styles/library.css` 1,385, and retired reference-only `web/legacy/app.css` 846. Theme token overrides and their compact picker live in the focused 507-line `web/src/styles/themes.css`; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,401 lines after locale and public-option extraction, `internal/config/settings_test.go` 1,180, `internal/httpapi/chat.go` 1,153, `internal/httpapi/voice.go` 1,300, `internal/httpapi/voice_test.go` 1,195, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Focused current-snapshot coverage lives in the 74-line `internal/motion/snapshot_test.go`. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/App.test.tsx` 1,468 lines, `web/src/components/SyncedVideoPlayer.tsx` 811, `web/src/styles/components.css` 1,493, `web/src/styles/library.css` 1,385, and retired reference-only `web/legacy/app.css` 846. Theme token overrides and their compact picker live in the focused 507-line `web/src/styles/themes.css`; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,712 physical lines after adding the shared localized decision-tree runtime. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating locale, updater state, or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,704,640 bytes plain and 16,206,848 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,710,784 bytes plain and 16,212,480 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,9 +110,10 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,481,697 raw / 741,913 gzip bytes. Lazy loading limits
-   the English startup path to 686,837 raw / 184,775 gzip bytes. The centered
-   persona editor overlay adds 958 raw / 199 gzip bytes to both measurements
+   browser payload is 1,484,215 raw / 742,311 gzip bytes. Lazy loading limits
+   the English startup path to 689,355 raw / 185,173 gzip bytes; all HTML/CSS/JS
+   is 1,039,979 raw / 304,914 gzip bytes. The shell-control, current-sample
+   visualizer, and wider persona follow-up adds 2,518 raw / 398 gzip bytes
    versus the preceding build. These remain within budget, but future locales,
    personas, and bitmap additions must keep startup and total payload growth
    explicit.
@@ -122,6 +123,23 @@ Ranked by threat to the stated goals:
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-29** - The engine snapshot now separates a clock-sampled
+  `current_sample` from `last_sample`, which remains the accepted buffer tail.
+  Motion SSE publishes at the engine's 125ms sampling cadence; the shared Handy
+  visualizer projects the current semantic point through the active stroke
+  window and reverse direction, then uses a matching 130ms linear transition.
+  Pause freezes the current estimate, and deterministic engine tests guard both
+  live advancement and buffer-tail separation. Reverse direction moved from
+  Chat to a right-aligned row in the connection manager; two horizontal range
+  rows keep that control block at 107px, below the former limits-only layout.
+  The notification panel is 360px wide with 30px commands, a separated
+  management group, and the standard trash icon. The persona editor desktop cap
+  is 960px while the mobile window still leaves 10px above global Stop. At
+  1280x720 and 390x844, all reviewed surfaces had zero horizontal overflow.
+  `CGO_ENABLED=0` binaries are 22,710,784 / 16,212,480 bytes plain/stripped;
+  startup UI is 689,355 / 185,173 raw/gzip and complete embedded output is
+  1,484,215 / 742,311.
 
 
 - **2026-07-29** - Replaced the Personas editor drawer with one centered modal
