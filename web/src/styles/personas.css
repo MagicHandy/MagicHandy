@@ -184,16 +184,24 @@
 }
 
 .persona-editor-window {
+  /* Tracks the dialog: a portrait that stays a 104px thumbnail while the window
+     grows is the thing the user actually chose rendered smallest. */
+  --persona-portrait-size: clamp(112px, 13vw, 184px);
+
   display: flex;
   flex-direction: column;
-  /* The editor has paired field groups and benefits from a wider desktop
-     canvas, while the percentage fallback keeps it inside narrower workspaces. */
-  width: min(960px, 100%);
-  /* Capped rather than "whatever the viewport allows". The body scrolls, so
-     extra height buys a little less scrolling at the cost of the dialog reading
-     as a full-screen takeover — at 720px tall it was filling 94% of the screen.
-     The cap keeps it a window on a tall monitor too. */
-  max-height: min(660px, calc(100dvh - 40px));
+  /* Grows with the viewport between two bounds rather than sitting at one
+     constant. 760px is the floor that keeps the paired field groups comfortable
+     on a laptop; 1180px is the ceiling past which a form of short selects only
+     stretches. A single fixed width is wrong in both directions — it was
+     1180px (the page-content token) and looked like a takeover at 1280, then
+     960px and looked small on a large desktop. The percentage keeps it inside
+     narrower workspaces. */
+  width: min(clamp(760px, 66vw, 1180px), 100%);
+  /* Same shape vertically. The body scrolls, so height is worth taking where the
+     screen has it; the dvh term lets a tall monitor use more of itself while the
+     floor keeps a laptop from a cramped, over-scrolling form. */
+  max-height: min(max(660px, 84dvh), calc(100dvh - 40px));
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -249,10 +257,14 @@
   padding-bottom: 0;
   border-bottom: 0;
 }
+/* Bounded columns rather than 1fr. A wider dialog should not mean wider
+   dropdowns — the longest option in any of these is 266px, so past ~420px the
+   extra width is empty. Capping the tracks leaves the surplus to the description
+   textarea and the lore list, which do use it. */
 .persona-editor-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 420px));
+  gap: 12px 18px;
 }
 .persona-editor-fields .field {
   min-width: 0;
@@ -261,8 +273,11 @@
 
 .persona-portrait-field {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  gap: 12px;
+  /* The portrait grows with the dialog instead of staying a thumbnail. It is the
+     one thing on this page the user actually chose, so it earns the space; the
+     name and description column still gets the remainder. */
+  grid-template-columns: var(--persona-portrait-size) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
 }
 /* Name and description sit beside the portrait rather than under it. The
@@ -276,7 +291,7 @@
 }
 .persona-portrait-preview {
   position: relative;
-  width: 104px;
+  width: var(--persona-portrait-size);
   aspect-ratio: 3 / 4;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -319,9 +334,11 @@
   object-fit: cover;
 }
 .persona-portrait-preview .persona-card-monogram span {
-  width: 42px;
-  height: 42px;
-  font-size: 1.05rem;
+  /* Scales with the frame so the plate keeps its proportion as the dialog grows. */
+  width: 44%;
+  height: 33%;
+  aspect-ratio: 1;
+  font-size: clamp(1.05rem, 3.4vw, 1.7rem);
 }
 /* The monogram plate shrinks a little to leave the control bar room. */
 .persona-portrait-preview .persona-card-monogram {

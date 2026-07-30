@@ -171,13 +171,50 @@ hard parts (path traversal and atomic replace):
 
 **Resize in the browser, not the server.** The client already captures video
 frames to a canvas and POSTs a JPEG blob for media thumbnails; portraits use
-that same path — draw the chosen file to a canvas at max edge 512, export
-`image/jpeg` at 0.85, POST. The server validates *decodability, dimensions, and
-byte ceiling* with `image/jpeg` from the standard library and nothing else. The
-alternative — server-side scaling — needs a new image-scaling dependency, or
-FFmpeg, and FFmpeg is explicitly optional
+that same path — bound the chosen file to max edge 640 (matching the thumbnail
+store), export `image/jpeg` at 0.92, POST. The server validates *decodability,
+dimensions, and byte ceiling* with `image/jpeg` from the standard library and
+nothing else. The alternative — server-side scaling — needs a new image-scaling
+dependency, or FFmpeg, and FFmpeg is explicitly optional
 ([media-tooling.md](media-tooling.md)). A persona portrait must not be the
 first feature that makes it mandatory.
+
+**How it downscales is the whole quality question, and it is not FFmpeg's job.**
+The first implementation did one `drawImage` straight to the target size. That is
+a single bilinear sample: it reads a 2×2 source neighbourhood per output pixel,
+so reducing a 2,560px photo to 640px never looks at roughly 90% of the source and
+turns fine detail into stair-stepping and moiré. `imageSmoothingQuality` was not
+set either. The visible aliasing was therefore a resampling bug, not a limit of
+doing this in a browser — reaching for FFmpeg would have added a mandatory
+dependency to fix something the platform already does correctly when asked.
+
+Two paths, both measured:
+
+1. `createImageBitmap(file, { resizeWidth, resizeHeight, resizeQuality: "high" })`
+   resizes during decode with the browser's own resampler. Its resize options are
+   not universally supported, so a bitmap that returns at the wrong size falls
+   through rather than being trusted.
+2. Progressive halving otherwise: halve repeatedly while more than 2× from
+   target, then one final smoothed draw. Every step stays within 2×, where a 2×2
+   read *is* a true box average of the pixels being merged, so no source detail
+   is skipped.
+
+Measured against ground truth — a zone plate downscaled 2,560→640 (exactly 4×),
+compared to an exact 4×4 area average computed in JS, RMS error on a 0–255 scale:
+
+| Method | RMS error |
+| --- | --- |
+| One `drawImage` (the old path) | **48.31** |
+| `createImageBitmap` at high quality | **0.82** |
+| Progressive halving | **0.59** |
+
+Both new paths are within a rounding error of the ideal; the old one was not
+close. This is verified by measurement in a real browser rather than by unit
+test, because jsdom has no canvas implementation to measure.
+
+Quality 0.92 rather than 0.85: a 640px portrait is a few tens of kilobytes, so
+the bytes a lower setting saves are not worth the ringing it adds around hair and
+hard edges.
 
 Accepting PNG uploads is handled the same way: the browser decodes anything
 `<img>` can decode and always uploads JPEG, so the server contract stays
@@ -368,16 +405,40 @@ reflowing its tiles when the editor opens. It is centered inside the routed
 workspace rather than the full viewport, keeping the desktop navigation rail and
 global Stop clear.
 
-The desktop window uses `min(960px, 100%)`. Its paired field groups and
-portrait-plus-identity row therefore use the available workspace instead of
-being compressed into a narrow reference-dialog width, while the percentage
-fallback keeps the window inside smaller workspaces. It remains below the
-1,180px page-content cap so the overlay retains visible context and margins.
+**The window scales with the viewport; the controls inside it do not.** A single
+fixed width was wrong in both directions. It first used `--content-wide-max`
+(1,180px), the *page content* token, which at 1280×720 gave a 1010×680 window
+covering 79% × 94% of the screen for a form whose widest control needs 266px —
+per-control waste of 36–87%, and the body still scrolled, so the width bought
+nothing. A 720px constant fixed that and then read as small on a large desktop; a
+960px constant was the same problem one notch up.
 
-Height is capped at `min(660px, 100dvh - 40px)` rather than taking whatever the
-viewport allows, for the same reason: a scrolling body means extra height buys a
-little less scrolling in exchange for the dialog reading as a full-screen
-takeover, and the cap keeps it a window on a tall monitor too.
+Three rules instead:
+
+- Width `min(clamp(760px, 66vw, 1180px), 100%)` — grows with the screen between a
+  laptop floor and a ceiling past which a form of short selects only stretches.
+- Height `min(max(660px, 84dvh), 100dvh - 40px)` — the same shape vertically.
+  The body scrolls, so height is worth taking where the screen has it, floored so
+  a laptop is not left cramped and over-scrolling.
+- Field tracks `repeat(2, minmax(0, 420px))` rather than `1fr`. **A wider dialog
+  must not mean wider dropdowns.** The longest option in any of them is 266px, so
+  the surplus goes to the description textarea and the lore list, which use it.
+
+The portrait is `clamp(112px, 13vw, 184px)` for the same reason in reverse: it is
+the one thing on the page the user actually chose, so it should not stay a 104px
+thumbnail while the window around it grows.
+
+Measured across four sizes:
+
+| Viewport | Window | Coverage | Portrait | Selects |
+| --- | --- | --- | --- | --- |
+| 2560×1440 | 1180×1075 | 46% × 75% | 184×245 | 420px, body does not scroll at all |
+| 1512×982 | 998×825 | 66% × 84% | 184×245 | 420px |
+| 1280×720 | 845×660 | 66% × 92% | 166×222 | 389px |
+| 375×812 | 359×694 | — | 112×149 | single column, 10px above the Stop bar |
+
+At every size the window stays inside the viewport, never overlaps the rail, and
+Stop remains the element hit at its own centre.
 
 **The portrait carries its own controls.** Replace and Remove are icon buttons on
 a scrim over the bottom of the picture, not a pair of wide text buttons beside it:
@@ -441,7 +502,7 @@ Each is independently shippable and independently revertible.
 | 1 | Store + migration v16, validation, tests | **Shipped.** `internal/persona`; `personas` table plus `chat_sessions.persona_id` by guarded `ALTER`. |
 | 2 | `personas` CRUD API + portrait upload/serve | **Shipped.** `internal/httpapi/personas.go`; reuses the thumbnail path-safety and atomic-replace shape. |
 | 3 | Route, grid, new-persona tile, monogram fallback | **Shipped.** `#/personas`, second in the rail. |
-| 4 | Editor window, duplicate, delete | **Shipped.** Centered modal over the unchanged grid; browser-side canvas resize to JPEG at max edge 512. |
+| 4 | Editor window, duplicate, delete | **Shipped.** Centered modal over the unchanged grid; browser-side high-quality resize to JPEG at max edge 640, quality 0.92. |
 | 5 | Session binding + chat header switcher + provenance | **Shipped.** `PUT /api/chat/sessions/{id}/persona`; provenance carries `persona_id` and `persona_name`. |
 | 6 | Reaction-style axis composition | **Shipped.** `chat.ReactionStyle`, composed between the voice identity and the contract. |
 | 7 | Lore | **Implemented.** Schema v17 stores bounded entries and off/relevant/full policy; relevant matching uses Unicode word boundaries; the exact backend composition is inspectable and copyable; an opt-in live scorecard measures 0/500/1000/2000-character budgets. Model-specific baseline numbers remain unmeasured and the Full-mode copy says so. |
