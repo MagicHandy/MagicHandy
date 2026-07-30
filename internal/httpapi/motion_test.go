@@ -657,17 +657,8 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 
 func assertMotionStartCloudRequests(t *testing.T, requests <-chan capturedCloudRequest) {
 	t.Helper()
-	assertAuthenticated := func(seen capturedCloudRequest) {
-		t.Helper()
-		if seen.Path != "/servertime" && (seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey) {
-			t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
-		}
-	}
 	first := readCapturedCloudRequest(t, requests)
-	if first.Method != http.MethodPut || first.Path != "/hsp/stop" {
-		t.Fatalf("first request = %+v, want PUT /hsp/stop", first)
-	}
-	assertAuthenticated(first)
+	assertCloudRequest(t, first, http.MethodPut, "/hsp/stop")
 
 	startupReads := map[string]bool{"/slider/state": false, "/slider/stroke": false}
 	for range 2 {
@@ -679,7 +670,7 @@ func assertMotionStartCloudRequests(t *testing.T, requests <-chan capturedCloudR
 			t.Fatalf("startup request = %+v, want one read of each startup endpoint", seen)
 		}
 		startupReads[seen.Path] = true
-		assertAuthenticated(seen)
+		assertCloudAuthenticated(t, seen)
 	}
 
 	wantRequests := []struct {
@@ -688,17 +679,45 @@ func assertMotionStartCloudRequests(t *testing.T, requests <-chan capturedCloudR
 	}{
 		{method: http.MethodPut, path: "/slider/stroke"},
 		{method: http.MethodPut, path: "/hsp/setup"},
-		{method: http.MethodPut, path: "/hsp/add"},
-		{method: http.MethodPut, path: "/hsp/add"},
-		{method: http.MethodGet, path: "/servertime"},
-		{method: http.MethodPut, path: "/hsp/play"},
 	}
 	for _, want := range wantRequests {
 		seen := readCapturedCloudRequest(t, requests)
-		if seen.Method != want.method || seen.Path != want.path {
-			t.Fatalf("request = %+v, want %s %s", seen, want.method, want.path)
+		assertCloudRequest(t, seen, want.method, want.path)
+	}
+
+	adds := 0
+	for {
+		seen := readCapturedCloudRequest(t, requests)
+		assertCloudAuthenticated(t, seen)
+		if seen.Method == http.MethodPut && seen.Path == "/hsp/add" {
+			adds++
+			continue
 		}
-		assertAuthenticated(seen)
+		if seen.Method != http.MethodGet || seen.Path != "/servertime" {
+			t.Fatalf("request = %+v, want PUT /hsp/add or GET /servertime", seen)
+		}
+		break
+	}
+	if adds == 0 {
+		t.Fatal("Cloud startup did not prebuffer any HSP points")
+	}
+	play := readCapturedCloudRequest(t, requests)
+	assertCloudRequest(t, play, http.MethodPut, "/hsp/play")
+}
+
+func assertCloudRequest(t *testing.T, seen capturedCloudRequest, method string, path string) {
+	t.Helper()
+	if seen.Method != method || seen.Path != path {
+		t.Fatalf("request = %+v, want %s %s", seen, method, path)
+	}
+	assertCloudAuthenticated(t, seen)
+}
+
+func assertCloudAuthenticated(t *testing.T, seen capturedCloudRequest) {
+	t.Helper()
+	if seen.Path != "/servertime" &&
+		(seen.ApplicationID != "dev-app-id" || seen.ConnectionKey != cloudTestConnectionKey) {
+		t.Fatalf("auth headers = %+v, want settings-derived credentials", seen)
 	}
 }
 

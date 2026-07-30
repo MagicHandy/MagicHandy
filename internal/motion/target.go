@@ -48,7 +48,7 @@ const (
 	PatternCascade PatternID = "cascade"
 	// PatternPendulum alternates long and short centered arcs.
 	PatternPendulum PatternID = "pendulum"
-	// PatternCradle uses restrained centered arcs with changing width.
+	// PatternCradle identifies the retired restrained centered-arcs pattern.
 	PatternCradle PatternID = "cradle"
 	// PatternSurge follows one full sweep with decaying echoes.
 	PatternSurge PatternID = "surge"

@@ -106,6 +106,7 @@ var promotedBuiltinPatterns = []PatternDefinition{
 }
 
 var retiredBuiltinPatternIDs = []PatternID{
+	PatternCradle,
 	PatternTopAnchoredDepths,
 	PatternDeepBookends,
 	PatternOneDeepThreeShallow,

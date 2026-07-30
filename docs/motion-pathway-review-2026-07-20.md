@@ -491,6 +491,56 @@ Autopilot decisions, and interactive chat/Autopilot handoff. Real-device feel
 remains unverified in this follow-up; any hardware pass must stay below 40% and
 capture owner telemetry and a trace export.
 
+## Cradle Playback Follow-Up - 2026-07-30
+
+Physical feedback reported intermittent stops while the built-in Cradle pattern
+was playing through Cloud REST. The captured Pattern Library run used 30% speed
+and the full 0-100 stroke window. Its 54 refill appends all succeeded, averaged
+336.6 ms latency, peaked at 399 ms, and retained at least 2,028.9 ms of accepted
+buffer lead. There was no transport failure, recovery Stop, or buffer
+starvation during the reported run.
+
+Static analysis did not find an authored hold. Whole-percent simulation at 8%,
+20%, and 37% produced no repeated-position interval; at 100% the longest was
+15 ms and total stationary time was 30 ms. It did expose an independent defect
+in the shared buffered-pattern sampler: every one-second internal fit was
+forced to retain its last probe, producing unrelated HSP waypoints at `995`,
+`1995`, and subsequent fixed window tails. This was the same firmware-facing
+restart risk already removed from the linear media path: an append boundary
+became a device segment boundary even when the authored motion had no event
+there.
+
+Buffered owners with a declared output resolution now fit with bounded
+lookahead and end each append at the first trajectory point retained with
+future context, or at an authored knot. The final lookahead point is recognized
+as forced and is not selected unless it is authored; lookahead expands to at
+most three ordinary sampler windows before falling back. Cloud keeps its
+100-point HSP limit, semantic approximation remains bounded, and transports
+without this buffered quantized contract retain their prior cadence. The
+change also lets startup use one prebuffer append when that fitted chunk already
+covers the owner's minimum lead.
+
+A second physical run tested that correction at 20% through Cloud REST. All 17
+appends succeeded, averaged 326.5 ms latency, peaked at 402 ms, and retained
+2,273.6-3,441.7 ms of accepted buffer lead. Every refill ended on an authored
+Cradle knot rather than an arbitrary sampler boundary. The motion nevertheless
+remained perceptibly discontinuous. Two of the curve's narrow legs travel only
+about 17.5 and 18.8 percentage points per second at that setting. The evidence
+does not establish a universal device speed threshold, but it does establish
+that this curve is not reliable default content on the tested hardware.
+
+Cradle is therefore absent from the generated default catalog and recorded in
+the retired built-in ID list. Library reconciliation deletes only a matching
+row whose origin is `builtin`; it does not delete unrelated user-imported or
+user-authored content. Regression coverage checks both catalog exclusion and
+persistent built-in cleanup, while a representative retained pattern verifies
+that buffered chunks avoid fixed sampler-window tails.
+
+Intentionally unchanged: the user's global speed and stroke limits, the finite
+linear-media sampler, immediate-mode Intiface pacing, and all other default
+patterns. Further physical reports should be evaluated per pattern rather than
+used to infer an unverified universal low-speed cutoff.
+
 ## ScriptPlayer Comparison
 
 Useful ideas retained from
