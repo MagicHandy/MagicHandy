@@ -176,10 +176,17 @@
 
 /* --- Editor window ------------------------------------------------------- */
 
+.persona-editor-overlay {
+  /* Center the desktop dialog in the routed workspace. The global Stop stays
+     above modals, so centering against the viewport would put a wide dialog
+     underneath the rail footer at narrower desktop widths. */
+  padding-left: calc(var(--rail-width) + 20px);
+}
+
 .persona-editor-window {
   display: flex;
   flex-direction: column;
-  width: min(760px, 100%);
+  width: min(var(--content-wide-max), 100%);
   max-height: calc(100dvh - 40px);
   overflow: hidden;
   border: 1px solid var(--line-strong);

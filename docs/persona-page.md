@@ -364,7 +364,12 @@ plus glyph and label. Two details that decide whether it feels right:
 Centered window overlay over the grid, not a route change and not a stacked
 modal (exactly one layer — [ui-design.md §Settings](ui-design.md)). The dimmed
 grid stays visible enough to preserve page context without squeezing or
-reflowing its tiles when the editor opens.
+reflowing its tiles when the editor opens. On desktop the window shares the
+1,180px wide-content limit used by the page so its paired controls remain
+comfortable without stretching into a full-screen sheet; below that cap it
+contracts with the viewport. It is centered inside the routed workspace rather
+than the full viewport, keeping the desktop navigation rail and global Stop
+clear.
 
 Fields use the settings idiom so the editor reads as one app: `h2` naming the
 persona, then unframed sections separated by rules with `h3.group-title` per

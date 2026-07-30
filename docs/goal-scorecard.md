@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,481,611 raw / 741,895 gzip bytes. Lazy loading limits
-   the English startup path to 686,751 raw / 184,757 gzip bytes. The centered
-   persona editor overlay adds 872 raw / 181 gzip bytes to both measurements
+   browser payload is 1,481,697 raw / 741,913 gzip bytes. Lazy loading limits
+   the English startup path to 686,837 raw / 184,775 gzip bytes. The centered
+   persona editor overlay adds 958 raw / 199 gzip bytes to both measurements
    versus the preceding build. These remain within budget, but future locales,
    personas, and bitmap additions must keep startup and total payload growth
    explicit.
@@ -131,8 +131,11 @@ Ranked by threat to the stated goals:
   fixed around one bounded scroll body. Editor sections use dividers instead of
   nested cards. The Personas heading and grid now share the 1,180px wide
   workspace container, and grid tracks explicitly start-align, fixing the
-  Firefox-only 100px tile offset. The design doc and SVG layout sketch now
-  describe the shipped overlay. A 390x844 Firefox pass also caught and fixed
+  Firefox-only 100px tile offset. Its desktop width now reaches 1,180px rather
+  than leaving the paired form fields constrained to 760px, and it centers in
+  the routed workspace so that width cannot overlap the rail Stop control. The
+  design doc and SVG layout sketch now describe the shipped overlay. A
+  390x844 Firefox pass also caught and fixed
   the global Stop bar covering the modal actions; the dialog now reserves the
   mobile footer while the backdrop continues to cover the viewport. All 315
   frontend tests, the 1,279-key localization audit, typecheck, production
