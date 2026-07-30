@@ -120,154 +120,161 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
         <button
           ref={closeButton}
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-secondary persona-drawer-close"
           onClick={onClose}
           aria-label={t("Close editor")}
+          title={t("Close editor")}
         >
           <CloseIcon />
         </button>
       </div>
 
-      <section className="group">
-        <h3 className="group-title">{t("Identity")}</h3>
-        <div className="persona-portrait-field">
-          <span className="persona-portrait-preview">
-            {portrait ? (
-              <img src={portrait} alt="" />
-            ) : (
-              <span className="persona-card-monogram" aria-hidden="true">
-                <span>{monogram(item.name)}</span>
-              </span>
-            )}
-          </span>
-          <span className="persona-portrait-actions">
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              className="visually-hidden"
-              onChange={(event) => void choosePortrait(event.target.files?.[0])}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={disabled}
-              onClick={() => fileInput.current?.click()}
-            >
-              {portrait ? t("Replace portrait") : t("Choose portrait")}
-            </button>
-            {portrait && (
+      <div className="persona-drawer-body">
+        <section className="group">
+          <h3 className="group-title">{t("Identity")}</h3>
+          <div className="persona-portrait-field">
+            <span className="persona-portrait-preview">
+              {portrait ? (
+                <img src={portrait} alt="" />
+              ) : (
+                <span className="persona-card-monogram" aria-hidden="true">
+                  <span>{monogram(item.name)}</span>
+                </span>
+              )}
+            </span>
+            <span className="persona-portrait-actions">
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                className="visually-hidden"
+                onChange={(event) => void choosePortrait(event.target.files?.[0])}
+              />
               <button
                 type="button"
                 className="btn btn-secondary"
                 disabled={disabled}
-                onClick={() => void run(() => api.deletePersonaPortrait(item.id))}
+                onClick={() => fileInput.current?.click()}
               >
-                {t("Remove portrait")}
+                {portrait ? t("Replace portrait") : t("Choose portrait")}
               </button>
-            )}
-            <span className="hint">
-              {t("Scaled to {edge}px and stored locally beside your other app data.", { edge: PORTRAIT_MAX_EDGE })}
+              {portrait && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={disabled}
+                  onClick={() => void run(() => api.deletePersonaPortrait(item.id))}
+                >
+                  {t("Remove portrait")}
+                </button>
+              )}
+              <span className="hint">
+                {t("Scaled to {edge}px and stored locally beside your other app data.", { edge: PORTRAIT_MAX_EDGE })}
+              </span>
             </span>
-          </span>
-        </div>
-        <label className="field">
-          <span className="label">
-            {t("Name")}
-            <span className="hint-inline">{Array.from(name).length} / {options.max_name}</span>
-          </span>
-          <input
-            type="text"
-            value={name}
-            maxLength={options.max_name}
-            disabled={disabled}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span className="label">
-            {t("Description")}
-            <span className="hint-inline">{Array.from(description).length} / {options.max_description}</span>
-          </span>
-          <textarea
-            rows={3}
-            value={description}
-            maxLength={options.max_description}
-            disabled={disabled}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </label>
-      </section>
+          </div>
+          <label className="field">
+            <span className="label">
+              {t("Name")}
+              <span className="hint-inline">{Array.from(name).length} / {options.max_name}</span>
+            </span>
+            <input
+              type="text"
+              value={name}
+              maxLength={options.max_name}
+              disabled={disabled}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span className="label">
+              {t("Description")}
+              <span className="hint-inline">{Array.from(description).length} / {options.max_description}</span>
+            </span>
+            <textarea
+              rows={3}
+              value={description}
+              maxLength={options.max_description}
+              disabled={disabled}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+        </section>
 
-      <section className="group">
-        <h3 className="group-title">{t("Voice and style")}</h3>
-        <label className="field">
-          <span className="label">{t("Reply register")}</span>
-          <select
-            value={item.chat_voice}
-            disabled={disabled}
-            onChange={(event) => void patch({ chat_voice: event.target.value })}
-          >
-            {options.chat_voices.map((voice) => (
-              <option key={voice} value={voice}>{personaOptionLabel(VOICE_LABELS, voice)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span className="label">{t("Reaction style")}</span>
-          <select
-            value={item.reaction_style}
-            disabled={disabled}
-            onChange={(event) => void patch({ reaction_style: event.target.value })}
-          >
-            {options.reaction_styles.map((style) => (
-              <option key={style} value={style}>{personaOptionLabel(STYLE_LABELS, style)}</option>
-            ))}
-          </select>
-        </label>
-        <p className="hint">
-          {t("Style shapes who leads the conversation and how replies are worded. It is separate from how explicit the language may be, and it never affects the device.")}
-        </p>
-      </section>
+        <section className="group">
+          <h3 className="group-title">{t("Voice and style")}</h3>
+          <div className="persona-editor-fields">
+            <label className="field">
+              <span className="label">{t("Reply register")}</span>
+              <select
+                value={item.chat_voice}
+                disabled={disabled}
+                onChange={(event) => void patch({ chat_voice: event.target.value })}
+              >
+                {options.chat_voices.map((voice) => (
+                  <option key={voice} value={voice}>{personaOptionLabel(VOICE_LABELS, voice)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">{t("Reaction style")}</span>
+              <select
+                value={item.reaction_style}
+                disabled={disabled}
+                onChange={(event) => void patch({ reaction_style: event.target.value })}
+              >
+                {options.reaction_styles.map((style) => (
+                  <option key={style} value={style}>{personaOptionLabel(STYLE_LABELS, style)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="hint">
+            {t("Style shapes who leads the conversation and how replies are worded. It is separate from how explicit the language may be, and it never affects the device.")}
+          </p>
+        </section>
 
-      <section className="group">
-        <h3 className="group-title">{t("Behavior")}</h3>
-        <label className="field">
-          <span className="label">{t("Prompt set")}</span>
-          <select
-            value={item.prompt_set_id}
-            disabled={disabled}
-            onChange={(event) => void patch({ prompt_set_id: event.target.value })}
-          >
-            <option value="">{t("Use the one selected in Settings")}</option>
-            {promptSets.map((set) => (
-              <option key={set.id} value={set.id}>{translateKnown(set.name)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span className="label">{t("Starting zone")}</span>
-          <select
-            value={item.default_focus_area}
-            disabled={disabled}
-            onChange={(event) => void patch({ default_focus_area: event.target.value })}
-          >
-            {options.focus_areas.map((area) => (
-              <option key={area} value={area}>{personaOptionLabel(AREA_LABELS, area)}</option>
-            ))}
-          </select>
-        </label>
-        <p className="hint">
-          {t("A persona never changes your speed limits, your stroke range, or what the model is allowed to control. Those stay in Settings.")}
-        </p>
-      </section>
+        <section className="group">
+          <h3 className="group-title">{t("Behavior")}</h3>
+          <div className="persona-editor-fields">
+            <label className="field">
+              <span className="label">{t("Prompt set")}</span>
+              <select
+                value={item.prompt_set_id}
+                disabled={disabled}
+                onChange={(event) => void patch({ prompt_set_id: event.target.value })}
+              >
+                <option value="">{t("Use the one selected in Settings")}</option>
+                {promptSets.map((set) => (
+                  <option key={set.id} value={set.id}>{translateKnown(set.name)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">{t("Starting zone")}</span>
+              <select
+                value={item.default_focus_area}
+                disabled={disabled}
+                onChange={(event) => void patch({ default_focus_area: event.target.value })}
+              >
+                {options.focus_areas.map((area) => (
+                  <option key={area} value={area}>{personaOptionLabel(AREA_LABELS, area)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="hint">
+            {t("A persona never changes your speed limits, your stroke range, or what the model is allowed to control. Those stay in Settings.")}
+          </p>
+        </section>
 
-      <PersonaLoreEditor
-        persona={item}
-        locked={locked}
-        onPersonaChanged={onPersonaChanged}
-        onError={onError}
-      />
+        <PersonaLoreEditor
+          persona={item}
+          locked={locked}
+          onPersonaChanged={onPersonaChanged}
+          onError={onError}
+        />
+      </div>
 
       <div className="persona-drawer-actions">
         <button

@@ -76,19 +76,6 @@
   background: var(--bg-inset);
 }
 
-.chat-tabs-title {
-  display: flex;
-  min-width: 68px;
-  flex: 0 0 auto;
-  align-items: center;
-  margin: 0;
-  padding: 5px 14px 0;
-  border-right: 1px solid var(--line);
-  color: var(--text);
-  font-size: 0.86rem;
-  font-weight: 650;
-}
-
 .chat-mood-readout {
   display: flex;
   min-width: 0;
@@ -492,11 +479,6 @@ button.chat-avatar:focus-visible {
 @media (max-width: 560px) {
   .chat-conversation > .chat {
     padding: 8px;
-  }
-
-  .chat-tabs-title {
-    min-width: 58px;
-    padding: 0 10px;
   }
 
   .chat-mood-readout {

@@ -32,10 +32,28 @@ export function PersonasRoute() {
     return () => controller.abort();
   }, [load]);
 
-  const reportError = (message: string) => {
+  const reportError = useCallback((message: string) => {
     setError(message);
     show(message, "error");
-  };
+  }, [show]);
+
+  const applyPayload = useCallback((next: PersonasPayload) => {
+    setPayload(next);
+    setError("");
+  }, []);
+
+  const applyPersona = useCallback((changed: Persona) => {
+    setPayload((current) => current
+      ? {
+          ...current,
+          personas: current.personas.map((item) => item.id === changed.id ? changed : item),
+          persona: current.persona?.id === changed.id ? changed : current.persona,
+        }
+      : current);
+    setError("");
+  }, []);
+
+  const closeEditor = useCallback(() => setEditingID(""), []);
 
   const create = async () => {
     setCreating(true);
@@ -69,6 +87,7 @@ export function PersonasRoute() {
         ) : (
           <PersonaGrid
             personas={payload.personas}
+            defaultPersona={payload.default_persona}
             activeID={payload.active_persona_id}
             locked={locked || creating}
             onOpen={(item) => setEditingID(item.id)}
@@ -81,21 +100,9 @@ export function PersonasRoute() {
             options={payload.options}
             promptSets={payload.prompt_sets ?? []}
             locked={locked}
-            onApplied={(next) => {
-              setPayload(next);
-              setError("");
-            }}
-            onPersonaChanged={(changed) => {
-              setPayload((current) => current
-                ? {
-                    ...current,
-                    personas: current.personas.map((item) => item.id === changed.id ? changed : item),
-                    persona: current.persona?.id === changed.id ? changed : current.persona,
-                  }
-                : current);
-              setError("");
-            }}
-            onClose={() => setEditingID("")}
+            onApplied={applyPayload}
+            onPersonaChanged={applyPersona}
+            onClose={closeEditor}
             onError={reportError}
           />
         )}

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
-import type { Persona, PersonaLorePayload, PersonasPayload } from "../api/types";
+import type { DefaultPersona, Persona, PersonaLorePayload, PersonasPayload } from "../api/types";
 import { PersonaEditor } from "./PersonaEditor";
 import { PersonaGrid, monogram } from "./PersonaGrid";
 import { PersonaSwitcher } from "./PersonaSwitcher";
@@ -46,9 +46,20 @@ function persona(overrides: Partial<Persona> = {}): Persona {
   };
 }
 
+function genericPersona(overrides: Partial<DefaultPersona> = {}): DefaultPersona {
+  return {
+    name: "MagicHandy",
+    description: "",
+    chat_voice: "utility",
+    prompt_set_id: "magichandy_motion_v1",
+    ...overrides,
+  };
+}
+
 function payload(overrides: Partial<PersonasPayload> = {}): PersonasPayload {
   return {
     personas: [persona()],
+    default_persona: genericPersona(),
     active_persona_id: "",
     active_session_id: "chat-1",
     prompt_sets: [{ id: "magichandy_motion_v1", name: "MagicHandy Motion", system: "", builtin: true }],
@@ -87,6 +98,7 @@ describe("PersonaGrid", () => {
     render(
       <PersonaGrid
         personas={[persona({ id: "persona-aaaaaaaaaaaa", name: "Ash" }), persona({ id: "persona-bbbbbbbbbbbb", name: "Mara" })]}
+        defaultPersona={genericPersona()}
         activeID=""
         locked={false}
         onOpen={vi.fn()}
@@ -98,10 +110,29 @@ describe("PersonaGrid", () => {
     expect(buttons[0]).toHaveAccessibleName("New persona");
   });
 
+  it("always lists the Settings-backed MagicHandy default", () => {
+    render(
+      <PersonaGrid
+        personas={[]}
+        defaultPersona={genericPersona()}
+        activeID=""
+        locked={false}
+        onOpen={vi.fn()}
+        onCreate={vi.fn()}
+      />,
+    );
+
+    const defaultTile = screen.getByRole("link", { name: "MagicHandy (Default)" });
+    expect(defaultTile).toHaveAttribute("href", "#/settings/model");
+    expect(defaultTile).toHaveAttribute("aria-current", "true");
+    expect(screen.getByText("1 persona")).toBeInTheDocument();
+  });
+
   it("marks only the active persona and reports the register on every tile", () => {
     render(
       <PersonaGrid
         personas={[persona({ id: "persona-aaaaaaaaaaaa", name: "Ash", chat_voice: "warm" }), persona({ id: "persona-bbbbbbbbbbbb", name: "Mara", chat_voice: "explicit" })]}
+        defaultPersona={genericPersona()}
         activeID="persona-bbbbbbbbbbbb"
         locked={false}
         onOpen={vi.fn()}
@@ -120,6 +151,7 @@ describe("PersonaGrid", () => {
     render(
       <PersonaGrid
         personas={[persona({ name: "vesper" }), persona({ id: "persona-cccccccccccc", name: "Ash", has_portrait: true })]}
+        defaultPersona={genericPersona()}
         activeID=""
         locked={false}
         onOpen={vi.fn()}
@@ -135,7 +167,14 @@ describe("PersonaGrid", () => {
 
   it("disables only the create control when the client is read-only", () => {
     render(
-      <PersonaGrid personas={[persona()]} activeID="" locked onOpen={vi.fn()} onCreate={vi.fn()} />,
+      <PersonaGrid
+        personas={[persona()]}
+        defaultPersona={genericPersona()}
+        activeID=""
+        locked
+        onOpen={vi.fn()}
+        onCreate={vi.fn()}
+      />,
     );
 
     expect(screen.getByRole("button", { name: "New persona" })).toBeDisabled();
@@ -278,16 +317,58 @@ describe("PersonaEditor", () => {
     await waitFor(() => expect(updatePersona).toHaveBeenCalledWith(current.id, { lore_mode: "full" }));
     await waitFor(() => expect(onPersonaChanged).toHaveBeenCalledWith(next));
   });
+
+  it("keeps loaded lore and the scroll region stable when parent callbacks change", async () => {
+    const current = persona({ lore_mode: "full", lore_count: 1 });
+    vi.mocked(api.personaLore).mockResolvedValue({
+      ...lorePayload(current),
+      entries: [{
+        id: "lore-0123456789ab",
+        persona_id: current.id,
+        text: "Blue velvet is familiar.",
+        keywords: ["velvet"],
+        enabled: true,
+        created_at: "2026-07-29T10:00:00Z",
+        updated_at: "2026-07-29T10:00:00Z",
+      }],
+    });
+    const state = payload();
+    const common = {
+      item: current,
+      options: state.options,
+      promptSets: state.prompt_sets ?? [],
+      locked: false,
+      onApplied: vi.fn(),
+      onPersonaChanged: vi.fn(),
+      onClose: vi.fn(),
+    };
+    const view = render(<PersonaEditor {...common} onError={vi.fn()} />);
+
+    expect(await screen.findByDisplayValue("Blue velvet is familiar.")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    const scrollBody = dialog.querySelector<HTMLElement>(".persona-drawer-body");
+    const actions = dialog.querySelector<HTMLElement>(".persona-drawer-actions");
+    expect(scrollBody).not.toContainElement(actions);
+    expect(scrollBody?.nextElementSibling).toBe(actions);
+
+    view.rerender(<PersonaEditor {...common} onError={vi.fn()} />);
+
+    await waitFor(() => expect(api.personaLore).toHaveBeenCalledTimes(1));
+    expect(screen.getByDisplayValue("Blue velvet is familiar.")).toBeInTheDocument();
+    expect(screen.queryByText("Loading lore")).not.toBeInTheDocument();
+  });
 });
 
 describe("PersonaSwitcher", () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it("renders nothing at all when there are no personas", async () => {
+  it("shows the generic default when there are no custom personas", async () => {
     personas.mockResolvedValue(payload({ personas: [] }));
-    const { container } = render(<PersonaSwitcher sessionID="chat-1" disabled={false} />);
-    await waitFor(() => expect(personas).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    render(<PersonaSwitcher sessionID="chat-1" disabled={false} />);
+
+    const trigger = await screen.findByRole("button", { name: "MagicHandy" });
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitemradio", { name: /MagicHandy Default/ })).toHaveAttribute("aria-checked", "true");
   });
 
   // A persona chip is decoration on top of chat. An unreadable library must not
@@ -307,8 +388,11 @@ describe("PersonaSwitcher", () => {
     render(<PersonaSwitcher sessionID="chat-1" disabled={false} onChanged={onChanged} />);
 
     const chip = await screen.findByRole("button", { name: /Rowan/ });
+    expect(chip.closest(".persona-switcher-wrap")).toBeInTheDocument();
+    expect(chip.querySelector(".persona-chip-chevron")).toBeInTheDocument();
     fireEvent.click(chip);
-    const clear = screen.getByRole("menuitemradio", { name: /No persona \(use Settings\)/ });
+    expect(chip).toHaveAttribute("aria-expanded", "true");
+    const clear = screen.getByRole("menuitemradio", { name: /MagicHandy Default/ });
     expect(screen.getByRole("menuitemradio", { name: /Rowan/ })).toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(clear);
@@ -316,15 +400,15 @@ describe("PersonaSwitcher", () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
-  it("reads No persona when the session is not bound", async () => {
+  it("reads MagicHandy when the session uses the generic default", async () => {
     personas.mockResolvedValue(payload());
     render(<PersonaSwitcher sessionID="chat-1" disabled={false} />);
-    expect(await screen.findByRole("button", { name: /No persona/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "MagicHandy" })).toBeInTheDocument();
   });
 
   it("cannot switch persona from a read-only client", async () => {
     personas.mockResolvedValue(payload());
     render(<PersonaSwitcher sessionID="chat-1" disabled />);
-    expect(await screen.findByRole("button", { name: /No persona/ })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "MagicHandy" })).toBeDisabled();
   });
 });

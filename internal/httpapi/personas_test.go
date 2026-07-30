@@ -17,10 +17,11 @@ import (
 )
 
 type personasResponse struct {
-	Personas        []persona.Persona `json:"personas"`
-	ActivePersonaID string            `json:"active_persona_id"`
-	ActiveSessionID string            `json:"active_session_id"`
-	Persona         *persona.Persona  `json:"persona"`
+	Personas        []persona.Persona  `json:"personas"`
+	DefaultPersona  defaultPersonaView `json:"default_persona"`
+	ActivePersonaID string             `json:"active_persona_id"`
+	ActiveSessionID string             `json:"active_session_id"`
+	Persona         *persona.Persona   `json:"persona"`
 	Options         struct {
 		ChatVoices      []string `json:"chat_voices"`
 		ReactionStyles  []string `json:"reaction_styles"`
@@ -112,6 +113,11 @@ func TestPersonasEndpointReportsTheServersOwnVocabulary(t *testing.T) {
 	if len(decoded.Personas) != 0 {
 		t.Fatalf("a fresh install has %d personas, want none", len(decoded.Personas))
 	}
+	if decoded.DefaultPersona.Name != "MagicHandy" ||
+		decoded.DefaultPersona.ChatVoice != config.LLMChatVoiceUtility ||
+		decoded.DefaultPersona.PromptSetID != config.PromptSetMagicHandyMotionV1 {
+		t.Fatalf("default persona = %#v", decoded.DefaultPersona)
+	}
 	// The page must never offer a value the server would reject, so the option
 	// lists come from the same source that validates them.
 	if strings.Join(decoded.Options.ChatVoices, ",") != strings.Join(config.LLMChatVoices(), ",") {
@@ -137,6 +143,29 @@ func TestPersonasEndpointReportsTheServersOwnVocabulary(t *testing.T) {
 	}
 	if decoded.ActiveSessionID == "" {
 		t.Fatal("the payload must name the active session so the page can bind to it")
+	}
+}
+
+func TestDefaultPersonaViewTracksSettingsWithoutCreatingAPersonaRow(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.LLM.ChatVoice = config.LLMChatVoiceIntimate
+		settings.LLM.PersonaDescription = "the generic profile"
+		return settings
+	})
+
+	recorder, decoded := personaRequest(t, server, http.MethodGet, "/api/personas", nil)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if len(decoded.Personas) != 0 {
+		t.Fatalf("default view created %d stored personas", len(decoded.Personas))
+	}
+	if decoded.DefaultPersona.Name != "MagicHandy" ||
+		decoded.DefaultPersona.ChatVoice != config.LLMChatVoiceIntimate ||
+		decoded.DefaultPersona.Description != "the generic profile" {
+		t.Fatalf("default persona = %#v", decoded.DefaultPersona)
 	}
 }
 
