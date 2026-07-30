@@ -186,8 +186,17 @@
 .persona-editor-window {
   display: flex;
   flex-direction: column;
-  width: min(var(--content-wide-max), 100%);
-  max-height: calc(100dvh - 40px);
+  /* Matches .reference-dialog, the app's existing dialog width. This was
+     --content-wide-max (1180px), which is the *page content* token: at a 1280
+     viewport it produced a 1010x680 window covering 79% x 94% of the screen for
+     a form whose widest control needs 266px, leaving selects 36-87% empty and
+     still scrolling. A dialog is sized by its content, a page by its column. */
+  width: min(720px, 100%);
+  /* Capped rather than "whatever the viewport allows". The body scrolls, so
+     extra height buys a little less scrolling at the cost of the dialog reading
+     as a full-screen takeover — at 720px tall it was filling 94% of the screen.
+     The cap keeps it a window on a tall monitor too. */
+  max-height: min(660px, calc(100dvh - 40px));
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
