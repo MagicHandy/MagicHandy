@@ -1,13 +1,18 @@
 /* Personas page: a portrait tile grid with a leading create tile, and an editor
-   drawer over it. Sibling to .media-grid rather than a reuse of it — video covers
+   window over it. Sibling to .media-grid rather than a reuse of it — video covers
    are 16/9 with copy below, personas are portraits with copy overlaid — but every
    interaction state is borrowed verbatim so the two grids feel like one app
    (docs/persona-page.md §5.2). */
+
+.workspace > .persona-page {
+  width: min(100%, var(--content-wide-max));
+}
 
 .persona-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 220px));
   align-items: start;
+  justify-content: start;
   gap: 14px;
 }
 
@@ -169,69 +174,87 @@
   font-size: 0.76rem;
 }
 
-/* --- Editor drawer ------------------------------------------------------- */
+/* --- Editor window ------------------------------------------------------- */
 
-/* Exactly one layer, never a modal over a modal (docs/ui-design.md). The grid
-   stays visible so the persona being edited stays in context. */
-@media (width > 900px) {
-  .workspace:has(.persona-drawer) > .workspace-head,
-  .workspace:has(.persona-drawer) > .persona-page {
-    width: calc(100% - 430px);
-    max-width: calc(100% - 430px);
-    margin-right: auto;
-    margin-left: 0;
-  }
+.persona-editor-overlay {
+  /* Center the desktop dialog in the routed workspace. The global Stop stays
+     above modals, so centering against the viewport would put a wide dialog
+     underneath the rail footer at narrower desktop widths. */
+  padding-left: calc(var(--rail-width) + 20px);
 }
 
-.persona-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  z-index: 40;
+.persona-editor-window {
   display: flex;
   flex-direction: column;
-  width: min(430px, 100vw);
-  height: 100%;
+  /* Matches .reference-dialog, the app's existing dialog width. This was
+     --content-wide-max (1180px), which is the *page content* token: at a 1280
+     viewport it produced a 1010x680 window covering 79% x 94% of the screen for
+     a form whose widest control needs 266px, leaving selects 36-87% empty and
+     still scrolling. A dialog is sized by its content, a page by its column. */
+  width: min(720px, 100%);
+  /* Capped rather than "whatever the viewport allows". The body scrolls, so
+     extra height buys a little less scrolling at the cost of the dialog reading
+     as a full-screen takeover — at 720px tall it was filling 94% of the screen.
+     The cap keeps it a window on a tall monitor too. */
+  max-height: min(660px, calc(100dvh - 40px));
   overflow: hidden;
-  border-left: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface);
-  box-shadow: -14px 0 34px rgb(0 0 0 / 34%);
+  box-shadow: var(--shadow);
 }
-.persona-drawer-head {
+.persona-editor-window-head {
   display: flex;
   min-height: 56px;
   flex: 0 0 auto;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px 10px 16px;
+  padding: 12px 16px 12px 18px;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
-.persona-drawer-head h2 {
+.persona-editor-window-head h2 {
   overflow: hidden;
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.persona-drawer-close {
+.persona-editor-window-close {
   width: 34px;
   min-height: 34px;
   flex: 0 0 34px;
   padding: 0;
 }
-.persona-drawer-body {
+.persona-editor-window-body {
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px 16px 18px;
+  padding: 18px;
   scrollbar-gutter: stable;
+}
+
+/* A dialog is already a framed surface. Section dividers keep the form
+   scannable without nesting settings cards inside another card. */
+.persona-editor-window-body > .group {
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.persona-editor-window-body > .group + .group {
+  margin-top: 18px;
+}
+.persona-editor-window-body > .group:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 .persona-editor-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .persona-editor-fields .field {
@@ -241,18 +264,57 @@
 
 .persona-portrait-field {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 104px minmax(0, 1fr);
   gap: 12px;
-  align-items: flex-start;
+  align-items: start;
+}
+/* Name and description sit beside the portrait rather than under it. The
+   portrait's own controls freed the column, and it is the shape a profile editor
+   is expected to have. */
+.persona-identity-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
 .persona-portrait-preview {
   position: relative;
-  width: 84px;
+  width: 104px;
   aspect-ratio: 3 / 4;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--bg-inset);
+}
+
+/* Anchored over the bottom of the picture on a scrim, so the icons stay legible
+   whatever the portrait happens to be. */
+.persona-portrait-overlay {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+  padding: 6px 5px 5px;
+  background: linear-gradient(to bottom,
+    rgb(0 0 0 / 0%),
+    color-mix(in srgb, var(--bg) 78%, transparent));
+}
+.persona-portrait-action {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-color: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+}
+.persona-portrait-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-3);
+}
+.persona-portrait-action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 .persona-portrait-preview img {
   width: 100%;
@@ -264,15 +326,13 @@
   height: 42px;
   font-size: 1.05rem;
 }
-.persona-portrait-actions {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+/* The monogram plate shrinks a little to leave the control bar room. */
+.persona-portrait-preview .persona-card-monogram {
+  align-items: start;
+  padding-top: 22px;
 }
 
-.persona-drawer-actions {
+.persona-editor-window-actions {
   display: flex;
   min-height: 64px;
   flex: 0 0 auto;
@@ -283,7 +343,7 @@
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
-.persona-drawer-actions .btn-danger-outline {
+.persona-editor-window-actions .btn-danger-outline {
   margin-left: auto;
 }
 
@@ -475,20 +535,29 @@
   content: "";
 }
 
+/* The mobile navigation rail reserves a footer for the global Stop bar. Keep
+   the dialog above that footer while the backdrop still covers the viewport. */
+@media (width <= 860px) {
+  .persona-editor-overlay {
+    place-items: start center;
+    padding: 8px 8px 110px;
+  }
+  .persona-editor-window {
+    max-height: calc(100dvh - 118px);
+  }
+}
+
 @media (width <= 640px) {
   .persona-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
-  .persona-drawer {
-    width: 100vw;
-    border-left: 0;
+  .persona-editor-window-body,
+  .persona-editor-window-actions {
+    padding-inline: 14px;
   }
-  .persona-drawer-body {
-    padding-inline: 12px;
-  }
-  .persona-drawer-actions {
-    padding-inline: 12px;
+  .persona-editor-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
   .persona-switcher-wrap {
     max-width: 140px;

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-29, bounded persona lore
+## Snapshot — 2026-07-29, persona editor overlay
 
 ### Goal 1: Maintainability
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,695,424 bytes plain and 16,199,680 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,704,640 bytes plain and 16,206,848 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,12 +110,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,477,079 raw / 740,978 gzip bytes. Lazy loading limits
-   the English startup path to 682,550 raw / 183,902 gzip bytes. Bounded persona
-   lore, the editor, and backend-exact prompt inspector add +57,633 raw /
-   +16,788 gzip complete and +35,796 / +8,060 on startup versus the preceding
-   build. These remain within budget, but future locales, personas, and bitmap
-   additions must keep startup and total payload growth explicit.
+   browser payload is 1,481,697 raw / 741,913 gzip bytes. Lazy loading limits
+   the English startup path to 686,837 raw / 184,775 gzip bytes. The centered
+   persona editor overlay adds 958 raw / 199 gzip bytes to both measurements
+   versus the preceding build. These remain within budget, but future locales,
+   personas, and bitmap additions must keep startup and total payload growth
+   explicit.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
    latency but keeps a second llama.cpp context resident. It passed isolated
    synthesis on a 16 GiB RTX 5070 Ti; representative simultaneous managed-LLM
@@ -124,6 +124,27 @@ Ranked by threat to the stated goals:
 ## History
 
 
+- **2026-07-29** - Replaced the Personas editor drawer with one centered modal
+  window over the unchanged, dimmed grid. The window locks page scroll, moves
+  focus to Close, traps Tab while retaining the global emergency Stop in the
+  focus cycle, restores focus on close, and keeps its header and action row
+  fixed around one bounded scroll body. Editor sections use dividers instead of
+  nested cards. The Personas heading and grid now share the 1,180px wide
+  workspace container, and grid tracks explicitly start-align, fixing the
+  Firefox-only 100px tile offset. Its desktop width now reaches 1,180px rather
+  than leaving the paired form fields constrained to 760px, and it centers in
+  the routed workspace so that width cannot overlap the rail Stop control. The
+  design doc and SVG layout sketch now describe the shipped overlay. A
+  390x844 Firefox pass also caught and fixed
+  the global Stop bar covering the modal actions; the dialog now reserves the
+  mobile footer while the backdrop continues to cover the viewport. All 315
+  frontend tests, the 1,279-key localization audit, typecheck, production
+  build, `go test ./...`,
+  `go vet ./...`, and lint (zero issues) pass. The English startup payload is
+  686,751 raw / 184,757 gzip bytes (+872 / +181); all HTML/CSS/JS and complete
+  embedded output are 1,037,375 / 304,498 and 1,481,611 / 741,895
+  (+872 / +181 each). Plain/stripped binaries are 22,704,640 / 16,206,848
+  bytes (+1,024 / +1,536), both within budget. No hardware motion was issued.
 - **2026-07-29** - Stabilized the persona editor and aligned its chat selector.
   Lore loading now follows the persona ID instead of parent callback identity,
   preventing app-state polling from clearing and rebuilding the lore section.

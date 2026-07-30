@@ -74,6 +74,9 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
           </span>
         )}
       </div>
+      {/* In the same two-column grid the other axis selects use, so a three-word
+          dropdown does not stretch across the whole dialog. */}
+      <div className="persona-editor-fields">
       <label className="field">
         <span className="label">{t("Prompt use")}</span>
         <select
@@ -95,6 +98,7 @@ export function PersonaLoreEditor({ persona, locked, onPersonaChanged, onError }
           <option value="full">{t("Full")}</option>
         </select>
       </label>
+      </div>
       <p className="hint">
         {persona.lore_mode === "off"
           ? t("Lore stays saved but does not enter the model prompt.")
