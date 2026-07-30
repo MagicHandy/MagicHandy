@@ -1150,3 +1150,40 @@ Exit evidence:
 
 Status 2026-07-28: mitigations are implemented. The risk remains Medium pending
 a Windows removable-drive and unavailable-network-root acceptance pass.
+
+## R27: Portable Persona Archive Input Risk
+
+Level: Low
+
+Description:
+Persona share files combine user-authored prompt text, lore, and an optional
+image in a ZIP container. A malformed or hostile archive could attempt path
+traversal, decompression amplification, oversized allocation, ID collision,
+unsupported future semantics, or smuggling of settings and motion privileges.
+
+Mitigation:
+
+- accept exactly `persona.json` and an optionally declared `portrait.jpg`;
+  reject directories, non-regular files, unknown/duplicate names, unknown JSON
+  fields, and unsupported schema versions
+- cap the compressed request at 4 MiB and independently cap declared and actual
+  uncompressed manifest/portrait reads before allocation
+- decode and dimension-check the JPEG, and apply the same persona/lore bounds
+  used by direct editing before any database write
+- generate fresh persona, lore, and custom behavior-profile IDs; resolve
+  built-in profiles to the importing build's trusted local definition
+- never carry sessions, timestamps, controller state, settings, memories,
+  anatomy, capability gates, motion limits, or executable content
+- require the active controller and the normal chat/Autopilot mutation lock for
+  import; keep export read-only and serve it as a nosniff attachment
+
+Exit evidence:
+
+- store and HTTP tests cover round trips, fresh IDs, custom/built-in behavior
+  profiles, lore/portrait preservation, runtime-metadata exclusion, traversal,
+  unknown fields/files, asset mismatches, decompression bounds, controller
+  ownership, and oversized bodies
+
+Status 2026-07-30: mitigations and automated evidence are implemented. Keep the
+risk open at Low until archives exported on one release are imported by a later
+release during release-upgrade acceptance.

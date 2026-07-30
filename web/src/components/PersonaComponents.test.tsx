@@ -9,9 +9,12 @@ import { PersonaSwitcher } from "./PersonaSwitcher";
 vi.mock("../api/client", () => ({
   api: {
     personas: vi.fn(),
+    createPersona: vi.fn(),
+    importPersona: vi.fn(),
     updatePersona: vi.fn(),
     duplicatePersona: vi.fn(),
     deletePersona: vi.fn(),
+    exportPersona: vi.fn(),
     savePersonaPortrait: vi.fn(),
     deletePersonaPortrait: vi.fn(),
     personaLore: vi.fn(),
@@ -105,11 +108,36 @@ describe("PersonaGrid", () => {
         locked={false}
         onOpen={vi.fn()}
         onCreate={vi.fn()}
+        onImport={vi.fn()}
       />,
     );
 
     const buttons = screen.getAllByRole("button");
     expect(buttons[0]).toHaveAccessibleName("New persona");
+    expect(buttons[1]).toHaveAccessibleName("Import persona");
+  });
+
+  it("passes the selected portable file through the import half", () => {
+    const onImport = vi.fn();
+    const { container } = render(
+      <PersonaGrid
+        personas={[]}
+        defaultPersona={genericPersona()}
+        activeID=""
+        locked={false}
+        onOpen={vi.fn()}
+        onCreate={vi.fn()}
+        onImport={onImport}
+      />,
+    );
+    const file = new File(["archive"], "rowan.mhpersona", {
+      type: "application/vnd.magichandy.persona+zip",
+    });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, { target: { files: [file] } });
+    expect(onImport).toHaveBeenCalledWith(file);
   });
 
   it("always lists the Settings-backed MagicHandy default", () => {
@@ -121,6 +149,7 @@ describe("PersonaGrid", () => {
         locked={false}
         onOpen={vi.fn()}
         onCreate={vi.fn()}
+        onImport={vi.fn()}
       />,
     );
 
@@ -139,6 +168,7 @@ describe("PersonaGrid", () => {
         locked={false}
         onOpen={vi.fn()}
         onCreate={vi.fn()}
+        onImport={vi.fn()}
       />,
     );
 
@@ -158,6 +188,7 @@ describe("PersonaGrid", () => {
         locked={false}
         onOpen={vi.fn()}
         onCreate={vi.fn()}
+        onImport={vi.fn()}
       />,
     );
 
@@ -176,10 +207,12 @@ describe("PersonaGrid", () => {
         locked
         onOpen={vi.fn()}
         onCreate={vi.fn()}
+        onImport={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("button", { name: "New persona" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Import persona" })).toBeDisabled();
     // Opening a persona to look at it is not a write, so it stays available.
     expect(screen.getByRole("button", { name: "Edit Rowan" })).toBeEnabled();
   });
@@ -211,19 +244,22 @@ describe("PersonaEditor", () => {
     const onPersonaChanged = vi.fn();
     const onClose = vi.fn();
     const onError = vi.fn();
+    const onExported = vi.fn();
     const view = render(
       <PersonaEditor
         item={item}
         options={state.options}
         promptSets={state.prompt_sets ?? []}
         locked={locked}
+        exportAvailable
         onApplied={onApplied}
         onPersonaChanged={onPersonaChanged}
         onClose={onClose}
         onError={onError}
+        onExported={onExported}
       />,
     );
-    return { ...view, onApplied, onPersonaChanged, onClose, onError };
+    return { ...view, onApplied, onPersonaChanged, onClose, onError, onExported };
   };
 
   it("opens as a focused modal window and closes from its backdrop", () => {
@@ -321,6 +357,24 @@ describe("PersonaEditor", () => {
     expect(screen.getByRole("button", { name: "Choose portrait" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Duplicate" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Delete persona" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export persona" })).toBeEnabled();
+  });
+
+  it("exports the persisted persona with the server-provided filename", async () => {
+    const blob = new Blob(["portable"]);
+    vi.mocked(api.exportPersona).mockResolvedValue({ blob, filename: "rowan.mhpersona" });
+    const createObjectURL = vi.fn(() => "blob:persona");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const { onExported } = renderEditor();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export persona" }));
+
+    await waitFor(() => expect(api.exportPersona).toHaveBeenCalledWith("persona-0123456789ab"));
+    expect(click).toHaveBeenCalledOnce();
+    expect(onExported).toHaveBeenCalledWith("Rowan");
+    click.mockRestore();
   });
 
   it("surfaces a rejected change instead of showing it as applied", async () => {
@@ -368,10 +422,12 @@ describe("PersonaEditor", () => {
         options={state.options}
         promptSets={state.prompt_sets}
         locked={false}
+        exportAvailable
         onApplied={vi.fn()}
         onPersonaChanged={vi.fn()}
         onClose={vi.fn()}
         onError={vi.fn()}
+        onExported={vi.fn()}
       />,
     );
 
@@ -380,6 +436,7 @@ describe("PersonaEditor", () => {
       .toEqual(["off", "full"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Add lore entry" }));
+    expect(screen.getByRole("button", { name: "Export persona" })).toBeDisabled();
     const row = document.querySelector(".persona-lore-row");
     expect(row).not.toBeNull();
     fireEvent.change(within(row as HTMLElement).getByRole("textbox", { name: /Lore text/ }), {
@@ -416,9 +473,11 @@ describe("PersonaEditor", () => {
       options: state.options,
       promptSets: state.prompt_sets ?? [],
       locked: false,
+      exportAvailable: true,
       onApplied: vi.fn(),
       onPersonaChanged: vi.fn(),
       onClose: vi.fn(),
+      onExported: vi.fn(),
     };
     const view = render(<PersonaEditor {...common} onError={vi.fn()} />);
 

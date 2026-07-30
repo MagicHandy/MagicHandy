@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { t, translateKnown } from "../i18n";
 import { api } from "../api/client";
 import type { Persona, PersonaDraft, PersonasPayload, PromptSet } from "../api/types";
-import { CloseIcon, PencilIcon, TrashIcon } from "../shell/icons";
+import { CloseIcon, DownloadIcon, PencilIcon, TrashIcon } from "../shell/icons";
 import { trapModalTab } from "../util/modal";
 import { codePointLength, limitCodePoints } from "../util/text";
 import { monogram } from "./PersonaGrid";
@@ -126,16 +126,30 @@ interface EditorProps {
   options: PersonasPayload["options"];
   promptSets: PromptSet[];
   locked: boolean;
+  exportAvailable: boolean;
   onApplied: (payload: PersonasPayload) => void;
   onPersonaChanged: (persona: Persona) => void;
   onClose: () => void;
   onError: (message: string) => void;
+  onExported: (name: string) => void;
 }
 
-export function PersonaEditor({ item, options, promptSets, locked, onApplied, onPersonaChanged, onClose, onError }: EditorProps) {
+export function PersonaEditor({
+  item,
+  options,
+  promptSets,
+  locked,
+  exportAvailable,
+  onApplied,
+  onPersonaChanged,
+  onClose,
+  onError,
+  onExported,
+}: EditorProps) {
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description);
   const [busy, setBusy] = useState(false);
+  const [loreExportBlocked, setLoreExportBlocked] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
@@ -145,6 +159,7 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
   useEffect(() => {
     setName(item.name);
     setDescription(item.description);
+    setLoreExportBlocked(false);
   }, [item.id, item.name, item.description]);
 
   useEffect(() => {
@@ -187,6 +202,27 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
   const dirty = name.trim() !== item.name || description.trim() !== item.description;
   const disabled = locked || busy;
   const portrait = api.personaPortraitURL(item);
+
+  const exportPersona = async () => {
+    setBusy(true);
+    try {
+      const { blob, filename } = await api.exportPersona(item.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      onExported(item.name);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const choosePortrait = async (file: File | undefined) => {
     if (!file) return;
@@ -385,6 +421,7 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
             locked={locked}
             onPersonaChanged={onPersonaChanged}
             onError={onError}
+            onExportBlockedChange={setLoreExportBlocked}
           />
         </div>
 
@@ -404,6 +441,18 @@ export function PersonaEditor({ item, options, promptSets, locked, onApplied, on
             onClick={() => void run(() => api.duplicatePersona(item.id))}
           >
             {t("Duplicate")}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy || !exportAvailable || dirty || loreExportBlocked}
+            title={dirty || loreExportBlocked
+              ? t("Save changes before exporting.")
+              : t("Export {name}", { name: item.name })}
+            onClick={() => void exportPersona()}
+          >
+            <DownloadIcon size={16} />
+            {t("Export persona")}
           </button>
           <button
             type="button"

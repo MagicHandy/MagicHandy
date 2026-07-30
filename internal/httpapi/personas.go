@@ -17,9 +17,11 @@ import (
 func (s *Server) personaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/personas", s.handlePersonasGet)
 	mux.HandleFunc("POST /api/personas", s.handlePersonaCreate)
+	mux.HandleFunc("POST /api/personas/import", s.handlePersonaImport)
 	mux.HandleFunc("PATCH /api/personas/{id}", s.handlePersonaUpdate)
 	mux.HandleFunc("DELETE /api/personas/{id}", s.handlePersonaDelete)
 	mux.HandleFunc("POST /api/personas/{id}/duplicate", s.handlePersonaDuplicate)
+	mux.HandleFunc("GET /api/personas/{id}/export", s.handlePersonaExport)
 	mux.HandleFunc("GET /api/personas/{id}/portrait", s.handlePersonaPortrait)
 	mux.HandleFunc("POST /api/personas/{id}/portrait", s.handlePersonaPortraitUpload)
 	mux.HandleFunc("DELETE /api/personas/{id}/portrait", s.handlePersonaPortraitDelete)
@@ -127,6 +129,136 @@ func (s *Server) handlePersonaCreate(w http.ResponseWriter, r *http.Request) {
 	upsertPersonaPayload(payload, item)
 	payload["persona"] = item
 	writeJSON(w, http.StatusCreated, payload)
+}
+
+func (s *Server) handlePersonaImport(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(r.Body, persona.MaxArchiveBytes+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("persona archive could not be read"))
+		return
+	}
+	if len(data) > persona.MaxArchiveBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, errors.New("persona archive is too large"))
+		return
+	}
+	portable, err := persona.DecodeArchive(data)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+
+	unlock, ok := s.beginPersonaMutation(w)
+	if !ok {
+		return
+	}
+	defer unlock()
+	payload, ok := s.preparePersonasMutation(w, r)
+	if !ok {
+		return
+	}
+
+	promptSetID := portable.Persona.PromptSetID
+	createdPromptSetID := ""
+	if profile := portable.BehaviorProfile; profile != nil {
+		if profile.Builtin {
+			local, found, resolveErr := s.personalization.prompts.Resolve(profile.ID)
+			if resolveErr != nil {
+				s.writePersonalizationStorageError(w, "prompt set", resolveErr)
+				return
+			}
+			if !found || !local.Builtin {
+				s.writePersonaError(w, fmt.Errorf(
+					"%w: built-in behavior profile %q is unavailable",
+					persona.ErrInvalid,
+					profile.ID,
+				))
+				return
+			}
+			promptSetID = local.ID
+		} else {
+			created, createErr := s.personalization.prompts.Create(profile.Name, profile.System)
+			if createErr != nil {
+				s.writePersonaError(w, portablePromptSetError(createErr))
+				return
+			}
+			promptSetID = created.ID
+			createdPromptSetID = created.ID
+			sets, listErr := s.personalization.prompts.List()
+			if listErr != nil {
+				s.rollbackImportedPromptSet(createdPromptSetID)
+				s.writePersonalizationStorageError(w, "prompt set", listErr)
+				return
+			}
+			payload["prompt_sets"] = sets
+		}
+	} else if promptSetID != "" {
+		local, found, resolveErr := s.personalization.prompts.Resolve(promptSetID)
+		if resolveErr != nil {
+			s.writePersonalizationStorageError(w, "prompt set", resolveErr)
+			return
+		}
+		if found {
+			promptSetID = local.ID
+		} else {
+			// A v1 archive exported by this build embeds custom profiles. A
+			// missing unembedded reference is therefore from an older or hand-
+			// authored file and falls back visibly to Settings.
+			promptSetID = ""
+		}
+	}
+
+	item, err := s.personas.ImportPortable(r.Context(), portable, promptSetID)
+	if err != nil {
+		s.rollbackImportedPromptSet(createdPromptSetID)
+		s.writePersonaError(w, err)
+		return
+	}
+	upsertPersonaPayload(payload, item)
+	payload["persona"] = item
+	writeJSON(w, http.StatusCreated, payload)
+}
+
+func (s *Server) handlePersonaExport(w http.ResponseWriter, r *http.Request) {
+	// Export reads a stable persona/profile pair but does not require controller
+	// ownership. The mutation lock prevents an edit from changing prompt_set_id
+	// between profile resolution and archive assembly.
+	s.personaMutationMu.Lock()
+	defer s.personaMutationMu.Unlock()
+
+	id := strings.TrimSpace(r.PathValue("id"))
+	item, err := s.personas.Get(r.Context(), id)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	var profile *chat.PromptSet
+	if item.PromptSetID != "" {
+		resolved, found, resolveErr := s.personalization.prompts.Resolve(item.PromptSetID)
+		if resolveErr != nil {
+			s.writePersonalizationStorageError(w, "prompt set", resolveErr)
+			return
+		}
+		if found {
+			profile = &resolved
+		}
+	}
+	archive, exported, err := s.personas.ExportArchive(r.Context(), id, profile)
+	if err != nil {
+		s.writePersonaError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", persona.ArchiveMediaType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(
+		`attachment; filename="%s"`,
+		personaArchiveFilename(exported.Name),
+	))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(archive) // #nosec G705 -- validated ZIP served as a nosniff attachment.
 }
 
 func (s *Server) handlePersonaUpdate(w http.ResponseWriter, r *http.Request) {
@@ -660,6 +792,55 @@ func personaErrorStatus(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+func portablePromptSetError(err error) error {
+	switch {
+	case errors.Is(err, chat.ErrPromptSetInvalid):
+		return fmt.Errorf("%w: imported behavior profile is invalid: %v", persona.ErrInvalid, err)
+	case errors.Is(err, chat.ErrPromptSetLimit):
+		return fmt.Errorf("%w: behavior profile library is full", persona.ErrLimit)
+	default:
+		return err
+	}
+}
+
+func (s *Server) rollbackImportedPromptSet(id string) {
+	if id == "" {
+		return
+	}
+	if err := s.personalization.prompts.Delete(id); err != nil {
+		s.logger.Warn(
+			"imported behavior profile rollback failed",
+			"prompt_set_id",
+			id,
+			"error",
+			err,
+		)
+	}
+}
+
+func personaArchiveFilename(name string) string {
+	var result strings.Builder
+	pendingSeparator := false
+	for _, current := range strings.ToLower(name) {
+		if (current >= 'a' && current <= 'z') || (current >= '0' && current <= '9') {
+			if pendingSeparator && result.Len() > 0 && result.Len() < 48 {
+				result.WriteByte('-')
+			}
+			pendingSeparator = false
+			if result.Len() < 48 {
+				result.WriteRune(current)
+			}
+			continue
+		}
+		pendingSeparator = result.Len() > 0
+	}
+	base := strings.Trim(result.String(), "-")
+	if base == "" {
+		base = "persona"
+	}
+	return base + persona.ArchiveExtension
 }
 
 // activeSessionPersona resolves the persona of whichever conversation is active.

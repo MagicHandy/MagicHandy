@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -199,6 +200,155 @@ func TestPersonaCRUDRoundTripsThroughTheAPI(t *testing.T) {
 	}
 	if len(remaining.Personas) != 1 {
 		t.Fatalf("library has %d personas after deleting, want 1", len(remaining.Personas))
+	}
+}
+
+func TestPersonaArchiveRoundTripsThroughTheAPI(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	source, profile, portrait, archive := exportPersonaFixtureViaAPI(t, server)
+	imported := importPersonaArchiveViaAPI(t, server, archive)
+	requireImportedPersonaArchive(t, server, source, profile, portrait, imported)
+}
+
+func exportPersonaFixtureViaAPI(
+	t *testing.T,
+	server *Server,
+) (persona.Persona, chat.PromptSet, []byte, []byte) {
+	t.Helper()
+	profile, err := server.personalization.prompts.Create(
+		"Rowan behavior",
+		"Keep the conversation measured and attentive.",
+	)
+	if err != nil {
+		t.Fatalf("create behavior profile: %v", err)
+	}
+	source := createPersonaVia(t, server, "Rowan")
+	recorder, configured := personaRequest(t, server, http.MethodPatch, "/api/personas/"+source.ID,
+		map[string]any{
+			"description":   "Steady and low-voiced.",
+			"prompt_set_id": profile.ID,
+			"lore_mode":     persona.LoreModeRelevant,
+		})
+	if recorder.Code != http.StatusOK || configured.Persona == nil {
+		t.Fatalf("configure: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	recorder, _ = personaRequest(t, server, http.MethodPost, "/api/personas/"+source.ID+"/lore",
+		map[string]any{
+			"text":     "Blue velvet is familiar.",
+			"keywords": []string{"velvet"},
+		})
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create lore: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	portrait := portraitJPEG(t, 96, 128)
+	request := withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/personas/"+source.ID+"/portrait",
+		bytes.NewReader(portrait),
+	))
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("portrait upload: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+
+	// A non-controller may export because this operation cannot affect a live
+	// chat or device.
+	request = httptest.NewRequest(http.MethodGet, "/api/personas/"+source.ID+"/export", nil)
+	request.Header.Set(controllerHeaderName, "someone-else")
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("export: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if recorder.Header().Get("Content-Type") != persona.ArchiveMediaType {
+		t.Fatalf("content type = %q", recorder.Header().Get("Content-Type"))
+	}
+	if recorder.Header().Get("Content-Disposition") != `attachment; filename="rowan.mhpersona"` {
+		t.Fatalf("content disposition = %q", recorder.Header().Get("Content-Disposition"))
+	}
+	return source, profile, portrait, append([]byte(nil), recorder.Body.Bytes()...)
+}
+
+func importPersonaArchiveViaAPI(t *testing.T, server *Server, archive []byte) persona.Persona {
+	t.Helper()
+	request := withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/personas/import",
+		bytes.NewReader(archive),
+	))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("import: status %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var imported personasResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &imported); err != nil {
+		t.Fatalf("decode import response: %v", err)
+	}
+	if imported.Persona == nil {
+		t.Fatalf("imported persona = %#v", imported.Persona)
+	}
+	return *imported.Persona
+}
+
+func requireImportedPersonaArchive(
+	t *testing.T,
+	server *Server,
+	source persona.Persona,
+	profile chat.PromptSet,
+	portrait []byte,
+	imported persona.Persona,
+) {
+	t.Helper()
+	if imported.ID == source.ID {
+		t.Fatal("import reused the source persona ID")
+	}
+	if imported.PromptSetID == profile.ID {
+		t.Fatal("import reused the source custom behavior-profile ID")
+	}
+	resolved, found, err := server.personalization.prompts.Resolve(imported.PromptSetID)
+	if err != nil || !found || resolved.Name != profile.Name || resolved.System != profile.System {
+		t.Fatalf("imported behavior profile = %#v, found %v, err %v", resolved, found, err)
+	}
+	lore, err := server.personas.ListLore(t.Context(), imported.ID)
+	if err != nil || len(lore) != 1 || lore[0].Text != "Blue velvet is familiar." {
+		t.Fatalf("imported lore = %#v, err %v", lore, err)
+	}
+	file, err := server.personas.OpenPortrait(t.Context(), imported.ID)
+	if err != nil {
+		t.Fatalf("open imported portrait: %v", err)
+	}
+	importedPortrait, err := io.ReadAll(file)
+	_ = file.Close()
+	if err != nil || !bytes.Equal(importedPortrait, portrait) {
+		t.Fatalf("imported portrait mismatch: err %v", err)
+	}
+}
+
+func TestPersonaImportRejectsInvalidAndOversizedArchives(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+
+	for label, body := range map[string][]byte{
+		"invalid":   []byte("not a persona archive"),
+		"oversized": bytes.Repeat([]byte("x"), persona.MaxArchiveBytes+1),
+	} {
+		request := withController(httptest.NewRequest(
+			http.MethodPost,
+			"/api/personas/import",
+			bytes.NewReader(body),
+		))
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+		want := http.StatusBadRequest
+		if label == "oversized" {
+			want = http.StatusRequestEntityTooLarge
+		}
+		if recorder.Code != want {
+			t.Fatalf("%s: status %d, want %d body %s", label, recorder.Code, want, recorder.Body.String())
+		}
 	}
 }
 
@@ -532,6 +682,7 @@ func TestPersonaWritesRequireTheController(t *testing.T) {
 		path   string
 	}{
 		{http.MethodPost, "/api/personas"},
+		{http.MethodPost, "/api/personas/import"},
 		{http.MethodPatch, "/api/personas/" + created.ID},
 		{http.MethodDelete, "/api/personas/" + created.ID},
 		{http.MethodPost, "/api/personas/" + created.ID + "/duplicate"},

@@ -1,7 +1,8 @@
+import { useRef } from "react";
 import { t } from "../i18n";
 import { api } from "../api/client";
 import type { DefaultPersona, Persona } from "../api/types";
-import { PlusIcon } from "../shell/icons";
+import { PlusIcon, UploadIcon } from "../shell/icons";
 import { VOICE_CHIP_LABELS, personaOptionLabel } from "./persona-labels";
 
 // monogram takes the first Unicode code point rather than the first UTF-16 code
@@ -94,6 +95,7 @@ export function PersonaGrid({
   locked,
   onOpen,
   onCreate,
+  onImport,
 }: {
   personas: Persona[];
   defaultPersona: DefaultPersona;
@@ -101,25 +103,49 @@ export function PersonaGrid({
   locked: boolean;
   onOpen: (item: Persona) => void;
   onCreate: () => void;
+  onImport: (file: File) => void;
 }) {
+  const importInput = useRef<HTMLInputElement>(null);
   const activePersonaExists = personas.some((item) => item.id === activeID);
   const count = personas.length + 1;
 
   return (
     <>
       <div className="persona-grid">
-        {/* First in DOM order, not just visually first: keyboard users reach the
-            create control before the cards, and a screen reader announces it as a
-            button among cards rather than as another persona. */}
-        <button
-          type="button"
-          className="persona-card persona-card-new"
-          onClick={onCreate}
-          disabled={locked}
-        >
-          <span className="icon" aria-hidden="true"><PlusIcon size={20} /></span>
-          <span>{t("New persona")}</span>
-        </button>
+        {/* First in DOM order, not just visually first: keyboard users reach New
+            then Import before the cards. The shared footprint keeps the empty
+            library from changing shape after its first import. */}
+        <div className="persona-card persona-card-actions">
+          <button
+            type="button"
+            className="persona-card-action"
+            onClick={onCreate}
+            disabled={locked}
+          >
+            <span className="icon" aria-hidden="true"><PlusIcon size={20} /></span>
+            <span>{t("New persona")}</span>
+          </button>
+          <button
+            type="button"
+            className="persona-card-action"
+            onClick={() => importInput.current?.click()}
+            disabled={locked}
+          >
+            <span className="icon" aria-hidden="true"><UploadIcon size={20} /></span>
+            <span>{t("Import persona")}</span>
+          </button>
+          <input
+            ref={importInput}
+            type="file"
+            className="visually-hidden"
+            accept=".mhpersona,application/vnd.magichandy.persona+zip,application/zip"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onImport(file);
+              event.target.value = "";
+            }}
+          />
+        </div>
         <DefaultPersonaTile item={defaultPersona} active={!activeID || !activePersonaExists} />
         {personas.map((item) => (
           <PersonaTile key={item.id} item={item} active={item.id === activeID} onOpen={onOpen} />
