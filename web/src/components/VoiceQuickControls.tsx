@@ -35,6 +35,7 @@ export function VoiceQuickControls() {
 
   return (
     <>
+      <div className="divider" />
       <label className="toggle-line voice-quick-toggle">
         <span className="toggle"><input type="checkbox" checked={enabled} disabled={!backendOnline || readOnly || saving} onChange={(event) => void change(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
         <span>{t("Speak replies")}</span>

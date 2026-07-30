@@ -1,0 +1,129 @@
+.autopilot-control {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.autopilot-control-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.autopilot-control[data-active="true"] .autopilot-control-dot {
+  background: var(--success);
+}
+
+.autopilot-control-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.autopilot-control-copy strong {
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.autopilot-control-copy span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autopilot-control-copy .autopilot-clock-status {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.autopilot-control-action {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.autopilot-control-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 8px;
+}
+
+.autopilot-preferences {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 7px;
+  margin: 4px 0 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.autopilot-preferences > label {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.autopilot-preferences select {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
+.autopilot-advanced {
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.autopilot-advanced summary {
+  padding: 8px 0 2px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.autopilot-advanced[open] {
+  display: grid;
+  gap: 8px;
+}
+
+.autopilot-authority {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.autopilot-advanced .toggle-line {
+  padding-top: 4px;
+  font-size: 0.78rem;
+}
+
+.autopilot-window {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) 50px auto 50px auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.autopilot-window input[type="number"] {
+  min-width: 0;
+  padding: 6px;
+  text-align: center;
+}

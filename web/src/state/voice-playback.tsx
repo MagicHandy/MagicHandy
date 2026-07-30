@@ -105,6 +105,14 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
           }
           const playbackToken = audioPlaybackToken();
           await playBlob(result.audio, playbackToken);
+          // Inference completion is not audible completion. Autopilot uses
+          // this acknowledgement to start its next independent speech interval.
+          try {
+            await api.voiceRequestPlayed(entry.id);
+          } catch {
+            // A bounded backend fallback prevents a dropped acknowledgement
+            // from freezing autonomous speech; playback itself already worked.
+          }
         } catch (error) {
           if (!isAbort(error) && !disposed.current) {
             const reason = normalizePlaybackReason(error instanceof Error ? translateKnown(error.message) : t("unknown playback error"));

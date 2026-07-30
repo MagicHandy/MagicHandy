@@ -166,7 +166,6 @@ export function ChatRoute() {
         <aside className="chat-sidebar" aria-label={t("Motion controls")}>
           <h2 className="section-title">{t("Controls")}</h2>
           <AutopilotControl />
-          <div className="divider" />
           <VoiceQuickControls />
           <div className="divider" />
           <h2 className="section-title">{t("Motion style")}</h2>

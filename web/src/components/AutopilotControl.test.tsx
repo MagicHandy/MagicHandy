@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { AutopilotControl } from "./AutopilotControl";
@@ -7,7 +7,15 @@ const app = vi.hoisted(() => ({
   backendOnline: true,
   readOnly: false,
   state: { modes: {}, settings: {} } as {
-    modes: { mode?: string; segment_index?: number; decision_source?: string };
+    modes: {
+      mode?: string;
+      segment_index?: number;
+      decision_source?: string;
+      motion_change_in_ms?: number;
+      speech_in_ms?: number;
+      motion_planned?: boolean;
+      speech_waiting_playback?: boolean;
+    };
     settings: Record<string, unknown>;
   },
   motion: { engine: { running: true, paused: false, target: { source: "autopilot" } } } as {
@@ -23,6 +31,7 @@ vi.mock("../api/client", () => ({
     stopMode: vi.fn(),
     pauseMotion: vi.fn(),
     resumeMotion: vi.fn(),
+    saveAutopilotPreferences: vi.fn(),
   },
 }));
 
@@ -35,6 +44,19 @@ const startMode = vi.mocked(api.startMode);
 const stopMode = vi.mocked(api.stopMode);
 const pauseMotion = vi.mocked(api.pauseMotion);
 const resumeMotion = vi.mocked(api.resumeMotion);
+const saveAutopilotPreferences = vi.mocked(api.saveAutopilotPreferences);
+
+const autopilotPreferences = {
+  speech_cadence: "natural",
+  speech_min_seconds: 35,
+  speech_max_seconds: 120,
+  motion_cadence: "natural",
+  motion_min_seconds: 20,
+  motion_max_seconds: 60,
+  adaptive_speech_timing: true,
+  adaptive_motion_timing: true,
+  speech_motion_authority: "chat_only",
+};
 
 describe("AutopilotControl", () => {
   beforeEach(() => {
@@ -48,6 +70,7 @@ describe("AutopilotControl", () => {
     stopMode.mockReset();
     pauseMotion.mockReset();
     resumeMotion.mockReset();
+    saveAutopilotPreferences.mockReset();
   });
 
   it("starts Autopilot from the Chat surface", async () => {
@@ -116,5 +139,30 @@ describe("AutopilotControl", () => {
 
     expect(screen.getByRole("button", { name: "Pause Autopilot" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Resume Autopilot" })).not.toBeInTheDocument();
+  });
+
+  it("renders independent clocks and persists cadence choices", async () => {
+    app.state = {
+      modes: {
+        mode: "autopilot",
+        segment_index: 2,
+        decision_source: "model",
+        motion_change_in_ms: 31_000,
+        speech_in_ms: 91_000,
+      },
+      settings: { autopilot: autopilotPreferences },
+    };
+    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
+    render(<AutopilotControl />);
+
+    expect(screen.getByText("Motion 31 s · Speech 1m 31s")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Motion changes"), { target: { value: "dynamic" } });
+    });
+
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith({
+      ...autopilotPreferences,
+      motion_cadence: "dynamic",
+    });
   });
 });

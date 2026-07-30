@@ -488,6 +488,9 @@ func (s *Server) updateSettingsAndRuntime(
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
 	s.applyVoiceSettingsTransition(next)
+	if s.modes != nil && previous.Autopilot != next.Autopilot {
+		s.modes.NotifyAutopilotSettingsChanged()
+	}
 	var runtimeErr error
 	if s.media != nil && !slices.Equal(previous.Media.LibraryPaths, next.Media.LibraryPaths) {
 		if _, err := s.media.RetainLocations(ctx, next.Media.LibraryPaths); err != nil {

@@ -10,6 +10,7 @@ vi.mock("../api/client", () => ({
   api: {
     voiceRequest: vi.fn(),
     voiceRequestAudio: vi.fn(),
+    voiceRequestPlayed: vi.fn(),
   },
 }));
 
@@ -26,6 +27,7 @@ vi.mock("./app-state", () => ({
 
 const voiceRequest = vi.mocked(api.voiceRequest);
 const voiceRequestAudio = vi.mocked(api.voiceRequestAudio);
+const voiceRequestPlayed = vi.mocked(api.voiceRequestPlayed);
 const playAudio = vi.mocked(playBlob);
 
 function QueueButton({ id = "tts-1" }: { id?: string }) {
@@ -50,8 +52,10 @@ describe("VoicePlaybackProvider", () => {
     show.mockReset();
     voiceRequest.mockReset();
     voiceRequestAudio.mockReset();
+    voiceRequestPlayed.mockReset();
     playAudio.mockReset();
     voiceRequestAudio.mockResolvedValue(new Blob(["wav"], { type: "audio/wav" }));
+    voiceRequestPlayed.mockResolvedValue({ acknowledged: true });
     playAudio.mockResolvedValue(undefined);
   });
 
@@ -81,6 +85,7 @@ describe("VoicePlaybackProvider", () => {
 
     expect(voiceRequestAudio).toHaveBeenCalledWith("tts-1", expect.any(AbortSignal));
     expect(playAudio).toHaveBeenCalledOnce();
+    expect(voiceRequestPlayed).toHaveBeenCalledWith("tts-1");
     expect(show).not.toHaveBeenCalled();
   });
 

@@ -88,8 +88,11 @@ first.
 - **Live-input behavior per dispatch owner** — one instrumented capture each,
   which the authoring-by-demonstration work depends on
   ([motion pathway review](motion-pathway-review-2026-07-20.md#open-question-live-input-over-hsp-unmeasured)).
-- **Autopilot cadence and autonomy level** — the STGPT-RV autospeak shape,
-  still unexposed (`llm-control-surface.md` ideas E/F).
+- **Autopilot arrangements and session authority** - independent cadence and
+  speech-motion authority are specified in
+  [autopilot-cadence.md](autopilot-cadence.md); freeform arrangements and
+  model-triggered session entry/exit remain open (`llm-control-surface.md`
+  ideas E/F).
 - **Live motion log and in-chat feedback buttons** — both are "strong
   candidate" in the ideas catalog and both are small.
 

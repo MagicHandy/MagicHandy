@@ -2,9 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -27,8 +28,6 @@ func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	var mu sync.Mutex
-	var says []string
 	manager, err := modes.NewManager(modes.Options{
 		Ensure: func(context.Context) (modes.Engine, error) {
 			engine, admission, err := server.motionEngineForStart()
@@ -58,20 +57,10 @@ func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
 				patternID = "stroke"
 				intensity = 35
 			}
-			say := ""
-			if input.SegmentIndex == 0 {
-				say = "Starting a steady pulse."
-			}
 			result := chat.Result{Response: chat.AssistantResponse{
-				Reply:  say,
 				Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: patternID, Intensity: intPtr(intensity)},
 			}}
 			return server.mapAutopilotResult(result, input)
-		},
-		Announce: func(_ context.Context, say string) {
-			mu.Lock()
-			says = append(says, say)
-			mu.Unlock()
 		},
 	})
 	if err != nil {
@@ -98,13 +87,6 @@ func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
 	}
 	if status.DecisionSource != "model" {
 		t.Fatalf("decision source = %q, want model", status.DecisionSource)
-	}
-
-	mu.Lock()
-	announced := append([]string(nil), says...)
-	mu.Unlock()
-	if len(announced) == 0 || announced[0] != "Starting a steady pulse." {
-		t.Fatalf("announced lines = %v, want the first check-in line", announced)
 	}
 
 	// The curated decisions must ride the shared engine as retargets, never
@@ -153,7 +135,7 @@ func TestAutopilotFallsBackWithoutConfiguredLLM(t *testing.T) {
 
 func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"I remember.","motion":{"action":"none"}}`,
+		`{"motion":{"action":"none"},"next":"normal"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -175,8 +157,8 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("autopilotDecide: %v", err)
 	}
-	if !decision.Hold || decision.Say != "I remember." {
-		t.Fatalf("decision = %+v, want conversational hold", decision)
+	if !decision.Hold || decision.Say != "" || decision.Next != modes.TimingNormal {
+		t.Fatalf("decision = %+v, want silent motion hold", decision)
 	}
 
 	provider.mu.Lock()
@@ -190,7 +172,7 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 		contextText.WriteString(message.Content)
 		contextText.WriteByte('\n')
 	}
-	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot check-in", "pattern \"stroke\" at 30% speed in area \"base\""} {
+	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot motion decision", "pattern \"stroke\" at 30% speed in area \"base\""} {
 		if !strings.Contains(contextText.String(), want) {
 			t.Fatalf("provider context missing %q:\n%s", want, contextText.String())
 		}
@@ -199,7 +181,7 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 
 func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"Changing pace.","motion":{"action":"target","pattern_id":"stroke","intensity":45}}`,
+		`{"motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -217,12 +199,34 @@ func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	}
 }
 
+func TestAutopilotSpeechUsesIndependentChatOnlyContractByDefault(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Still here with you.","motion":{"action":"target","speed_percent":45},"next":"later"}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+
+	decision, err := server.autopilotDecideSpeech(t.Context(), modes.DecisionInput{
+		Style:            config.MotionStyleBalanced,
+		SpeedMinPercent:  20,
+		SpeedMaxPercent:  80,
+		CurrentPatternID: motion.PatternStroke,
+		CurrentSpeed:     30,
+	})
+	if err != nil {
+		t.Fatalf("autopilotDecideSpeech: %v", err)
+	}
+	if !decision.Hold || decision.Say != "Still here with you." || decision.Next != modes.TimingLater {
+		t.Fatalf("chat-only speech decision = %+v", decision)
+	}
+}
+
 func TestAutopilotAnnouncementIsDiscoverableByChatPlayback(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 	startSpeakingTTS(t, server, true)
 
-	server.autopilotAnnounce(t.Context(), "Shown and spoken autonomously.")
+	announcement := server.autopilotAnnounce(t.Context(), "Shown and spoken autonomously.")
 	messages, _, _ := getChatMessages(t, server, "")
 	if len(messages) != 1 || messages[0].Content != "Shown and spoken autonomously." {
 		t.Fatalf("autopilot message missing from chat: %+v", messages)
@@ -231,9 +235,63 @@ func TestAutopilotAnnouncementIsDiscoverableByChatPlayback(t *testing.T) {
 	if requestID == "" {
 		t.Fatal("autopilot message has no speech request ID for browser playback")
 	}
+	if !announcement.Published || !announcement.AwaitPlayback || announcement.RequestID != requestID {
+		t.Fatalf("announcement = %+v, request = %q", announcement, requestID)
+	}
 	pending, ok := server.voice.Request(requestID)
 	if !ok || pending.Text() != messages[0].Content {
 		t.Fatalf("speech request %q does not match displayed message", requestID)
+	}
+	waitForVoiceRequestDone(t, server, requestID)
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(
+		http.MethodPost,
+		"/api/voice/requests/"+requestID+"/played",
+		nil,
+	))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"acknowledged":false`) {
+		t.Fatalf("playback acknowledgement = %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAutopilotPreferencesEndpointPersistsValidatedSettings(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	preferences := config.DefaultAutopilotSettings()
+	preferences.MotionCadence = config.AutopilotMotionSteady
+	preferences.SpeechCadence = config.AutopilotSpeechQuiet
+	preferences.SpeechMotionAuthority = config.AutopilotSpeechMotionStyle
+	body, err := json.Marshal(preferences)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	request := withController(httptest.NewRequest(
+		http.MethodPut,
+		"/api/modes/autopilot/preferences",
+		strings.NewReader(string(body)),
+	))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	saved, _ := server.store.Snapshot()
+	if saved.Autopilot != preferences {
+		t.Fatalf("saved preferences = %+v", saved.Autopilot)
+	}
+
+	preferences.MotionMinSeconds = 7
+	body, _ = json.Marshal(preferences)
+	request = withController(httptest.NewRequest(
+		http.MethodPut,
+		"/api/modes/autopilot/preferences",
+		strings.NewReader(string(body)),
+	))
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("invalid status = %d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -419,14 +477,14 @@ func TestAutopilotDecisionMessageFramesTheContract(t *testing.T) {
 		AreaFocusEnabled: true,
 	})
 	for _, want := range []string{
-		"Autopilot check-in 3",
+		"Autopilot motion decision 3",
 		"balanced",
 		"20-80%",
 		"stroke, pulse",
-		"previous line",
 		"Current motion: pattern \"stroke\" at 30% speed in area \"base\"",
 		"current named area focus is temporary",
-		"Never use action \"stop\"",
+		"Never use action \"start\" or \"stop\"",
+		"Set next to soon, normal, or later",
 	} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("decision message missing %q:\n%s", want, message)
