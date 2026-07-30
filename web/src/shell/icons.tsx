@@ -146,6 +146,13 @@ export const RefreshIcon = ({ size = 18, className }: P) => (
     <path d="M5.5 14a7 7 0 0 0 12 3l2.5-4" />
   </svg>
 );
+export const TakeControlIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M10 17l5-5-5-5" />
+    <path d="M15 12H3" />
+    <path d="M15 4h5v16h-5" />
+  </svg>
+);
 export const WirelessIcon = ({ size = 18, className }: P) => (
   <svg {...base(size, className)}>
     <path d="M5 9.5a10 10 0 0 1 14 0" />

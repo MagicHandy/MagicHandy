@@ -434,7 +434,8 @@ Implement:
   switch-while-running path
 - single-active-controller enforcement: one client owns command routes; other
   clients get read-only state plus Stop (design in `docs/ui-design.md`,
-  "Connection And Single-Controller"); stale-controller takeover is explicit
+  "Connection And Single-Controller"); explicit takeover is stop-first,
+  temporarily locks both clients, and reports unconfirmed physical Stop
 - motion state pushed over SSE (reuse the cloud/bluetooth event pattern) with
   the polling loop kept as fallback; the visualizer shows an explicit stale
   state when the stream drops

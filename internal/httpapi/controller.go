@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -12,13 +13,19 @@ const (
 	controllerLeaseTTL   = 15 * time.Second
 )
 
+var (
+	errControllerTakeoverInProgress = errors.New("another controller takeover is already in progress")
+	errControllerTakeoverNotPending = errors.New("controller takeover is no longer pending")
+)
+
 type controllerRuntime struct {
-	mu             sync.Mutex
-	clock          func() time.Time
-	leaseTTL       time.Duration
-	activeClientID string
-	activeSince    time.Time
-	lastSeenAt     time.Time
+	mu               sync.Mutex
+	clock            func() time.Time
+	leaseTTL         time.Duration
+	activeClientID   string
+	activeSince      time.Time
+	lastSeenAt       time.Time
+	takeoverClientID string
 }
 
 type controllerSnapshot struct {
@@ -29,6 +36,15 @@ type controllerSnapshot struct {
 	ActiveClientID        string `json:"active_client_id,omitempty"`
 	ActiveClientAgeMillis int64  `json:"active_client_age_ms,omitempty"`
 	LeaseExpiresInMillis  int64  `json:"lease_expires_in_ms,omitempty"`
+	TakeoverInProgress    bool   `json:"takeover_in_progress,omitempty"`
+}
+
+type controllerTakeoverResponse struct {
+	Controller    controllerSnapshot `json:"controller"`
+	Changed       bool               `json:"changed"`
+	StopConfirmed bool               `json:"stop_confirmed"`
+	StopSequence  uint64             `json:"stop_sequence"`
+	Warning       string             `json:"warning,omitempty"`
 }
 
 func newControllerRuntime() controllerRuntime {
@@ -40,6 +56,66 @@ func newControllerRuntime() controllerRuntime {
 
 func (s *Server) handleControllerState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.controllerState(r))
+}
+
+func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request) {
+	if s.quiescing.Load() {
+		writeError(w, http.StatusServiceUnavailable, errServerQuiescing)
+		return
+	}
+	clientID := cleanControllerClientID(r.Header.Get(controllerHeaderName))
+	if clientID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("controller takeover requires a client id header"))
+		return
+	}
+
+	controller, started, err := s.controller.BeginTakeover(clientID)
+	if err != nil {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":      err.Error(),
+			"controller": controller,
+		})
+		return
+	}
+	if !started {
+		writeJSON(w, http.StatusOK, controllerTakeoverResponse{
+			Controller:    controller,
+			Changed:       false,
+			StopConfirmed: true,
+			StopSequence:  s.stopSequence.Load(),
+		})
+		return
+	}
+
+	completed := false
+	defer func() {
+		if !completed {
+			s.controller.CancelTakeover(clientID)
+		}
+	}()
+
+	_, stopErr := s.emergencyStop(r.Context(), "controller_takeover")
+	controller, err = s.controller.CompleteTakeover(clientID)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	completed = true
+
+	response := controllerTakeoverResponse{
+		Controller:    controller,
+		Changed:       true,
+		StopConfirmed: stopErr == nil,
+		StopSequence:  s.stopSequence.Load(),
+	}
+	if stopErr != nil {
+		response.Warning = "Control transferred after local Stop, but physical Stop could not be confirmed: " +
+			s.safeMotionErrorMessage(stopErr)
+	}
+	s.logger.Info("controller ownership transferred",
+		"stop_confirmed", response.StopConfirmed,
+	)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) controllerState(r *http.Request) controllerSnapshot {
@@ -107,6 +183,9 @@ func (c *controllerRuntime) Touch(clientID string) controllerSnapshot {
 	if clientID == "" {
 		return c.snapshotLocked(clientID, "missing controller client id", now)
 	}
+	if c.takeoverClientID != "" {
+		return c.snapshotLocked(clientID, "controller handoff is stopping active work", now)
+	}
 	if c.activeClientID == "" {
 		c.activeClientID = clientID
 		c.activeSince = now
@@ -118,6 +197,59 @@ func (c *controllerRuntime) Touch(clientID string) controllerSnapshot {
 		return c.snapshotLocked(clientID, "", now)
 	}
 	return c.snapshotLocked(clientID, "another browser tab is the active controller", now)
+}
+
+func (c *controllerRuntime) BeginTakeover(clientID string) (controllerSnapshot, bool, error) {
+	clientID = cleanControllerClientID(clientID)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := c.nowLocked()
+	c.expireLocked(now)
+	if clientID == "" {
+		return c.snapshotLocked(clientID, "missing controller client id", now), false, errors.New("controller takeover requires a client id")
+	}
+	if c.takeoverClientID != "" {
+		return c.snapshotLocked(clientID, "controller handoff is stopping active work", now), false, errControllerTakeoverInProgress
+	}
+	if c.activeClientID == clientID {
+		c.lastSeenAt = now
+		return c.snapshotLocked(clientID, "", now), false, nil
+	}
+
+	c.takeoverClientID = clientID
+	return c.snapshotLocked(clientID, "controller handoff is stopping active work", now), true, nil
+}
+
+func (c *controllerRuntime) CompleteTakeover(clientID string) (controllerSnapshot, error) {
+	clientID = cleanControllerClientID(clientID)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := c.nowLocked()
+	if clientID == "" || c.takeoverClientID != clientID {
+		return c.snapshotLocked(clientID, "controller takeover is no longer pending", now), errControllerTakeoverNotPending
+	}
+	c.activeClientID = clientID
+	c.activeSince = now
+	c.lastSeenAt = now
+	c.takeoverClientID = ""
+	return c.snapshotLocked(clientID, "", now), nil
+}
+
+func (c *controllerRuntime) CancelTakeover(clientID string) {
+	clientID = cleanControllerClientID(clientID)
+	if clientID == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.takeoverClientID == clientID {
+		c.takeoverClientID = ""
+	}
 }
 
 func (c *controllerRuntime) Release(clientID string) {
@@ -136,8 +268,11 @@ func (c *controllerRuntime) Release(clientID string) {
 }
 
 func (c *controllerRuntime) snapshotLocked(clientID string, reason string, now time.Time) controllerSnapshot {
-	active := clientID != "" && c.activeClientID == clientID
+	active := clientID != "" && c.activeClientID == clientID && c.takeoverClientID == ""
 	readOnly := !active
+	if c.takeoverClientID != "" {
+		reason = "controller handoff is stopping active work"
+	}
 	if reason == "" && readOnly {
 		reason = "another browser tab is the active controller"
 	}
@@ -160,6 +295,7 @@ func (c *controllerRuntime) snapshotLocked(clientID string, reason string, now t
 		ActiveClientID:        c.activeClientID,
 		ActiveClientAgeMillis: age,
 		LeaseExpiresInMillis:  expires,
+		TakeoverInProgress:    c.takeoverClientID != "",
 	}
 }
 

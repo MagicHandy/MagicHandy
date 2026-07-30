@@ -5,15 +5,33 @@ independent tabs racing hardware commands.
 
 ## Controller Lease
 
-- Browser clients identify themselves with `X-MagicHandy-Client-ID` on
-  mutating requests. EventSource clients use `client_id` in the query string
-  because browser `EventSource` cannot send custom headers.
+- Browser clients identify themselves with a tab-scoped
+  `X-MagicHandy-Client-ID` on mutating requests. The ID persists through a
+  reload in `sessionStorage`, while a new or duplicated top-level navigation
+  mints a fresh ID even if the browser copied session state. Controller
+  identity must never use shared `localStorage`, which would silently grant
+  every same-profile tab the same lease. EventSource clients use `client_id` in
+  the query string because browser `EventSource` cannot send custom headers.
 - `GET /api/state`, `GET /api/controller`, and `GET /api/motion/events` claim or
   refresh the lease for the first client that appears. These read paths may use
   the query-string client ID; mutating paths never do.
 - The active lease expires after 15 seconds without a refresh.
 - A second client receives `controller.read_only=true` in state responses. It may
   watch state and use Stop, but mutating device paths return HTTP 409.
+- A read-only client can explicitly request control with
+  `POST /api/controller/takeover`. The request requires
+  `X-MagicHandy-Client-ID`; a query-string ID cannot authorize a handoff.
+- Takeover is stop-first. The server temporarily marks every client read-only,
+  runs the same global Emergency Stop path used by the shell control, and only
+  then assigns the lease to the requesting client. This cancels motion,
+  Autopilot, video synchronization, chat work, speech playback, and queued voice
+  work before ownership changes.
+- A takeover by the current owner is idempotent. A second takeover request while
+  a handoff is pending returns HTTP 409 instead of racing it.
+- A failed physical Stop does not leave ownership ambiguous: local work is still
+  invalidated and the requesting client receives the lease with an explicit
+  warning that physical Stop was not confirmed. The response includes the Stop
+  sequence so browser clients discard work from before the handoff.
 - Stop remains available to any client because safety takes priority over
   controller ownership.
 - Every Stop activation attempts the configured transport, including idle and
