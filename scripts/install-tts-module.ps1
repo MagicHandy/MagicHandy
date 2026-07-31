@@ -505,7 +505,9 @@ $modelCache = Join-Path $InstallRoot 'model-cache\hub'
 Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache
 
 $healthPath = '/health'
-if ($Module -eq 'chatterbox') {
+if ($Module -eq 'faster-qwen3-tts') {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'tts\faster-qwen-server.py') -Destination (Join-Path $InstallRoot 'magichandy-faster-qwen-server.py') -Force
+} else {
     Write-ChatterboxConfiguration -Root $InstallRoot -Source $sourceRoot -ServerPort $Port -RuntimeDevice $Device -VoiceName $Voice -SourceWav $ReferenceWav
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'tts\chatterbox-server.py') -Destination (Join-Path $InstallRoot 'magichandy-chatterbox-server.py') -Force
     $healthPath = '/api/model-info'

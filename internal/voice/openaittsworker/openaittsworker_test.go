@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -129,13 +130,18 @@ func (d *workerDriver) terminal(t *testing.T) (protocol.Response, []byte) {
 
 func loadWorker(t *testing.T, serverURL string) *workerDriver {
 	t.Helper()
-	driver := startWorker(t, Options{
+	return loadWorkerWithOptions(t, Options{
 		BaseURL:        serverURL,
 		APIKey:         testAPIKey,
 		Model:          "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
 		Voice:          "default",
 		ResponseFormat: "wav",
 	})
+}
+
+func loadWorkerWithOptions(t *testing.T, options Options) *workerDriver {
+	t.Helper()
+	driver := startWorker(t, options)
 	driver.send(t, protocol.Request{
 		Type:            protocol.RequestHello,
 		ID:              "hello",
@@ -205,6 +211,16 @@ func TestHealthReadyFieldRejectsInvalidPath(t *testing.T) {
 	}
 }
 
+func TestRandomizedSeedRequiresSeedContract(t *testing.T) {
+	options := normalizeOptions(Options{
+		BaseURL:       "http://127.0.0.1:8991",
+		RandomizeSeed: true,
+	})
+	if err := validateOptions(options); err == nil || !strings.Contains(err.Error(), "requires a configured seed") {
+		t.Fatalf("validation error = %v", err)
+	}
+}
+
 func TestOpenAICompatibleSpeechRequestAndStreamingWAVRepair(t *testing.T) {
 	var requestBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -246,11 +262,69 @@ func TestOpenAICompatibleSpeechRequestAndStreamingWAVRepair(t *testing.T) {
 		requestBody["response_format"] != "wav" {
 		t.Fatalf("OpenAI-compatible request = %#v", requestBody)
 	}
+	if _, seeded := requestBody["seed"]; seeded {
+		t.Fatalf("generic OpenAI-compatible request unexpectedly included seed: %#v", requestBody)
+	}
 	if got, want := binary.LittleEndian.Uint32(audio[4:8]), uint32(40); got != want {
 		t.Fatalf("RIFF length = %d, want %d", got, want)
 	}
 	if got, want := binary.LittleEndian.Uint32(audio[40:44]), uint32(4); got != want {
 		t.Fatalf("data length = %d, want %d", got, want)
+	}
+}
+
+func TestSpeechRequestSeedIsProviderScopedAndCanVary(t *testing.T) {
+	var mu sync.Mutex
+	var seeds []uint32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		var requestBody struct {
+			Seed *uint32 `json:"seed"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		if requestBody.Seed == nil {
+			t.Error("seed was omitted")
+		} else {
+			mu.Lock()
+			seeds = append(seeds, *requestBody.Seed)
+			mu.Unlock()
+		}
+		w.Header().Set("Content-Type", "audio/wav")
+		_, _ = w.Write(streamingTestWAV())
+	}))
+	t.Cleanup(server.Close)
+
+	fixedSeed := uint32(1337)
+	fixed := loadWorkerWithOptions(t, Options{
+		BaseURL: server.URL, ResponseFormat: "wav", Seed: &fixedSeed,
+	})
+	fixed.send(t, protocol.Request{Type: protocol.RequestSpeak, ID: "fixed", Text: "Repeat this."})
+	if terminal, _ := fixed.terminal(t); terminal.Type != protocol.ResponseDone {
+		t.Fatalf("fixed seed response = %+v", terminal)
+	}
+
+	varied := loadWorkerWithOptions(t, Options{
+		BaseURL: server.URL, ResponseFormat: "wav", Seed: &fixedSeed, RandomizeSeed: true,
+	})
+	for index := 0; index < 3; index++ {
+		varied.send(t, protocol.Request{Type: protocol.RequestSpeak, ID: "varied-" + strconv.Itoa(index), Text: "Vary this."})
+		if terminal, _ := varied.terminal(t); terminal.Type != protocol.ResponseDone {
+			t.Fatalf("varied seed response %d = %+v", index, terminal)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seeds) != 4 || seeds[0] != fixedSeed {
+		t.Fatalf("request seeds = %v", seeds)
+	}
+	if seeds[1] == seeds[2] && seeds[2] == seeds[3] {
+		t.Fatalf("varied requests reused one seed: %v", seeds[1:])
 	}
 }
 

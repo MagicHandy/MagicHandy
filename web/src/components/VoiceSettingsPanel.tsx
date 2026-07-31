@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
+import { RefreshIcon } from "../shell/icons";
 import { HostPathField } from "./HostPathField";
 import { VoiceRequestQueue } from "./VoiceRequestQueue";
 import { VoiceWorkers } from "./VoiceWorkers";
@@ -103,6 +104,8 @@ export function VoiceSettingsPanel({
         tts_health_path: "/health",
         tts_response_format: "wav",
         tts_device: "cuda",
+        tts_seed: 1337,
+        tts_seed_mode: "fixed",
       });
       return;
     }
@@ -178,6 +181,7 @@ export function VoiceSettingsPanel({
             <p className="form-status">{t("Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.")}</p>
             <HostPathField label={t("Reference WAV")} kind="wav" value={voice.tts_reference_wav ?? ""} disabled={locked} onChange={(tts_reference_wav) => patch({ tts_reference_wav })} />
             <label className="field"><span className="label">{t("Exact reference transcript")}</span><textarea rows={3} value={voice.tts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ tts_reference_text: event.target.value })} /></label>
+            <p className="form-status">{t("Use clean single-speaker audio, ideally 3 to 10 seconds, with an exact transcript.")}</p>
             <label className="field"><span className="label">{t("Language")}</span><input type="text" value={voice.tts_language ?? "Auto"} disabled={locked} onChange={(event) => patch({ tts_language: event.target.value })} /></label>
           </>}
           {voice.tts_provider === "chatterbox_tts" && <>
@@ -205,6 +209,11 @@ export function VoiceSettingsPanel({
         </>}
 
         {voice.tts_provider !== "none" && voice.tts_provider !== "custom" && <details className="advanced-fields"><summary>{t("Advanced")}</summary>
+          {voice.tts_provider === "faster_qwen3_tts" && <>
+            <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={(voice.tts_seed_mode ?? "fixed") === "fixed"} disabled={locked} onChange={(event) => patch({ tts_seed_mode: event.target.checked ? "fixed" : "varied" })} /><span className="track" aria-hidden="true" /></span><span>{t("Repeatable voice generation")}</span></label>
+            <p className="form-status">{(voice.tts_seed_mode ?? "fixed") === "fixed" ? t("Fixed mode reuses one seed for more consistent output.") : t("Varied mode uses a new seed for every request and can produce unusually long or degraded speech.")}</p>
+            {(voice.tts_seed_mode ?? "fixed") === "fixed" && <div className="field"><span className="label">{t("Generation seed")}</span><div className="field-action-row"><input aria-label={t("Generation seed")} type="number" min={0} max={4294967295} step={1} value={voice.tts_seed ?? 1337} disabled={locked} onChange={(event) => { const seed = Number(event.target.value); if (Number.isSafeInteger(seed) && seed >= 0 && seed <= 4294967295) patch({ tts_seed: seed }); }} /><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => { const values = new Uint32Array(1); globalThis.crypto.getRandomValues(values); patch({ tts_seed: values[0], tts_seed_mode: "fixed" }); }}><RefreshIcon size={16} />{t("New seed")}</button></div></div>}
+          </>}
           {(managedTTS || voice.tts_provider === "openai_compatible") && <>
             <label className="field"><span className="label">{t("Response format")}</span><select value={voice.tts_response_format ?? "wav"} disabled={locked} onChange={(event) => patch({ tts_response_format: event.target.value })}>{responseFormats.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</select></label>
             <label className="field"><span className="label">{t("Health path")}</span><input type="text" value={voice.tts_health_path ?? "/health"} disabled={locked} onChange={(event) => patch({ tts_health_path: event.target.value })} /></label>

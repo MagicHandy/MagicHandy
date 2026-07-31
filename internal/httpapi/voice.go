@@ -106,6 +106,12 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 	if settings.TTSProvider == config.VoiceTTSProviderChatterbox {
 		worker.Args = append(worker.Args, "-health-ready-field", "loaded")
 	}
+	if settings.TTSProvider == config.VoiceTTSProviderFasterQwen {
+		worker.Args = append(worker.Args, "-seed", strconv.FormatUint(uint64(settings.TTSSeed), 10))
+		if settings.TTSSeedMode == config.TTSSeedModeVaried {
+			worker.Args = append(worker.Args, "-randomize-seed")
+		}
+	}
 	if settings.TTSProvider == config.VoiceTTSProviderOpenAICompat || !settings.TTSAutoLaunch {
 		return worker
 	}
@@ -157,6 +163,7 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
 		server := filepath.Join(source, "examples", "openai_server.py")
+		launcher := filepath.Join(root, "magichandy-faster-qwen-server.py")
 		if !fasterQwenReferenceConfigured(settings) {
 			return managedTTSLaunch{}, false
 		}
@@ -172,6 +179,7 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 			command:   python,
 			directory: source,
 			args: []string{
+				launcher,
 				server,
 				"--model", modelPath,
 				"--ref-audio", settings.TTSReferenceWAV,
@@ -211,7 +219,8 @@ func managedTTSRuntimeInstalled(settings config.VoiceSettings, dataDir string) b
 	source := filepath.Join(root, "source")
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
-		if !isRegularFile(filepath.Join(source, "examples", "openai_server.py")) {
+		if !isRegularFile(filepath.Join(source, "examples", "openai_server.py")) ||
+			!isRegularFile(filepath.Join(root, "magichandy-faster-qwen-server.py")) {
 			return false
 		}
 		_, err := fasterQwenModelPath(settings, dataDir)

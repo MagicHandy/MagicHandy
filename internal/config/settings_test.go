@@ -823,6 +823,9 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 		defaults.Voice.InputSilenceMillis != DefaultVoiceInputSilenceMillis || !defaults.Voice.InputNoiseSuppress {
 		t.Fatalf("voice input defaults = %+v", defaults.Voice)
 	}
+	if defaults.Voice.TTSSeed != DefaultFasterQwenSeed || defaults.Voice.TTSSeedMode != TTSSeedModeFixed {
+		t.Fatalf("TTS seed defaults = %d %q", defaults.Voice.TTSSeed, defaults.Voice.TTSSeedMode)
+	}
 
 	settings := defaults
 	settings.Voice = VoiceSettings{
@@ -851,6 +854,9 @@ func TestVoiceSettingsRejectInvalidTTSOptions(t *testing.T) {
 		{name: "unknown device", change: func(voice *VoiceSettings) {
 			voice.TTSDevice = "directml"
 		}, want: "TTS device"},
+		{name: "unknown seed mode", change: func(voice *VoiceSettings) {
+			voice.TTSSeedMode = "sometimes"
+		}, want: "TTS seed mode"},
 		{name: "Faster Qwen CPU", change: func(voice *VoiceSettings) {
 			voice.TTSProvider = VoiceTTSProviderFasterQwen
 			voice.TTSDevice = TTSDeviceCPU
@@ -881,6 +887,24 @@ func TestVoiceSettingsRejectInvalidTTSOptions(t *testing.T) {
 				t.Fatalf("NormalizeSettings error = %v, want containing %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestVoiceUpdatePreservesAndReplacesTTSSeed(t *testing.T) {
+	current := DefaultSettings().Voice
+	current.TTSSeed = 91
+	current.TTSSeedMode = TTSSeedModeVaried
+
+	preserved := applyVoiceUpdate(current, VoiceUpdate{})
+	if preserved.TTSSeed != 91 || preserved.TTSSeedMode != TTSSeedModeVaried {
+		t.Fatalf("omitted seed update = %d %q", preserved.TTSSeed, preserved.TTSSeedMode)
+	}
+
+	seed := uint32(0)
+	mode := TTSSeedModeFixed
+	replaced := applyVoiceUpdate(current, VoiceUpdate{TTSSeed: &seed, TTSSeedMode: &mode})
+	if replaced.TTSSeed != 0 || replaced.TTSSeedMode != TTSSeedModeFixed {
+		t.Fatalf("explicit seed update = %d %q", replaced.TTSSeed, replaced.TTSSeedMode)
 	}
 }
 

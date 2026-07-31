@@ -81,6 +81,10 @@ func applyMissingTTSDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	if settings.TTSDevice == "" {
 		settings.TTSDevice = defaults.TTSDevice
 	}
+	if settings.TTSSeedMode == "" {
+		settings.TTSSeedMode = defaults.TTSSeedMode
+		settings.TTSSeed = defaults.TTSSeed
+	}
 	return settings
 }
 
@@ -119,6 +123,7 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.TTSReferenceText = strings.TrimSpace(settings.TTSReferenceText)
 	settings.TTSLanguage = strings.TrimSpace(settings.TTSLanguage)
 	settings.TTSDevice = strings.ToLower(strings.TrimSpace(settings.TTSDevice))
+	settings.TTSSeedMode = strings.ToLower(strings.TrimSpace(settings.TTSSeedMode))
 	settings.ParakeetServerPath = strings.TrimSpace(settings.ParakeetServerPath)
 	settings.ParakeetModelPath = strings.TrimSpace(settings.ParakeetModelPath)
 	settings.ParakeetSource = strings.TrimSpace(settings.ParakeetSource)
@@ -182,6 +187,9 @@ func validateTTSSettings(settings VoiceSettings) error {
 	}
 	if !oneOf(settings.TTSDevice, TTSDeviceAuto, TTSDeviceCUDA, TTSDeviceCPU) {
 		return fmt.Errorf("unknown TTS device %q", settings.TTSDevice)
+	}
+	if !oneOf(settings.TTSSeedMode, TTSSeedModeFixed, TTSSeedModeVaried) {
+		return fmt.Errorf("unknown TTS seed mode %q", settings.TTSSeedMode)
 	}
 	if settings.TTSProvider == VoiceTTSProviderFasterQwen &&
 		!oneOf(settings.TTSDevice, TTSDeviceAuto, TTSDeviceCUDA) {

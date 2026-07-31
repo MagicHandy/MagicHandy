@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-31, OpenAI-compatible local TTS modules
+## Snapshot — 2026-07-31, Faster Qwen output stability
 
 ### Goal 1: Maintainability
 
@@ -31,9 +31,9 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,327 lines, `internal/config/settings_test.go` 1,425, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 961, `internal/httpapi/voice_test.go` 977, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Voice normalization/defaulting/validation is isolated in a 249-line config file, and the OpenAI-compatible adapter has its own package. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,134 lines, `web/src/App.test.tsx` 1,439, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,443, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Provider-specific TTS fields replace the retired reference-code dialog without another UI tree; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
-| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | Removing the coupled NeuTTS toolchain reduced `scripts/installer/InstallerSupport.psm1` to 2,075 physical lines. It remains outside the Go/web architecture size test and is a manually reviewed guideline exception. Optional Python/PyTorch speech setup now lives in dedicated install/update scripts rather than extending the core installer decision tree. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,353 lines, `internal/config/settings_test.go` 1,453, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,095, `internal/httpapi/voice_test.go` 1,071, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Voice normalization/defaulting/validation is isolated in a focused config file, and the OpenAI-compatible adapter has its own package. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,138 lines, `web/src/App.test.tsx` 1,440, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,443, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Provider-specific TTS fields replace the retired reference-code dialog without another UI tree; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
+| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,319 physical lines and remains outside the Go/web architecture size test as a manually reviewed guideline exception. Optional Python/PyTorch speech setup lives in dedicated install/update scripts; the shared module only validates, invokes, and refreshes their small app-owned launchers. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phase 18 M1-M2 reuse one bounded exact-name funscript document for the canvas and one shared-engine finite media target, keep host paths out of the API, and leave real-device timing claims to the explicit M3 acceptance gate. |
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,936,064 bytes plain and 16,403,968 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,945,792 bytes plain and 16,410,112 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Unmeasured** | The prior 679 / 282 / 287 ms sample used a now-retired managed NeuTTS configuration. Scripted TTS servers are optional child processes and are not part of core readiness, but schema-v2 startup still needs a fresh server-side measurement in Phase 16. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -131,6 +131,27 @@ Ranked by threat to the stated goals:
    acceptance remain R17 evidence; Chatterbox CPU is the documented fallback.
 
 ## History
+
+- **2026-07-31** - Stabilized managed Faster Qwen output after a real 2 MiB
+  retained-audio rejection and highly variable speech. The core now retains up
+  to 8 MiB per playable clip and nine clips (72 MiB worst case), while the
+  managed server defaults to fixed seed `1337`, performs one short hidden
+  streaming warm-up, and applies a text-proportional generation ceiling.
+  Fixed-seed first and second visible requests produced identical 334,124-byte
+  WAVs after a 12.3-second cold model start. Before the ceiling, a four-word
+  varied-seed request ran to 6,858,284 bytes (about 143 seconds); two equivalent
+  final varied requests completed in 1.07/1.24 seconds as 103,724/134,444-byte
+  WAVs (2.16/2.80 seconds). The reported reference is valid 48 kHz mono PCM but
+  lasts 19.702 seconds with 6.668 seconds of detected silence across 15 gaps;
+  the GUI and docs now recommend a clean exact-transcript 3-to-10-second
+  excerpt. Go vet, changed-package tests, Python compilation, all 352 frontend
+  tests, localization/typecheck/build, and pure-Go app/worker builds pass. The
+  full local Go run passes outside four sandbox-blocked Ollama symlink tests;
+  local race remains unavailable without `gcc`, and CI is authoritative for
+  both. Plain/stripped binaries are 22,945,792 / 16,410,112 bytes (+9,728 /
+  +6,144). English startup is 722,734 / 192,425 raw/gzip (+2,266 / +385); all
+  HTML/CSS/JS and complete output are 1,083,326 / 314,668 and 1,527,562 /
+  752,095 (+4,996 / +559 and +4,996 / +589).
 
 - **2026-07-31** - Made Faster Qwen reference setup GUI-owned. The command-line
   installer no longer prompts for or rejects an empty reference WAV/transcript,

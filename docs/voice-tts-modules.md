@@ -54,6 +54,12 @@ tokenizer files, and passes that local snapshot directory to the server. The
 server remains in Hugging Face and Transformers offline modes after installation;
 startup never depends on a network metadata request. A legacy cache without a
 revision ref is accepted only when it contains exactly one complete snapshot.
+MagicHandy's small launcher wrapper is copied beside the module and refreshed
+by ordinary app updates without touching the Python environment or model cache.
+It extends only the managed Faster Qwen endpoint with an unsigned generation
+seed and performs one short discarded streaming warm-up before reporting ready.
+The warm-up prevents one-time model initialization from changing the first
+user-visible fixed-seed clip; the pinned upstream model remains unchanged.
 
 Retries also reuse a source checkout and managed environment left by a failure
 before `module-state.json` was written. The installer records only its known
@@ -97,13 +103,28 @@ it did not launch.
 ## Reference Audio
 
 Faster Qwen3-TTS needs a local reference WAV plus its exact transcript for
-zero-shot cloning. Use clean single-speaker speech without music or effects.
+zero-shot cloning. Use clean single-speaker speech without music or effects,
+ideally 3 to 10 seconds and close to the model's advertised short-reference
+use case. A longer WAV is accepted, but extra pauses, delivery changes, or room
+conditions can make cloning less consistent; test a short clean excerpt before
+attributing variation to the seed.
 The command-line installer does not ask for either value. After installation,
 open Settings > Voice, choose the WAV, enter its exact transcript, and save.
 MagicHandy reports the runtime as installed but keeps the worker unconfigured
 until both values are present. The app stores the path and transcript in its
 settings database, not in installer state; conditioning is cached by the
 resident server.
+
+Managed Faster Qwen defaults to **Fixed** seed mode with seed `1337`, matching
+the pinned project's examples. The same text, reference, and settings therefore
+reuse the same sampling seed. **New seed** chooses and saves another unsigned
+32-bit seed; **Varied** mode chooses a new seed for every request. Seed control
+can help isolate stochastic delivery or quality changes, but it cannot repair a
+noisy, mismatched, or overly long reference. Generic OpenAI-compatible servers
+do not receive MagicHandy's nonstandard `seed` field. Varied seeds can fail to
+emit an end token and produce unusually long or degraded speech, so the managed
+wrapper also applies a generous text-proportional 12-to-160-second generation
+ceiling. Fixed mode remains the recommended default.
 
 Chatterbox accepts a local reference WAV as a named voice. The installer copies
 that source into the module's voice directory and stores the resulting voice
@@ -129,10 +150,17 @@ MagicHandy sends:
 }
 ```
 
+The managed Faster Qwen wrapper also accepts `"seed": 1337`. The Go adapter
+adds it only for that provider.
+
 `model` and `voice` may be omitted when the server does not require them. The
 worker accepts WAV, MP3, Opus, AAC, or FLAC responses. WAV is preferred
 because it avoids optional browser codec differences. A streamed WAV with
 unknown RIFF lengths is repaired after the bounded response is complete.
+The worker bounds one HTTP response at 32 MiB. The core retains at most 8 MiB
+per playable clip (about 2 minutes 55 seconds of 24 kHz mono 16-bit WAV) and at
+most nine clips, for a 72 MiB worst-case retained-audio ceiling. Larger output
+fails explicitly instead of growing process memory without bound.
 The scripted Faster Qwen server is limited to WAV, and the scripted
 Chatterbox server is limited to WAV, MP3, or Opus. Settings enforces those
 provider-specific format lists.
