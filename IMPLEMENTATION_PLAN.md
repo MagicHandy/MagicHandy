@@ -1117,7 +1117,10 @@ Status: **implemented; release listening and performance acceptance open**.
   configuration, and later updates preserve the GUI-owned values. Windows
   model downloads serialize Hugging Face cache finalization, retry transient
   failures, and retain completed files so standard accounts can resume without
-  symlink privileges. Retries before module state is committed reuse the
+  symlink privileges. Managed Faster Qwen startup resolves the installed cache
+  revision to a verified local snapshot before launching under Hugging Face and
+  Transformers offline modes, avoiding network metadata calls after install.
+  Retries before module state is committed reuse the
   managed checkout, environment, installed packages, and model cache while
   preserving the checkout integrity gate for real source or unknown-file
   changes. Main-installer calls execute the TTS module scripts in a child
