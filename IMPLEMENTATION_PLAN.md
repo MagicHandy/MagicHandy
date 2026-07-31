@@ -1117,7 +1117,10 @@ Status: **implemented; release listening and performance acceptance open**.
   configuration, and later updates preserve the GUI-owned values. Windows
   model downloads serialize Hugging Face cache finalization, retry transient
   failures, and retain completed files so standard accounts can resume without
-  symlink privileges.
+  symlink privileges. Retries before module state is committed reuse the
+  managed checkout, environment, installed packages, and model cache while
+  preserving the checkout integrity gate for real source or unknown-file
+  changes.
 - Release evidence must record cold/warm time to playable audio, listening
   quality across representative references, cancellation/recovery, browser
   playback in Firefox and Chromium, clean child teardown, and VRAM coexistence

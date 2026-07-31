@@ -88,10 +88,12 @@ try {
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Exact reference transcript'")) -Message 'TTS install must leave Faster Qwen transcription to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains('[string]$ReferenceTranscript')) -Message 'TTS install must not expose a Faster Qwen transcript parameter'
     Assert-True -Condition (-not $ttsInstallerSource.Contains('requires a reference WAV and its exact transcript')) -Message 'empty Faster Qwen references must not fail installation'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains('Import-Module $supportPath -Force')) -Message 'nested TTS install must not invalidate its parent installer module'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('--max-workers', '1')")) -Message 'Windows TTS model downloads must serialize Hugging Face cache finalization'
     Assert-True -Condition ($ttsInstallerSource.Contains("'HF_HUB_DISABLE_SYMLINKS_WARNING'")) -Message 'Windows TTS installs should replace the Hugging Face symlink warning with installer-owned handling'
     Assert-True -Condition ($ttsInstallerSource.Contains('for ($attempt = 1; $attempt -le 3; $attempt++)')) -Message 'TTS model downloads should retry the resumable cache'
     Assert-True -Condition ($ttsInstallerSource.Contains('Downloaded files were kept; rerun the installer to resume.')) -Message 'TTS model failure should explain that completed downloads are retained'
+    Assert-True -Condition ($ttsInstallerSource.Contains("@('faster_qwen3_tts.egg-info')")) -Message 'partial Faster Qwen installs should recognize installer-generated package metadata'
     $mainInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'install.ps1'))
     Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceWav')) -Message 'main installer must not expose a reference WAV choice'
     Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceTranscript')) -Message 'main installer must not expose a reference transcript choice'
@@ -99,6 +101,7 @@ try {
     Assert-True -Condition (-not $coreCommandSource.Contains('"tts-reference-text"')) -Message 'the internal install command must leave Faster Qwen transcript changes to the GUI'
     $ttsUpdaterSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\update-tts-module.ps1'))
     Assert-True -Condition (-not $ttsUpdaterSource.Contains('ReferenceTranscript =')) -Message 'TTS updates must not restore stale command-line reference text'
+    Assert-True -Condition (-not $ttsUpdaterSource.Contains('Import-Module $supportPath -Force')) -Message 'nested TTS update must not invalidate its parent installer module'
     $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
@@ -237,9 +240,56 @@ try {
     [System.IO.File]::WriteAllText((Join-Path $qwenRoot 'module-state.json'), ($moduleState | ConvertTo-Json))
     $checkOnly = & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($checkOnly -match 'Module state verified') -Message 'main installer should validate legacy module state without restoring its reference fields'
+    $parentModuleSurvived = & $supportModule {
+        param([string]$Updater, [string]$InstallRoot)
+        & $Updater -InstallRoot $InstallRoot -CheckOnly -Yes | Out-Null
+        if (-not $?) {
+            return $false
+        }
+        return $null -ne (Get-Command Write-MagicHandyLauncher -CommandType Function -ErrorAction SilentlyContinue)
+    } $ttsUpdater $qwenRoot
+    Assert-True -Condition ([bool]$parentModuleSurvived) -Message 'nested TTS validation should preserve parent installer private helpers'
     Assert-Throws -Action {
         & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Device cuda -Yes
     } -Pattern 'CheckOnly cannot be combined' -Message 'TTS check-only override rejection'
+
+    Write-Host 'Checking partial TTS source recovery...'
+    $gitForTTS = Resolve-MagicHandyExecutable -Name 'git'
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($gitForTTS)) -Message 'Git should be available for partial TTS source recovery tests'
+    $partialSource = Join-Path $tempRoot 'partial-tts-source'
+    New-Item -ItemType Directory -Force -Path $partialSource | Out-Null
+    & $gitForTTS -C $partialSource init --quiet
+    Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'partial TTS fixture repository initialization'
+    & $gitForTTS -C $partialSource config user.email 'installer-test@magichandy.local'
+    & $gitForTTS -C $partialSource config user.name 'MagicHandy Installer Test'
+    [System.IO.File]::WriteAllText((Join-Path $partialSource 'pyproject.toml'), "[project]`nname = `"fixture`"`nversion = `"0.0.0`"`n")
+    & $gitForTTS -C $partialSource add pyproject.toml
+    & $gitForTTS -C $partialSource commit --quiet -m 'fixture'
+    Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'partial TTS fixture repository commit'
+
+    $generatedMetadata = Join-Path $partialSource 'faster_qwen3_tts.egg-info'
+    New-Item -ItemType Directory -Force -Path $generatedMetadata | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $generatedMetadata 'PKG-INFO'), 'installer generated')
+    [System.IO.File]::WriteAllText((Join-Path $partialSource 'user-notes.txt'), 'preserve me')
+    [System.IO.File]::AppendAllText((Join-Path $partialSource 'pyproject.toml'), '# preserve this edit')
+    Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @('faster_qwen3_tts.egg-info')
+    Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @('faster_qwen3_tts.egg-info')
+    Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @()
+
+    $partialStatus = @(& $gitForTTS -C $partialSource status --porcelain --untracked-files=all)
+    Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'partial TTS fixture status'
+    $partialStatusText = $partialStatus -join "`n"
+    Assert-True -Condition ($partialStatusText -notmatch 'egg-info') -Message 'known installer metadata should not block a partial TTS retry'
+    Assert-True -Condition ($partialStatusText -match '\?\? user-notes\.txt') -Message 'unknown untracked files should continue to block managed source replacement'
+    Assert-True -Condition ($partialStatusText -match ' M pyproject\.toml') -Message 'tracked source edits should continue to block managed source replacement'
+
+    $excludePath = Join-Path $partialSource '.git\info\exclude'
+    $excludeLines = @([System.IO.File]::ReadAllLines($excludePath))
+    $exclusionCount = @($excludeLines | Where-Object { $_ -eq '/faster_qwen3_tts.egg-info/' }).Count
+    Assert-Equal -Expected 1 -Actual $exclusionCount -Message 'installer metadata exclusion should be idempotent'
+    Assert-Throws -Action {
+        Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @('..\outside')
+    } -Pattern 'simple relative path' -Message 'path traversal in installer metadata exclusion'
 
     Write-Host 'Checking installer-state round trip and data hygiene...'
     $statePath = Join-Path $tempRoot 'install-state.json'

@@ -134,6 +134,14 @@ privileges. A failed model transfer is retried against the same resumable cache
 and completed files are retained; rerunning the installer continues that cache
 instead of starting the multi-gigabyte download over.
 
+The module install is restartable before `module-state.json` exists. A retry
+reuses the managed source checkout, Python environment, installed packages,
+and model cache. Package metadata created by the install itself is registered
+in that checkout's private `.git/info/exclude`; tracked source edits and any
+other untracked files still stop the update instead of being overwritten. The
+module scripts also reuse the parent installer's loaded support module so a
+successful retry can continue through launcher creation and saved-state commit.
+
 Faster Qwen reference setup is deliberately not part of the command-line
 installer. Installation completes with the runtime and model present, then
 Settings > Voice accepts the reference WAV and its exact transcript. Until

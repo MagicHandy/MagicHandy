@@ -41,7 +41,7 @@ $ErrorActionPreference = 'Stop'
 
 $repository = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $supportPath = Join-Path $PSScriptRoot 'installer\InstallerSupport.psm1'
-Import-Module $supportPath -Force
+Import-Module $supportPath -DisableNameChecking -ErrorAction Stop
 
 $fasterSource = 'https://github.com/andimarafioti/faster-qwen3-tts.git'
 $fasterRevision = 'a70afc0f81f7f5f8801c3227968f1102f43f211c'
@@ -269,20 +269,22 @@ function Sync-PinnedSource {
         [Parameter(Mandatory = $true)][string]$Git,
         [Parameter(Mandatory = $true)][string]$URL,
         [Parameter(Mandatory = $true)][string]$Revision,
-        [Parameter(Mandatory = $true)][string]$Destination
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [string[]]$InstallerGeneratedPaths = @()
     )
     if (Test-Path -LiteralPath $Destination) {
         if (-not (Test-Path -LiteralPath (Join-Path $Destination '.git') -PathType Container)) {
             throw "The module source path exists but is not a Git checkout: '$Destination'."
         }
-        $dirty = @(& $Git -C $Destination status --porcelain)
-        if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
-            throw "The managed module source has local changes. Preserve or remove '$Destination' before updating."
-        }
     } else {
         $parent = Split-Path -Parent $Destination
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
         Invoke-Checked -Executable $Git -Arguments @('clone', '--filter=blob:none', '--no-checkout', $URL, $Destination) -Description 'Source clone'
+    }
+    Add-MagicHandyGitInfoExclusions -RepositoryPath $Destination -RelativePaths $InstallerGeneratedPaths
+    $dirty = @(& $Git -C $Destination status --porcelain)
+    if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
+        throw "The managed module source has local changes. Preserve or remove '$Destination' before updating."
     }
     Invoke-Checked -Executable $Git -Arguments @('-C', $Destination, 'fetch', '--depth', '1', 'origin', $Revision) -Description 'Pinned source fetch'
     Invoke-Checked -Executable $Git -Arguments @('-C', $Destination, 'checkout', '--detach', '--force', 'FETCH_HEAD') -Description 'Pinned source checkout'
@@ -461,7 +463,17 @@ Confirm-TTSAction 'Proceed with the optional TTS module download and installatio
 $git = Ensure-MagicHandyGit -AssumeYes:$Yes
 $uv = Ensure-Uv
 $sourceRoot = Join-Path $InstallRoot 'source'
-Sync-PinnedSource -Git $git -URL $sourceURL -Revision $sourceRevision -Destination $sourceRoot
+$installerGeneratedPaths = if ($Module -eq 'faster-qwen3-tts') {
+    @('faster_qwen3_tts.egg-info')
+} else {
+    @()
+}
+Sync-PinnedSource `
+    -Git $git `
+    -URL $sourceURL `
+    -Revision $sourceRevision `
+    -Destination $sourceRoot `
+    -InstallerGeneratedPaths $installerGeneratedPaths
 
 $pythonVersion = if ($Module -eq 'chatterbox') { '3.10' } else { '3.11' }
 $pythonEnvironment = Initialize-TTSPythonEnvironment -Uv $uv -Root $InstallRoot -PythonVersion $pythonVersion
