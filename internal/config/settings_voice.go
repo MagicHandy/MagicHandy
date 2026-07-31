@@ -168,15 +168,8 @@ func validateTTSSettings(settings VoiceSettings) error {
 			return err
 		}
 	}
-	if len(settings.ElevenLabsVoiceID) > 256 || len(settings.ElevenLabsModelID) > 256 ||
-		len(settings.TTSModel) > 512 || len(settings.TTSVoice) > 512 || len(settings.ASRModel) > 256 {
-		return errors.New("voice and model identifiers exceed their maximum length")
-	}
-	if len(settings.TTSReferenceText) > 8<<10 {
-		return errors.New("TTS reference transcript must not exceed 8 KiB")
-	}
-	if settings.TTSServerPort < 1 || settings.TTSServerPort > 65535 {
-		return errors.New("TTS server port must be between 1 and 65535")
+	if err := validateTTSFieldBounds(settings); err != nil {
+		return err
 	}
 	if err := validateTTSResponseFormat(settings.TTSProvider, settings.TTSResponseFormat); err != nil {
 		return err
@@ -197,6 +190,22 @@ func validateTTSSettings(settings VoiceSettings) error {
 	}
 	if err := validateChatterboxVoice(settings.TTSProvider, settings.TTSVoice); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateTTSFieldBounds covers the size and range limits, which are independent
+// of which provider is selected.
+func validateTTSFieldBounds(settings VoiceSettings) error {
+	if len(settings.ElevenLabsVoiceID) > 256 || len(settings.ElevenLabsModelID) > 256 ||
+		len(settings.TTSModel) > 512 || len(settings.TTSVoice) > 512 || len(settings.ASRModel) > 256 {
+		return errors.New("voice and model identifiers exceed their maximum length")
+	}
+	if len(settings.TTSReferenceText) > 8<<10 {
+		return errors.New("TTS reference transcript must not exceed 8 KiB")
+	}
+	if settings.TTSServerPort < 1 || settings.TTSServerPort > 65535 {
+		return errors.New("TTS server port must be between 1 and 65535")
 	}
 	return nil
 }

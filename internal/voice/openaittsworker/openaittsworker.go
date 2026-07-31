@@ -370,18 +370,11 @@ func (s *session) workLoop() {
 	}
 }
 
-func (s *session) speak(ctx context.Context, request protocol.Request) {
-	text := strings.TrimSpace(request.Text)
-	if text == "" {
-		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "speak text is empty", false)
-		return
-	}
-	if len(text) > maxSpeechBytes {
-		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
-			fmt.Sprintf("speak text exceeds %d KiB", maxSpeechBytes>>10), false)
-		return
-	}
-
+// speechRequestBody encodes the /v1/audio/speech payload. It reports failures
+// on the session itself and returns false when the caller should stop, so the
+// distinct error code and retryable flag for each failure stay with the check
+// that produces it.
+func (s *session) speechRequestBody(request protocol.Request, text string) ([]byte, bool) {
 	payload := map[string]any{
 		"input":           text,
 		"response_format": s.options.ResponseFormat,
@@ -402,7 +395,7 @@ func (s *session) speak(ctx context.Context, request protocol.Request) {
 			var randomBytes [4]byte
 			if _, err := rand.Read(randomBytes[:]); err != nil {
 				s.sendError(request.ID, protocol.ErrorCodeInternal, "generate random TTS seed", true)
-				return
+				return nil, false
 			}
 			seed = binary.LittleEndian.Uint32(randomBytes[:])
 		}
@@ -411,6 +404,25 @@ func (s *session) speak(ctx context.Context, request protocol.Request) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		s.sendError(request.ID, protocol.ErrorCodeInternal, "encode TTS request", false)
+		return nil, false
+	}
+	return body, true
+}
+
+func (s *session) speak(ctx context.Context, request protocol.Request) {
+	text := strings.TrimSpace(request.Text)
+	if text == "" {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "speak text is empty", false)
+		return
+	}
+	if len(text) > maxSpeechBytes {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
+			fmt.Sprintf("speak text exceeds %d KiB", maxSpeechBytes>>10), false)
+		return
+	}
+
+	body, ok := s.speechRequestBody(request, text)
+	if !ok {
 		return
 	}
 

@@ -798,7 +798,7 @@ func containsString(value string, fragment string) bool {
 	return strings.Contains(value, fragment)
 }
 
-func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
+func TestVoiceSettingsDefaultOff(t *testing.T) {
 	defaults := DefaultSettings()
 	if defaults.Voice.Enabled {
 		t.Fatal("voice must default to disabled")
@@ -826,8 +826,10 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if defaults.Voice.TTSSeed != DefaultFasterQwenSeed || defaults.Voice.TTSSeedMode != TTSSeedModeFixed {
 		t.Fatalf("TTS seed defaults = %d %q", defaults.Voice.TTSSeed, defaults.Voice.TTSSeedMode)
 	}
+}
 
-	settings := defaults
+func TestVoiceSettingsNormalizeTrimsWorkerFields(t *testing.T) {
+	settings := DefaultSettings()
 	settings.Voice = VoiceSettings{
 		Enabled:       true,
 		TTSWorkerPath: `  C:\workers\stub.exe  `,
