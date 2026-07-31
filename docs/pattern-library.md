@@ -62,6 +62,14 @@ Replacements are authored as a stroke velocity per travel, with the travel time
 derived as amplitude divided by that velocity, and reach the cycle floor by
 repeating their phrase rather than by stretching it. Cycle lengths run 6.7-12.4 s.
 
+`scripts/pattern-designer.js` is that generator and is the place to add or retune
+a built-in. It holds the turning positions and intended stroke velocity for each
+entry, derives the travel times, checks the envelope, and reports any pair of
+patterns too close in shape to be worth choosing between; `EMIT=1` prints
+pasteable Go specs. Every shipped `TravelMillis` list reproduces from it exactly.
+Its constants are a design aid and are deliberately tighter than the Go test,
+which is the gate.
+
 The prior screening rule asked for reach *variety* -- four amplitude bands, no
 repeated endpoint, no run of two near-equal amplitudes. Measurement does not
 support variety as the quality axis: the disabled patterns were the more varied
