@@ -652,18 +652,20 @@ Stop red or running green. Emergency Stop closes capture and invalidates queued
 transcription and speech playback before recognized text can enter Chat; stale
 request generations cannot dispatch motion afterward.
 
-NeuTTS reference generation is a focused modal rather than another permanent
-settings block. It lets the controller select a source WAV, enter the exact
-spoken transcript, generate codes locally without Python, preview the stored
-audio, and correct the transcript before applying managed paths. The UI must
-show generation as a bounded in-progress action and retain manual pre-encoded
-paths under Advanced. Active ASR and TTS work shares one labeled, boxed voice
-queue; provider sections show worker state but do not repeat request rows.
-NeuTTS sampling stays in that same collapsed Advanced section: a segmented
-**Consistent / Varied** choice, fixed-seed number field, and **New seed** command.
-Consistent seed 3 is the default. The control reports repeat-cache availability;
-Varied is never presented as a quality improvement because it can reintroduce
-measured pacing and intelligibility variance.
+Local TTS uses one provider dropdown: Faster Qwen3-TTS (managed),
+Chatterbox Turbo (managed), an external OpenAI-compatible endpoint, ElevenLabs,
+or a custom worker. Managed choices expose only their module root, model,
+reference inputs, supported device, loopback port, and explicit auto-launch
+toggle. Faster Qwen visibly requires NVIDIA/CUDA and never offers CPU;
+Chatterbox carries the CPU/broader-hardware path. The separate installer owns
+model download and reference-file setup, so Settings does not pretend it can
+generate model-specific voice codes.
+
+The external compatible provider shows URL, model, voice, and a write-only
+optional bearer key. Advanced contains format, health path, and worker-binary
+override. Module state is a backend-inspected readout rather than a client-side
+guess. Active ASR and TTS work shares one labeled, boxed voice queue; provider
+sections show worker state but do not repeat request rows.
 
 ### Not yet built — planned, not regressions
 

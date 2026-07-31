@@ -2,11 +2,9 @@
 
 ## Status
 
-Accepted and implemented. Updated 2026-07-15: managed ASR uses parakeet.cpp;
-NeuTTS Air uses the Slice 13.6 Go adapter around a first-party persistent runner
-built against pinned `neutts-rs` v0.1.1; a separate Rust/ONNX worker generates
-reference codes from WAV. CPU and CUDA/WGPU builds are explicit external-runtime
-choices and do not change the pure-Go core.
+Superseded for TTS by ADR 0012 on 2026-07-31. The Parakeet ASR and ElevenLabs
+decisions remain current. NeuTTS Air was implemented and measured, but its
+quality and reliability did not meet release acceptance.
 
 ## Context
 
@@ -126,16 +124,12 @@ Negative / risks:
 
 ## Implementation Note
 
-The NeuTTS Air spike, Slice 13.6 protocol adapter, persistent GPU runtime, and
-checksum-pinned Windows source installation are complete. A pinned
-DistillNeuCodec ONNX worker generates compatible reference codes from WAV
-without Python. The installer provisions eSpeak NG 1.52 and schema-5 manifests
-reject the older inaccurate phonemizer path. Enabled ASR and chat-speech roles autoload their configured
-workers on app startup; failures remain isolated and visible. Setup, measured
-latency, and manual pre-encoded fallback are documented in
-`docs/neutts-worker.md`. Network-denied evidence and subjective quality remain
-open; if they fail acceptance, use a documented non-Python fallback or an
-optional Python worker while keeping ElevenLabs as the premium path.
+The NeuTTS experiment was implemented and measured, then retired after
+subjective quality and reliability failed release acceptance. ADR 0012 records
+the replacement decision and current local TTS modules. Historical timing
+evidence remains in the scorecard and performance baseline; no NeuTTS runtime,
+reference encoder, installer path, or settings surface remains in the release
+implementation.
 
 The first Parakeet integration is documented in `docs/voice-parakeet.md`: a
 managed parakeet.cpp v0.4.0 process with explicit, checksum-verified installer
@@ -145,4 +139,5 @@ downloads. It is a worker-owned runner, not a CGo link or a new motion path.
 
 - ADR 0003: the worker boundary and delivery-ordering rules this builds on
 - `docs/voice-tts-survey.md`: the evidence base
-- `docs/risk-register.md`: R17 (NeuTTS Air cloning/codec spike)
+- ADR 0012: current OpenAI-compatible local TTS modules
+- `docs/risk-register.md`: R17 (local TTS quality and lifecycle)

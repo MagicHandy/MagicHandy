@@ -75,7 +75,8 @@ and completion text use the selected installer locale.
 - Use concise, work-focused UI language. Do not add promotional copy or explain
   the interface inside the interface.
 - Preserve established product and protocol names: MagicHandy, The Handy,
-  llama.cpp, Ollama, NeuTTS, Parakeet, Intiface, Bluetooth, GGUF, WAV, JSON,
+  llama.cpp, Ollama, Faster Qwen3-TTS, Chatterbox, Parakeet, Intiface,
+  Bluetooth, GGUF, WAV, JSON,
   HTTP, CUDA, CPU, WGPU, and ONNX.
 - Keep units and version identifiers exact. Localized prose may use locale
   decimal punctuation, but paths, flags, IDs, hashes, and code remain verbatim.

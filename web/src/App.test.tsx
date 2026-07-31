@@ -28,7 +28,7 @@ const baseState = {
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, apply_video_speed_limit: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
-    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, neutts_sampling_mode: "fixed", neutts_sampler_seed: 3, elevenlabs_key_set: false },
+    voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, tts_auto_launch: false, tts_base_url: "http://127.0.0.1:8991", tts_model: "Qwen/Qwen3-TTS-12Hz-0.6B-Base", tts_voice: "default", tts_response_format: "wav", tts_health_path: "/health", tts_module_root: "", tts_server_port: 8991, tts_reference_wav: "", tts_reference_text: "", tts_language: "Auto", tts_device: "auto", elevenlabs_key_set: false, openai_tts_key_set: false },
     chat: { startup_behavior: "previous", keep_unsaved_on_exit: false },
     diagnostics: { verbosity: "normal" },
     options: {
@@ -40,10 +40,10 @@ const baseState = {
       llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512, 1024],
       prompt_sets: ["default"],
-      tts_providers: ["none", "elevenlabs", "neutts_air", "custom"],
+      tts_providers: ["none", "elevenlabs", "faster_qwen3_tts", "chatterbox_tts", "openai_compatible", "custom"],
       asr_providers: ["none", "parakeet_managed", "openai_compatible", "custom"],
       parakeet_sources: ["app_managed", "custom_local"],
-      neutts_sampling_modes: ["fixed", "random"],
+      tts_devices: ["auto", "cuda", "cpu"],
       chat_startup_behaviors: ["previous", "new"],
       themes: ["steel-azure", "deep-violet"],
     },
@@ -967,13 +967,12 @@ describe("app shell safety invariants", () => {
         voice: {
           workers: {},
           modules: {
-            neutts: {
+            tts: {
               state: "incomplete",
               installed: false,
               worker_installed: true,
-              runtime_installed: true,
-              reference_encoder_installed: true,
-              message: "Generate a reference voice from a WAV and its exact transcript.",
+              runtime_installed: false,
+              message: "Faster Qwen3-TTS is incomplete. Rerun scripts/update-tts-module.ps1.",
             },
           },
         },
@@ -991,69 +990,41 @@ describe("app shell safety invariants", () => {
     expect(screen.getByLabelText(/voice id/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/reference transcript/i)).toBeNull();
 
-    fireEvent.change(providers[1], { target: { value: "neutts_air" } });
-    expect(screen.getByLabelText(/reference transcript/i)).toBeInTheDocument();
-    const generateReference = await screen.findByRole("button", { name: /generate reference voice/i });
-    await waitFor(() => expect(generateReference).toBeEnabled());
-    fireEvent.click(generateReference);
-    expect(screen.getByRole("dialog", { name: /create reference voice/i })).toBeInTheDocument();
-    expect(screen.getByText(/python is not used/i)).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: /source voice/i })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: /exact source transcript/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /close reference voice window/i }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /create reference voice/i })).toBeNull());
-    await waitFor(() => expect(generateReference).toHaveFocus());
+    fireEvent.change(providers[1], { target: { value: "faster_qwen3_tts" } });
+    expect(screen.getByRole("textbox", { name: /module folder/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /reference wav/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /exact reference transcript/i })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /launch this module/i })).not.toBeChecked();
+    expect(screen.getByRole("status", { name: /checking the faster qwen3-tts module/i })).toHaveTextContent(/incomplete/i);
+    expect(screen.getByLabelText(/^device$/i)).toHaveValue("cuda");
     expect(screen.queryByLabelText(/^api key/i)).toBeNull();
-    expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.change(providers[1], { target: { value: "chatterbox_tts" } });
+    expect(screen.getByLabelText(/voice name/i)).toHaveValue("Emily.wav");
+    fireEvent.click(screen.getByText("Advanced"));
+    const chatterboxFormats = screen.getByLabelText(/response format/i);
+    expect(within(chatterboxFormats).getByRole("option", { name: "OPUS" })).toBeInTheDocument();
+    expect(within(chatterboxFormats).queryByRole("option", { name: "FLAC" })).toBeNull();
+    expect(screen.getByLabelText(/health path/i)).toHaveValue("/api/model-info");
+
+    fireEvent.change(providers[1], { target: { value: "openai_compatible" } });
+    expect(screen.getByLabelText(/base url/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^api key/i)).toHaveAttribute("placeholder", "Optional bearer key");
+    expect(screen.queryByLabelText(/reference wav/i)).toBeNull();
   });
 
-  it("keeps NeuTTS deterministic by default and makes variation an advanced opt-in", async () => {
-    const state = {
-      ...baseState,
-      settings: {
-        ...baseState.settings,
-        voice: { ...baseState.settings.voice, tts_provider: "neutts_air" },
-      },
-    };
-    const fetch = installFetch({ state });
-    renderApp();
-    await screen.findByRole("button", { name: /emergency stop/i });
-    go("#/settings/voice");
-
-    fireEvent.click(await screen.findByText("Advanced"));
-    const variation = screen.getByRole("group", { name: /neutts speech variation/i });
-    expect(within(variation).getByRole("button", { name: "Consistent" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("spinbutton", { name: /fixed seed/i })).toHaveValue(3);
-
-    fireEvent.click(screen.getByRole("button", { name: /new seed/i }));
-    expect(screen.getByRole("spinbutton", { name: /fixed seed/i })).not.toHaveValue(3);
-    fireEvent.change(screen.getByRole("spinbutton", { name: /fixed seed/i }), { target: { value: "19" } });
-    fireEvent.click(within(variation).getByRole("button", { name: "Varied" }));
-    expect(within(variation).getByRole("button", { name: "Varied" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByRole("spinbutton", { name: /fixed seed/i })).toBeNull();
-    expect(screen.getByText(/repeat cache off/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
-    await waitFor(() => expect(fetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PUT")).toBe(true));
-    const [, request] = fetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PUT") ?? [];
-    const payload = JSON.parse(String((request as RequestInit).body));
-    expect(payload.voice.neutts_sampling_mode).toBe("random");
-    expect(payload.voice.neutts_sampler_seed).toBe(19);
-  });
-
-  it("uses the host path picker for the NeuTTS runner", async () => {
-    const fetch = installFetch({ pickedPath: "C:\\NeuTTS\\stream_pcm.exe" });
+  it("uses host path pickers for a managed TTS module and reference WAV", async () => {
+    const fetch = installFetch({ pickedPath: "C:\\Voice\\faster-qwen3-tts" });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
     const providers = await screen.findAllByRole("combobox", { name: /provider/i });
-    fireEvent.change(providers[1], { target: { value: "neutts_air" } });
+    fireEvent.change(providers[1], { target: { value: "faster_qwen3_tts" } });
 
-    fireEvent.click(screen.getByText("Advanced"));
-    fireEvent.click(screen.getByRole("button", { name: /browse for stream_pcm runner override/i }));
-    await waitFor(() => expect(screen.getByRole("textbox", { name: /stream_pcm runner override/i })).toHaveValue("C:\\NeuTTS\\stream_pcm.exe"));
+    fireEvent.click(screen.getByRole("button", { name: /browse for module folder/i }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: /module folder/i })).toHaveValue("C:\\Voice\\faster-qwen3-tts"));
     const pickerCall = fetch.mock.calls.find(([url]) => String(url).includes("/api/host/path-picker"));
-    expect(JSON.parse(String((pickerCall?.[1] as RequestInit).body))).toEqual({ kind: "executable", current: "" });
+    expect(JSON.parse(String((pickerCall?.[1] as RequestInit).body))).toEqual({ kind: "directory", current: "" });
   });
 
   it("hides the chat voice controls when voice is not configured", async () => {

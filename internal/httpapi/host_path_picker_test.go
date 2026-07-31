@@ -12,17 +12,17 @@ import (
 
 func TestHostPathPickerReturnsValidatedLocalSelection(t *testing.T) {
 	server := newTestServer(t)
-	selected := filepath.Join(t.TempDir(), "stream_pcm.exe")
+	selected := filepath.Join(t.TempDir(), "tts-server.exe")
 	if err := os.WriteFile(selected, []byte("runner"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	server.hostPathPicker = func(_ context.Context, spec hostPathPickerSpec, current string) (string, bool, error) {
-		if spec.Directory || !strings.Contains(spec.Filter, "*.exe") || current != `C:\existing\stream_pcm.exe` {
+		if spec.Directory || !strings.Contains(spec.Filter, "*.exe") || current != `C:\existing\tts-server.exe` {
 			t.Fatalf("picker input = %+v, %q", spec, current)
 		}
 		return selected, false, nil
 	}
-	request := withController(httptest.NewRequest(http.MethodPost, "/api/host/path-picker", strings.NewReader(`{"kind":"executable","current":"C:\\existing\\stream_pcm.exe"}`)))
+	request := withController(httptest.NewRequest(http.MethodPost, "/api/host/path-picker", strings.NewReader(`{"kind":"executable","current":"C:\\existing\\tts-server.exe"}`)))
 	prepareLocalPathPickerRequest(request)
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, request)

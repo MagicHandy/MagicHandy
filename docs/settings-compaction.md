@@ -5,7 +5,8 @@
 Implemented 2026-07-09 as Slice 13.5 in
 [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md). It changes the Settings
 **presentation and voice settings schema** without changing the worker
-protocol or safety rules in [ui-design.md](ui-design.md).
+protocol or safety rules in [ui-design.md](ui-design.md). The TTS provider
+rows were revised on 2026-07-31 by ADR 0012.
 
 ## Problem
 
@@ -50,7 +51,7 @@ Provider: [ None ▾ | Parakeet (managed, local) | OpenAI-compatible server | Cu
 <worker status row: dot+text, Start/Stop/Restart/Load/Test controls>
 
 ── Speech output (TTS) ─────────────────────────────
-Provider: [ None ▾ | ElevenLabs (cloud) | NeuTTS Air (local) | Custom worker ]
+Provider: [ None ▾ | ElevenLabs | Faster Qwen3-TTS | Chatterbox | OpenAI-compatible | Custom ]
 <provider-scoped fields>
 [x] Speak chat replies            (only rendered when a TTS provider is set)
 <worker status row>
@@ -77,7 +78,9 @@ of in a combined block at the bottom.
 | --- | --- |
 | None | none |
 | ElevenLabs (cloud) | API key (write-only, set-badge, clear toggle — existing secret handling unchanged) · voice ID (default Rachel) · model ID (default `eleven_multilingual_v2`) |
-| NeuTTS Air (local) | optional custom `stream_pcm` runner override (blank uses the installer-managed runtime) · **Generate reference voice** modal for source WAV, exact transcript, local encoding, and audio preview · manual pre-encoded code/WAV paths under Advanced |
+| Faster Qwen3-TTS (managed) | module root · model · reference WAV + exact transcript · language · CUDA device · loopback port · auto-launch |
+| Chatterbox Turbo (managed) | module root · model · reference WAV · voice name · CPU/CUDA/auto device · loopback port · auto-launch |
+| OpenAI-compatible server | base URL · model · voice · optional write-only bearer key |
 | Custom worker | worker path · worker args (one per line) |
 
 "Custom worker" is the escape hatch that keeps the general ADR 0003 worker
@@ -94,7 +97,8 @@ args back into fields), and violate backend-authoritative state. Instead:
    (additive, settings version stays 1; absent fields default):
 
    ```
-   tts_provider:  none | elevenlabs | neutts_air | custom
+   tts_provider:  none | elevenlabs | faster_qwen3_tts | chatterbox_tts |
+                  openai_compatible | custom
    asr_provider:  none | parakeet_managed | openai_compatible | custom
    elevenlabs_voice_id, elevenlabs_model_id
    parakeet_source: app_managed | custom_local
@@ -110,7 +114,8 @@ args back into fields), and violate backend-authoritative state. Instead:
    where they are tested, next to the workers they launch. `enabled` +
    `provider: none` maps to a disabled worker exactly as today.
 3. **Worker binary resolution** removes path fields from the common case.
-   For the known providers (`elevenlabs`, `parakeet_managed`), the worker
+   For the known providers (`elevenlabs`, `parakeet_managed`, and the three
+   OpenAI-compatible TTS choices), the worker
    executable is resolved in order: explicit override (Advanced field) →
    alongside the `magichandy` executable → the data-dir tools folder the
    installer provisions. Phase 16 packaging ships the worker binaries next
@@ -121,12 +126,12 @@ args back into fields), and violate backend-authoritative state. Instead:
    runtime files. `app_managed` resolves the fixed installer-owned runner/model
    paths under the app data directory and reports complete/incomplete/missing
    module state. `custom_local` alone reads the saved server/model paths.
-   NeuTTS follows the same ownership rule: a blank runner override resolves the
-   fixed installer-owned runtime and Hugging Face cache under the app data
-   directory's `voice/neutts/active` tree, including the installer-owned
-   reference encoder; an explicit runner remains a custom runtime using its own
-   cache. ASR and TTS requests render in one labeled voice queue rather than in
-   duplicated provider sections.
+   Managed TTS follows the same ownership rule: a blank module-root field
+   resolves the provider's fixed installer-owned directory under app data;
+   auto-launch owns only the direct child it starts. External endpoints and
+   auto-launch-off servers are never stopped by MagicHandy. ASR and TTS
+   requests render in one labeled voice queue rather than in duplicated
+   provider sections.
 5. **Migration**: existing raw worker path/argument settings load as
    `provider: custom`; existing Parakeet server/model paths load as
    `parakeet_source: custom_local`. Values remain intact, so upgrades change

@@ -69,7 +69,7 @@ if the user changes nothing. Steps 0 and 8 are not choices, just framing.
    │   ├─ Managed Parakeet download        → size/license/SHA-256 shown
    │   └─ Custom/external path             → advanced disclosure
    ├─ Spoken replies (TTS)
-   │   ├─ NeuTTS (local cloning)           → prebuilt runner + verified assets;
+   │   ├─ Faster Qwen / Chatterbox cloning → optional isolated module install;
    │   │                                      needs reference WAV + transcript
    │   └─ ElevenLabs (cloud)               → write-only API key
    └─ Skip — decide later                  → DEFAULT (both toggles off)

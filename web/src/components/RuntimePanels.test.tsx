@@ -180,6 +180,38 @@ describe("runtime panels", () => {
     expect(screen.getByRole("combobox", { name: "Speech output provider" })).toBeInTheDocument();
     expect(await screen.findByRole("alert")).toHaveTextContent("voice endpoint unavailable");
   });
+
+  it("does not present unsupported CPU execution for Faster Qwen", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    settings.voice = {
+      ...settings.voice,
+      tts_provider: "faster_qwen3_tts",
+      tts_device: "cuda",
+      tts_model: "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    };
+    render(
+      <VoiceSettingsPanel
+        settings={settings}
+        locked={false}
+        dirty={false}
+        patch={vi.fn()}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.")).toBeInTheDocument();
+    const device = screen.getByRole("combobox", { name: "Device" });
+    expect(device).toHaveTextContent("NVIDIA CUDA");
+    expect(device).not.toHaveTextContent("CPU");
+    await userEvent.click(screen.getByText("Advanced"));
+    const responseFormat = screen.getByRole("combobox", { name: "Response format" });
+    expect(responseFormat).toHaveTextContent("WAV");
+    expect(responseFormat).not.toHaveTextContent("MP3");
+  });
 });
 
 function renderModelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn()) {
@@ -211,9 +243,9 @@ function voiceSettings(): PublicSettings {
     },
     options: {
       asr_providers: ["none", "parakeet_managed"],
-      tts_providers: ["none", "neutts_air"],
+      tts_providers: ["none", "faster_qwen3_tts", "chatterbox_tts", "openai_compatible"],
       parakeet_sources: ["app_managed"],
-      neutts_sampling_modes: ["fixed", "random"],
+      tts_devices: ["auto", "cuda", "cpu"],
     },
   } as unknown as PublicSettings;
 }

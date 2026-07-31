@@ -426,7 +426,7 @@ func TestOpenStoreImportsLegacySettingsFile(t *testing.T) {
 }
 
 func TestMissingFieldsAreDefaulted(t *testing.T) {
-	raw := []byte(`{"version":1,"server":{"port":49721}}`)
+	raw := []byte(`{"version":2,"server":{"port":49721}}`)
 
 	settings, migrated, err := loadSettingsFromBytes(raw)
 	if err != nil {
@@ -537,7 +537,7 @@ func TestNewChatStartupRejectsUnsavedDraftRetention(t *testing.T) {
 }
 
 func TestSettingsLoaderAcceptsUTF8BOM(t *testing.T) {
-	raw := append([]byte{0xEF, 0xBB, 0xBF}, []byte(`{"version":1,"server":{"port":49724}}`)...)
+	raw := append([]byte{0xEF, 0xBB, 0xBF}, []byte(`{"version":2,"server":{"port":49724}}`)...)
 
 	settings, migrated, err := loadSettingsFromBytes(raw)
 	if err != nil {
@@ -634,18 +634,18 @@ func TestIntifaceSettingsApplyUpdate(t *testing.T) {
 	}
 }
 
-func TestLegacyVersionOneSettingsDefaultIntifaceAddressWithoutVersionBump(t *testing.T) {
+func TestLegacyVersionOneSettingsDefaultIntifaceAddressDuringVoiceMigration(t *testing.T) {
 	raw := []byte(`{"version":1,"device":{"hsp_dispatch_owner":"cloud_rest","firmware_api_requirement":"firmware_v4_api_v3_required","api_application_id_source":"bundled_app_id"}}`)
 
 	settings, migrated, err := loadSettingsFromBytes(raw)
 	if err != nil {
 		t.Fatalf("loadSettingsFromBytes: %v", err)
 	}
-	if migrated {
-		t.Fatal("additive Intiface address default unexpectedly migrated version-1 settings")
+	if !migrated {
+		t.Fatal("version-1 settings did not report the voice schema migration")
 	}
-	if settings.Version != 1 {
-		t.Fatalf("version = %d, want 1", settings.Version)
+	if settings.Version != CurrentSettingsVersion {
+		t.Fatalf("version = %d, want %d", settings.Version, CurrentSettingsVersion)
 	}
 	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
 		t.Fatalf("Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
@@ -812,8 +812,12 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if defaults.Voice.ParakeetSource != ParakeetSourceApp {
 		t.Fatalf("Parakeet source = %q, want %q", defaults.Voice.ParakeetSource, ParakeetSourceApp)
 	}
-	if defaults.Voice.NeuTTSSamplingMode != NeuTTSSamplingFixed || defaults.Voice.NeuTTSSamplerSeed != DefaultNeuTTSSamplerSeed {
-		t.Fatalf("NeuTTS sampling defaults = %q/%d", defaults.Voice.NeuTTSSamplingMode, defaults.Voice.NeuTTSSamplerSeed)
+	if defaults.Voice.TTSBaseURL != DefaultTTSBaseURL ||
+		defaults.Voice.TTSResponseFormat != DefaultTTSResponseFormat ||
+		defaults.Voice.TTSHealthPath != DefaultTTSHealthPath ||
+		defaults.Voice.TTSServerPort != DefaultTTSServerPort ||
+		defaults.Voice.TTSDevice != TTSDeviceAuto {
+		t.Fatalf("OpenAI-compatible TTS defaults = %+v", defaults.Voice)
 	}
 	if defaults.Voice.InputMode != VoiceInputModeHandsFree || defaults.Voice.InputSensitivity != DefaultVoiceInputSensitivity ||
 		defaults.Voice.InputSilenceMillis != DefaultVoiceInputSilenceMillis || !defaults.Voice.InputNoiseSuppress {
@@ -836,11 +840,87 @@ func TestVoiceSettingsDefaultOffAndNormalized(t *testing.T) {
 	if len(normalized.Voice.TTSWorkerArgs) != 2 {
 		t.Fatalf("tts worker args = %v, want blank entries dropped", normalized.Voice.TTSWorkerArgs)
 	}
+}
 
-	invalid := defaults
-	invalid.Voice.NeuTTSSamplingMode = "roulette"
-	if _, err := NormalizeSettings(invalid); err == nil || !strings.Contains(err.Error(), "NeuTTS sampling mode") {
-		t.Fatalf("invalid NeuTTS sampling mode error = %v", err)
+func TestVoiceSettingsRejectInvalidTTSOptions(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*VoiceSettings)
+		want   string
+	}{
+		{name: "unknown device", change: func(voice *VoiceSettings) {
+			voice.TTSDevice = "directml"
+		}, want: "TTS device"},
+		{name: "Faster Qwen CPU", change: func(voice *VoiceSettings) {
+			voice.TTSProvider = VoiceTTSProviderFasterQwen
+			voice.TTSDevice = TTSDeviceCPU
+		}, want: "NVIDIA CUDA"},
+		{name: "unsafe managed URL", change: func(voice *VoiceSettings) {
+			voice.TTSProvider = VoiceTTSProviderChatterbox
+			voice.TTSBaseURL = "file:///tmp/tts"
+		}, want: "TTS base URL"},
+		{name: "Faster Qwen format", change: func(voice *VoiceSettings) {
+			voice.TTSProvider = VoiceTTSProviderFasterQwen
+			voice.TTSResponseFormat = "mp3"
+		}, want: "does not support"},
+		{name: "Chatterbox format", change: func(voice *VoiceSettings) {
+			voice.TTSProvider = VoiceTTSProviderChatterbox
+			voice.TTSResponseFormat = "flac"
+		}, want: "does not support"},
+		{name: "Chatterbox voice path", change: func(voice *VoiceSettings) {
+			voice.TTSProvider = VoiceTTSProviderChatterbox
+			voice.TTSVoice = `..\outside.wav`
+		}, want: "plain .wav file name"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := DefaultSettings()
+			test.change(&settings.Voice)
+			if _, err := NormalizeSettings(settings); err == nil ||
+				!strings.Contains(err.Error(), test.want) {
+				t.Fatalf("NormalizeSettings error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestManagedTTSProviderDefaultsIncludeUsableVoiceNames(t *testing.T) {
+	for _, test := range []struct {
+		provider string
+		model    string
+		voice    string
+	}{
+		{VoiceTTSProviderFasterQwen, DefaultFasterQwenModel, DefaultFasterQwenVoice},
+		{VoiceTTSProviderChatterbox, DefaultChatterboxModel, DefaultChatterboxVoice},
+	} {
+		settings := DefaultSettings()
+		settings.Voice.TTSProvider = test.provider
+		settings.Voice.TTSModel = ""
+		settings.Voice.TTSVoice = ""
+		normalized, err := NormalizeSettings(settings)
+		if err != nil {
+			t.Fatalf("NormalizeSettings(%s): %v", test.provider, err)
+		}
+		if normalized.Voice.TTSModel != test.model || normalized.Voice.TTSVoice != test.voice {
+			t.Fatalf("%s defaults = model %q voice %q", test.provider,
+				normalized.Voice.TTSModel, normalized.Voice.TTSVoice)
+		}
+	}
+}
+
+func TestChatterboxHealthPathMigratesToModelReadinessEndpoint(t *testing.T) {
+	for _, healthPath := range []string{"", DefaultTTSHealthPath, "/api/ui/initial-data"} {
+		settings := DefaultSettings()
+		settings.Voice.TTSProvider = VoiceTTSProviderChatterbox
+		settings.Voice.TTSHealthPath = healthPath
+		normalized, err := NormalizeSettings(settings)
+		if err != nil {
+			t.Fatalf("NormalizeSettings(%q): %v", healthPath, err)
+		}
+		if normalized.Voice.TTSHealthPath != DefaultChatterboxHealthPath {
+			t.Fatalf("health path %q normalized to %q, want %q",
+				healthPath, normalized.Voice.TTSHealthPath, DefaultChatterboxHealthPath)
+		}
 	}
 }
 
@@ -882,8 +962,8 @@ func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T
 	if err != nil {
 		t.Fatalf("loadSettingsFromBytes: %v", err)
 	}
-	if migrated {
-		t.Fatal("additive version-1 provider defaults must not bump the schema version")
+	if !migrated || settings.Version != CurrentSettingsVersion {
+		t.Fatalf("version-1 voice settings were not migrated: version=%d migrated=%v", settings.Version, migrated)
 	}
 	if settings.Voice.TTSProvider != VoiceProviderCustom || settings.Voice.ASRProvider != VoiceProviderCustom {
 		t.Fatalf("legacy commands were not classified as custom: %+v", settings.Voice)
@@ -891,8 +971,24 @@ func TestLegacyVoiceCommandsMigrateToCustomWithoutChangingArguments(t *testing.T
 	if settings.Voice.TTSWorkerPath != `C:\legacy\tts.exe` || strings.Join(settings.Voice.ASRWorkerArgs, "|") != "-role|asr" {
 		t.Fatalf("legacy command changed during migration: %+v", settings.Voice)
 	}
-	if settings.Voice.NeuTTSSamplingMode != NeuTTSSamplingFixed || settings.Voice.NeuTTSSamplerSeed != DefaultNeuTTSSamplerSeed {
-		t.Fatalf("legacy NeuTTS sampling defaults = %+v", settings.Voice)
+	if settings.Voice.TTSResponseFormat != DefaultTTSResponseFormat ||
+		settings.Voice.TTSServerPort != DefaultTTSServerPort {
+		t.Fatalf("legacy OpenAI-compatible TTS defaults = %+v", settings.Voice)
+	}
+}
+
+func TestRemovedNeuTTSSelectionMigratesToVoiceOff(t *testing.T) {
+	data := []byte(`{
+		"version":1,
+		"voice":{"enabled":true,"tts_provider":"neutts_air","speak_replies":true,"tts_auto_launch":true}
+	}`)
+	settings, migrated, err := loadSettingsFromBytes(data)
+	if err != nil {
+		t.Fatalf("loadSettingsFromBytes: %v", err)
+	}
+	if !migrated || settings.Voice.TTSProvider != VoiceProviderNone ||
+		settings.Voice.SpeakReplies || settings.Voice.TTSAutoLaunch {
+		t.Fatalf("removed provider was not disabled safely: %+v", settings.Voice)
 	}
 }
 
@@ -913,8 +1009,7 @@ func TestExistingParakeetPathsMigrateToCustomSource(t *testing.T) {
 func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 	current := DefaultSettings()
 	parakeetSource := ParakeetSourceCustom
-	neuTTSSamplingMode := NeuTTSSamplingRandom
-	neuTTSSamplerSeed := uint32(27)
+	autoLaunch := true
 	update := SettingsUpdate{
 		Server: current.Server,
 		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
@@ -924,12 +1019,15 @@ func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 			TTSWorkerPath: `C:\custom\tts.exe`, TTSWorkerArgs: []string{"--kept"},
 			ASRWorkerPath: `C:\custom\asr.exe`, ASRWorkerArgs: []string{"--also-kept"},
 			ElevenLabsVoiceID: "voice-123", ElevenLabsModelID: "model-456",
+			TTSAutoLaunch: &autoLaunch, TTSBaseURL: "http://127.0.0.1:8992/",
+			TTSModel: "chatterbox-turbo", TTSVoice: "sample.wav",
+			TTSResponseFormat: "WAV", TTSHealthPath: "api/ui/initial-data",
+			TTSModuleRoot: `C:\voice\chatterbox`, TTSServerPort: 8992,
+			TTSReferenceWAV: `C:\voices\reference.wav`, TTSReferenceText: "Reference transcript.",
+			TTSLanguage: "Auto", TTSDevice: TTSDeviceCPU,
 			ParakeetServerPath: `C:\parakeet\server.exe`, ParakeetModelPath: `C:\parakeet\model.gguf`, ParakeetServerPort: 9012,
 			ParakeetSource: &parakeetSource,
 			ASRBaseURL:     "http://127.0.0.1:7777/", ASRModel: "parakeet",
-			NeuTTSRunnerPath: `C:\neutts\stream_pcm.exe`, NeuTTSReferenceWAV: `C:\voices\reference.wav`,
-			NeuTTSReferenceCodes: `C:\voices\reference.npy`, NeuTTSReferenceText: "Reference transcript.", NeuTTSBackbone: "local/backbone",
-			NeuTTSSamplingMode: &neuTTSSamplingMode, NeuTTSSamplerSeed: &neuTTSSamplerSeed,
 		},
 	}
 	next, err := current.ApplyUpdate(update)
@@ -939,17 +1037,19 @@ func TestVoiceProviderFieldsSurviveAHiddenProviderSave(t *testing.T) {
 	if next.Voice.TTSProvider != VoiceProviderNone || next.Voice.ASRProvider != VoiceProviderNone {
 		t.Fatalf("active selections changed: %+v", next.Voice)
 	}
-	if next.Voice.ElevenLabsVoiceID != "voice-123" || next.Voice.ParakeetServerPort != 9012 || next.Voice.NeuTTSReferenceCodes != `C:\voices\reference.npy` {
+	if next.Voice.ElevenLabsVoiceID != "voice-123" || next.Voice.ParakeetServerPort != 9012 ||
+		next.Voice.TTSReferenceWAV != `C:\voices\reference.wav` || !next.Voice.TTSAutoLaunch {
 		t.Fatalf("hidden provider fields were discarded: %+v", next.Voice)
 	}
 	if next.Voice.ParakeetSource != ParakeetSourceCustom {
 		t.Fatalf("hidden Parakeet source was discarded: %+v", next.Voice)
 	}
-	if next.Voice.ASRBaseURL != "http://127.0.0.1:7777" || len(next.Voice.TTSWorkerArgs) != 1 {
+	if next.Voice.ASRBaseURL != "http://127.0.0.1:7777" ||
+		next.Voice.TTSBaseURL != "http://127.0.0.1:8992" ||
+		next.Voice.TTSResponseFormat != "wav" ||
+		next.Voice.TTSHealthPath != "/api/ui/initial-data" ||
+		len(next.Voice.TTSWorkerArgs) != 1 {
 		t.Fatalf("hidden provider fields were not normalized losslessly: %+v", next.Voice)
-	}
-	if next.Voice.NeuTTSSamplingMode != NeuTTSSamplingRandom || next.Voice.NeuTTSSamplerSeed != neuTTSSamplerSeed {
-		t.Fatalf("hidden NeuTTS sampling fields were discarded: %+v", next.Voice)
 	}
 }
 
@@ -966,18 +1066,20 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 	inputSensitivity := 72
 	inputSilence := 1250
 	noiseSuppression := false
-	neuTTSSamplingMode := NeuTTSSamplingRandom
-	neuTTSSamplerSeed := uint32(42)
+	autoLaunch := true
 	update := SettingsUpdate{
 		Server: current.Server,
 		Device: DeviceUpdate{HSPDispatchOwner: current.Device.HSPDispatchOwner, FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement, APIApplicationIDSource: current.Device.APIApplicationIDSource},
 		Motion: current.Motion,
 		LLM:    LLMUpdateFromSettings(current.LLM),
 		Voice: VoiceUpdate{
-			Enabled: true, ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"},
+			Enabled: true, TTSProvider: VoiceTTSProviderOpenAICompat,
+			TTSBaseURL: "http://127.0.0.1:9444/", TTSModel: "local-tts",
+			TTSVoice: "speaker-a", TTSResponseFormat: "wav", TTSHealthPath: "/healthz",
+			TTSServerPort: 9444, TTSDevice: TTSDeviceCPU, TTSAutoLaunch: &autoLaunch,
+			ASRWorkerPath: `C:\workers\stub.exe`, ASRWorkerArgs: []string{"-role", "asr"},
 			InputMode: &inputMode, InputSensitivity: &inputSensitivity, InputSilenceMillis: &inputSilence,
 			InputNoiseSuppress: &noiseSuppression,
-			NeuTTSSamplingMode: &neuTTSSamplingMode, NeuTTSSamplerSeed: &neuTTSSamplerSeed,
 		},
 		Diagnostics: current.Diagnostics,
 	}
@@ -1002,8 +1104,10 @@ func TestVoiceSettingsSurviveApplyUpdateAndReload(t *testing.T) {
 		got.Voice.InputSilenceMillis != inputSilence || got.Voice.InputNoiseSuppress {
 		t.Fatalf("voice input preferences did not survive reload: %+v", got.Voice)
 	}
-	if got.Voice.NeuTTSSamplingMode != neuTTSSamplingMode || got.Voice.NeuTTSSamplerSeed != neuTTSSamplerSeed {
-		t.Fatalf("NeuTTS sampling preferences did not survive reload: %+v", got.Voice)
+	if got.Voice.TTSProvider != VoiceTTSProviderOpenAICompat ||
+		got.Voice.TTSBaseURL != "http://127.0.0.1:9444" ||
+		got.Voice.TTSModel != "local-tts" || !got.Voice.TTSAutoLaunch {
+		t.Fatalf("OpenAI-compatible TTS preferences did not survive reload: %+v", got.Voice)
 	}
 }
 

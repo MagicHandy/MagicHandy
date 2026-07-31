@@ -1,202 +1,195 @@
-# Source Installer And Updater
+# Windows Source Installer
 
-`install.ps1` is the Windows source-build bootstrap. `update.ps1` is its
-choice-preserving updater, and `change-language.ps1` is the recovery path for
-UI/chat locale selection. They share
-`scripts/installer/InstallerSupport.psm1`; package detection, downloads, state,
-and builds must not be reimplemented in entry scripts.
+`install.ps1` builds and configures MagicHandy from source. `update.ps1`
+fast-forwards a clean checkout, preserves the install choices, rebuilds, and
+relaunches it. Both scripts share
+`scripts/installer/InstallerSupport.psm1`; they do not maintain parallel
+provisioning logic.
 
-This is not the Phase 16 prebuilt release path. It can begin with no development
-tools installed, but a managed llama.cpp source build installs those tools on
-the machine. It also builds and installs the coupled NeuTTS runtime. A future
-packaged release avoids that source-toolchain footprint entirely.
+The core install stays pure Go. Optional Python, PyTorch, and local TTS model
+files are installed only through the separate scripts documented under
+[Optional Local TTS](#optional-local-tts).
+
+## Quick Start
+
+From a PowerShell window in the directory where MagicHandy should be installed:
+
+```powershell
+git clone https://github.com/MagicHandy/MagicHandy.git
+Set-Location .\MagicHandy
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+This is the same copy-paste block shown in the README.
 
 ## Supported Host
 
-- 64-bit Windows 10/11 with Windows PowerShell 5.1 or newer
-- internet access for missing packages and explicitly selected model assets
-- permission to approve package-manager/UAC prompts
+- 64-bit Windows 10 or Windows 11
+- Windows PowerShell 5.1 or newer
+- internet access for selected dependencies and models
+- enough free space for the source toolchain and selected runtimes
 
-The embedded UI is already built, so Node.js is not an install dependency. The
-core and first-party workers remain `CGO_ENABLED=0`; MSVC/CUDA/LLVM/Rust are used
-only for external managed processes.
+The installer can start without Go, Git, CMake, a C++ compiler, CUDA, Ollama,
+or Parakeet. Missing components are named and installed only after consent.
+If WinGet is missing, the script offers Microsoft's supported App Installer
+repair path.
+
+## Normal Install Choices
+
+The interactive flow asks for:
+
+1. app/installer UI language;
+2. built-in chat response language;
+3. data directory and local HTTP port;
+4. whether to configure a local LLM;
+5. managed llama.cpp or Ollama;
+6. CPU or CUDA for a managed llama.cpp build;
+7. optional Ollama provisioning/model pull;
+8. optional Parakeet runner and model; and
+9. optional launcher creation.
+
+Selecting managed llama.cpp explains why it is useful: MagicHandy owns a
+pinned, known-compatible runtime and can load managed GGUF models directly.
+Selecting Ollama avoids that source build and saves the compiler/runtime space
+when the user already has a suitable Ollama installation.
 
 ## Provisioned Packages
 
-The script names each missing package, purpose, license, and large disk impact
-before consent. `-Yes` is explicit unattended consent to those prompts.
-
-| Selection | WinGet package | Why |
+| Selection | Package or tool | Purpose |
 | --- | --- | --- |
-| Always | `GoLang.Go` | Build the pure-Go core and worker adapters |
-| Managed llama.cpp | `Git.Git` | Fetch the checksum-pinned source revision |
-| Managed llama.cpp | `Kitware.CMake` | Configure/build `llama-server` |
-| Managed llama.cpp | `Microsoft.VisualStudio.BuildTools` | Desktop C++ workload and Windows SDK |
-| Managed llama.cpp + NeuTTS | `Rustlang.Rustup` | Build MagicHandy's persistent NeuTTS runner with the selected CPU/CUDA backend |
-| Managed llama.cpp + NeuTTS | `LLVM.LLVM` | Provide `libclang` for generated llama.cpp Rust bindings |
-| Managed llama.cpp + NeuTTS | `eSpeak-NG.eSpeak-NG` | Produce the English IPA expected by the NeuTTS backbone |
-| CUDA backend | `Nvidia.CUDA` | Provide `nvcc` and CUDA build/runtime files |
-| Ollama selected | `Ollama.Ollama` | External local-LLM daemon/runtime |
+| Always | `GoLang.Go` | Build the pure-Go app and worker adapters |
+| Managed llama.cpp | Git | Fetch the pinned llama.cpp revision |
+| Managed llama.cpp | `Kitware.CMake` | Generate the native build |
+| Managed llama.cpp | Visual Studio Build Tools, Desktop C++ workload, Windows SDK | Compile the Windows runtime |
+| Managed llama.cpp with CUDA | `Nvidia.CUDA` | Build NVIDIA acceleration |
+| Ollama | `Ollama.Ollama` | Install the external local-model daemon when requested |
+| Parakeet | pinned runner archive and GGUF model | Optional managed ASR |
 
-If WinGet is absent, the installer offers Microsoft's supported
-`Microsoft.WinGet.Client` repair flow. Every installed tool is resolved and
-verified in the current process; the script asks for a restart/retry only when
-Windows reports success but the executable or compiler workload is still not
-available. For CUDA builds, the managed-runtime helper also derives the toolkit
-root from `nvcc.exe` and passes it to both CMake and NVIDIA's Visual Studio build
-targets, including when WinGet installed CUDA earlier in the same process.
+Package agreements and large downloads are shown before installation.
+`-Yes` is the unattended form of that consent. Every installed dependency is
+verified before the build continues.
 
 ## Built Outputs
 
-Every successful run builds these files beside the source checkout:
+The source installer builds these binaries with `CGO_ENABLED=0`:
 
 - `magichandy.exe`
 - `voice-parakeet-worker.exe`
-- `voice-neutts-worker.exe`
+- `voice-openai-tts-worker.exe`
 - `voice-elevenlabs-worker.exe`
 
-The executables and generated `Start-MagicHandy.ps1` are ignored build/runtime
-artifacts. The optional portable `data/` directory is ignored too.
+Frontend production assets are built first and embedded in `magichandy.exe`.
+Managed llama.cpp remains a separate native process and is never linked into
+the core.
 
-These three voice executables are protocol adapters. The installer separately
-provisions selected Parakeet assets and, whenever managed llama.cpp is selected,
-an app-managed NeuTTS runtime and reference encoder. It does not install a
-reference voice. Settings generates validated reference codes from a
-user-selected WAV and exact transcript without Python; manual `.npy` paths
-remain available. A successful source build therefore ends with
-**configuration required**, not a claim that every provider is ready.
+## Optional Local TTS
 
-For manual/custom runtimes, Settings path fields provide **Browse...** on the
-Windows host. This is a controller-gated, loopback-only native dialog; it does
-not expose directory listings to remote browser clients. Typed paths remain
-available for advanced or non-Windows setups.
+Local voice cloning is intentionally not coupled to the main installer or the
+llama.cpp choice. After MagicHandy is built, run:
 
-Builds are written to per-process temporary executable paths and moved into
-place only after Go succeeds. Before replacement, the installer finds only
-`magichandy.exe` processes owned by the selected checkout, calls the local
-Emergency Stop endpoint, and terminates that process tree (including optional
-workers). A failed active Stop, unexpected port owner, or multiple checkout
-instances aborts the rebuild and leaves every app in place. When no local motion
-engine exists, an unreachable configured transport is surfaced as a warning
-before teardown rather than misreported as delivered. Legacy Go `*.exe~`
-backups are removed and ignored so an old in-use replacement cannot dirty the
-checkout again.
+```powershell
+.\scripts\install-tts-module.ps1
+```
 
-Parakeet's external CPU runner and 644 MiB model are separate explicit assets.
-The script displays their size/license, verifies their pinned SHA-256 values,
-downloads with a compact inline progress bar, and installs them atomically under
-`<data-dir>/voice/parakeet`. Transient transport and server failures are retried
-with validated byte-range resume. It then prints the deliberate activation
-sequence: Settings > Voice, select Parakeet and the MagicHandy module, enable
-voice, save, then Start. Installing files never enables voice. Once enabled and
-configured, speech input autoloads its worker on later app starts.
+The module installer offers:
 
-NeuTTS is coupled to the managed llama.cpp source-build choice. The installer:
+- Faster Qwen3-TTS for NVIDIA/CUDA systems; and
+- Chatterbox Turbo for CPU or broader GPU compatibility.
 
-1. installs LLVM/libclang, eSpeak NG 1.52+, and pinned Rust 1.94.0 for Windows
-   MSVC through Rustup;
-2. clones `neutts-rs` v0.1.1 and verifies commit
-   `ae7ea9a2a8d93e63eacdc1f10522ad3f92cc725f`;
-3. requires and corrects the tag's single stale root-package version in
-   `Cargo.lock` from 0.1.0 to 0.1.1, without changing dependency versions;
-4. downloads the revision-pinned NeuCodec checkpoint, Air Q4 GGUF, and two-file
-   DistillNeuCodec ONNX encoder with fixed SHA-256 verification, bounded retries,
-   and resumable partial files under `<data-dir>/voice/neutts/downloads`;
-5. converts the checkpoint to `neucodec_decoder.safetensors` with the upstream
-   pure-Rust converter, without Python or PyTorch;
-6. applies MagicHandy's exact pinned all-layer CUDA offload patch, copies the
-   reviewed persistent runner source, and builds it with Cargo `--locked`;
-   CPU installs use the CPU backbone/codec, while CUDA installs use the CUDA
-   llama.cpp backbone and WGPU codec. The runner invokes system eSpeak directly
-   and runs a pronunciation quality probe before publication;
-7. builds the first-party Rust/ONNX reference encoder with the same pinned
-   toolchain and locked dependency graph; and
-8. stages both workers, DirectML, decoder, encoder model, exact GGUF cache, and
-   the five required llama/ggml DLLs for CUDA together; verifies their hashes;
-   then swaps them atomically under `<data-dir>/voice/neutts/active`.
+It displays the pinned repository revision, license, model, hardware target,
+loopback endpoint, destination, and multi-gigabyte download warning. After
+consent it installs `uv` when needed, creates an isolated Python 3.11
+environment under the MagicHandy data directory, downloads the model, and
+uses `magichandy.exe -configure-tts-module` to persist the provider settings.
+The Chatterbox launcher suppresses the upstream standalone browser so
+MagicHandy remains the only UI.
 
-The schema-5 active manifest records the runner protocol, selected backend,
-backbone/codec acceleration, eSpeak phonemizer/version, deterministic sampler,
-incremental audio assembly, PCM cache limits, native dependency hashes, built
-runner/decoder hashes, immutable model revisions, source checkpoint hashes, and
-exact Rust compiler identity. Updates reuse it without requiring Rustup only
-after the installer rehashes all active artifacts. Schema-4 and older runtimes
-are stale and rebuilt once. An interrupted directory swap restores the newest preserved
-backup before retrying; rollback data is removed only after the replacement
-verifies.
-When app-managed NeuTTS is selected, the app independently validates the pinned
-manifest, Air Q4 cache revision, and required paths before it configures the
-worker. The installer performs the full hashes before atomic publication and
-reuse; application startup and status polling do not rehash large runtime
-assets before serving HTTP.
+Useful examples:
 
-The NeuTTS build does not reuse `llama-server.exe`; the runner embeds its own
-llama.cpp binding and persistent model context. Coupling the choices shares the
-explicit source-toolchain/download decision and backend selection. CUDA avoids
-the measured multi-minute CPU response but reserves additional VRAM while TTS
-is loaded; CPU avoids that VRAM cost. The CPU runtime is about 1.9 GiB installed
-and the CUDA runtime about 2.0 GiB. Decoder conversion temporarily downloads
-another approximately 1.1 GiB checkpoint and Cargo/build files can use several
-GB. Skipping managed llama.cpp, including with `-SkipLlamaBuild`, skips Rustup,
-the persistent runner, eSpeak, and all NeuTTS model work. Existing files are not
-deleted.
+```powershell
+.\scripts\install-tts-module.ps1 -PlanOnly -Module faster-qwen3-tts
+.\scripts\install-tts-module.ps1 -Module faster-qwen3-tts -ReferenceWav C:\voices\sample.wav -ReferenceTranscript "Exact words in the sample." -AutoLaunch
+.\scripts\install-tts-module.ps1 -Module chatterbox -Device cpu -AutoLaunch
+.\scripts\update-tts-module.ps1
+```
+
+Faster Qwen3-TTS requires an NVIDIA GPU and CUDA. It cannot be selected with
+`-Device cpu`. Chatterbox is the fallback for CPU operation.
+
+`update-tts-module.ps1` reads `module-state.json`, preserves the existing
+module, model, voice/reference, language, device, port, auto-launch, and
+speak-replies choices, and asks at runtime whether to change them. It supports
+`-PlanOnly` and does not update the main repository.
+
+See `docs/voice-tts-modules.md` for endpoint and process-ownership details.
 
 ## Install Commands
 
-Interactive setup:
+Interactive:
 
 ```powershell
 .\install.ps1
 ```
 
-Inspect an unattended CUDA source-toolchain setup without changing the machine:
+Inspect without changes:
 
 ```powershell
-.\install.ps1 -Yes -LlamaBackend cuda -PlanOnly -NoLaunch
+.\install.ps1 -PlanOnly
 ```
 
-Apply it:
+Unattended managed CUDA setup:
 
 ```powershell
 .\install.ps1 -Yes -LlamaBackend cuda
 ```
 
-Use Ollama and avoid the managed llama.cpp/NeuTTS runtime toolchain:
+Use Ollama and skip the managed llama.cpp build:
 
 ```powershell
 .\install.ps1 -Yes -SkipLlamaBuild
 ```
 
-Select languages unattended (the interactive installer asks these first):
+Build without launching:
 
 ```powershell
-.\install.ps1 -Yes -UILanguage ja -ChatLanguage es
+.\install.ps1 -Yes -NoLaunch
 ```
+
+Other important flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `-Port 49717` | Local loopback HTTP port |
+| `-DataDir PATH` | SQLite, model, trace, and runtime data root |
+| `-UILanguage LOCALE` | `en`, `es`, `pt-BR`, `zh-Hans`, or `ja` |
+| `-ChatLanguage LOCALE` | Built-in response language |
+| `-SkipParakeet` | Skip optional managed ASR assets |
+| `-NoLauncher` | Do not create `Start-MagicHandy.ps1` |
+| `-StatePath PATH` | Override install state for testing/managed use |
 
 ## Persisted Choices
 
-After all selected provisioning succeeds, the installer atomically writes
-`%LOCALAPPDATA%\MagicHandy\install-state.json` (or `-StatePath` for managed/test
-use). Schema v2 contains only:
+By default, non-secret install state is stored at:
 
-- install/update timestamps and repository path
-- data directory and local port
-- app UI/installer locale and built-in chat reply locale
-- whether local LLM setup is selected
-- managed llama.cpp selection and concrete CPU/CUDA backend
-- NeuTTS selection is derived from managed llama.cpp rather than stored as a
-  separate choice
-- Ollama selection and optional public model name
-- Parakeet asset selection
-- launcher selection
+```text
+%LOCALAPPDATA%\MagicHandy\install-state.json
+```
 
-Schema v1 is migrated in memory to English UI/chat locales and is written as v2
-only after a successful non-plan update. No API key, Handy connection key,
-prompt/chat content, model bytes, or voice credential belongs in this file.
-The main SQLite settings database remains authoritative for application
-settings and credentials. After provisioning succeeds, `magichandy.exe` runs in
-a language-only configuration mode to atomically apply `ui.locale` and the
-matching built-in prompt set before the app starts.
+Schema 2 records:
+
+- repository and data paths;
+- local port;
+- UI and chat locales;
+- whether LLM setup is enabled;
+- managed llama.cpp choice and CPU/CUDA backend;
+- Ollama choice and optional model;
+- Parakeet choice; and
+- launcher choice.
+
+The Handy connection key, ElevenLabs key, OpenAI-compatible bearer key, and
+other credentials never enter installer state, command output, or logs. Local
+TTS module choices use a separate non-secret `module-state.json` inside that
+module's install root.
 
 ## Update Behavior
 
@@ -208,68 +201,50 @@ Run:
 
 The updater:
 
-1. reads the saved choices, restores the saved UI language, and displays both language choices plus the remaining setup;
-2. asks whether to modify them (default: no);
-3. refuses to touch a dirty Git worktree;
-4. fetches explicitly, then fast-forwards `main` from `origin/main` or a live
-   feature from its configured upstream;
-5. if a feature upstream was deleted after merge, uses `origin/main` only when
-   the local feature tip is already contained there; it never switches the
-   branch or rewrites its upstream;
-6. invokes the newly checked-out `install.ps1` with preserved or revised state;
-7. during provisioning, sends Emergency Stop and stops this checkout's running
-   app process tree before replacing binaries;
-8. writes state only after provisioning succeeds; and
-9. optionally launches the app, opening the browser only after `/api/state`
-   confirms that the new process owns the configured port.
+- restores the saved UI language before displaying prompts;
+- shows the previous choices and asks whether to modify them;
+- refuses to update a dirty worktree;
+- fast-forwards the current branch to its safe upstream target without
+  discarding local commits;
+- treats a merged feature branch with a deleted remote as eligible to advance
+  from `origin/main` only after an ancestry check;
+- explicitly takes controller ownership, sends Emergency Stop, and terminates
+  only the app process tree belonging to this checkout;
+- stages rebuilt binaries before replacing the active files;
+- reapplies SQLite-backed language settings after a successful build; and
+- opens the browser only after the new server owns the configured port and
+  answers `/api/state`.
 
-Windows PowerShell treats a non-2xx response as an exception, but the updater
-still reads MagicHandy's JSON Stop payload. If motion was already inactive and
-the payload confirms local stopped state, the updater still does not infer
-physical delivery. Any unavailable, stale, or failed transport Stop requires the
-operator to verify the device is physically stopped and type `STOPPED` in an
-interactive update. Unattended updates, malformed responses, and unreachable
-responses fail closed and leave the old app running.
-
-Use `-Yes -NoLaunch` for an unattended update with unchanged choices,
-`-Reconfigure` to walk every choice, `-NoPull` to rebuild the current checkout,
-or `-PlanOnly` to inspect the saved dependency graph without changing anything.
-During reconfiguration, blank input keeps the displayed value; enter `-` to
-clear the optional saved Ollama model choice.
-
-Changing a choice never silently deletes an existing runtime, model library, or
-voice asset. It only changes what subsequent runs ensure is present.
+The updater does not install or change optional TTS modules. Run
+`scripts/update-tts-module.ps1` for that module lifecycle.
 
 ## Language Recovery
 
-Run `change-language.ps1` if the installer or app UI language was selected
-incorrectly:
+Run:
 
 ```powershell
 .\change-language.ps1
 ```
 
-The script displays all five languages by native name before localized text,
-then asks separately for app UI and chat reply languages. It updates the app
-through the same validated language-only executable mode and updates existing
-installer state without touching provider, storage, model, voice, or launcher
-choices. If this checkout is running, it sends Emergency Stop and restarts it;
-`-NoLaunch` leaves it stopped. Unattended use accepts `-UILanguage`,
-`-ChatLanguage`, and `-Yes`.
+It displays native language names before locale-dependent text, updates both
+installer state and app settings, and safely restarts a running app so an old
+in-memory settings snapshot cannot overwrite the correction.
 
 ## Validation
 
-`scripts/test-installer.ps1` runs under Windows PowerShell 5.1 in CI. It checks
-all script syntax; UTF-8 installer catalog key and placeholder parity; absence
-of hard-coded decision prompts; schema-v1-to-v2 migration; atomic state round
-trips and secret-field exclusion; localized update plans; interrupted HTTP
-byte-range resume and checksum promotion; managed CUDA/NeuTTS versus Ollama-only
-plans; app-managed NeuTTS schema-5 CPU/CUDA manifest discovery; native-DLL and
-encoder tamper detection; and end-to-end plan-only install/update behavior.
-Updater fixtures cover non-2xx Stop response parsing, strict response
-validation, exact physical-stop confirmation, unattended refusal, `main`, a
-live feature upstream, a single-branch
-merged/deleted feature fallback, unmerged/deleted refusal, and dirty-tree
-refusal. A real temporary app verifies Emergency Stop, checkout-scoped
-process-tree teardown, and stale executable-backup cleanup. Download tests use a
-small loopback fixture; CI performs no package or external model download.
+`scripts/test-installer.ps1` covers:
+
+- PowerShell syntax and localized catalog integrity;
+- plan-only no-write behavior;
+- package and build decision trees;
+- install-state migration, validation, and atomic writes;
+- managed llama.cpp versus Ollama plans;
+- optional Parakeet plans;
+- optional Faster Qwen3-TTS and Chatterbox plan/update behavior;
+- complete Go binary output and staged replacement;
+- process ownership, controller takeover, Stop, and relaunch behavior; and
+- unsafe dirty-tree/update-state failures.
+
+Release acceptance still requires a clean Windows VM run because a plan test
+cannot prove WinGet repair, Visual Studio workload installation, CUDA driver
+compatibility, model download reliability, or local TTS listening quality.

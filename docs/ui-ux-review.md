@@ -1,5 +1,9 @@
 # UI/UX Review — 2026-07-10 (post-Phase-13 live pass)
 
+> Historical review of the pre-ADR-0012 voice UI. NeuTTS-specific findings and
+> file references are retained as review history; the current provider surface
+> is documented in `docs/ui-design.md` and `docs/voice-tts-modules.md`.
+
 Reviewed against `main` at `53555ecd` (PR #49 merged: provider-scoped voice
 Settings, NeuTTS adapter, push-to-talk, Chat speak-replies control) by driving
 the built binary headless and inspecting the **live rendered DOM** at

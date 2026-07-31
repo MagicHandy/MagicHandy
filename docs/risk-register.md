@@ -545,112 +545,66 @@ Exit evidence:
   documented before first run; ordinary users do not have to find or paste an
   Application ID unless using the developer override
 
-## R17: NeuTTS Air Cloning And Codec Spike
+## R17: Local TTS Quality, Performance, And Module Lifecycle
 
 Level: Medium
 
 Description:
-ADR 0007 selects NeuTTS Air as the local, non-Python cloning TTS. The Go worker
-adapter owns a first-party persistent runner built against pinned `neutts-rs`
-and streams PCM without Python. The source installer builds either a CPU or
-CUDA/WGPU runtime and installs verified decoder/backbone assets with managed
-llama.cpp. A first-party Rust worker runs a pinned DistillNeuCodec ONNX encoder
-and generates validated reference codes from a local WAV without Python. The
-older bounded `.pt`/`.npy` normalizer remains an advanced fallback. The pinned
-upstream hub client still does not honor `HF_HUB_OFFLINE=1`. Enforced offline
-behavior, GPU-memory coexistence with the chat LLM, and subjective speaker
-similarity across representative references remain unproven. Controlled
-intelligibility now has ASR round-trip evidence.
+The NeuTTS experiment proved the optional worker boundary and fast persistent
+GPU synthesis, but repeated listening still found slurring, inconsistent
+articulation, and fragile reference conditioning. ADR 0012 retires that
+runtime rather than shipping a large custom codec and native-runner surface
+that did not meet release quality.
+
+Local cloning now uses one bounded OpenAI-compatible Go adapter with optional
+Faster Qwen3-TTS or Chatterbox server modules. Those modules improve the model
+choices but add isolated Python/PyTorch environments, multi-gigabyte downloads,
+hardware-specific wheels, and long first loads. Quality, warm latency, clean
+cancellation, browser playback, and GPU coexistence with the chat LLM require
+direct acceptance; protocol compatibility alone cannot prove them.
 
 Mitigation:
 
-- keep the implemented adapter bounded and cancellable, request offline mode,
-  require the exact local GGUF cache entry, use a CLI-contract readiness probe
-  that does not synthesize, and avoid claiming network sandboxing without a
-  network-denied test
-- install immutable, checksum-verified inputs through the source installer;
-  report missing runner/decoder/codes/transcript states before Start and keep a
-  guarded local host-path chooser for custom overrides
-- keep reference encoding in a short-lived worker, pin and checksum its ONNX
-  graph/external weights, constrain WAV duration/rate/channels, and re-parse and
-  range-check generated NPY in Go before publishing it
-- keep the model in one worker-owned process, frame every output with bounded
-  lengths, cancel by request ID, and terminate the process on unload, worker
-  shutdown, or Emergency Stop
-- record CPU/CUDA/WGPU acceleration and every required native DLL checksum in
-  the managed manifest; surface the selected backend and explain the CUDA
-  latency/VRAM versus CPU compatibility tradeoff before installation
-- provision eSpeak NG 1.52, quality-probe its IPA during installation, reject
-  manifests without that phonemizer identity, and preserve Neuphonic's codec
-  lookback/lookahead overlap-add instead of concatenating independent chunks
-- keep ElevenLabs as the working non-Python premium path meanwhile
-- fall back to F5-TTS (ONNX) or an optional Python worker if the spike fails,
-  without blocking the rest of voice
+- keep Python, Torch, CUDA, and model code in an optional child process behind
+  ADR 0003; preserve the `CGO_ENABLED=0` core
+- install each module only through an explicit script that shows the pinned
+  source revision, license, model, hardware target, install root, and expected
+  disk impact before consent
+- recommend Faster Qwen3-TTS only for NVIDIA/CUDA systems; use Chatterbox as
+  the CPU/broader-hardware fallback and never advertise an unsupported Faster
+  Qwen CPU mode
+- bind managed servers to loopback, reject occupied ports, launch without a
+  shell, suppress the Chatterbox standalone browser, and stop only a child the
+  worker started
+- bound request text, error bodies, response audio, queue depth, and deadlines;
+  repair streamed WAV headers only after the bounded clip is retained
+- keep bearer credentials environment-only, redact provider errors, and clear
+  adapter credentials before launching a managed model server
+- migrate retired provider selections to voice output off instead of silently
+  choosing a replacement with different privacy and hardware implications
+- keep ElevenLabs as an independent cloud option while local acceptance is
+  incomplete
 
 Exit evidence:
 
-- a capped listening run shows acceptable cloning quality and latency with the
-  non-Python adapter; the native encoder remains compatible across representative
-  WAV formats and source voices
+- on representative clean reference WAVs, capped listening finds no persistent
+  slurring, truncation, speaker drift, or unexpected pace changes
+- cold load, time to first playable audio, warm completion, and repeat latency
+  are recorded for supported hardware and remain usable beside the selected
+  local LLM
+- cancellation terminates the active request, the next request succeeds, and
+  unload/app shutdown leave no owned server process
+- Firefox and Chromium play retained WAV output; auto-launch off never stops an
+  external service; occupied-port and startup-failure states are actionable
+- installer plan-only and saved-choice update paths change no files or settings
 
-Status 2026-07-15: the spike and Slice 13.6 adapter landed
-(`docs/neutts-air-spike.md`, `docs/neutts-worker.md`). Non-Python decode and
-streaming are implemented through `neutts-rs`; the core wraps retained PCM at
-the playback boundary. The Windows source installer now verifies and builds
-`neutts-rs` v0.1.1, converts a verified NeuCodec checkpoint, and installs the
-exact Air Q4 cache whenever managed llama.cpp is selected. A pure-Go bounded
-normalizer prepared the official Dave `.pt` sample's 372 codes. A pinned
-DistillNeuCodec ONNX encoder then generated 373 valid codes directly from the
-7.45 second, 44.1 kHz stereo Dave WAV in about 1.3 seconds. The installed
-NeuTTS runner accepted those generated codes and produced 106,560 PCM bytes
-(2.22 seconds of audio), proving format compatibility. Settings now exposes the
-actual WAV-plus-transcript generation flow and keeps pre-encoded paths under
-Advanced. Investigation of the installed CPU-only runner found a 127.27-second
-wall time, 90.86-second first audio, and 66.72x real-time factor. The pinned
-CUDA/WGPU build completed the same engineering path in 2.45 seconds after a
-1.90-second model load. The persistent Go-worker path then delivered first
-audio in 1.01 seconds and completed in 2.18 seconds on its first request; the
-warm request delivered first audio in 0.47 seconds and completed in 1.17
-seconds. Cancellation after the first chunk returned `canceled`, and the same
-process completed a recovery request with 96,960 PCM bytes before clean exit. A
-clean full updater then migrated the installed runtime to schema 3 CUDA/WGPU,
-and the relaunched production app autoloaded both voice roles. Two HTTP TTS
-requests completed in 2.018 and 0.874 seconds with valid retained WAVs and
-same-process reuse; a visible Edge request completed without an autoplay error
-after the shell adopted a gesture-unlocked Web Audio sink. Subjective listening,
-representative-source quality, CUDA/LLM VRAM coexistence, and network-sandbox
-evidence remain open risks. A follow-up quality audit isolated severe slurring
-to the experimental pure-Rust phonemizer (wrong IPA and a dropped reference
-word) and independent codec chunks. System eSpeak NG 1.52 plus Neuphonic's
-overlap-aware stream retained every substantive target word in four random
-Parakeet round trips, with two exact sentence transcriptions. Schema 4 forces
-older managed runtimes to rebuild; wider listening and speaker-similarity
-acceptance still remain open. A consistency follow-up found per-request random
-sampling produced 4.60-9.10 second clips for identical text and could terminate
-a corpus sentence at 0.14 seconds. Schema 5 selects validated seed 3, records
-that choice, uses sample-identical incremental overlap-add, and adds a bounded
-memory-only exact-text cache. All four selected-seed corpus clips retained their
-target words; a repeated 4.70 second clip replayed byte-identically in 0 ms after
-a 1.91 second miss. This removes known same-input variability but does not close
-the representative-reference or subjective-listening risk. Advanced Voice
-settings retain fixed seed 3 by default, allow another reproducible 32-bit seed
-for reference-specific auditioning, and expose per-request randomness only as
-an explicit **Varied** mode with cache disabled. The UI states that cache loss;
-documentation records that randomization can reintroduce the measured quality
-variance. See `docs/neutts-quality-performance.md`.
-
-Status 2026-07-16: a cross-provider reliability audit closed several causes of
-silent or intermittent failure without changing the selected voice engines.
-The core no longer drops full audio buffers under worker bursts; it rejects
-malformed, out-of-order, mixed-format, empty, and oversized terminal output.
-Cancellation now stays attached to the exact worker session and a stale NeuTTS
-cancel cannot become the next request's response. Worker lifecycle changes are
-serialized and hard teardown owns the child process tree. Provider URL,
-response-size, staged-audio, reference-WAV, and encoder-output bounds are now
-enforced. Retained speech covers the accepted TTS workload and ASR history no
-longer evicts clips waiting for ordered playback. Subjective cloning quality,
-representative references, GPU/LLM coexistence, and network-denied runtime
-evidence remain open under this risk.
+Status 2026-07-31: NeuTTS code, settings, UI, runner, reference encoder, and
+source-installer coupling are removed. The generic adapter, scripted Faster
+Qwen3-TTS/Chatterbox installation and update paths, provider-scoped settings,
+auto-launch ownership, migration, and automated protocol/lifecycle tests are
+implemented. Live listening, latency, browser, and VRAM acceptance remains
+open. Historical NeuTTS measurements remain in `docs/goal-scorecard.md` and
+`docs/perf-baseline.md`; they are not evidence for the replacement modules.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

@@ -8,7 +8,6 @@ import type {
   ChatStreamEvent,
   MemoryState,
   MotionStyle,
-  NeuTTSReference,
   BluetoothAckPayload,
   BluetoothClientStatus,
   BluetoothCommandsResponse,
@@ -526,7 +525,7 @@ export const api = {
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
-  pickHostPath: (kind: "executable" | "gguf" | "wav" | "npy" | "neutts_codes" | "file" | "directory", current: string) =>
+  pickHostPath: (kind: "executable" | "gguf" | "wav" | "file" | "directory", current: string) =>
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
@@ -625,13 +624,6 @@ export const api = {
     input_silence_ms: number;
     input_noise_suppression: boolean;
   }>("PUT", "/api/voice/input-preferences", patch),
-  generateNeuTTSReference: (reference_wav: string, transcript: string, signal?: AbortSignal) =>
-    request<{ reference: NeuTTSReference; preview_url: string }>(
-      "POST",
-      "/api/voice/neutts/references",
-      { reference_wav, transcript },
-      signal,
-    ),
   // Lease-gated audio: only the active controller may fetch a clip.
   voiceRequestAudio: async (id: string, signal?: AbortSignal): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {

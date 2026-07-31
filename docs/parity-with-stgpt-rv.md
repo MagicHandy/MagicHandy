@@ -56,7 +56,7 @@ Same vocabulary as the sweeps, plus one:
 | **LLM program/script selection** | **Partial** | Engine `ProgramID` exists; chat contract exposes only `pattern_id` — idea B |
 | **Soft-anchor loops (tip/upper/mid/lower/base)** | **Partial** | Engine `SoftAnchor` exists; no authoring UI or model access — idea G |
 | **LLM-driven autonomous mode (Autopilot)** | **Initial implementation (PR #101)** | Chat-native control; bounded recent-conversation context; enabled pattern/intensity curation over the shared segment loop; visible deterministic fallback; chat-log/browser-TTS delivery. Live-model, long-session, cadence, and richer-arrangement acceptance remain open; see [llm-control-surface.md](llm-control-surface.md) ideas E/F |
-| Voice output (cloud + local cloning) | **Covered / differs** | ElevenLabs + NeuTTS Air (STGPT-RV used Chatterbox); ADR 0007 |
+| Voice output (cloud + local cloning) | **Covered / differs** | ElevenLabs plus Faster Qwen3-TTS, Chatterbox, or an external OpenAI-compatible endpoint; ADRs 0007 and 0012 |
 | Voice input (ASR) | **Covered / differs** | Managed Parakeet (STGPT-RV also had faster-whisper); ADR 0007 |
 | Persona prompt + memory | **Covered** | Phase 10 prompt sets + inspectable memory + dedicated bounded persona description |
 | User anatomy prompt vocabulary | **Covered** | `penis` / `vagina` / bounded custom wording, separate from partner persona and active only for opted-in interactive non-utility voices |

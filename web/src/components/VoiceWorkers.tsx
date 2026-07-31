@@ -46,7 +46,8 @@ interface Props {
   enabled?: boolean;
   providerSelected?: boolean;
   showParakeetModule?: boolean;
-  showNeuTTSModule?: boolean;
+  showTTSModule?: boolean;
+  ttsModuleName?: string;
   workers: Record<string, VoiceWorkerStatus>;
   requests: VoiceRequestSnapshot[];
   modules: Record<string, VoiceModuleStatus>;
@@ -62,7 +63,8 @@ export function VoiceWorkers({
   enabled,
   providerSelected,
   showParakeetModule,
-  showNeuTTSModule,
+  showTTSModule,
+  ttsModuleName,
   workers,
   requests,
   modules,
@@ -99,9 +101,7 @@ export function VoiceWorkers({
 
   const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
   const parakeetModule = modules.parakeet;
-  const neuttsModule = modules.neutts;
-  const visibleModule = showParakeetModule ? parakeetModule : showNeuTTSModule ? neuttsModule : undefined;
-  const visibleModuleName = showParakeetModule ? "Parakeet" : "NeuTTS";
+  const ttsModule = modules.tts;
 
   return (
     <div className="voice-workers">
@@ -111,10 +111,10 @@ export function VoiceWorkers({
           <span>{parakeetModule?.message ? translateKnown(parakeetModule.message) : t("Checking the MagicHandy Parakeet module.")}</span>
         </div>
       )}
-      {showNeuTTSModule && (
-        <div className="voice-module-readout" role="status" aria-label={t("NeuTTS module")}>
-          <span className="status-dot" data-state={visibleModule?.installed ? "ok" : visibleModule?.state === "incomplete" ? "warn" : "idle"} />
-          <span>{visibleModule?.message ? translateKnown(visibleModule.message) : t("Checking the {module} module.", { module: visibleModuleName })}</span>
+      {showTTSModule && (
+        <div className="voice-module-readout" role="status" aria-label={t("Checking the {module} module.", { module: ttsModuleName ?? "TTS" })}>
+          <span className="status-dot" data-state={ttsModule?.installed ? "ok" : ttsModule?.state === "incomplete" ? "warn" : "idle"} />
+          <span>{ttsModule?.message ? translateKnown(ttsModule.message) : t("Checking the {module} module.", { module: ttsModuleName ?? "TTS" })}</span>
         </div>
       )}
       {roles.map((role) => {
@@ -142,7 +142,7 @@ export function VoiceWorkers({
               )}
             </div>
             {state === "not_configured" && (
-              <p className="form-status">{(showParakeetModule || showNeuTTSModule) ? t("The selected module is not ready; follow the module status above before starting it.") : t("The selected worker is not configured. Check its provider fields or installation, then save.")}</p>
+              <p className="form-status">{(showParakeetModule || showTTSModule) ? t("The selected module is not ready; follow the module status above before starting it.") : t("The selected worker is not configured. Check its provider fields or installation, then save.")}</p>
             )}
             {state === "disabled" && providerSelected && (
               <p className="form-status">{enabled ? t("Save these voice settings; Start will appear here once the worker is configured.") : t("Enable voice workers and save; Start will appear here when the worker is ready.")}</p>
