@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { MediaVideo } from "../api/types";
@@ -30,6 +30,7 @@ function panel(props: Partial<Parameters<typeof PlaybackPanel>[0]> = {}) {
       smoothingPercent={0}
       roundingMillis={0}
       limitSpeed={false}
+      speedLimitPercent={40}
       onClose={vi.fn()}
       {...props}
     />
@@ -62,7 +63,7 @@ describe("PlaybackPanel", () => {
     fireEvent.change(slider, { target: { value: "20" } });
     expect(saveOffset).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(200);
+    await act(() => vi.advanceTimersByTimeAsync(200));
     expect(saveOffset).toHaveBeenCalledOnce();
     expect(saveOffset).toHaveBeenCalledWith("clip", 20);
   });
@@ -72,7 +73,7 @@ describe("PlaybackPanel", () => {
     expect(screen.queryByRole("slider", { name: /Peak rounding/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /Round peaks/ }));
-    await vi.advanceTimersByTimeAsync(0);
+    await act(() => vi.advanceTimersByTimeAsync(200));
     expect(savePlayback).toHaveBeenCalledWith({ peak_rounding_ms: 60 });
     expect(screen.getByRole("slider", { name: /Peak rounding/ })).toBeInTheDocument();
   });
@@ -90,6 +91,13 @@ describe("PlaybackPanel", () => {
     expect(screen.getByText("Filters on; effect is measured when motion re-arms.")).toBeInTheDocument();
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
   });
+
+  it("names the configured maximum when the video speed cap is on", () => {
+    render(panel({ limitSpeed: true, speedLimitPercent: 35 }));
+    expect(screen.getByText("35% max")).toBeInTheDocument();
+    expect(screen.getByText("Travel is capped at 35% without changing the video clock.")).toBeInTheDocument();
+  });
+
   it("reports what the filters measurably changed", () => {
     render(panel({
       smoothingPercent: 3,

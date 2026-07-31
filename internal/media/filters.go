@@ -145,7 +145,6 @@ func filletCorner(
 	// uniformly in u samples uniformly in time.
 	knots := make([]motion.CurvePoint, 0, samples+2)
 	knots = append(knots, start)
-	apexShift := 0.0
 	for step := 1; step <= samples; step++ {
 		u := float64(step) / float64(samples+1)
 		position := quadraticBezier(start.PositionPercent, vertex.PositionPercent, end.PositionPercent, u)
@@ -153,11 +152,24 @@ func filletCorner(
 		if at <= knots[len(knots)-1].TimeMillis || at >= end.TimeMillis {
 			continue
 		}
-		apexShift = math.Max(apexShift, math.Abs(vertex.PositionPercent-position))
 		knots = append(knots, motion.CurvePoint{TimeMillis: at, PositionPercent: position})
 	}
 	knots = append(knots, end)
-	return knots, apexShift
+
+	// Report the closest emitted point to the authored extreme. The old metric
+	// selected the knot farthest from the vertex, which is near the fillet edge
+	// and overstates how much the actual rounded apex was cut.
+	roundedExtreme := knots[0].PositionPercent
+	if vertex.PositionPercent > start.PositionPercent && vertex.PositionPercent > end.PositionPercent {
+		for _, knot := range knots[1:] {
+			roundedExtreme = math.Max(roundedExtreme, knot.PositionPercent)
+		}
+	} else {
+		for _, knot := range knots[1:] {
+			roundedExtreme = math.Min(roundedExtreme, knot.PositionPercent)
+		}
+	}
+	return knots, math.Abs(vertex.PositionPercent - roundedExtreme)
 }
 
 func quadraticBezier(start, control, end, u float64) float64 {

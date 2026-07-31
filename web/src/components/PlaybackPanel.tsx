@@ -14,6 +14,12 @@ const MAX_SMOOTHING_PERCENT = 5;
 const MAX_ROUNDING_MILLIS = 200;
 const WRITE_DEBOUNCE_MILLIS = 180;
 
+export interface MediaPlaybackPatch {
+  script_smoothing_percent?: number;
+  peak_rounding_ms?: number;
+  apply_video_speed_limit?: boolean;
+}
+
 interface Props {
   video: MediaVideo;
   sync: MediaSyncStatus;
@@ -22,9 +28,11 @@ interface Props {
   smoothingPercent: number;
   roundingMillis: number;
   limitSpeed: boolean;
+  speedLimitPercent: number;
   onClose: () => void;
   onVideoUpdate?: (video: MediaVideo) => void;
-  onFiltersChanged?: () => void;
+  onFiltersChanging?: () => void;
+  onFiltersChanged?: (patch: MediaPlaybackPatch) => Promise<void>;
 }
 
 export function PlaybackPanel({
@@ -35,8 +43,10 @@ export function PlaybackPanel({
   smoothingPercent,
   roundingMillis,
   limitSpeed,
+  speedLimitPercent,
   onClose,
   onVideoUpdate,
+  onFiltersChanging,
   onFiltersChanged,
 }: Props) {
   const [offset, setOffset] = useState(video.script_offset_ms ?? 0);
@@ -46,13 +56,16 @@ export function PlaybackPanel({
   const [error, setError] = useState("");
   const panelRef = useRef<HTMLDivElement | null>(null);
   const offsetTimer = useRef<number>();
+  const filterTimer = useRef<number>();
+  const pendingFilters = useRef<MediaPlaybackPatch>({});
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      window.clearTimeout(offsetTimer.current);
+      // Debounced writes intentionally survive the panel closing. Dismissing a
+      // floating panel immediately after a drag must not discard the value.
     };
   }, []);
 
@@ -94,17 +107,23 @@ export function PlaybackPanel({
     }, WRITE_DEBOUNCE_MILLIS);
   }, [onVideoUpdate, video]);
 
-  const writeFilters = useCallback((patch: Record<string, number | boolean>) => {
-    void api.saveMediaPlayback(patch)
-      .then(() => {
-        if (!mounted.current) return;
-        setError("");
-        onFiltersChanged?.();
-      })
-      .catch((reason: unknown) => {
-        if (mounted.current) setError(reason instanceof Error ? reason.message : "Filters could not be saved.");
-      });
-  }, [onFiltersChanged]);
+  const writeFilters = useCallback((patch: MediaPlaybackPatch) => {
+    onFiltersChanging?.();
+    pendingFilters.current = { ...pendingFilters.current, ...patch };
+    window.clearTimeout(filterTimer.current);
+    filterTimer.current = window.setTimeout(() => {
+      const next = pendingFilters.current;
+      pendingFilters.current = {};
+      const write = onFiltersChanged ? onFiltersChanged(next) : api.saveMediaPlayback(next).then(() => undefined);
+      void write
+        .then(() => {
+          if (mounted.current) setError("");
+        })
+        .catch((reason: unknown) => {
+          if (mounted.current) setError(reason instanceof Error ? reason.message : "Filters could not be saved.");
+        });
+    }, WRITE_DEBOUNCE_MILLIS);
+  }, [onFiltersChanged, onFiltersChanging]);
 
   function changeOffset(millis: number) {
     const next = clamp(millis, -MAX_OFFSET_MILLIS, MAX_OFFSET_MILLIS);
@@ -235,14 +254,15 @@ export function PlaybackPanel({
               }}
             />
             <span>{t("Limit speed")}</span>
-            <output>{speedLimit ? t("on") : t("off")}</output>
+            <output>{speedLimit ? t("{percent}% max", { percent: speedLimitPercent }) : t("off")}</output>
           </label>
         </fieldset>
 
         <footer className="playback-panel-foot">
           <p className="playback-panel-effect" role="status">
             {!filtered && t("Playing the script exactly as authored.")}
-            {filtered && !hasMeasuredEffect && t("Filters on; effect is measured when motion re-arms.")}
+            {filtered && !hasMeasuredEffect && speedLimit && t("Travel is capped at {percent}% without changing the video clock.", { percent: speedLimitPercent })}
+            {filtered && !hasMeasuredEffect && !speedLimit && t("Filters on; effect is measured when motion re-arms.")}
             {filtered && hasMeasuredEffect && (actionsRemoved > 0 && peakReductionPercent > 0
               ? t("{count} actions removed · peaks up to {percent}% lower", {
                 count: formatNumber(actionsRemoved),

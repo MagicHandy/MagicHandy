@@ -14,10 +14,12 @@ interface Props {
   script: MediaFunscript;
   currentTime: number;
   hidden: boolean;
+  onSeekCancel?: () => void;
   onSeek: (milliseconds: number) => void;
+  onSeekStart?: () => void;
 }
 
-export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props) {
+export function FunscriptTimeline({ script, currentTime, hidden, onSeek, onSeekCancel, onSeekStart }: Props) {
   const baseRef = useRef<HTMLCanvasElement>(null);
   const playheadRef = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
@@ -85,6 +87,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
   function startSeek(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button > 0) return;
     dragging.current = true;
+    onSeekStart?.();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     previewAtClientX(event.clientX);
     event.preventDefault();
@@ -115,6 +118,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    onSeekCancel?.();
   }
 
   function keyboardSeek(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -139,6 +143,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek }: Props
         return;
     }
     event.preventDefault();
+    onSeekStart?.();
     onSeek(Math.max(0, Math.min(duration, next)));
   }
 

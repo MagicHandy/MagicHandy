@@ -79,6 +79,23 @@ describe("MediaVideoPlayer", () => {
     expect(onPlaybackEvent).toHaveBeenCalledWith("playing", player);
   });
 
+  it("renders synchronized controls inside the video frame", () => {
+    render(
+      <MediaVideoPlayer
+        video={video("paired")}
+        allowMetadataWrite={false}
+        controlsEnabled={false}
+        videoOverlay={<div data-testid="transport-overlay">controls</div>}
+      />,
+    );
+
+    const player = screen.getByLabelText("paired");
+    const frame = player.closest(".media-video-frame");
+    const overlay = screen.getByTestId("transport-overlay");
+    expect(frame).toContainElement(overlay);
+    expect(player.nextElementSibling).toBe(overlay);
+  });
+
   it("does not rewrite an equivalent browser duration", () => {
     render(<MediaVideoPlayer video={video("session", 41900)} allowMetadataWrite synchronized />);
     const player = screen.getByLabelText("session") as HTMLVideoElement;
