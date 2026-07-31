@@ -600,30 +600,20 @@ type catalogPatternSpec struct {
 // catalogPatternSpecs are deliberately selected complete cycles. None is
 // a random excerpt; every final travel interval closes the shape back onto its
 // first point before the hardware-budget pass runs.
+//
+// Travel times for the velocity-authored entries are derived, not chosen: each
+// is amplitude divided by an intended stroke speed. Authoring positions and
+// times as unrelated lists is what let the retired catalog put a 14-unit stroke
+// and an 84-unit stroke on the same 760ms, giving 18%/s next to 116%/s inside
+// one pattern. Those entries also reach the cycle floor by repeating their
+// phrase rather than by letting mustFitCatalog stretch every timestamp, which
+// would divide every velocity by the same factor.
 var catalogPatternSpecs = []catalogPatternSpec{
-	{
-		ID: PatternWaves, Name: "Waves", Description: "Strokes swell deeper, crest, and recede.",
-		Positions:    []float64{30, 55, 25, 75, 20, 95, 25, 75, 30, 55},
-		TravelMillis: []int64{600, 550, 650, 550, 750, 650, 550, 650, 550, 700},
-		Tags:         []string{"swell", "varied", "breathing"},
-	},
-	{
-		ID: PatternClimb, Name: "Climb", Description: "Each stroke reaches farther before a full release.",
-		Positions:    []float64{10, 40, 20, 55, 30, 70, 40, 85, 50, 100},
-		TravelMillis: []int64{620, 560, 620, 560, 620, 560, 620, 560, 720, 720},
-		Tags:         []string{"build", "progressive", "release"},
-	},
 	{
 		ID: PatternFlutter, Name: "Flutter", Description: "Tight mid-span strokes open into one full sweep.",
 		Positions:    []float64{45, 70, 45, 70, 45, 70, 45, 70, 5, 95},
 		TravelMillis: []int64{500, 500, 500, 500, 500, 500, 500, 850, 900, 850},
 		Tags:         []string{"flutter", "contrast", "tight"},
-	},
-	{
-		ID: PatternSway, Name: "Sway", Description: "Broad asymmetric arcs lean from side to side.",
-		Positions:    []float64{18, 82, 34, 94, 26, 74, 42, 88},
-		TravelMillis: []int64{850, 650, 900, 600, 800, 700, 900, 1200},
-		Tags:         []string{"broad", "asymmetric", "flowing"},
 	},
 	{
 		ID: PatternDrift, Name: "Drift", Description: "A steady-width stroke migrates upward and returns.",
@@ -632,40 +622,109 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Tags:         []string{"migrating", "progressive", "smooth"},
 	},
 	{
-		ID: PatternDoubleTap, Name: "Double Tap", Description: "Paired accents alternate with deeper sweeps.",
-		Positions:    []float64{18, 72, 28, 76, 18, 96, 32, 90},
-		TravelMillis: []int64{620, 500, 560, 780, 900, 620, 540, 1080},
-		Tags:         []string{"paired", "accent", "contrast"},
+		ID: PatternEasingDown, Name: "Easing Down",
+		Description:  "The stroke window steps steadily lower without losing pace. Use when winding down from a peak or easing intensity back.",
+		Positions:    []float64{100, 56, 86, 42, 72, 28, 58, 14, 100, 56, 86, 42, 72, 28, 58, 14},
+		TravelMillis: []int64{518, 484, 518, 484, 518, 484, 518, 717, 518, 484, 518, 484, 518, 484, 518, 717},
+		Tags:         []string{"easing", "descending", "calming"},
 	},
 	{
-		ID: PatternCascade, Name: "Cascade", Description: "Successive peaks descend before a clean reset.",
-		Positions:    []float64{12, 96, 24, 82, 34, 68, 42, 56},
-		TravelMillis: []int64{760, 620, 760, 620, 760, 620, 760, 1700},
-		Tags:         []string{"descending", "release", "stepped"},
+		ID: PatternBuildingUp, Name: "Building Up",
+		Description:  "The stroke window climbs step by step, then one full sweep resets it. Use when building intensity or answering an eager reply.",
+		Positions:    []float64{0, 44, 14, 58, 28, 72, 42, 86, 0, 44, 14, 58, 28, 72, 42, 86},
+		TravelMillis: []int64{518, 484, 518, 484, 518, 484, 518, 717, 518, 484, 518, 484, 518, 484, 518, 717},
+		Tags:         []string{"building", "ascending", "progressive"},
 	},
 	{
-		ID: PatternPendulum, Name: "Pendulum", Description: "Long and short centered arcs alternate evenly.",
-		Positions:    []float64{10, 90, 28, 72, 16, 84, 38, 62},
-		TravelMillis: []int64{900, 650, 1050, 600, 850, 700, 1000, 850},
-		Tags:         []string{"alternating", "centered", "swing"},
+		ID: PatternBroadAndTight, Name: "Broad and Tight",
+		Description:  "One wide sweep answered by a run of tight centered strokes. Use for playful contrast that keeps a steady pace.",
+		Positions:    []float64{6, 94, 34, 66, 34, 66, 6, 94, 34, 66, 34, 66},
+		TravelMillis: []int64{733, 500, 516, 516, 516, 968, 733, 500, 516, 516, 516, 968},
+		Tags:         []string{"contrast", "paired", "centered"},
 	},
 	{
-		ID: PatternSurge, Name: "Surge", Description: "One full sweep settles through progressively smaller echoes.",
-		Positions:    []float64{10, 100, 28, 88, 40, 76, 48, 66},
-		TravelMillis: []int64{900, 620, 800, 620, 720, 620, 660, 1660},
-		Tags:         []string{"full", "decay", "echo"},
+		ID: PatternUpperAccents, Name: "Upper Accents",
+		Description:  "Quick accents in the upper range answered by one broad sweep. Use to hold attention near the top.",
+		Positions:    []float64{8, 96, 62, 96, 62, 96, 8, 96, 62, 96, 62, 96},
+		TravelMillis: []int64{721, 486, 486, 486, 486, 721, 721, 486, 486, 486, 486, 721},
+		Tags:         []string{"upper", "accent", "teasing"},
 	},
 	{
-		ID: PatternRolling, Name: "Rolling", Description: "Offset medium and deep strokes keep the center moving.",
-		Positions:    []float64{20, 65, 35, 85, 25, 75, 45, 95, 30, 70},
-		TravelMillis: []int64{650, 560, 720, 580, 680, 560, 760, 600, 700, 790},
-		Tags:         []string{"layered", "varied", "flowing"},
+		ID: PatternLowerAccents, Name: "Lower Accents",
+		Description:  "Quick accents in the lower range answered by one broad sweep. Use to keep the motion low and deep.",
+		Positions:    []float64{92, 4, 38, 4, 38, 4, 92, 4, 38, 4, 38, 4},
+		TravelMillis: []int64{721, 486, 486, 486, 486, 721, 721, 486, 486, 486, 486, 721},
+		Tags:         []string{"lower", "accent", "deep"},
 	},
 	{
-		ID: PatternSyncopate, Name: "Syncopate", Description: "Uneven accents resolve through a complete repeating phrase.",
-		Positions:    []float64{18, 78, 30, 92, 22, 62, 12, 88, 40, 72},
-		TravelMillis: []int64{520, 900, 560, 700, 500, 1100, 620, 540, 960, 700},
-		Tags:         []string{"syncopated", "accent", "varied"},
+		ID: PatternSteadyDrift, Name: "Steady Drift",
+		Description:  "A single unchanging pace while the stroke window wanders up and back. Use for a calm, hypnotic stretch or a dependable baseline.",
+		Positions:    []float64{10, 52, 20, 62, 30, 72, 10, 52, 20, 62, 30, 72},
+		TravelMillis: []int64{600, 457, 600, 457, 600, 886, 600, 457, 600, 457, 600, 886},
+		Tags:         []string{"steady", "migrating", "calm"},
+	},
+	{
+		ID: PatternNarrowing, Name: "Narrowing",
+		Description:  "Strokes close in toward the center and the pace eases with them. Use to concentrate and quiet the motion.",
+		Positions:    []float64{15, 85, 21, 79, 28, 72, 35, 65, 15, 85, 21, 79, 28, 72, 35, 65},
+		TravelMillis: []int64{522, 525, 518, 520, 512, 514, 484, 510, 522, 525, 518, 520, 512, 514, 484, 510},
+		Tags:         []string{"narrowing", "easing", "centered"},
+	},
+	{
+		ID: PatternOpeningUp, Name: "Opening Up",
+		Description:  "Strokes widen out from the center and pick up pace as they go. Use to open the motion out of a tight stretch.",
+		Positions:    []float64{35, 65, 28, 72, 21, 79, 15, 85, 35, 65, 28, 72, 21, 79, 15, 85},
+		TravelMillis: []int64{484, 514, 512, 520, 518, 525, 522, 510, 484, 514, 512, 520, 518, 525, 522, 510},
+		Tags:         []string{"widening", "building", "centered"},
+	},
+	{
+		ID: PatternRocking, Name: "Rocking",
+		Description:  "Even mid-range strokes at one unchanging pace, nothing else. Use as a plain dependable rhythm to settle into.",
+		Positions:    []float64{25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25, 75},
+		TravelMillis: []int64{556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556},
+		Tags:         []string{"steady", "even", "centered"},
+	},
+	{
+		ID: PatternThreeAndOne, Name: "Three and One",
+		Description:  "Three tight strokes held up high, then one full plunge and recovery. Use for a grouped phrase with a clear landing.",
+		Positions:    []float64{95, 65, 95, 65, 95, 65, 95, 5, 95, 65, 95, 65, 95, 65, 95, 5},
+		TravelMillis: []int64{484, 484, 484, 484, 484, 484, 738, 738, 484, 484, 484, 484, 484, 484, 738, 738},
+		Tags:         []string{"grouped", "resolving", "upper"},
+	},
+	{
+		ID: PatternOffbeat, Name: "Offbeat",
+		Description:  "Even strokes broken by one deeper reach off the beat. Use when the rhythm should stay unpredictable.",
+		Positions:    []float64{16, 64, 16, 64, 16, 92, 16, 64, 16, 64, 16, 92},
+		TravelMillis: []int64{667, 667, 667, 667, 1056, 623, 667, 667, 667, 667, 1056, 623},
+		Tags:         []string{"syncopated", "accent", "varied"}, Experimental: true,
+	},
+	{
+		ID: PatternLongReturn, Name: "Long Return",
+		Description:  "A quick reach answered by an unhurried return, over and over. Use for a leaning, asymmetric feel.",
+		Positions:    []float64{10, 78, 10, 78, 10, 78, 10, 78},
+		TravelMillis: []int64{567, 1097, 567, 1097, 567, 1097, 567, 1097},
+		Tags:         []string{"asymmetric", "leaning", "paired"}, Experimental: true,
+	},
+	{
+		ID: PatternSwell, Name: "Swell",
+		Description:  "The stroke window rises across the whole cycle and settles back down again. Use for one long unbroken arc rather than a repeating beat.",
+		Positions:    []float64{5, 45, 15, 55, 25, 65, 35, 75, 25, 65, 15, 55, 5, 45, 15, 55, 25, 65, 35, 75, 25, 65, 15, 55},
+		TravelMillis: []int64{500, 484, 500, 484, 500, 484, 500, 510, 500, 510, 500, 510, 500, 484, 500, 484, 500, 484, 500, 510, 500, 510, 500, 510},
+		Tags:         []string{"arc", "migrating", "long"}, Experimental: true,
+	},
+	{
+		ID: PatternSurgeAndSettle, Name: "Surge and Settle",
+		Description:  "One fast full sweep drops into a long run of moderate mid strokes. Use to punctuate hard, then recover for a while.",
+		Positions:    []float64{2, 98, 35, 68, 35, 68, 35, 68, 35, 68, 35, 68, 2, 98, 35, 68, 35, 68, 35, 68, 35, 68, 35, 68},
+		TravelMillis: []int64{686, 573, 485, 485, 485, 485, 485, 485, 485, 485, 485, 589, 686, 573, 485, 485, 485, 485, 485, 485, 485, 485, 485, 589},
+		Tags:         []string{"accent", "recovery", "long"}, Experimental: true,
+	},
+	{
+		ID: PatternCrosscut, Name: "Crosscut",
+		Description:  "A long block of broad strokes trades places with a long block of tight ones. Use for restless variety that still keeps a beat.",
+		Positions:    []float64{8, 88, 8, 88, 8, 88, 55, 85, 55, 85, 55, 85},
+		TravelMillis: []int64{640, 640, 640, 640, 640, 485, 484, 484, 484, 484, 484, 631},
+		Tags:         []string{"alternating", "blocks", "restless"}, Experimental: true,
 	},
 	{
 		ID: PatternFourLevelCircuit, Name: "Four-Level Circuit", Description: "Full and partial strokes rotate through both halves of the range.",
@@ -686,46 +745,10 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Tags:         []string{"uneven", "deep", "upper-return"},
 	},
 	{
-		ID: PatternShortMediumSteps, Name: "Short-Medium Steps", Description: "Lower returns repeat short peaks with occasional medium reaches.",
-		Positions:    []float64{0, 25, 0, 45, 0, 25, 0, 25, 0, 45},
-		TravelMillis: []int64{471, 472, 1414, 472, 471, 472, 472, 471, 1414, 471},
-		Tags:         []string{"short", "medium", "lower-return"},
-	},
-	{
-		ID: PatternDeepMediumShortPairs, Name: "Deep, Medium, Short", Description: "Paired strokes move from broad reaches through medium and shorter ranges.",
-		Positions:    []float64{10, 90, 0, 40, 10, 60, 0, 40},
-		TravelMillis: []int64{1246, 1134, 1466, 534, 500, 733, 400, 533},
-		Tags:         []string{"paired", "range-change", "descending"}, Experimental: true,
-	},
-	{
-		ID: PatternFallingCrest, Name: "Falling Crest", Description: "Broad strokes lower successive upper reversals while the return point wanders.",
-		Positions:    []float64{100, 11, 89, 0, 78, 33, 67, 0},
-		TravelMillis: []int64{719, 640, 602, 927, 1177, 669, 1039, 1545},
-		Tags:         []string{"descending", "broad", "migrating"}, Experimental: true,
-	},
-	{
-		ID: PatternThreeDeepOneShort, Name: "Three Deep, One Short", Description: "A grouped run of broad strokes resolves with one shorter phrase.",
-		Positions:    []float64{0, 100, 20, 90, 0, 100, 10, 50},
-		TravelMillis: []int64{1615, 1139, 1020, 1273, 1574, 1366, 1241, 1606},
-		Tags:         []string{"deep", "grouped", "contrast"}, Experimental: true,
-	},
-	{
-		ID: PatternDescendingLadder, Name: "Descending Ladder", Description: "Both endpoints step downward before one broad rebound.",
-		Positions:    []float64{100, 50, 90, 40, 80, 20, 100, 60},
-		TravelMillis: []int64{445, 468, 410, 439, 474, 730, 1657, 784},
-		Tags:         []string{"stepped", "descending", "rebound"}, Experimental: true,
-	},
-	{
 		ID: PatternSlowFastFull, Name: "Slow-to-Fast Full", Description: "Two measured full strokes transition into a run of faster full strokes.",
 		Positions:    []float64{0, 100, 0, 100, 0, 100, 0, 100, 0, 100},
 		TravelMillis: []int64{702, 1170, 701, 1204, 471, 470, 470, 470, 471, 471},
 		Tags:         []string{"full", "tempo-change", "accelerating"},
-	},
-	{
-		ID: PatternWanderingSwell, Name: "Wandering Swell", Description: "Changing centers and stroke spans build toward a full closing sweep.",
-		Positions:    []float64{20, 80, 10, 60, 30, 90, 20, 79, 4, 100},
-		TravelMillis: []int64{767, 1535, 701, 400, 801, 901, 634, 1668, 1268, 834},
-		Tags:         []string{"migrating", "swell", "varied"}, Experimental: true,
 	},
 	{
 		ID: PatternDeepPartialSequence, Name: "Deep-Partial Sequence", Description: "Lower returns mix full-depth and partial-depth strokes with uneven accents.",

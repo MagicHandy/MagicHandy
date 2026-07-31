@@ -125,6 +125,30 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-30** - Retired the 15 built-ins the user had disabled by hand and
+  replaced them with 15 velocity-authored ones. Measuring the disabled set found
+  two failure modes: five stalled, spending a contiguous span under 30%/s
+  (`Cascade` 2.46 s of a 6.6 s loop, `Descending Ladder` 2.04 s, `Deep, Medium,
+  Short` 1.68 s, `Pendulum` 1.04 s, `Surge` 0.68 s) against 0.15 s worst for any
+  retained pattern; the other ten never held a pace, averaging a 33%/s slowest
+  stroke against 62%/s retained. The cause was that `Positions` and
+  `TravelMillis` were independent lists, so stroke velocity was never designed --
+  `Cascade` put a 14-unit and an 84-unit stroke on nearly the same duration.
+  Replacements derive travel time from an intended stroke velocity and reach the
+  cycle floor by repeating their phrase instead of letting `mustFitCatalog`
+  stretch every timestamp, which had slowed `Descending Ladder` 1.22x. Cycles run
+  6.7-12.4 s and no two replacements are near-duplicates by shape. The former
+  screening rule rewarded reach *variety*, which measurement contradicts -- the
+  disabled set was the more varied one -- so it is replaced by a speed envelope
+  taken from the retained patterns, admitting all 13 and rejecting 12 of the 15
+  retired (`Sway`, `Rolling`, and `Double Tap` sit inside the retained range).
+  `TestAdaptiveCatalogFramesReduceSubtleStairSteps...` was restated: its
+  "adaptive beats fixed by 10%" margin came from the stalling patterns
+  manufacturing the fixed-frame baseline, not from the framer. Live catalog worst
+  stall is now 172 ms, down from 2,475 ms. Retirement reuses the existing
+  `seedBuiltins` delete, so feedback rows cascade away. gofmt, go vet,
+  golangci-lint (0 issues), and full Go tests pass.
+
 - **2026-07-30** - Replaced passive read-only controller status with an
   explicit **Take control** action. Handoff marks every browser read-only,
   invokes global Emergency Stop on a detached bounded context, and transfers
