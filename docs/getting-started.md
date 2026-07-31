@@ -20,19 +20,15 @@ happens:
 - It repairs Windows Package Manager (WinGet) through Microsoft's supported
   path when needed, then installs and verifies Go.
 - Choosing the **managed llama.cpp build** additionally provisions Git, CMake,
-  the Visual Studio Desktop C++ workload, and CUDA when selected. That choice
-  also provisions LLVM/libclang, eSpeak NG 1.52, and pinned Rust 1.94.0 through Rustup, builds
-  MagicHandy's persistent NeuTTS runner with the same CPU/CUDA backend, and
-  installs a checksum-verified Air Q4 backbone, a decoder converted from a
-  checksum-verified NeuCodec checkpoint, and a pinned ONNX reference encoder.
-- Choosing **Ollama** instead avoids the managed source builds and also skips
-  NeuTTS; the installer can provision Ollama too.
-- The installer builds the core and all three first-party Go voice adapters.
+  the Visual Studio Desktop C++ workload, and CUDA when selected.
+- Choosing **Ollama** instead avoids the managed llama.cpp source build; the
+  installer can provision Ollama too.
+- The installer builds the core and all first-party Go voice adapters.
   The optional Parakeet runner and its 644 MiB model remain a separate,
   checksum-verified prompt, and voice remains disabled until you enable it.
-- For NeuTTS, users supply a reference WAV and its exact transcript; Settings
-  generates the `.npy` reference codes locally without Python. Manual
-  pre-encoded paths remain available under Advanced.
+- Optional Faster Qwen3-TTS and Chatterbox local speech modules are installed
+  separately. Their Python, PyTorch, and model files never become normal app or
+  llama.cpp install dependencies.
 - Enabled speech input and **Speak chat replies** load their configured workers
   automatically on later app starts. Installing assets alone does not enable
   either feature.
@@ -45,7 +41,7 @@ happens:
 | --- | --- |
 | `-UILanguage ja` | Set the installer and app UI locale (`en`, `es`, `pt-BR`, `zh-Hans`, or `ja`) |
 | `-ChatLanguage es` | Select the matching built-in chat reply prompt |
-| `-SkipLlamaBuild` | Choose Ollama; skip managed llama.cpp and NeuTTS |
+| `-SkipLlamaBuild` | Choose Ollama and skip managed llama.cpp |
 | `-Yes` | Unattended: accepts the displayed third-party package licenses and large-download choices |
 | `-LlamaBackend cuda` | Select the CUDA build of managed llama.cpp |
 | `-PlanOnly` | Show the planned work without doing any of it |
@@ -75,6 +71,30 @@ the app so an old in-memory settings snapshot cannot overwrite the change.
 Package IDs, the state schema, and the full command reference live in
 [source-installer.md](source-installer.md).
 
+## Optional local TTS
+
+Install local cloning only after the main app build:
+
+```powershell
+.\scripts\install-tts-module.ps1
+```
+
+The script offers Faster Qwen3-TTS for NVIDIA/CUDA systems and Chatterbox
+Turbo as the CPU/broader-hardware fallback. It shows the pinned source,
+license, model, destination, and multi-gigabyte download warning before
+consent, creates an isolated `uv` environment, and writes the selected
+provider and auto-launch choice into MagicHandy's SQLite settings. Use
+`-PlanOnly` to inspect the operation without changing the machine.
+
+To update an installed module while preserving its choices:
+
+```powershell
+.\scripts\update-tts-module.ps1
+```
+
+Full provider behavior, reference-audio requirements, and ownership rules are
+in [voice-tts-modules.md](voice-tts-modules.md).
+
 ## Updating (`update.ps1`)
 
 ```powershell
@@ -83,7 +103,7 @@ Package IDs, the state schema, and the full command reference live in
 
 The updater restores the saved UI language before showing its banner. It then
 shows the saved UI/chat languages, data directory, port,
-llama.cpp/NeuTTS/Ollama selection, Parakeet choice, and launcher choice before
+llama.cpp/Ollama selection, Parakeet choice, and launcher choice before
 asking whether to modify them. It rebuilds through the same provisioning implementation as the
 installer, and it:
 

@@ -4,18 +4,16 @@
 
 .DESCRIPTION
     The installer can start on a machine without Go, Git, CMake, a C++ compiler,
-    Rust, LLVM/libclang, CUDA, or Ollama. Missing selected dependencies are installed with WinGet
+    CUDA, or Ollama. Missing selected dependencies are installed with WinGet
     after explicit consent, then verified before the build continues. If WinGet
     itself is unavailable, the script offers the official Microsoft repair path.
 
     The core app and all first-party Go voice adapters are built with CGO
     disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
-    runner/model remain explicit choices. Selecting managed llama.cpp also builds
-    MagicHandy's persistent NeuTTS runner with the selected CPU or CUDA backend
-    and installs its verified decoder, Air Q4 backbone, and local
-    WAV-to-reference encoder. Skipping managed llama.cpp skips NeuTTS. Users
-    supply a reference WAV and its exact transcript; the app generates the codes
-    without Python. No model is downloaded at app startup.
+    runner/model remain explicit choices. Optional local cloning TTS is installed
+    separately with scripts\install-tts-module.ps1, so Python, PyTorch, and
+    speech models never become core-install dependencies. No model is downloaded
+    at app startup.
 
     Non-secret installation choices are stored under LocalAppData so update.ps1
     can preserve or revise them. API keys and the Handy connection key are never
@@ -41,8 +39,7 @@
     NVIDIA GPU is detected and the user accepts installing a missing CUDA Toolkit.
 
 .PARAMETER SkipLlamaBuild
-    Skip the app-owned llama.cpp source build and the coupled NeuTTS runtime/model
-    installation, then ensure Ollama is available.
+    Skip the app-owned llama.cpp source build, then ensure Ollama is available.
 
 .PARAMETER OllamaModel
     Optional model name to ensure with Ollama. Blank leaves its model library
@@ -56,8 +53,7 @@
 
 .PARAMETER Yes
     Accept the documented defaults and third-party package/license prompts. This
-    installs the complete selected source-build toolchain and the coupled NeuTTS
-    runtime/model assets without stopping for input.
+    installs the complete selected source-build toolchain without stopping for input.
 
 .PARAMETER NoLaunch
     Build and configure without starting the app.
@@ -74,12 +70,12 @@
 
 .EXAMPLE
     .\install.ps1 -Yes -LlamaBackend cuda -NoLaunch
-    Provision the CUDA source-build toolchain, managed llama.cpp, NeuTTS, Ollama,
+    Provision the CUDA source-build toolchain, managed llama.cpp, Ollama,
     Parakeet, and all app/voice adapter binaries without launching.
 
 .EXAMPLE
     .\install.ps1 -Yes -SkipLlamaBuild -NoLaunch
-    Use Ollama instead of storing managed llama.cpp; NeuTTS is also skipped.
+    Use Ollama instead of storing managed llama.cpp.
 
 .EXAMPLE
     .\install.ps1 -Yes -UILanguage ja -ChatLanguage es -NoLaunch
@@ -228,7 +224,6 @@ function New-FreshConfiguration {
         } else {
             Write-Host ''
             Write-Host (Get-MagicHandyText -Key 'llama_benefit')
-            Write-Host (Get-MagicHandyText -Key 'llama_neutts')
             Write-Host (Get-MagicHandyText -Key 'llama_ollama_tradeoff') -ForegroundColor DarkGray
             Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'llama_question') -Default $true
         }
@@ -305,7 +300,6 @@ function Read-ReconfiguredState([object]$Existing) {
     $ensureOllama = $false
     $model = ''
     if ($setupLLM) {
-        Write-Host (Get-MagicHandyText -Key 'neutts_managed_note') -ForegroundColor DarkGray
         $buildManaged = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'llama_keep_question') -Default ([bool]$Existing.build_managed_llama)
         if ($buildManaged) {
             $backendDefault = if ([string]$Existing.llama_backend -eq 'cuda') { 'cuda' } else { 'cpu' }

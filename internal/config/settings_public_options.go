@@ -66,12 +66,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			PromptSetMagicHandyMotionV1ZHHans,
 			PromptSetMagicHandyMotionV1JA,
 		},
-		TTSProviders: []string{
-			VoiceProviderNone,
-			VoiceTTSProviderElevenLabs,
-			VoiceTTSProviderNeuTTSAir,
-			VoiceProviderCustom,
-		},
+		TTSProviders: voiceTTSProviderOptions(),
 		ASRProviders: []string{
 			VoiceProviderNone,
 			VoiceASRProviderParakeet,
@@ -82,10 +77,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			ParakeetSourceApp,
 			ParakeetSourceCustom,
 		},
-		NeuTTSSamplingModes: []string{
-			NeuTTSSamplingFixed,
-			NeuTTSSamplingRandom,
-		},
+		TTSDevices: voiceTTSDeviceOptions(),
 		ChatStartupBehaviors: []string{
 			ChatStartupPrevious,
 			ChatStartupNew,
@@ -99,4 +91,19 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 		},
 		Themes: SupportedUIThemes(),
 	}
+}
+
+func voiceTTSProviderOptions() []string {
+	return []string{
+		VoiceProviderNone,
+		VoiceTTSProviderElevenLabs,
+		VoiceTTSProviderFasterQwen,
+		VoiceTTSProviderChatterbox,
+		VoiceTTSProviderOpenAICompat,
+		VoiceProviderCustom,
+	}
+}
+
+func voiceTTSDeviceOptions() []string {
+	return []string{TTSDeviceAuto, TTSDeviceCUDA, TTSDeviceCPU}
 }

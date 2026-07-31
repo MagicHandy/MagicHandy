@@ -299,7 +299,7 @@ func TestSaveRejectsOversizedSettingsBeforeWriting(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	settings, _ := store.Snapshot()
-	settings.Voice.NeuTTSReferenceCodes = strings.Repeat("1,", maxSettingsDocumentBytes)
+	settings.Voice.TTSWorkerArgs = []string{strings.Repeat("x", maxSettingsDocumentBytes)}
 	if _, err := store.Save(settings); !errors.Is(err, errSettingsDocumentTooLarge) {
 		t.Fatalf("Save oversized settings error = %v, want size-limit error", err)
 	}

@@ -57,51 +57,50 @@ type Runtime struct {
 
 // Server owns the local HTTP routes and embedded static asset serving.
 type Server struct {
-	static                 fs.FS
-	logger                 *slog.Logger
-	store                  *config.Store
-	traces                 *diagnostics.TraceRing
-	transport              transport.DiagnosticsProvider
-	cloud                  cloudRuntime
-	bluetooth              bluetoothRuntime
-	intiface               intifaceRuntime
-	motion                 motionRuntime
-	llm                    llmRuntime
-	models                 *llm.ModelManager
-	managedLLM             *llm.ManagedLlamaRuntimeManager
-	controller             controllerRuntime
-	personalization        personalizationRuntime
-	personas               *persona.Store
-	modes                  *modes.Manager
-	voice                  *voice.Manager
-	voiceExecutable        string
-	voiceDataDir           string
-	voiceAutoloadMu        sync.Mutex
-	voiceAutoloadCancel    context.CancelFunc
-	voiceAutoloadWG        sync.WaitGroup
-	neuttsAdapterInstalled atomic.Bool
-	stopSequence           atomic.Uint64
-	quiescing              atomic.Bool
-	lifecycleCtx           context.Context
-	lifecycleCancel        context.CancelFunc
-	quiesceOnce            sync.Once
-	closeOnce              sync.Once
-	settingsLifecycleMu    sync.Mutex
-	chatLifecycleMu        sync.Mutex
-	personaMutationMu      sync.Mutex
-	chatCancelMu           sync.Mutex
-	chatCancels            map[uint64]context.CancelFunc
-	nextChatID             uint64
-	chatSpeechMu           sync.Mutex
-	chatSpeechRequests     map[int64]string
-	hostPathPicker         hostPathPicker
-	chatLog                *chat.MessageLog
-	patterns               *patterns.Library
-	media                  *media.Catalog
-	mediaSync              *mediaSyncRuntime
-	started                time.Time
-	version                VersionInfo
-	handler                http.Handler
+	static              fs.FS
+	logger              *slog.Logger
+	store               *config.Store
+	traces              *diagnostics.TraceRing
+	transport           transport.DiagnosticsProvider
+	cloud               cloudRuntime
+	bluetooth           bluetoothRuntime
+	intiface            intifaceRuntime
+	motion              motionRuntime
+	llm                 llmRuntime
+	models              *llm.ModelManager
+	managedLLM          *llm.ManagedLlamaRuntimeManager
+	controller          controllerRuntime
+	personalization     personalizationRuntime
+	personas            *persona.Store
+	modes               *modes.Manager
+	voice               *voice.Manager
+	voiceExecutable     string
+	voiceDataDir        string
+	voiceAutoloadMu     sync.Mutex
+	voiceAutoloadCancel context.CancelFunc
+	voiceAutoloadWG     sync.WaitGroup
+	stopSequence        atomic.Uint64
+	quiescing           atomic.Bool
+	lifecycleCtx        context.Context
+	lifecycleCancel     context.CancelFunc
+	quiesceOnce         sync.Once
+	closeOnce           sync.Once
+	settingsLifecycleMu sync.Mutex
+	chatLifecycleMu     sync.Mutex
+	personaMutationMu   sync.Mutex
+	chatCancelMu        sync.Mutex
+	chatCancels         map[uint64]context.CancelFunc
+	nextChatID          uint64
+	chatSpeechMu        sync.Mutex
+	chatSpeechRequests  map[int64]string
+	hostPathPicker      hostPathPicker
+	chatLog             *chat.MessageLog
+	patterns            *patterns.Library
+	media               *media.Catalog
+	mediaSync           *mediaSyncRuntime
+	started             time.Time
+	version             VersionInfo
+	handler             http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.
@@ -259,7 +258,6 @@ func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings con
 func (s *Server) configureVoice(settings config.VoiceSettings, executablePath, dataDir string) {
 	s.voiceExecutable = executablePath
 	s.voiceDataDir = dataDir
-	s.neuttsAdapterInstalled.Store(isRegularFile(resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-neutts-worker")))
 	s.voice = newVoiceManager(settings, executablePath, dataDir)
 }
 

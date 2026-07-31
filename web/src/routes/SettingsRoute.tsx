@@ -84,6 +84,8 @@ export function SettingsRoute() {
   const [clearKey, setClearKey] = useState(false);
   const [newElevenLabsKey, setNewElevenLabsKey] = useState("");
   const [clearElevenLabsKey, setClearElevenLabsKey] = useState(false);
+  const [newOpenAITTSKey, setNewOpenAITTSKey] = useState("");
+  const [clearOpenAITTSKey, setClearOpenAITTSKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -164,6 +166,7 @@ export function SettingsRoute() {
     setSaving(true);
     const connectionKey = newKey.trim();
     const elevenLabsKey = newElevenLabsKey.trim();
+    const openAITTSKey = newOpenAITTSKey.trim();
     const update: SettingsUpdate = {
       server: { port: s.server.port },
       ui: {
@@ -214,6 +217,18 @@ export function SettingsRoute() {
         speak_replies: s.voice?.speak_replies ?? false,
         elevenlabs_voice_id: s.voice?.elevenlabs_voice_id ?? "",
         elevenlabs_model_id: s.voice?.elevenlabs_model_id ?? "",
+        tts_auto_launch: s.voice?.tts_auto_launch ?? false,
+        tts_base_url: s.voice?.tts_base_url ?? "http://127.0.0.1:8991",
+        tts_model: s.voice?.tts_model ?? "",
+        tts_voice: s.voice?.tts_voice ?? "",
+        tts_response_format: s.voice?.tts_response_format ?? "wav",
+        tts_health_path: s.voice?.tts_health_path ?? "/health",
+        tts_module_root: s.voice?.tts_module_root ?? "",
+        tts_server_port: s.voice?.tts_server_port ?? 8991,
+        tts_reference_wav: s.voice?.tts_reference_wav ?? "",
+        tts_reference_text: s.voice?.tts_reference_text ?? "",
+        tts_language: s.voice?.tts_language ?? "Auto",
+        tts_device: s.voice?.tts_device ?? "auto",
         parakeet_server_path: s.voice?.parakeet_server_path ?? "",
         parakeet_model_path: s.voice?.parakeet_model_path ?? "",
         parakeet_port: s.voice?.parakeet_port ?? 8990,
@@ -224,15 +239,10 @@ export function SettingsRoute() {
         input_sensitivity: s.voice?.input_sensitivity ?? 55,
         input_silence_ms: s.voice?.input_silence_ms ?? 900,
         input_noise_suppression: s.voice?.input_noise_suppression ?? true,
-        neutts_runner_path: s.voice?.neutts_runner_path ?? "",
-        neutts_reference_wav: s.voice?.neutts_reference_wav ?? "",
-        neutts_reference_codes: s.voice?.neutts_reference_codes ?? "",
-        neutts_reference_text: s.voice?.neutts_reference_text ?? "",
-        neutts_backbone: s.voice?.neutts_backbone ?? "",
-        neutts_sampling_mode: s.voice?.neutts_sampling_mode ?? "fixed",
-        neutts_sampler_seed: s.voice?.neutts_sampler_seed ?? 3,
         ...(elevenLabsKey ? { elevenlabs_api_key: elevenLabsKey } : {}),
         clear_elevenlabs_key: elevenLabsKey ? false : clearElevenLabsKey,
+        ...(openAITTSKey ? { openai_tts_api_key: openAITTSKey } : {}),
+        clear_openai_tts_key: openAITTSKey ? false : clearOpenAITTSKey,
       },
       chat: {
         startup_behavior: s.chat?.startup_behavior ?? "previous",
@@ -250,6 +260,8 @@ export function SettingsRoute() {
         setClearKey(false);
         setNewElevenLabsKey("");
         setClearElevenLabsKey(false);
+        setNewOpenAITTSKey("");
+        setClearOpenAITTSKey(false);
         await load();
       }
     } catch (e) {
@@ -268,6 +280,8 @@ export function SettingsRoute() {
     setClearKey(false);
     setNewElevenLabsKey("");
     setClearElevenLabsKey(false);
+    setNewOpenAITTSKey("");
+    setClearOpenAITTSKey(false);
   }
 
   if (!s) return (
@@ -300,7 +314,7 @@ export function SettingsRoute() {
     tts_providers: [],
     asr_providers: [],
     parakeet_sources: [],
-    neutts_sampling_modes: [],
+    tts_devices: [],
     chat_startup_behaviors: [],
     locales: [],
     themes: [],
@@ -460,12 +474,16 @@ export function SettingsRoute() {
         {section === "voice" && <VoiceSettingsPanel
           settings={s}
           locked={locked}
-          dirty={JSON.stringify(s.voice) !== JSON.stringify(saved?.voice) || Boolean(newElevenLabsKey.trim()) || clearElevenLabsKey}
+          dirty={JSON.stringify(s.voice) !== JSON.stringify(saved?.voice) || Boolean(newElevenLabsKey.trim()) || clearElevenLabsKey || Boolean(newOpenAITTSKey.trim()) || clearOpenAITTSKey}
           patch={patchVoice}
           newKey={newElevenLabsKey}
           setNewKey={(value) => { setNewElevenLabsKey(value); if (value.trim()) setClearElevenLabsKey(false); }}
           clearKey={clearElevenLabsKey}
           setClearKey={(value) => { setClearElevenLabsKey(value); if (value) setNewElevenLabsKey(""); }}
+          newOpenAIKey={newOpenAITTSKey}
+          setNewOpenAIKey={(value) => { setNewOpenAITTSKey(value); if (value.trim()) setClearOpenAITTSKey(false); }}
+          clearOpenAIKey={clearOpenAITTSKey}
+          setClearOpenAIKey={(value) => { setClearOpenAITTSKey(value); if (value) setNewOpenAITTSKey(""); }}
         />}
 
         {section === "prompts" && (

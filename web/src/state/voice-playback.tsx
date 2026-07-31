@@ -45,9 +45,9 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 async function waitForSpeech(requestId: string, signal: AbortSignal): Promise<boolean> {
-  // The worker owns its inference timeout. NeuTTS cold starts can take more
-  // than a minute, so a second, shorter browser deadline would discard valid
-  // audio while the backend is still actively producing it.
+  // The worker owns its inference timeout. Local model startup can take
+  // minutes, so a second browser deadline would discard a valid request while
+  // the backend is still loading or generating audio.
   for (;;) {
     const response = await api.voiceRequest(requestId, signal);
     const request = response.request;

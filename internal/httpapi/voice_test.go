@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -55,120 +54,235 @@ func TestResolveWorkerBinaryOrder(t *testing.T) {
 	}
 }
 
-func TestNeuTTSReferencePreparationAndPrivatePreview(t *testing.T) {
-	server := newTestServer(t)
-	directory := t.TempDir()
-	source := filepath.Join(directory, "reference.npy")
-	header := "{'descr': '<i4', 'fortran_order': False, 'shape': (3,), }          \n"
-	npy := make([]byte, 10+len(header)+12)
-	copy(npy, []byte("\x93NUMPY"))
-	npy[6] = 1
-	binary.LittleEndian.PutUint16(npy[8:10], uint16(len(header))) // #nosec G115 -- fixed test header is below 64 KiB.
-	copy(npy[10:], header)
-	for index, value := range []uint32{3, 5, 8} {
-		binary.LittleEndian.PutUint32(npy[10+len(header)+index*4:], value)
-	}
-	if err := os.WriteFile(source, npy, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	wav, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
-	if err != nil {
-		t.Fatal(err)
-	}
-	wavPath := filepath.Join(directory, "reference.wav")
-	if err := os.WriteFile(wavPath, wav, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	body, _ := json.Marshal(map[string]string{"source_path": source, "reference_wav": wavPath})
-	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/neutts/references", strings.NewReader(string(body))))
-	prepareLocalPathPickerRequest(request)
-	recorder := httptest.NewRecorder()
-	server.Handler().ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("prepare status = %d: %s", recorder.Code, recorder.Body.String())
-	}
-	var response struct {
-		Reference struct {
-			ID        string `json:"id"`
-			CodesPath string `json:"codes_path"`
-			AudioPath string `json:"audio_path"`
-		} `json:"reference"`
-		PreviewURL string `json:"preview_url"`
-	}
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-	if response.Reference.ID == "" || response.PreviewURL == "" || !strings.HasPrefix(response.Reference.CodesPath, server.voiceDataDir) || !strings.HasPrefix(response.Reference.AudioPath, server.voiceDataDir) {
-		t.Fatalf("prepare response = %+v", response)
-	}
+func TestVoiceManagerConfigComposesExternalOpenAITTS(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderOpenAICompat
+	settings.TTSWorkerPath = `C:\\workers\\openai-tts.exe`
+	settings.TTSBaseURL = "https://tts.example.test/api"
+	settings.TTSModel = "voice-model"
+	settings.TTSVoice = "speaker-a"
+	settings.TTSResponseFormat = "mp3"
+	settings.TTSHealthPath = "/ready"
+	settings.OpenAITTSAPIKey = "private-bearer"
 
-	request = withController(httptest.NewRequest(http.MethodGet, response.PreviewURL, nil))
-	prepareLocalPathPickerRequest(request)
-	recorder = httptest.NewRecorder()
-	server.Handler().ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "audio/wav" || !strings.HasPrefix(recorder.Header().Get("Cache-Control"), "no-store") {
-		t.Fatalf("preview response = %d, headers=%v", recorder.Code, recorder.Header())
+	got := voiceManagerConfig(settings, "", "")
+	if got.TTS.Command != settings.TTSWorkerPath {
+		t.Fatalf("external TTS command = %q", got.TTS.Command)
 	}
-	if !strings.HasPrefix(recorder.Body.String(), "RIFF") {
-		t.Fatal("preview did not return the managed WAV")
+	wantArgs := "-base-url|https://tts.example.test/api|-model|voice-model|-voice|speaker-a|-response-format|mp3|-health-path|/ready"
+	if joined := strings.Join(got.TTS.Args, "|"); joined != wantArgs {
+		t.Fatalf("external TTS args = %q, want %q", joined, wantArgs)
 	}
-
-	request = httptest.NewRequest(http.MethodGet, response.PreviewURL, nil)
-	prepareLocalPathPickerRequest(request)
-	recorder = httptest.NewRecorder()
-	server.Handler().ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusConflict {
-		t.Fatalf("preview without controller = %d, want 409", recorder.Code)
+	if got.TTS.Env["OPENAI_TTS_API_KEY"] != "private-bearer" ||
+		strings.Contains(strings.Join(got.TTS.Args, " "), "private-bearer") {
+		t.Fatalf("compatible TTS bearer must be environment-only: %+v", got.TTS)
+	}
+	if got.TTS.JobTimeout != 10*time.Minute {
+		t.Fatalf("compatible TTS job timeout = %v", got.TTS.JobTimeout)
 	}
 }
 
-func TestNeuTTSReferencePreparationRejectsRemoteHostPaths(t *testing.T) {
-	server := newTestServer(t)
-	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/neutts/references", strings.NewReader(`{"source_path":"C:\\private\\voice.pt"}`)))
-	request.Header.Set("Content-Type", "application/json")
-	request.Host = "127.0.0.1:49717"
-	request.RemoteAddr = "192.0.2.10:54321"
-	recorder := httptest.NewRecorder()
-	server.Handler().ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("remote reference preparation = %d, want 403: %s", recorder.Code, recorder.Body.String())
+func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
+	root := t.TempDir()
+	python := managedTestFile(t, filepath.Join(root, ".venv", managedPythonDirectory(), managedPythonName()))
+	server := managedTestFile(t, filepath.Join(root, "source", "examples", "openai_server.py"))
+	reference := managedTestFile(t, filepath.Join(root, "voice.wav"))
+
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
+	settings.TTSWorkerPath = "voice-openai-tts-worker"
+	settings.TTSAutoLaunch = true
+	settings.TTSModuleRoot = root
+	settings.TTSModel = config.DefaultFasterQwenModel
+	settings.TTSVoice = "default"
+	settings.TTSReferenceWAV = reference
+	settings.TTSReferenceText = "Exact words from the reference."
+	settings.TTSLanguage = "English"
+	settings.TTSDevice = config.TTSDeviceCUDA
+	settings.TTSServerPort = 9015
+	settings.OpenAITTSAPIKey = "stale-external-key"
+
+	got := voiceManagerConfig(settings, "", t.TempDir())
+	if got.TTS.Command != settings.TTSWorkerPath {
+		t.Fatalf("managed Faster Qwen worker = %+v", got.TTS)
+	}
+	if got.TTS.Env["HF_HOME"] != filepath.Join(root, "model-cache") ||
+		got.TTS.Env["HF_HUB_OFFLINE"] != "1" ||
+		got.TTS.Env["TRANSFORMERS_OFFLINE"] != "1" ||
+		got.TTS.Env["OPENAI_TTS_API_KEY"] != "" {
+		t.Fatalf("managed Faster Qwen environment = %+v", got.TTS.Env)
+	}
+	assertArgumentsContain(t, got.TTS.Args,
+		[2]string{"-server-command", python},
+		[2]string{"-server-dir", filepath.Join(root, "source")},
+		[2]string{"-server-port", "9015"},
+		[2]string{"-server-arg", server},
+		[2]string{"-server-arg", "--ref-audio"},
+		[2]string{"-server-arg", reference},
+		[2]string{"-server-arg", "--ref-text"},
+		[2]string{"-server-arg", settings.TTSReferenceText},
+		[2]string{"-server-arg", "--host"},
+		[2]string{"-server-arg", "127.0.0.1"},
+	)
+	if got.TTS.JobTimeout != voiceModelLoadTimeout {
+		t.Fatalf("managed Faster Qwen job timeout = %v", got.TTS.JobTimeout)
+	}
+
+	settings.TTSReferenceText = ""
+	if incomplete := voiceManagerConfig(settings, "", ""); incomplete.TTS.Command != "" {
+		t.Fatalf("incomplete managed Faster Qwen module must not start: %+v", incomplete.TTS)
 	}
 }
 
-func TestNeuTTSReferenceGenerationRejectsUntrustedManagedRuntime(t *testing.T) {
-	server := newTestServer(t)
-	runner, _, _ := installTestAppManagedNeuTTSRuntime(t, server.voiceDataDir)
-	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), []byte(`{"schema_version":2,"source_commit":"untrusted"}`), 0o600); err != nil {
+func TestVoiceManagerConfigComposesManagedChatterbox(t *testing.T) {
+	root := t.TempDir()
+	python := managedTestFile(t, filepath.Join(root, ".venv", managedPythonDirectory(), managedPythonName()))
+	server := managedTestFile(t, filepath.Join(root, "source", "server.py"))
+	launcher := managedTestFile(t, filepath.Join(root, "magichandy-chatterbox-server.py"))
+	configPath := managedTestFile(t, filepath.Join(root, "runtime", "config.yaml"))
+	voicePath := managedTestFile(t, filepath.Join(root, "runtime", "voices", "sample.wav"))
+
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderChatterbox
+	settings.TTSWorkerPath = "voice-openai-tts-worker"
+	settings.TTSAutoLaunch = true
+	settings.TTSModuleRoot = root
+	settings.TTSBaseURL = "http://127.0.0.1:8992"
+	settings.TTSModel = config.DefaultChatterboxModel
+	settings.TTSVoice = "sample.wav"
+	settings.TTSHealthPath = config.DefaultChatterboxHealthPath
+	settings.TTSServerPort = 8992
+
+	launch, ready := managedTTSCommand(settings, "")
+	if !ready || launch.command != python || launch.directory != filepath.Dir(configPath) ||
+		len(launch.args) != 2 || launch.args[0] != launcher || launch.args[1] != server {
+		t.Fatalf("managed Chatterbox launch = %+v, ready=%v", launch, ready)
+	}
+	got := voiceManagerConfig(settings, "", "")
+	assertArgumentsContain(t, got.TTS.Args,
+		[2]string{"-server-command", python},
+		[2]string{"-server-dir", filepath.Join(root, "runtime")},
+		[2]string{"-server-port", "8992"},
+		[2]string{"-health-ready-field", "loaded"},
+		[2]string{"-server-arg", launcher},
+		[2]string{"-server-arg", server},
+	)
+	if got.TTS.JobTimeout != voiceModelLoadTimeout {
+		t.Fatalf("managed Chatterbox job timeout = %v", got.TTS.JobTimeout)
+	}
+	if err := os.Remove(voicePath); err != nil {
 		t.Fatal(err)
 	}
-	if neuttsReferenceEncoderInstalled(server.voiceDataDir) {
-		t.Fatal("reference encoder reported installed with an untrusted manifest")
+	if _, ready := managedTTSCommand(settings, ""); ready {
+		t.Fatal("managed Chatterbox module with a missing selected voice reported ready")
+	}
+}
+
+func TestManagedTTSAutoLaunchCanBeDisabled(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
+	settings.TTSWorkerPath = "voice-openai-tts-worker"
+	settings.TTSAutoLaunch = false
+	settings.TTSBaseURL = "http://127.0.0.1:9777"
+	settings.TTSModel = config.DefaultFasterQwenModel
+
+	got := voiceManagerConfig(settings, "", "")
+	if got.TTS.Command != settings.TTSWorkerPath {
+		t.Fatalf("user-managed server adapter = %+v", got.TTS)
+	}
+	if strings.Contains(strings.Join(got.TTS.Args, "|"), "-server-command") {
+		t.Fatalf("auto-launch off still composed a managed child: %+v", got.TTS.Args)
+	}
+}
+
+func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	worker := managedTestFile(t, filepath.Join(appDir, workerBinaryName("voice-openai-tts-worker")))
+	settings := config.DefaultSettings().Voice
+	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
+	settings.TTSModuleRoot = filepath.Join(root, "module")
+	settings.TTSReferenceText = "Exact transcript."
+	settings.TTSReferenceWAV = filepath.Join(root, "reference.wav")
+
+	status := inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
+	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled {
+		t.Fatalf("adapter-only module status = %+v (worker %q)", status, worker)
 	}
 
-	wav, err := base64.StdEncoding.DecodeString(silentTestWAVBase64())
-	if err != nil {
+	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, ".venv", managedPythonDirectory(), managedPythonName()))
+	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "source", "examples", "openai_server.py"))
+	managedTestFile(t, settings.TTSReferenceWAV)
+	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
+	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
+		t.Fatalf("complete module status = %+v", status)
+	}
+}
+
+func managedTestFile(t *testing.T, path string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	wavPath := filepath.Join(t.TempDir(), "reference.wav")
-	if err := os.WriteFile(wavPath, wav, 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	body, err := json.Marshal(map[string]string{
-		"reference_wav": wavPath,
-		"transcript":    "Exact transcript.",
-	})
-	if err != nil {
-		t.Fatal(err)
+	return path
+}
+
+func managedPythonDirectory() string {
+	if runtime.GOOS == "windows" {
+		return "Scripts"
 	}
-	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/neutts/references", strings.NewReader(string(body))))
-	prepareLocalPathPickerRequest(request)
-	recorder := httptest.NewRecorder()
-	server.Handler().ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("reference generation status = %d, want 422: %s", recorder.Code, recorder.Body.String())
+	return "bin"
+}
+
+func managedPythonName() string {
+	if runtime.GOOS == "windows" {
+		return "python.exe"
 	}
-	if !strings.Contains(recorder.Body.String(), "app-managed NeuCodec reference encoder is unavailable") {
-		t.Fatalf("reference generation error did not identify the untrusted runtime: %s", recorder.Body.String())
+	return "python"
+}
+
+func workerBinaryName(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
+
+func assertArgumentsContain(t *testing.T, arguments []string, pairs ...[2]string) {
+	t.Helper()
+	for _, pair := range pairs {
+		key, value := pair[0], pair[1]
+		found := false
+		for position := 0; position+1 < len(arguments); position++ {
+			if arguments[position] == key && arguments[position+1] == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("arguments %q do not contain %q followed by %q", arguments, key, value)
+		}
+	}
+}
+
+func TestAudioContentTypeSupportsCompatibleTTSFormats(t *testing.T) {
+	for format, want := range map[string]string{
+		"wav":  "audio/wav",
+		"mp3":  "audio/mpeg",
+		"opus": "audio/ogg",
+		"aac":  "audio/aac",
+		"flac": "audio/flac",
+	} {
+		if got := audioContentType(format); got != want {
+			t.Errorf("audioContentType(%q) = %q, want %q", format, got, want)
+		}
 	}
 }
 
@@ -262,347 +376,6 @@ func TestVoiceManagerConfigUsesAppManagedParakeetAssets(t *testing.T) {
 	wantArgs := strings.Join([]string{"-server-path", serverPath, "-server-model", modelPath, "-server-port", "8990"}, "|")
 	if got.ASR.Command != "app-worker" || strings.Join(got.ASR.Args, "|") != wantArgs {
 		t.Fatalf("app-managed Parakeet composition = %+v, want args %q", got.ASR, wantArgs)
-	}
-}
-
-func TestVoiceManagerConfigRequiresCompleteNeuTTSRuntime(t *testing.T) {
-	root := t.TempDir()
-	installTestNeuTTSBackbone(t)
-	adapter := filepath.Join(root, "voice-neutts-worker.exe")
-	runner := filepath.Join(root, "stream_pcm.exe")
-	codes := filepath.Join(root, "reference.npy")
-	for _, path := range []string{adapter, runner, codes} {
-		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Join(root, "models"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "models", "neucodec_decoder.safetensors"), []byte("decoder"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	settings := config.DefaultSettings().Voice
-	settings.Enabled = true
-	settings.TTSProvider = config.VoiceTTSProviderNeuTTSAir
-	settings.TTSWorkerPath = adapter
-	settings.NeuTTSRunnerPath = runner
-	settings.NeuTTSReferenceCodes = codes
-
-	if got := voiceManagerConfig(settings, "", ""); got.TTS.Command != "" {
-		t.Fatalf("NeuTTS without a transcript must remain unconfigured: %+v", got.TTS)
-	}
-	settings.NeuTTSReferenceText = "Exact reference transcript."
-	got := voiceManagerConfig(settings, "", "")
-	if got.TTS.Command != adapter {
-		t.Fatalf("complete NeuTTS command = %q", got.TTS.Command)
-	}
-	wantArgs := strings.Join([]string{"-runner", runner, "-ref-text", settings.NeuTTSReferenceText, "-backbone", settings.NeuTTSBackbone, "-ref-codes", codes}, "|")
-	if strings.Join(got.TTS.Args, "|") != wantArgs {
-		t.Fatalf("NeuTTS args = %q, want %q", strings.Join(got.TTS.Args, "|"), wantArgs)
-	}
-}
-
-func TestInspectNeuTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
-	root := t.TempDir()
-	installTestNeuTTSBackbone(t)
-	appDir := filepath.Join(root, "app")
-	if err := os.MkdirAll(appDir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	workerName := "voice-neutts-worker"
-	if runtime.GOOS == "windows" {
-		workerName += ".exe"
-	}
-	if err := os.WriteFile(filepath.Join(appDir, workerName), []byte("worker"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	settings := config.DefaultSettings().Voice
-	status := inspectNeuTTSModule(settings, true, false, "")
-	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled || !strings.Contains(status.Message, "skipping llama.cpp also skips NeuTTS") {
-		t.Fatalf("adapter-only NeuTTS status = %+v", status)
-	}
-
-	settings.NeuTTSRunnerPath = filepath.Join(root, "stream_pcm.exe")
-	settings.NeuTTSReferenceCodes = filepath.Join(root, "reference.npy")
-	settings.NeuTTSReferenceText = "Exact transcript."
-	for _, path := range []string{settings.NeuTTSRunnerPath, settings.NeuTTSReferenceCodes} {
-		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Join(root, "models"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "models", "neucodec_decoder.safetensors"), []byte("decoder"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	status = inspectNeuTTSModule(settings, true, true, "")
-	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
-		t.Fatalf("complete NeuTTS status = %+v", status)
-	}
-}
-
-func installTestNeuTTSBackbone(t *testing.T) {
-	installTestCachedBackbone(t, config.DefaultNeuTTSBackbone, "neutts-air-Q4_0.gguf")
-}
-
-func TestNeuTTSBackboneCacheDiscoversPersistedCustomRepo(t *testing.T) {
-	installTestCachedBackbone(t, "example/custom-neutts", "custom-q8.gguf")
-	if !neuttsBackboneCached("example/custom-neutts", "") {
-		t.Fatal("custom persisted backbone cache was not discovered")
-	}
-	if neuttsBackboneCached(`..\escape/repo`, "") {
-		t.Fatal("invalid repository identifiers must not escape the cache root")
-	}
-}
-
-func installTestAppManagedNeuTTSRuntime(t *testing.T, dataDir string) (string, string, []byte) {
-	t.Helper()
-	runner, hfHome := neuttsAppPaths(dataDir)
-	encoder, encoderModel := neuttsEncoderPaths(dataDir)
-	if err := os.MkdirAll(filepath.Join(filepath.Dir(runner), "models"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(encoderModel), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	for path, content := range map[string]string{
-		runner: "runner",
-		filepath.Join(filepath.Dir(runner), "models", "neucodec_decoder.safetensors"): "decoder",
-		encoder:                "encoder",
-		encoderModel:           "encoder model",
-		encoderModel + ".data": "encoder weights",
-		filepath.Join(filepath.Dir(runner), "DirectML.dll"): "directml",
-	} {
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	runnerHash, runnerOK := fileSHA256(runner)
-	decoderHash, decoderOK := fileSHA256(filepath.Join(filepath.Dir(runner), "models", "neucodec_decoder.safetensors"))
-	encoderHash, encoderOK := fileSHA256(encoder)
-	directMLHash, directMLOK := fileSHA256(filepath.Join(filepath.Dir(runner), "DirectML.dll"))
-	if !runnerOK || !decoderOK || !encoderOK || !directMLOK {
-		t.Fatal("could not hash app-managed NeuTTS fixtures")
-	}
-	manifest, err := json.Marshal(map[string]any{
-		"schema_version":            5,
-		"source_commit":             managedNeuTTSSource,
-		"rust_toolchain":            managedNeuTTSRust,
-		"backend":                   "cpu",
-		"runner_protocol":           managedNeuTTSProtocol,
-		"sampler_seed":              managedNeuTTSSamplerSeed,
-		"audio_assembly":            managedNeuTTSAudioMix,
-		"pcm_cache_max_bytes":       managedNeuTTSCacheBytes,
-		"pcm_cache_max_entries":     managedNeuTTSCacheItems,
-		"phonemizer":                managedNeuTTSPhonemizer,
-		"phonemizer_version":        managedNeuTTSPhonemeVer,
-		"backbone_acceleration":     "cpu",
-		"codec_acceleration":        "cpu",
-		"native_dependencies":       map[string]string{},
-		"backbone_revision":         managedNeuTTSBackbone,
-		"codec_revision":            managedNeuTTSCodec,
-		"runner_sha256":             runnerHash,
-		"decoder_sha256":            decoderHash,
-		"backbone_sha256":           managedNeuTTSBackboneSHA,
-		"codec_checkpoint_sha256":   managedNeuTTSCodecSHA,
-		"encoder_revision":          managedNeuTTSEncoder,
-		"encoder_sha256":            encoderHash,
-		"encoder_model_sha256":      managedNeuTTSEncoderSHA,
-		"encoder_model_data_sha256": managedNeuTTSWeightsSHA,
-		"directml_sha256":           directMLHash,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), manifest, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	installTestCachedBackboneRevisionAt(t, hfHome, config.DefaultNeuTTSBackbone, managedNeuTTSBackbone, "neutts-air-Q4_0.gguf")
-	return runner, hfHome, manifest
-}
-
-func TestVoiceManagerConfigUsesAppManagedNeuTTSRuntime(t *testing.T) {
-	dataDir := t.TempDir()
-	runner, hfHome, manifest := installTestAppManagedNeuTTSRuntime(t, dataDir)
-	realFileSHA256 := managedNeuTTSFileSHA256
-	hashCalls := 0
-	managedNeuTTSFileSHA256 = func(path string) (string, bool) {
-		hashCalls++
-		switch filepath.Base(path) {
-		case "neutts-air-Q4_0.gguf":
-			return managedNeuTTSBackboneSHA, true
-		case "distill_neucodec_encoder.onnx":
-			return managedNeuTTSEncoderSHA, true
-		case "distill_neucodec_encoder.onnx.data":
-			return managedNeuTTSWeightsSHA, true
-		}
-		return realFileSHA256(path)
-	}
-	t.Cleanup(func() { managedNeuTTSFileSHA256 = realFileSHA256 })
-	root := t.TempDir()
-	adapter := filepath.Join(root, "voice-neutts-worker.exe")
-	codes := filepath.Join(root, "reference.npy")
-	for _, path := range []string{adapter, codes} {
-		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	settings := config.DefaultSettings().Voice
-	settings.Enabled = true
-	settings.TTSProvider = config.VoiceTTSProviderNeuTTSAir
-	settings.TTSWorkerPath = adapter
-	settings.NeuTTSReferenceCodes = codes
-	settings.NeuTTSReferenceText = "Exact transcript."
-
-	assertAppManagedNeuTTSStartup(t, settings, dataDir, runner, hfHome, &hashCalls)
-	assertAppManagedNeuTTSBackboneValidation(t, &settings, dataDir, hfHome)
-	assertAppManagedNeuTTSManifestValidation(t, settings, dataDir, runner, manifest)
-}
-
-func assertAppManagedNeuTTSStartup(t *testing.T, settings config.VoiceSettings, dataDir, runner, hfHome string, hashCalls *int) {
-	t.Helper()
-	got := voiceManagerConfig(settings, "", dataDir)
-	if *hashCalls != 0 {
-		t.Fatalf("startup configuration hashed managed runtime files %d times", *hashCalls)
-	}
-	if got.TTS.Command != settings.TTSWorkerPath || got.TTS.Env["HF_HOME"] != hfHome ||
-		got.TTS.Env["MAGICHANDY_NEUTTS_SEED"] != strconv.FormatUint(uint64(config.DefaultNeuTTSSamplerSeed), 10) {
-		t.Fatalf("app-managed NeuTTS config = %+v", got.TTS)
-	}
-	if len(got.TTS.Args) < 2 || got.TTS.Args[1] != runner {
-		t.Fatalf("app-managed NeuTTS runner args = %q, want %q", got.TTS.Args, runner)
-	}
-	status := inspectNeuTTSModule(settings, true, true, dataDir)
-	if status.State != "ready" || !status.RuntimeInstalled || !status.Installed || status.RuntimeBackend != "cpu" {
-		t.Fatalf("app-managed NeuTTS status = %+v", status)
-	}
-	if !managedNeuTTSManifestReady(dataDir, true) {
-		t.Fatal("explicit managed runtime integrity verification failed")
-	}
-}
-
-func TestNeuTTSSamplingSettingsComposeRunnerEnvironment(t *testing.T) {
-	settings := config.DefaultSettings().Voice
-	settings.Enabled = true
-	settings.TTSProvider = config.VoiceTTSProviderNeuTTSAir
-	settings.NeuTTSSamplerSeed = 27
-
-	fixed := voiceManagerConfig(settings, "", t.TempDir())
-	if got := fixed.TTS.Env["MAGICHANDY_NEUTTS_SEED"]; got != "27" {
-		t.Fatalf("fixed NeuTTS seed = %q, want 27", got)
-	}
-
-	settings.NeuTTSSamplingMode = config.NeuTTSSamplingRandom
-	random := voiceManagerConfig(settings, "", t.TempDir())
-	if got := random.TTS.Env["MAGICHANDY_NEUTTS_SEED"]; got != "random" {
-		t.Fatalf("random NeuTTS seed = %q, want random", got)
-	}
-
-	settings.NeuTTSSamplingMode = config.NeuTTSSamplingFixed
-	settings.NeuTTSRunnerPath = `C:\custom\stream_pcm.exe`
-	override := voiceManagerConfig(settings, "", t.TempDir())
-	if got := override.TTS.Env["MAGICHANDY_NEUTTS_SEED"]; got != "27" {
-		t.Fatalf("custom runner fixed seed = %q, want 27", got)
-	}
-	if _, ok := override.TTS.Env["HF_HOME"]; ok {
-		t.Fatalf("custom runner inherited app-managed HF_HOME: %+v", override.TTS.Env)
-	}
-}
-
-func assertAppManagedNeuTTSBackboneValidation(t *testing.T, settings *config.VoiceSettings, dataDir, hfHome string) {
-	t.Helper()
-	installTestCachedBackboneAt(t, hfHome, "example/custom-neutts", "custom.gguf")
-	settings.NeuTTSBackbone = "example/custom-neutts"
-	if got := voiceManagerConfig(*settings, "", dataDir); got.TTS.Command != "" {
-		t.Fatalf("app-managed NeuTTS must not substitute a custom backbone: %+v", got.TTS)
-	}
-	settings.NeuTTSBackbone = config.DefaultNeuTTSBackbone
-	backboneRef := filepath.Join(hfHome, "hub", "models--neuphonic--neutts-air-q4-gguf", "refs", "main")
-	if err := os.WriteFile(backboneRef, []byte("unexpected-revision"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := voiceManagerConfig(*settings, "", dataDir); got.TTS.Command != "" {
-		t.Fatalf("app-managed NeuTTS must reject an unexpected backbone revision: %+v", got.TTS)
-	}
-	if err := os.WriteFile(backboneRef, []byte(managedNeuTTSBackbone), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func assertAppManagedNeuTTSManifestValidation(t *testing.T, settings config.VoiceSettings, dataDir, runner string, manifest []byte) {
-	t.Helper()
-	if err := os.WriteFile(runner, []byte("tampered"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if managedNeuTTSManifestReady(dataDir, true) {
-		t.Fatal("explicit integrity verification accepted changed runner bytes")
-	}
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command == "" {
-		t.Fatalf("startup should trust the installer-published manifest without re-hashing large artifacts: %+v", got.TTS)
-	}
-	if err := os.WriteFile(runner, []byte("runner"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	var manifestFields map[string]any
-	if err := json.Unmarshal(manifest, &manifestFields); err != nil {
-		t.Fatal(err)
-	}
-	manifestFields["sampler_seed"] = managedNeuTTSSamplerSeed + 1
-	badSeed, err := json.Marshal(manifestFields)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), badSeed, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
-		t.Fatalf("app-managed NeuTTS must reject an unverified sampler seed: %+v", got.TTS)
-	}
-	badPhonemizer := []byte(strings.Replace(string(manifest), managedNeuTTSPhonemizer, "experimental-phonemizer", 1))
-	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), badPhonemizer, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
-		t.Fatalf("app-managed NeuTTS must reject an unverified phonemizer: %+v", got.TTS)
-	}
-	manifest = []byte(strings.Replace(string(manifest), managedNeuTTSSource, "untrusted-source", 1))
-	if err := os.WriteFile(filepath.Join(filepath.Dir(runner), "runtime.json"), manifest, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := voiceManagerConfig(settings, "", dataDir); got.TTS.Command != "" {
-		t.Fatalf("app-managed NeuTTS must reject an unexpected manifest: %+v", got.TTS)
-	}
-}
-
-func installTestCachedBackbone(t *testing.T, repo, filename string) {
-	t.Helper()
-	hfHome := t.TempDir()
-	t.Setenv("HF_HOME", hfHome)
-	installTestCachedBackboneAt(t, hfHome, repo, filename)
-}
-
-func installTestCachedBackboneAt(t *testing.T, hfHome, repo, filename string) {
-	t.Helper()
-	installTestCachedBackboneRevisionAt(t, hfHome, repo, "test-revision", filename)
-}
-
-func installTestCachedBackboneRevisionAt(t *testing.T, hfHome, repo, revision, filename string) {
-	t.Helper()
-	repoRoot := filepath.Join(hfHome, "hub", "models--"+strings.ReplaceAll(repo, "/", "--"))
-	if err := os.MkdirAll(filepath.Join(repoRoot, "refs"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(repoRoot, "refs", "main"), []byte(revision), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	snapshot := filepath.Join(repoRoot, "snapshots", revision)
-	if err := os.MkdirAll(snapshot, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(snapshot, filename), []byte("gguf"), 0o600); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -1153,7 +926,19 @@ func TestVoiceSettingsRoundTripThroughAPI(t *testing.T) {
 		},
 		"motion": {"speed_min_percent": 20, "speed_max_percent": 80, "stroke_min_percent": 0, "stroke_max_percent": 100, "reverse_direction": false, "style": "balanced"},
 		"llm": {"provider": "llama_cpp", "llama_cpp_mode": "managed", "llama_cpp_base_url": "http://127.0.0.1:8080", "ollama_base_url": "http://127.0.0.1:11434", "model": "local-model", "prompt_set": "magichandy_motion_v1", "request_timeout_ms": 120000},
-		"voice": {"enabled": true, "tts_worker_path": "C:\\workers\\stub.exe", "tts_worker_args": ["-role", "tts"], "neutts_sampling_mode": "random", "neutts_sampler_seed": 42},
+		"voice": {
+			"enabled": true,
+			"tts_provider": "openai_compatible",
+			"tts_worker_path": "C:\\workers\\stub.exe",
+			"tts_base_url": "http://127.0.0.1:9444/",
+			"tts_model": "local-voice-model",
+			"tts_voice": "speaker-a",
+			"tts_response_format": "wav",
+			"tts_health_path": "/ready",
+			"tts_server_port": 9444,
+			"tts_device": "cpu",
+			"openai_tts_api_key": "private-rest-key"
+		},
 		"diagnostics": {"verbosity": "normal"},
 		"clear_connection_key": false
 	}`
@@ -1173,11 +958,15 @@ func TestVoiceSettingsRoundTripThroughAPI(t *testing.T) {
 	if settings.Voice.TTSWorkerPath != `C:\workers\stub.exe` {
 		t.Fatalf("tts worker path = %q", settings.Voice.TTSWorkerPath)
 	}
-	if len(settings.Voice.TTSWorkerArgs) != 2 {
-		t.Fatalf("tts worker args = %v", settings.Voice.TTSWorkerArgs)
+	if settings.Voice.TTSProvider != config.VoiceTTSProviderOpenAICompat ||
+		settings.Voice.TTSBaseURL != "http://127.0.0.1:9444" ||
+		settings.Voice.TTSModel != "local-voice-model" ||
+		settings.Voice.TTSVoice != "speaker-a" {
+		t.Fatalf("compatible TTS settings did not persist: %+v", settings.Voice)
 	}
-	if settings.Voice.NeuTTSSamplingMode != config.NeuTTSSamplingRandom || settings.Voice.NeuTTSSamplerSeed != 42 {
-		t.Fatalf("NeuTTS sampling settings did not persist: %+v", settings.Voice)
+	if settings.Voice.OpenAITTSAPIKey != "private-rest-key" ||
+		strings.Contains(recorder.Body.String(), "private-rest-key") {
+		t.Fatalf("compatible TTS key was not stored privately: response=%s", recorder.Body.String())
 	}
 
 	// The saved-but-unstarted worker must show as stopped, never autostart.

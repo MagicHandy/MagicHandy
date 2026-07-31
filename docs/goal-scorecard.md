@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-30, synchronized video seek reliability
+## Snapshot — 2026-07-31, OpenAI-compatible local TTS modules
 
 ### Goal 1: Maintainability
 
@@ -31,9 +31,9 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,389 lines, `internal/config/settings_test.go` 1,325, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,321, `internal/httpapi/voice_test.go` 1,195, `internal/modes/manager.go` 976, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Autopilot cadence logic is isolated in the 475-line `internal/modes/autopilot_scheduler.go` rather than extending the manager further. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,099 lines, `web/src/App.test.tsx` 1,469, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,450, `web/src/styles/shell.css` 1,036, and retired reference-only `web/legacy/app.css` 846. Paired-video transport controls and inactivity handling are isolated in their own 259-line component rather than extending the player render surface further; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
-| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,712 physical lines after adding the shared localized decision-tree runtime. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating locale, updater state, or safety teardown. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,327 lines, `internal/config/settings_test.go` 1,425, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 961, `internal/httpapi/voice_test.go` 977, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Voice normalization/defaulting/validation is isolated in a 249-line config file, and the OpenAI-compatible adapter has its own package. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,134 lines, `web/src/App.test.tsx` 1,439, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,443, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Provider-specific TTS fields replace the retired reference-code dialog without another UI tree; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
+| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | Removing the coupled NeuTTS toolchain reduced `scripts/installer/InstallerSupport.psm1` to 2,075 physical lines. It remains outside the Go/web architecture size test and is a manually reviewed guideline exception. Optional Python/PyTorch speech setup now lives in dedicated install/update scripts rather than extending the core installer decision tree. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phase 18 M1-M2 reuse one bounded exact-name funscript document for the canvas and one shared-engine finite media target, keep host paths out of the API, and leave real-device timing claims to the explicit M3 acceptance gate. |
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 23,008,256 bytes plain and 16,441,344 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
-| Cold start to serving UI | < 500 ms | **At Risk** | 679 / 282 / 287 ms over 3 runs with a copied production-style SQLite configuration pointing at the installed managed NeuTTS runtime. The client-side PowerShell probe pre-creates its HTTP client but still includes process-spawn and request overhead; startup no longer hashes roughly 1.1 GiB before listening, but the cold first run still misses the target. Add server-side timestamps in Phase 16 before judging. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,936,576 bytes plain and 16,403,968 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Cold start to serving UI | < 500 ms | **Unmeasured** | The prior 679 / 282 / 287 ms sample used a now-retired managed NeuTTS configuration. Scripted TTS servers are optional child processes and are not part of core readiness, but schema-v2 startup still needs a fresh server-side measurement in Phase 16. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -102,17 +102,19 @@ Ranked by threat to the stated goals:
    preserving local teardown. An already-connected Browser Bluetooth owner now
    also invalidates fetched work and writes Stop directly during backend loss;
    current Cloud/Browser retry and teardown hardware evidence remains open.
-2. **Cold start at the boundary.** Two warmed managed-NeuTTS-configured runs
-   were below the target, but the 679 ms cold run was not. Client probe overhead
-   and host caching are not separated; treat 500 ms as unconfirmed until Phase
-   16 measures it server-side.
+2. **Cold start at the boundary.** The available sample used the retired
+   NeuTTS configuration. Client probe overhead and host caching were not
+   separated; treat 500 ms as unconfirmed until Phase 16 measures the current
+   schema-v2 build server-side.
 3. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,536,190 raw / 756,484 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 724,654 raw / 193,758 gzip bytes; all
-   HTML/CSS/JS is 1,091,954 raw / 319,087 gzip bytes. Independent Autopilot clocks,
+   browser payload is 1,521,392 raw / 751,143 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 720,252 raw / 191,994 gzip bytes; all
+   HTML/CSS/JS is 1,077,156 raw / 313,746 gzip bytes. The local-TTS transition
+   removes 14,798 raw / 5,341 gzip bytes overall and 4,402 raw / 1,764 gzip bytes
+   from startup relative to its checked-in predecessor. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
    3,315 gzip bytes against their preceding checked-in bundle; browser-session
    notification persistence adds another 1,424 raw / 481 gzip bytes. The
@@ -123,12 +125,27 @@ Ranked by threat to the stated goals:
    their checked-in predecessor; the bitmap is unchanged. These remain within
    budget, but future locales, personas, and bitmap additions must keep startup
    and total payload growth explicit.
-5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
-   latency but keeps a second llama.cpp context resident. It passed isolated
-   synthesis on a 16 GiB RTX 5070 Ti; representative simultaneous managed-LLM
-   load and lower-VRAM acceptance remain R17 evidence.
+5. **GPU voice/LLM coexistence.** Faster Qwen3-TTS and Chatterbox are isolated
+   optional servers, but each can still compete with a managed LLM for VRAM.
+   Representative warm latency, quality, cancellation, and simultaneous-LLM
+   acceptance remain R17 evidence; Chatterbox CPU is the documented fallback.
 
 ## History
+
+- **2026-07-31** - Retired NeuTTS after repeated quality acceptance failures
+  and replaced it with one bounded OpenAI-compatible TTS adapter, scripted
+  Faster Qwen3-TTS and Chatterbox modules, and a generic external-server
+  provider. Settings schema v2 disables the removed provider safely, preserves
+  private bearer credentials, and exposes explicit auto-launch ownership.
+  Managed Chatterbox readiness requires `/api/model-info` to report
+  `loaded=true`; worker tests cover cancellation, response bounds, WAV repair,
+  credential redaction, and owned-child teardown. Its installer selects the
+  pinned CUDA 12.1 or 12.8 dependency set from NVIDIA compute capability.
+  Go tests, lint, installer
+  integration, frontend typecheck/tests/build, and `CGO_ENABLED=0` builds pass;
+  the local Windows host lacks the C compiler required for `go test -race`, so
+  the mandatory Ubuntu CI gate remains authoritative. Browser and binary
+  measurements are recorded in the current snapshot.
 
 - **2026-07-30** - Replaced paired-video native controls and the 400 ms scrub
   inference window with an explicit app-owned transport and seek lifecycle.

@@ -61,4 +61,4 @@ only when the **Custom worker** provider is selected.
 - ADR 0007 (selection rationale: expressive + high-fidelity cloning, no
   local VRAM, explicit cloud trade-off)
 - ADR 0003 / `docs/voice-worker-protocol.md` (the boundary this implements)
-- `docs/neutts-air-spike.md` (the local cloning counterpart)
+- `docs/voice-tts-modules.md` (local cloning alternatives)

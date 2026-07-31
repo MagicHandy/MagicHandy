@@ -1,5 +1,9 @@
 # Voice TTS Survey: Fast, Cloning, Expressive
 
+> Historical survey. ADR 0012 supersedes its NeuTTS recommendation after live
+> listening failed release acceptance. The current local choices are Faster
+> Qwen3-TTS, Chatterbox Turbo, and user-managed OpenAI-compatible servers.
+
 Survey date: June 2026. This is a landscape report to inform ADR 0007 (voice
 backend selection). It is scoped to MagicHandy's constraints:
 

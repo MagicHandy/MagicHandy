@@ -59,6 +59,8 @@ try {
         'install.ps1',
         'update.ps1',
         'change-language.ps1',
+        'scripts\install-tts-module.ps1',
+        'scripts\update-tts-module.ps1',
         'scripts\installer\InstallerSupport.psm1',
         'internal\llm\runtimeassets\build-managed-llama.ps1'
     )
@@ -69,6 +71,11 @@ try {
         [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\chatterbox-server.py') -PathType Leaf) -Message 'Chatterbox launcher shim should ship with the installer'
+    $ttsInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\install-tts-module.ps1'))
+    Assert-True -Condition ($ttsInstallerSource.Contains('--query-gpu=compute_cap')) -Message 'Chatterbox install should detect NVIDIA compute capability'
+    Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia.txt')) -Message 'Chatterbox install should retain the CUDA 12.1 dependency set'
+    Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia-cu128.txt')) -Message 'Chatterbox install should retain the RTX 50-series CUDA 12.8 dependency set'
     $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
@@ -147,13 +154,58 @@ try {
     Assert-True -Condition ($installCompletion -match 'INSTALL COMPLETE') -Message 'install completion should identify the finished operation'
     Assert-True -Condition ($installCompletion -match 'APP BUILD VERIFIED - CONFIGURATION APPLIED') -Message 'install completion should confirm that selected language configuration was applied'
     Assert-True -Condition ($installCompletion -match 'Open Settings.+select a model, voice provider, and device transport') -Message 'install completion should give relevant next steps'
-    Assert-True -Condition ($installCompletion -match 'Managed NeuTTS can create reference codes\s+locally from a WAV and exact transcript') -Message 'install completion should describe the local NeuTTS reference workflow'
     Assert-True -Condition ($installCompletion -match '\|\|=+\[\]') -Message 'completion should include the Handy motion-rail text art'
     $updateCompletion = Write-MagicHandyCompletionArt -Operation Update 6>&1 | Out-String
     Assert-True -Condition ($updateCompletion -match 'Congratulations.+Saved installation choices were applied') -Message 'update completion should confirm preserved installation choices'
     Assert-True -Condition ($updateCompletion -match 'current app language and prompt settings were preserved\s+unless explicitly reconfigured') -Message 'update completion should describe app language authority'
     $planCompletion = Write-MagicHandyCompletionArt -Operation UpdatePlan 6>&1 | Out-String
     Assert-True -Condition ($planCompletion -match 'NO CHANGES MADE') -Message 'plan completion should not claim that a build ran'
+
+    Write-Host 'Checking optional TTS installer plans and saved-choice updates...'
+    $ttsInstaller = Join-Path $Repo 'scripts\install-tts-module.ps1'
+    $ttsUpdater = Join-Path $Repo 'scripts\update-tts-module.ps1'
+    $ttsData = Join-Path $tempRoot 'tts-data'
+    $qwenRoot = Join-Path $ttsData 'voice\faster-qwen3-tts'
+    $qwenPlan = & $ttsInstaller -Module faster-qwen3-tts -DataDir $ttsData -InstallRoot $qwenRoot -PlanOnly -Yes 6>&1 | Out-String
+    Assert-True -Condition ($qwenPlan -match 'faster-qwen3-tts') -Message 'Faster Qwen plan should identify its module'
+    Assert-True -Condition ($qwenPlan -match 'no dependencies, files, models, processes, or settings were changed') -Message 'Faster Qwen plan should state its no-write contract'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $qwenRoot)) -Message 'Faster Qwen plan should not create its install root'
+
+    $chatterRoot = Join-Path $ttsData 'voice\chatterbox-tts'
+    $chatterPlan = & $ttsInstaller -Module chatterbox -DataDir $ttsData -InstallRoot $chatterRoot -Device cpu -PlanOnly -Yes 6>&1 | Out-String
+    Assert-True -Condition ($chatterPlan -match 'Chatterbox') -Message 'Chatterbox plan should identify its module'
+    Assert-True -Condition ($chatterPlan -match 'Device:\s+cpu') -Message 'Chatterbox plan should preserve the selected device'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $chatterRoot)) -Message 'Chatterbox plan should not create its install root'
+    Assert-Throws -Action {
+        & $ttsInstaller -Module faster-qwen3-tts -DataDir $ttsData -InstallRoot $qwenRoot -Device cpu -PlanOnly -Yes
+    } -Pattern 'requires an NVIDIA GPU' -Message 'Faster Qwen CPU plan'
+    Assert-Throws -Action {
+        & $ttsInstaller -Module chatterbox -DataDir $ttsData -InstallRoot $chatterRoot -Voice '..\outside.wav' -PlanOnly -Yes
+    } -Pattern 'plain .wav file name' -Message 'Chatterbox path-like voice'
+
+    New-Item -ItemType Directory -Force -Path $qwenRoot | Out-Null
+    $moduleState = [ordered]@{
+        schema_version = 1
+        module = 'faster-qwen3-tts'
+        provider = 'faster_qwen3_tts'
+        install_root = $qwenRoot
+        data_dir = $ttsData
+        source_url = 'https://example.invalid/faster-qwen3-tts.git'
+        source_revision = 'fixture'
+        model = 'Qwen/Qwen3-TTS-12Hz-0.6B-Base'
+        voice = 'default'
+        reference_wav = 'C:\voices\sample.wav'
+        reference_transcript = 'Exact transcript.'
+        language = 'English'
+        device = 'cuda'
+        port = 8991
+        auto_launch = $true
+        speak_replies = $true
+    }
+    [System.IO.File]::WriteAllText((Join-Path $qwenRoot 'module-state.json'), ($moduleState | ConvertTo-Json))
+    $updatePlan = & $ttsUpdater -InstallRoot $qwenRoot -PlanOnly -Yes 6>&1 | Out-String
+    Assert-True -Condition ($updatePlan -match 'Auto-launch:\s+True') -Message 'TTS update plan should preserve auto-launch'
+    Assert-True -Condition ($updatePlan -match 'Qwen/Qwen3-TTS-12Hz-0\.6B-Base') -Message 'TTS update plan should preserve the installed model'
 
     Write-Host 'Checking installer-state round trip and data hygiene...'
     $statePath = Join-Path $tempRoot 'install-state.json'
@@ -385,173 +437,6 @@ try {
     $pinnedTampered = & $supportModule { param($Path, $Hash) Test-MagicHandyPinnedFile -Path $Path -ExpectedSHA256 $Hash } $pinnedFixture $pinnedHash
     Assert-True -Condition (-not $pinnedTampered) -Message 'pinned-file verifier should reject changed bytes'
 
-    Write-Host 'Checking pinned NeuTTS Cargo lock correction...'
-    $lockSource = Join-Path $tempRoot 'neutts-lock-source'
-    New-Item -ItemType Directory -Force -Path $lockSource | Out-Null
-    $lockPath = Join-Path $lockSource 'Cargo.lock'
-    $lockFixture = @'
-version = 4
-
-[[package]]
-name = "neutts"
-version = "0.1.0"
-dependencies = [
- "fixture",
-]
-
-[[package]]
-name = "fixture"
-version = "0.1.0"
-'@
-    [System.IO.File]::WriteAllText($lockPath, $lockFixture)
-    & $supportModule { param($SourceRoot) Repair-MagicHandyNeuTTSCargoLock -SourceRoot $SourceRoot } $lockSource
-    $correctedLock = [System.IO.File]::ReadAllText($lockPath)
-    Assert-True -Condition ($correctedLock -match '(?m)^name = "neutts"\r?\nversion = "0\.1\.1"\r?$') -Message 'known upstream root package version should be corrected'
-    Assert-True -Condition ($correctedLock -match '(?m)^name = "fixture"\r?\nversion = "0\.1\.0"\r?$') -Message 'dependency versions should remain unchanged'
-
-    $unexpectedLockSource = Join-Path $tempRoot 'unexpected-neutts-lock-source'
-    New-Item -ItemType Directory -Force -Path $unexpectedLockSource | Out-Null
-    $unexpectedLockPath = Join-Path $unexpectedLockSource 'Cargo.lock'
-    [System.IO.File]::WriteAllText($unexpectedLockPath, ($lockFixture -replace 'version = "0\.1\.0"', 'version = "0.1.2"'))
-    $unexpectedLockRejected = $false
-    try {
-        & $supportModule { param($SourceRoot) Repair-MagicHandyNeuTTSCargoLock -SourceRoot $SourceRoot } $unexpectedLockSource
-    } catch {
-        $unexpectedLockRejected = $true
-    }
-    Assert-True -Condition $unexpectedLockRejected -Message 'unexpected upstream lock content should fail closed'
-
-    Write-Host 'Checking native executable probe classification...'
-    $probeExecutable = (Get-Process -Id $PID).Path
-    $probeResults = & $supportModule {
-        param($ProbeExecutable, $MissingProbe)
-        $ErrorActionPreference = 'Stop'
-        [pscustomobject]@{
-            StderrSuccess = Test-MagicHandyNativeProbe -Executable $ProbeExecutable -ArgumentList @('-NoProfile', '-Command', '[Console]::Error.WriteLine(''usage''); exit 0')
-            Nonzero = Test-MagicHandyNativeProbe -Executable $ProbeExecutable -ArgumentList @('-NoProfile', '-Command', 'exit 7')
-            Missing = Test-MagicHandyNativeProbe -Executable $MissingProbe
-            RestoredErrorAction = $ErrorActionPreference
-        }
-    } $probeExecutable (Join-Path $tempRoot 'missing-probe.exe')
-    Assert-True -Condition ([bool]$probeResults.StderrSuccess) -Message 'stderr with exit zero should pass a native probe'
-    Assert-True -Condition (-not [bool]$probeResults.Nonzero) -Message 'nonzero exit should fail a native probe'
-    Assert-True -Condition (-not [bool]$probeResults.Missing) -Message 'an executable launch failure should fail closed'
-    Assert-Equal -Expected 'Stop' -Actual ([string]$probeResults.RestoredErrorAction) -Message 'native probe should restore ErrorActionPreference'
-
-    Write-Host 'Checking app-managed NeuTTS runtime manifest discovery...'
-    $neuttsData = Join-Path $tempRoot 'neutts-data'
-    $neuttsRuntimeResult = & $supportModule {
-        param($DataDir)
-        $root = Join-Path $DataDir 'voice\neutts\active'
-        $runtime = Join-Path $root 'runtime'
-        $runner = Join-Path $runtime 'stream_pcm.exe'
-        $decoder = Join-Path $runtime 'models\neucodec_decoder.safetensors'
-        $encoder = Join-Path $runtime 'magichandy-neucodec-encoder.exe'
-        $directML = Join-Path $runtime 'DirectML.dll'
-        $encoderModel = Join-Path $root 'encoder\distill_neucodec_encoder.onnx'
-        $encoderWeights = "$encoderModel.data"
-        $gguf = Join-Path $root "hf\hub\models--neuphonic--neutts-air-q4-gguf\snapshots\$script:NeuTTSBackboneRevision\neutts-air-Q4_0.gguf"
-        foreach ($path in @($runner, $decoder, $encoder, $directML, $encoderModel, $encoderWeights, $gguf)) {
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
-            [System.IO.File]::WriteAllText($path, 'fixture')
-        }
-        $backboneRef = Join-Path $root 'hf\hub\models--neuphonic--neutts-air-q4-gguf\refs\main'
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backboneRef) | Out-Null
-        [System.IO.File]::WriteAllText($backboneRef, $script:NeuTTSBackboneRevision)
-        $fixtureBackboneHash = Get-MagicHandySHA256 -Path $gguf
-        $originalBackboneHash = $script:NeuTTSBackboneSHA256
-        $originalEncoderModelHash = $script:NeuTTSEncoderModelSHA256
-        $originalEncoderWeightsHash = $script:NeuTTSEncoderWeightsSHA256
-        $script:NeuTTSBackboneSHA256 = $fixtureBackboneHash
-        $script:NeuTTSEncoderModelSHA256 = Get-MagicHandySHA256 -Path $encoderModel
-        $script:NeuTTSEncoderWeightsSHA256 = Get-MagicHandySHA256 -Path $encoderWeights
-        $manifest = [pscustomobject]@{
-            schema_version = 5
-            source_commit = $script:NeuTTSSourceCommit
-            rust_toolchain = $script:NeuTTSRustToolchain
-            backend = 'cpu'
-            runner_protocol = $script:NeuTTSRunnerProtocol
-            sampler_seed = $script:NeuTTSSamplerSeed
-            audio_assembly = $script:NeuTTSAudioAssembly
-            pcm_cache_max_bytes = $script:NeuTTSPCMCacheMaxBytes
-            pcm_cache_max_entries = $script:NeuTTSPCMCacheMaxEntries
-            phonemizer = $script:NeuTTSPhonemizer
-            phonemizer_version = $script:NeuTTSPhonemizerVersion
-            backbone_acceleration = 'cpu'
-            codec_acceleration = 'cpu'
-            native_dependencies = [ordered]@{}
-            backbone_revision = $script:NeuTTSBackboneRevision
-            backbone_sha256 = $fixtureBackboneHash
-            codec_revision = $script:NeuTTSCodecRevision
-            codec_checkpoint_sha256 = $script:NeuTTSCodecSHA256
-            runner_sha256 = (Get-MagicHandySHA256 -Path $runner)
-            decoder_sha256 = (Get-MagicHandySHA256 -Path $decoder)
-            encoder_revision = $script:NeuTTSEncoderRevision
-            encoder_sha256 = (Get-MagicHandySHA256 -Path $encoder)
-            encoder_model_sha256 = $script:NeuTTSEncoderModelSHA256
-            encoder_model_data_sha256 = $script:NeuTTSEncoderWeightsSHA256
-            directml_sha256 = (Get-MagicHandySHA256 -Path $directML)
-        }
-        [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json))
-        try {
-            $valid = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
-            $wrongBackend = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cuda'
-            [System.IO.File]::AppendAllText($runner, 'tampered')
-            $tampered = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
-            [System.IO.File]::WriteAllText($runner, 'fixture')
-            $manifest.sampler_seed = $script:NeuTTSSamplerSeed + 1
-            [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json))
-            $wrongSeed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
-            $manifest.sampler_seed = $script:NeuTTSSamplerSeed
-            $malformedJSON = ($manifest | ConvertTo-Json) -replace '"schema_version":\s+5', '"schema_version":"invalid"'
-            [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), $malformedJSON)
-            $malformed = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cpu'
-
-            $nativeDependencies = [ordered]@{}
-            foreach ($name in @('ggml-base.dll', 'ggml-cpu.dll', 'ggml-cuda.dll', 'ggml.dll', 'llama.dll')) {
-                $path = Join-Path $runtime $name
-                [System.IO.File]::WriteAllText($path, "fixture-$name")
-                $nativeDependencies[$name] = Get-MagicHandySHA256 -Path $path
-            }
-            $manifest.backend = 'cuda'
-            $manifest.backbone_acceleration = 'cuda_all_layers'
-            $manifest.codec_acceleration = 'wgpu'
-            $manifest.native_dependencies = $nativeDependencies
-            [System.IO.File]::WriteAllText((Join-Path $runtime 'runtime.json'), ($manifest | ConvertTo-Json -Depth 3))
-            $validCUDA = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cuda'
-            [System.IO.File]::AppendAllText((Join-Path $runtime 'ggml-cuda.dll'), 'tampered')
-            $tamperedCUDA = Test-MagicHandyNeuTTSInstall -DataDir $DataDir -Backend 'cuda'
-
-            [pscustomobject]@{
-                Valid = $valid
-                WrongBackend = $wrongBackend
-                Tampered = $tampered
-                WrongSeed = $wrongSeed
-                Malformed = $malformed
-                ValidCUDA = $validCUDA
-                TamperedCUDA = $tamperedCUDA
-            }
-        } finally {
-            $script:NeuTTSBackboneSHA256 = $originalBackboneHash
-            $script:NeuTTSEncoderModelSHA256 = $originalEncoderModelHash
-            $script:NeuTTSEncoderWeightsSHA256 = $originalEncoderWeightsHash
-        }
-    } $neuttsData
-    Assert-True -Condition ([bool]$neuttsRuntimeResult.Valid) -Message 'matching NeuTTS manifest and runtime files should be reusable'
-    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.WrongBackend) -Message 'changing the saved backend should rebuild NeuTTS with matching acceleration'
-    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Tampered) -Message 'changed NeuTTS runtime bytes should require repair'
-    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.WrongSeed) -Message 'a changed NeuTTS sampler seed should require repair'
-    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.Malformed) -Message 'a malformed NeuTTS manifest should request repair rather than abort setup'
-    Assert-True -Condition ([bool]$neuttsRuntimeResult.ValidCUDA) -Message 'a CUDA NeuTTS manifest should require and accept all pinned native dependencies'
-    Assert-True -Condition (-not [bool]$neuttsRuntimeResult.TamperedCUDA) -Message 'a changed CUDA NeuTTS dependency should require repair'
-
-    Write-Host 'Checking interrupted NeuTTS swap recovery...'
-    $recoveryData = Join-Path $tempRoot 'neutts-recovery-data'
-    $backupRuntime = Join-Path $recoveryData 'voice\neutts\active.backup-fixture\runtime'
-    New-Item -ItemType Directory -Force -Path $backupRuntime | Out-Null
-    [System.IO.File]::WriteAllText((Join-Path $backupRuntime 'marker.txt'), 'previous runtime')
-    & $supportModule { param($DataDir) Restore-MagicHandyNeuTTSBackup -DataDir $DataDir } $recoveryData
-    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $recoveryData 'voice\neutts\active\runtime\marker.txt')) -Message 'an interrupted swap should restore its previous active runtime'
 
     Write-Host 'Checking generated launcher quoting and syntax...'
     $launcherRoot = Join-Path $tempRoot "launcher root's copy"
@@ -663,7 +548,7 @@ version = "0.1.0"
     }
 
     Write-Host 'Checking coherent staged binary replacement and verified relaunch...'
-    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-neutts-worker.exe', 'voice-elevenlabs-worker.exe')
+    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-openai-tts-worker.exe', 'voice-elevenlabs-worker.exe')
     $staleHashes = @{}
     foreach ($name in $binaryNames) {
         $path = Join-Path $runtimeRepo $name
@@ -965,12 +850,8 @@ version = "0.1.0"
     Assert-PlanContains -Plan $managedPlan -Pattern 'Visual Studio C\+\+'
     Assert-PlanContains -Plan $managedPlan -Pattern 'CUDA Toolkit'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'NeuTTS Air.*protocol adapters'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'LLVM/libclang, Rustup.*Rust 1\.94\.0.*MSVC toolchain'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'eSpeak NG 1\.52\.0'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'persistent NeuTTS runner from pinned neutts-rs.*CUDA backbone \+ WGPU codec'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'MagicHandy NeuCodec ONNX reference encoder worker'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verified NeuTTS Air Q4.*NeuCodec decoder.*reference encoder assets.*about 2\.0 GiB installed'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'OpenAI-compatible TTS'
+    Assert-PlanExcludes -Plan $managedPlan -Pattern 'NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
 
     $ollamaState = New-MagicHandyInstallState `
         -RepositoryPath $Repo `
@@ -984,9 +865,8 @@ version = "0.1.0"
         -CreateLauncher $false
     $ollamaPlan = @(Get-MagicHandyProvisionPlan -State $ollamaState)
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Ensure Ollama'
-    Assert-PlanContains -Plan $ollamaPlan -Pattern 'Skip NeuTTS runtime build.*managed llama\.cpp is not selected'
     Assert-PlanContains -Plan $ollamaPlan -Pattern 'Remove an existing generated Start-MagicHandy\.ps1.*preserve any user-authored file'
-    Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|LLVM/libclang|Rustup|eSpeak NG|Build pinned neutts-rs|checksum-verified NeuTTS|Parakeet CPU runner'
+    Assert-PlanExcludes -Plan $ollamaPlan -Pattern 'CMake|Visual Studio|CUDA|NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup|Parakeet CPU runner'
 
     Write-Host 'Checking updater fast-forward and dirty-worktree refusal...'
     $git = Resolve-MagicHandyExecutable -Name 'git'
@@ -1151,8 +1031,7 @@ version = "0.1.0"
     Assert-True -Condition (($capturedPrompts -join "`n") -match 'Modify previous installation choices') -Message 'updater should ask whether to modify choices'
     Assert-True -Condition ($reconfigureOutput -match 'Managed llama\.cpp: no') -Message 'reconfiguration should switch managed llama.cpp off'
     Assert-True -Condition ($reconfigureOutput -match 'Ollama model:\s+\(unchanged\)') -Message 'reconfiguration should clear the optional model'
-    Assert-PlanContains -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Skip NeuTTS runtime build.*managed llama\.cpp is not selected'
-    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|CUDA Toolkit|LLVM/libclang|Rustup|Build pinned neutts-rs'
+    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|CUDA Toolkit|NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
     Assert-Equal -Expected $beforeHash -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $statePath).Hash) -Message 'reconfiguration plan must not rewrite state'
     Assert-Equal -Expected 0 -Actual $remainingResponses -Message 'all expected prompts should be consumed'
 

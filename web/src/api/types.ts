@@ -681,6 +681,18 @@ export interface VoiceSettings {
   speak_replies?: boolean;
   elevenlabs_voice_id?: string;
   elevenlabs_model_id?: string;
+  tts_auto_launch: boolean;
+  tts_base_url?: string;
+  tts_model?: string;
+  tts_voice?: string;
+  tts_response_format?: string;
+  tts_health_path?: string;
+  tts_module_root?: string;
+  tts_server_port?: number;
+  tts_reference_wav?: string;
+  tts_reference_text?: string;
+  tts_language?: string;
+  tts_device?: "auto" | "cuda" | "cpu" | string;
   parakeet_server_path?: string;
   parakeet_model_path?: string;
   parakeet_port?: number;
@@ -691,15 +703,10 @@ export interface VoiceSettings {
   input_sensitivity: number;
   input_silence_ms: number;
   input_noise_suppression: boolean;
-  neutts_runner_path?: string;
-  neutts_reference_wav?: string;
-  neutts_reference_codes?: string;
-  neutts_reference_text?: string;
-  neutts_backbone?: string;
-  neutts_sampling_mode?: "fixed" | "random" | string;
-  neutts_sampler_seed?: number;
   // Read side only: the stored ElevenLabs key is never returned, just a flag.
   elevenlabs_key_set?: boolean;
+  // Read side only: compatible endpoint keys are never returned.
+  openai_tts_key_set?: boolean;
 }
 
 // Write payload for voice settings: the key is write-only (omit to keep the
@@ -716,6 +723,18 @@ export interface VoiceSettingsUpdate {
   speak_replies: boolean;
   elevenlabs_voice_id: string;
   elevenlabs_model_id: string;
+  tts_auto_launch: boolean;
+  tts_base_url: string;
+  tts_model: string;
+  tts_voice: string;
+  tts_response_format: string;
+  tts_health_path: string;
+  tts_module_root: string;
+  tts_server_port: number;
+  tts_reference_wav: string;
+  tts_reference_text: string;
+  tts_language: string;
+  tts_device: "auto" | "cuda" | "cpu" | string;
   parakeet_server_path: string;
   parakeet_model_path: string;
   parakeet_port: number;
@@ -726,15 +745,10 @@ export interface VoiceSettingsUpdate {
   input_sensitivity: number;
   input_silence_ms: number;
   input_noise_suppression: boolean;
-  neutts_runner_path: string;
-  neutts_reference_wav: string;
-  neutts_reference_codes: string;
-  neutts_reference_text: string;
-  neutts_backbone: string;
-  neutts_sampling_mode: "fixed" | "random" | string;
-  neutts_sampler_seed: number;
   elevenlabs_api_key?: string;
   clear_elevenlabs_key: boolean;
+  openai_tts_api_key?: string;
+  clear_openai_tts_key: boolean;
 }
 
 export type VoiceWorkerState =
@@ -777,7 +791,6 @@ export interface VoiceModuleStatus {
   worker_installed: boolean;
   runtime_installed: boolean;
   runtime_backend?: "cpu" | "cuda" | "custom" | string;
-  reference_encoder_installed?: boolean;
   message: string;
 }
 
@@ -793,16 +806,6 @@ export interface VoiceRequestSnapshot {
   transcript?: { text: string; confidence: number }[];
   rejected?: string;
   error?: { code: string; message: string; retryable?: boolean };
-}
-
-export interface NeuTTSReference {
-  id: string;
-  codes_path: string;
-  audio_path?: string;
-  transcript?: string;
-  token_count: number;
-  source_format: "torch_int32" | "npy_int32" | string;
-  reused: boolean;
 }
 
 export interface OptionHints {
@@ -823,7 +826,7 @@ export interface OptionHints {
   tts_providers?: string[];
   asr_providers?: string[];
   parakeet_sources?: string[];
-  neutts_sampling_modes?: string[];
+  tts_devices?: string[];
   chat_startup_behaviors?: string[];
   locales?: string[];
   themes?: string[];

@@ -16,8 +16,8 @@ A structural advantage worth stating up front: MagicHandy's core is a single
 pure-Go binary with **no Python, no venv, no pip, and no torch/CUDA in the core**.
 The hardest, most failure-prone part of the old setup — building a Python ML
 environment with matching CUDA/torch wheels — simply does not exist here. CUDA
-matters only for app-owned external model processes (`llama-server` and the
-optional managed NeuTTS runner), never for the MagicHandy Go core itself.
+matters only for app-owned external model processes (`llama-server` and
+optional local TTS servers), never for the MagicHandy Go core itself.
 
 ## What StrokeGPT-ReVibed automated (the parity target)
 
@@ -39,16 +39,14 @@ optional managed NeuTTS runner), never for the MagicHandy Go core itself.
   64-bit Windows machine. It repairs/installs WinGet through Microsoft's
   supported PowerShell path when needed, then installs and verifies Go. A
   selected managed llama.cpp source build additionally provisions Git, CMake,
-  the Visual Studio Desktop C++ workload/Windows SDK, CUDA when selected, and
-  LLVM/libclang, eSpeak NG 1.52, and pinned Rust 1.94.0 through Rustup for the
-  coupled NeuTTS build. It builds MagicHandy's persistent NeuTTS runner with the same CPU/CUDA
-  backend and a first-party ONNX reference encoder, converts a verified NeuCodec
-  checkpoint, and installs the verified Air Q4 and DistillNeuCodec assets.
-  Choosing Ollama avoids both managed source builds; the installer can provision
-  Ollama too. It builds the core and all
-  three first-party Go voice adapters. Optional Parakeet assets remain consented,
+  the Visual Studio Desktop C++ workload/Windows SDK, and CUDA when selected.
+  Choosing Ollama avoids the managed source build; the installer can provision
+  Ollama too. It builds the core and all first-party Go voice adapters.
+  Optional Parakeet assets remain consented,
   size/license-visible, and SHA-256 verified, and voice remains disabled. The
   installer can write a `Start-MagicHandy.ps1` launcher and open the app.
+  Faster Qwen3-TTS and Chatterbox have separate, explicit module scripts so
+  Python, PyTorch, and speech models never enter the normal install plan.
 - **State-aware source updater (`update.ps1`):** atomically reads the non-secret
   install choices stored under LocalAppData, restores the saved UI language,
   shows UI/chat locales with the remaining choices, asks whether to revise them,
@@ -84,13 +82,11 @@ optional managed NeuTTS runner), never for the MagicHandy Go core itself.
    stand-in).
 5. Voice setup is partial: provider adapters, provider-scoped settings,
    continuous hands-free and hold-to-talk browser capture, app-managed Parakeet
-   and NeuTTS installer paths, and guarded local Windows path browsing exist.
-   App-managed assets are discovered separately from custom overrides. NeuTTS
-   generates reference codes from a supported WAV through the pinned native
-   ONNX worker, and the persistent CUDA/WGPU runtime now has measured
-   low-latency synthesis. A real managed-Parakeet browser microphone run,
-   subjective cloning acceptance, and any LAN/HTTPS story remain open (managed
-   browser audio: R24; NeuTTS: R17; LAN/HTTPS: R18).
+   plus scripted Faster Qwen3-TTS/Chatterbox installer paths, and guarded local
+   Windows path browsing exist. App-managed assets are discovered separately
+   from custom overrides. A real managed-Parakeet browser microphone run,
+   local-cloning listening/performance acceptance, and any LAN/HTTPS story
+   remain open (managed browser audio: R24; local TTS: R17; LAN/HTTPS: R18).
 
 ## Roadmap to parity
 
@@ -132,11 +128,11 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    StrokeGPT-ReVibed porting step over the Phase 15 importer.
 8. **Voice setup (implemented adapters and source provisioning).** Provider
    selection, workers, push-to-talk, browser playback, and app-managed Parakeet
-   and NeuTTS runtime installation have landed. Local WAV-to-reference-code
-   generation has landed through a pinned native ONNX worker; prebuilt
-   provisioning and broader microphone/provider compatibility checks still
-   require release evidence.
-   Providers stay optional and off the core runtime path (ADR 0007).
+   installation have landed. Dedicated scripts install pinned Faster Qwen3-TTS
+   or Chatterbox modules and persist their auto-launch choices; arbitrary
+   compatible endpoints use the same Go adapter. Broader microphone, listening,
+   latency, and GPU-coexistence checks still require release evidence.
+   Providers stay optional and off the core runtime path (ADRs 0007 and 0012).
 9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
    HTTPS story explicitly before promising phone use (risk R18).
 
@@ -164,7 +160,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | StrokeGPT-ReVibed setup capability | MagicHandy status | Where |
 | --- | --- | --- |
 | One-command environment setup | **Implemented for source installs** — bootstraps dependencies and compiler | `install.ps1` |
-| No Python/venv/torch to install | **Implemented for core, Parakeet, ElevenLabs, NeuTTS synthesis, and WAV reference encoding** | by design + R17 |
+| No Python/venv/torch in the core install | **Implemented**; optional local TTS modules install an isolated environment only when selected | by design + ADR 0012 |
 | Prebuilt one-click download | Planned | Phase 16 |
 | LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
 | Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
@@ -172,7 +168,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - Parakeet and the NeuTTS runner/decoder/backbone/encoder are app-managed; Settings generates a reference from WAV with audio preview; prebuilt release provisioning remains | Phase 13 + Phase 16 prebuilt provisioning |
+| Voice model setup | Partial - Parakeet is app-managed; Faster Qwen3-TTS/Chatterbox have explicit module scripts and Settings auto-launch; release listening and prebuilt provisioning remain | Phase 13 + Phase 16 |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

@@ -12,13 +12,17 @@ MagicHandy Go core idled at ~9 MB before SQLite and ~54 MB after the pure-Go
 SQLite datastore landed (see `docs/perf-baseline.md`). The SQLite result is a
 Phase 11B waiver against the original <40 MB idle budget, not a budget change.
 
-The default voice stack is non-Python: Parakeet (ASR), NeuTTS Air (local cloning TTS), and ElevenLabs (cloud TTS) — see ADR 0007. Python may still be added later behind optional worker boundaries for Chatterbox, CosyVoice, or other ML-heavy features, but it never defines the core app install path.
+Voice remains optional. Parakeet ASR and ElevenLabs cloud TTS use bundled Go
+adapters; local cloning uses a generic OpenAI-compatible Go adapter with
+explicitly installed Faster Qwen3-TTS or Chatterbox server modules. Their
+Python/PyTorch environments stay outside the pure-Go core and are not part of
+the normal install path. See ADRs 0003, 0007, and 0012.
 
 Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway. See `docs/decisions/0005-local-llm-runtime.md` and `docs/model-management.md`.
 
 ## Status
 
-Updated 2026-07-27. MagicHandy is a source-runnable alpha, not a packaged or
+Updated 2026-07-31. MagicHandy is a source-runnable alpha, not a packaged or
 release-ready application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
@@ -44,17 +48,15 @@ Recent work (PRs #63-#83) hardens connection and live-limit controls, bounds
 LLM output with honest provider-native reasoning control, makes source updates
 survive merged/deleted feature upstreams and avoid reopening stale UI, recovers
 malformed small-model structured responses, and replaces the Intiface
-queue-admission loop with deadline-driven asynchronous-ACK pacing. The largest
-recent thread is optional voice: slices 13.9 and 13.10 add a persistent
-CUDA/WGPU NeuTTS runner with settings-driven startup autoload and native
-(Python-free) WAV reference-code generation, and follow-ups (#81-#83) correct
-NeuTTS phonemization via eSpeak NG, stabilize output with a deterministic
-default seed plus an exact-text PCM cache, and add advanced seed controls.
-Voice stays optional and disabled by default, and its runtime is measured
-separately from the core (`docs/goal-scorecard.md`). Broader LLM quality/latency,
-the revised Intiface pacer on hardware, real managed microphone acceptance, and
-NeuTTS subjective cloning quality (R17) are still open measurements, not
-inferred completion claims.
+queue-admission loop with deadline-driven asynchronous-ACK pacing. The latest
+optional-voice slice retires NeuTTS after repeated listening failed
+release-quality acceptance. One bounded OpenAI-compatible TTS worker now serves
+Faster Qwen3-TTS, Chatterbox Turbo, and user-managed compatible endpoints.
+Dedicated scripts install pinned local modules only after consent, persist
+their settings through the app, and preserve auto-launch choices during
+updates. Voice stays optional and disabled by default; local-module quality,
+latency, VRAM coexistence, and browser playback remain release acceptance
+evidence under R17 rather than inferred completion claims.
 
 In this table, **Complete** means the scoped implementation and automated tests
 landed. It does not imply that every real-hardware acceptance check, provider
@@ -80,17 +82,18 @@ status column and in "Known Gaps Carried Forward" below.
 | 11B | SQLite persistence foundation (ADR 0008) | **Complete** | #32, #33 |
 | 12 | Voice worker boundary (protocol, lifecycle, stubs, status UI) | **Complete** | #41 |
 | 13.0 | Delivery-ordering foundation (shared chat log, cursors, lockstep TTS, audio lease) | **Complete** | #42 |
-| 13.1 | NeuTTS Air spike — non-Python decode proven; Python-harness CPU timing later rejected (R17) | **Complete** | #43 |
+| 13.1 | Historical NeuTTS Air spike — later retired by ADR 0012 | **Complete; retired** | #43 |
 | 13.2 | ElevenLabs cloud TTS worker | **Complete** | #44 |
 | 13.3 | Parakeet ASR worker (OpenAI-compatible proxy) | **Complete** | #45 |
 | 13.4 | Managed Parakeet runner and interactive installer | **Complete** | #46 |
 | 13.5 | Settings compaction: voice input/output split, provider-scoped fields | **Complete** | #49 |
-| 13.6 | NeuTTS Air offline stream adapter | **Complete** | #49 |
+| 13.6 | Historical NeuTTS Air offline stream adapter | **Complete; retired** | #49 |
 | 13.7 | Push-to-talk microphone input and Chat voice controls | **Implemented; managed-provider E2E open** | #49 |
 | 13.8 | Voice UX hardening: stacked chat layout, control gating, load/feedback loop | **Complete** | #51 |
-| 13.9 | Persistent TTS playback, shared voice queue, native WAV reference encoding | **Complete** | #79 |
-| 13.10 | Persistent GPU NeuTTS runtime and settings-driven startup autoload | **Complete** | #80 |
+| 13.9 | Persistent TTS playback and shared voice queue; retired NeuTTS reference encoder | **Complete; playback/queue retained** | #79 |
+| 13.10 | Historical persistent GPU NeuTTS runtime and startup autoload | **Complete; retired** | #80 |
 | 13.11 | Voice protocol, queue, provider, and process-lifecycle reliability audit | **Complete** | #89 |
+| 13.12 | OpenAI-compatible local TTS worker, scripted Faster Qwen3-TTS/Chatterbox modules, NeuTTS retirement | **Implemented; release listening/latency acceptance open** | — |
 | 14 | Pattern library, programs, authoring, and LLM curation | **Implemented; UI reliability audit complete; HW feel check open** | #52, #91 |
 | 14B | Intiface/Buttplug dispatch owner, transport-neutral frame contract (ADR 0010) | **Implemented; pre-async-pacer HW run passed, revised pacer HW run open** | #59, #67 |
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
@@ -180,9 +183,11 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   Curated model downloads remain release work.
 - Optional voice remains disabled until the user enables it. Once configured,
   enabled speech input and enabled chat speech autoload their respective workers
-  and models on app startup; failures stay isolated and visible. Source-installed
-  Parakeet and NeuTTS assets are discovered as app-managed modules with visible
-  complete/incomplete state, while custom paths remain separate selections.
+  and models on app startup; failures stay isolated and visible.
+  Source-installed Parakeet, Faster Qwen3-TTS, and Chatterbox assets are
+  discovered as app-managed modules with visible complete/incomplete state,
+  while custom paths and user-managed OpenAI-compatible endpoints remain
+  separate selections.
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
@@ -240,20 +245,19 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    Provider adapters, source-installer asset discovery, app-managed/custom
    separation, explicit enable/save/Start UI, and guarded Windows host-path
    browsing are implemented. A real Chrome/Edge transcription run remains R24
-   exit evidence. The source installer now builds and discovers a pinned NeuTTS
-   runner/decoder/backbone and DistillNeuCodec ONNX reference encoder with
-   managed llama.cpp. Settings generates validated reference codes directly
-   from WAV without Python. The persistent CUDA/WGPU runner removes repeated
-   model startup and has measured sub-second warm first audio; enforced offline
-   operation, GPU/LLM coexistence, and subjective cloning quality remain R17.
+   exit evidence. Optional local TTS now uses a generic OpenAI-compatible
+   adapter plus independently installed, pinned Faster Qwen3-TTS or Chatterbox
+   modules. Their installer, cancellation, ownership, quality, warm latency,
+   browser playback, and GPU/LLM coexistence acceptance remain R17.
 7. **Current-build performance evidence**: the post-SQLite build has current
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
 8. **Release provisioning**: `install.ps1` now builds every first-party Go voice
    adapter and can provision a clean Windows source machine, including the
    compiler; `update.ps1` preserves or revises those choices. Managed llama.cpp
-   and the coupled NeuTTS runtime/assets still build/provision outside the core.
-   Phase 16
+   still builds outside the core. Local TTS is no longer coupled to that build:
+   dedicated scripts install or update the optional Python/model module and
+   write its settings explicitly. Phase 16
    must provide checksummed prebuilt runtimes before the GUI setup path can avoid
    installing Git/CMake/Visual Studio rather than merely automating them.
 9. **Motion/transport concurrency audit (2026-07-16)**: engine commands are
@@ -799,14 +803,22 @@ evaluated on the next app launch).
 
 # Phase 13: Voice Feature Implementations
 
+The NeuTTS-specific slices below are retained only as implementation history.
+ADR 0012 and Slice 13.12 supersede that runtime, installer coupling, reference
+encoder, and settings surface. The shared queue, playback, protocol, and
+lifecycle hardening remain current.
+
 ## Suggested `/goal`
 
-`/goal Complete MagicHandy Phase 13: implement the non-Python voice providers one per PR — starting with the NeuTTS Air spike, then ElevenLabs cloud TTS, then Parakeet ASR — keeping the core app functional without voice and the voice settings surface minimal.`
+`/goal Complete MagicHandy voice release acceptance: validate Parakeet ASR,
+ElevenLabs, Faster Qwen3-TTS, Chatterbox, and external OpenAI-compatible TTS
+through the shared worker boundary while keeping voice optional and the core
+pure Go.`
 
 ## Objective
 
-Add the selected non-Python voice providers incrementally behind the worker
-boundary (ADR 0007).
+Add and validate selected voice providers incrementally behind the worker
+boundary (ADRs 0003, 0007, and 0012).
 
 ## Scope
 
@@ -908,8 +920,8 @@ Status: **complete**.
   controller-gated WAV-plus-transcript window. The original bounded Torch/NPY
   normalizer remains available for manual pre-encoded input and never executes
   pickle.
-- Setup and the exact capability boundary are documented in
-  [docs/neutts-worker.md](docs/neutts-worker.md).
+- Historical timing and capability evidence remains in
+  `docs/goal-scorecard.md` and Git history.
 
 ### Slice 13.7: Browser Voice Input
 
@@ -1052,8 +1064,8 @@ Status: **complete**.
   to one collapsed Advanced control: fixed seed 3 remains the default, any
   unsigned 32-bit seed can be retained for a reference voice, **New seed** picks
   a different repeatable value, and **Varied** explicitly restores per-request
-  randomness with the repeat cache disabled. See
-  `docs/neutts-quality-performance.md`.
+  randomness with the repeat cache disabled. These controls and the runtime
+  were later removed by Slice 13.12.
 
 ### Slice 13.11: Voice Reliability Audit
 
@@ -1077,6 +1089,30 @@ Status: **complete** (#89).
 - Automated coverage includes burst audio delivery, malformed protocol frames,
   lifecycle races, URL validation, persistent-runner cancellation, strict WAV
   framing, and provider response bounds. Real-device motion is unchanged.
+
+### Slice 13.12: OpenAI-Compatible Local TTS Modules
+
+Status: **implemented; release listening and performance acceptance open**.
+
+- Remove the NeuTTS worker, Rust runner, reference-code generator, assets,
+  installer coupling, provider fields, and UI. Legacy `neutts_air` settings
+  migrate to voice output off rather than silently selecting a replacement.
+- Add one pure-Go ADR 0003 adapter for OpenAI-compatible
+  `POST /v1/audio/speech` services. It bounds text, errors, and retained audio;
+  repairs streamed WAV length sentinels; redacts bearer keys; supports
+  cancellation; and owns only direct child processes it starts.
+- Offer Faster Qwen3-TTS as the NVIDIA/CUDA managed path, Chatterbox Turbo as
+  the broader CPU/GPU fallback, and an external compatible endpoint. Provider,
+  module root, model, voice, reference, health, port, device, and auto-launch
+  settings remain backend-authoritative.
+- Keep Python/PyTorch/model downloads out of `install.ps1`. Dedicated
+  `install-tts-module.ps1` and `update-tts-module.ps1` scripts use isolated
+  `uv` environments, pinned upstream revisions, loopback-only configuration,
+  explicit consent, plan-only operation, and the app CLI to persist settings.
+- Release evidence must record cold/warm time to playable audio, listening
+  quality across representative references, cancellation/recovery, browser
+  playback in Firefox and Chromium, clean child teardown, and VRAM coexistence
+  with the selected local LLM.
 
 Each provider must include: setup documentation, load/unload behavior, status
 diagnostics, queue/cancellation behavior, sentence-level streaming, and
@@ -1115,14 +1151,15 @@ provider loads, cancellation works, queue depth is visible, the app survives
 
 ## Done Criteria
 
-- NeuTTS Air (or its documented fallback), ElevenLabs, and Parakeet work
-  behind the protocol with no Python required.
+- ElevenLabs, Parakeet, managed Faster Qwen3-TTS/Chatterbox modules, and an
+  external OpenAI-compatible TTS endpoint work behind the protocol. Optional
+  Python runtimes remain isolated from the pure-Go core and normal install.
 - Sentence streaming works; spoken text always matches displayed text.
 - The default voice settings surface stays small.
 
 ## Out Of Scope
 
-- optional Python workers (Chatterbox, CosyVoice) — the protocol door stays open
+- embedding Python, Torch, or a native model runtime in the Go core
 - background or unattended microphone auto-start without a visible user-owned
   capture session
 
@@ -1532,9 +1569,10 @@ Implement, as slices:
   CPU/CUDA download by default, advanced managed source build, skip-for-Ollama
   with store import, or external URL)
   → LLM model (import or curated download) → optional voice provisioning
-  (Parakeet runner+model and source-built NeuTTS assets moved from `install.ps1` into
-  checksummed, size/license-visible, progress-reporting API endpoints;
-  ElevenLabs key entry) → finish. Every step skippable; every step is the
+  (Parakeet runner+model, Faster Qwen3-TTS or Chatterbox module installation,
+  an external compatible endpoint, or ElevenLabs key entry; all large runtime
+  and model work remains size/license-visible and progress-reporting) → finish.
+  Every step skippable; every step is the
   existing settings/API surface, never a second implementation. The user
   decision tree, screen design, and branding slots are specified in
   `docs/setup-wizard-design.md` (wireframe: `docs/setup-wizard-sketch.svg`);

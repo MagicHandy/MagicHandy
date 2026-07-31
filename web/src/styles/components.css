@@ -351,13 +351,6 @@ textarea:disabled {
   background: var(--surface-3);
   color: var(--text);
 }
-.neutts-sampling-control {
-  width: min(100%, 240px);
-}
-.neutts-sampling-control button {
-  flex: 1 1 0;
-}
-
 /* ---- Motion visualizer ---- */
 .visualizer {
   display: grid;
