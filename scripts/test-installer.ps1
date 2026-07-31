@@ -88,7 +88,7 @@ try {
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Exact reference transcript'")) -Message 'TTS install must leave Faster Qwen transcription to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains('[string]$ReferenceTranscript')) -Message 'TTS install must not expose a Faster Qwen transcript parameter'
     Assert-True -Condition (-not $ttsInstallerSource.Contains('requires a reference WAV and its exact transcript')) -Message 'empty Faster Qwen references must not fail installation'
-    Assert-True -Condition (-not $ttsInstallerSource.Contains('Import-Module $supportPath -Force')) -Message 'nested TTS install must not invalidate its parent installer module'
+    Assert-True -Condition ($ttsInstallerSource.Contains('Import-Module $supportPath -Force')) -Message 'standalone TTS install should initialize its isolated installer support module'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('--max-workers', '1')")) -Message 'Windows TTS model downloads must serialize Hugging Face cache finalization'
     Assert-True -Condition ($ttsInstallerSource.Contains("'HF_HUB_DISABLE_SYMLINKS_WARNING'")) -Message 'Windows TTS installs should replace the Hugging Face symlink warning with installer-owned handling'
     Assert-True -Condition ($ttsInstallerSource.Contains('for ($attempt = 1; $attempt -le 3; $attempt++)')) -Message 'TTS model downloads should retry the resumable cache'
@@ -101,8 +101,11 @@ try {
     Assert-True -Condition (-not $coreCommandSource.Contains('"tts-reference-text"')) -Message 'the internal install command must leave Faster Qwen transcript changes to the GUI'
     $ttsUpdaterSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\update-tts-module.ps1'))
     Assert-True -Condition (-not $ttsUpdaterSource.Contains('ReferenceTranscript =')) -Message 'TTS updates must not restore stale command-line reference text'
-    Assert-True -Condition (-not $ttsUpdaterSource.Contains('Import-Module $supportPath -Force')) -Message 'nested TTS update must not invalidate its parent installer module'
+    Assert-True -Condition ($ttsUpdaterSource.Contains('Import-Module $supportPath -Force')) -Message 'standalone TTS update should initialize its isolated installer support module'
     $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
+    $installerModuleSource = [System.IO.File]::ReadAllText($installerModulePath)
+    Assert-True -Condition ($installerModuleSource.Contains('function Invoke-MagicHandyPowerShellScript')) -Message 'main installer should isolate managed TTS scripts in a child PowerShell process'
+    Assert-True -Condition ($installerModuleSource.Contains('-NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments')) -Message 'TTS process isolation should preserve script paths and argument boundaries'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
 
@@ -240,15 +243,6 @@ try {
     [System.IO.File]::WriteAllText((Join-Path $qwenRoot 'module-state.json'), ($moduleState | ConvertTo-Json))
     $checkOnly = & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($checkOnly -match 'Module state verified') -Message 'main installer should validate legacy module state without restoring its reference fields'
-    $parentModuleSurvived = & $supportModule {
-        param([string]$Updater, [string]$InstallRoot)
-        & $Updater -InstallRoot $InstallRoot -CheckOnly -Yes | Out-Null
-        if (-not $?) {
-            return $false
-        }
-        return $null -ne (Get-Command Write-MagicHandyLauncher -CommandType Function -ErrorAction SilentlyContinue)
-    } $ttsUpdater $qwenRoot
-    Assert-True -Condition ([bool]$parentModuleSurvived) -Message 'nested TTS validation should preserve parent installer private helpers'
     Assert-Throws -Action {
         & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Device cuda -Yes
     } -Pattern 'CheckOnly cannot be combined' -Message 'TTS check-only override rejection'
@@ -322,6 +316,76 @@ try {
     $json = Get-Content -LiteralPath $statePath -Raw
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
+
+    Write-Host 'Checking TTS child-process module isolation...'
+    $ttsProcessRepository = Join-Path $tempRoot 'tts process repository'
+    $ttsProcessScripts = Join-Path $ttsProcessRepository 'scripts'
+    $ttsProcessRoot = Join-Path $dataDir 'voice\chatterbox-tts'
+    $ttsProcessMarker = Join-Path $tempRoot 'tts-process-marker.txt'
+    New-Item -ItemType Directory -Force -Path $ttsProcessScripts, $ttsProcessRoot | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $ttsProcessRoot 'module-state.json'), '{}')
+    $ttsProcessUpdater = @'
+#Requires -Version 5.1
+[CmdletBinding()]
+param(
+    [string]$InstallRoot,
+    [string]$Device,
+    [switch]$ApplyInstallerChoices,
+    [switch]$Yes,
+    [switch]$AutoLaunch,
+    [switch]$NoAutoLaunch,
+    [switch]$CheckOnly
+)
+$ErrorActionPreference = 'Stop'
+Import-Module $env:MAGICHANDY_TEST_INSTALLER_SUPPORT -Force -DisableNameChecking
+$loaded = Read-MagicHandyInstallState -Path $env:MAGICHANDY_TEST_INSTALLER_STATE
+if ($env:MAGICHANDY_TEST_TTS_FAIL -eq '1') {
+    throw 'Intentional TTS process fixture failure.'
+}
+if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $AutoLaunch) {
+    throw 'Parent installer choices were not preserved across the TTS process boundary.'
+}
+[System.IO.File]::WriteAllText($env:MAGICHANDY_TEST_TTS_MARKER, [string]$loaded.tts_module)
+'@
+    [System.IO.File]::WriteAllText((Join-Path $ttsProcessScripts 'update-tts-module.ps1'), $ttsProcessUpdater)
+    [System.IO.File]::WriteAllText((Join-Path $ttsProcessScripts 'install-tts-module.ps1'), "#Requires -Version 5.1`nparam()`n")
+    $originalTestSupport = $env:MAGICHANDY_TEST_INSTALLER_SUPPORT
+    $originalTestState = $env:MAGICHANDY_TEST_INSTALLER_STATE
+    $originalTestMarker = $env:MAGICHANDY_TEST_TTS_MARKER
+    $originalTestFailure = $env:MAGICHANDY_TEST_TTS_FAIL
+    try {
+        $env:MAGICHANDY_TEST_INSTALLER_SUPPORT = $installerModulePath
+        $env:MAGICHANDY_TEST_INSTALLER_STATE = $statePath
+        $env:MAGICHANDY_TEST_TTS_MARKER = $ttsProcessMarker
+        $env:MAGICHANDY_TEST_TTS_FAIL = '0'
+        $parentModuleSurvivedUpdate = & $supportModule {
+            param([object]$FixtureState, [string]$FixtureRepository)
+            Install-MagicHandyTTSModule `
+                -State $FixtureState `
+                -RepositoryPath $FixtureRepository `
+                -Reconfigure `
+                -AssumeYes
+            return $null -ne (Get-Command Write-MagicHandyLauncher -CommandType Function -ErrorAction SilentlyContinue)
+        } $state $ttsProcessRepository
+        $env:MAGICHANDY_TEST_TTS_FAIL = '1'
+        Assert-Throws -Action {
+            & $supportModule {
+                param([object]$FixtureState, [string]$FixtureRepository)
+                Install-MagicHandyTTSModule `
+                    -State $FixtureState `
+                    -RepositoryPath $FixtureRepository `
+                    -Reconfigure `
+                    -AssumeYes
+            } $state $ttsProcessRepository
+        } -Pattern 'TTS module update failed \(exit 1\)' -Message 'isolated TTS process failure propagation'
+    } finally {
+        $env:MAGICHANDY_TEST_INSTALLER_SUPPORT = $originalTestSupport
+        $env:MAGICHANDY_TEST_INSTALLER_STATE = $originalTestState
+        $env:MAGICHANDY_TEST_TTS_MARKER = $originalTestMarker
+        $env:MAGICHANDY_TEST_TTS_FAIL = $originalTestFailure
+    }
+    Assert-True -Condition ([bool]$parentModuleSurvivedUpdate) -Message 'TTS update should not invalidate parent installer private helpers'
+    Assert-Equal -Expected 'chatterbox' -Actual ([System.IO.File]::ReadAllText($ttsProcessMarker)) -Message 'isolated TTS update should retain initialized installer schema state'
 
     $unicodeStatePath = Join-Path $tempRoot 'unicode-install-state.json'
     $unicodeDataDir = Join-Path $tempRoot (-join ([char[]]@(0x5229, 0x7528, 0x8005, 0x30c7, 0x30fc, 0x30bf)))

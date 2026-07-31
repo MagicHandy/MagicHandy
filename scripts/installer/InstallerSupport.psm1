@@ -1913,6 +1913,23 @@ function Remove-MagicHandyGeneratedLauncher {
     Write-Host "Removed generated launcher $launcher" -ForegroundColor Green
 }
 
+function Invoke-MagicHandyPowerShellScript {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $powershell = Resolve-MagicHandyExecutable -Name 'powershell.exe'
+    if ([string]::IsNullOrWhiteSpace($powershell)) {
+        throw 'Windows PowerShell 5.1 is required to run the managed TTS installer.'
+    }
+    & $powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Description failed (exit $LASTEXITCODE)."
+    }
+}
+
 function Install-MagicHandyTTSModule {
     param(
         [Parameter(Mandatory = $true)][object]$State,
@@ -1944,44 +1961,50 @@ function Install-MagicHandyTTSModule {
 
     if (Test-Path -LiteralPath $moduleStatePath -PathType Leaf) {
         if (-not $Reconfigure) {
-            & $updater -InstallRoot $installRoot -CheckOnly -Yes
-            if (-not $?) {
-                throw 'The installed TTS module state could not be verified.'
-            }
+            Invoke-MagicHandyPowerShellScript `
+                -ScriptPath $updater `
+                -Arguments @('-InstallRoot', $installRoot, '-CheckOnly', '-Yes') `
+                -Description 'Installed TTS module validation'
             Write-Host (Get-MagicHandyText -Key 'tts_reuse') -ForegroundColor Green
             return
         }
 
-        $updateArguments = @{
-            InstallRoot = $installRoot
-            Device = [string]$State.tts_device
-            ApplyInstallerChoices = $true
-            Yes = [bool]$AssumeYes
+        $updateArguments = @(
+            '-InstallRoot', $installRoot,
+            '-Device', [string]$State.tts_device,
+            '-ApplyInstallerChoices'
+        )
+        if ($AssumeYes) {
+            $updateArguments += '-Yes'
         }
         if ([bool]$State.tts_auto_launch) {
-            $updateArguments.AutoLaunch = $true
+            $updateArguments += '-AutoLaunch'
         } else {
-            $updateArguments.NoAutoLaunch = $true
+            $updateArguments += '-NoAutoLaunch'
         }
-        & $updater @updateArguments
-        if (-not $?) {
-            throw 'The TTS module updater did not complete successfully.'
-        }
+        Invoke-MagicHandyPowerShellScript `
+            -ScriptPath $updater `
+            -Arguments $updateArguments `
+            -Description 'TTS module update'
         return
     }
 
-    $installArguments = @{
-        Module = [string]$State.tts_module
-        DataDir = [string]$State.data_dir
-        InstallRoot = $installRoot
-        Device = [string]$State.tts_device
-        AutoLaunch = [bool]$State.tts_auto_launch
-        Yes = [bool]$AssumeYes
+    $installArguments = @(
+        '-Module', [string]$State.tts_module,
+        '-DataDir', [string]$State.data_dir,
+        '-InstallRoot', $installRoot,
+        '-Device', [string]$State.tts_device
+    )
+    if ([bool]$State.tts_auto_launch) {
+        $installArguments += '-AutoLaunch'
     }
-    & $installer @installArguments
-    if (-not $?) {
-        throw 'The TTS module installer did not complete successfully.'
+    if ($AssumeYes) {
+        $installArguments += '-Yes'
     }
+    Invoke-MagicHandyPowerShellScript `
+        -ScriptPath $installer `
+        -Arguments $installArguments `
+        -Description 'TTS module installation'
 }
 
 function Invoke-MagicHandyProvision {

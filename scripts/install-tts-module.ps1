@@ -41,7 +41,7 @@ $ErrorActionPreference = 'Stop'
 
 $repository = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $supportPath = Join-Path $PSScriptRoot 'installer\InstallerSupport.psm1'
-Import-Module $supportPath -DisableNameChecking -ErrorAction Stop
+Import-Module $supportPath -Force -DisableNameChecking -ErrorAction Stop
 
 $fasterSource = 'https://github.com/andimarafioti/faster-qwen3-tts.git'
 $fasterRevision = 'a70afc0f81f7f5f8801c3227968f1102f43f211c'
@@ -281,7 +281,7 @@ function Sync-PinnedSource {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
         Invoke-Checked -Executable $Git -Arguments @('clone', '--filter=blob:none', '--no-checkout', $URL, $Destination) -Description 'Source clone'
     }
-    Add-MagicHandyGitInfoExclusions -RepositoryPath $Destination -RelativePaths $InstallerGeneratedPaths
+    InstallerSupport\Add-MagicHandyGitInfoExclusions -RepositoryPath $Destination -RelativePaths $InstallerGeneratedPaths
     $dirty = @(& $Git -C $Destination status --porcelain)
     if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
         throw "The managed module source has local changes. Preserve or remove '$Destination' before updating."
@@ -371,9 +371,9 @@ if ([string]::IsNullOrWhiteSpace($Module)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($DataDir)) {
-    $statePath = Get-MagicHandyInstallStatePath
+    $statePath = InstallerSupport\Get-MagicHandyInstallStatePath
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
-        $installState = Read-MagicHandyInstallState -Path $statePath
+        $installState = InstallerSupport\Read-MagicHandyInstallState -Path $statePath
         $DataDir = [string]$installState.data_dir
     } else {
         $DataDir = Join-Path $env:LOCALAPPDATA 'MagicHandy'
@@ -460,7 +460,7 @@ if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
 }
 
 Confirm-TTSAction 'Proceed with the optional TTS module download and installation?'
-$git = Ensure-MagicHandyGit -AssumeYes:$Yes
+$git = InstallerSupport\Ensure-MagicHandyGit -AssumeYes:$Yes
 $uv = Ensure-Uv
 $sourceRoot = Join-Path $InstallRoot 'source'
 $installerGeneratedPaths = if ($Module -eq 'faster-qwen3-tts') {
@@ -516,15 +516,15 @@ if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
     throw "MagicHandy executable not found at '$exe'. Run install.ps1 or update.ps1 before installing a TTS module."
 }
 
-$wasRunning = Test-MagicHandyAppRunning -RepositoryPath $repository
-$statePath = Get-MagicHandyInstallStatePath
+$wasRunning = InstallerSupport\Test-MagicHandyAppRunning -RepositoryPath $repository
+$statePath = InstallerSupport\Get-MagicHandyInstallStatePath
 $appPort = 49717
 if (Test-Path -LiteralPath $statePath -PathType Leaf) {
-    $appState = Read-MagicHandyInstallState -Path $statePath
+    $appState = InstallerSupport\Read-MagicHandyInstallState -Path $statePath
     $appPort = [int]$appState.port
 }
 if ($wasRunning) {
-    Stop-MagicHandyAppForRebuild -RepositoryPath $repository -Port $appPort -AllowPhysicalStopConfirmation
+    InstallerSupport\Stop-MagicHandyAppForRebuild -RepositoryPath $repository -Port $appPort -AllowPhysicalStopConfirmation
 }
 
 try {
@@ -572,7 +572,7 @@ try {
     Write-TTSModuleState -Path (Join-Path $InstallRoot 'module-state.json') -State $moduleState
 } finally {
     if ($wasRunning) {
-        Start-MagicHandyApp -RepositoryPath $repository -DataDir $DataDir -Port $appPort
+        InstallerSupport\Start-MagicHandyApp -RepositoryPath $repository -DataDir $DataDir -Port $appPort
     }
 }
 
