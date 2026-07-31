@@ -1114,7 +1114,10 @@ Status: **implemented; release listening and performance acceptance open**.
   validate and reuse the installed multi-gigabyte module. Faster Qwen reference
   WAV and transcript selection belongs to Settings > Voice: command-line
   installation leaves both empty, reports the installed runtime as needing
-  configuration, and later updates preserve the GUI-owned values.
+  configuration, and later updates preserve the GUI-owned values. Windows
+  model downloads serialize Hugging Face cache finalization, retry transient
+  failures, and retain completed files so standard accounts can resume without
+  symlink privileges.
 - Release evidence must record cold/warm time to playable audio, listening
   quality across representative references, cancellation/recovery, browser
   playback in Firefox and Chromium, clean child teardown, and VRAM coexistence

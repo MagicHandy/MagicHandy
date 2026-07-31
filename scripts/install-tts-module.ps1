@@ -187,6 +187,60 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-HuggingFaceModelDownload {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$CacheDirectory
+    )
+
+    $arguments = @('download', $Repository, '--cache-dir', $CacheDirectory)
+    $isWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+    if ($isWindows) {
+        # huggingface_hub probes symlink support lazily. Concurrent first-use
+        # workers can observe the optimistic probe value and fail with WinError
+        # 1314 before the normal copy fallback is selected.
+        $arguments += @('--max-workers', '1')
+        Write-Host 'Using serialized model-file finalization for standard Windows accounts.'
+    }
+
+    $previousSymlinkWarning = [System.Environment]::GetEnvironmentVariable(
+        'HF_HUB_DISABLE_SYMLINKS_WARNING',
+        [System.EnvironmentVariableTarget]::Process
+    )
+    $exitCode = 1
+    try {
+        if ($isWindows) {
+            [System.Environment]::SetEnvironmentVariable(
+                'HF_HUB_DISABLE_SYMLINKS_WARNING',
+                '1',
+                [System.EnvironmentVariableTarget]::Process
+            )
+        }
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & $Executable @arguments
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -eq 0) {
+                return
+            }
+            if ($attempt -lt 3) {
+                Write-Warning "Model download attempt $attempt failed (exit $exitCode). Retrying with the resumable cache..."
+                Start-Sleep -Seconds (2 * $attempt)
+            }
+        }
+    } finally {
+        if ($isWindows) {
+            [System.Environment]::SetEnvironmentVariable(
+                'HF_HUB_DISABLE_SYMLINKS_WARNING',
+                $previousSymlinkWarning,
+                [System.EnvironmentVariableTarget]::Process
+            )
+        }
+    }
+
+    throw "Model download failed after 3 attempts (last exit $exitCode). Downloaded files were kept; rerun the installer to resume."
+}
+
 function ConvertTo-YamlSingleQuotedScalar {
     param([Parameter(Mandatory = $true)][string]$Value)
     return "'" + $Value.Replace("'", "''") + "'"
@@ -436,7 +490,7 @@ if (-not (Test-Path -LiteralPath $hf -PathType Leaf)) {
 }
 $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/chatterbox-turbo' }
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
-Invoke-Checked -Executable $hf -Arguments @('download', $modelRepo, '--cache-dir', $modelCache) -Description 'Model download'
+Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache
 
 $healthPath = '/health'
 if ($Module -eq 'chatterbox') {
