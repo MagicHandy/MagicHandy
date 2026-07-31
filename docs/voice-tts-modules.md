@@ -54,6 +54,11 @@ package-metadata directory in the checkout's private Git excludes. It never
 cleans the checkout or ignores arbitrary files, so tracked edits and unrelated
 untracked files remain a hard stop.
 
+When the main installer invokes a TTS module script, it uses a child Windows
+PowerShell process. This keeps the module script's support-module reload and
+private schema state separate from the parent provisioner, while preserving
+interactive prompts, output, and exit failures.
+
 `scripts/update-tts-module.ps1` reads the existing module choice, preserves it
 by default, and asks before changing provider, model, port, or auto-launch. The
 main app updater validates and reuses a selected installed module rather than

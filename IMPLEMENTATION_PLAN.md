@@ -1120,7 +1120,9 @@ Status: **implemented; release listening and performance acceptance open**.
   symlink privileges. Retries before module state is committed reuse the
   managed checkout, environment, installed packages, and model cache while
   preserving the checkout integrity gate for real source or unknown-file
-  changes.
+  changes. Main-installer calls execute the TTS module scripts in a child
+  Windows PowerShell process so their module initialization cannot mutate the
+  active parent provisioner.
 - Release evidence must record cold/warm time to playable audio, listening
   quality across representative references, cancellation/recovery, browser
   playback in Firefox and Chromium, clean child teardown, and VRAM coexistence

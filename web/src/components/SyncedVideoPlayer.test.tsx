@@ -166,7 +166,7 @@ describe("SyncedVideoPlayer", () => {
     });
     Object.defineProperty(player, "paused", { configurable: true, get: () => paused });
 
-    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Play video with paired motion" }));
 
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
       event: "play",
@@ -267,7 +267,7 @@ describe("SyncedVideoPlayer", () => {
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={12} />);
     await screen.findByLabelText("Paired session");
 
-    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Play video with paired motion" }));
     await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
     expect(play).toHaveBeenCalledOnce();
 
@@ -303,7 +303,7 @@ describe("SyncedVideoPlayer", () => {
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={13} />);
     await screen.findByLabelText("Paired session");
 
-    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Play video with paired motion" }));
     await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Pause video and motion" }));
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 13, expect.any(AbortSignal), false));
@@ -331,7 +331,7 @@ describe("SyncedVideoPlayer", () => {
     });
     Object.defineProperty(player, "paused", { configurable: true, get: () => paused });
 
-    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Play video with paired motion" }));
     await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
     paused = false;
     pause.mockClear();

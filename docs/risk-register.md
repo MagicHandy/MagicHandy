@@ -623,7 +623,8 @@ resumable cache, avoiding `WinError 1314` on ordinary non-Developer-Mode
 accounts. Interrupted installs can resume before module state exists without
 discarding completed packages or treating installer-generated metadata as a
 source edit, and nested module verification no longer invalidates the parent
-installer before launcher and state finalization. Live listening, latency,
+installer: TTS module scripts now run in an isolated Windows PowerShell process
+before launcher and state finalization continue. Live listening, latency,
 browser, and VRAM
 acceptance remains open. Historical NeuTTS measurements remain in
 `docs/goal-scorecard.md` and `docs/perf-baseline.md`; they are not evidence for

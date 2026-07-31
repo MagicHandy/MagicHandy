@@ -33,7 +33,7 @@ if ($CheckOnly -and ($ModifyChoices -or $ApplyInstallerChoices -or $AutoLaunch -
 
 $repository = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $supportPath = Join-Path $PSScriptRoot 'installer\InstallerSupport.psm1'
-Import-Module $supportPath -DisableNameChecking -ErrorAction Stop
+Import-Module $supportPath -Force -DisableNameChecking -ErrorAction Stop
 
 function Read-TTSModuleState {
     param(
@@ -92,11 +92,11 @@ function Read-TTSModuleState {
 }
 
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
-    $statePath = Get-MagicHandyInstallStatePath
+    $statePath = InstallerSupport\Get-MagicHandyInstallStatePath
     if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
         throw 'MagicHandy install state was not found. Pass -InstallRoot explicitly.'
     }
-    $installState = Read-MagicHandyInstallState -Path $statePath
+    $installState = InstallerSupport\Read-MagicHandyInstallState -Path $statePath
     $voiceRoot = Join-Path ([string]$installState.data_dir) 'voice'
     $candidates = @(
         (Join-Path $voiceRoot 'faster-qwen3-tts'),
