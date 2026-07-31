@@ -477,6 +477,18 @@ button.chat-avatar:focus-visible {
 }
 
 @media (max-width: 560px) {
+  .chat-conversation {
+    min-height: 0;
+  }
+
+  .chat-conversation .chat-log-shell {
+    flex: 0 0 auto;
+  }
+
+  .chat-conversation .chat-log {
+    height: clamp(170px, 30dvh, 240px);
+  }
+
   .chat-conversation > .chat {
     padding: 8px;
   }

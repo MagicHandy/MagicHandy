@@ -110,15 +110,15 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,536,048 raw / 756,452 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 724,512 raw / 193,726 gzip bytes; all
-   HTML/CSS/JS is 1,091,812 raw / 319,055 gzip bytes. Independent Autopilot clocks,
+   browser payload is 1,536,190 raw / 756,484 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 724,654 raw / 193,758 gzip bytes; all
+   HTML/CSS/JS is 1,091,954 raw / 319,087 gzip bytes. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
    3,315 gzip bytes against their preceding checked-in bundle; browser-session
    notification persistence adds another 1,424 raw / 481 gzip bytes. The
    synchronized-video transport, embedded auto-hide overlay, vertical volume
-   control, and explicit seek lifecycle add 18,269 raw / 4,661 gzip bytes total
-   (14,105 / 3,402 on the
+   control, and explicit seek lifecycle add 18,411 raw / 4,693 gzip bytes total
+   (14,247 / 3,434 on the
    English startup path) against
    their checked-in predecessor; the bitmap is unchanged. These remain within
    budget, but future locales, personas, and bitmap additions must keep startup
@@ -150,13 +150,16 @@ Ranked by threat to the stated goals:
   remained clean. Windows race execution still cannot start because no C
   compiler is installed; the mandatory Ubuntu CI race job remains
   authoritative. No real-device motion was authorized for this pass, so R25
-  remains High. The complete embedded output is 1,536,048 raw / 756,452
-  level-9 gzip bytes; the English startup path is 724,512 / 193,726.
+  remains High. The complete embedded output is 1,536,190 raw / 756,484
+  level-9 gzip bytes; the English startup path is 724,654 / 193,758.
 
 - **2026-07-30** - Chat composition now follows conventional messaging
   behavior: Enter sends, Shift+Enter preserves multiline input, and an Enter
   key event during IME composition is ignored. A focused component regression
-  test covers all three paths.
+  test covers all three paths. Below 560 px, the stacked conversation no longer
+  inherits the 520 px tablet minimum; its scrollback is bounded to 170-240 px.
+  At the checked 320 x 700 viewport, empty scrollback falls from 315 px to
+  210 px, the conversation is 329 px high, and horizontal overflow remains zero.
 
 - **2026-07-30** - Retired the 15 built-ins the user had disabled by hand and
   replaced them with 15 velocity-authored ones. Measuring the disabled set found
