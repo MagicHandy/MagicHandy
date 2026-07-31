@@ -20,7 +20,7 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 		if definition.CycleMillis < RoutineCycleFloorMillis {
 			t.Fatalf("pattern %q cycle = %d, below routine floor", definition.ID, definition.CycleMillis)
 		}
-		if slices.Contains(definition.Tags, TagCurated) {
+		if UsesExactImportedCurve(definition) {
 			continue
 		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
@@ -106,7 +106,7 @@ func TestCatalogPatternsHoldTheMeasuredSpeedEnvelope(t *testing.T) {
 	for _, definition := range BuiltinPatternDefinitions() {
 		// Curated entries are exact user-tested curves; they are evidence, not
 		// designs, and deliberately carry holds the envelope would reject.
-		if slices.Contains(definition.Tags, TagCurated) {
+		if UsesExactImportedCurve(definition) {
 			continue
 		}
 		slowest, fastest, travel := math.Inf(1), 0.0, 0.0

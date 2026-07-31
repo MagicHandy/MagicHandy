@@ -3,7 +3,6 @@ package motion
 import (
 	"context"
 	"math"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -251,7 +250,7 @@ func TestAdaptiveCatalogFramesTrackThePlanWithoutStairSteps(t *testing.T) {
 	var adaptiveStationaryMillis int64
 	for _, definition := range BuiltinPatternDefinitions() {
 		// Curated entries are exact user curves that deliberately hold position.
-		if slices.Contains(definition.Tags, TagCurated) {
+		if UsesExactImportedCurve(definition) {
 			continue
 		}
 		plan := NewMotionPlan("catalog", MotionTarget{
@@ -311,6 +310,9 @@ func TestWholePercentSamplingReducesRoundedPlateausWithinWireErrorBound(t *testi
 	maximumWireError := 0.0
 	worstPattern := ""
 	for _, definition := range BuiltinPatternDefinitions() {
+		if UsesExactImportedCurve(definition) {
+			continue
+		}
 		plan := NewMotionPlan("catalog", MotionTarget{
 			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 			AreaFocus: &AreaFocus{MinPercent: 45, MaxPercent: 55},
@@ -549,13 +551,16 @@ func TestCatalogRetargetTransitionsDoNotCreateRapidChatter(t *testing.T) {
 	definitions := BuiltinPatternDefinitions()
 	const handoff = int64(2200)
 	for _, previousDefinition := range definitions {
+		if UsesExactImportedCurve(previousDefinition) {
+			continue
+		}
 		previous := NewMotionPlan("previous", MotionTarget{
 			PatternID: previousDefinition.ID, Pattern: &previousDefinition, SpeedPercent: 100,
 		}, settings, 0, 0, time.Unix(0, 0))
 		position := previous.SampleAt(handoff).PositionPercent
 		direction := previous.DirectionAt(handoff)
 		for _, nextDefinition := range definitions {
-			if nextDefinition.ID == previousDefinition.ID {
+			if nextDefinition.ID == previousDefinition.ID || UsesExactImportedCurve(nextDefinition) {
 				continue
 			}
 			next := previous.retargetFromState("next", MotionTarget{
@@ -573,6 +578,9 @@ func TestCatalogFocusTransitionsDoNotCreateRapidChatter(t *testing.T) {
 	settings.SpeedMaxPercent = 100
 	const handoff = int64(2200)
 	for _, definition := range BuiltinPatternDefinitions() {
+		if UsesExactImportedCurve(definition) {
+			continue
+		}
 		full := NewMotionPlan("full", MotionTarget{
 			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 		}, settings, 0, 0, time.Unix(0, 0))

@@ -1,0 +1,250 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 2/6",
+  "description": "10.0s curated clip from cowgirlintense-v2 \u00b7 pose=cowgirl zone=deep style=intense speed=fast",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 77,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 244,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 410,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 577,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 777,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 944,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 1111,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 1278,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 1478,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 1645,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 1812,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 1978,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 2179,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 2346,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 2512,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 2679,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 2880,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3046,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 3213,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 3380,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 3580,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3747,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 3914,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 4080,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 4281,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 4448,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 4615,
+      "position_percent": 21.428571
+    },
+    {
+      "time_ms": 4781,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 4982,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 5148,
+      "position_percent": 57.142857
+    },
+    {
+      "time_ms": 5315,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 5482,
+      "position_percent": 50.0
+    },
+    {
+      "time_ms": 5649,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 5949,
+      "position_percent": 14.285714
+    },
+    {
+      "time_ms": 6216,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 6350,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 6517,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 6783,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 6917,
+      "position_percent": 28.571429
+    },
+    {
+      "time_ms": 7050,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 7184,
+      "position_percent": 28.571429
+    },
+    {
+      "time_ms": 7317,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 7618,
+      "position_percent": 14.285714
+    },
+    {
+      "time_ms": 7784,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 7885,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 8018,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 8252,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 8385,
+      "position_percent": 28.571429
+    },
+    {
+      "time_ms": 8518,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 8652,
+      "position_percent": 28.571429
+    },
+    {
+      "time_ms": 8785,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 9086,
+      "position_percent": 14.285714
+    },
+    {
+      "time_ms": 9286,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 9386,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 9520,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 9753,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 9887,
+      "position_percent": 28.571429
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 28.571429
+    }
+  ],
+  "tags": [
+    "deep",
+    "rhythmic",
+    "build"
+  ]
+}

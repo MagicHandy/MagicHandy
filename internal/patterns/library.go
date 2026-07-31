@@ -429,7 +429,9 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		activeBuiltins := make(map[string]struct{}, len(motion.BuiltinPatternDefinitions()))
 		for _, definition := range motion.BuiltinPatternDefinitions() {
+			activeBuiltins[string(definition.ID)] = struct{}{}
 			points, _ := json.Marshal(definition.Points)
 			tags, _ := json.Marshal(definition.Tags)
 			_, err := tx.ExecContext(ctx, `
@@ -461,8 +463,46 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 				}
 			}
 		}
+		if err := l.purgeRetiredBuiltinPatterns(ctx, tx, activeBuiltins); err != nil {
+			return err
+		}
+		if err := l.purgeImportedClipDuplicates(ctx, tx); err != nil {
+			return err
+		}
 		return nil
 	})
+}
+
+func (l *Library) purgeRetiredBuiltinPatterns(ctx context.Context, tx *sql.Tx, activeIDs map[string]struct{}) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM patterns WHERE origin = 'builtin'`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		if _, ok := activeIDs[id]; ok {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM patterns WHERE id = ? AND origin = 'builtin'`, id); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func (l *Library) purgeImportedClipDuplicates(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
+		DELETE FROM patterns
+		WHERE origin = 'user' AND (
+			tags_json LIKE '%"imported"%'
+			AND description LIKE '% clip from %'
+		)
+	`)
+	return err
 }
 
 type promotedPatternState struct {

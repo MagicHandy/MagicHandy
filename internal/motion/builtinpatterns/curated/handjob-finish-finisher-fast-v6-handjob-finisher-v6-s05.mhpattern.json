@@ -1,0 +1,206 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 5/12",
+  "description": "10.0s curated clip from handjob-finisher-v6 \u00b7 pose=handjob zone=finish style=finisher speed=fast",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 70,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 270,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 437,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 670,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 837,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 1037,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 1238,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 1438,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 1605,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 1805,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 1972,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 2172,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 2339,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 2539,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 2706,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 2939,
+      "position_percent": 80.0
+    },
+    {
+      "time_ms": 3106,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3306,
+      "position_percent": 80.0
+    },
+    {
+      "time_ms": 3473,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3673,
+      "position_percent": 80.0
+    },
+    {
+      "time_ms": 3874,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 4074,
+      "position_percent": 80.0
+    },
+    {
+      "time_ms": 4241,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 4474,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 4608,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 4875,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 5041,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 5308,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 5542,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 5775,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 6009,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 6309,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 6543,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 6810,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 7043,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 7344,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 7577,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 7844,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 8078,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 8378,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 8645,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 8879,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 9079,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 9412,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 9613,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 9913,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100.0
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change"
+  ]
+}

@@ -911,6 +911,8 @@
   "Scroll to zoom at cursor; Shift-scroll to pan": "スクロールでカーソル位置をズーム；Shift+スクロールでパン",
   "Scroll to zoom at cursor; Shift-scroll to pan (tooltip)": "スクロールでカーソル位置を拡大縮小、Shift+スクロールで移動",
   "Search patterns": "パターンを検索",
+  "Filter by tags": "タグで絞り込む",
+  "Clear tag filters": "タグフィルターを解除",
   "Search videos": "動画を検索",
   "Seductive": "誘惑的",
   "Segment {segment} · {source}": "セグメント {segment} · {source}",
