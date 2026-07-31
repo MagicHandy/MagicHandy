@@ -160,6 +160,10 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 		if !fasterQwenReferenceConfigured(settings) {
 			return managedTTSLaunch{}, false
 		}
+		modelPath, err := fasterQwenModelPath(settings, dataDir)
+		if err != nil {
+			return managedTTSLaunch{}, false
+		}
 		device := settings.TTSDevice
 		if device == config.TTSDeviceAuto {
 			device = config.TTSDeviceCUDA
@@ -169,7 +173,7 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 			directory: source,
 			args: []string{
 				server,
-				"--model", settings.TTSModel,
+				"--model", modelPath,
 				"--ref-audio", settings.TTSReferenceWAV,
 				"--ref-text", settings.TTSReferenceText,
 				"--language", settings.TTSLanguage,
@@ -207,7 +211,11 @@ func managedTTSRuntimeInstalled(settings config.VoiceSettings, dataDir string) b
 	source := filepath.Join(root, "source")
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
-		return isRegularFile(filepath.Join(source, "examples", "openai_server.py"))
+		if !isRegularFile(filepath.Join(source, "examples", "openai_server.py")) {
+			return false
+		}
+		_, err := fasterQwenModelPath(settings, dataDir)
+		return err == nil
 	case config.VoiceTTSProviderChatterbox:
 		runtimeDir := filepath.Join(root, "runtime")
 		return isRegularFile(filepath.Join(source, "server.py")) &&
@@ -217,6 +225,93 @@ func managedTTSRuntimeInstalled(settings config.VoiceSettings, dataDir string) b
 	default:
 		return false
 	}
+}
+
+func fasterQwenModelPath(settings config.VoiceSettings, dataDir string) (string, error) {
+	model := strings.TrimSpace(settings.TTSModel)
+	if model == "" {
+		return "", errors.New("faster Qwen3-TTS model is not configured")
+	}
+	if info, err := os.Stat(model); err == nil && info.IsDir() {
+		return validateFasterQwenModelDirectory(model)
+	}
+	if filepath.IsAbs(model) || strings.Contains(model, `\`) {
+		return "", fmt.Errorf("faster Qwen3-TTS model directory is unavailable: %q", model)
+	}
+
+	parts := strings.Split(model, "/")
+	if len(parts) != 2 || !validHuggingFaceRepositoryPart(parts[0]) ||
+		!validHuggingFaceRepositoryPart(parts[1]) {
+		return "", fmt.Errorf("faster Qwen3-TTS model must be a local directory or Hugging Face repository ID: %q", model)
+	}
+	root := ttsModuleRoot(settings, dataDir)
+	if root == "" {
+		return "", errors.New("faster Qwen3-TTS module root is unavailable")
+	}
+	repositoryCache := filepath.Join(root, "model-cache", "hub", "models--"+strings.Join(parts, "--"))
+	snapshots := filepath.Join(repositoryCache, "snapshots")
+
+	// #nosec G304 -- the module root is an explicit local setting and the
+	// repository components are validated before this fixed cache path is read.
+	ref, err := os.ReadFile(filepath.Join(repositoryCache, "refs", "main"))
+	if err == nil {
+		revision := strings.TrimSpace(string(ref))
+		if !validSnapshotRevision(revision) {
+			return "", errors.New("faster Qwen3-TTS model cache has an invalid refs/main revision")
+		}
+		return validateFasterQwenModelDirectory(filepath.Join(snapshots, revision))
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("read Faster Qwen3-TTS model cache revision: %w", err)
+	}
+
+	entries, err := os.ReadDir(snapshots)
+	if err != nil {
+		return "", fmt.Errorf("read Faster Qwen3-TTS model snapshots: %w", err)
+	}
+	candidates := make([]string, 0, 1)
+	for _, entry := range entries {
+		if entry.IsDir() && validSnapshotRevision(entry.Name()) {
+			candidates = append(candidates, filepath.Join(snapshots, entry.Name()))
+		}
+	}
+	if len(candidates) != 1 {
+		return "", fmt.Errorf("faster Qwen3-TTS model cache has %d snapshots and no refs/main revision", len(candidates))
+	}
+	return validateFasterQwenModelDirectory(candidates[0])
+}
+
+func validHuggingFaceRepositoryPart(part string) bool {
+	return part != "" && part != "." && part != ".." &&
+		!strings.ContainsAny(part, `/\:`)
+}
+
+func validSnapshotRevision(revision string) bool {
+	return revision != "" && revision != "." && revision != ".." &&
+		!strings.ContainsAny(revision, `/\:`)
+}
+
+func validateFasterQwenModelDirectory(directory string) (string, error) {
+	required := []string{
+		filepath.Join(directory, "config.json"),
+		filepath.Join(directory, "tokenizer_config.json"),
+		filepath.Join(directory, "speech_tokenizer", "config.json"),
+		filepath.Join(directory, "speech_tokenizer", "model.safetensors"),
+	}
+	for _, path := range required {
+		if !isRegularFile(path) {
+			return "", fmt.Errorf("faster Qwen3-TTS model cache is incomplete: %s is missing", path)
+		}
+	}
+	if !isRegularFile(filepath.Join(directory, "model.safetensors")) &&
+		!isRegularFile(filepath.Join(directory, "model.safetensors.index.json")) {
+		return "", fmt.Errorf("faster Qwen3-TTS model cache is incomplete: model weights are missing from %s", directory)
+	}
+	abs, err := filepath.Abs(directory)
+	if err != nil {
+		return "", fmt.Errorf("resolve Faster Qwen3-TTS model directory: %w", err)
+	}
+	return filepath.Clean(abs), nil
 }
 
 func fasterQwenReferenceConfigured(settings config.VoiceSettings) bool {

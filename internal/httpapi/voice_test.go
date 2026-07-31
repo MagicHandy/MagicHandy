@@ -88,6 +88,7 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	python := managedTestFile(t, filepath.Join(root, ".venv", managedPythonDirectory(), managedPythonName()))
 	server := managedTestFile(t, filepath.Join(root, "source", "examples", "openai_server.py"))
 	reference := managedTestFile(t, filepath.Join(root, "voice.wav"))
+	model := managedFasterQwenSnapshot(t, root, config.DefaultFasterQwenModel, "abc123")
 
 	settings := config.DefaultSettings().Voice
 	settings.Enabled = true
@@ -119,6 +120,8 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 		[2]string{"-server-dir", filepath.Join(root, "source")},
 		[2]string{"-server-port", "9015"},
 		[2]string{"-server-arg", server},
+		[2]string{"-server-arg", "--model"},
+		[2]string{"-server-arg", model},
 		[2]string{"-server-arg", "--ref-audio"},
 		[2]string{"-server-arg", reference},
 		[2]string{"-server-arg", "--ref-text"},
@@ -133,6 +136,38 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	settings.TTSReferenceText = ""
 	if incomplete := voiceManagerConfig(settings, "", ""); incomplete.TTS.Command != "" {
 		t.Fatalf("incomplete managed Faster Qwen module must not start: %+v", incomplete.TTS)
+	}
+}
+
+func TestFasterQwenModelPathRejectsAmbiguousOrIncompleteCaches(t *testing.T) {
+	root := t.TempDir()
+	settings := config.DefaultSettings().Voice
+	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
+	settings.TTSModuleRoot = root
+	settings.TTSModel = config.DefaultFasterQwenModel
+	repositoryCache := managedFasterQwenRepositoryCache(root, settings.TTSModel)
+
+	managedFasterQwenModelFiles(t, filepath.Join(repositoryCache, "snapshots", "one"))
+	got, err := fasterQwenModelPath(settings, "")
+	if err != nil || got != filepath.Join(repositoryCache, "snapshots", "one") {
+		t.Fatalf("single unreferenced model snapshot = %q, %v", got, err)
+	}
+
+	managedFasterQwenModelFiles(t, filepath.Join(repositoryCache, "snapshots", "two"))
+	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "2 snapshots") {
+		t.Fatalf("ambiguous model snapshots error = %v", err)
+	}
+
+	managedTestFile(t, filepath.Join(repositoryCache, "refs", "main"))
+	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "incomplete") {
+		t.Fatalf("incomplete referenced snapshot error = %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(repositoryCache, "refs", "main"), []byte(`..\escape`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "invalid refs/main") {
+		t.Fatalf("unsafe model revision error = %v", err)
 	}
 }
 
@@ -206,6 +241,7 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	settings := config.DefaultSettings().Voice
 	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
 	settings.TTSModuleRoot = filepath.Join(root, "module")
+	settings.TTSModel = config.DefaultFasterQwenModel
 
 	status := inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
 	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled {
@@ -214,6 +250,13 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, ".venv", managedPythonDirectory(), managedPythonName()))
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "source", "examples", "openai_server.py"))
+	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
+	if status.State != "incomplete" || status.Installed || status.RuntimeInstalled ||
+		!strings.Contains(status.Message, "Rerun") {
+		t.Fatalf("pre-model module status = %+v", status)
+	}
+
+	managedFasterQwenSnapshot(t, settings.TTSModuleRoot, settings.TTSModel, "abc123")
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
 	if status.State != "incomplete" || status.Installed || !status.RuntimeInstalled ||
 		!strings.Contains(status.Message, "Voice settings") {
@@ -226,6 +269,35 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
 	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
 		t.Fatalf("complete module status = %+v", status)
+	}
+}
+
+func managedFasterQwenSnapshot(t *testing.T, root, repository, revision string) string {
+	t.Helper()
+	repositoryCache := managedFasterQwenRepositoryCache(root, repository)
+	snapshot := filepath.Join(repositoryCache, "snapshots", revision)
+	managedFasterQwenModelFiles(t, snapshot)
+	ref := managedTestFile(t, filepath.Join(repositoryCache, "refs", "main"))
+	if err := os.WriteFile(ref, []byte(revision+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
+}
+
+func managedFasterQwenRepositoryCache(root, repository string) string {
+	return filepath.Join(root, "model-cache", "hub", "models--"+strings.ReplaceAll(repository, "/", "--"))
+}
+
+func managedFasterQwenModelFiles(t *testing.T, directory string) {
+	t.Helper()
+	for _, path := range []string{
+		filepath.Join(directory, "config.json"),
+		filepath.Join(directory, "tokenizer_config.json"),
+		filepath.Join(directory, "model.safetensors"),
+		filepath.Join(directory, "speech_tokenizer", "config.json"),
+		filepath.Join(directory, "speech_tokenizer", "model.safetensors"),
+	} {
+		managedTestFile(t, path)
 	}
 }
 

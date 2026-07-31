@@ -48,6 +48,13 @@ symlink-probe race, retries transient failures three times, and keeps the
 resumable cache when all attempts fail. Rerunning either installer reuses files
 that already finished.
 
+Managed Faster Qwen startup resolves the configured Hugging Face repository ID
+to the cache revision recorded in `refs/main`, verifies the model and speech
+tokenizer files, and passes that local snapshot directory to the server. The
+server remains in Hugging Face and Transformers offline modes after installation;
+startup never depends on a network metadata request. A legacy cache without a
+revision ref is accepted only when it contains exactly one complete snapshot.
+
 Retries also reuse a source checkout and managed environment left by a failure
 before `module-state.json` was written. The installer records only its known
 package-metadata directory in the checkout's private Git excludes. It never
@@ -148,3 +155,12 @@ and passed to the worker only as `OPENAI_TTS_API_KEY`.
   remote endpoint;
 - GPU memory leaves enough room for the selected chat model;
 - browser playback succeeds in Firefox and Chromium.
+
+Development evidence from 2026-07-31 on Windows with the managed CUDA 0.6B
+model: offline startup reached model-ready in 6.8 seconds, a manual stop/start
+cycle returned to ready in 7.2 seconds, and Chromium completed the audio fetch
+and `/played` acknowledgement. The first 2.88-second clip after process startup
+took 15.4 seconds; a warm 1.52-second clip took about 0.8 seconds. SoX was not
+installed and its upstream warning did not prevent synthesis. This single
+reference check does not close the representative-reference listening,
+Firefox, cancellation, or GPU/LLM coexistence items above.
