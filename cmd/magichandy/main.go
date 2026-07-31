@@ -160,7 +160,6 @@ type ttsModuleConfiguration struct {
 	ResponseFormat string
 	HealthPath     string
 	ReferenceWAV   string
-	ReferenceText  string
 	Language       string
 	Device         string
 	ServerPort     int
@@ -177,7 +176,6 @@ type ttsModuleFlagValues struct {
 	responseFormat *string
 	healthPath     *string
 	referenceWAV   *string
-	referenceText  *string
 	language       *string
 	device         *string
 	serverPort     *int
@@ -194,8 +192,7 @@ func addTTSModuleFlags(flags *flag.FlagSet) ttsModuleFlagValues {
 		voice:          flags.String("tts-voice", "", "TTS voice identifier"),
 		responseFormat: flags.String("tts-response-format", config.DefaultTTSResponseFormat, "TTS audio response format"),
 		healthPath:     flags.String("tts-health-path", config.DefaultTTSHealthPath, "TTS server health endpoint"),
-		referenceWAV:   flags.String("tts-reference-wav", "", "local voice reference WAV"),
-		referenceText:  flags.String("tts-reference-text", "", "exact voice reference transcript"),
+		referenceWAV:   flags.String("tts-reference-wav", "", "local Chatterbox voice reference WAV"),
 		language:       flags.String("tts-language", "Auto", "TTS language"),
 		device:         flags.String("tts-device", config.TTSDeviceAuto, "TTS runtime device: auto, cuda, or cpu"),
 		serverPort:     flags.Int("tts-server-port", config.DefaultTTSServerPort, "managed TTS loopback port"),
@@ -214,7 +211,6 @@ func (values ttsModuleFlagValues) configuration() ttsModuleConfiguration {
 		ResponseFormat: *values.responseFormat,
 		HealthPath:     *values.healthPath,
 		ReferenceWAV:   *values.referenceWAV,
-		ReferenceText:  *values.referenceText,
 		Language:       *values.language,
 		Device:         *values.device,
 		ServerPort:     *values.serverPort,
@@ -268,9 +264,6 @@ func configureTTSModule(
 		configuration.BaseURL = fmt.Sprintf("http://127.0.0.1:%d", configuration.ServerPort)
 	}
 	if configuration.Provider == config.VoiceTTSProviderFasterQwen {
-		if strings.TrimSpace(configuration.ReferenceWAV) == "" || strings.TrimSpace(configuration.ReferenceText) == "" {
-			return errors.New("faster Qwen3-TTS requires tts-reference-wav and tts-reference-text")
-		}
 		if configuration.Model == "" {
 			configuration.Model = config.DefaultFasterQwenModel
 		}
@@ -291,6 +284,7 @@ func configureTTSModule(
 	}
 
 	_, _, err := store.Update(func(settings config.Settings) (config.Settings, error) {
+		sameProvider := settings.Voice.TTSProvider == configuration.Provider
 		settings.Voice.Enabled = true
 		settings.Voice.TTSProvider = configuration.Provider
 		settings.Voice.TTSModuleRoot = strings.TrimSpace(configuration.ModuleRoot)
@@ -299,8 +293,14 @@ func configureTTSModule(
 		settings.Voice.TTSVoice = strings.TrimSpace(configuration.Voice)
 		settings.Voice.TTSResponseFormat = strings.TrimSpace(configuration.ResponseFormat)
 		settings.Voice.TTSHealthPath = strings.TrimSpace(configuration.HealthPath)
-		settings.Voice.TTSReferenceWAV = strings.TrimSpace(configuration.ReferenceWAV)
-		settings.Voice.TTSReferenceText = strings.TrimSpace(configuration.ReferenceText)
+		if !sameProvider {
+			settings.Voice.TTSReferenceWAV = ""
+			settings.Voice.TTSReferenceText = ""
+		}
+		referenceWAV := strings.TrimSpace(configuration.ReferenceWAV)
+		if configuration.Provider == config.VoiceTTSProviderChatterbox && referenceWAV != "" {
+			settings.Voice.TTSReferenceWAV = referenceWAV
+		}
 		settings.Voice.TTSLanguage = strings.TrimSpace(configuration.Language)
 		settings.Voice.TTSDevice = strings.TrimSpace(configuration.Device)
 		settings.Voice.TTSServerPort = configuration.ServerPort

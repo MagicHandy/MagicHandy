@@ -128,11 +128,17 @@ uses `magichandy.exe -configure-tts-module` to persist the provider settings.
 The Chatterbox launcher suppresses the upstream standalone browser so
 MagicHandy remains the only UI.
 
+Faster Qwen reference setup is deliberately not part of the command-line
+installer. Installation completes with the runtime and model present, then
+Settings > Voice accepts the reference WAV and its exact transcript. Until
+both are saved, MagicHandy reports the module as installed but not yet ready
+and does not launch its worker.
+
 Useful examples:
 
 ```powershell
 .\scripts\install-tts-module.ps1 -PlanOnly -Module faster-qwen3-tts
-.\scripts\install-tts-module.ps1 -Module faster-qwen3-tts -ReferenceWav C:\voices\sample.wav -ReferenceTranscript "Exact words in the sample." -AutoLaunch
+.\scripts\install-tts-module.ps1 -Module faster-qwen3-tts -AutoLaunch
 .\scripts\install-tts-module.ps1 -Module chatterbox -Device cpu -AutoLaunch
 .\scripts\update-tts-module.ps1
 ```
@@ -141,9 +147,11 @@ Faster Qwen3-TTS requires an NVIDIA GPU and CUDA. It cannot be selected with
 `-Device cpu`. Chatterbox is the fallback for CPU operation.
 
 `update-tts-module.ps1` reads `module-state.json`, preserves the existing
-module, model, voice/reference, language, device, port, auto-launch, and
-speak-replies choices, and asks at runtime whether to change them. It supports
-`-PlanOnly` and does not update the main repository.
+module, model, voice, language, device, port, auto-launch, and speak-replies
+choices, and asks at runtime whether to change them. Reference settings remain
+owned by the app database and are neither prompted for nor overwritten during
+a module update. The script supports `-PlanOnly` and does not update the main
+repository.
 
 See `docs/voice-tts-modules.md` for endpoint and process-ownership details.
 
@@ -190,8 +198,6 @@ Other important flags:
 | `-SkipParakeet` | Skip optional managed ASR assets |
 | `-TTSModule none|faster-qwen3-tts|chatterbox` | Select optional managed local TTS for unattended setup |
 | `-TTSDevice auto|cpu|cuda` | Select the TTS execution device |
-| `-TTSReferenceWav PATH` | Reference WAV required by unattended Faster Qwen setup |
-| `-TTSReferenceTranscript TEXT` | Exact transcript required by unattended Faster Qwen setup |
 | `-NoTTSAutoLaunch` | Keep the selected TTS server externally managed |
 | `-NoLauncher` | Do not create `Start-MagicHandy.ps1` |
 | `-StatePath PATH` | Override install state for testing/managed use |
@@ -218,9 +224,11 @@ Schema 3 records:
 
 The Handy connection key, ElevenLabs key, OpenAI-compatible bearer key, and
 other credentials never enter installer state, command output, or logs. The
-module's model, voice/reference, language, port, and speak-replies choices
-remain in a separate non-secret `module-state.json` inside its install root;
-reference data is not duplicated into general installer state.
+module's model, packaged voice, language, port, and speak-replies choices
+remain in a separate non-secret `module-state.json` inside its install root.
+Faster Qwen reference paths and transcripts live only in the app settings
+database after the user saves them in Settings > Voice; they are not duplicated
+into installer state.
 
 ## Update Behavior
 

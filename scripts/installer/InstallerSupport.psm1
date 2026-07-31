@@ -1857,8 +1857,6 @@ function Install-MagicHandyTTSModule {
     param(
         [Parameter(Mandatory = $true)][object]$State,
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
-        [string]$ReferenceWav = '',
-        [string]$ReferenceTranscript = '',
         [switch]$Reconfigure,
         [switch]$AssumeYes
     )
@@ -1917,8 +1915,6 @@ function Install-MagicHandyTTSModule {
         DataDir = [string]$State.data_dir
         InstallRoot = $installRoot
         Device = [string]$State.tts_device
-        ReferenceWav = $ReferenceWav
-        ReferenceTranscript = $ReferenceTranscript
         AutoLaunch = [bool]$State.tts_auto_launch
         Yes = [bool]$AssumeYes
     }
@@ -1937,9 +1933,7 @@ function Invoke-MagicHandyProvision {
         [switch]$AssumeYes,
         [switch]$PlanOnly,
         [switch]$PreserveAppLanguages,
-        [switch]$ReconfigureTTS,
-        [string]$TTSReferenceWav = '',
-        [string]$TTSReferenceTranscript = ''
+        [switch]$ReconfigureTTS
     )
 
     if ($PlanOnly) {
@@ -1993,8 +1987,6 @@ function Invoke-MagicHandyProvision {
         Install-MagicHandyTTSModule `
             -State $State `
             -RepositoryPath $RepositoryPath `
-            -ReferenceWav $TTSReferenceWav `
-            -ReferenceTranscript $TTSReferenceTranscript `
             -Reconfigure:$ReconfigureTTS `
             -AssumeYes:$AssumeYes
     }

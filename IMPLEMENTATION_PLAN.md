@@ -1111,7 +1111,10 @@ Status: **implemented; release listening and performance acceptance open**.
   environments, pinned upstream revisions, loopback-only configuration,
   explicit consent, plan-only operation, and the app CLI to persist settings.
   A selected path bootstraps every non-OS dependency; ordinary app updates
-  validate and reuse the installed multi-gigabyte module.
+  validate and reuse the installed multi-gigabyte module. Faster Qwen reference
+  WAV and transcript selection belongs to Settings > Voice: command-line
+  installation leaves both empty, reports the installed runtime as needing
+  configuration, and later updates preserve the GUI-owned values.
 - Release evidence must record cold/warm time to playable audio, listening
   quality across representative references, cancellation/recovery, browser
   playback in Firefox and Chromium, clean child teardown, and VRAM coexistence
@@ -1540,6 +1543,8 @@ choices to SQLite settings, migrates saved installer state, and provides
 Faster Qwen3-TTS or Chatterbox in the same decision tree, bootstraps uv and the
 module-compatible Python/PyTorch environment, and has a PowerShell-only
 bootstrap that installs Git before cloning on an otherwise clean Windows host.
+The command-line flow installs Faster Qwen without reference prompts; the GUI
+owns its reference WAV and exact transcript.
 Phase 16 still owns
 clean-machine
 acceptance, curated checksum-pinned model downloads, hardware-fit

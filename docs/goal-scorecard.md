@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,936,576 bytes plain and 16,403,968 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 22,936,064 bytes plain and 16,403,968 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Unmeasured** | The prior 679 / 282 / 287 ms sample used a now-retired managed NeuTTS configuration. Scripted TTS servers are optional child processes and are not part of core readiness, but schema-v2 startup still needs a fresh server-side measurement in Phase 16. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,521,392 raw / 751,143 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 720,252 raw / 191,994 gzip bytes; all
-   HTML/CSS/JS is 1,077,156 raw / 313,746 gzip bytes. The local-TTS transition
+   browser payload is 1,522,566 raw / 751,506 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 720,468 raw / 192,040 gzip bytes; all
+   HTML/CSS/JS is 1,078,330 raw / 314,109 gzip bytes. The local-TTS transition
    removes 14,798 raw / 5,341 gzip bytes overall and 4,402 raw / 1,764 gzip bytes
    from startup relative to its checked-in predecessor. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
@@ -131,6 +131,20 @@ Ranked by threat to the stated goals:
    acceptance remain R17 evidence; Chatterbox CPU is the documented fallback.
 
 ## History
+
+- **2026-07-31** - Made Faster Qwen reference setup GUI-owned. The command-line
+  installer no longer prompts for or rejects an empty reference WAV/transcript,
+  its completion output directs users to Settings > Voice, and module-state v2
+  excludes those app settings while remaining compatible with v1. Backend
+  status distinguishes installed runtime files from reference readiness, and a
+  same-provider module update cannot erase GUI-saved reference values. Full Go
+  tests, vet, lint (zero issues), the pure-Go build, all 351 frontend tests,
+  localization/typecheck/build, and the Windows installer integration suite
+  pass. Local race execution remains unavailable because `gcc` is absent; the
+  Ubuntu CI gate remains authoritative. Plain/stripped binaries are
+  22,936,064 / 16,403,968 bytes (-512 / unchanged). English startup is
+  720,468 / 192,040 raw/gzip (+216 / +46); all HTML/CSS/JS and complete output
+  are 1,078,330 / 314,109 and 1,522,566 / 751,506 (+1,174 / +363).
 
 - **2026-07-31** - Integrated managed Faster Qwen3-TTS and Chatterbox choices
   into the localized source-installer decision tree. A PowerShell-only

@@ -4,6 +4,7 @@
   "NVIDIA CUDA": "NVIDIA CUDA（显卡）",
   "CPU": "CPU（处理器）",
   "Faster Qwen3-TTS": "Faster Qwen3-TTS（快速版）",
+  "Faster Qwen3-TTS is installed. Add a reference WAV and its exact transcript in Voice settings, then save.": "Faster Qwen3-TTS 已安装。请在语音设置中添加参考 WAV 及其准确文字稿，然后保存。",
   "Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.": "Faster Qwen3-TTS 需要支持 CUDA 的 NVIDIA GPU。",
   "Chatterbox Turbo": "Chatterbox Turbo（本地语音）",
   "Module folder": "模块文件夹",

@@ -110,6 +110,10 @@ consent, creates an isolated `uv` environment, and writes the selected
 provider and auto-launch choice into MagicHandy's SQLite settings. Use
 `-PlanOnly` to inspect the operation without changing the machine.
 
+For Faster Qwen, the command-line step installs only the runtime and model.
+Add the reference WAV and its exact transcript later in Settings > Voice; an
+empty reference during installation is expected and does not fail setup.
+
 To update an installed module while preserving its choices:
 
 ```powershell

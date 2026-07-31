@@ -47,15 +47,15 @@ function Read-TTSModuleState {
     }
     $required = @(
         'schema_version', 'module', 'provider', 'install_root', 'data_dir',
-        'source_url', 'source_revision', 'model', 'voice', 'reference_wav',
-        'reference_transcript', 'device', 'port', 'auto_launch', 'speak_replies'
+        'source_url', 'source_revision', 'model', 'voice', 'device', 'port',
+        'auto_launch', 'speak_replies'
     )
     foreach ($name in $required) {
         if ($moduleState.PSObject.Properties.Name -notcontains $name) {
             throw "TTS module state '$Path' is missing '$name'."
         }
     }
-    if ($moduleState.schema_version -isnot [int] -or [int]$moduleState.schema_version -ne 1) {
+    if ($moduleState.schema_version -isnot [int] -or [int]$moduleState.schema_version -notin @(1, 2)) {
         throw "Unsupported TTS module state schema '$($moduleState.schema_version)'."
     }
     if ([string]$moduleState.module -notin @('faster-qwen3-tts', 'chatterbox')) {
@@ -83,7 +83,7 @@ function Read-TTSModuleState {
             throw "TTS module state '$Path' field '$name' must be boolean."
         }
     }
-    foreach ($name in @('model', 'voice', 'reference_wav', 'reference_transcript', 'device')) {
+    foreach ($name in @('model', 'voice', 'device')) {
         if ($moduleState.$name -isnot [string]) {
             throw "TTS module state '$Path' field '$name' must be text."
         }
@@ -130,7 +130,7 @@ if ($CheckOnly) {
 $hasInstallerOverrides = $ApplyInstallerChoices -or $AutoLaunch -or $NoAutoLaunch -or
     -not [string]::IsNullOrWhiteSpace($Device)
 if (-not $ModifyChoices -and -not $hasInstallerOverrides -and -not $Yes -and -not $PlanOnly) {
-    $answer = Read-Host 'Modify the previous module, model, device, port, reference, or auto-launch choices? [y/N]'
+    $answer = Read-Host 'Modify the previous module, model, device, port, or auto-launch choices? [y/N]'
     $ModifyChoices = $answer -match '^(?i:y|yes)$'
 }
 
@@ -148,8 +148,6 @@ $arguments = @{
     Module = [string]$state.module
     DataDir = [string]$state.data_dir
     InstallRoot = $InstallRoot
-    ReferenceWav = [string]$state.reference_wav
-    ReferenceTranscript = [string]$state.reference_transcript
     Model = [string]$state.model
     Voice = [string]$state.voice
     Language = if ($state.PSObject.Properties.Name -notcontains 'language' -or [string]::IsNullOrWhiteSpace([string]$state.language)) { 'Auto' } else { [string]$state.language }

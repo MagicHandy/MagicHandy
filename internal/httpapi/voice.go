@@ -145,7 +145,7 @@ type managedTTSLaunch struct {
 
 func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTTSLaunch, bool) {
 	root := ttsModuleRoot(settings, dataDir)
-	if root == "" {
+	if root == "" || !managedTTSRuntimeInstalled(settings, dataDir) {
 		return managedTTSLaunch{}, false
 	}
 	python := filepath.Join(root, ".venv", "Scripts", "python.exe")
@@ -153,15 +153,11 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 		python = filepath.Join(root, ".venv", "bin", "python")
 	}
 	source := filepath.Join(root, "source")
-	if !isRegularFile(python) {
-		return managedTTSLaunch{}, false
-	}
 
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
 		server := filepath.Join(source, "examples", "openai_server.py")
-		if !isRegularFile(server) || !isRegularFile(settings.TTSReferenceWAV) ||
-			strings.TrimSpace(settings.TTSReferenceText) == "" {
+		if !fasterQwenReferenceConfigured(settings) {
 			return managedTTSLaunch{}, false
 		}
 		device := settings.TTSDevice
@@ -186,12 +182,6 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 		server := filepath.Join(source, "server.py")
 		launcher := filepath.Join(root, "magichandy-chatterbox-server.py")
 		runtimeDir := filepath.Join(root, "runtime")
-		voicePath := filepath.Join(runtimeDir, "voices", settings.TTSVoice)
-		if !isRegularFile(server) || !isRegularFile(launcher) ||
-			!isRegularFile(filepath.Join(runtimeDir, "config.yaml")) ||
-			!isRegularFile(voicePath) {
-			return managedTTSLaunch{}, false
-		}
 		return managedTTSLaunch{
 			command:   python,
 			directory: runtimeDir,
@@ -200,6 +190,38 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 	default:
 		return managedTTSLaunch{}, false
 	}
+}
+
+func managedTTSRuntimeInstalled(settings config.VoiceSettings, dataDir string) bool {
+	root := ttsModuleRoot(settings, dataDir)
+	if root == "" {
+		return false
+	}
+	python := filepath.Join(root, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS != "windows" {
+		python = filepath.Join(root, ".venv", "bin", "python")
+	}
+	if !isRegularFile(python) {
+		return false
+	}
+	source := filepath.Join(root, "source")
+	switch settings.TTSProvider {
+	case config.VoiceTTSProviderFasterQwen:
+		return isRegularFile(filepath.Join(source, "examples", "openai_server.py"))
+	case config.VoiceTTSProviderChatterbox:
+		runtimeDir := filepath.Join(root, "runtime")
+		return isRegularFile(filepath.Join(source, "server.py")) &&
+			isRegularFile(filepath.Join(root, "magichandy-chatterbox-server.py")) &&
+			isRegularFile(filepath.Join(runtimeDir, "config.yaml")) &&
+			isRegularFile(filepath.Join(runtimeDir, "voices", settings.TTSVoice))
+	default:
+		return false
+	}
+}
+
+func fasterQwenReferenceConfigured(settings config.VoiceSettings) bool {
+	return isRegularFile(settings.TTSReferenceWAV) &&
+		strings.TrimSpace(settings.TTSReferenceText) != ""
 }
 
 func ttsModuleRoot(settings config.VoiceSettings, dataDir string) string {
@@ -272,7 +294,7 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 
 func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir string) voiceModuleStatus {
 	worker := resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-openai-tts-worker")
-	_, runtimeInstalled := managedTTSCommand(settings, dataDir)
+	runtimeInstalled := managedTTSRuntimeInstalled(settings, dataDir)
 	name := "Local TTS"
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
@@ -288,6 +310,12 @@ func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir str
 		Message:          name + " is not installed. Run scripts/install-tts-module.ps1.",
 	}
 	if status.WorkerInstalled && runtimeInstalled {
+		if settings.TTSProvider == config.VoiceTTSProviderFasterQwen &&
+			!fasterQwenReferenceConfigured(settings) {
+			status.State = "incomplete"
+			status.Message = "Faster Qwen3-TTS is installed. Add a reference WAV and its exact transcript in Voice settings, then save."
+			return status
+		}
 		status.State = "ready"
 		status.Installed = true
 		status.Message = name + " and the OpenAI-compatible adapter are installed."
