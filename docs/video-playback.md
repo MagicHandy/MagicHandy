@@ -670,7 +670,9 @@ play/pause, position, volume, playback rate, and fullscreen. It is embedded at
 the bottom of the picture over a transparent fade, remains visible while
 paused, arming, buffering, seeking, or keyboard-focused, and hides after two
 seconds without pointer or focus activity only while synchronized playback is
-actually active. Pointer movement or focus restores it immediately. Plain
+actually active. Pointer movement or focus restores it immediately. Volume
+stays compact until the mute control is hovered or focused, then opens a
+vertical slider that remains keyboard reachable at narrow widths. Plain
 videos still use native controls.
 
 Play captures one exact media timestamp and holds the video there before

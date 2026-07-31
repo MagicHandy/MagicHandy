@@ -211,25 +211,29 @@ export function SynchronizedVideoControls({
           }}
         />
         <span className="media-transport-time" aria-hidden="true">{formatTimelineTime(duration)}</span>
-        <button
-          type="button"
-          className="icon-button media-transport-mute"
-          title={muted ? t("Unmute video") : t("Mute video")}
-          aria-label={muted ? t("Unmute video") : t("Mute video")}
-          onClick={() => onMuteChange(!muted)}
-        >
-          {muted || volume === 0 ? <VolumeMutedIcon /> : <VolumeIcon />}
-        </button>
-        <input
-          type="range"
-          className="media-transport-volume"
-          aria-label={t("Video volume")}
-          min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(event) => onVolumeChange(Number(event.target.value))}
-        />
+        <div className="media-transport-volume-control">
+          <button
+            type="button"
+            className="icon-button media-transport-mute"
+            title={muted ? t("Unmute video") : t("Mute video")}
+            aria-label={muted ? t("Unmute video") : t("Mute video")}
+            onClick={() => onMuteChange(!muted)}
+          >
+            {muted || volume === 0 ? <VolumeMutedIcon /> : <VolumeIcon />}
+          </button>
+          <div className="media-transport-volume-popover">
+            <input
+              type="range"
+              className="media-transport-volume"
+              aria-label={t("Video volume")}
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(event) => onVolumeChange(Number(event.target.value))}
+            />
+          </div>
+        </div>
         <select
           className="media-transport-rate"
           aria-label={t("Video playback speed")}

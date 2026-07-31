@@ -77,6 +77,16 @@ describe("SynchronizedVideoControls", () => {
     expect(props.onSeekCommit).toHaveBeenCalledWith(2_500);
   });
 
+  it("keeps volume adjustment anchored to the mute control", () => {
+    const props = renderControls();
+    const mute = screen.getByRole("button", { name: "Mute video" });
+    const volume = screen.getByRole("slider", { name: "Video volume" });
+
+    expect(mute.closest(".media-transport-volume-control")).toContainElement(volume);
+    fireEvent.change(volume, { target: { value: "0.35" } });
+    expect(props.onVolumeChange).toHaveBeenCalledWith(0.35);
+  });
+
   it("hides inactive playback controls and reveals them for pointer or keyboard use", () => {
     vi.useFakeTimers();
     try {
