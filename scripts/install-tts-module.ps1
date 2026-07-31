@@ -77,7 +77,8 @@ function Resolve-Uv {
     }
     foreach ($candidate in @(
         (Join-Path $env:USERPROFILE '.local\bin\uv.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\uv\uv.exe')
+        (Join-Path $env:LOCALAPPDATA 'Programs\uv\uv.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\uv.exe')
     )) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
             return $candidate
@@ -92,19 +93,47 @@ function Ensure-Uv {
         return $uv
     }
     Confirm-TTSAction 'uv is required to create an isolated Python environment. Install uv with WinGet?'
-    $winget = Resolve-MagicHandyExecutable -Name 'winget'
-    if (-not $winget) {
-        throw 'WinGet is unavailable. Install Microsoft App Installer, then rerun this script.'
-    }
-    & $winget install --id astral-sh.uv -e --accept-package-agreements --accept-source-agreements
-    if ($LASTEXITCODE -ne 0) {
-        throw "uv installation failed (exit $LASTEXITCODE)."
-    }
+    Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv' -AssumeYes:$Yes
     $uv = Resolve-Uv
     if (-not $uv) {
         throw 'uv was installed but is not visible yet. Restart PowerShell and rerun this script.'
     }
     return $uv
+}
+
+function Initialize-TTSPythonEnvironment {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uv,
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$PythonVersion
+    )
+
+    Invoke-Checked -Executable $Uv -Arguments @('python', 'install', $PythonVersion) -Description "Python $PythonVersion installation"
+
+    $venv = Join-Path $Root '.venv'
+    $python = Join-Path $venv 'Scripts\python.exe'
+    Assert-MagicHandyChildPath -Root $Root -Candidate $venv
+    if (Test-Path -LiteralPath $python -PathType Leaf) {
+        $reportedVersion = @(& $python --version 2>&1) -join ' '
+        if ($LASTEXITCODE -ne 0 -or $reportedVersion -notmatch "^Python $([regex]::Escape($PythonVersion))\.") {
+            Write-Warning "Replacing the module environment because it does not use required Python $PythonVersion."
+            Remove-Item -LiteralPath $venv -Recurse -Force
+        }
+    }
+
+    Invoke-Checked -Executable $Uv -Arguments @('venv', '--python', $PythonVersion, '--allow-existing', $venv) -Description 'Python environment creation'
+    if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+        throw "The isolated Python executable was not created at '$python'."
+    }
+    $verifiedVersion = @(& $python --version 2>&1) -join ' '
+    if ($LASTEXITCODE -ne 0 -or $verifiedVersion -notmatch "^Python $([regex]::Escape($PythonVersion))\.") {
+        throw "The isolated environment did not resolve required Python $PythonVersion (reported '$verifiedVersion')."
+    }
+    return [pscustomobject]@{
+        Root = $venv
+        Python = $python
+        Version = $verifiedVersion
+    }
 }
 
 function Get-ChatterboxRequirements {
@@ -356,6 +385,7 @@ Write-Host "Install root: $InstallRoot"
 Write-Host "Source:       $sourceURL@$sourceRevision"
 Write-Host "Model:        $modelDisplay"
 Write-Host "Device:       $Device"
+Write-Host "Python:       $(if ($Module -eq 'chatterbox') { '3.10 (managed by uv)' } else { '3.11 (managed by uv)' })"
 Write-Host "Endpoint:     http://127.0.0.1:$Port"
 Write-Host "Auto-launch:  $([bool]$AutoLaunch)"
 Write-Host "License:      $license"
@@ -385,12 +415,10 @@ $uv = Ensure-Uv
 $sourceRoot = Join-Path $InstallRoot 'source'
 Sync-PinnedSource -Git $git -URL $sourceURL -Revision $sourceRevision -Destination $sourceRoot
 
-$venv = Join-Path $InstallRoot '.venv'
-Invoke-Checked -Executable $uv -Arguments @('venv', '--python', '3.11', '--allow-existing', $venv) -Description 'Python environment creation'
-$python = Join-Path $venv 'Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-    throw "The isolated Python executable was not created at '$python'."
-}
+$pythonVersion = if ($Module -eq 'chatterbox') { '3.10' } else { '3.11' }
+$pythonEnvironment = Initialize-TTSPythonEnvironment -Uv $uv -Root $InstallRoot -PythonVersion $pythonVersion
+$venv = [string]$pythonEnvironment.Root
+$python = [string]$pythonEnvironment.Python
 
 if ($Module -eq 'faster-qwen3-tts') {
     Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--torch-backend', 'cu128', '--editable', "$sourceRoot[demo]") -Description 'Faster Qwen3-TTS dependency installation'

@@ -5,7 +5,17 @@ Everything you need to install, update, and run MagicHandy from source. The
 
 ## Windows installer (`install.ps1`)
 
-From the project folder, in PowerShell:
+On a machine without Git or other development dependencies, open PowerShell in
+the desired parent folder and run:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$bootstrap = Join-Path $env:TEMP 'MagicHandy-bootstrap.ps1'
+Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/MagicHandy/MagicHandy/main/bootstrap.ps1' -OutFile $bootstrap
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
+```
+
+From an existing project checkout:
 
 ```powershell
 .\install.ps1
@@ -23,12 +33,20 @@ happens:
   the Visual Studio Desktop C++ workload, and CUDA when selected.
 - Choosing **Ollama** instead avoids the managed llama.cpp source build; the
   installer can provision Ollama too.
+- Managed llama.cpp is the tightly controlled path: MagicHandy pins and tunes
+  the runner and owns startup, model loading, structured replies, and
+  diagnostics. Ollama is the simpler space-saving choice when an existing
+  installation and model library should remain externally managed.
+- CUDA normally makes local LLM and TTS inference much faster on a supported
+  NVIDIA GPU. It also consumes disk and VRAM and requires a compatible driver;
+  managed llama.cpp source builds additionally need the CUDA Toolkit.
 - The installer builds the core and all first-party Go voice adapters.
   The optional Parakeet runner and its 644 MiB model remain a separate,
   checksum-verified prompt, and voice remains disabled until you enable it.
-- Optional Faster Qwen3-TTS and Chatterbox local speech modules are installed
-  separately. Their Python, PyTorch, and model files never become normal app or
-  llama.cpp install dependencies.
+- Optional Faster Qwen3-TTS and Chatterbox local speech modules are choices in
+  the same decision tree. The selected path bootstraps WinGet, uv, managed
+  Python, PyTorch, and its model as needed. Those files remain isolated and
+  never become normal app or llama.cpp dependencies.
 - Enabled speech input and **Speak chat replies** load their configured workers
   automatically on later app starts. Installing assets alone does not enable
   either feature.
@@ -44,6 +62,8 @@ happens:
 | `-SkipLlamaBuild` | Choose Ollama and skip managed llama.cpp |
 | `-Yes` | Unattended: accepts the displayed third-party package licenses and large-download choices |
 | `-LlamaBackend cuda` | Select the CUDA build of managed llama.cpp |
+| `-TTSModule chatterbox` | Install managed local Chatterbox (`faster-qwen3-tts` is the NVIDIA cloning-quality path) |
+| `-TTSDevice cpu` | Keep Chatterbox off the GPU (`cuda` is faster on supported NVIDIA hardware) |
 | `-PlanOnly` | Show the planned work without doing any of it |
 
 Example unattended CUDA source-toolchain setup:
@@ -73,15 +93,19 @@ Package IDs, the state schema, and the full command reference live in
 
 ## Optional local TTS
 
-Install local cloning only after the main app build:
+The main installer offers local cloning directly. It requires no preinstalled
+Python, uv, PyTorch, or compiler: Faster Qwen receives managed Python 3.11,
+while Chatterbox receives Python 3.10 for its prebuilt Windows wheels. The
+standalone entry point remains available:
 
 ```powershell
 .\scripts\install-tts-module.ps1
 ```
 
 The script offers Faster Qwen3-TTS for NVIDIA/CUDA systems and Chatterbox
-Turbo as the CPU/broader-hardware fallback. It shows the pinned source,
-license, model, destination, and multi-gigabyte download warning before
+Turbo as the CPU/broader-hardware fallback. It repairs WinGet if needed and
+shows the pinned source, license, model, destination, and multi-gigabyte
+download warning before
 consent, creates an isolated `uv` environment, and writes the selected
 provider and auto-launch choice into MagicHandy's SQLite settings. Use
 `-PlanOnly` to inspect the operation without changing the machine.
@@ -103,8 +127,8 @@ in [voice-tts-modules.md](voice-tts-modules.md).
 
 The updater restores the saved UI language before showing its banner. It then
 shows the saved UI/chat languages, data directory, port,
-llama.cpp/Ollama selection, Parakeet choice, and launcher choice before
-asking whether to modify them. It rebuilds through the same provisioning implementation as the
+llama.cpp/Ollama selection, Parakeet choice, managed TTS choice, and launcher
+choice before asking whether to modify them. It rebuilds through the same provisioning implementation as the
 installer, and it:
 
 - refuses to update over local source changes and only fast-forwards — `main`

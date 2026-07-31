@@ -37,22 +37,27 @@ on your machine — no account, no tracking.
 
 ## Get started
 
-On Windows, install [Git](https://git-scm.com/download/win), open PowerShell in
-the folder where you want MagicHandy, and paste this entire block:
+On Windows, open PowerShell in the folder where you want MagicHandy and paste
+this entire block. It needs only Windows PowerShell and internet access; the
+bootstrap repairs WinGet and installs Git when they are missing, then the main
+installer provisions only the features you select:
 
 ```powershell
-git clone https://github.com/MagicHandy/MagicHandy.git
-Set-Location .\MagicHandy
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$bootstrap = Join-Path $env:TEMP 'MagicHandy-bootstrap.ps1'
+Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/MagicHandy/MagicHandy/main/bootstrap.ps1' -OutFile $bootstrap
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 ```
 
 The installer is designed to bootstrap a clean 64-bit Windows machine and
-provisions only what your choices require; release clean-machine acceptance
-remains open. Its first two questions choose the app UI and
-chat reply languages; every later question uses the selected UI language. Run
-`.\change-language.ps1` if either choice needs to be corrected. Flags, voice
-options, model imports, updater behavior, and manual setup are all covered in
-the **[Getting Started guide](docs/getting-started.md)**.
+provisions only what your choices require, including compilers, managed
+llama.cpp or Ollama, CUDA, speech recognition, and optional local TTS with its
+own Python/PyTorch environment. Release clean-machine acceptance remains open.
+Its first two questions choose the app UI and chat reply languages; every later
+question uses the selected UI language. Run `.\change-language.ps1` if either
+choice needs to be corrected. Flags, voice options, model imports, updater
+behavior, and manual setup are all covered in the
+**[Getting Started guide](docs/getting-started.md)**.
 
 For later updates, open PowerShell in the same `MagicHandy` folder and run
 `.\update.ps1`; it keeps your previous installation choices unless you ask to

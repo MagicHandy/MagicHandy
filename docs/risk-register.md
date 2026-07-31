@@ -567,9 +567,9 @@ Mitigation:
 
 - keep Python, Torch, CUDA, and model code in an optional child process behind
   ADR 0003; preserve the `CGO_ENABLED=0` core
-- install each module only through an explicit script that shows the pinned
-  source revision, license, model, hardware target, install root, and expected
-  disk impact before consent
+- install each module only through the main decision tree or explicit module
+  script; both show the pinned source revision, license, model, hardware
+  target, install root, and expected disk impact before consent
 - recommend Faster Qwen3-TTS only for NVIDIA/CUDA systems; use Chatterbox as
   the CPU/broader-hardware fallback and never advertise an unsupported Faster
   Qwen CPU mode
@@ -599,12 +599,15 @@ Exit evidence:
 - installer plan-only and saved-choice update paths change no files or settings
 
 Status 2026-07-31: NeuTTS code, settings, UI, runner, reference encoder, and
-source-installer coupling are removed. The generic adapter, scripted Faster
-Qwen3-TTS/Chatterbox installation and update paths, provider-scoped settings,
+llama.cpp coupling are removed. The generic adapter, main-installer and
+standalone Faster Qwen3-TTS/Chatterbox paths, provider-scoped settings,
 auto-launch ownership, migration, and automated protocol/lifecycle tests are
-implemented. Live listening, latency, browser, and VRAM acceptance remains
-open. Historical NeuTTS measurements remain in `docs/goal-scorecard.md` and
-`docs/perf-baseline.md`; they are not evidence for the replacement modules.
+implemented. The clean-host path repairs WinGet, installs Git/uv, provisions
+module-compatible Python 3.10 or 3.11 plus PyTorch/model assets, and does not
+require a preinstalled compiler. Live listening, latency, browser, and VRAM
+acceptance remains open. Historical NeuTTS measurements remain in
+`docs/goal-scorecard.md` and `docs/perf-baseline.md`; they are not evidence for
+the replacement modules.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

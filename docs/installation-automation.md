@@ -45,8 +45,13 @@ optional local TTS servers), never for the MagicHandy Go core itself.
   Optional Parakeet assets remain consented,
   size/license-visible, and SHA-256 verified, and voice remains disabled. The
   installer can write a `Start-MagicHandy.ps1` launcher and open the app.
-  Faster Qwen3-TTS and Chatterbox have separate, explicit module scripts so
-  Python, PyTorch, and speech models never enter the normal install plan.
+  Faster Qwen3-TTS and Chatterbox are explicit choices in the same decision
+  tree. The selected path repairs WinGet and bootstraps uv, a compatible
+  managed Python runtime, PyTorch, and the model without requiring any of them
+  to be preinstalled. Those assets remain isolated from the pure-Go core.
+- **Clean-machine bootstrap (`bootstrap.ps1`):** starts with Windows PowerShell
+  and internet access only, repairs WinGet, installs Git after consent, clones
+  the repository, and delegates every product choice to `install.ps1`.
 - **State-aware source updater (`update.ps1`):** atomically reads the non-secret
   install choices stored under LocalAppData, restores the saved UI language,
   shows UI/chat locales with the remaining choices, asks whether to revise them,
@@ -82,8 +87,8 @@ optional local TTS servers), never for the MagicHandy Go core itself.
    stand-in).
 5. Voice setup is partial: provider adapters, provider-scoped settings,
    continuous hands-free and hold-to-talk browser capture, app-managed Parakeet
-   plus scripted Faster Qwen3-TTS/Chatterbox installer paths, and guarded local
-   Windows path browsing exist. App-managed assets are discovered separately
+   plus main-installer and standalone Faster Qwen3-TTS/Chatterbox paths, and
+   guarded local Windows path browsing exist. App-managed assets are discovered separately
    from custom overrides. A real managed-Parakeet browser microphone run,
    local-cloning listening/performance acceptance, and any LAN/HTTPS story
    remain open (managed browser audio: R24; local TTS: R17; LAN/HTTPS: R18).
@@ -128,8 +133,9 @@ Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
    StrokeGPT-ReVibed porting step over the Phase 15 importer.
 8. **Voice setup (implemented adapters and source provisioning).** Provider
    selection, workers, push-to-talk, browser playback, and app-managed Parakeet
-   installation have landed. Dedicated scripts install pinned Faster Qwen3-TTS
-   or Chatterbox modules and persist their auto-launch choices; arbitrary
+   installation have landed. The main decision tree and dedicated scripts
+   install pinned Faster Qwen3-TTS or Chatterbox modules and persist their
+   hardware and auto-launch choices; arbitrary
    compatible endpoints use the same Go adapter. Broader microphone, listening,
    latency, and GPU-coexistence checks still require release evidence.
    Providers stay optional and off the core runtime path (ADRs 0007 and 0012).
@@ -168,7 +174,7 @@ These hold for every step above (from `docs/goals-and-guardrails.md` and
 | GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
 | Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
 | First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - Parakeet is app-managed; Faster Qwen3-TTS/Chatterbox have explicit module scripts and Settings auto-launch; release listening and prebuilt provisioning remain | Phase 13 + Phase 16 |
+| Voice model setup | Partial - Parakeet is app-managed; Faster Qwen3-TTS/Chatterbox are in the main decision tree with standalone update scripts and Settings auto-launch; release listening and prebuilt provisioning remain | Phase 13 + Phase 16 |
 | LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
 
 ## Related docs

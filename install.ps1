@@ -10,10 +10,11 @@
 
     The core app and all first-party Go voice adapters are built with CGO
     disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
-    runner/model remain explicit choices. Optional local cloning TTS is installed
-    separately with scripts\install-tts-module.ps1, so Python, PyTorch, and
-    speech models never become core-install dependencies. No model is downloaded
-    at app startup.
+    runner/model and local TTS remain explicit choices. When local TTS is
+    selected, the installer bootstraps uv, a module-compatible Python runtime,
+    PyTorch, and the speech model in an isolated data-directory environment.
+    These never become core dependencies, and no model is downloaded at app
+    startup.
 
     Non-secret installation choices are stored under LocalAppData so update.ps1
     can preserve or revise them. API keys and the Handy connection key are never
@@ -48,12 +49,30 @@
 .PARAMETER SkipParakeet
     Do not install the optional 644 MiB Parakeet ASR model and CPU runner.
 
+.PARAMETER TTSModule
+    Optional managed local TTS module: none, faster-qwen3-tts, or chatterbox.
+    Interactive setup explains the tradeoffs when this is omitted.
+
+.PARAMETER TTSDevice
+    Local TTS execution device: auto, cpu, or cuda. Faster Qwen3-TTS requires
+    CUDA. Auto prefers CUDA for Chatterbox when an NVIDIA GPU is detected.
+
+.PARAMETER TTSReferenceWav
+    Reference WAV for unattended Faster Qwen3-TTS installation.
+
+.PARAMETER TTSReferenceTranscript
+    Exact transcript of TTSReferenceWav for unattended Faster Qwen3-TTS setup.
+
+.PARAMETER NoTTSAutoLaunch
+    Configure the selected managed TTS server without launching it with the app.
+
 .PARAMETER NoLauncher
     Do not create Start-MagicHandy.ps1.
 
 .PARAMETER Yes
     Accept the documented defaults and third-party package/license prompts. This
-    installs the complete selected source-build toolchain without stopping for input.
+    installs the complete selected source-build toolchain without stopping for
+    input. Local TTS remains off unless TTSModule is passed explicitly.
 
 .PARAMETER NoLaunch
     Build and configure without starting the app.
@@ -78,6 +97,11 @@
     Use Ollama instead of storing managed llama.cpp.
 
 .EXAMPLE
+    .\install.ps1 -Yes -TTSModule chatterbox -TTSDevice cpu -NoLaunch
+    Bootstrap Chatterbox, uv, managed Python, PyTorch, and its model on a clean
+    CPU-only Windows machine.
+
+.EXAMPLE
     .\install.ps1 -Yes -UILanguage ja -ChatLanguage es -NoLaunch
     Use Japanese for the installer/app UI and Spanish for built-in chat replies.
 #>
@@ -96,6 +120,13 @@ param(
     [switch]$SkipLlamaBuild,
     [string]$OllamaModel,
     [switch]$SkipParakeet,
+    [ValidateSet('', 'none', 'faster-qwen3-tts', 'chatterbox')]
+    [string]$TTSModule = '',
+    [ValidateSet('auto', 'cpu', 'cuda')]
+    [string]$TTSDevice = 'auto',
+    [string]$TTSReferenceWav = '',
+    [string]$TTSReferenceTranscript = '',
+    [switch]$NoTTSAutoLaunch,
     [switch]$NoLauncher,
     [switch]$Yes,
     [switch]$NoLaunch,
@@ -192,6 +223,7 @@ function Resolve-InitialBackend([bool]$BuildManaged) {
         Write-Host (Get-MagicHandyText -Key 'nvidia_missing')
         return 'cpu'
     }
+    Write-Host (Get-MagicHandyText -Key 'cuda_benefit') -ForegroundColor DarkGray
     if (Resolve-MagicHandyExecutable -Name 'nvcc') {
         Write-Host (Get-MagicHandyText -Key 'cuda_detected') -ForegroundColor Green
         return 'cuda'
@@ -202,6 +234,133 @@ function Resolve-InitialBackend([bool]$BuildManaged) {
         return 'cuda'
     }
     return 'cpu'
+}
+
+function Read-TTSModuleChoice {
+    param(
+        [ValidateSet('faster-qwen3-tts', 'chatterbox')]
+        [string]$Default,
+        [bool]$HasNVIDIA
+    )
+
+    Write-Host ('  1. ' + (Get-MagicHandyText -Key 'tts_option_faster'))
+    Write-Host ('  2. ' + (Get-MagicHandyText -Key 'tts_option_chatterbox'))
+    $defaultValue = if ($Default -eq 'faster-qwen3-tts') { '1' } else { '2' }
+    while ($true) {
+        $answer = (Read-MagicHandyValue -Question (Get-MagicHandyText -Key 'tts_module_question') -Default $defaultValue).ToLowerInvariant()
+        if ($answer -in @('1', 'faster', 'faster-qwen3-tts')) {
+            if ($HasNVIDIA) {
+                return 'faster-qwen3-tts'
+            }
+            Write-Warning (Get-MagicHandyText -Key 'tts_faster_unavailable')
+            continue
+        }
+        if ($answer -in @('2', 'chatterbox')) {
+            return 'chatterbox'
+        }
+        Write-Warning (Get-MagicHandyText -Key 'tts_module_invalid')
+    }
+}
+
+function Read-TTSConfiguration {
+    param(
+        [ValidateSet('none', 'faster-qwen3-tts', 'chatterbox')]
+        [string]$DefaultModule = 'none',
+        [ValidateSet('cpu', 'cuda')]
+        [string]$DefaultDevice = 'cpu',
+        [bool]$DefaultAutoLaunch = $false,
+        [switch]$UseCommandLineChoices
+    )
+
+    $hasNVIDIA = [bool](Resolve-MagicHandyExecutable -Name 'nvidia-smi')
+    $module = if ($UseCommandLineChoices -and -not [string]::IsNullOrWhiteSpace($TTSModule)) {
+        $TTSModule
+    } elseif ($UseCommandLineChoices -and $Yes) {
+        'none'
+    } else {
+        Write-Host ''
+        Write-Host (Get-MagicHandyText -Key 'tts_benefit')
+        Write-Host (Get-MagicHandyText -Key 'tts_zero_dependencies') -ForegroundColor DarkGray
+        Write-Host (Get-MagicHandyText -Key 'tts_storage_tradeoff') -ForegroundColor DarkGray
+        $installTTS = Confirm-MagicHandyChoice `
+            -Question (Get-MagicHandyText -Key 'tts_question') `
+            -Default ($DefaultModule -ne 'none')
+        if (-not $installTTS) {
+            'none'
+        } else {
+            Write-Host (Get-MagicHandyText -Key 'tts_faster_benefit')
+            Write-Host (Get-MagicHandyText -Key 'tts_chatterbox_benefit')
+            $choiceDefault = if ($DefaultModule -ne 'none') {
+                $DefaultModule
+            } elseif ($hasNVIDIA) {
+                'faster-qwen3-tts'
+            } else {
+                'chatterbox'
+            }
+            Read-TTSModuleChoice -Default $choiceDefault -HasNVIDIA $hasNVIDIA
+        }
+    }
+
+    if ($module -eq 'none') {
+        return [pscustomobject]@{
+            Module = 'none'
+            Device = 'cpu'
+            AutoLaunch = $false
+        }
+    }
+
+    if ($module -eq 'faster-qwen3-tts') {
+        if ($UseCommandLineChoices -and $TTSDevice -eq 'cpu') {
+            throw (Get-MagicHandyText -Key 'tts_faster_cuda_only')
+        }
+        if (-not $hasNVIDIA -and -not $PlanOnly) {
+            throw (Get-MagicHandyText -Key 'tts_faster_unavailable')
+        }
+        $device = 'cuda'
+    } else {
+        if ($UseCommandLineChoices -and $TTSDevice -ne 'auto') {
+            $device = $TTSDevice
+        } elseif (-not $hasNVIDIA) {
+            $device = 'cpu'
+        } elseif ($UseCommandLineChoices -and $Yes) {
+            $device = 'cuda'
+        } else {
+            Write-Host (Get-MagicHandyText -Key 'tts_cuda_benefit') -ForegroundColor DarkGray
+            $device = if (Confirm-MagicHandyChoice `
+                    -Question (Get-MagicHandyText -Key 'tts_cuda_question') `
+                    -Default ($DefaultDevice -eq 'cuda')) {
+                'cuda'
+            } else {
+                'cpu'
+            }
+        }
+        if ($device -eq 'cuda' -and -not $hasNVIDIA -and -not $PlanOnly) {
+            throw (Get-MagicHandyText -Key 'tts_cuda_unavailable')
+        }
+    }
+
+    $autoLaunch = if ($UseCommandLineChoices -and $NoTTSAutoLaunch) {
+        $false
+    } elseif ($UseCommandLineChoices -and $Yes) {
+        $true
+    } else {
+        Write-Host (Get-MagicHandyText -Key 'tts_auto_launch_benefit') -ForegroundColor DarkGray
+        Confirm-MagicHandyChoice `
+            -Question (Get-MagicHandyText -Key 'tts_auto_launch_question') `
+            -Default $(if ($DefaultModule -eq 'none') { $true } else { $DefaultAutoLaunch })
+    }
+
+    if ($UseCommandLineChoices -and $Yes -and -not $PlanOnly -and $module -eq 'faster-qwen3-tts' -and (
+            [string]::IsNullOrWhiteSpace($TTSReferenceWav) -or
+            [string]::IsNullOrWhiteSpace($TTSReferenceTranscript))) {
+        throw (Get-MagicHandyText -Key 'tts_reference_unattended')
+    }
+
+    return [pscustomobject]@{
+        Module = $module
+        Device = $device
+        AutoLaunch = [bool]$autoLaunch
+    }
 }
 
 function New-FreshConfiguration {
@@ -251,6 +410,7 @@ function New-FreshConfiguration {
         Write-Host (Get-MagicHandyText -Key 'parakeet_benefit')
         Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'parakeet_question') -Default $false
     }
+    $tts = Read-TTSConfiguration -UseCommandLineChoices
     $launcher = if ($NoLauncher) {
         $false
     } elseif ($Yes) {
@@ -271,6 +431,9 @@ function New-FreshConfiguration {
         -EnsureOllama $ensureOllama `
         -OllamaModel $model `
         -InstallParakeet $parakeet `
+        -TTSModule ([string]$tts.Module) `
+        -TTSDevice ([string]$tts.Device) `
+        -TTSAutoLaunch ([bool]$tts.AutoLaunch) `
         -CreateLauncher $launcher
 }
 
@@ -300,8 +463,13 @@ function Read-ReconfiguredState([object]$Existing) {
     $ensureOllama = $false
     $model = ''
     if ($setupLLM) {
+        Write-Host ''
+        Write-Host (Get-MagicHandyText -Key 'llama_benefit')
+        Write-Host (Get-MagicHandyText -Key 'llama_ollama_tradeoff') -ForegroundColor DarkGray
         $buildManaged = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'llama_keep_question') -Default ([bool]$Existing.build_managed_llama)
         if ($buildManaged) {
+            Write-Host (Get-MagicHandyText -Key 'cuda_benefit') -ForegroundColor DarkGray
+            Write-Host (Get-MagicHandyText -Key 'cuda_tradeoff') -ForegroundColor DarkGray
             $backendDefault = if ([string]$Existing.llama_backend -eq 'cuda') { 'cuda' } else { 'cpu' }
             $backend = Read-MagicHandyBackend -Default $backendDefault
         }
@@ -316,6 +484,10 @@ function Read-ReconfiguredState([object]$Existing) {
         }
     }
     $parakeet = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'parakeet_keep_question') -Default ([bool]$Existing.install_parakeet)
+    $tts = Read-TTSConfiguration `
+        -DefaultModule ([string]$Existing.tts_module) `
+        -DefaultDevice ([string]$Existing.tts_device) `
+        -DefaultAutoLaunch ([bool]$Existing.tts_auto_launch)
     $launcher = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'launcher_refresh_question') -Default ([bool]$Existing.create_launcher)
 
     return New-MagicHandyInstallState `
@@ -330,6 +502,9 @@ function Read-ReconfiguredState([object]$Existing) {
         -EnsureOllama $ensureOllama `
         -OllamaModel $model `
         -InstallParakeet $parakeet `
+        -TTSModule ([string]$tts.Module) `
+        -TTSDevice ([string]$tts.Device) `
+        -TTSAutoLaunch ([bool]$tts.AutoLaunch) `
         -CreateLauncher $launcher `
         -InstalledAt ([string]$Existing.installed_at)
 }
@@ -347,6 +522,9 @@ function Copy-SavedState([object]$Existing) {
         -EnsureOllama ([bool]$Existing.ensure_ollama) `
         -OllamaModel ([string]$Existing.ollama_model) `
         -InstallParakeet ([bool]$Existing.install_parakeet) `
+        -TTSModule ([string]$Existing.tts_module) `
+        -TTSDevice ([string]$Existing.tts_device) `
+        -TTSAutoLaunch ([bool]$Existing.tts_auto_launch) `
         -CreateLauncher ([bool]$Existing.create_launcher) `
         -InstalledAt ([string]$Existing.installed_at)
 }
@@ -377,7 +555,10 @@ Invoke-MagicHandyProvision `
     -RunningPort $runningPort `
     -AssumeYes:$Yes `
     -PlanOnly:$PlanOnly `
-    -PreserveAppLanguages:$UseSavedChoices
+    -PreserveAppLanguages:$UseSavedChoices `
+    -ReconfigureTTS:$Reconfigure `
+    -TTSReferenceWav $TTSReferenceWav `
+    -TTSReferenceTranscript $TTSReferenceTranscript
 
 if ($PlanOnly) {
     Write-Host ''

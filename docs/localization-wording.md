@@ -48,12 +48,14 @@ The browser UI language and default chat reply language are separate choices:
   reply language.
 
 The source installer asks for both choices before any other decision. Changing
-the UI language immediately changes all later decision-tree questions. Schema 2
-of `install-state.json` stores `ui_locale` and `chat_locale`; schema 1 migrates
-to English without discarding any prior choice. First installation and explicit
-reconfiguration invoke MagicHandy's language-only configuration mode. Ordinary
-updates preserve the current SQLite UI locale and prompt selection, including a
-custom prompt; installer state controls only the update script's own language.
+the UI language immediately changes all later decision-tree questions. Schema 3
+of `install-state.json` stores `ui_locale`, `chat_locale`, and the managed TTS
+install choices. Schema 1 and 2 migrate without discarding prior choices; older
+states default to English and no installer-managed TTS as applicable. First
+installation and explicit reconfiguration invoke MagicHandy's language-only
+configuration mode. Ordinary updates preserve the current SQLite UI locale and
+prompt selection, including a custom prompt; installer state controls only the
+update script's own language.
 
 `update.ps1` restores the saved UI language before showing its banner or asking
 a question. `change-language.ps1` always starts with the native-name language

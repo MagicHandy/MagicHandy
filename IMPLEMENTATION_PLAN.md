@@ -1105,10 +1105,13 @@ Status: **implemented; release listening and performance acceptance open**.
   the broader CPU/GPU fallback, and an external compatible endpoint. Provider,
   module root, model, voice, reference, health, port, device, and auto-launch
   settings remain backend-authoritative.
-- Keep Python/PyTorch/model downloads out of `install.ps1`. Dedicated
-  `install-tts-module.ps1` and `update-tts-module.ps1` scripts use isolated
-  `uv` environments, pinned upstream revisions, loopback-only configuration,
+- Keep Python/PyTorch/model code out of the core. The main `install.ps1`
+  decision tree and dedicated `install-tts-module.ps1` /
+  `update-tts-module.ps1` entry points use isolated managed-Python `uv`
+  environments, pinned upstream revisions, loopback-only configuration,
   explicit consent, plan-only operation, and the app CLI to persist settings.
+  A selected path bootstraps every non-OS dependency; ordinary app updates
+  validate and reuse the installed multi-gigabyte module.
 - Release evidence must record cold/warm time to playable audio, listening
   quality across representative references, cancellation/recovery, browser
   playback in Firefox and Chromium, clean child teardown, and VRAM coexistence
@@ -1533,7 +1536,11 @@ inner-hash verification for the pinned Parakeet runner, stable delegated state
 paths, and generated-launcher ownership. The source flow now asks separately for
 app UI and chat reply languages, localizes every later decision, applies those
 choices to SQLite settings, migrates saved installer state, and provides
-`change-language.ps1` as a native-name recovery path. Phase 16 still owns
+`change-language.ps1` as a native-name recovery path. It also offers managed
+Faster Qwen3-TTS or Chatterbox in the same decision tree, bootstraps uv and the
+module-compatible Python/PyTorch environment, and has a PowerShell-only
+bootstrap that installs Git before cloning on an otherwise clean Windows host.
+Phase 16 still owns
 clean-machine
 acceptance, curated checksum-pinned model downloads, hardware-fit
 recommendations, and release packaging that avoids installing a source

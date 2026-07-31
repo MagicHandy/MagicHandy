@@ -20,21 +20,32 @@ Qwen runtime is unsuitable. Neither module is required to run MagicHandy.
 
 ## Installation Contract
 
-Run `scripts/install-tts-module.ps1` explicitly. It:
+Choose a managed module in `install.ps1`, or run
+`scripts/install-tts-module.ps1` directly. The shared module flow:
 
 1. displays the selected project's license, model, hardware target, source
    revision, download implications, and install root;
-2. installs `uv` through WinGet only after consent when it is missing;
-3. creates a private virtual environment below the MagicHandy data directory;
+2. repairs WinGet through Microsoft's supported path when needed, then installs
+   `uv` after consent;
+3. installs a managed Python runtime and creates a private virtual environment
+   below the MagicHandy data directory;
 4. installs a pinned upstream revision and dependencies;
 5. downloads the chosen model only after consent;
 6. configures the server for `127.0.0.1`, not all interfaces; and
 7. calls the MagicHandy settings command so the provider, paths, port, and
    auto-launch choice are persisted in SQLite.
 
+No preinstalled Python, uv, PyTorch, Git, or compiler is required. Faster Qwen
+uses managed Python 3.11. The pinned Chatterbox dependency set uses Python 3.10
+because its supported Windows Torch, torchvision, and ONNX packages are
+available as wheels there; this avoids an accidental native build on a clean
+machine.
+
 `scripts/update-tts-module.ps1` reads the existing module choice, preserves it
-by default, and asks before changing provider, model, port, or auto-launch.
-Both scripts support a plan-only mode that performs no downloads or writes.
+by default, and asks before changing provider, model, port, or auto-launch. The
+main app updater validates and reuses a selected installed module rather than
+reinstalling several GiB. Both module scripts support non-mutating plan/check
+modes.
 
 The scripts do not reuse or alter a system Python environment. Removing a
 provider from Settings does not delete its model files. Uninstalling large

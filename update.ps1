@@ -6,8 +6,10 @@
     Reads the non-secret choices saved by install.ps1, displays them, and asks
     whether they should be modified. Unless reconfiguration is requested, the
     same data directory, port, managed llama.cpp selection, Ollama preference,
-    Parakeet choice, and launcher choice are reused. Optional local TTS modules
-    are updated separately with scripts\update-tts-module.ps1.
+    Parakeet choice, managed local TTS install choice, and launcher choice are
+    reused. An already installed TTS module is verified and reused without
+    repeating its multi-gigabyte installation; use
+    scripts\update-tts-module.ps1 when intentionally updating that module.
 
     The updater refuses to update over local source changes and only performs a
     fast-forward Git update. Main follows origin/main, live feature branches
@@ -46,7 +48,8 @@
 
 .EXAMPLE
     .\update.ps1 -Reconfigure
-    Safely fast-forward, then revisit choices such as managed llama.cpp and Parakeet.
+    Safely fast-forward, then revisit choices such as managed llama.cpp,
+    Parakeet, and managed local TTS.
 #>
 #Requires -Version 5.1
 [CmdletBinding()]
