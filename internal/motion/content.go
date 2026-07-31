@@ -106,6 +106,7 @@ func buildBuiltinPatternCatalog() []PatternDefinition {
 	}
 	definitions = append(definitions, generateCatalogPatterns()...)
 	definitions = append(definitions, PromotedBuiltinPatternDefinitions()...)
+	definitions = append(definitions, loadCuratedBuiltinPatterns()...)
 	return definitions
 }
 
@@ -181,6 +182,14 @@ func (c Curve) Preview(intervalMillis int64) []CurvePoint {
 	}
 	points = append(points, CurvePoint{TimeMillis: c.duration, PositionPercent: c.Sample(c.duration)})
 	return points
+}
+
+// UsesExactImportedCurve marks dense imported curves exempt from generated-catalog budgets.
+func UsesExactImportedCurve(definition PatternDefinition) bool {
+	if slices.Contains(definition.Tags, TagCurated) {
+		return true
+	}
+	return strings.HasPrefix(string(definition.ID), "curated-")
 }
 
 // BuiltinPatternDefinitions returns the parametrically generated catalog.

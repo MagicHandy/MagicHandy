@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryPattern } from "../api/types";
 import { CheckIcon, CloseIcon, DownloadIcon, PencilIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon, TrashIcon } from "../shell/icons";
 import { libraryActionKey, type LibraryBusyKeys } from "./library-actions";
+import { collectPatternTags, patternMatchesQuery, patternMatchesTags, visiblePatternTags } from "./pattern-library-tags";
 import { PatternCurve } from "./PatternCurve";
 
 interface Props {
@@ -19,12 +20,24 @@ interface Props {
 
 export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, onPlay, onFeedback, onExport, onDelete }: Props) {
   const [query, setQuery] = useState("");
+  const [activeTags, setActiveTags] = useState<ReadonlySet<string>>(() => new Set());
+  const availableTags = useMemo(() => collectPatternTags(patterns), [patterns]);
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return patterns;
-    return patterns.filter((pattern) => `${pattern.name} ${pattern.description ?? ""} ${pattern.tags.join(" ")}`.toLowerCase().includes(needle));
-  }, [patterns, query]);
+    return patterns.filter((pattern) => patternMatchesQuery(pattern, query) && patternMatchesTags(pattern, activeTags));
+  }, [activeTags, patterns, query]);
   const enabled = patterns.filter((pattern) => pattern.enabled).length;
+
+  function toggleTag(tag: string) {
+    setActiveTags((current) => {
+      const next = new Set(current);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  }
 
   return (
     <section className="library-view" aria-label={t("Pattern catalog")}>
@@ -40,10 +53,33 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
         </label>
       </div>
 
+      {availableTags.length > 0 && (
+        <div className="tag-filter-bar" role="group" aria-label={t("Filter by tags")}>
+          {activeTags.size > 0 && (
+            <button type="button" className="tag-filter-chip clear" onClick={() => setActiveTags(new Set())}>
+              {t("Clear tag filters")}
+            </button>
+          )}
+          {availableTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              className="tag-filter-chip"
+              data-active={activeTags.has(tag) || undefined}
+              aria-pressed={activeTags.has(tag)}
+              onClick={() => toggleTag(tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="pattern-list">
         {filtered.map((pattern) => {
           const mutating = busyKeys.has(libraryActionKey.pattern(pattern.id));
           const startingMotion = busyKeys.has(libraryActionKey.motionStart);
+          const tags = visiblePatternTags(pattern.tags);
           return <article className="pattern-row" key={pattern.id} data-disabled={!pattern.enabled || undefined}>
             <label className="toggle pattern-enable" title={pattern.enabled ? t("Disable pattern") : t("Enable pattern")}>
               <input type="checkbox" checked={pattern.enabled} disabled={locked || mutating} aria-label={t("Enable {name}", { name: pattern.name })} onChange={(event) => void onPatch(pattern.id, { enabled: event.target.checked })} />
@@ -54,7 +90,7 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
               <PatternNameEditor pattern={pattern} locked={locked || mutating} onCommit={(name) => onPatch(pattern.id, { name })} />
               {pattern.description && <p>{pattern.description}</p>}
               <div className="pattern-meta"><span>{t("{seconds} s", { seconds: (pattern.cycle_ms / 1000).toFixed(1) })}</span><span>{pattern.kind}</span><span>{t("{count} knots", { count: pattern.points.length })}</span></div>
-              {pattern.tags.length > 0 && <div className="tag-list">{pattern.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+              {tags.length > 0 && <div className="tag-list">{tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
             </div>
             <WeightEditor pattern={pattern} locked={locked || mutating} onCommit={(weight) => onPatch(pattern.id, { weight })} />
             <div className="pattern-actions">

@@ -1,0 +1,54 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 4.2s \u00b7 Part 7/7",
+  "description": "4.2s curated clip from handjob-finisher-v4 \u00b7 pose=handjob zone=finish style=finisher speed=fast",
+  "kind": "routine",
+  "cycle_ms": 4164,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 160,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 761,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 1195,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 1729,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 2129,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 2696,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 3130,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3664,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 4164,
+      "position_percent": 15.0
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change"
+  ]
+}

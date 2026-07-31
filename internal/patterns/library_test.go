@@ -59,6 +59,53 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	}
 }
 
+func TestLibraryPurgesRetiredBuiltinsAndImportedClipDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	library, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	pointsJSON := `[{"time_ms":0,"position_percent":0},{"time_ms":6600,"position_percent":100}]`
+	tagsJSON := `["imported","curated"]`
+	if _, err := library.db.SQL().Exec(`
+		INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
+			cycle_ms, points_json, tags_json, created_at, updated_at)
+		VALUES(?, ?, '', 'builtin', 'routine', 1, 1.0, 6600, ?, ?, ?, ?)
+	`, "curated-legacy-clip", "Legacy Clip", pointsJSON, tagsJSON, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`
+		INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
+			cycle_ms, points_json, tags_json, created_at, updated_at)
+		VALUES(?, ?, '10.0s clip from legacy-source', 'user', 'routine', 1, 1.0, 6600, ?, ?, ?, ?)
+	`, "pattern-imported-clip", "Imported Clip", pointsJSON, tagsJSON, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	if _, err := reopened.Pattern("curated-legacy-clip"); !errors.Is(err, ErrPatternNotFound) {
+		t.Fatalf("retired built-in error = %v, want ErrPatternNotFound", err)
+	}
+	if _, err := reopened.Pattern("pattern-imported-clip"); !errors.Is(err, ErrPatternNotFound) {
+		t.Fatalf("imported clip duplicate error = %v, want ErrPatternNotFound", err)
+	}
+	patterns, err := reopened.ListPatterns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(patterns) != len(motion.BuiltinPatternDefinitions()) {
+		t.Fatalf("patterns after purge = %d, want %d", len(patterns), len(motion.BuiltinPatternDefinitions()))
+	}
+}
+
 func TestLibraryReconcilesRetiredAndPromotedBuiltins(t *testing.T) {
 	dir := t.TempDir()
 	library, err := Open(dir)

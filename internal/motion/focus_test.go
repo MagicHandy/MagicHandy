@@ -2,7 +2,6 @@ package motion
 
 import (
 	"math"
-	"slices"
 	"testing"
 	"time"
 
@@ -194,7 +193,7 @@ func TestReversalRampShortensWithSpeedAndFocus(t *testing.T) {
 // their authored peaks are out of scope here.
 func TestReversalRampStaysInsideItsAccelerationBudget(t *testing.T) {
 	for _, definition := range BuiltinPatternDefinitions() {
-		if slices.Contains(definition.Tags, TagCurated) {
+		if UsesExactImportedCurve(definition) {
 			continue
 		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)

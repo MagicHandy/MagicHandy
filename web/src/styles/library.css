@@ -184,6 +184,30 @@ input[type="search"] {
   color: var(--muted);
   font-size: 0.68rem;
 }
+.tag-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tag-filter-chip {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.tag-filter-chip[data-active="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-tint);
+  color: var(--text);
+}
+.tag-filter-chip.clear {
+  border-style: dashed;
+}
 .weight-editor {
   display: flex;
   flex-direction: column;

@@ -905,6 +905,8 @@
   "Scroll to zoom at cursor; Shift-scroll to pan": "Rolar para dar zoom no cursor; Shift+rolar para mover",
   "Scroll to zoom at cursor; Shift-scroll to pan (tooltip)": "Role para ampliar no cursor; Shift-rolagem para mover",
   "Search patterns": "Buscar padrões",
+  "Filter by tags": "Filtrar por tags",
+  "Clear tag filters": "Limpar filtros de tag",
   "Search videos": "Buscar vídeos",
   "Seductive": "Sedutor/a",
   "Segment {segment} · {source}": "Segmento {segment} · {source}",

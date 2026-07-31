@@ -5,6 +5,20 @@ import type { CSSProperties } from "react";
 import type { MotionInfo } from "../api/types";
 import { clampPercent } from "../util/format";
 
+const DEVICE_CENTER_X = 48;
+const BODY_WIDTH = 48;
+const BODY_X = DEVICE_CENTER_X - BODY_WIDTH / 2;
+const TRACK_WIDTH = 9;
+const TRACK_X = DEVICE_CENTER_X - TRACK_WIDTH / 2;
+const TRACK_INNER_WIDTH = 7.8;
+const TRACK_INNER_X = TRACK_X + (TRACK_WIDTH - TRACK_INNER_WIDTH) / 2;
+const COLLAR_WIDTH = 16;
+const COLLAR_X = DEVICE_CENTER_X - COLLAR_WIDTH / 2;
+const SLEEVE_WIDTH = 14;
+const SLEEVE_X = DEVICE_CENTER_X - SLEEVE_WIDTH / 2;
+const SCREEN_WIDTH = 20;
+const SCREEN_X = DEVICE_CENTER_X - SCREEN_WIDTH / 2;
+
 export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo | null; mini?: boolean }) {
   const engine = motion?.engine;
   const running = engine?.running === true;
@@ -56,8 +70,8 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
     : t("No active pattern");
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";
-  // The stroking sleeve rides a vertical channel on the body's right edge, the
-  // way The Handy 2's sleeve carriage travels. 100% is the top of the channel.
+  // The stroke channel and carriage ride on the device center axis. 100% is the
+  // top of the channel.
   const travelTop = 30;
   const travelBottom = 104;
   const toChannelY = (percent: number) => travelBottom - ((travelBottom - travelTop) * percent) / 100;
@@ -83,19 +97,29 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
         preserveAspectRatio="xMidYMid meet"
         aria-hidden="true"
       >
-        {/* Body: the vertical charcoal capsule you hold, styled after The Handy 2. */}
-        <rect className="viz-body" x="20" y="10" width="40" height="112" rx="18" />
-        <path className="viz-grip" d="M27 34l24-9M27 46l24-9M27 58l24-9" />
-        <rect className="viz-screen" x="30" y="66" width="19" height="26" rx="4" />
-        <circle className="viz-device-led" cx="39.5" cy="36" r="2.6" />
-        {/* Belt channel on the right edge, with the active stroke range inside it. */}
-        <rect className="viz-track" x="55" y="24" width="9" height="84" rx="4.5" />
-        <rect className="viz-stroke-range" x="55.6" y={rangeTop} width="7.8" height={Math.max(3, rangeBottom - rangeTop)} rx="3.6" />
-        {/* Sleeve carriage: the clear ribbed sleeve held by a collar, moving vertically. */}
+        {/* Body: vertical capsule centered on the motion axis. */}
+        <rect className="viz-body" x={BODY_X} y="10" width={BODY_WIDTH} height="112" rx="24" />
+        <path className="viz-grip" d={`M${BODY_X + 10} 35h${BODY_WIDTH - 20}M${BODY_X + 10} 47h${BODY_WIDTH - 20}M${BODY_X + 10} 59h${BODY_WIDTH - 20}`} />
+        <rect className="viz-screen" x={SCREEN_X} y="66" width={SCREEN_WIDTH} height="26" rx="4" />
+        <circle className="viz-device-led" cx={DEVICE_CENTER_X} cy="36" r="2.6" />
+        {/* Stroke channel on the center axis, with the active range inside it. */}
+        <rect className="viz-track" x={TRACK_X} y="24" width={TRACK_WIDTH} height="84" rx="4.5" />
+        <rect
+          className="viz-stroke-range"
+          x={TRACK_INNER_X}
+          y={rangeTop}
+          width={TRACK_INNER_WIDTH}
+          height={Math.max(3, rangeBottom - rangeTop)}
+          rx="3.6"
+        />
+        {/* Sleeve carriage: collar + ribbed sleeve, moving vertically on the axis. */}
         <g className="viz-carriage" style={carriageStyle}>
-          <rect className="viz-carriage-sleeve" x="62" y="-9" width="14" height="18" rx="6.5" />
-          <path className="viz-sleeve-rib" d="M65-3.5h9M65 0h9M65 3.5h9" />
-          <rect className="viz-carriage-collar" x="51" y="-7.5" width="16" height="15" rx="5" />
+          <rect className="viz-carriage-sleeve" x={SLEEVE_X} y="-9" width={SLEEVE_WIDTH} height="18" rx="6.5" />
+          <path
+            className="viz-sleeve-rib"
+            d={`M${SLEEVE_X + 3} -3.5h${SLEEVE_WIDTH - 6}M${SLEEVE_X + 3} 0h${SLEEVE_WIDTH - 6}M${SLEEVE_X + 3} 3.5h${SLEEVE_WIDTH - 6}`}
+          />
+          <rect className="viz-carriage-collar" x={COLLAR_X} y="-7.5" width={COLLAR_WIDTH} height="15" rx="5" />
         </g>
       </svg>
       {!mini && (

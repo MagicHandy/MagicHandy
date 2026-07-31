@@ -1,0 +1,138 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 10.0s \u00b7 Part 1/6",
+  "description": "10.0s curated clip from handjob-tip \u00b7 pose=handjob zone=tip style=flow speed=medium",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 233,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 433,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 634,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 867,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 1134,
+      "position_percent": 20.0
+    },
+    {
+      "time_ms": 1401,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 1802,
+      "position_percent": 20.0
+    },
+    {
+      "time_ms": 2202,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 2669,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3069,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 3470,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 3937,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 4371,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 4738,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 5105,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 5505,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 5906,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 6273,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 6606,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 7007,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 7307,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 7674,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 8041,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 8408,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 8708,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 9075,
+      "position_percent": 100.0
+    },
+    {
+      "time_ms": 9342,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 9609,
+      "position_percent": 90.0
+    },
+    {
+      "time_ms": 9843,
+      "position_percent": 0.0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0.0
+    }
+  ],
+  "tags": [
+    "tip",
+    "steady",
+    "varied"
+  ]
+}
