@@ -3,6 +3,7 @@ package motion
 import (
 	"context"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -232,12 +233,27 @@ func TestAdaptiveFrameRejectsPathologicallyDenseEssentialContent(t *testing.T) {
 	}
 }
 
-func TestAdaptiveCatalogFramesReduceSubtleStairStepsWithinErrorBound(t *testing.T) {
+// Adaptive framing has to track the plan inside the wire tolerance and must not
+// leave the device parked on one rounded percent for a meaningful share of the
+// cycle, even with the area focus compressed to a ten-point window.
+//
+// This asserted "adaptive beats fixed framing by 10%" until the stalling
+// patterns were retired. That margin was not coming from the framer: fixed-frame
+// rounding only accumulates stationary time when the curve crawls, so the
+// baseline it beat was manufactured almost entirely by the very patterns the
+// catalog no longer contains. With none of them left, fixed-frame stationary time
+// across the whole catalog collapses to near zero and the comparison has nothing
+// to measure. The error bound below was always the substantive guarantee.
+func TestAdaptiveCatalogFramesTrackThePlanWithoutStairSteps(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 100
-	var fixedStationaryMillis int64
+	var playedMillis int64
 	var adaptiveStationaryMillis int64
 	for _, definition := range BuiltinPatternDefinitions() {
+		// Curated entries are exact user curves that deliberately hold position.
+		if slices.Contains(definition.Tags, TagCurated) {
+			continue
+		}
 		plan := NewMotionPlan("catalog", MotionTarget{
 			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 			AreaFocus: &AreaFocus{MinPercent: 45, MaxPercent: 55},
@@ -270,20 +286,12 @@ func TestAdaptiveCatalogFramesReduceSubtleStairStepsWithinErrorBound(t *testing.
 			}
 		}
 
-		lastFixed := math.Round(plan.SampleAt(0).PositionPercent)
-		for at := defaultSampleInterval.Milliseconds(); at <= samples[len(samples)-1].TimeMillis; at += defaultSampleInterval.Milliseconds() {
-			position := math.Round(plan.SampleAt(at).PositionPercent)
-			if position == lastFixed {
-				fixedStationaryMillis += defaultSampleInterval.Milliseconds()
-			}
-			lastFixed = position
-		}
+		playedMillis += samples[len(samples)-1].TimeMillis - samples[0].TimeMillis
 	}
-	if adaptiveStationaryMillis >= fixedStationaryMillis*9/10 {
+	if share := float64(adaptiveStationaryMillis) / float64(playedMillis); share > 0.10 {
 		t.Fatalf(
-			"adaptive rounded stationary time = %dms, want at least 10%% below fixed-frame %dms",
-			adaptiveStationaryMillis,
-			fixedStationaryMillis,
+			"adaptive framing held a rounded percent for %dms of %dms played (%.1f%%), want under 10%%",
+			adaptiveStationaryMillis, playedMillis, share*100,
 		)
 	}
 }
@@ -352,13 +360,13 @@ func TestWholePercentSamplingReducesRoundedPlateausWithinWireErrorBound(t *testi
 }
 
 func TestWholePercentPatternChunksDoNotEndAtFixedSamplerWindows(t *testing.T) {
-	definition, found := BuiltinPatternDefinition(PatternPendulum)
+	definition, found := BuiltinPatternDefinition(PatternSteadyDrift)
 	if !found {
-		t.Fatal("Pendulum is missing from the default catalog")
+		t.Fatal("Steady Drift is missing from the default catalog")
 	}
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 100
-	plan := NewMotionPlan("pendulum", MotionTarget{
+	plan := NewMotionPlan("steady-drift", MotionTarget{
 		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
 	}, settings, 0, 0, time.Unix(0, 0))
 	engine := &Engine{

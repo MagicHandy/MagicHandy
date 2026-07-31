@@ -32,29 +32,29 @@ const (
 	PatternPulse PatternID = "pulse"
 	// PatternTease is a fixed shallow-to-deep pattern.
 	PatternTease PatternID = "tease"
-	// PatternWaves is the swelling-amplitude pattern.
+	// PatternWaves identifies a retired swelling-amplitude pattern.
 	PatternWaves PatternID = "waves"
-	// PatternClimb is the ratcheting-build pattern.
+	// PatternClimb identifies a retired ratcheting-build pattern.
 	PatternClimb PatternID = "climb"
 	// PatternFlutter is the shallow-flutter-with-sweep pattern.
 	PatternFlutter PatternID = "flutter"
-	// PatternSway is the asymmetric broad-arc pattern.
+	// PatternSway identifies a retired asymmetric broad-arc pattern.
 	PatternSway PatternID = "sway"
 	// PatternDrift migrates a consistent stroke window across a cycle.
 	PatternDrift PatternID = "drift"
-	// PatternDoubleTap groups paired accents around deeper sweeps.
+	// PatternDoubleTap identifies a retired paired-accent pattern.
 	PatternDoubleTap PatternID = "double-tap"
-	// PatternCascade steps peak depth downward before resetting.
+	// PatternCascade identifies a retired descending-peak pattern.
 	PatternCascade PatternID = "cascade"
-	// PatternPendulum alternates long and short centered arcs.
+	// PatternPendulum identifies a retired alternating centered-arc pattern.
 	PatternPendulum PatternID = "pendulum"
 	// PatternCradle identifies the retired restrained centered-arcs pattern.
 	PatternCradle PatternID = "cradle"
-	// PatternSurge follows one full sweep with decaying echoes.
+	// PatternSurge identifies a retired decaying-echo pattern.
 	PatternSurge PatternID = "surge"
-	// PatternRolling layers offset medium and deep strokes.
+	// PatternRolling identifies a retired layered medium-and-deep pattern.
 	PatternRolling PatternID = "rolling"
-	// PatternSyncopate uses an intentionally uneven complete rhythm.
+	// PatternSyncopate identifies a retired uneven-rhythm pattern.
 	PatternSyncopate PatternID = "syncopate"
 	// PatternFourLevelCircuit cycles full and partial strokes across both zones.
 	PatternFourLevelCircuit PatternID = "four-level-circuit"
@@ -62,7 +62,7 @@ const (
 	PatternHighLowBlocks PatternID = "high-low-blocks"
 	// PatternDeepShallowSequence mixes deep and medium upper-anchored strokes.
 	PatternDeepShallowSequence PatternID = "deep-shallow-sequence"
-	// PatternShortMediumSteps repeats short and medium lower-anchored strokes.
+	// PatternShortMediumSteps identifies a retired lower-anchored step pattern.
 	PatternShortMediumSteps PatternID = "short-medium-steps"
 	// PatternTopAnchoredDepths identifies a retired upper-return catalog pattern.
 	PatternTopAnchoredDepths PatternID = "top-anchored-depths"
@@ -80,15 +80,15 @@ const (
 	PatternMidrangeFullFinish PatternID = "midrange-full-finish"
 	// PatternDeepPartialSequence mixes full and partial lower-anchored strokes.
 	PatternDeepPartialSequence PatternID = "deep-partial-sequence"
-	// PatternDeepMediumShortPairs moves through paired reach bands.
+	// PatternDeepMediumShortPairs identifies a retired paired reach-band pattern.
 	PatternDeepMediumShortPairs PatternID = "deep-medium-short-pairs"
-	// PatternFallingCrest lowers successive upper reversals across broad strokes.
+	// PatternFallingCrest identifies a retired lowering-reversal pattern.
 	PatternFallingCrest PatternID = "falling-crest"
-	// PatternThreeDeepOneShort resolves grouped broad strokes with a shorter phrase.
+	// PatternThreeDeepOneShort identifies a retired grouped broad-stroke pattern.
 	PatternThreeDeepOneShort PatternID = "three-deep-one-short"
-	// PatternDescendingLadder steps both endpoints downward before rebounding.
+	// PatternDescendingLadder identifies a retired stepped-endpoint pattern.
 	PatternDescendingLadder PatternID = "descending-ladder"
-	// PatternWanderingSwell changes both center and reach before a full sweep.
+	// PatternWanderingSwell identifies a retired migrating center-and-reach pattern.
 	PatternWanderingSwell PatternID = "wandering-swell"
 	// PatternRisingReach progressively extends alternating upper reversals.
 	PatternRisingReach PatternID = "rising-reach"
@@ -96,6 +96,41 @@ const (
 	PatternHardAndRegular PatternID = "hard-and-regular"
 	// PatternPlayfulJerk is a promoted user-curated staggered full-range rhythm.
 	PatternPlayfulJerk PatternID = "playful-jerk"
+
+	// The velocity-authored replacement catalog. Every entry below is generated
+	// from a stroke velocity rather than a free-hand travel time, so no pattern
+	// can collapse to a crawl the way the descending shapes above did.
+
+	// PatternEasingDown steps the whole stroke window lower at a held pace.
+	PatternEasingDown PatternID = "easing-down"
+	// PatternBuildingUp steps the whole stroke window higher at a held pace.
+	PatternBuildingUp PatternID = "building-up"
+	// PatternBroadAndTight answers one wide sweep with tight centered strokes.
+	PatternBroadAndTight PatternID = "broad-and-tight"
+	// PatternUpperAccents keeps quick accents in the upper range.
+	PatternUpperAccents PatternID = "upper-accents"
+	// PatternLowerAccents keeps quick accents in the lower range.
+	PatternLowerAccents PatternID = "lower-accents"
+	// PatternSteadyDrift holds one pace while the window wanders.
+	PatternSteadyDrift PatternID = "steady-drift"
+	// PatternOffbeat breaks even strokes with one displaced deeper reach.
+	PatternOffbeat PatternID = "offbeat"
+	// PatternNarrowing converges stroke width toward the center.
+	PatternNarrowing PatternID = "narrowing"
+	// PatternOpeningUp diverges stroke width away from the center.
+	PatternOpeningUp PatternID = "opening-up"
+	// PatternLongReturn pairs a quick reach with an unhurried return.
+	PatternLongReturn PatternID = "long-return"
+	// PatternSwell carries the window up and back across one long arc.
+	PatternSwell PatternID = "swell"
+	// PatternRocking repeats one even mid-range stroke at a fixed pace.
+	PatternRocking PatternID = "rocking"
+	// PatternSurgeAndSettle follows one full sweep with a long settled run.
+	PatternSurgeAndSettle PatternID = "surge-and-settle"
+	// PatternThreeAndOne resolves tight upper strokes with one full plunge.
+	PatternThreeAndOne PatternID = "three-and-one"
+	// PatternCrosscut trades long blocks of broad and tight strokes.
+	PatternCrosscut PatternID = "crosscut"
 )
 
 // AreaFocus constrains semantic sampling to a focus region.

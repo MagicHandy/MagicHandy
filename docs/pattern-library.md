@@ -29,32 +29,63 @@ one as the other.
 
 ## Built-In Catalog
 
-The built-in catalog contains 29 patterns: three established patterns
-(`Stroke`, `Pulse`, and `Tease`), 18 accepted generated patterns, six new
-experimental replacements, and two timing-preserved user-curated patterns.
-`experimental` is now an active review state rather than a historical label:
+The built-in catalog contains 28 patterns: three established patterns
+(`Stroke`, `Pulse`, and `Tease`), eight retained generated patterns, 15
+velocity-authored replacements, and two timing-preserved user-curated patterns.
+`experimental` is an active review state rather than a historical label:
 retained patterns no longer carry the tag or the `Experimental:` description
-prefix. Only `Deep, Medium, Short`, `Falling Crest`, `Three Deep, One Short`,
-`Descending Ladder`, `Wandering Swell`, and `Rising Reach` are experimental.
+prefix. Only `Rising Reach`, `Offbeat`, `Long Return`, `Swell`, `Surge and
+Settle`, and `Crosscut` are experimental.
 
-The replacement pass used live library feedback from a connected device. The
-six disabled patterns were `Deep Bookends`, `Lower Midrange Mix`, `Midrange
-with Full Finish`, `Mid-to-Top Switch`, `One Deep, Three Shallow`, and
-`Top-Anchored Depths`. Their shared weakness was not simply regularity. Each
-repeated a nearly fixed endpoint; four mixed in 10-20% micro-strokes and the
-other two repeated nearly identical 30-40% spans near the reversal floor. That
-combination produced limited phrase variation and physically jittery or shaking
-motion. Regular full-range motion remains a useful, deliberate behavior.
+### The velocity-authored replacement pass
 
-Replacement screening again reduced source action streams to reversal extrema
-and considered only complete phrases whose final source travel closed onto the
-first point. The six selected phrases come from six distinct source
-fingerprints. Each generated replacement has at least 30% travel per stroke,
-four amplitude bands, no endpoint band used more than twice, and no run longer
-than two near-equal stroke amplitudes. Generator tests also retain the 450 ms
-reversal-gap and 3000 relative-position/s2 acceleration budgets. Source
-filenames played no role in selection, names, descriptions, or tags; source
-paths, filenames, and payloads are not retained.
+The user disabled 15 built-ins by hand, reporting that they lacked smooth
+continuous motion on the device. Measuring them found two failure modes and one
+shared cause.
+
+**Five stalled.** The rendered curve spends a contiguous span under 30%/s:
+`Cascade` 2.46 s of a 6.6 s loop, `Descending Ladder` 2.04 s, `Deep, Medium,
+Short` 1.68 s, `Pendulum` 1.04 s, `Surge` 0.68 s. No retained pattern exceeds
+0.15 s. **Ten never settled into a pace:** their slowest stroke averaged 33%/s
+against 62%/s for the retained set, with a 3.4x internal speed spread against
+2.3x, across 5.5 distinct stroke lengths against 3.0.
+
+The shared cause is that `Positions` and `TravelMillis` were independent lists,
+so stroke velocity -- the quantity the hand actually registers -- was never
+designed. `Cascade` put a 14-unit stroke and an 84-unit stroke on nearly the same
+duration, giving 18%/s next to 116%/s. A second contributor: `mustFitCatalog`
+reaches `RoutineCycleFloorMillis` by scaling every timestamp, dividing every
+velocity by the same factor, which slowed `Descending Ladder` 1.22x from its
+authored 410-474 ms strokes.
+
+Replacements are authored as a stroke velocity per travel, with the travel time
+derived as amplitude divided by that velocity, and reach the cycle floor by
+repeating their phrase rather than by stretching it. Cycle lengths run 6.7-12.4 s.
+
+`scripts/pattern-designer.js` is that generator and is the place to add or retune
+a built-in. It holds the turning positions and intended stroke velocity for each
+entry, derives the travel times, checks the envelope, and reports any pair of
+patterns too close in shape to be worth choosing between; `EMIT=1` prints
+pasteable Go specs. Every shipped `TravelMillis` list reproduces from it exactly.
+Its constants are a design aid and are deliberately tighter than the Go test,
+which is the gate.
+
+The prior screening rule asked for reach *variety* -- four amplitude bands, no
+repeated endpoint, no run of two near-equal amplitudes. Measurement does not
+support variety as the quality axis: the disabled patterns were the more varied
+group. `TestCatalogPatternsHoldTheMeasuredSpeedEnvelope` replaces it with bounds
+taken from the retained patterns: every stroke at least 22% travel and 42%/s, at
+most a 3.3x internal speed spread, at least 55%/s mean, and no more than 200 ms
+under 30%/s. Because speed scaling is a uniform time factor, those ratios hold at
+any intensity. The 450 ms reversal-gap and 3000 relative-position/s2 acceleration
+budgets are unchanged; together they imply the 22% minimum stroke, and they cap a
+short stroke's speed at `amplitude / 0.45`, which is why long strokes are the fast
+ones in every replacement.
+
+These bounds admit all 13 retained patterns and reject 12 of the 15 retired ones.
+They do not catch `Sway`, `Rolling`, or `Double Tap`, whose slowest strokes
+(46, 54, 57%/s) sit inside the retained range; those three were the weakest part
+of the case for removing them.
 
 `Hard and Regular` and `playful jerk` are exact curves promoted from the live
 user library. Their accepted timing is intentionally preserved instead of being
@@ -159,7 +190,7 @@ available.
 
 Model permissions further narrow that catalog. Turning pattern selection off
 removes pattern fields and skips the pattern-store read for the turn. Turning
-experimental patterns off (the default) excludes the six replacement rows
+experimental patterns off (the default) excludes the six experimental rows
 while retaining all accepted and user-curated built-ins. Area focus is
 independent of catalog storage. These permissions persist in the existing
 versioned settings document in SQLite and therefore do not add a table or

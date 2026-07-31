@@ -71,54 +71,106 @@ func assertExperimentalPatternQuality(t *testing.T, definition PatternDefinition
 	if first.TimeMillis != 0 || last.TimeMillis != definition.CycleMillis || first.PositionPercent != last.PositionPercent {
 		t.Fatalf("experimental pattern %q is not a complete closed cycle: first=%+v last=%+v cycle=%d", definition.ID, first, last, definition.CycleMillis)
 	}
-	minimum, maximum := first.PositionPercent, first.PositionPercent
-	amplitudeBands := make(map[int]bool)
-	positionUses := make(map[int]int)
-	repeatedAmplitudeRun := 1
-	longestAmplitudeRun := 1
-	previousAmplitude := -1.0
-	for index, point := range definition.Points[:len(definition.Points)-1] {
-		minimum = math.Min(minimum, point.PositionPercent)
-		maximum = math.Max(maximum, point.PositionPercent)
-		if index > 0 && point.PositionPercent == definition.Points[index-1].PositionPercent {
-			t.Fatalf("experimental pattern %q has a stationary adjacent knot at %d", definition.ID, index)
+}
+
+// Stroke-speed envelope, measured from the thirteen patterns that survived the
+// user disabling fifteen by hand.
+//
+// The rule this replaced asked for reach VARIETY -- four amplitude bands, no
+// repeated endpoint, no two similar strokes in a row. Measuring the disabled set
+// showed variety was never the missing ingredient: they averaged 5.5 distinct
+// stroke lengths against 3.0 for the ones that were kept. What separated them was
+// speed. Every kept pattern holds at least 44%/s on its slowest stroke; eleven of
+// the fifteen disabled ones fall below that, and five stall outright -- Cascade
+// spends 2.46s of a 6.6s loop under 30%/s because a shrinking stroke kept a fixed
+// half-period.
+//
+// Speed scaling is a uniform time factor, so these ratios hold at any intensity.
+//
+// The bounds sit just outside the kept patterns rather than around the new ones:
+// Drift runs a 44%/s stroke and both Tease and Deep-Partial Sequence spread 3.2x,
+// and those are evidence of what is acceptable, not candidates to reject. That
+// costs some detection at the margin -- of the fifteen retired shapes these
+// bounds catch twelve, missing Sway, Rolling, and Double Tap, whose slowest
+// strokes (46, 54, 57%/s) sit inside the kept range. Those three were always the
+// weakest part of the case for removing them.
+const (
+	envelopeFloorVelocity   = 42.0 // Drift, the slowest kept pattern, runs 44
+	envelopeMaxSpeedRatio   = 3.3  // Tease and Deep-Partial Sequence both spread 3.2x
+	envelopeMinAmplitude    = 22.0 // reversal gap * floor velocity
+	envelopeMinMeanVelocity = 55.0 // Drift and Flutter sit at 56-57
+	envelopeMaxStallMillis  = 200  // longest contiguous span under 30%/s
+)
+
+func TestCatalogPatternsHoldTheMeasuredSpeedEnvelope(t *testing.T) {
+	for _, definition := range BuiltinPatternDefinitions() {
+		// Curated entries are exact user-tested curves; they are evidence, not
+		// designs, and deliberately carry holds the envelope would reject.
+		if slices.Contains(definition.Tags, TagCurated) {
+			continue
 		}
-		next := definition.Points[index+1]
-		amplitude := math.Abs(next.PositionPercent - point.PositionPercent)
-		if amplitude < 30 {
-			t.Fatalf("experimental pattern %q travel %d amplitude = %.1f, want at least 30", definition.ID, index, amplitude)
+		slowest, fastest, travel := math.Inf(1), 0.0, 0.0
+		for index := 1; index < len(definition.Points); index++ {
+			previous, point := definition.Points[index-1], definition.Points[index]
+			amplitude := math.Abs(point.PositionPercent - previous.PositionPercent)
+			millis := point.TimeMillis - previous.TimeMillis
+			if amplitude == 0 || millis <= 0 {
+				continue
+			}
+			if amplitude < envelopeMinAmplitude {
+				t.Errorf("%s: stroke %d amplitude %.0f below %.0f, too short to stay above the speed floor",
+					definition.ID, index, amplitude, envelopeMinAmplitude)
+			}
+			velocity := amplitude / (float64(millis) / 1000)
+			slowest, fastest = math.Min(slowest, velocity), math.Max(fastest, velocity)
+			travel += amplitude
 		}
-		amplitudeBands[int(math.Round(amplitude/10))] = true
-		positionUses[int(math.Round(point.PositionPercent/5))]++
-		if math.Abs(amplitude-previousAmplitude) < 5 {
-			repeatedAmplitudeRun++
-		} else {
-			repeatedAmplitudeRun = 1
+		if slowest < envelopeFloorVelocity {
+			t.Errorf("%s: slowest stroke %.0f%%/s below the %.0f%%/s floor", definition.ID, slowest, envelopeFloorVelocity)
 		}
-		longestAmplitudeRun = max(longestAmplitudeRun, repeatedAmplitudeRun)
-		previousAmplitude = amplitude
-	}
-	if maximum-minimum < 65 {
-		t.Fatalf("experimental pattern %q span = %.1f, want a meaningful motion range", definition.ID, maximum-minimum)
-	}
-	if len(amplitudeBands) < 4 || longestAmplitudeRun > 2 {
-		t.Fatalf("experimental pattern %q has weak reach variation: bands=%d longest run=%d", definition.ID, len(amplitudeBands), longestAmplitudeRun)
-	}
-	for band, uses := range positionUses {
-		if uses > 2 {
-			t.Fatalf("experimental pattern %q repeats endpoint band %d %d times", definition.ID, band, uses)
+		if ratio := fastest / slowest; ratio > envelopeMaxSpeedRatio {
+			t.Errorf("%s: speed spread %.2fx exceeds %.2fx", definition.ID, ratio, envelopeMaxSpeedRatio)
+		}
+		if mean := travel / (float64(definition.CycleMillis) / 1000); mean < envelopeMinMeanVelocity {
+			t.Errorf("%s: mean speed %.0f%%/s below %.0f%%/s", definition.ID, mean, envelopeMinMeanVelocity)
+		}
+		if stall := longestStallMillis(t, definition); stall > envelopeMaxStallMillis {
+			t.Errorf("%s: stalls for %dms under 30%%/s, above the %dms ceiling",
+				definition.ID, stall, envelopeMaxStallMillis)
 		}
 	}
 }
 
+// longestStallMillis reports the longest contiguous span the rendered curve
+// spends under 30%/s. Measuring the smoothed curve rather than the authored
+// chords is what catches a stall: the device follows the interpolated script.
+func longestStallMillis(t *testing.T, definition PatternDefinition) int64 {
+	t.Helper()
+	curve, err := NewCurve(definition.Points, definition.CycleMillis, true)
+	if err != nil {
+		t.Fatalf("%s: %v", definition.ID, err)
+	}
+	const step = 25
+	run, longest := int64(0), int64(0)
+	for at := int64(0); at < definition.CycleMillis; at += step {
+		if math.Abs(curve.Velocity(at)) < 30 {
+			run += step
+			longest = max(longest, run)
+			continue
+		}
+		run = 0
+	}
+	return longest
+}
+
 func TestOnlyReplacementPatternsAreExperimental(t *testing.T) {
 	want := map[PatternID]bool{
-		PatternDeepMediumShortPairs: true,
-		PatternFallingCrest:         true,
-		PatternThreeDeepOneShort:    true,
-		PatternDescendingLadder:     true,
-		PatternWanderingSwell:       true,
-		PatternRisingReach:          true,
+		PatternRisingReach:    true,
+		PatternOffbeat:        true,
+		PatternLongReturn:     true,
+		PatternSwell:          true,
+		PatternSurgeAndSettle: true,
+		PatternCrosscut:       true,
 	}
 	for _, definition := range BuiltinPatternDefinitions() {
 		hasTag := slices.Contains(definition.Tags, TagExperimental)
@@ -145,18 +197,27 @@ func TestRetiredPatternsAreAbsentFromDefaultCatalog(t *testing.T) {
 
 func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 	want := map[PatternID]string{
-		PatternFourLevelCircuit:     "Four-Level Circuit",
-		PatternHighLowBlocks:        "High-Low Blocks",
-		PatternDeepShallowSequence:  "Deep-Shallow Sequence",
-		PatternShortMediumSteps:     "Short-Medium Steps",
-		PatternDeepMediumShortPairs: "Deep, Medium, Short",
-		PatternFallingCrest:         "Falling Crest",
-		PatternThreeDeepOneShort:    "Three Deep, One Short",
-		PatternDescendingLadder:     "Descending Ladder",
-		PatternSlowFastFull:         "Slow-to-Fast Full",
-		PatternWanderingSwell:       "Wandering Swell",
-		PatternDeepPartialSequence:  "Deep-Partial Sequence",
-		PatternRisingReach:          "Rising Reach",
+		PatternFourLevelCircuit:    "Four-Level Circuit",
+		PatternHighLowBlocks:       "High-Low Blocks",
+		PatternDeepShallowSequence: "Deep-Shallow Sequence",
+		PatternSlowFastFull:        "Slow-to-Fast Full",
+		PatternDeepPartialSequence: "Deep-Partial Sequence",
+		PatternRisingReach:         "Rising Reach",
+		PatternEasingDown:          "Easing Down",
+		PatternBuildingUp:          "Building Up",
+		PatternBroadAndTight:       "Broad and Tight",
+		PatternUpperAccents:        "Upper Accents",
+		PatternLowerAccents:        "Lower Accents",
+		PatternSteadyDrift:         "Steady Drift",
+		PatternNarrowing:           "Narrowing",
+		PatternOpeningUp:           "Opening Up",
+		PatternRocking:             "Rocking",
+		PatternThreeAndOne:         "Three and One",
+		PatternOffbeat:             "Offbeat",
+		PatternLongReturn:          "Long Return",
+		PatternSwell:               "Swell",
+		PatternSurgeAndSettle:      "Surge and Settle",
+		PatternCrosscut:            "Crosscut",
 	}
 	for _, definition := range BuiltinPatternDefinitions() {
 		name, ok := want[definition.ID]

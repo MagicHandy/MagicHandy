@@ -113,6 +113,34 @@ var retiredBuiltinPatternIDs = []PatternID{
 	PatternLowerMidrangeMix,
 	PatternMidTopSwitch,
 	PatternMidrangeFullFinish,
+
+	// Retired after the user disabled all fifteen by hand. Measuring them found
+	// two failure modes, both traceable to the same authoring gap: positions and
+	// travel times were independent lists, so stroke velocity was never a
+	// designed quantity.
+	//
+	// Five stalled outright -- the rendered curve spends a contiguous span under
+	// 30%/s, up to 2.46s of a 6.6s loop in Cascade, because a shrinking stroke
+	// kept a fixed half-period. Ten more never settled into a pace: their slowest
+	// stroke averaged 33%/s against 62%/s across the patterns that were kept, and
+	// they used 5.5 distinct stroke lengths against 3.0.
+	//
+	// Replacements are authored from velocity and live in catalogPatternSpecs.
+	PatternCascade,
+	PatternSurge,
+	PatternDescendingLadder,
+	PatternPendulum,
+	PatternDeepMediumShortPairs,
+	PatternClimb,
+	PatternWaves,
+	PatternWanderingSwell,
+	PatternSway,
+	PatternRolling,
+	PatternFallingCrest,
+	PatternDoubleTap,
+	PatternShortMediumSteps,
+	PatternSyncopate,
+	PatternThreeDeepOneShort,
 }
 
 // PromotedBuiltinPatternDefinitions returns defensive copies of user-tested
