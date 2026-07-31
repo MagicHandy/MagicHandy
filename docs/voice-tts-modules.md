@@ -33,7 +33,8 @@ Choose a managed module in `install.ps1`, or run
 5. downloads the chosen model only after consent;
 6. configures the server for `127.0.0.1`, not all interfaces; and
 7. calls the MagicHandy settings command so the provider, paths, port, and
-   auto-launch choice are persisted in SQLite.
+   auto-launch choice are persisted in SQLite. Faster Qwen reference fields
+   remain empty until the user completes them in Settings > Voice.
 
 No preinstalled Python, uv, PyTorch, Git, or compiler is required. Faster Qwen
 uses managed Python 3.11. The pinned Chatterbox dependency set uses Python 3.10
@@ -73,8 +74,12 @@ it did not launch.
 
 Faster Qwen3-TTS needs a local reference WAV plus its exact transcript for
 zero-shot cloning. Use clean single-speaker speech without music or effects.
-The installer stores paths, not encoded voice tokens; conditioning is cached by
-the resident server.
+The command-line installer does not ask for either value. After installation,
+open Settings > Voice, choose the WAV, enter its exact transcript, and save.
+MagicHandy reports the runtime as installed but keeps the worker unconfigured
+until both values are present. The app stores the path and transcript in its
+settings database, not in installer state; conditioning is cached by the
+resident server.
 
 Chatterbox accepts a local reference WAV as a named voice. The installer copies
 that source into the module's voice directory and stores the resulting voice

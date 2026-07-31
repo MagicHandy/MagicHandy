@@ -10,7 +10,7 @@ source revision, installs its dependencies, downloads the selected model after
 consent, and writes module settings through magichandy.exe.
 
 .EXAMPLE
-.\scripts\install-tts-module.ps1 -Module faster-qwen3-tts -ReferenceWav C:\voices\sample.wav -ReferenceTranscript "Exact words in the sample." -AutoLaunch
+.\scripts\install-tts-module.ps1 -Module faster-qwen3-tts -AutoLaunch
 
 .EXAMPLE
 .\scripts\install-tts-module.ps1 -Module chatterbox -Device cpu -AutoLaunch
@@ -22,7 +22,6 @@ param(
     [string]$DataDir = '',
     [string]$InstallRoot = '',
     [string]$ReferenceWav = '',
-    [string]$ReferenceTranscript = '',
     [string]$Model = '',
     [string]$Voice = '',
     [string]$Language = 'Auto',
@@ -338,6 +337,9 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 
 if ($Module -eq 'faster-qwen3-tts') {
+    if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
+        throw 'Configure the Faster Qwen3-TTS reference WAV and transcript in Settings > Voice after installation.'
+    }
     if ([string]::IsNullOrWhiteSpace($Model)) {
         $Model = 'Qwen/Qwen3-TTS-12Hz-0.6B-Base'
     }
@@ -349,12 +351,6 @@ if ($Module -eq 'faster-qwen3-tts') {
     }
     if ($Device -ne 'cuda') {
         throw 'Faster Qwen3-TTS requires an NVIDIA GPU and the CUDA device. Choose Chatterbox for CPU operation.'
-    }
-    if ([string]::IsNullOrWhiteSpace($ReferenceWav) -and -not $PlanOnly) {
-        $ReferenceWav = Read-TTSChoice -Question 'Reference WAV path' -Default ''
-    }
-    if ([string]::IsNullOrWhiteSpace($ReferenceTranscript) -and -not $PlanOnly) {
-        $ReferenceTranscript = Read-TTSChoice -Question 'Exact reference transcript' -Default ''
     }
 } else {
     if ([string]::IsNullOrWhiteSpace($Model)) {
@@ -388,6 +384,9 @@ Write-Host "Device:       $Device"
 Write-Host "Python:       $(if ($Module -eq 'chatterbox') { '3.10 (managed by uv)' } else { '3.11 (managed by uv)' })"
 Write-Host "Endpoint:     http://127.0.0.1:$Port"
 Write-Host "Auto-launch:  $([bool]$AutoLaunch)"
+if ($Module -eq 'faster-qwen3-tts') {
+    Write-Host 'Reference:    configure later in Settings > Voice'
+}
 Write-Host "License:      $license"
 Write-Host 'Downloads include Python, PyTorch, the model, and transitive packages. Expect several GiB.' -ForegroundColor Yellow
 
@@ -397,11 +396,6 @@ if ($PlanOnly) {
     return
 }
 
-if ($Module -eq 'faster-qwen3-tts') {
-    if ([string]::IsNullOrWhiteSpace($ReferenceWav) -or [string]::IsNullOrWhiteSpace($ReferenceTranscript)) {
-        throw 'Faster Qwen3-TTS requires a reference WAV and its exact transcript.'
-    }
-}
 if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
     $ReferenceWav = [System.IO.Path]::GetFullPath($ReferenceWav)
     if (-not (Test-Path -LiteralPath $ReferenceWav -PathType Leaf) -or [System.IO.Path]::GetExtension($ReferenceWav) -ne '.wav') {
@@ -478,12 +472,13 @@ try {
         '-tts-voice', $Voice,
         '-tts-response-format', 'wav',
         '-tts-health-path', $healthPath,
-        '-tts-reference-wav', $ReferenceWav,
-        '-tts-reference-text', $ReferenceTranscript,
         '-tts-language', $Language,
         '-tts-device', $Device,
         '-tts-server-port', [string]$Port
     )
+    if ($Module -eq 'chatterbox' -and -not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
+        $settingsArguments += @('-tts-reference-wav', $ReferenceWav)
+    }
     if ($AutoLaunch) {
         $settingsArguments += '-tts-auto-launch'
     }
@@ -493,7 +488,7 @@ try {
     Invoke-Checked -Executable $exe -Arguments $settingsArguments -Description 'MagicHandy TTS settings update'
 
     $moduleState = [ordered]@{
-        schema_version = 1
+        schema_version = 2
         module = $Module
         provider = $provider
         install_root = $InstallRoot
@@ -502,8 +497,6 @@ try {
         source_revision = $sourceRevision
         model = $Model
         voice = $Voice
-        reference_wav = $ReferenceWav
-        reference_transcript = $ReferenceTranscript
         language = $Language
         device = $Device
         port = $Port
@@ -518,11 +511,14 @@ try {
 }
 
 Write-Host ''
-Write-Host '  +-----------------------------------------------+' -ForegroundColor Green
-Write-Host '  | Local voice module installed and configured. |' -ForegroundColor Green
-Write-Host '  +-----------------------------------------------+' -ForegroundColor Green
+Write-Host '  +------------------------------------------+' -ForegroundColor Green
+Write-Host '  | Local voice module runtime installed.    |' -ForegroundColor Green
+Write-Host '  +------------------------------------------+' -ForegroundColor Green
 Write-Host "Provider: $provider"
 Write-Host "Settings: $DataDir"
+if ($Module -eq 'faster-qwen3-tts') {
+    Write-Host 'Next: open Settings > Voice and add a reference WAV with its exact transcript.' -ForegroundColor Yellow
+}
 if (-not $AutoLaunch) {
     Write-Host 'Auto-launch is off. Start the server yourself before loading the TTS worker.' -ForegroundColor Yellow
 }

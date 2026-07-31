@@ -4,6 +4,7 @@
   "NVIDIA CUDA": "NVIDIA CUDA (GPU)",
   "CPU": "CPU (processador)",
   "Faster Qwen3-TTS": "Faster Qwen3-TTS (rápido)",
+  "Faster Qwen3-TTS is installed. Add a reference WAV and its exact transcript in Voice settings, then save.": "O Faster Qwen3-TTS está instalado. Adicione um WAV de referência e sua transcrição exata nas configurações de Voz e salve.",
   "Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.": "O Faster Qwen3-TTS requer uma GPU NVIDIA com CUDA.",
   "Chatterbox Turbo": "Chatterbox Turbo (local)",
   "Module folder": "Pasta do módulo",

@@ -139,8 +139,6 @@ func TestRunConfiguresScriptedTTSWithoutStartingServer(t *testing.T) {
 		"-tts-base-url", "http://127.0.0.1:9015",
 		"-tts-model", config.DefaultFasterQwenModel,
 		"-tts-voice", "default",
-		"-tts-reference-wav", `C:\voices\sample.wav`,
-		"-tts-reference-text", "Exact reference transcript.",
 		"-tts-language", "English",
 		"-tts-device", config.TTSDeviceCUDA,
 		"-tts-server-port", "9015",
@@ -169,13 +167,92 @@ func TestRunConfiguresScriptedTTSWithoutStartingServer(t *testing.T) {
 	}
 }
 
+func TestRunConfiguresFasterQwenBeforeGUIReference(t *testing.T) {
+	dataDir := t.TempDir()
+	err := run([]string{
+		"-data-dir", dataDir,
+		"-configure-tts-module", config.VoiceTTSProviderFasterQwen,
+		"-tts-module-root", `C:\MagicHandy\voice\faster-qwen3-tts`,
+		"-tts-device", config.TTSDeviceCUDA,
+		"-tts-server-port", "8991",
+		"-tts-auto-launch",
+	}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("run pre-reference TTS configuration: %v", err)
+	}
+
+	store, err := config.OpenStore(dataDir)
+	if err != nil {
+		t.Fatalf("OpenStore verify: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	settings, _ := store.Snapshot()
+	if settings.Voice.TTSProvider != config.VoiceTTSProviderFasterQwen ||
+		settings.Voice.TTSReferenceWAV != "" ||
+		settings.Voice.TTSReferenceText != "" ||
+		!settings.Voice.TTSAutoLaunch {
+		t.Fatalf("saved pre-reference TTS settings = %+v", settings.Voice)
+	}
+}
+
+func TestRunTTSModuleUpdatePreservesGUIReference(t *testing.T) {
+	dataDir := t.TempDir()
+	initialArgs := []string{
+		"-data-dir", dataDir,
+		"-configure-tts-module", config.VoiceTTSProviderFasterQwen,
+		"-tts-module-root", `C:\MagicHandy\voice\faster-qwen3-tts`,
+		"-tts-device", config.TTSDeviceCUDA,
+		"-tts-server-port", "8991",
+	}
+	if err := run(initialArgs, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run initial TTS configuration: %v", err)
+	}
+
+	store, err := config.OpenStore(dataDir)
+	if err != nil {
+		t.Fatalf("OpenStore for GUI update: %v", err)
+	}
+	_, _, err = store.Update(func(settings config.Settings) (config.Settings, error) {
+		settings.Voice.TTSReferenceWAV = `C:\voices\sample.wav`
+		settings.Voice.TTSReferenceText = "Exact reference transcript."
+		return settings, nil
+	})
+	if closeErr := store.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatalf("save GUI reference: %v", err)
+	}
+
+	updateArgs := []string{
+		"-data-dir", dataDir,
+		"-configure-tts-module", config.VoiceTTSProviderFasterQwen,
+		"-tts-module-root", `C:\MagicHandy\voice\faster-qwen3-tts`,
+		"-tts-device", config.TTSDeviceCUDA,
+		"-tts-server-port", "8993",
+	}
+	if err := run(updateArgs, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run reference-independent TTS update: %v", err)
+	}
+
+	store, err = config.OpenStore(dataDir)
+	if err != nil {
+		t.Fatalf("OpenStore verify: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	settings, _ := store.Snapshot()
+	if settings.Voice.TTSReferenceWAV != `C:\voices\sample.wav` ||
+		settings.Voice.TTSReferenceText != "Exact reference transcript." ||
+		settings.Voice.TTSServerPort != 8993 {
+		t.Fatalf("saved TTS settings after update = %+v", settings.Voice)
+	}
+}
+
 func TestRunRejectsUnsupportedFasterQwenCPUConfiguration(t *testing.T) {
 	err := run([]string{
 		"-data-dir", t.TempDir(),
 		"-configure-tts-module", config.VoiceTTSProviderFasterQwen,
 		"-tts-module-root", `C:\MagicHandy\voice\faster-qwen3-tts`,
-		"-tts-reference-wav", `C:\voices\sample.wav`,
-		"-tts-reference-text", "Exact reference transcript.",
 		"-tts-device", config.TTSDeviceCPU,
 	}, &bytes.Buffer{}, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "NVIDIA CUDA") {

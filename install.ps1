@@ -57,12 +57,6 @@
     Local TTS execution device: auto, cpu, or cuda. Faster Qwen3-TTS requires
     CUDA. Auto prefers CUDA for Chatterbox when an NVIDIA GPU is detected.
 
-.PARAMETER TTSReferenceWav
-    Reference WAV for unattended Faster Qwen3-TTS installation.
-
-.PARAMETER TTSReferenceTranscript
-    Exact transcript of TTSReferenceWav for unattended Faster Qwen3-TTS setup.
-
 .PARAMETER NoTTSAutoLaunch
     Configure the selected managed TTS server without launching it with the app.
 
@@ -124,8 +118,6 @@ param(
     [string]$TTSModule = '',
     [ValidateSet('auto', 'cpu', 'cuda')]
     [string]$TTSDevice = 'auto',
-    [string]$TTSReferenceWav = '',
-    [string]$TTSReferenceTranscript = '',
     [switch]$NoTTSAutoLaunch,
     [switch]$NoLauncher,
     [switch]$Yes,
@@ -350,12 +342,6 @@ function Read-TTSConfiguration {
             -Default $(if ($DefaultModule -eq 'none') { $true } else { $DefaultAutoLaunch })
     }
 
-    if ($UseCommandLineChoices -and $Yes -and -not $PlanOnly -and $module -eq 'faster-qwen3-tts' -and (
-            [string]::IsNullOrWhiteSpace($TTSReferenceWav) -or
-            [string]::IsNullOrWhiteSpace($TTSReferenceTranscript))) {
-        throw (Get-MagicHandyText -Key 'tts_reference_unattended')
-    }
-
     return [pscustomobject]@{
         Module = $module
         Device = $device
@@ -556,9 +542,7 @@ Invoke-MagicHandyProvision `
     -AssumeYes:$Yes `
     -PlanOnly:$PlanOnly `
     -PreserveAppLanguages:$UseSavedChoices `
-    -ReconfigureTTS:$Reconfigure `
-    -TTSReferenceWav $TTSReferenceWav `
-    -TTSReferenceTranscript $TTSReferenceTranscript
+    -ReconfigureTTS:$Reconfigure
 
 if ($PlanOnly) {
     Write-Host ''

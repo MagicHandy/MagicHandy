@@ -570,6 +570,10 @@ Mitigation:
 - install each module only through the main decision tree or explicit module
   script; both show the pinned source revision, license, model, hardware
   target, install root, and expected disk impact before consent
+- keep Faster Qwen reference selection in Settings > Voice; command-line
+  installation may finish without a reference, app status must distinguish
+  that state from missing runtime files, and module updates must preserve
+  GUI-owned reference values
 - recommend Faster Qwen3-TTS only for NVIDIA/CUDA systems; use Chatterbox as
   the CPU/broader-hardware fallback and never advertise an unsupported Faster
   Qwen CPU mode
@@ -604,7 +608,10 @@ standalone Faster Qwen3-TTS/Chatterbox paths, provider-scoped settings,
 auto-launch ownership, migration, and automated protocol/lifecycle tests are
 implemented. The clean-host path repairs WinGet, installs Git/uv, provisions
 module-compatible Python 3.10 or 3.11 plus PyTorch/model assets, and does not
-require a preinstalled compiler. Live listening, latency, browser, and VRAM
+require a preinstalled compiler. Faster Qwen installation now deliberately
+defers its reference WAV and exact transcript to Settings > Voice without
+blocking runtime installation or allowing updates to erase those values. Live
+listening, latency, browser, and VRAM
 acceptance remains open. Historical NeuTTS measurements remain in
 `docs/goal-scorecard.md` and `docs/perf-baseline.md`; they are not evidence for
 the replacement modules.

@@ -971,8 +971,8 @@ describe("app shell safety invariants", () => {
               state: "incomplete",
               installed: false,
               worker_installed: true,
-              runtime_installed: false,
-              message: "Faster Qwen3-TTS is incomplete. Rerun scripts/update-tts-module.ps1.",
+              runtime_installed: true,
+              message: "Faster Qwen3-TTS is installed. Add a reference WAV and its exact transcript in Voice settings, then save.",
             },
           },
         },
@@ -995,7 +995,7 @@ describe("app shell safety invariants", () => {
     expect(screen.getByRole("textbox", { name: /reference wav/i })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /exact reference transcript/i })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /launch this module/i })).not.toBeChecked();
-    expect(screen.getByRole("status", { name: /checking the faster qwen3-tts module/i })).toHaveTextContent(/incomplete/i);
+    expect(screen.getByRole("status", { name: /checking the faster qwen3-tts module/i })).toHaveTextContent(/add a reference wav/i);
     expect(screen.getByLabelText(/^device$/i)).toHaveValue("cuda");
     expect(screen.queryByLabelText(/^api key/i)).toBeNull();
 

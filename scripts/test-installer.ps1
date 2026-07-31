@@ -84,6 +84,17 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains("Microsoft\WinGet\Links\uv.exe")) -Message 'TTS install should resolve the WinGet portable uv link in the current process'
     Assert-True -Condition ($ttsInstallerSource.Contains("Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv'")) -Message 'TTS install should repair WinGet and refresh PATH after installing uv'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('python', 'install', `$PythonVersion)")) -Message 'TTS install should explicitly provision its managed Python runtime'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Reference WAV path'")) -Message 'TTS install must leave Faster Qwen reference selection to the GUI'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Exact reference transcript'")) -Message 'TTS install must leave Faster Qwen transcription to the GUI'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains('[string]$ReferenceTranscript')) -Message 'TTS install must not expose a Faster Qwen transcript parameter'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains('requires a reference WAV and its exact transcript')) -Message 'empty Faster Qwen references must not fail installation'
+    $mainInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'install.ps1'))
+    Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceWav')) -Message 'main installer must not expose a reference WAV choice'
+    Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceTranscript')) -Message 'main installer must not expose a reference transcript choice'
+    $coreCommandSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'cmd\magichandy\main.go'))
+    Assert-True -Condition (-not $coreCommandSource.Contains('"tts-reference-text"')) -Message 'the internal install command must leave Faster Qwen transcript changes to the GUI'
+    $ttsUpdaterSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\update-tts-module.ps1'))
+    Assert-True -Condition (-not $ttsUpdaterSource.Contains('ReferenceTranscript =')) -Message 'TTS updates must not restore stale command-line reference text'
     $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
@@ -177,6 +188,7 @@ try {
     $qwenPlan = & $ttsInstaller -Module faster-qwen3-tts -DataDir $ttsData -InstallRoot $qwenRoot -PlanOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($qwenPlan -match 'faster-qwen3-tts') -Message 'Faster Qwen plan should identify its module'
     Assert-True -Condition ($qwenPlan -match 'Python:\s+3\.11 \(managed by uv\)') -Message 'Faster Qwen should use managed Python 3.11'
+    Assert-True -Condition ($qwenPlan -match 'Reference:\s+configure later in Settings > Voice') -Message 'Faster Qwen should direct reference setup to the GUI'
     Assert-True -Condition ($qwenPlan -match 'no dependencies, files, models, processes, or settings were changed') -Message 'Faster Qwen plan should state its no-write contract'
     Assert-True -Condition (-not (Test-Path -LiteralPath $qwenRoot)) -Message 'Faster Qwen plan should not create its install root'
 
@@ -195,7 +207,7 @@ try {
 
     New-Item -ItemType Directory -Force -Path $qwenRoot | Out-Null
     $moduleState = [ordered]@{
-        schema_version = 1
+        schema_version = 2
         module = 'faster-qwen3-tts'
         provider = 'faster_qwen3_tts'
         install_root = $qwenRoot
@@ -204,8 +216,6 @@ try {
         source_revision = 'fixture'
         model = 'Qwen/Qwen3-TTS-12Hz-0.6B-Base'
         voice = 'default'
-        reference_wav = 'C:\voices\sample.wav'
-        reference_transcript = 'Exact transcript.'
         language = 'English'
         device = 'cuda'
         port = 8991
@@ -216,8 +226,13 @@ try {
     $updatePlan = & $ttsUpdater -InstallRoot $qwenRoot -PlanOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($updatePlan -match 'Auto-launch:\s+True') -Message 'TTS update plan should preserve auto-launch'
     Assert-True -Condition ($updatePlan -match 'Qwen/Qwen3-TTS-12Hz-0\.6B-Base') -Message 'TTS update plan should preserve the installed model'
+
+    $moduleState.schema_version = 1
+    $moduleState.reference_wav = 'C:\voices\sample.wav'
+    $moduleState.reference_transcript = 'Exact transcript.'
+    [System.IO.File]::WriteAllText((Join-Path $qwenRoot 'module-state.json'), ($moduleState | ConvertTo-Json))
     $checkOnly = & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Yes 6>&1 | Out-String
-    Assert-True -Condition ($checkOnly -match 'Module state verified') -Message 'main installer should be able to validate and reuse an installed TTS module'
+    Assert-True -Condition ($checkOnly -match 'Module state verified') -Message 'main installer should validate legacy module state without restoring its reference fields'
     Assert-Throws -Action {
         & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Device cuda -Yes
     } -Pattern 'CheckOnly cannot be combined' -Message 'TTS check-only override rejection'
@@ -1029,6 +1044,19 @@ try {
     Assert-True -Condition ($ttsFreshPlan -match 'Bootstrap uv and managed Python.+chatterbox local TTS \(cpu; auto-launch: yes\)') -Message 'main installer should include selected TTS bootstrap in its plan'
     Assert-True -Condition ($ttsFreshPlan -match 'Installer-managed local TTS: chatterbox \(cpu; auto-launch: yes\)') -Message 'main installer should summarize selected TTS choices'
     Assert-True -Condition (-not (Test-Path -LiteralPath $ttsFreshPlanState)) -Message 'TTS install plan must not persist state'
+
+    $qwenFreshPlan = (& (Join-Path $Repo 'install.ps1') `
+        -Yes `
+        -SkipLlamaBuild `
+        -SkipParakeet `
+        -TTSModule faster-qwen3-tts `
+        -TTSDevice cuda `
+        -NoLauncher `
+        -NoLaunch `
+        -PlanOnly `
+        -StatePath $ttsFreshPlanState 6>&1 | Out-String)
+    Assert-True -Condition ($qwenFreshPlan -match 'faster-qwen3-tts local TTS \(cuda; auto-launch: yes\)') -Message 'main installer should plan Faster Qwen without command-line reference data'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $ttsFreshPlanState)) -Message 'Faster Qwen install plan must not persist state'
     Assert-Throws -Action {
         & (Join-Path $Repo 'install.ps1') -Yes -TTSModule faster-qwen3-tts -TTSDevice cpu -PlanOnly -StatePath $ttsFreshPlanState
     } -Pattern 'cannot use CPU' -Message 'main installer Faster Qwen CPU selection'

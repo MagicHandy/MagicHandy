@@ -206,8 +206,6 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	settings := config.DefaultSettings().Voice
 	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
 	settings.TTSModuleRoot = filepath.Join(root, "module")
-	settings.TTSReferenceText = "Exact transcript."
-	settings.TTSReferenceWAV = filepath.Join(root, "reference.wav")
 
 	status := inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
 	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled {
@@ -216,6 +214,14 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, ".venv", managedPythonDirectory(), managedPythonName()))
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "source", "examples", "openai_server.py"))
+	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
+	if status.State != "incomplete" || status.Installed || !status.RuntimeInstalled ||
+		!strings.Contains(status.Message, "Voice settings") {
+		t.Fatalf("pre-reference module status = %+v", status)
+	}
+
+	settings.TTSReferenceText = "Exact transcript."
+	settings.TTSReferenceWAV = filepath.Join(root, "reference.wav")
 	managedTestFile(t, settings.TTSReferenceWAV)
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
 	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
