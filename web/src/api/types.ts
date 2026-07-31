@@ -693,6 +693,8 @@ export interface VoiceSettings {
   tts_reference_text?: string;
   tts_language?: string;
   tts_device?: "auto" | "cuda" | "cpu" | string;
+  tts_seed: number;
+  tts_seed_mode: "fixed" | "varied" | string;
   parakeet_server_path?: string;
   parakeet_model_path?: string;
   parakeet_port?: number;
@@ -735,6 +737,8 @@ export interface VoiceSettingsUpdate {
   tts_reference_text: string;
   tts_language: string;
   tts_device: "auto" | "cuda" | "cpu" | string;
+  tts_seed: number;
+  tts_seed_mode: "fixed" | "varied" | string;
   parakeet_server_path: string;
   parakeet_model_path: string;
   parakeet_port: number;

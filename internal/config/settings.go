@@ -167,6 +167,12 @@ const (
 	DefaultFasterQwenModel = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 	// DefaultFasterQwenVoice names the single reference configured by the script.
 	DefaultFasterQwenVoice = "default"
+	// DefaultFasterQwenSeed matches the pinned runner's documented examples.
+	DefaultFasterQwenSeed uint32 = 1337
+	// TTSSeedModeFixed reuses the saved seed for repeatable synthesis.
+	TTSSeedModeFixed = "fixed"
+	// TTSSeedModeVaried selects a fresh seed for each synthesis request.
+	TTSSeedModeVaried = "varied"
 	// DefaultChatterboxModel selects the reviewed Turbo model.
 	DefaultChatterboxModel = "chatterbox-turbo"
 	// DefaultChatterboxVoice is bundled by the pinned server checkout.
@@ -331,6 +337,8 @@ type VoiceSettings struct {
 	TTSReferenceText  string `json:"tts_reference_text,omitempty"`
 	TTSLanguage       string `json:"tts_language,omitempty"`
 	TTSDevice         string `json:"tts_device,omitempty"`
+	TTSSeed           uint32 `json:"tts_seed"`
+	TTSSeedMode       string `json:"tts_seed_mode"`
 
 	ParakeetServerPath string `json:"parakeet_server_path,omitempty"`
 	ParakeetModelPath  string `json:"parakeet_model_path,omitempty"`
@@ -380,6 +388,8 @@ type PublicVoiceSettings struct {
 	TTSReferenceText   string   `json:"tts_reference_text,omitempty"`
 	TTSLanguage        string   `json:"tts_language,omitempty"`
 	TTSDevice          string   `json:"tts_device,omitempty"`
+	TTSSeed            uint32   `json:"tts_seed"`
+	TTSSeedMode        string   `json:"tts_seed_mode"`
 	ParakeetServerPath string   `json:"parakeet_server_path,omitempty"`
 	ParakeetModelPath  string   `json:"parakeet_model_path,omitempty"`
 	ParakeetServerPort int      `json:"parakeet_port,omitempty"`
@@ -419,6 +429,8 @@ type VoiceUpdate struct {
 	TTSReferenceText   string   `json:"tts_reference_text"`
 	TTSLanguage        string   `json:"tts_language"`
 	TTSDevice          string   `json:"tts_device"`
+	TTSSeed            *uint32  `json:"tts_seed,omitempty"`
+	TTSSeedMode        *string  `json:"tts_seed_mode,omitempty"`
 	ParakeetServerPath string   `json:"parakeet_server_path"`
 	ParakeetModelPath  string   `json:"parakeet_model_path"`
 	ParakeetServerPort int      `json:"parakeet_port"`
@@ -628,6 +640,8 @@ func DefaultSettings() Settings {
 			TTSServerPort:      DefaultTTSServerPort,
 			TTSLanguage:        "Auto",
 			TTSDevice:          TTSDeviceAuto,
+			TTSSeed:            DefaultFasterQwenSeed,
+			TTSSeedMode:        TTSSeedModeFixed,
 			ParakeetServerPort: DefaultParakeetServerPort,
 			ParakeetSource:     ParakeetSourceApp,
 			InputMode:          VoiceInputModeHandsFree,
@@ -714,6 +728,8 @@ func publicVoiceSettings(settings VoiceSettings) PublicVoiceSettings {
 		TTSReferenceText:   settings.TTSReferenceText,
 		TTSLanguage:        settings.TTSLanguage,
 		TTSDevice:          settings.TTSDevice,
+		TTSSeed:            settings.TTSSeed,
+		TTSSeedMode:        settings.TTSSeedMode,
 		ParakeetServerPath: settings.ParakeetServerPath,
 		ParakeetModelPath:  settings.ParakeetModelPath,
 		ParakeetServerPort: settings.ParakeetServerPort,
@@ -854,6 +870,14 @@ func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
 	if update.InputNoiseSuppress != nil {
 		inputNoiseSuppress = *update.InputNoiseSuppress
 	}
+	ttsSeed := current.TTSSeed
+	if update.TTSSeed != nil {
+		ttsSeed = *update.TTSSeed
+	}
+	ttsSeedMode := current.TTSSeedMode
+	if update.TTSSeedMode != nil {
+		ttsSeedMode = *update.TTSSeedMode
+	}
 	return normalizeVoiceStrings(VoiceSettings{
 		Enabled:            update.Enabled,
 		TTSProvider:        update.TTSProvider,
@@ -877,6 +901,8 @@ func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
 		TTSReferenceText:   update.TTSReferenceText,
 		TTSLanguage:        update.TTSLanguage,
 		TTSDevice:          update.TTSDevice,
+		TTSSeed:            ttsSeed,
+		TTSSeedMode:        ttsSeedMode,
 		ParakeetServerPath: update.ParakeetServerPath,
 		ParakeetModelPath:  update.ParakeetModelPath,
 		ParakeetServerPort: update.ParakeetServerPort,

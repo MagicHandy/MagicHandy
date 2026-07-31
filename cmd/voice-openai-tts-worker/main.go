@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice"
@@ -14,6 +15,36 @@ import (
 )
 
 type stringList []string
+
+type optionalUint32 struct {
+	value uint32
+	set   bool
+}
+
+func (value *optionalUint32) String() string {
+	if !value.set {
+		return ""
+	}
+	return strconv.FormatUint(uint64(value.value), 10)
+}
+
+func (value *optionalUint32) Set(raw string) error {
+	parsed, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil {
+		return fmt.Errorf("seed must be an unsigned 32-bit integer: %w", err)
+	}
+	value.value = uint32(parsed)
+	value.set = true
+	return nil
+}
+
+func (value *optionalUint32) Pointer() *uint32 {
+	if !value.set {
+		return nil
+	}
+	seed := value.value
+	return &seed
+}
 
 func (values *stringList) String() string {
 	return strings.Join(*values, " ")
@@ -31,6 +62,9 @@ func main() {
 	responseFormat := flag.String("response-format", openaittsworker.DefaultResponseFormat, "audio response format")
 	healthPath := flag.String("health-path", openaittsworker.DefaultHealthPath, "server health endpoint path")
 	healthReadyField := flag.String("health-ready-field", "", "optional dot-separated boolean field required to be true")
+	var seed optionalUint32
+	flag.Var(&seed, "seed", "optional unsigned 32-bit generation seed")
+	randomizeSeed := flag.Bool("randomize-seed", false, "choose a fresh generation seed for each request")
 	serverCommand := flag.String("server-command", "", "local TTS server executable to manage")
 	serverDir := flag.String("server-dir", "", "working directory for the managed TTS server")
 	serverPort := flag.Int("server-port", openaittsworker.DefaultServerPort, "loopback port for the managed TTS server")
@@ -53,6 +87,8 @@ func main() {
 		ResponseFormat:   *responseFormat,
 		HealthPath:       *healthPath,
 		HealthReadyField: *healthReadyField,
+		Seed:             seed.Pointer(),
+		RandomizeSeed:    *randomizeSeed,
 		ServerCommand:    *serverCommand,
 		ServerArgs:       serverArgs,
 		ServerDir:        *serverDir,

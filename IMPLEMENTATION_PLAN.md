@@ -1105,6 +1105,14 @@ Status: **implemented; release listening and performance acceptance open**.
   the broader CPU/GPU fallback, and an external compatible endpoint. Provider,
   module root, model, voice, reference, health, port, device, and auto-launch
   settings remain backend-authoritative.
+- Keep Faster Qwen sampling explicit and provider-scoped: fixed seed `1337` is
+  the repeatable default, the GUI can save another unsigned seed or select
+  per-request variation, and generic compatible endpoints never receive the
+  extension. The app-owned launcher reseeds Python, NumPy, and Torch only while
+  holding the pinned server's serialized inference lock, and consumes one short
+  hidden warm-up before readiness so the first visible clip starts from the same
+  initialized state as later requests. A text-proportional generation ceiling
+  prevents a failed end-token sample from occupying the queue for minutes.
 - Keep Python/PyTorch/model code out of the core. The main `install.ps1`
   decision tree and dedicated `install-tts-module.ps1` /
   `update-tts-module.ps1` entry points use isolated managed-Python `uv`
@@ -1125,7 +1133,8 @@ Status: **implemented; release listening and performance acceptance open**.
   preserving the checkout integrity gate for real source or unknown-file
   changes. Main-installer calls execute the TTS module scripts in a child
   Windows PowerShell process so their module initialization cannot mutate the
-  active parent provisioner.
+  active parent provisioner. Ordinary app updates refresh the small app-owned
+  server launcher without reinstalling Python, packages, or model files.
 - Release evidence must record cold/warm time to playable audio, listening
   quality across representative references, cancellation/recovery, browser
   playback in Firefox and Chromium, clean child teardown, and VRAM coexistence

@@ -81,6 +81,10 @@ func applyMissingTTSDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	if settings.TTSDevice == "" {
 		settings.TTSDevice = defaults.TTSDevice
 	}
+	if settings.TTSSeedMode == "" {
+		settings.TTSSeedMode = defaults.TTSSeedMode
+		settings.TTSSeed = defaults.TTSSeed
+	}
 	return settings
 }
 
@@ -119,6 +123,7 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.TTSReferenceText = strings.TrimSpace(settings.TTSReferenceText)
 	settings.TTSLanguage = strings.TrimSpace(settings.TTSLanguage)
 	settings.TTSDevice = strings.ToLower(strings.TrimSpace(settings.TTSDevice))
+	settings.TTSSeedMode = strings.ToLower(strings.TrimSpace(settings.TTSSeedMode))
 	settings.ParakeetServerPath = strings.TrimSpace(settings.ParakeetServerPath)
 	settings.ParakeetModelPath = strings.TrimSpace(settings.ParakeetModelPath)
 	settings.ParakeetSource = strings.TrimSpace(settings.ParakeetSource)
@@ -163,15 +168,8 @@ func validateTTSSettings(settings VoiceSettings) error {
 			return err
 		}
 	}
-	if len(settings.ElevenLabsVoiceID) > 256 || len(settings.ElevenLabsModelID) > 256 ||
-		len(settings.TTSModel) > 512 || len(settings.TTSVoice) > 512 || len(settings.ASRModel) > 256 {
-		return errors.New("voice and model identifiers exceed their maximum length")
-	}
-	if len(settings.TTSReferenceText) > 8<<10 {
-		return errors.New("TTS reference transcript must not exceed 8 KiB")
-	}
-	if settings.TTSServerPort < 1 || settings.TTSServerPort > 65535 {
-		return errors.New("TTS server port must be between 1 and 65535")
+	if err := validateTTSFieldBounds(settings); err != nil {
+		return err
 	}
 	if err := validateTTSResponseFormat(settings.TTSProvider, settings.TTSResponseFormat); err != nil {
 		return err
@@ -183,12 +181,31 @@ func validateTTSSettings(settings VoiceSettings) error {
 	if !oneOf(settings.TTSDevice, TTSDeviceAuto, TTSDeviceCUDA, TTSDeviceCPU) {
 		return fmt.Errorf("unknown TTS device %q", settings.TTSDevice)
 	}
+	if !oneOf(settings.TTSSeedMode, TTSSeedModeFixed, TTSSeedModeVaried) {
+		return fmt.Errorf("unknown TTS seed mode %q", settings.TTSSeedMode)
+	}
 	if settings.TTSProvider == VoiceTTSProviderFasterQwen &&
 		!oneOf(settings.TTSDevice, TTSDeviceAuto, TTSDeviceCUDA) {
 		return errors.New("faster Qwen3-TTS requires an NVIDIA CUDA device")
 	}
 	if err := validateChatterboxVoice(settings.TTSProvider, settings.TTSVoice); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateTTSFieldBounds covers the size and range limits, which are independent
+// of which provider is selected.
+func validateTTSFieldBounds(settings VoiceSettings) error {
+	if len(settings.ElevenLabsVoiceID) > 256 || len(settings.ElevenLabsModelID) > 256 ||
+		len(settings.TTSModel) > 512 || len(settings.TTSVoice) > 512 || len(settings.ASRModel) > 256 {
+		return errors.New("voice and model identifiers exceed their maximum length")
+	}
+	if len(settings.TTSReferenceText) > 8<<10 {
+		return errors.New("TTS reference transcript must not exceed 8 KiB")
+	}
+	if settings.TTSServerPort < 1 || settings.TTSServerPort > 65535 {
+		return errors.New("TTS server port must be between 1 and 65535")
 	}
 	return nil
 }

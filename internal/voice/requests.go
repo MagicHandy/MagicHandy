@@ -15,7 +15,7 @@ import (
 // lease-gated playback endpoint, capped per request and to the most recent
 // few requests so retained audio cannot grow without bound.
 const (
-	maxRetainedAudioBytes = 2 << 20 // per request
+	maxRetainedAudioBytes = 8 << 20 // per request
 	// One active TTS request plus every request accepted by the bounded queue
 	// may complete before ordered browser playback catches up.
 	audioRetainCount      = queueCapacity + 1
