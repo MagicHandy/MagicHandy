@@ -6,8 +6,8 @@ or let Freestyle run hands-free. Conversations, settings, and credentials stay
 on your machine — no account, no tracking.
 
 > **Status:** early and under active development. Local chat already drives
-> real device motion, but there is no one-click install yet. Expect rough
-> edges — see [what's coming](#roadmap).
+> real device motion, but there is no packaged one-click installer yet.
+> Expect rough edges — see [what's coming](#roadmap).
 
 ## What it does
 
@@ -37,11 +37,13 @@ on your machine — no account, no tracking.
 
 ## Get started
 
-On Windows, from the project folder in PowerShell:
+On Windows, install [Git](https://git-scm.com/download/win), open PowerShell in
+the folder where you want MagicHandy, and paste this entire block:
 
 ```powershell
-.\install.ps1   # first-time setup — asks before installing anything
-.\update.ps1    # later: update and rebuild, keeping your choices
+git clone https://github.com/MagicHandy/MagicHandy.git
+Set-Location .\MagicHandy
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 The installer is designed to bootstrap a clean 64-bit Windows machine and
@@ -51,6 +53,10 @@ chat reply languages; every later question uses the selected UI language. Run
 `.\change-language.ps1` if either choice needs to be corrected. Flags, voice
 options, model imports, updater behavior, and manual setup are all covered in
 the **[Getting Started guide](docs/getting-started.md)**.
+
+For later updates, open PowerShell in the same `MagicHandy` folder and run
+`.\update.ps1`; it keeps your previous installation choices unless you ask to
+change them.
 
 Prefer to build it yourself? `go run ./cmd/magichandy` (Go 1.25+) serves the
 app at <http://127.0.0.1:49717> — no Node required. Details in the
