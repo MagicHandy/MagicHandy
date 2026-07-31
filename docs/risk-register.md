@@ -588,7 +588,17 @@ Mitigation:
   shell, suppress the Chatterbox standalone browser, and stop only a child the
   worker started
 - bound request text, error bodies, response audio, queue depth, and deadlines;
-  repair streamed WAV headers only after the bounded clip is retained
+  repair streamed WAV headers only after the bounded clip is retained; keep the
+  playable core retention ceiling at 8 MiB per clip and nine clips (72 MiB
+  worst case), independently of the worker's larger HTTP response ceiling
+- default managed Faster Qwen to fixed seed `1337`, expose explicit New seed
+  and Varied controls, and reseed Python, NumPy, and Torch inside the server's
+  serialized inference lock; never add this extension to generic compatible
+  providers; bound managed generation to a generous text-proportional window so
+  a sampled failure to emit an end token cannot monopolize the queue
+- recommend a clean, exact-transcript, 3-to-10-second Faster Qwen reference and
+  retest with a shorter excerpt before treating stochastic sampling as the sole
+  cause of inconsistent cloning
 - keep bearer credentials environment-only, redact provider errors, and clear
   adapter credentials before launching a managed model server
 - migrate retired provider selections to voice output off instead of silently

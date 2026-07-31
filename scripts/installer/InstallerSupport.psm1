@@ -1930,6 +1930,27 @@ function Invoke-MagicHandyPowerShellScript {
     }
 }
 
+function Sync-MagicHandyTTSModuleArtifacts {
+    param(
+        [Parameter(Mandatory = $true)][object]$State,
+        [Parameter(Mandatory = $true)][string]$RepositoryPath,
+        [Parameter(Mandatory = $true)][string]$InstallRoot
+    )
+
+    $launcher = if ([string]$State.tts_module -eq 'faster-qwen3-tts') {
+        'faster-qwen-server.py'
+    } else {
+        'chatterbox-server.py'
+    }
+    $source = Join-Path $RepositoryPath "scripts\tts\$launcher"
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        throw "MagicHandy TTS launcher was not found at '$source'."
+    }
+    $destination = Join-Path $InstallRoot "magichandy-$launcher"
+    Assert-MagicHandyChildPath -Root ([string]$State.data_dir) -Candidate $destination
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+}
+
 function Install-MagicHandyTTSModule {
     param(
         [Parameter(Mandatory = $true)][object]$State,
@@ -1965,6 +1986,10 @@ function Install-MagicHandyTTSModule {
                 -ScriptPath $updater `
                 -Arguments @('-InstallRoot', $installRoot, '-CheckOnly', '-Yes') `
                 -Description 'Installed TTS module validation'
+            Sync-MagicHandyTTSModuleArtifacts `
+                -State $State `
+                -RepositoryPath $RepositoryPath `
+                -InstallRoot $installRoot
             Write-Host (Get-MagicHandyText -Key 'tts_reuse') -ForegroundColor Green
             return
         }
@@ -2284,6 +2309,7 @@ Export-ModuleMember -Function @(
     'Ensure-MagicHandyWinGet',
     'Invoke-MagicHandyWinGetInstall',
     'Ensure-MagicHandyGit',
+    'Sync-MagicHandyTTSModuleArtifacts',
     'Invoke-MagicHandyProvision',
     'Test-MagicHandyAppRunning',
     'Stop-MagicHandyAppForRebuild',

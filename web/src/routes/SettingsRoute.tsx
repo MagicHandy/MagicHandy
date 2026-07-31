@@ -229,6 +229,8 @@ export function SettingsRoute() {
         tts_reference_text: s.voice?.tts_reference_text ?? "",
         tts_language: s.voice?.tts_language ?? "Auto",
         tts_device: s.voice?.tts_device ?? "auto",
+        tts_seed: s.voice?.tts_seed ?? 1337,
+        tts_seed_mode: s.voice?.tts_seed_mode ?? "fixed",
         parakeet_server_path: s.voice?.parakeet_server_path ?? "",
         parakeet_model_path: s.voice?.parakeet_model_path ?? "",
         parakeet_port: s.voice?.parakeet_port ?? 8990,

@@ -212,6 +212,43 @@ describe("runtime panels", () => {
     expect(responseFormat).toHaveTextContent("WAV");
     expect(responseFormat).not.toHaveTextContent("MP3");
   });
+
+  it("offers fixed and varied Faster Qwen seed controls", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    settings.voice = {
+      ...settings.voice,
+      tts_provider: "faster_qwen3_tts",
+      tts_device: "cuda",
+      tts_seed: 1337,
+      tts_seed_mode: "fixed",
+    };
+    const patch = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <VoiceSettingsPanel
+        settings={settings}
+        locked={false}
+        dirty={false}
+        patch={patch}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByText("Advanced"));
+    const repeatable = screen.getByRole("checkbox", { name: "Repeatable voice generation" });
+    expect(repeatable).toBeChecked();
+    expect(screen.getByRole("spinbutton", { name: "Generation seed" })).toHaveValue(1337);
+    await user.click(repeatable);
+    expect(patch).toHaveBeenCalledWith({ tts_seed_mode: "varied" });
+    await user.click(screen.getByRole("button", { name: "New seed" }));
+    const randomSeedPatch = patch.mock.calls[patch.mock.calls.length - 1]?.[0];
+    expect(randomSeedPatch.tts_seed_mode).toBe("fixed");
+    expect(randomSeedPatch.tts_seed).toEqual(expect.any(Number));
+  });
 });
 
 function renderModelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn()) {

@@ -131,6 +131,8 @@ function settings(verbosity: string): PublicSettings {
       tts_reference_text: "",
       tts_language: "Auto",
       tts_device: "auto",
+      tts_seed: 1337,
+      tts_seed_mode: "fixed",
       elevenlabs_key_set: false,
       openai_tts_key_set: false,
     },

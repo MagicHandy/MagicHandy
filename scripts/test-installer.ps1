@@ -216,6 +216,14 @@ try {
     } -Pattern 'plain .wav file name' -Message 'Chatterbox path-like voice'
 
     New-Item -ItemType Directory -Force -Path $qwenRoot | Out-Null
+    $artifactState = [pscustomobject]@{
+        tts_module = 'faster-qwen3-tts'
+        data_dir = $ttsData
+    }
+    Sync-MagicHandyTTSModuleArtifacts -State $artifactState -RepositoryPath $Repo -InstallRoot $qwenRoot
+    $installedQwenLauncher = Join-Path $qwenRoot 'magichandy-faster-qwen-server.py'
+    Assert-True -Condition (Test-Path -LiteralPath $installedQwenLauncher -PathType Leaf) -Message 'main updater should sync the Faster Qwen launcher without reinstalling the model'
+    Assert-Equal -Expected ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Repo 'scripts\tts\faster-qwen-server.py')).Hash) -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $installedQwenLauncher).Hash) -Message 'synced Faster Qwen launcher content'
     $moduleState = [ordered]@{
         schema_version = 2
         module = 'faster-qwen3-tts'

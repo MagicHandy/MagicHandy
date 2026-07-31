@@ -333,6 +333,31 @@ func TestWorkerResponseValidationRejectsEmptyCompletion(t *testing.T) {
 	}
 }
 
+func TestWorkerAudioRetentionAcceptsEightMiBAndRejectsMore(t *testing.T) {
+	pending := &PendingRequest{ID: "tts-1", Role: RoleTTS, Type: RequestSpeak, state: RequestStateActive}
+	chunk := base64.StdEncoding.EncodeToString(make([]byte, 1<<20))
+	for sequence := 0; sequence < 8; sequence++ {
+		if err := pending.appendAudio(Response{
+			Type: ResponseAudioChunk, RequestID: pending.ID, Seq: sequence,
+			AudioB64: chunk, AudioFormat: "wav",
+		}); err != nil {
+			t.Fatalf("append MiB %d: %v", sequence+1, err)
+		}
+	}
+	if got := pending.Snapshot().AudioBytes; got != 8<<20 {
+		t.Fatalf("retained audio = %d bytes, want %d", got, 8<<20)
+	}
+	if err := pending.appendAudio(Response{
+		Type: ResponseAudioChunk, RequestID: pending.ID, Seq: 8,
+		AudioB64: base64.StdEncoding.EncodeToString([]byte{1}), AudioFormat: "wav",
+	}); err == nil || !strings.Contains(err.Error(), "8 MiB") {
+		t.Fatalf("oversize append error = %v", err)
+	}
+	if !pending.Snapshot().AudioTruncated {
+		t.Fatal("oversize retained audio was not marked truncated")
+	}
+}
+
 func TestRequestSnapshotOwnsTranscriptAndError(t *testing.T) {
 	pending := &PendingRequest{
 		ID: "asr-1", Role: RoleASR, Type: RequestTranscribe, state: RequestStateFailed,

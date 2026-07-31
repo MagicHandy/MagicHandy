@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +88,7 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	root := t.TempDir()
 	python := managedTestFile(t, filepath.Join(root, ".venv", managedPythonDirectory(), managedPythonName()))
 	server := managedTestFile(t, filepath.Join(root, "source", "examples", "openai_server.py"))
+	launcher := managedTestFile(t, filepath.Join(root, "magichandy-faster-qwen-server.py"))
 	reference := managedTestFile(t, filepath.Join(root, "voice.wav"))
 	model := managedFasterQwenSnapshot(t, root, config.DefaultFasterQwenModel, "abc123")
 
@@ -116,9 +118,11 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 		t.Fatalf("managed Faster Qwen environment = %+v", got.TTS.Env)
 	}
 	assertArgumentsContain(t, got.TTS.Args,
+		[2]string{"-seed", "1337"},
 		[2]string{"-server-command", python},
 		[2]string{"-server-dir", filepath.Join(root, "source")},
 		[2]string{"-server-port", "9015"},
+		[2]string{"-server-arg", launcher},
 		[2]string{"-server-arg", server},
 		[2]string{"-server-arg", "--model"},
 		[2]string{"-server-arg", model},
@@ -131,6 +135,10 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	)
 	if got.TTS.JobTimeout != voiceModelLoadTimeout {
 		t.Fatalf("managed Faster Qwen job timeout = %v", got.TTS.JobTimeout)
+	}
+	settings.TTSSeedMode = config.TTSSeedModeVaried
+	if varied := voiceManagerConfig(settings, "", t.TempDir()); !slices.Contains(varied.TTS.Args, "-randomize-seed") {
+		t.Fatalf("varied Faster Qwen seed mode args = %+v", varied.TTS.Args)
 	}
 
 	settings.TTSReferenceText = ""
@@ -250,6 +258,7 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, ".venv", managedPythonDirectory(), managedPythonName()))
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "source", "examples", "openai_server.py"))
+	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "magichandy-faster-qwen-server.py"))
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
 	if status.State != "incomplete" || status.Installed || status.RuntimeInstalled ||
 		!strings.Contains(status.Message, "Rerun") {
