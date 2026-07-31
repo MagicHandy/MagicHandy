@@ -48,6 +48,12 @@ symlink-probe race, retries transient failures three times, and keeps the
 resumable cache when all attempts fail. Rerunning either installer reuses files
 that already finished.
 
+Retries also reuse a source checkout and managed environment left by a failure
+before `module-state.json` was written. The installer records only its known
+package-metadata directory in the checkout's private Git excludes. It never
+cleans the checkout or ignores arbitrary files, so tracked edits and unrelated
+untracked files remain a hard stop.
+
 `scripts/update-tts-module.ps1` reads the existing module choice, preserves it
 by default, and asks before changing provider, model, port, or auto-launch. The
 main app updater validates and reuses a selected installed module rather than

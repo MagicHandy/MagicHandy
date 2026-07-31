@@ -573,6 +573,10 @@ Mitigation:
 - serialize Hugging Face model-file finalization on Windows so standard
   accounts use the copy fallback without a concurrent symlink-probe race;
   retry against the resumable cache and retain completed files after failure
+- resume source, environment, package, and model artifacts left before module
+  state is committed; exclude only installer-generated package metadata from
+  the managed checkout's integrity check, while tracked edits and unknown
+  untracked files continue to block replacement
 - keep Faster Qwen reference selection in Settings > Voice; command-line
   installation may finish without a reference, app status must distinguish
   that state from missing runtime files, and module updates must preserve
@@ -616,7 +620,11 @@ defers its reference WAV and exact transcript to Settings > Voice without
 blocking runtime installation or allowing updates to erase those values.
 Windows model downloads serialize cache finalization and retry the retained
 resumable cache, avoiding `WinError 1314` on ordinary non-Developer-Mode
-accounts. Live listening, latency, browser, and VRAM
+accounts. Interrupted installs can resume before module state exists without
+discarding completed packages or treating installer-generated metadata as a
+source edit, and nested module verification no longer invalidates the parent
+installer before launcher and state finalization. Live listening, latency,
+browser, and VRAM
 acceptance remains open. Historical NeuTTS measurements remain in
 `docs/goal-scorecard.md` and `docs/perf-baseline.md`; they are not evidence for
 the replacement modules.

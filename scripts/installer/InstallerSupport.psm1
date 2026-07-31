@@ -422,6 +422,66 @@ function Assert-MagicHandyChildPath {
     }
 }
 
+function Add-MagicHandyGitInfoExclusions {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryPath,
+        [string[]]$RelativePaths = @()
+    )
+
+    if ($RelativePaths.Count -eq 0) {
+        return
+    }
+    $repository = [System.IO.Path]::GetFullPath($RepositoryPath)
+    $gitDirectory = Join-Path $repository '.git'
+    if (-not (Test-Path -LiteralPath $gitDirectory -PathType Container)) {
+        throw "Managed source is not a normal Git checkout: '$repository'."
+    }
+
+    $patterns = @()
+    foreach ($path in $RelativePaths) {
+        $rawPath = ([string]$path).Replace('\', '/')
+        $relative = $rawPath.Trim('/')
+        $segments = @($relative.Split('/'))
+        if ([string]::IsNullOrWhiteSpace($relative) -or
+            $relative -notmatch '^[A-Za-z0-9._/-]+$' -or
+            [System.IO.Path]::IsPathRooted($rawPath) -or
+            $rawPath.StartsWith('/') -or
+            $segments -contains '.' -or
+            $segments -contains '..') {
+            throw "Git info exclusion must be a simple relative path: '$path'."
+        }
+        $patterns += "/$relative/"
+    }
+
+    $infoDirectory = Join-Path $gitDirectory 'info'
+    $excludePath = Join-Path $infoDirectory 'exclude'
+    Assert-MagicHandyChildPath -Root $gitDirectory -Candidate $excludePath
+    $existingContent = if (Test-Path -LiteralPath $excludePath -PathType Leaf) {
+        [System.IO.File]::ReadAllText($excludePath, [System.Text.Encoding]::UTF8)
+    } else {
+        ''
+    }
+    $existingPatterns = @($existingContent -split '\r?\n')
+    $missing = @($patterns | Where-Object { $_ -notin $existingPatterns } | Select-Object -Unique)
+    if ($missing.Count -eq 0) {
+        return
+    }
+
+    New-Item -ItemType Directory -Path $infoDirectory -Force | Out-Null
+    $newLine = [Environment]::NewLine
+    $prefix = if ($existingContent.Length -gt 0 -and -not $existingContent.EndsWith("`n")) {
+        $newLine
+    } else {
+        ''
+    }
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::AppendAllText(
+        $excludePath,
+        $prefix + ($missing -join $newLine) + $newLine,
+        $encoding
+    )
+}
+
 function Convert-MagicHandyInstallState {
     param([Parameter(Mandatory = $true)][object]$State)
 
@@ -2192,6 +2252,7 @@ Export-ModuleMember -Function @(
     'Resolve-MagicHandyExecutable',
     'Get-MagicHandyInstallStatePath',
     'Assert-MagicHandyChildPath',
+    'Add-MagicHandyGitInfoExclusions',
     'New-MagicHandyInstallState',
     'Read-MagicHandyInstallState',
     'Write-MagicHandyInstallState',

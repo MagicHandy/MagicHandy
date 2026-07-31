@@ -33,7 +33,7 @@ if ($CheckOnly -and ($ModifyChoices -or $ApplyInstallerChoices -or $AutoLaunch -
 
 $repository = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $supportPath = Join-Path $PSScriptRoot 'installer\InstallerSupport.psm1'
-Import-Module $supportPath -Force
+Import-Module $supportPath -DisableNameChecking -ErrorAction Stop
 
 function Read-TTSModuleState {
     param(
