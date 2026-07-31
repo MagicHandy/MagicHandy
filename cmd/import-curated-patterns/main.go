@@ -32,7 +32,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "open store: %v\n", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	library, err := patterns.OpenWithDatabase(store.Datastore())
 	if err != nil {
@@ -53,7 +53,7 @@ func main() {
 			continue
 		}
 		path := filepath.Join(*source, entry.Name())
-		data, readErr := os.ReadFile(path)
+		data, readErr := os.ReadFile(path) // #nosec G304 -- path is built from an explicit CLI source directory.
 		if readErr != nil {
 			fmt.Fprintf(os.Stderr, "skip %s: %v\n", entry.Name(), readErr)
 			skipped++

@@ -17,7 +17,7 @@ func expectedCuratedPatternCount(t *testing.T) int {
 		t.Fatal("resolve test file path")
 	}
 	catalogPath := filepath.Join(filepath.Dir(file), "builtinpatterns", "curated", "_catalog.json")
-	data, err := os.ReadFile(catalogPath)
+	data, err := os.ReadFile(catalogPath) // #nosec G304 -- test fixture path derived from this test file location.
 	if err != nil {
 		t.Fatalf("read curated catalog: %v", err)
 	}
