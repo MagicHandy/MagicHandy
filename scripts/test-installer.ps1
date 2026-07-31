@@ -56,6 +56,7 @@ New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 try {
     Write-Host 'Checking PowerShell 5.1 syntax...'
     $files = @(
+        'bootstrap.ps1',
         'install.ps1',
         'update.ps1',
         'change-language.ps1',
@@ -72,10 +73,17 @@ try {
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\chatterbox-server.py') -PathType Leaf) -Message 'Chatterbox launcher shim should ship with the installer'
+    $bootstrapSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'bootstrap.ps1'))
+    Assert-True -Condition ($bootstrapSource.Contains('Microsoft.WinGet.Client')) -Message 'clean-machine bootstrap should use the official WinGet repair path'
+    Assert-True -Condition ($bootstrapSource.Contains('--id Git.Git')) -Message 'clean-machine bootstrap should install Git when missing'
+    Assert-True -Condition ($bootstrapSource.Contains('& $installer @installerArguments')) -Message 'clean-machine bootstrap should delegate choices to install.ps1'
     $ttsInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\install-tts-module.ps1'))
     Assert-True -Condition ($ttsInstallerSource.Contains('--query-gpu=compute_cap')) -Message 'Chatterbox install should detect NVIDIA compute capability'
     Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia.txt')) -Message 'Chatterbox install should retain the CUDA 12.1 dependency set'
     Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia-cu128.txt')) -Message 'Chatterbox install should retain the RTX 50-series CUDA 12.8 dependency set'
+    Assert-True -Condition ($ttsInstallerSource.Contains("Microsoft\WinGet\Links\uv.exe")) -Message 'TTS install should resolve the WinGet portable uv link in the current process'
+    Assert-True -Condition ($ttsInstallerSource.Contains("Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv'")) -Message 'TTS install should repair WinGet and refresh PATH after installing uv'
+    Assert-True -Condition ($ttsInstallerSource.Contains("@('python', 'install', `$PythonVersion)")) -Message 'TTS install should explicitly provision its managed Python runtime'
     $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
@@ -168,6 +176,7 @@ try {
     $qwenRoot = Join-Path $ttsData 'voice\faster-qwen3-tts'
     $qwenPlan = & $ttsInstaller -Module faster-qwen3-tts -DataDir $ttsData -InstallRoot $qwenRoot -PlanOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($qwenPlan -match 'faster-qwen3-tts') -Message 'Faster Qwen plan should identify its module'
+    Assert-True -Condition ($qwenPlan -match 'Python:\s+3\.11 \(managed by uv\)') -Message 'Faster Qwen should use managed Python 3.11'
     Assert-True -Condition ($qwenPlan -match 'no dependencies, files, models, processes, or settings were changed') -Message 'Faster Qwen plan should state its no-write contract'
     Assert-True -Condition (-not (Test-Path -LiteralPath $qwenRoot)) -Message 'Faster Qwen plan should not create its install root'
 
@@ -175,6 +184,7 @@ try {
     $chatterPlan = & $ttsInstaller -Module chatterbox -DataDir $ttsData -InstallRoot $chatterRoot -Device cpu -PlanOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($chatterPlan -match 'Chatterbox') -Message 'Chatterbox plan should identify its module'
     Assert-True -Condition ($chatterPlan -match 'Device:\s+cpu') -Message 'Chatterbox plan should preserve the selected device'
+    Assert-True -Condition ($chatterPlan -match 'Python:\s+3\.10 \(managed by uv\)') -Message 'Chatterbox should use Python 3.10 for prebuilt Windows wheels'
     Assert-True -Condition (-not (Test-Path -LiteralPath $chatterRoot)) -Message 'Chatterbox plan should not create its install root'
     Assert-Throws -Action {
         & $ttsInstaller -Module faster-qwen3-tts -DataDir $ttsData -InstallRoot $qwenRoot -Device cpu -PlanOnly -Yes
@@ -206,6 +216,11 @@ try {
     $updatePlan = & $ttsUpdater -InstallRoot $qwenRoot -PlanOnly -Yes 6>&1 | Out-String
     Assert-True -Condition ($updatePlan -match 'Auto-launch:\s+True') -Message 'TTS update plan should preserve auto-launch'
     Assert-True -Condition ($updatePlan -match 'Qwen/Qwen3-TTS-12Hz-0\.6B-Base') -Message 'TTS update plan should preserve the installed model'
+    $checkOnly = & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Yes 6>&1 | Out-String
+    Assert-True -Condition ($checkOnly -match 'Module state verified') -Message 'main installer should be able to validate and reuse an installed TTS module'
+    Assert-Throws -Action {
+        & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Device cuda -Yes
+    } -Pattern 'CheckOnly cannot be combined' -Message 'TTS check-only override rejection'
 
     Write-Host 'Checking installer-state round trip and data hygiene...'
     $statePath = Join-Path $tempRoot 'install-state.json'
@@ -220,15 +235,21 @@ try {
         -EnsureOllama $true `
         -OllamaModel 'example/model:latest' `
         -InstallParakeet $true `
+        -TTSModule 'chatterbox' `
+        -TTSDevice 'cuda' `
+        -TTSAutoLaunch $true `
         -CreateLauncher $true
     Write-MagicHandyInstallState -State $state -Path $statePath
     $loaded = Read-MagicHandyInstallState -Path $statePath
-    Assert-Equal -Expected 2 -Actual ([int]$loaded.schema_version) -Message 'state schema'
+    Assert-Equal -Expected 3 -Actual ([int]$loaded.schema_version) -Message 'state schema'
     Assert-Equal -Expected 49800 -Actual ([int]$loaded.port) -Message 'saved port'
     Assert-Equal -Expected 'cuda' -Actual ([string]$loaded.llama_backend) -Message 'saved backend'
     Assert-Equal -Expected 'en' -Actual ([string]$loaded.ui_locale) -Message 'saved UI locale'
     Assert-Equal -Expected 'en' -Actual ([string]$loaded.chat_locale) -Message 'saved chat locale'
     Assert-True -Condition ([bool]$loaded.install_parakeet) -Message 'saved Parakeet choice'
+    Assert-Equal -Expected 'chatterbox' -Actual ([string]$loaded.tts_module) -Message 'saved TTS module'
+    Assert-Equal -Expected 'cuda' -Actual ([string]$loaded.tts_device) -Message 'saved TTS device'
+    Assert-True -Condition ([bool]$loaded.tts_auto_launch) -Message 'saved TTS auto-launch choice'
     $json = Get-Content -LiteralPath $statePath -Raw
     Assert-True -Condition ($json -notmatch '(?i)api.?key|connection.?key|password|secret') -Message 'state must not define secret fields'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$statePath.partial-$PID")) -Message 'state write must be atomic'
@@ -259,11 +280,26 @@ try {
     $legacyState.schema_version = 1
     $legacyState.PSObject.Properties.Remove('ui_locale')
     $legacyState.PSObject.Properties.Remove('chat_locale')
+    $legacyState.PSObject.Properties.Remove('tts_module')
+    $legacyState.PSObject.Properties.Remove('tts_device')
+    $legacyState.PSObject.Properties.Remove('tts_auto_launch')
     [System.IO.File]::WriteAllText($legacyStatePath, ($legacyState | ConvertTo-Json -Depth 5))
     $migratedState = Read-MagicHandyInstallState -Path $legacyStatePath
-    Assert-Equal -Expected 2 -Actual ([int]$migratedState.schema_version) -Message 'legacy state should migrate to schema 2 in memory'
+    Assert-Equal -Expected 3 -Actual ([int]$migratedState.schema_version) -Message 'legacy state should migrate to schema 3 in memory'
     Assert-Equal -Expected 'en' -Actual ([string]$migratedState.ui_locale) -Message 'legacy state UI locale default'
     Assert-Equal -Expected 'en' -Actual ([string]$migratedState.chat_locale) -Message 'legacy state chat locale default'
+    Assert-Equal -Expected 'none' -Actual ([string]$migratedState.tts_module) -Message 'legacy state local TTS default'
+
+    $schemaTwoStatePath = Join-Path $tempRoot 'schema-two-install-state.json'
+    $schemaTwoState = $json | ConvertFrom-Json
+    $schemaTwoState.schema_version = 2
+    $schemaTwoState.PSObject.Properties.Remove('tts_module')
+    $schemaTwoState.PSObject.Properties.Remove('tts_device')
+    $schemaTwoState.PSObject.Properties.Remove('tts_auto_launch')
+    [System.IO.File]::WriteAllText($schemaTwoStatePath, ($schemaTwoState | ConvertTo-Json -Depth 5))
+    $migratedSchemaTwo = Read-MagicHandyInstallState -Path $schemaTwoStatePath
+    Assert-Equal -Expected 3 -Actual ([int]$migratedSchemaTwo.schema_version) -Message 'schema 2 state should migrate to schema 3 in memory'
+    Assert-Equal -Expected 'none' -Actual ([string]$migratedSchemaTwo.tts_module) -Message 'schema 2 TTS default'
 
     $invalidLocalePath = Join-Path $tempRoot 'invalid-locale-state.json'
     $invalidLocale = $json | ConvertFrom-Json
@@ -275,6 +311,13 @@ try {
     $invalidBoolean.build_managed_llama = 'false'
     [System.IO.File]::WriteAllText($invalidBooleanPath, ($invalidBoolean | ConvertTo-Json -Depth 5))
     Assert-Throws -Action { Read-MagicHandyInstallState -Path $invalidBooleanPath } -Pattern 'build_managed_llama.+boolean' -Message 'string-encoded installer boolean'
+
+    $invalidTTSPath = Join-Path $tempRoot 'invalid-tts-state.json'
+    $invalidTTS = $json | ConvertFrom-Json
+    $invalidTTS.tts_module = 'faster-qwen3-tts'
+    $invalidTTS.tts_device = 'cpu'
+    [System.IO.File]::WriteAllText($invalidTTSPath, ($invalidTTS | ConvertTo-Json -Depth 5))
+    Assert-Throws -Action { Read-MagicHandyInstallState -Path $invalidTTSPath } -Pattern 'must use CUDA' -Message 'Faster Qwen CPU installer state'
 
     $secretFieldPath = Join-Path $tempRoot 'secret-field-state.json'
     $secretField = $json | ConvertFrom-Json
@@ -851,6 +894,7 @@ try {
     Assert-PlanContains -Plan $managedPlan -Pattern 'CUDA Toolkit'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
     Assert-PlanContains -Plan $managedPlan -Pattern 'OpenAI-compatible TTS'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'managed Python.+chatterbox local TTS \(cuda; auto-launch: yes\)'
     Assert-PlanExcludes -Plan $managedPlan -Pattern 'NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
 
     $ollamaState = New-MagicHandyInstallState `
@@ -971,6 +1015,24 @@ try {
         -StatePath $freshPlanState | Out-Host
     Assert-True -Condition (-not (Test-Path -LiteralPath $freshPlanState)) -Message 'install plan must not persist state'
 
+    $ttsFreshPlanState = Join-Path $tempRoot 'fresh-tts-plan-state.json'
+    $ttsFreshPlan = (& (Join-Path $Repo 'install.ps1') `
+        -Yes `
+        -SkipLlamaBuild `
+        -SkipParakeet `
+        -TTSModule chatterbox `
+        -TTSDevice cpu `
+        -NoLauncher `
+        -NoLaunch `
+        -PlanOnly `
+        -StatePath $ttsFreshPlanState 6>&1 | Out-String)
+    Assert-True -Condition ($ttsFreshPlan -match 'Bootstrap uv and managed Python.+chatterbox local TTS \(cpu; auto-launch: yes\)') -Message 'main installer should include selected TTS bootstrap in its plan'
+    Assert-True -Condition ($ttsFreshPlan -match 'Installer-managed local TTS: chatterbox \(cpu; auto-launch: yes\)') -Message 'main installer should summarize selected TTS choices'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $ttsFreshPlanState)) -Message 'TTS install plan must not persist state'
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'install.ps1') -Yes -TTSModule faster-qwen3-tts -TTSDevice cpu -PlanOnly -StatePath $ttsFreshPlanState
+    } -Pattern 'cannot use CPU' -Message 'main installer Faster Qwen CPU selection'
+
     Write-Host 'Checking update.ps1 preserved-choice plan...'
     $beforeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $statePath).Hash
     & (Join-Path $Repo 'update.ps1') `
@@ -1004,7 +1066,7 @@ try {
     Write-Host 'Checking updater runtime reconfiguration prompt...'
     $global:MagicHandyInstallerResponses = New-Object System.Collections.Generic.Queue[string]
     $global:MagicHandyInstallerPrompts = New-Object System.Collections.Generic.List[string]
-    foreach ($response in @('y', '', '', '', '', 'y', 'n', 'y', '-', 'n', 'y')) {
+    foreach ($response in @('y', '', '', '', '', 'y', 'n', 'y', '-', 'n', 'n', 'y')) {
         $global:MagicHandyInstallerResponses.Enqueue($response)
     }
     function global:Read-Host {
@@ -1031,6 +1093,7 @@ try {
     Assert-True -Condition (($capturedPrompts -join "`n") -match 'Modify previous installation choices') -Message 'updater should ask whether to modify choices'
     Assert-True -Condition ($reconfigureOutput -match 'Managed llama\.cpp: no') -Message 'reconfiguration should switch managed llama.cpp off'
     Assert-True -Condition ($reconfigureOutput -match 'Ollama model:\s+\(unchanged\)') -Message 'reconfiguration should clear the optional model'
+    Assert-True -Condition ($reconfigureOutput -match 'Installer-managed local TTS: no') -Message 'reconfiguration should allow declining installer-managed TTS'
     Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|CUDA Toolkit|NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
     Assert-Equal -Expected $beforeHash -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $statePath).Hash) -Message 'reconfiguration plan must not rewrite state'
     Assert-Equal -Expected 0 -Actual $remainingResponses -Message 'all expected prompts should be consumed'

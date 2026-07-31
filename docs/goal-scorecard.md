@@ -132,6 +132,17 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-31** - Integrated managed Faster Qwen3-TTS and Chatterbox choices
+  into the localized source-installer decision tree. A PowerShell-only
+  bootstrap now repairs WinGet and installs Git before cloning, while selected
+  TTS setup provisions uv, managed Python 3.11 (Faster Qwen) or 3.10
+  (Chatterbox), PyTorch, and the model without a preinstalled compiler.
+  Installer-state schema 3 persists the module, CPU/CUDA, and auto-launch
+  choices; ordinary updates validate and reuse installed multi-gigabyte assets.
+  The Windows installer integration suite passes. These script and
+  documentation changes do not alter the embedded browser payload or Go
+  binary.
+
 - **2026-07-31** - Retired NeuTTS after repeated quality acceptance failures
   and replaced it with one bounded OpenAI-compatible TTS adapter, scripted
   Faster Qwen3-TTS and Chatterbox modules, and a generic external-server

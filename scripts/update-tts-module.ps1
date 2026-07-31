@@ -7,12 +7,29 @@ Updates an installed scripted TTS module while preserving its prior choices.
 param(
     [string]$InstallRoot = '',
     [switch]$ModifyChoices,
+    [ValidateSet('', 'auto', 'cuda', 'cpu')]
+    [string]$Device = '',
+    [switch]$AutoLaunch,
+    [switch]$NoAutoLaunch,
+    [switch]$ApplyInstallerChoices,
+    [switch]$CheckOnly,
     [switch]$PlanOnly,
     [switch]$Yes
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($AutoLaunch -and $NoAutoLaunch) {
+    throw 'AutoLaunch and NoAutoLaunch cannot be combined.'
+}
+if ($ModifyChoices -and $ApplyInstallerChoices) {
+    throw 'ModifyChoices and ApplyInstallerChoices cannot be combined.'
+}
+if ($CheckOnly -and ($ModifyChoices -or $ApplyInstallerChoices -or $AutoLaunch -or $NoAutoLaunch -or
+        -not [string]::IsNullOrWhiteSpace($Device) -or $PlanOnly)) {
+    throw 'CheckOnly cannot be combined with update or override choices.'
+}
 
 $repository = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $supportPath = Join-Path $PSScriptRoot 'installer\InstallerSupport.psm1'
@@ -105,7 +122,14 @@ Write-Host "Device:      $($state.device)"
 Write-Host "Port:        $($state.port)"
 Write-Host "Auto-launch: $([bool]$state.auto_launch)"
 
-if (-not $ModifyChoices -and -not $Yes -and -not $PlanOnly) {
+if ($CheckOnly) {
+    Write-Host 'Module state verified.' -ForegroundColor Green
+    return
+}
+
+$hasInstallerOverrides = $ApplyInstallerChoices -or $AutoLaunch -or $NoAutoLaunch -or
+    -not [string]::IsNullOrWhiteSpace($Device)
+if (-not $ModifyChoices -and -not $hasInstallerOverrides -and -not $Yes -and -not $PlanOnly) {
     $answer = Read-Host 'Modify the previous module, model, device, port, reference, or auto-launch choices? [y/N]'
     $ModifyChoices = $answer -match '^(?i:y|yes)$'
 }
@@ -129,9 +153,15 @@ $arguments = @{
     Model = [string]$state.model
     Voice = [string]$state.voice
     Language = if ($state.PSObject.Properties.Name -notcontains 'language' -or [string]::IsNullOrWhiteSpace([string]$state.language)) { 'Auto' } else { [string]$state.language }
-    Device = [string]$state.device
+    Device = if ([string]::IsNullOrWhiteSpace($Device)) { [string]$state.device } else { $Device }
     Port = [int]$state.port
-    AutoLaunch = [bool]$state.auto_launch
+    AutoLaunch = if ($AutoLaunch) {
+        $true
+    } elseif ($NoAutoLaunch) {
+        $false
+    } else {
+        [bool]$state.auto_launch
+    }
     SpeakReplies = [bool]$state.speak_replies
     Update = $true
     PlanOnly = [bool]$PlanOnly

@@ -6,8 +6,10 @@ relaunches it. Both scripts share
 `scripts/installer/InstallerSupport.psm1`; they do not maintain parallel
 provisioning logic.
 
-The core install stays pure Go. Optional Python, PyTorch, and local TTS model
-files are installed only through the separate scripts documented under
+The core install stays pure Go. The main decision tree can provision an
+optional local TTS module, but its managed Python, PyTorch, and model files
+remain isolated under the data directory. The same module lifecycle is also
+available through the scripts documented under
 [Optional Local TTS](#optional-local-tts).
 
 ## Quick Start
@@ -15,12 +17,16 @@ files are installed only through the separate scripts documented under
 From a PowerShell window in the directory where MagicHandy should be installed:
 
 ```powershell
-git clone https://github.com/MagicHandy/MagicHandy.git
-Set-Location .\MagicHandy
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$bootstrap = Join-Path $env:TEMP 'MagicHandy-bootstrap.ps1'
+Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/MagicHandy/MagicHandy/main/bootstrap.ps1' -OutFile $bootstrap
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 ```
 
-This is the same copy-paste block shown in the README.
+This is the same copy-paste block shown in the README. `bootstrap.ps1` installs
+Git after consent and creates the checkout before handing control to
+`install.ps1`; users who already cloned the repository can run `.\install.ps1`
+directly.
 
 ## Supported Host
 
@@ -30,9 +36,11 @@ This is the same copy-paste block shown in the README.
 - enough free space for the source toolchain and selected runtimes
 
 The installer can start without Go, Git, CMake, a C++ compiler, CUDA, Ollama,
-or Parakeet. Missing components are named and installed only after consent.
-If WinGet is missing, the script offers Microsoft's supported App Installer
-repair path.
+Parakeet, uv, Python, PyTorch, or a speech model. Missing components are named
+and installed only after consent. If WinGet is missing, the script offers
+Microsoft's supported App Installer repair path. A working NVIDIA driver is a
+hardware prerequisite for CUDA paths; CPU Chatterbox remains available when no
+NVIDIA GPU is present.
 
 ## Normal Install Choices
 
@@ -45,13 +53,21 @@ The interactive flow asks for:
 5. managed llama.cpp or Ollama;
 6. CPU or CUDA for a managed llama.cpp build;
 7. optional Ollama provisioning/model pull;
-8. optional Parakeet runner and model; and
-9. optional launcher creation.
+8. optional Parakeet runner and model;
+9. optional managed local TTS module, CPU/CUDA target, and auto-launch; and
+10. optional launcher creation.
 
 Selecting managed llama.cpp explains why it is useful: MagicHandy owns a
-pinned, known-compatible runtime and can load managed GGUF models directly.
-Selecting Ollama avoids that source build and saves the compiler/runtime space
-when the user already has a suitable Ollama installation.
+pinned, tuned runtime and controls startup, GGUF loading, structured-response
+behavior, and diagnostics. Selecting Ollama avoids that source build and saves
+compiler/runtime space when the user already has a suitable installation, at
+the cost of less runner lifecycle control.
+
+CUDA normally produces local LLM and TTS output much faster than CPU on a
+supported NVIDIA GPU. The decision tree also states the cost: compatible
+drivers, GPU memory, several GiB of disk, and the CUDA Toolkit for a managed
+llama.cpp source build. TTS PyTorch wheels carry their selected CUDA runtime and
+do not add a compiler dependency.
 
 ## Provisioned Packages
 
@@ -64,6 +80,7 @@ when the user already has a suitable Ollama installation.
 | Managed llama.cpp with CUDA | `Nvidia.CUDA` | Build NVIDIA acceleration |
 | Ollama | `Ollama.Ollama` | Install the external local-model daemon when requested |
 | Parakeet | pinned runner archive and GGUF model | Optional managed ASR |
+| Managed local TTS | `astral-sh.uv`, managed Python 3.10 or 3.11, pinned Python packages and model | Optional isolated local speech |
 
 Package agreements and large downloads are shown before installation.
 `-Yes` is the unattended form of that consent. Every installed dependency is
@@ -84,22 +101,29 @@ the core.
 
 ## Optional Local TTS
 
-Local voice cloning is intentionally not coupled to the main installer or the
-llama.cpp choice. After MagicHandy is built, run:
+Local voice cloning is independent of the llama.cpp choice but is now offered
+in the main installer decision tree. The installer offers:
+
+- Faster Qwen3-TTS for NVIDIA/CUDA systems; and
+- Chatterbox Turbo for CPU or broader NVIDIA compatibility.
+
+Selecting either path bootstraps WinGet when necessary, installs `uv`, installs
+the required managed Python runtime, creates an isolated environment, and
+downloads PyTorch and the model. No preinstalled Python or compiler is
+required. Faster Qwen uses Python 3.11; pinned Chatterbox uses Python 3.10 so
+Windows receives prebuilt Torch, torchvision, and ONNX wheels rather than
+attempting native builds.
+
+The same flow remains directly callable after MagicHandy is built:
 
 ```powershell
 .\scripts\install-tts-module.ps1
 ```
 
-The module installer offers:
-
-- Faster Qwen3-TTS for NVIDIA/CUDA systems; and
-- Chatterbox Turbo for CPU or broader GPU compatibility.
-
 It displays the pinned repository revision, license, model, hardware target,
 loopback endpoint, destination, and multi-gigabyte download warning. After
-consent it installs `uv` when needed, creates an isolated Python 3.11
-environment under the MagicHandy data directory, downloads the model, and
+consent it creates the module-compatible Python environment under the
+MagicHandy data directory, downloads the model, and
 uses `magichandy.exe -configure-tts-module` to persist the provider settings.
 The Chatterbox launcher suppresses the upstream standalone browser so
 MagicHandy remains the only UI.
@@ -164,6 +188,11 @@ Other important flags:
 | `-UILanguage LOCALE` | `en`, `es`, `pt-BR`, `zh-Hans`, or `ja` |
 | `-ChatLanguage LOCALE` | Built-in response language |
 | `-SkipParakeet` | Skip optional managed ASR assets |
+| `-TTSModule none|faster-qwen3-tts|chatterbox` | Select optional managed local TTS for unattended setup |
+| `-TTSDevice auto|cpu|cuda` | Select the TTS execution device |
+| `-TTSReferenceWav PATH` | Reference WAV required by unattended Faster Qwen setup |
+| `-TTSReferenceTranscript TEXT` | Exact transcript required by unattended Faster Qwen setup |
+| `-NoTTSAutoLaunch` | Keep the selected TTS server externally managed |
 | `-NoLauncher` | Do not create `Start-MagicHandy.ps1` |
 | `-StatePath PATH` | Override install state for testing/managed use |
 
@@ -175,7 +204,7 @@ By default, non-secret install state is stored at:
 %LOCALAPPDATA%\MagicHandy\install-state.json
 ```
 
-Schema 2 records:
+Schema 3 records:
 
 - repository and data paths;
 - local port;
@@ -183,13 +212,15 @@ Schema 2 records:
 - whether LLM setup is enabled;
 - managed llama.cpp choice and CPU/CUDA backend;
 - Ollama choice and optional model;
-- Parakeet choice; and
+- Parakeet choice;
+- managed TTS module, CPU/CUDA target, and auto-launch choice; and
 - launcher choice.
 
 The Handy connection key, ElevenLabs key, OpenAI-compatible bearer key, and
-other credentials never enter installer state, command output, or logs. Local
-TTS module choices use a separate non-secret `module-state.json` inside that
-module's install root.
+other credentials never enter installer state, command output, or logs. The
+module's model, voice/reference, language, port, and speak-replies choices
+remain in a separate non-secret `module-state.json` inside its install root;
+reference data is not duplicated into general installer state.
 
 ## Update Behavior
 
@@ -211,12 +242,18 @@ The updater:
 - explicitly takes controller ownership, sends Emergency Stop, and terminates
   only the app process tree belonging to this checkout;
 - stages rebuilt binaries before replacing the active files;
+- validates and reuses an installed selected TTS module without repeating its
+  multi-gigabyte installation;
 - reapplies SQLite-backed language settings after a successful build; and
 - opens the browser only after the new server owns the configured port and
   answers `/api/state`.
 
-The updater does not install or change optional TTS modules. Run
-`scripts/update-tts-module.ps1` for that module lifecycle.
+Reconfiguring the main decision tree can install or retarget the selected TTS
+module. An ordinary app update only validates and reuses it. Run
+`scripts/update-tts-module.ps1` when intentionally updating the module's pinned
+source, dependencies, model, reference, or other module-level choices.
+Declining installer-managed TTS does not remove module assets or disable a
+cloud/custom provider selected in Settings.
 
 ## Language Recovery
 

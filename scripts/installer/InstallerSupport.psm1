@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:InstallStateSchema = 2
+$script:InstallStateSchema = 3
 $script:MinimumGoVersion = [Version]'1.25.0'
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
@@ -430,7 +430,15 @@ function Convert-MagicHandyInstallState {
         $State.schema_version -is [int] -and [int]$State.schema_version -eq 1) {
         $State | Add-Member -NotePropertyName 'ui_locale' -NotePropertyValue 'en'
         $State | Add-Member -NotePropertyName 'chat_locale' -NotePropertyValue 'en'
-        $State.schema_version = $script:InstallStateSchema
+        $State.schema_version = 2
+    }
+    if ($State -is [System.Management.Automation.PSCustomObject] -and
+        $State.PSObject.Properties.Name -contains 'schema_version' -and
+        $State.schema_version -is [int] -and [int]$State.schema_version -eq 2) {
+        $State | Add-Member -NotePropertyName 'tts_module' -NotePropertyValue 'none'
+        $State | Add-Member -NotePropertyName 'tts_device' -NotePropertyValue 'cpu'
+        $State | Add-Member -NotePropertyName 'tts_auto_launch' -NotePropertyValue $false
+        $State.schema_version = 3
     }
     return $State
 }
@@ -447,7 +455,8 @@ function Assert-MagicHandyInstallState {
     $required = @(
         'schema_version', 'installed_at', 'updated_at', 'repository_path', 'data_dir', 'port',
         'ui_locale', 'chat_locale', 'setup_llm', 'build_managed_llama', 'llama_backend', 'ensure_ollama',
-        'ollama_model', 'install_parakeet', 'create_launcher'
+        'ollama_model', 'install_parakeet', 'tts_module', 'tts_device', 'tts_auto_launch',
+        'create_launcher'
     )
     foreach ($name in $required) {
         if ($State.PSObject.Properties.Name -notcontains $name) {
@@ -464,7 +473,7 @@ function Assert-MagicHandyInstallState {
     if ($State.port -isnot [int] -or [int]$State.port -lt 1 -or [int]$State.port -gt 65535) {
         throw "$Source has an invalid port. Expected an integer from 1 through 65535."
     }
-    foreach ($name in @('setup_llm', 'build_managed_llama', 'ensure_ollama', 'install_parakeet', 'create_launcher')) {
+    foreach ($name in @('setup_llm', 'build_managed_llama', 'ensure_ollama', 'install_parakeet', 'tts_auto_launch', 'create_launcher')) {
         if ($State.$name -isnot [bool]) {
             throw "$Source field '$name' must be boolean."
         }
@@ -497,6 +506,20 @@ function Assert-MagicHandyInstallState {
     if ($State.ollama_model -isnot [string]) {
         throw "$Source field 'ollama_model' must be text."
     }
+    if ($State.tts_module -isnot [string] -or
+        [string]$State.tts_module -notin @('none', 'faster-qwen3-tts', 'chatterbox')) {
+        throw "$Source field 'tts_module' must be none, faster-qwen3-tts, or chatterbox."
+    }
+    if ($State.tts_device -isnot [string] -or [string]$State.tts_device -notin @('cpu', 'cuda')) {
+        throw "$Source field 'tts_device' must be cpu or cuda."
+    }
+    if ([string]$State.tts_module -eq 'none' -and (
+            [string]$State.tts_device -ne 'cpu' -or [bool]$State.tts_auto_launch)) {
+        throw "$Source must use the cpu placeholder and disable auto-launch when tts_module is none."
+    }
+    if ([string]$State.tts_module -eq 'faster-qwen3-tts' -and [string]$State.tts_device -ne 'cuda') {
+        throw "$Source must use CUDA for Faster Qwen3-TTS."
+    }
     if (-not [bool]$State.setup_llm -and (
             [bool]$State.build_managed_llama -or [bool]$State.ensure_ollama -or
             -not [string]::IsNullOrWhiteSpace([string]$State.ollama_model))) {
@@ -527,6 +550,9 @@ function New-MagicHandyInstallState {
         [Parameter(Mandatory = $true)][bool]$EnsureOllama,
         [string]$OllamaModel = '',
         [Parameter(Mandatory = $true)][bool]$InstallParakeet,
+        [ValidateSet('none', 'faster-qwen3-tts', 'chatterbox')][string]$TTSModule = 'none',
+        [ValidateSet('cpu', 'cuda')][string]$TTSDevice = 'cpu',
+        [bool]$TTSAutoLaunch = $false,
         [Parameter(Mandatory = $true)][bool]$CreateLauncher,
         [string]$InstalledAt = ''
     )
@@ -552,6 +578,9 @@ function New-MagicHandyInstallState {
         ensure_ollama = $EnsureOllama
         ollama_model = $OllamaModel.Trim()
         install_parakeet = $InstallParakeet
+        tts_module = $TTSModule
+        tts_device = $TTSDevice
+        tts_auto_launch = $TTSAutoLaunch
         create_launcher = $CreateLauncher
     }
     Assert-MagicHandyInstallState -State $state -Source 'New installer state'
@@ -606,6 +635,15 @@ function Show-MagicHandyInstallState {
     $managed = if ([bool]$State.build_managed_llama) { Get-MagicHandyText -Key 'summary_managed_yes' -Values @($State.llama_backend) } else { $no }
     $ollama = if ([bool]$State.ensure_ollama) { $yes } else { $no }
     $parakeet = if ([bool]$State.install_parakeet) { $yes } else { $no }
+    $tts = if ([string]$State.tts_module -eq 'none') {
+        $no
+    } else {
+        Get-MagicHandyText -Key 'summary_tts_selected' -Values @(
+            $State.tts_module,
+            $State.tts_device,
+            $(if ([bool]$State.tts_auto_launch) { $yes } else { $no })
+        )
+    }
     $launcher = if ([bool]$State.create_launcher) { $yes } else { $no }
     $model = if ([string]::IsNullOrWhiteSpace([string]$State.ollama_model)) { '({0})' -f (Get-MagicHandyText -Key 'choice_unchanged') } else { $State.ollama_model }
     $values = @(
@@ -617,6 +655,7 @@ function Show-MagicHandyInstallState {
         @('summary_ollama', $ollama),
         @('summary_ollama_model', $model),
         @('summary_parakeet', $parakeet),
+        @('summary_tts', $tts),
         @('summary_launcher', $launcher)
     )
     foreach ($item in $values) {
@@ -659,6 +698,17 @@ function Get-MagicHandyProvisionPlan {
     }
     if ([bool]$State.install_parakeet) {
         $plan.Add((Get-MagicHandyText -Key 'plan_parakeet'))
+    }
+    if ([string]$State.tts_module -ne 'none') {
+        $plan.Add((Get-MagicHandyText -Key 'plan_tts' -Values @(
+            $State.tts_module,
+            $State.tts_device,
+            $(if ([bool]$State.tts_auto_launch) {
+                Get-MagicHandyText -Key 'choice_yes'
+            } else {
+                Get-MagicHandyText -Key 'choice_no'
+            })
+        )))
     }
     if ([bool]$State.create_launcher) {
         $plan.Add((Get-MagicHandyText -Key 'plan_launcher_write'))
@@ -1803,6 +1853,81 @@ function Remove-MagicHandyGeneratedLauncher {
     Write-Host "Removed generated launcher $launcher" -ForegroundColor Green
 }
 
+function Install-MagicHandyTTSModule {
+    param(
+        [Parameter(Mandatory = $true)][object]$State,
+        [Parameter(Mandatory = $true)][string]$RepositoryPath,
+        [string]$ReferenceWav = '',
+        [string]$ReferenceTranscript = '',
+        [switch]$Reconfigure,
+        [switch]$AssumeYes
+    )
+
+    if ([string]$State.tts_module -eq 'none') {
+        return
+    }
+
+    $folder = if ([string]$State.tts_module -eq 'faster-qwen3-tts') {
+        'faster-qwen3-tts'
+    } else {
+        'chatterbox-tts'
+    }
+    $installRoot = Join-Path ([string]$State.data_dir) "voice\$folder"
+    $moduleStatePath = Join-Path $installRoot 'module-state.json'
+    Assert-MagicHandyChildPath -Root ([string]$State.data_dir) -Candidate $installRoot
+
+    $installer = Join-Path $RepositoryPath 'scripts\install-tts-module.ps1'
+    $updater = Join-Path $RepositoryPath 'scripts\update-tts-module.ps1'
+    foreach ($scriptPath in @($installer, $updater)) {
+        if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+            throw "TTS module script was not found at '$scriptPath'."
+        }
+    }
+
+    if (Test-Path -LiteralPath $moduleStatePath -PathType Leaf) {
+        if (-not $Reconfigure) {
+            & $updater -InstallRoot $installRoot -CheckOnly -Yes
+            if (-not $?) {
+                throw 'The installed TTS module state could not be verified.'
+            }
+            Write-Host (Get-MagicHandyText -Key 'tts_reuse') -ForegroundColor Green
+            return
+        }
+
+        $updateArguments = @{
+            InstallRoot = $installRoot
+            Device = [string]$State.tts_device
+            ApplyInstallerChoices = $true
+            Yes = [bool]$AssumeYes
+        }
+        if ([bool]$State.tts_auto_launch) {
+            $updateArguments.AutoLaunch = $true
+        } else {
+            $updateArguments.NoAutoLaunch = $true
+        }
+        & $updater @updateArguments
+        if (-not $?) {
+            throw 'The TTS module updater did not complete successfully.'
+        }
+        return
+    }
+
+    $installArguments = @{
+        Module = [string]$State.tts_module
+        DataDir = [string]$State.data_dir
+        InstallRoot = $installRoot
+        Device = [string]$State.tts_device
+        ReferenceWav = $ReferenceWav
+        ReferenceTranscript = $ReferenceTranscript
+        AutoLaunch = [bool]$State.tts_auto_launch
+        Yes = [bool]$AssumeYes
+    }
+    & $installer @installArguments
+    if (-not $?) {
+        throw 'The TTS module installer did not complete successfully.'
+    }
+}
+
 function Invoke-MagicHandyProvision {
     [CmdletBinding()]
     param(
@@ -1811,7 +1936,10 @@ function Invoke-MagicHandyProvision {
         [int]$RunningPort = 0,
         [switch]$AssumeYes,
         [switch]$PlanOnly,
-        [switch]$PreserveAppLanguages
+        [switch]$PreserveAppLanguages,
+        [switch]$ReconfigureTTS,
+        [string]$TTSReferenceWav = '',
+        [string]$TTSReferenceTranscript = ''
     )
 
     if ($PlanOnly) {
@@ -1858,6 +1986,17 @@ function Invoke-MagicHandyProvision {
     if ([bool]$State.install_parakeet) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'parakeet_heading')
         Install-MagicHandyParakeet -DataDir $State.data_dir
+    }
+
+    if ([string]$State.tts_module -ne 'none') {
+        Write-InstallerHeading (Get-MagicHandyText -Key 'tts_heading')
+        Install-MagicHandyTTSModule `
+            -State $State `
+            -RepositoryPath $RepositoryPath `
+            -ReferenceWav $TTSReferenceWav `
+            -ReferenceTranscript $TTSReferenceTranscript `
+            -Reconfigure:$ReconfigureTTS `
+            -AssumeYes:$AssumeYes
     }
 
     Write-InstallerHeading (Get-MagicHandyText -Key 'languages_heading')
@@ -2060,11 +2199,14 @@ Export-ModuleMember -Function @(
     'Read-MagicHandyBackend',
     'Resolve-MagicHandyExecutable',
     'Get-MagicHandyInstallStatePath',
+    'Assert-MagicHandyChildPath',
     'New-MagicHandyInstallState',
     'Read-MagicHandyInstallState',
     'Write-MagicHandyInstallState',
     'Show-MagicHandyInstallState',
     'Get-MagicHandyProvisionPlan',
+    'Ensure-MagicHandyWinGet',
+    'Invoke-MagicHandyWinGetInstall',
     'Ensure-MagicHandyGit',
     'Invoke-MagicHandyProvision',
     'Test-MagicHandyAppRunning',
