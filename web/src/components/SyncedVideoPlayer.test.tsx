@@ -4,6 +4,10 @@ import { api, ApiError } from "../api/client";
 import type { MediaFunscript, MediaSyncStatus, MediaVideo } from "../api/types";
 import { SyncedVideoPlayer } from "./SyncedVideoPlayer";
 
+const { refreshAppState } = vi.hoisted(() => ({
+  refreshAppState: vi.fn(),
+}));
+
 vi.mock("../api/client", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/client")>();
   return {
@@ -13,12 +17,29 @@ vi.mock("../api/client", async (importOriginal) => {
       mediaSync: vi.fn(),
       mediaStreamURL: (id: string) => `/stream/${id}`,
       saveMediaDuration: vi.fn(),
+      saveMediaPlayback: vi.fn(),
     },
   };
 });
 
+vi.mock("../state/app-state", () => ({
+  useAppState: () => ({
+    state: {
+      settings: {
+        media: {},
+        motion: {
+          apply_video_speed_limit: false,
+          speed_max_percent: 40,
+        },
+      },
+    },
+    refresh: refreshAppState,
+  }),
+}));
+
 const mediaFunscript = vi.mocked(api.mediaFunscript);
 const mediaSync = vi.mocked(api.mediaSync);
+const saveMediaPlayback = vi.mocked(api.saveMediaPlayback);
 const following: MediaSyncStatus = {
   active: true,
   video_id: "paired",
@@ -69,6 +90,8 @@ describe("SyncedVideoPlayer", () => {
     });
     pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     mediaFunscript.mockResolvedValue({ funscript: script });
+    saveMediaPlayback.mockResolvedValue({ status: "saved" });
+    refreshAppState.mockResolvedValue(undefined);
     mediaSync.mockImplementation(async (event) => ({
       sync: event.state === "playing" ? { ...following, last_event: event.event } : {
         active: false,
@@ -103,8 +126,65 @@ describe("SyncedVideoPlayer", () => {
     releaseScript();
     expect(await screen.findByRole("slider", { name: /funscript timeline/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Paired session")).toBe(player);
-    expect(player).toHaveAttribute("controls");
+    expect(player).not.toHaveAttribute("controls");
+    const transport = screen.getByRole("group", { name: "Synchronized video controls" });
+    expect(transport).toContainElement(screen.getByRole("button", { name: "Play video with paired motion" }));
+    expect(player.closest(".media-video-frame")).toContainElement(transport);
     expect(shell).not.toHaveAttribute("aria-busy");
+  });
+
+  it("holds the exact click timestamp until paired motion is armed", async () => {
+    let releaseArm!: () => void;
+    mediaSync.mockImplementation((event) => {
+      if (event.state === "playing" && event.event === "play") {
+        return new Promise<{ sync: MediaSyncStatus }>((resolve) => {
+          releaseArm = () => resolve({ sync: { ...following, last_event: event.event } });
+        });
+      }
+      const state: MediaSyncStatus["state"] = event.state === "closed"
+        ? "idle"
+        : event.state === "playing"
+          ? "interrupted"
+          : event.state;
+      return Promise.resolve({
+        sync: {
+          active: false,
+          video_id: event.video_id,
+          state,
+          last_event: event.event,
+        },
+      });
+    });
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={8} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    let currentTime = 3.25;
+    let paused = true;
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+      set: (value: number) => { currentTime = value; },
+    });
+    Object.defineProperty(player, "paused", { configurable: true, get: () => paused });
+
+    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
+
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
+      event: "play",
+      media_time_ms: 3_250,
+    }), 8, expect.any(AbortSignal), false));
+    expect(play).not.toHaveBeenCalled();
+
+    // Even if the browser starts advancing unexpectedly, the app freezes and
+    // rewinds it to the timestamp whose device arm is still pending.
+    paused = false;
+    currentTime = 4;
+    fireEvent.play(player);
+    expect(pause).toHaveBeenCalled();
+    expect(currentTime).toBeCloseTo(3.25, 3);
+    expect(play).not.toHaveBeenCalled();
+
+    releaseArm();
+    await waitFor(() => expect(play).toHaveBeenCalledOnce());
   });
 
   it("loads the same-name script, shows its curve, and arms motion before resuming video", async () => {
@@ -167,7 +247,7 @@ describe("SyncedVideoPlayer", () => {
     expect(mediaSync.mock.calls.some(([event]) => event.event === "pause")).toBe(false);
   });
 
-  it("auto-resumes a seek even when the browser emits pause before seeking", async () => {
+  it("preserves play intent across a long explicit scrub and re-arms once at its exact target", async () => {
     let releaseSeekArm!: () => void;
     mediaSync.mockImplementation((event) => {
       if (event.state === "playing" && event.event === "seeked") {
@@ -185,50 +265,98 @@ describe("SyncedVideoPlayer", () => {
       });
     });
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={12} />);
-    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    await screen.findByLabelText("Paired session");
 
-    fireEvent.play(player);
+    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
     await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
     expect(play).toHaveBeenCalledOnce();
 
-    // Some browsers pause first for one scrubber gesture. The pause still
-    // stops motion immediately, but playback intent survives into the seek.
-    fireEvent.pause(player);
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 12, expect.any(AbortSignal), false));
-    Object.defineProperty(player, "currentTime", { configurable: true, writable: true, value: 4.5 });
-    fireEvent.seeking(player);
-    expect(screen.getByText("Seeking to 00:04.500; stopping prior motion")).toBeInTheDocument();
-    fireEvent.seeked(player);
-    expect(await screen.findByText("Resyncing motion to script at 00:04.500")).toBeInTheDocument();
+    mediaSync.mockClear();
+    const scrubber = screen.getByRole("slider", { name: "Video position" });
+    fireEvent.pointerDown(scrubber, { pointerId: 1 });
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(
+      expect.objectContaining({ state: "seeking", event: "seeking" }),
+      12,
+      expect.any(AbortSignal),
+      false,
+    ));
+    fireEvent.change(scrubber, { target: { value: "4500" } });
+    // The old implementation lost this intent after 400 ms. Explicit gesture
+    // state has no timing window, so an arbitrarily long drag remains a resume.
+    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    fireEvent.pointerUp(scrubber, { pointerId: 1 });
+    expect(await screen.findByText("Video held at 00:04.500; resyncing motion")).toBeInTheDocument();
 
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({
       state: "playing",
       event: "seeked",
       media_time_ms: 4_500,
     }), 12, expect.any(AbortSignal), false));
+    expect(mediaSync.mock.calls.filter(([event]) => event.state === "seeking")).toHaveLength(1);
+    expect(mediaSync.mock.calls.filter(([event]) => event.state === "playing")).toHaveLength(1);
     releaseSeekArm();
     await waitFor(() => expect(play).toHaveBeenCalledTimes(2));
     expect(screen.getByText("Device following video")).toBeInTheDocument();
   });
 
-  it("keeps a long-paused video paused when a later seek arrives", async () => {
-    const nowSpy = vi.spyOn(performance, "now");
+  it("keeps an explicitly paused video paused after scrubbing", async () => {
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={13} />);
-    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    await screen.findByLabelText("Paired session");
 
-    fireEvent.play(player);
+    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
     await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
-    nowSpy.mockReturnValue(10_000);
-    fireEvent.pause(player);
+    fireEvent.click(screen.getByRole("button", { name: "Pause video and motion" }));
     await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "pause" }), 13, expect.any(AbortSignal), false));
 
-    nowSpy.mockReturnValue(20_000);
-    fireEvent.seeking(player);
-    fireEvent.seeked(player);
+    mediaSync.mockClear();
+    const scrubber = screen.getByRole("slider", { name: "Video position" });
+    fireEvent.pointerDown(scrubber, { pointerId: 1 });
+    fireEvent.change(scrubber, { target: { value: "4500" } });
+    fireEvent.pointerUp(scrubber, { pointerId: 1 });
 
-    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(expect.objectContaining({ state: "paused", event: "seeked" }), 13, expect.any(AbortSignal), false));
+    await waitFor(() => expect(scrubber).toHaveValue("4500"));
+    expect(mediaSync).not.toHaveBeenCalled();
     expect(play).toHaveBeenCalledOnce();
-    nowSpy.mockRestore();
+  });
+
+  it("freezes and re-arms the exact timestamp when a script filter changes", async () => {
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={16} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    let currentTime = 2.75;
+    let paused = true;
+    Object.defineProperty(player, "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+      set: (value: number) => { currentTime = value; },
+    });
+    Object.defineProperty(player, "paused", { configurable: true, get: () => paused });
+
+    fireEvent.click(screen.getByRole("button", { name: "Play video with paired motion" }));
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    paused = false;
+    pause.mockClear();
+    mediaSync.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync 0 ms" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Round peaks/ }));
+
+    expect(pause).toHaveBeenCalledOnce();
+    expect(currentTime).toBeCloseTo(2.75, 3);
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(
+      expect.objectContaining({ state: "paused", event: "pause", media_time_ms: 2_750 }),
+      16,
+      expect.any(AbortSignal),
+      false,
+    ));
+    await waitFor(() => expect(saveMediaPlayback).toHaveBeenCalledWith({ peak_rounding_ms: 60 }));
+    await waitFor(() => expect(mediaSync).toHaveBeenCalledWith(
+      expect.objectContaining({ state: "playing", event: "resync", media_time_ms: 2_750 }),
+      16,
+      expect.any(AbortSignal),
+      false,
+    ));
+    expect(mediaSync.mock.calls.filter(([event]) => event.state === "paused")).toHaveLength(1);
+    expect(mediaSync.mock.calls.filter(([event]) => event.state === "playing")).toHaveLength(1);
   });
 
   it("locks the held video onto the engine clock before resuming playback", async () => {
@@ -403,17 +531,13 @@ describe("SyncedVideoPlayer", () => {
     render(<SyncedVideoPlayer video={video(true, 8_000)} locked={false} stopSequence={7} />);
 
     expect(await screen.findByText("Length differs from 00:08 video")).toBeInTheDocument();
-    expect(screen.getByLabelText("Paired session")).toHaveAttribute("controls");
+    expect(screen.getByLabelText("Paired session")).not.toHaveAttribute("controls");
+    expect(screen.getByRole("button", { name: "Play video with paired motion" })).toBeEnabled();
   });
 
   it("leaves the video paused and reports a synchronization failure", async () => {
     mediaSync.mockRejectedValueOnce(new ApiError("transport unavailable", 502, { error: "transport unavailable" }));
 
-// The player reads media playback settings straight from app state, the way
-// QuickSettings and ChatPanel do; these tests render it outside the provider.
-vi.mock("../state/app-state", () => ({
-  useAppState: () => ({ state: { settings: { media: {}, motion: {} } }, refresh: vi.fn() }),
-}));
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={7} />);
     const player = await screen.findByLabelText("Paired session");
 

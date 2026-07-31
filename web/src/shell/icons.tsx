@@ -93,6 +93,24 @@ export const PauseIcon = ({ size = 18, className }: P) => (
     <rect x="14" y="5" width="4" height="14" rx="1" />
   </svg>
 );
+export const VolumeIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M5 10v4h4l5 4V6l-5 4z" />
+    <path d="M17 9a4 4 0 0 1 0 6" />
+    <path d="M19.5 6.5a8 8 0 0 1 0 11" />
+  </svg>
+);
+export const VolumeMutedIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M5 10v4h4l5 4V6l-5 4z" />
+    <path d="m17 10 4 4M21 10l-4 4" />
+  </svg>
+);
+export const FullscreenIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4" />
+  </svg>
+);
 export const DownloadIcon = ({ size = 18, className }: P) => (
   <svg {...base(size, className)}>
     <path d="M12 3v12" />

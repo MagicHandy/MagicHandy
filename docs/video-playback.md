@@ -53,6 +53,18 @@ The implementation borrows proven interaction ideas, not whole architectures:
   coarse and its browser-to-device path would violate MagicHandy's transport
   boundary, but the explicit reset/stop behavior is the correct minimum for a
   media-clock player.
+- [Stash's scene player](https://github.com/stashapp/stash/blob/afdaa082b63708793d83312e692562aa36821f50/ui/v2.5/src/components/ScenePlayer/ScenePlayer.tsx#L954-L971)
+  records whether playback was active at scrub start, pauses immediately, seeks,
+  and resumes only when that recorded intent was active. MagicHandy adopts that
+  explicit gesture lifecycle. It does not adopt Video.js or Stash's separate
+  interactive-device pipeline; the Go motion engine remains the only motion
+  owner.
+- [Plyr's control contract](https://github.com/sampotts/plyr#options) hides
+  controls after two seconds without pointer or focus activity and restores
+  them immediately on movement, focus, or pause. Stash's
+  [Video.js styling](https://github.com/stashapp/stash/blob/afdaa082b63708793d83312e692562aa36821f50/ui/v2.5/src/components/ScenePlayer/styles.scss#L158-L176)
+  places a transparent control bar over a bottom fade. Paired playback adopts
+  those presentation rules without adding either player dependency.
 
 The resulting reusable unit is the native-video component used by both the
 dedicated Videos page and the optional funscript-import preview. It accepts an opaque
@@ -225,11 +237,14 @@ drift never re-times the device:
   750 ms and playback-rate changes stop immediately and return
   `requires_reanchor`, after which the browser holds the video and explicitly
   re-arms. A heartbeat can validate or stop a run, **never start one**.
-- A seek gesture may reach the page as `pause` before `seeking`. The pause
-  still stops motion immediately, but playback intent survives a pause that a
-  seek follows within 400 ms, so the seek re-arms motion and resumes the video
-  instead of leaving it paused. A video paused outside that window stays
-  paused when scrubbed later.
+- Paired playback uses app-owned controls so a scrub has an explicit start,
+  commit, and cancel lifecycle. Scrub start records whether playback was
+  desired, holds the video at its exact current timestamp, and begins one Stop.
+  Commit moves the held video to the exact requested timestamp and performs one
+  re-arm only when playback was desired; a previously paused video stays
+  paused. There is no timing heuristic, so a long drag behaves the same as a
+  short one. Pointer capture makes release outside the slider complete the same
+  gesture instead of leaving playback indefinitely held.
 - Heartbeat loss for more than five seconds stops the engine. A closed,
   crashed, suspended, or controller-lost player therefore cannot leave a
   resumable media target behind.
@@ -252,12 +267,17 @@ drift never re-times the device:
   validate real alignment without creating a transport-specific media path.
 
 Safety inheritance: authored timestamps and positions stay locked to the video
-by default. Settings > Media can opt into a semantic slew cap derived from the
+by default. Settings > Media can opt into a semantic rate cap derived from the
 configured maximum speed (300 semantic percentage points/second at 100%, scaled
-by the selected maximum). The cap changes only over-limit positions, never the
-media clock, and is not calibrated physical-velocity feedback. Changing the
-effective cap during an active media run Stops and invalidates that run because
-already-buffered HSP points cannot be rewritten; Play starts a clean stream.
+by the selected maximum). The cap clips each authored segment's displacement
+without changing its timestamp or direction. It never amplifies a source
+segment and cannot continue toward an old absolute target after the script has
+already reversed. Because the video clock cannot slow down, clipping a segment
+can compress or offset the later range; the control reports that tradeoff
+instead of claiming authored-exact playback. This is not calibrated
+physical-velocity feedback. Changing the effective cap during an active media
+run Stops and invalidates that run because already-buffered HSP points cannot
+be rewritten; Play starts a clean stream.
 Startup acquisition remains speed-bounded by the configured maximum even when
 the playback cap is off. Emergency Stop and the controller lease behave like
 every other motion source. Read-only tabs can watch video and inspect the
@@ -282,9 +302,9 @@ downsampling is reused at canvas resolution):
   choice persists per browser (`localStorage`), since it is presentation, not
   app state. Reduced-motion: the playhead updates stepwise instead of
   animating.
-- Fullscreen uses the native `<video>` controls; the custom strip is a
-  windowed-mode surface in v1 (an overlay strip in fullscreen is a later
-  polish slice).
+- Fullscreen expands the whole synchronized player, including its app-owned
+  transport controls and timeline. Plain videos without a paired script retain
+  native `<video>` controls.
 
 ## UI integration
 
@@ -297,8 +317,10 @@ downsampling is reused at canvas resolution):
   unplugged locations. **Search** is a client-side filter over name or registered
   location (the catalog returns the full bounded list; personal libraries do
   not need server search). Sort: name / most recent.
-- **Player view** (replaces the grid within the route; back button returns): M0
-  ships `<video>` with native controls and browser-reported duration backfill.
+- **Player view** (replaces the grid within the route; back button returns):
+  plain videos use native `<video>` controls and browser-reported duration
+  backfill; paired videos use app-owned controls so Play and seek can hold the
+  media clock before device work begins.
   Leaving the Videos route unmounts the player so hidden audio never continues.
   Paired videos load the M1 canvas timeline before controls become available;
   M2 adds compact sync/device/drift status. The persistent Stop button stays
@@ -607,9 +629,9 @@ Firefox user testing exposed avoidable serialization before the first frame and
 an ambiguous seek state. The paired player previously waited for the complete
 funscript request before it mounted the `<video>` element, so the browser could
 not begin metadata or media buffering while the bounded script was read and
-parsed. The player now mounts immediately with `preload="auto"`; native controls
-stay unavailable until the paired script is validated, preventing unsynchronized
-play while allowing media and script I/O to overlap.
+parsed. The player now mounts immediately with `preload="auto"`; paired
+transport controls stay unavailable until the script is validated, preventing
+unsynchronized play while allowing media and script I/O to overlap.
 
 The successful timeline read also prepares the same bounded, validated script
 inside the sync runtime. The first arm promotes that document instead of opening
@@ -627,8 +649,8 @@ and zero-speed verification remains unchanged.
 Seek feedback now describes the local operation instead of relying only on the
 last backend snapshot:
 
-- `Seeking to <time>; stopping prior motion`
-- `Resyncing motion to script at <time>`
+- `Video held at <time>; stopping prior motion`
+- `Video held at <time>; resyncing motion`
 - `Script aligned at <time>; resuming video`
 
 The operation clears on the media element's `playing` event, which is the honest
@@ -637,6 +659,43 @@ Coverage includes Firefox's observed `pause` -> `seeking` -> `seeked` ordering,
 keeps playback intent through that one scrub gesture, and verifies that the
 re-arm uses the new media timestamp. Hardware alignment was not re-measured in
 this pass; M3's real-device gate remains open.
+
+### Explicit transport and seek lifecycle (2026-07-30)
+
+Further Firefox testing showed that native controls still let the video clock
+advance before the application could finish pausing it, and their event order
+could not distinguish a long scrub from a deliberate pause without a 400 ms
+guess. Paired videos now use a compact app-owned transport overlay for
+play/pause, position, volume, playback rate, and fullscreen. It is embedded at
+the bottom of the picture over a transparent fade, remains visible while
+paused, arming, buffering, seeking, or keyboard-focused, and hides after two
+seconds without pointer or focus activity only while synchronized playback is
+actually active. Pointer movement or focus restores it immediately. Volume
+stays compact until the mute control is hovered or focused, then opens a
+vertical slider that remains keyboard reachable at narrow widths. Plain
+videos still use native controls.
+
+Play captures one exact media timestamp and holds the video there before
+requesting an arm. The media element's `play()` is not called until the backend
+confirms active synchronized motion; an unexpected native play event during
+arming is paused and rewound to the captured anchor. Seek start and filter
+changes use the same coordinated restart contract: freeze immediately, cancel
+obsolete startup work, issue at most one Stop, serialize the settings write
+when present, and perform one re-arm at the frozen target. Pausing or unmounting
+invalidates the continuation so a late request cannot resume playback.
+
+"Rapid seek" therefore means immediate visual freeze with no video drift or
+duplicate lifecycle requests. Physical acquisition remains bounded by the
+configured startup speed and verifies both arrival and zero speed before the
+video resumes. A distant target can legitimately take seconds; bypassing that
+lead-in would recreate the unsafe first-command jerk this project removed.
+
+Frontend regressions cover a seek held longer than the former timeout, exact
+timestamp capture, one stop/re-arm, paused scrubbing, filter changes, obsolete
+arm cancellation, buffering recovery, and session teardown. Motion tests pin
+the optional rate cap to three properties: unchanged timestamps, bounded
+per-segment travel, and no authored-direction reversal or amplification.
+Real-device alignment was not re-measured in this pass; M3 remains open.
 
 ### Open decision: offline pre-transcode
 

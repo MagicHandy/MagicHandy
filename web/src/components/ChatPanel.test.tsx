@@ -260,6 +260,35 @@ describe("ChatPanel history", () => {
     await waitFor(() => expect(onSessionChanged).toHaveBeenCalledTimes(1));
   });
 
+  it("sends with Enter while preserving Shift+Enter and IME composition", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    streamChatMock.mockResolvedValue(undefined);
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "first line" } });
+
+    fireEvent.keyDown(textbox, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(textbox, { key: "Enter", isComposing: true });
+    expect(streamChatMock).not.toHaveBeenCalled();
+
+    fireEvent.change(textbox, { target: { value: "first line\nsecond line" } });
+    fireEvent.keyDown(textbox, { key: "Enter" });
+
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledWith(
+      SESSION_ID,
+      "first line\nsecond line",
+      expect.any(Function),
+      expect.any(AbortSignal),
+      1,
+    ));
+  });
+
   it("surfaces a deterministic Stop transport failure", async () => {
     getChatMessages.mockResolvedValueOnce({
       messages: [],

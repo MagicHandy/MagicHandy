@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-30, explicit controller takeover
+## Snapshot — 2026-07-30, synchronized video seek reliability
 
 ### Goal 1: Maintainability
 
@@ -32,7 +32,7 @@ Scoring key:
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,389 lines, `internal/config/settings_test.go` 1,325, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,321, `internal/httpapi/voice_test.go` 1,195, `internal/modes/manager.go` 976, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Autopilot cadence logic is isolated in the 475-line `internal/modes/autopilot_scheduler.go` rather than extending the manager further. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,099 lines, `web/src/App.test.tsx` 1,469, `web/src/components/SyncedVideoPlayer.tsx` 858, `web/src/styles/components.css` 1,450, `web/src/styles/shell.css` 1,036, and retired reference-only `web/legacy/app.css` 846. The 335-line Autopilot control and its 129-line stylesheet stay focused; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,099 lines, `web/src/App.test.tsx` 1,469, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,450, `web/src/styles/shell.css` 1,036, and retired reference-only `web/legacy/app.css` 846. Paired-video transport controls and inactivity handling are isolated in their own 259-line component rather than extending the player render surface further; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,712 physical lines after adding the shared localized decision-tree runtime. It is outside the Go/web architecture size test and remains a manually reviewed guideline exception; the next installer slice should separate state/core build, package/bootstrap, managed LLM, and voice-runtime helpers without duplicating locale, updater state, or safety teardown. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
@@ -110,20 +110,56 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,510,270 raw / 749,617 gzip bytes. Lazy loading limits
-   the English startup path to 706,223 raw / 189,486 gzip bytes; all HTML/CSS/JS
-   is 1,066,034 raw / 312,220 gzip bytes. Independent Autopilot clocks,
+   browser payload is 1,536,190 raw / 756,484 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 724,654 raw / 193,758 gzip bytes; all
+   HTML/CSS/JS is 1,091,954 raw / 319,087 gzip bytes. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
    3,315 gzip bytes against their preceding checked-in bundle; browser-session
-   notification persistence adds another 1,424 raw / 481 gzip bytes. These
-   remain within budget, but future locales, personas, and bitmap additions
-   must keep startup and total payload growth explicit.
+   notification persistence adds another 1,424 raw / 481 gzip bytes. The
+   synchronized-video transport, embedded auto-hide overlay, vertical volume
+   control, and explicit seek lifecycle add 18,411 raw / 4,693 gzip bytes total
+   (14,247 / 3,434 on the
+   English startup path) against
+   their checked-in predecessor; the bitmap is unchanged. These remain within
+   budget, but future locales, personas, and bitmap additions must keep startup
+   and total payload growth explicit.
 5. **GPU voice/LLM coexistence.** Persistent CUDA NeuTTS fixes interactive
    latency but keeps a second llama.cpp context resident. It passed isolated
    synthesis on a 16 GiB RTX 5070 Ti; representative simultaneous managed-LLM
    load and lower-VRAM acceptance remain R17 evidence.
 
 ## History
+
+- **2026-07-30** - Replaced paired-video native controls and the 400 ms scrub
+  inference window with an explicit app-owned transport and seek lifecycle.
+  Play now holds the exact media anchor until the backend reports active
+  script motion; scrubbing freezes immediately, issues one Stop, commits one
+  timestamp, and re-arms once only when playback was intended at scrub start.
+  Script filter and rate changes use the same freeze/stop/re-anchor path. The
+  video speed cap now limits each authored segment delta instead of chasing a
+  stale absolute target, preserving reversals and never increasing a segment's
+  speed; peak-rounding diagnostics report the emitted apex reduction. Full Go
+  tests, vet, lint (zero issues), the `CGO_ENABLED=0` build, all 355 frontend
+  tests, typecheck, localization audit, and the production build pass. The
+  transport is embedded over a transparent bottom fade and auto-hides only
+  during active playback; pause, arm, seek, errors, and keyboard focus keep it
+  visible. Hovering or focusing mute reveals a compact vertical volume slider.
+  A current isolated browser build was checked with the paired
+  `Kishiri106 By Mouth` media: a rejected arm kept the video at `00:00`, the
+  transport had no horizontal overflow at 390 px or 320 px, and the console
+  remained clean. Windows race execution still cannot start because no C
+  compiler is installed; the mandatory Ubuntu CI race job remains
+  authoritative. No real-device motion was authorized for this pass, so R25
+  remains High. The complete embedded output is 1,536,190 raw / 756,484
+  level-9 gzip bytes; the English startup path is 724,654 / 193,758.
+
+- **2026-07-30** - Chat composition now follows conventional messaging
+  behavior: Enter sends, Shift+Enter preserves multiline input, and an Enter
+  key event during IME composition is ignored. A focused component regression
+  test covers all three paths. Below 560 px, the stacked conversation no longer
+  inherits the 520 px tablet minimum; its scrollback is bounded to 170-240 px.
+  At the checked 320 x 700 viewport, empty scrollback falls from 315 px to
+  210 px, the conversation is 329 px high, and horizontal overflow remains zero.
 
 - **2026-07-30** - Retired the 15 built-ins the user had disabled by hand and
   replaced them with 15 velocity-authored ones. Measuring the disabled set found

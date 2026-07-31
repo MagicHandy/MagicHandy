@@ -431,6 +431,67 @@ func TestMediaTimelineCapsOverFastTravelWithoutChangingClock(t *testing.T) {
 	}
 }
 
+func TestMediaTimelineLimitPreservesAuthoredDirectionAfterClipping(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 40
+	settings.ApplyVideoSpeedLimit = true
+	timeline := MediaTimelineDefinition{
+		ID: "reversal-after-clip", Name: "Reversal after clip", DurationMillis: 300,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 0},
+			{TimeMillis: 100, PositionPercent: 100},
+			{TimeMillis: 200, PositionPercent: 90},
+			{TimeMillis: 300, PositionPercent: 95},
+		},
+	}
+	plan := NewMotionPlan("limited-reversal", MotionTarget{
+		Label: "Reversal after clip", Source: TargetSourceMedia, MediaID: timeline.ID, Media: &timeline,
+	}, settings, 0, 0, time.Unix(0, 0))
+
+	want := []CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 100, PositionPercent: 12},
+		{TimeMillis: 200, PositionPercent: 2},
+		{TimeMillis: 300, PositionPercent: 7},
+	}
+	for index, point := range plan.Target.Media.Points {
+		if point != want[index] {
+			t.Fatalf("limited point %d = %+v, want %+v", index, point, want[index])
+		}
+	}
+}
+
+func TestMediaTimelineLimitNeverAmplifiesAnAuthoredSegment(t *testing.T) {
+	points := []CurvePoint{
+		{TimeMillis: 0, PositionPercent: 50},
+		{TimeMillis: 80, PositionPercent: 100},
+		{TimeMillis: 420, PositionPercent: 92},
+		{TimeMillis: 500, PositionPercent: 5},
+		{TimeMillis: 1200, PositionPercent: 40},
+		{TimeMillis: 1300, PositionPercent: 40},
+	}
+	limited := limitMediaTimelineRate(points, 25)
+	maximumRate := mediaFullSpeedRatePercentPerSecond * 0.25
+
+	for index := 1; index < len(points); index++ {
+		authoredDelta := points[index].PositionPercent - points[index-1].PositionPercent
+		limitedDelta := limited[index].PositionPercent - limited[index-1].PositionPercent
+		maximumDelta := maximumRate * float64(points[index].TimeMillis-points[index-1].TimeMillis) / 1000
+		if math.Abs(limitedDelta) > maximumDelta+1e-9 {
+			t.Fatalf("segment %d limited delta %.3f exceeds rate cap %.3f", index, limitedDelta, maximumDelta)
+		}
+		if math.Abs(limitedDelta) > math.Abs(authoredDelta)+1e-9 {
+			t.Fatalf("segment %d limited delta %.3f amplifies authored %.3f", index, limitedDelta, authoredDelta)
+		}
+		if authoredDelta*limitedDelta < 0 {
+			t.Fatalf("segment %d reversed direction: authored %.3f, limited %.3f", index, authoredDelta, limitedDelta)
+		}
+		if limited[index].PositionPercent < 0 || limited[index].PositionPercent > 100 {
+			t.Fatalf("segment %d position %.3f is outside semantic travel", index, limited[index].PositionPercent)
+		}
+	}
+}
+
 func TestMediaTimelineSupportsFeatureLengthPointCounts(t *testing.T) {
 	points := make([]CurvePoint, MaximumMediaTimelinePoints)
 	for index := range points {

@@ -212,10 +212,19 @@ rounds position to lose the corner.
 
 #### Limit speed to the motion maximum
 
-Surfaces the existing `motion.apply_video_speed_limit`, unchanged: a causal
-forward slew limiter that clips only over-limit segments and never touches
-timestamps. It is already the one media filter with shipped behavior and tests,
-and it belongs in the same group as the others rather than only in Settings.
+Surfaces `motion.apply_video_speed_limit` and labels the actual configured
+maximum rather than merely saying "on". The limiter clips each authored
+segment's displacement to the semantic rate budget while preserving that
+segment's timestamp and direction. It never adds travel the script did not
+request. This replaces the earlier absolute-target chaser: after one clipped
+rise, a small authored fall could still make the old output rise quickly toward
+the stale target, which felt faster and contradicted the script's reversal.
+
+Fixed video timing makes one tradeoff unavoidable: when an over-limit segment
+cannot reach its authored endpoint, later positions can be compressed or
+offset. The panel therefore says travel is capped without changing the video
+clock. It does not imply that both the original range and original timing can be
+preserved under a lower speed ceiling.
 
 ### 3. Effect readout
 

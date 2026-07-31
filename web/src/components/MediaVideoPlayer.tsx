@@ -7,6 +7,7 @@ interface Props {
   video: MediaVideo;
   allowMetadataWrite: boolean;
   children?: ReactNode;
+  videoOverlay?: ReactNode;
   controlsEnabled?: boolean;
   busy?: boolean;
   onDuration?: (durationMillis: number) => void;
@@ -39,6 +40,7 @@ export function MediaVideoPlayer({
   video,
   allowMetadataWrite,
   children,
+  videoOverlay,
   controlsEnabled = true,
   busy = false,
   onDuration,
@@ -229,6 +231,7 @@ export function MediaVideoPlayer({
             void classifyFailure(event.currentTarget);
           }}
         />
+        {videoOverlay}
       </div>
       {incompatible && (
         <div className="form-status media-incompatible-notice" role="alert">

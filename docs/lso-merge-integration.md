@@ -72,8 +72,9 @@ first.
   ones are worth replacing is a judgment call best made by whoever has a large
   funscript collection to draw from. Content work, no architecture risk;
   [pattern-library.md](pattern-library.md) covers import and promotion.
-- **Enter-to-send in chat** — still Ctrl+Enter in
-  `web/src/components/ChatPanel.tsx`. Keep a modifier for newline.
+- **Enter-to-send in chat** — implemented in
+  `web/src/components/ChatPanel.tsx`: Enter sends, Shift+Enter inserts a newline,
+  and IME composition is not interrupted.
 - **Mouse-tracked authoring**, scoped as record-then-play. See the design note
   in [feature-ideas.md](feature-ideas.md) §C.
 

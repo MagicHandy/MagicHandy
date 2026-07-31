@@ -377,7 +377,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             placeholder={historyError ? t("Conversation history unavailable.") : historyLoading ? t("Loading conversation…") : readOnly ? t("Read-only — this tab can't drive motion.") : t("Message MagicHandy…")}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 void send();
               }

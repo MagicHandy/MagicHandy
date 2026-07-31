@@ -264,10 +264,12 @@ func patternContent(definition PatternDefinition) resolvedContent {
 }
 
 // limitMediaTimelineRate keeps the video clock and every point timestamp
-// unchanged while bounding only physically over-fast travel. This is a
-// conventional slew limiter: each accepted point becomes the anchor for the
-// next segment, so the output cannot hide an unsafe jump after one clipped
-// segment. Ordinary authored travel below the selected limit is unchanged.
+// unchanged while bounding only physically over-fast travel. It limits each
+// authored displacement rather than chasing the authored absolute target.
+// Chasing the target can keep moving quickly in the old direction after the
+// script has reversed, which both amplifies that segment and feels faster than
+// the uncapped script. Delta limiting preserves every authored direction and
+// never adds travel that the source did not request.
 func limitMediaTimelineRate(points []CurvePoint, speedPercent int) []CurvePoint {
 	if len(points) < 2 {
 		return append([]CurvePoint(nil), points...)
@@ -275,13 +277,16 @@ func limitMediaTimelineRate(points []CurvePoint, speedPercent int) []CurvePoint 
 	maximumRate := mediaFullSpeedRatePercentPerSecond * float64(clamp(speedPercent, 1, 100)) / 100
 	limited := append([]CurvePoint(nil), points...)
 	for index := 1; index < len(limited); index++ {
-		elapsedMillis := limited[index].TimeMillis - limited[index-1].TimeMillis
+		elapsedMillis := points[index].TimeMillis - points[index-1].TimeMillis
 		maximumDelta := maximumRate * float64(elapsedMillis) / 1000
-		minimum := limited[index-1].PositionPercent - maximumDelta
-		maximum := limited[index-1].PositionPercent + maximumDelta
+		authoredDelta := points[index].PositionPercent - points[index-1].PositionPercent
+		limitedDelta := math.Max(
+			-maximumDelta,
+			math.Min(maximumDelta, authoredDelta),
+		)
 		limited[index].PositionPercent = math.Max(
-			minimum,
-			math.Min(maximum, limited[index].PositionPercent),
+			0,
+			math.Min(100, limited[index-1].PositionPercent+limitedDelta),
 		)
 	}
 	return limited

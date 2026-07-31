@@ -56,6 +56,29 @@ func TestRoundPeaksReductionGrowsWithTheWindow(t *testing.T) {
 	}
 }
 
+func TestFilletCornerReportsTheActualRoundedApexReduction(t *testing.T) {
+	knots, reduction := filletCorner(
+		motion.CurvePoint{TimeMillis: 0, PositionPercent: 0},
+		motion.CurvePoint{TimeMillis: 500, PositionPercent: 100},
+		motion.CurvePoint{TimeMillis: 1000, PositionPercent: 0},
+		100,
+		3,
+	)
+	if len(knots) != 5 {
+		t.Fatalf("fillet knot count = %d, want 5", len(knots))
+	}
+	if math.Abs(reduction-10) > 1e-9 {
+		t.Fatalf("reported apex reduction = %.3f, want 10", reduction)
+	}
+	highest := 0.0
+	for _, knot := range knots {
+		highest = math.Max(highest, knot.PositionPercent)
+	}
+	if math.Abs(reduction-(100-highest)) > 1e-9 {
+		t.Fatalf("reported reduction %.3f does not match emitted apex %.3f", reduction, highest)
+	}
+}
+
 // Rounding must never consume the leg between two corners, or a fast script
 // would lose its shape entirely rather than its corners.
 func TestRoundPeaksIsCappedByItsOwnLeg(t *testing.T) {

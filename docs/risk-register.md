@@ -1068,6 +1068,9 @@ Mitigation:
 - make the video clock authoritative through explicit controller-gated
   play/pause/seek/heartbeat events, one bounded sync session, and generation
   fencing around seeks and replacement
+- use app-owned paired-video controls with explicit scrub start/commit/cancel;
+  hold the video at one captured timestamp until motion is armed instead of
+  inferring intent from browser event timing
 - fence every mounted player with a random session id and monotonic event
   sequence so late close/arm requests cannot cross session ownership
 - Stop and explicitly re-arm on seek completion, rate change, confirmed/hard
@@ -1104,14 +1107,24 @@ Review update 2026-07-22: the retained failing trace exposed both shallow Cloud
 coverage and a later center-amplitude transform that was incorrectly labeled a
 speed limit. Media now selects a 10-second Cloud minimum, prebuffers in
 owner-capped batches, emits exact authored knots across engine chunks, and
-preserves authored positions by default. The optional cap is a causal semantic
-slew limit and an active policy change requires Stop/re-arm.
+preserves authored positions by default. The optional cap bounds each authored
+segment's displacement without changing its timestamp or direction, and an
+active policy change requires Stop/re-arm.
 
 A capped post-fix Cloud run at 01:17 kept sixteen heartbeats `following` with
 1 ms calibrated drift, 327-364 ms successful append latency, source-exact
 reversals, and no starvation. A separate 01:16 to 01:30 seek re-armed once and
 stayed healthy. R25 remains High for subjective continuity confirmation and
 matched Browser Bluetooth/Intiface evidence.
+
+Review update 2026-07-30: paired videos no longer expose native controls that
+can advance the media clock before the application takes over. Play freezes at
+the click timestamp until the backend confirms an active arm. Long pointer
+scrubs preserve their start-time play intent without a timeout, issue one Stop,
+and re-arm once at the committed timestamp; paused scrubs stay paused. Script
+filter writes use the same freeze/stop/re-arm lifecycle. Focused browser tests
+cover these paths, but no new real-device run was authorized for this pass, so
+R25 remains High and M3 is unchanged.
 
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).
