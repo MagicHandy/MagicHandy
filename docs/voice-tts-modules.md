@@ -42,6 +42,12 @@ because its supported Windows Torch, torchvision, and ONNX packages are
 available as wheels there; this avoids an accidental native build on a clean
 machine.
 
+Model downloads do not require Windows symlink privileges. The installer uses
+one Hugging Face file-finalization worker on Windows to avoid a first-use
+symlink-probe race, retries transient failures three times, and keeps the
+resumable cache when all attempts fail. Rerunning either installer reuses files
+that already finished.
+
 `scripts/update-tts-module.ps1` reads the existing module choice, preserves it
 by default, and asks before changing provider, model, port, or auto-launch. The
 main app updater validates and reuses a selected installed module rather than

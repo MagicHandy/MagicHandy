@@ -128,6 +128,12 @@ uses `magichandy.exe -configure-tts-module` to persist the provider settings.
 The Chatterbox launcher suppresses the upstream standalone browser so
 MagicHandy remains the only UI.
 
+On Windows, model files are finalized serially so Hugging Face's ordinary-file
+fallback works without Administrator access, Developer Mode, or symlink
+privileges. A failed model transfer is retried against the same resumable cache
+and completed files are retained; rerunning the installer continues that cache
+instead of starting the multi-gigabyte download over.
+
 Faster Qwen reference setup is deliberately not part of the command-line
 installer. Installation completes with the runtime and model present, then
 Settings > Voice accepts the reference WAV and its exact transcript. Until
