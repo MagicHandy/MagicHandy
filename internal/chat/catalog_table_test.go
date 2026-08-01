@@ -66,6 +66,32 @@ func TestCatalogOmitsWeightUntilFeedbackMovesIt(t *testing.T) {
 	}
 }
 
+// Tags were the largest item left in the catalog, and the tail of each list is
+// where the dead weight sits. Only the leading few reach the model; the library
+// keeps the whole list so UI filtering is unaffected.
+func TestCatalogSendsOnlyTheLeadingTags(t *testing.T) {
+	catalog := curationInstructions([]PatternChoice{{
+		ID: "stroke", Name: "Stroke", Description: "Even.", Weight: 1,
+		Tags: []string{"accent", "rhythmic", "tempo-change", "upper-return"},
+	}})
+	if !strings.Contains(catalog, "accent, rhythmic") {
+		t.Fatalf("leading tags missing:\n%s", catalog)
+	}
+	for _, dropped := range []string{"tempo-change", "upper-return"} {
+		if strings.Contains(catalog, dropped) {
+			t.Fatalf("tag %q past the cap still reached the prompt:\n%s", dropped, catalog)
+		}
+	}
+
+	// A pattern with no tags must not leave a dangling empty column.
+	untagged := curationInstructions([]PatternChoice{
+		{ID: "stroke", Name: "Stroke", Description: "Even.", Weight: 1},
+	})
+	if strings.Contains(untagged, "Even. |") {
+		t.Fatalf("an untagged pattern kept an empty trailing column:\n%s", untagged)
+	}
+}
+
 // An empty catalog still has to route the model to the speed-only contract.
 func TestCatalogWithNoUsableIDsFallsBackToSpeedOnly(t *testing.T) {
 	for _, patterns := range [][]PatternChoice{nil, {{ID: "   ", Name: "Blank"}}} {

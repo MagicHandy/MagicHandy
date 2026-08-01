@@ -151,9 +151,17 @@ Ranked by threat to the stated goals:
   repeated keys cost about 62 B per entry against roughly 65 B of actual label --
   at two hundred patterns the punctuation cost as much as the content. Weight is
   emitted only once feedback has moved it off the default, since the preference
-  rule cannot apply while every entry is equal. Catalog 32,144 -> **19,661 B**;
-  live composed prompt **40,706 -> 28,223 B (~7,056 tokens)**, against ~15,949
-  tokens before any of this work, verified through
+  rule cannot apply while every entry is equal. Two remaining duplicates went
+  after that: the fifteen velocity-authored descriptions were carrying padding
+  around their shape and their "when to reach for it" signal (1,689 -> 992 B
+  authored), and only the leading two tags per pattern now reach the model, since
+  tags were the largest single item left at 5.8 KB and the tail of each list
+  earns none of it -- an imported clip carries its source's role rather than
+  anything about its motion, repeated identically across every part of a script,
+  so it cannot separate the entries the model must choose between. The library
+  keeps the full tag list, so UI filtering is unchanged. Catalog 32,144 ->
+  **16,118 B**; live composed prompt **40,706 -> 24,680 B (~6,170 tokens)**,
+  against ~15,949 tokens before any of this work, verified through
   `/api/diagnostics/prompt-composition`. Escaping that `json.Marshal` used to
   provide is now this package's own job, so `promptTableField` collapses
   whitespace and strips the delimiter and

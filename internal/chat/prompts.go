@@ -693,8 +693,10 @@ func curationInstructions(patterns []PatternChoice) string {
 		builder.WriteString(promptTableField(pattern.Name, 80))
 		builder.WriteString(" | ")
 		builder.WriteString(promptTableField(pattern.Description, 200))
-		builder.WriteString(" | ")
-		builder.WriteString(promptTableField(strings.Join(pattern.Tags, ", "), 120))
+		if tags := promptTableField(joinLeadingTags(pattern.Tags), 60); tags != "" {
+			builder.WriteString(" | ")
+			builder.WriteString(tags)
+		}
 		// Weight is only worth its bytes when feedback has actually moved it off
 		// the default, which is the only case where the preference rule can apply.
 		if pattern.Weight > 0 && math.Abs(pattern.Weight-1) > 0.001 {
@@ -719,6 +721,27 @@ func curationInstructions(patterns []PatternChoice) string {
 	builder.WriteString("\nValid curated start motion object using an enabled id: " + string(startExample))
 	builder.WriteString("\nValid curated target motion object using an enabled id: " + string(targetExample))
 	return builder.String()
+}
+
+// maxPromptTags is how many tags per pattern reach the model. Tags were the
+// largest single item left in the catalog at 5.8 KB, and the tail of each list
+// earns none of it: an imported clip carries the role its source had rather than
+// anything about its motion, and the same four tags repeat across every part of
+// a source script, so they cannot separate entries the model must choose
+// between. The library keeps the full list, so filtering in the UI is unchanged.
+const maxPromptTags = 2
+
+func joinLeadingTags(tags []string) string {
+	kept := make([]string, 0, maxPromptTags)
+	for _, tag := range tags {
+		if tag = strings.TrimSpace(tag); tag == "" {
+			continue
+		}
+		if kept = append(kept, tag); len(kept) == maxPromptTags {
+			break
+		}
+	}
+	return strings.Join(kept, ", ")
 }
 
 // promptTableField makes one value safe to place in a delimited catalog row.
