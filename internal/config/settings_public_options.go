@@ -78,7 +78,8 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			ParakeetSourceApp,
 			ParakeetSourceCustom,
 		},
-		TTSDevices: voiceTTSDeviceOptions(),
+		TTSDevices:     voiceTTSDeviceOptions(),
+		TTSTonePresets: TTSTonePresets(),
 		ChatStartupBehaviors: []string{
 			ChatStartupPrevious,
 			ChatStartupNew,

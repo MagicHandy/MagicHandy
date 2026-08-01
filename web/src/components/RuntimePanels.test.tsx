@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
@@ -280,6 +280,67 @@ describe("runtime panels", () => {
     expect(randomSeedPatch.tts_seed_mode).toBe("fixed");
     expect(randomSeedPatch.tts_seed).toEqual(expect.any(Number));
   });
+
+  it("offers reviewed Faster Qwen tone presets and reveals the custom prompt", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    settings.voice = {
+      ...settings.voice,
+      tts_provider: "faster_qwen3_tts",
+      tts_device: "cuda",
+      tts_tone_preset: "natural",
+      tts_tone_prompt: "",
+    };
+    settings.options.tts_tone_presets = [
+      "natural",
+      "warm",
+      "playful",
+      "tender",
+      "commanding",
+      "excited",
+      "custom",
+    ];
+    const patch = vi.fn();
+    const user = userEvent.setup();
+    const view = render(
+      <VoiceSettingsPanel
+        settings={settings}
+        locked={false}
+        dirty={false}
+        patch={patch}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    const tone = screen.getByRole("combobox", { name: "Voice tone" });
+    expect(tone).toHaveValue("natural");
+    expect(tone).toHaveTextContent("Warm and intimate");
+    expect(tone).toHaveTextContent("Playful and teasing");
+    expect(screen.queryByRole("textbox", { name: "Custom tone prompt" })).not.toBeInTheDocument();
+
+    await user.selectOptions(tone, "custom");
+    expect(patch).toHaveBeenCalledWith({ tts_tone_preset: "custom" });
+
+    settings.voice = { ...settings.voice, tts_tone_preset: "custom" };
+    view.rerender(
+      <VoiceSettingsPanel
+        settings={settings}
+        locked={false}
+        dirty={true}
+        patch={patch}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+    const customPrompt = screen.getByRole("textbox", { name: "Custom tone prompt" });
+    fireEvent.change(customPrompt, { target: { value: "Speak with quiet anticipation." } });
+    expect(patch).toHaveBeenLastCalledWith({ tts_tone_prompt: "Speak with quiet anticipation." });
+  });
 });
 
 function modelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn(), contextSizes = [16384, 32768, 65536, 131072]) {
@@ -313,12 +374,15 @@ function voiceSettings(): PublicSettings {
       tts_worker_path: "",
       tts_worker_args: [],
       speak_replies: false,
+      tts_tone_preset: "natural",
+      tts_tone_prompt: "",
     },
     options: {
       asr_providers: ["none", "parakeet_managed"],
       tts_providers: ["none", "faster_qwen3_tts", "chatterbox_tts", "openai_compatible"],
       parakeet_sources: ["app_managed"],
       tts_devices: ["auto", "cuda", "cpu"],
+      tts_tone_presets: ["natural", "warm", "playful", "tender", "commanding", "excited", "custom"],
     },
   } as unknown as PublicSettings;
 }

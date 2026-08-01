@@ -57,7 +57,8 @@ revision ref is accepted only when it contains exactly one complete snapshot.
 MagicHandy's small launcher wrapper is copied beside the module and refreshed
 by ordinary app updates without touching the Python environment or model cache.
 It extends only the managed Faster Qwen endpoint with an unsigned generation
-seed and performs one short discarded streaming warm-up before reporting ready.
+seed and an optional Base-model tone instruction, then performs one short
+discarded streaming warm-up before reporting ready.
 The warm-up prevents one-time model initialization from changing the first
 user-visible fixed-seed clip; the pinned upstream model remains unchanged.
 
@@ -126,6 +127,23 @@ emit an end token and produce unusually long or degraded speech, so the managed
 wrapper also applies a generous text-proportional 12-to-160-second generation
 ceiling. Fixed mode remains the recommended default.
 
+### Tone prompts
+
+Settings > Voice exposes a reviewed set of Faster Qwen delivery prompts:
+Natural, Warm and intimate, Playful and teasing, Soft and reassuring,
+Confident and commanding, and Excited and energetic. **Natural** sends no
+instruction and therefore preserves the behavior of installations created
+before this control existed. **Custom** reveals a bounded free-text prompt for
+pace, emotion, pitch, emphasis, or other delivery guidance.
+
+The managed Faster Qwen Base model accepts these instructions while cloning in
+the existing in-context-learning mode. Instruction following is experimental:
+the reference WAV, exact transcript, generated text, and seed still materially
+affect delivery, and a prompt cannot repair a noisy or mismatched reference.
+Saving a changed tone reconfigures the managed worker before the next request.
+The prompt is persisted with the other voice settings and is never sent to
+generic OpenAI-compatible TTS providers.
+
 Chatterbox accepts a local reference WAV as a named voice. The installer copies
 that source into the module's voice directory and stores the resulting voice
 name. The original file remains untouched. Without a reference, the pinned
@@ -150,8 +168,9 @@ MagicHandy sends:
 }
 ```
 
-The managed Faster Qwen wrapper also accepts `"seed": 1337`. The Go adapter
-adds it only for that provider.
+The managed Faster Qwen wrapper also accepts `"seed": 1337` and an optional
+`"instruct": "Speak in a warm, intimate tone."`. The Go adapter adds these
+nonstandard fields only for that provider.
 
 `model` and `voice` may be omitted when the server does not require them. The
 worker accepts WAV, MP3, Opus, AAC, or FLAC responses. WAV is preferred

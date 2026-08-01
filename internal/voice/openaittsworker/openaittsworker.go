@@ -43,6 +43,7 @@ const (
 	queueCapacity        = 8
 	chunkBytes           = 32 * 1024
 	maxSpeechBytes       = 32 << 10
+	maxInstructBytes     = 2 << 10
 	maxAudioBytes        = 32 << 20
 	maxHealthBytes       = 64 << 10
 	maxErrorBytes        = 2 << 10
@@ -57,6 +58,7 @@ type Options struct {
 	APIKey           string
 	Model            string
 	Voice            string
+	Instruct         string
 	ResponseFormat   string
 	HealthPath       string
 	HealthReadyField string
@@ -389,6 +391,9 @@ func (s *session) speechRequestBody(request protocol.Request, text string) ([]by
 	if voice != "" {
 		payload["voice"] = voice
 	}
+	if s.options.Instruct != "" {
+		payload["instruct"] = s.options.Instruct
+	}
 	if s.options.Seed != nil {
 		seed := *s.options.Seed
 		if s.options.RandomizeSeed {
@@ -522,6 +527,7 @@ func normalizeOptions(options Options) Options {
 	options.APIKey = strings.TrimSpace(options.APIKey)
 	options.Model = strings.TrimSpace(options.Model)
 	options.Voice = strings.TrimSpace(options.Voice)
+	options.Instruct = strings.TrimSpace(options.Instruct)
 	options.ResponseFormat = strings.ToLower(strings.TrimSpace(options.ResponseFormat))
 	if options.ResponseFormat == "" {
 		options.ResponseFormat = DefaultResponseFormat
@@ -589,6 +595,9 @@ func validateServerEndpoint(options Options) error {
 func validateRequestOptions(options Options) error {
 	if options.RandomizeSeed && options.Seed == nil {
 		return errors.New("randomized TTS seed mode requires a configured seed")
+	}
+	if len(options.Instruct) > maxInstructBytes {
+		return fmt.Errorf("TTS instruction exceeds %d KiB", maxInstructBytes>>10)
 	}
 	for label, value := range map[string]string{
 		"model": options.Model, "voice": options.Voice, "response format": options.ResponseFormat,

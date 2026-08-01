@@ -695,6 +695,8 @@ export interface VoiceSettings {
   tts_device?: "auto" | "cuda" | "cpu" | string;
   tts_seed: number;
   tts_seed_mode: "fixed" | "varied" | string;
+  tts_tone_preset: "natural" | "warm" | "playful" | "tender" | "commanding" | "excited" | "custom" | string;
+  tts_tone_prompt?: string;
   parakeet_server_path?: string;
   parakeet_model_path?: string;
   parakeet_port?: number;
@@ -739,6 +741,8 @@ export interface VoiceSettingsUpdate {
   tts_device: "auto" | "cuda" | "cpu" | string;
   tts_seed: number;
   tts_seed_mode: "fixed" | "varied" | string;
+  tts_tone_preset: "natural" | "warm" | "playful" | "tender" | "commanding" | "excited" | "custom" | string;
+  tts_tone_prompt: string;
   parakeet_server_path: string;
   parakeet_model_path: string;
   parakeet_port: number;
@@ -832,6 +836,7 @@ export interface OptionHints {
   asr_providers?: string[];
   parakeet_sources?: string[];
   tts_devices?: string[];
+  tts_tone_presets?: string[];
   chat_startup_behaviors?: string[];
   locales?: string[];
   themes?: string[];

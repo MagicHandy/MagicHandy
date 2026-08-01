@@ -108,6 +108,9 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 	}
 	if settings.TTSProvider == config.VoiceTTSProviderFasterQwen {
 		worker.Args = append(worker.Args, "-seed", strconv.FormatUint(uint64(settings.TTSSeed), 10))
+		if instruct := config.ResolveTTSTonePrompt(settings); instruct != "" {
+			worker.Args = append(worker.Args, "-instruct", instruct)
+		}
 		if settings.TTSSeedMode == config.TTSSeedModeVaried {
 			worker.Args = append(worker.Args, "-randomize-seed")
 		}

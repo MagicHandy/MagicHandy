@@ -224,6 +224,9 @@ try {
     $installedQwenLauncher = Join-Path $qwenRoot 'magichandy-faster-qwen-server.py'
     Assert-True -Condition (Test-Path -LiteralPath $installedQwenLauncher -PathType Leaf) -Message 'main updater should sync the Faster Qwen launcher without reinstalling the model'
     Assert-Equal -Expected ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Repo 'scripts\tts\faster-qwen-server.py')).Hash) -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $installedQwenLauncher).Hash) -Message 'synced Faster Qwen launcher content'
+    $installedQwenLauncherSource = Get-Content -Raw -LiteralPath $installedQwenLauncher
+    Assert-True -Condition ($installedQwenLauncherSource -match 'instruct=request\.instruct or None') -Message 'synced Faster Qwen launcher should forward tone instructions'
+    Assert-True -Condition ($installedQwenLauncherSource -match 'generate_voice_clone_streaming') -Message 'synced Faster Qwen launcher should retain streaming synthesis'
     $moduleState = [ordered]@{
         schema_version = 2
         module = 'faster-qwen3-tts'
