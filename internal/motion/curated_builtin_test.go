@@ -77,10 +77,9 @@ func TestCuratedBuiltinPatternsLoad(t *testing.T) {
 	// TestBuiltinCatalogIncludesGeneratedPatternsWithoutExactTimingExemption, and
 	// against the speed envelope by TestCatalogPatternsHoldTheMeasuredSpeedEnvelope.
 	wantStable := []PatternID{
-		"curated-easy-drive-1", "curated-easy-drive-3", "curated-easy-drive-4",
-		"curated-easy-drive-5", "curated-easy-drive-6", "curated-gentle-drive-2",
-		"curated-gentle-drive-3", "curated-gentle-drive-4", "curated-gentle-drive-5",
-		"curated-steady-drive-2",
+		"curated-easy-drive-1", "curated-easy-drive-2", "curated-easy-drive-3",
+		"curated-easy-drive-4", "curated-easy-drive-5", "curated-gentle-drive-1",
+		"curated-gentle-drive-2", "curated-gentle-drive-3", "curated-steady-drive-2",
 	}
 	if experimental != catalog.PatternCount-len(wantStable) || !slices.Equal(stable, wantStable) {
 		t.Fatalf("generated status audit = %d experimental, stable %v", experimental, stable)

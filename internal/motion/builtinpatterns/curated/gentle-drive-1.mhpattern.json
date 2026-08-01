@@ -3,51 +3,43 @@
   "name": "Gentle Drive 1",
   "description": "Slow cadence.",
   "kind": "routine",
-  "cycle_ms": 9140,
+  "cycle_ms": 10000,
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 50
-    },
-    {
-      "time_ms": 1000,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 1595,
-      "position_percent": 25
-    },
-    {
-      "time_ms": 2785,
-      "position_percent": 75
-    },
-    {
-      "time_ms": 3380,
       "position_percent": 100
     },
     {
-      "time_ms": 4570,
-      "position_percent": 50
-    },
-    {
-      "time_ms": 5570,
+      "time_ms": 766,
       "position_percent": 0
     },
     {
-      "time_ms": 6165,
-      "position_percent": 25
-    },
-    {
-      "time_ms": 7355,
-      "position_percent": 75
-    },
-    {
-      "time_ms": 7950,
+      "time_ms": 2400,
       "position_percent": 100
     },
     {
-      "time_ms": 9140,
-      "position_percent": 50
+      "time_ms": 3600,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5154,
+      "position_percent": 99
+    },
+    {
+      "time_ms": 6354,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8010,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9210,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
     }
   ],
   "tags": [

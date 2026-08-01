@@ -7,61 +7,61 @@
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 100
+      "position_percent": 0
     },
     {
-      "time_ms": 833,
-      "position_percent": 0
+      "time_ms": 848,
+      "position_percent": 100
     },
     {
       "time_ms": 1666,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 2500,
       "position_percent": 0
     },
     {
-      "time_ms": 3333,
+      "time_ms": 2515,
       "position_percent": 100
     },
     {
-      "time_ms": 4166,
+      "time_ms": 3348,
       "position_percent": 0
     },
     {
-      "time_ms": 5000,
+      "time_ms": 4219,
       "position_percent": 100
     },
     {
-      "time_ms": 5833,
+      "time_ms": 5053,
       "position_percent": 0
     },
     {
-      "time_ms": 6666,
+      "time_ms": 5925,
       "position_percent": 100
     },
     {
-      "time_ms": 7500,
+      "time_ms": 6758,
       "position_percent": 0
     },
     {
-      "time_ms": 8333,
+      "time_ms": 7592,
       "position_percent": 100
     },
     {
-      "time_ms": 9167,
+      "time_ms": 8425,
       "position_percent": 0
+    },
+    {
+      "time_ms": 9296,
+      "position_percent": 100
     },
     {
       "time_ms": 10000,
-      "position_percent": 100
+      "position_percent": 0
     }
   ],
   "tags": [
-    "accent",
+    "tip",
     "rhythmic",
-    "tempo-change",
+    "varied",
     "upper-return"
   ]
 }

@@ -1,108 +1,188 @@
 {
   "schema": "magichandy.pattern.v1",
   "name": "Fast Drive 3",
-  "description": "Medium cadence.",
+  "description": "Quick cadence.",
   "kind": "routine",
-  "cycle_ms": 9600,
+  "cycle_ms": 10000,
   "points": [
     {
       "time_ms": 0,
       "position_percent": 100
     },
     {
-      "time_ms": 367,
-      "position_percent": 0
+      "time_ms": 217,
+      "position_percent": 30
     },
     {
-      "time_ms": 733,
+      "time_ms": 533,
       "position_percent": 100
     },
     {
-      "time_ms": 1100,
+      "time_ms": 866,
       "position_percent": 0
     },
     {
-      "time_ms": 1467,
+      "time_ms": 1233,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 1433,
+      "position_percent": 8
+    },
+    {
+      "time_ms": 1733,
+      "position_percent": 59
+    },
+    {
+      "time_ms": 1933,
+      "position_percent": 26
+    },
+    {
+      "time_ms": 2183,
+      "position_percent": 74
+    },
+    {
+      "time_ms": 2366,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 2616,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2800,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 3050,
       "position_percent": 100
     },
     {
-      "time_ms": 1833,
-      "position_percent": 0
+      "time_ms": 3233,
+      "position_percent": 60
     },
     {
-      "time_ms": 2200,
+      "time_ms": 3483,
       "position_percent": 100
     },
     {
-      "time_ms": 2567,
-      "position_percent": 0
+      "time_ms": 3716,
+      "position_percent": 50
     },
     {
-      "time_ms": 3200,
+      "time_ms": 3950,
       "position_percent": 100
     },
     {
-      "time_ms": 3567,
-      "position_percent": 0
+      "time_ms": 4183,
+      "position_percent": 60
     },
     {
-      "time_ms": 3933,
+      "time_ms": 4466,
       "position_percent": 100
     },
     {
-      "time_ms": 4300,
-      "position_percent": 0
+      "time_ms": 4666,
+      "position_percent": 17
     },
     {
-      "time_ms": 4667,
-      "position_percent": 100
+      "time_ms": 4900,
+      "position_percent": 87
     },
     {
-      "time_ms": 5033,
-      "position_percent": 0
+      "time_ms": 5100,
+      "position_percent": 17
     },
     {
-      "time_ms": 5400,
-      "position_percent": 100
+      "time_ms": 5333,
+      "position_percent": 87
     },
     {
-      "time_ms": 5767,
-      "position_percent": 0
+      "time_ms": 5533,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 5766,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 5966,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 6200,
+      "position_percent": 87
     },
     {
       "time_ms": 6400,
-      "position_percent": 100
+      "position_percent": 17
     },
     {
-      "time_ms": 6767,
-      "position_percent": 0
+      "time_ms": 6633,
+      "position_percent": 87
     },
     {
-      "time_ms": 7133,
-      "position_percent": 100
+      "time_ms": 6833,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 7066,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 7266,
+      "position_percent": 17
     },
     {
       "time_ms": 7500,
-      "position_percent": 0
+      "position_percent": 87
     },
     {
-      "time_ms": 7867,
-      "position_percent": 100
+      "time_ms": 7700,
+      "position_percent": 17
     },
     {
-      "time_ms": 8233,
-      "position_percent": 0
+      "time_ms": 7933,
+      "position_percent": 87
     },
     {
-      "time_ms": 8600,
-      "position_percent": 100
+      "time_ms": 8133,
+      "position_percent": 17
     },
     {
-      "time_ms": 8967,
-      "position_percent": 0
+      "time_ms": 8366,
+      "position_percent": 87
     },
     {
-      "time_ms": 9600,
+      "time_ms": 8566,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 8800,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 9000,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 9233,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 9433,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 9666,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 9866,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 10000,
       "position_percent": 100
     }
   ],

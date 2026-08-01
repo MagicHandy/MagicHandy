@@ -1,6 +1,6 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Easy Roll 4",
+  "name": "Easy Roll",
   "description": "Medium cadence.",
   "kind": "routine",
   "cycle_ms": 10000,

@@ -1,82 +1,183 @@
 {
   "schema": "magichandy.pattern.v1",
   "name": "Steady Roll 2",
-  "description": "Medium cadence.",
+  "description": "Quick cadence.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 83.333333
+    },
+    {
+      "time_ms": 400,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 984,
+      "position_percent": 16.666667
+    },
+    {
+      "time_ms": 1294,
+      "position_percent": 55
+    },
+    {
+      "time_ms": 1377,
       "position_percent": 0
     },
     {
-      "time_ms": 934,
-      "position_percent": 100
+      "time_ms": 1460,
+      "position_percent": 50
     },
     {
-      "time_ms": 1668,
-      "position_percent": 12.5
-    },
-    {
-      "time_ms": 2402,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 3069,
+      "time_ms": 1544,
       "position_percent": 0
     },
     {
-      "time_ms": 3904,
-      "position_percent": 100
+      "time_ms": 1677,
+      "position_percent": 46.666667
     },
     {
-      "time_ms": 4471,
-      "position_percent": 6.25
-    },
-    {
-      "time_ms": 5272,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5906,
-      "position_percent": 6.25
-    },
-    {
-      "time_ms": 6673,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 7274,
+      "time_ms": 1810,
       "position_percent": 0
     },
     {
-      "time_ms": 7908,
-      "position_percent": 87.5
-    },
-    {
-      "time_ms": 8508,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8808,
+      "time_ms": 2376,
       "position_percent": 100
     },
     {
-      "time_ms": 9075,
+      "time_ms": 2543,
       "position_percent": 0
     },
     {
-      "time_ms": 9376,
-      "position_percent": 100
+      "time_ms": 2643,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 2743,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3209,
+      "position_percent": 93.333333
+    },
+    {
+      "time_ms": 3376,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3476,
+      "position_percent": 46.666667
+    },
+    {
+      "time_ms": 3576,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4193,
+      "position_percent": 88.333333
+    },
+    {
+      "time_ms": 4376,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4476,
+      "position_percent": 46.666667
+    },
+    {
+      "time_ms": 4576,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5376,
+      "position_percent": 83.333333
+    },
+    {
+      "time_ms": 5559,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5676,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 5793,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6576,
+      "position_percent": 78.333333
+    },
+    {
+      "time_ms": 6759,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6876,
+      "position_percent": 46.666667
+    },
+    {
+      "time_ms": 6993,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7759,
+      "position_percent": 73.333333
+    },
+    {
+      "time_ms": 7943,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8059,
+      "position_percent": 45
+    },
+    {
+      "time_ms": 8176,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8309,
+      "position_percent": 28.333333
+    },
+    {
+      "time_ms": 8493,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8910,
+      "position_percent": 68.333333
+    },
+    {
+      "time_ms": 9094,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9210,
+      "position_percent": 41.666667
+    },
+    {
+      "time_ms": 9327,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9500,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 9667,
+      "position_percent": 0
     },
     {
       "time_ms": 10000,
-      "position_percent": 0
+      "position_percent": 83.333333
     }
   ],
   "tags": [
     "full",
     "rhythmic",
-    "build"
+    "varied",
+    "upper-return"
   ]
 }
