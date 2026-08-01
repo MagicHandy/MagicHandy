@@ -50,24 +50,25 @@ const (
 	// AutopilotDefaultMotionMaxSeconds is the upper natural motion bound.
 	AutopilotDefaultMotionMaxSeconds = 60
 
-	// AutopilotArcHold keeps the session arc where it is.
+	// AutopilotArcHold keeps the session buildup where it is.
 	AutopilotArcHold = "hold"
-	// AutopilotArcAdvance asks the backend to move the arc forward one bounded
+	// AutopilotArcAdvance asks the backend to move the buildup forward one bounded
 	// step. The model can never write the value itself.
 	AutopilotArcAdvance = "advance"
-	// AutopilotArcEase asks the backend to move the arc back one bounded step, so
+	// AutopilotArcEase asks the backend to move the buildup back one bounded step, so
 	// the model can wind down as well as build.
 	AutopilotArcEase = "ease"
 
-	// AutopilotMinimumArcMinutes and AutopilotMaximumArcMinutes bound the arc
-	// length. Below the minimum the bar would fill faster than the model could
-	// respond to it.
-	AutopilotMinimumArcMinutes = 5
-	// AutopilotMaximumArcMinutes is the longest arc a user may configure.
-	AutopilotMaximumArcMinutes = 180
-	// AutopilotDefaultArcMinutes is the first-run arc length.
+	// AutopilotMinimumArcMinutes accepts any positive whole-minute buildup.
+	// The model cadence remains independently bounded, so a short buildup does
+	// not permit faster model calls or motion outside the user's limits.
+	AutopilotMinimumArcMinutes = 1
+	// AutopilotMaximumArcMinutes is only a time.Duration overflow guard, not a
+	// product-level session limit. It is roughly 292 years.
+	AutopilotMaximumArcMinutes = 153_722_867
+	// AutopilotDefaultArcMinutes is the first-run buildup duration.
 	AutopilotDefaultArcMinutes = 30
-	// AutopilotArcNudgePercent is the most one model turn may move the arc. A
+	// AutopilotArcNudgePercent is the most one model turn may move the buildup. A
 	// clamp is what keeps an eager model from sprinting the bar to full.
 	AutopilotArcNudgePercent = 6
 )
@@ -95,7 +96,7 @@ type AutopilotSettings struct {
 	// long a session has run and being encouraged to escalate through it are
 	// different things, and a user may want the first without the second.
 	//
-	// The arc positions intent inside the user's existing speed band. It never
+	// The buildup positions intent inside the user's existing speed band. It never
 	// widens the band, the focus range, or any capability gate.
 	SessionArc        bool `json:"session_arc"`
 	SessionArcMinutes int  `json:"session_arc_minutes"`
@@ -114,7 +115,7 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		AdaptiveMotionTiming:  true,
 		SpeechMotionAuthority: AutopilotSpeechMotionChatOnly,
 		// Tracking defaults on: it is read-only context that makes cadence
-		// decisions better informed. The arc defaults off because it changes what
+		// decisions better informed. Buildup defaults off because it changes what
 		// the model is encouraged to do, which is a choice the user should make.
 		SessionTracking:   true,
 		SessionArc:        false,
@@ -122,7 +123,7 @@ func DefaultAutopilotSettings() AutopilotSettings {
 	}
 }
 
-// ValidAutopilotArcIntent reports whether a model-supplied arc nudge is one this
+// ValidAutopilotArcIntent reports whether a model-supplied buildup nudge is one this
 // build honors. Anything else resolves to hold.
 func ValidAutopilotArcIntent(intent string) bool {
 	return oneOf(intent, AutopilotArcHold, AutopilotArcAdvance, AutopilotArcEase)
@@ -206,16 +207,16 @@ func validateAutopilotSettings(settings AutopilotSettings) error {
 	if settings.SessionArcMinutes < AutopilotMinimumArcMinutes ||
 		settings.SessionArcMinutes > AutopilotMaximumArcMinutes {
 		return fmt.Errorf(
-			"autopilot session arc length must be between %d and %d minutes",
+			"autopilot session buildup duration must be between %d and %d minutes",
 			AutopilotMinimumArcMinutes,
 			AutopilotMaximumArcMinutes,
 		)
 	}
-	// The arc is a reading of session progress, so it cannot exist without the
+	// The buildup is a reading of session progress, so it cannot exist without the
 	// tracking that produces it. Rejecting the combination keeps the settings
 	// document from expressing a state the runtime would have to silently ignore.
 	if settings.SessionArc && !settings.SessionTracking {
-		return errors.New("autopilot session arc requires session tracking")
+		return errors.New("autopilot session buildup requires session tracking")
 	}
 	return nil
 }
@@ -265,7 +266,7 @@ func applyMissingAutopilotDefaults(
 	if settings.MotionMaxSeconds == 0 {
 		settings.MotionMaxSeconds = defaults.MotionMaxSeconds
 	}
-	// A bool cannot distinguish "absent" from "explicitly false", so the new arc
+	// A bool cannot distinguish "absent" from "explicitly false", so the new buildup
 	// length doubles as the presence marker for this field group: it is zero only
 	// in a document written before the group existed. Without this, a document
 	// saved between the cadence release and this one would silently run with

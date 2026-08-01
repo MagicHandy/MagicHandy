@@ -6,7 +6,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
-// The session arc is a visible fill bar the model is encouraged to build along.
+// Session buildup is visible progress the model is encouraged to build along.
 //
 // A model-maintained score that quietly accumulates and then drives intensity is
 // the hidden-escalation shape docs/goals-and-guardrails.md rules out. Four
@@ -15,7 +15,7 @@ import (
 //
 //   - Visible. The value is rendered, so nothing about the progression is hidden
 //     from the person it is happening to.
-//   - User-armed. Off is the default, and off removes the arc from the prompt
+//   - User-armed. Off is the default, and off removes buildup from the prompt
 //     entirely rather than sending a zero — the model cannot act on a field it
 //     never saw, which is the same discipline the capability gates use.
 //   - Bounded. It is a percentage with a full mark, not a counter that grows.
@@ -23,7 +23,7 @@ import (
 //     can never write the value. So it cannot sprint the bar to full, and the
 //     trace shows every nudge.
 //
-// What the arc does *not* do is widen anything. It positions intent inside the
+// What buildup does *not* do is widen anything. It positions intent inside the
 // user's existing speed band. Speed limits, focus range, and capability gates
 // stay exactly where the user set them, and the engine clamps regardless.
 type arcState struct {
@@ -35,7 +35,7 @@ type arcState struct {
 	lastNudge string
 }
 
-// SessionArc is the UI-facing arc snapshot.
+// SessionArc is the UI-facing buildup snapshot. Its name preserves the API schema.
 type SessionArc struct {
 	Enabled bool   `json:"enabled"`
 	Percent int    `json:"percent"`
@@ -71,7 +71,7 @@ func (m *Manager) arcPercentLocked(now time.Time) int {
 	return clampInt(percent, 0, 100)
 }
 
-// applyArcIntentLocked moves the arc by at most one clamped step. Callers hold
+// applyArcIntentLocked moves buildup by at most one clamped step. Callers hold
 // the lock.
 func (m *Manager) applyArcIntentLocked(now time.Time, intent string) {
 	settings := m.options.AutopilotSettings()
@@ -96,7 +96,7 @@ func (m *Manager) applyArcIntentLocked(now time.Time, intent string) {
 	}
 }
 
-// SessionArcSnapshot reports the arc for the UI.
+// SessionArcSnapshot reports buildup for the UI.
 func (m *Manager) SessionArcSnapshot() SessionArc {
 	settings := m.options.AutopilotSettings()
 	m.mu.Lock()
@@ -112,11 +112,11 @@ func (m *Manager) SessionArcSnapshot() SessionArc {
 	return arc
 }
 
-// ResetSessionArc returns the bar to empty. The user owns the arc as much as the
+// ResetSessionArc returns buildup to empty. The user owns the progress as much as the
 // model does; a bar you cannot pull back is not really an override.
 //
-// It reports false when there is no Autopilot session to place an arc in. Start
-// clears the arc for a fresh run, so accepting a placement beforehand would store
+// It reports false when there is no Autopilot session to place buildup in. Start
+// clears buildup for a fresh run, so accepting a placement beforehand would store
 // a value that is silently discarded a moment later — a call that appears to work
 // and does nothing is worse than one that says no.
 func (m *Manager) ResetSessionArc() bool {

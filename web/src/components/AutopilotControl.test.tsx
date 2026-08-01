@@ -172,9 +172,9 @@ describe("AutopilotControl", () => {
     });
   });
 
-  // The arc is only defensible because it is visible. If the bar can be enabled
-  // without appearing, the safety argument for the whole feature is gone.
-  it("renders the session arc bar with its value when the backend reports one", () => {
+  // Session buildup is only defensible because it is visible. If it can be
+  // enabled without appearing, the safety argument for the feature is gone.
+  it("renders session buildup with its value when the backend reports one", () => {
     app.state = {
       modes: {
         mode: "autopilot",
@@ -185,7 +185,7 @@ describe("AutopilotControl", () => {
     };
     render(<AutopilotControl />);
 
-    const meter = screen.getByRole("meter", { name: "Session arc" });
+    const meter = screen.getByRole("meter", { name: "Session buildup" });
     expect(meter).toHaveAttribute("aria-valuenow", "42");
     expect(meter).toHaveAttribute("aria-valuemin", "0");
     expect(meter).toHaveAttribute("aria-valuemax", "100");
@@ -194,13 +194,13 @@ describe("AutopilotControl", () => {
     expect(screen.getByText(/limits never move/i)).toBeInTheDocument();
   });
 
-  it("shows no arc while the switch is off", () => {
+  it("shows no buildup while the switch is off", () => {
     app.state = {
       modes: { mode: "autopilot", segment_index: 3 },
       settings: { autopilot: autopilotPreferences },
     };
     render(<AutopilotControl />);
-    expect(screen.queryByRole("meter", { name: "Session arc" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("meter", { name: "Session buildup" })).not.toBeInTheDocument();
   });
 
   // A bar the user cannot pull back would be a readout, not an override.
@@ -216,24 +216,79 @@ describe("AutopilotControl", () => {
     };
     render(<AutopilotControl />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset arc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset buildup" }));
     await act(async () => {
       await Promise.resolve();
     });
     expect(resetAutopilotArc).toHaveBeenCalledOnce();
   });
 
-  // The arc is a reading of session progress, so the UI must not offer a
-  // combination the backend rejects.
-  it("cannot enable the arc without session tracking", () => {
+  it("enables required session tracking with session buildup", async () => {
+    saveAutopilotPreferences.mockResolvedValue({
+      autopilot: { ...autopilotPreferences, session_tracking: true, session_arc: true },
+    });
     app.state = {
       modes: { mode: "autopilot" },
       settings: { autopilot: { ...autopilotPreferences, session_tracking: false } },
     };
     render(<AutopilotControl />);
-    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Session buildup" }));
 
-    expect(screen.getByRole("checkbox", { name: /Session arc bar/ })).toBeDisabled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({
+      session_tracking: true,
+      session_arc: true,
+    }));
+  });
+
+  it("shows custom cadence timing beside its selector without opening Advanced", () => {
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: {
+        autopilot: {
+          ...autopilotPreferences,
+          motion_cadence: "custom",
+          speech_cadence: "custom",
+        },
+      },
+    };
+    render(<AutopilotControl />);
+
+    const advanced = screen.getByText("Advanced").closest("details");
+    const motionSelector = screen.getByRole("combobox", { name: "Motion changes" });
+    const speechSelector = screen.getByRole("combobox", { name: "Spoken check-ins" });
+    const motionMinimum = screen.getByRole("spinbutton", { name: "Motion minimum seconds" });
+    const speechMinimum = screen.getByRole("spinbutton", { name: "Speech minimum seconds" });
+    expect(advanced).not.toContainElement(motionMinimum);
+    expect(advanced).not.toContainElement(speechMinimum);
+    expect(motionSelector.parentElement?.nextElementSibling).toContainElement(motionMinimum);
+    expect(speechSelector.parentElement?.nextElementSibling).toContainElement(speechMinimum);
+    expect(screen.getByText("Motion range")).toBeVisible();
+    expect(screen.getByText("Speech range")).toBeVisible();
+  });
+
+  it.each([1, 24 * 60])("saves a %d minute custom buildup", async (minutes) => {
+    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
+    };
+    render(<AutopilotControl />);
+    const duration = screen.getByRole("spinbutton", { name: "Session buildup minutes" });
+
+    await act(async () => {
+      fireEvent.change(duration, { target: { value: String(minutes) } });
+      fireEvent.blur(duration);
+      await Promise.resolve();
+    });
+
+    expect(duration).toHaveAttribute("min", "1");
+    expect(duration).not.toHaveAttribute("max");
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({
+      session_arc_minutes: minutes,
+    }));
   });
 
   it("clears the arc when session tracking is switched off", async () => {

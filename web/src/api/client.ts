@@ -399,7 +399,7 @@ export const api = {
     apply_video_speed_limit: boolean;
   }>) => request("POST", "/api/media/playback", patch),
 
-  // The session arc is the user's as much as the model's: a progression you can
+  // Session buildup is the user's as much as the model's: progress you can
   // see but not move would be a readout, not an override.
   setAutopilotArc: (percent: number) =>
     request<{ session_arc: SessionArc }>("PUT", "/api/modes/autopilot/arc", { percent }),

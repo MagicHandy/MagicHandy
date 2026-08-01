@@ -44,7 +44,7 @@ type AutopilotResponse struct {
 	// texture rather than a rejected turn, because it was added after the
 	// contract shipped and a missing field is not a malformed response.
 	Variability string
-	// Arc is a request to move the visible session arc by one bounded step. It is
+	// Arc is a request to move visible session buildup by one bounded step. It is
 	// read only while the arc is enabled and can never set the value.
 	Arc string
 }

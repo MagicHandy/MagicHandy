@@ -34,11 +34,15 @@ const authorityOptions = [
   ["full_motion", "Full motion"],
 ] as const satisfies ReadonlyArray<readonly [string, MessageKey]>;
 
-// SessionArcBar renders the visible session progression. The arc is only
-// defensible because it is visible: a model encouraged to build intensity through
-// a hidden counter is the escalation pattern the goals doc rules out, and a bar on
-// screen with a reset beside it is the difference.
-function SessionArcBar({
+const minimumBuildupMinutes = 1;
+// This only prevents time.Duration overflow in the Go scheduler. It is not a
+// product-level session limit and is intentionally absent from the input UI.
+const maximumBuildupMinutes = 153_722_867;
+
+// SessionBuildup renders the visible session progression. A model encouraged to
+// build intensity through a hidden counter is the escalation pattern the goals
+// doc rules out; visible progress with a reset beside it is the difference.
+function SessionBuildup({
   arc,
   disabled,
   onReset,
@@ -48,25 +52,25 @@ function SessionArcBar({
   onReset: () => void;
 }) {
   return (
-    <div className="autopilot-arc">
-      <div className="autopilot-arc-head">
-        <span className="label">{t("Session arc")}</span>
+    <div className="autopilot-buildup">
+      <div className="autopilot-buildup-head">
+        <span className="label">{t("Session buildup")}</span>
         <span className="hint-inline">{t("{percent}% of {minutes} min", { percent: arc.percent, minutes: arc.minutes })}</span>
       </div>
       <div
-        className="autopilot-arc-track"
+        className="autopilot-buildup-track"
         role="meter"
-        aria-label={t("Session arc")}
+        aria-label={t("Session buildup")}
         aria-valuenow={arc.percent}
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <span className="autopilot-arc-fill" style={{ width: `${arc.percent}%` }} />
+        <span className="autopilot-buildup-fill" style={{ width: `${arc.percent}%` }} />
       </div>
-      <div className="autopilot-arc-actions">
+      <div className="autopilot-buildup-actions">
         <span className="hint">{t("The assistant aims higher in your speed range as this fills. Your limits never move.")}</span>
         <button type="button" className="btn btn-secondary" disabled={disabled} onClick={onReset}>
-          {t("Reset arc")}
+          {t("Reset buildup")}
         </button>
       </div>
     </div>
@@ -157,7 +161,7 @@ export function AutopilotControl() {
   }
 
   const preferences = state?.settings?.autopilot;
-  const resetArc = async () => {
+  const resetBuildup = async () => {
     try {
       await api.resetAutopilotArc();
       refresh();
@@ -209,10 +213,10 @@ export function AutopilotControl() {
         </button>
       </div>
       {active && modes?.session_arc?.enabled && (
-        <SessionArcBar
+        <SessionBuildup
           arc={modes.session_arc}
           disabled={locked}
-          onReset={() => void resetArc()}
+          onReset={() => void resetBuildup()}
         />
       )}
       {preferences && (
@@ -264,11 +268,13 @@ function AutopilotPreferences({
     }
   }
 
-  // The arc length is a single bounded value in minutes, not one end of a paired
-  // seconds window, so it gets its own saver rather than branches inside one.
-  function saveArcMinutes(raw: string) {
+  // Buildup duration is a single positive whole-minute value, not one end of a
+  // cadence window, so it gets its own saver.
+  function saveBuildupMinutes(raw: string) {
     const parsed = Number.parseInt(raw, 10);
-    const minutes = Number.isFinite(parsed) ? Math.min(180, Math.max(5, parsed)) : 30;
+    const minutes = Number.isFinite(parsed)
+      ? Math.min(maximumBuildupMinutes, Math.max(minimumBuildupMinutes, parsed))
+      : 30;
     void save({ ...draft, session_arc_minutes: minutes });
   }
 
@@ -301,12 +307,96 @@ function AutopilotPreferences({
           {motionOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
         </select>
       </label>
+      {draft.motion_cadence === "custom" && (
+        <div className="autopilot-window autopilot-window-range">
+          <span>{t("Motion range")}</span>
+          <input
+            type="number"
+            min={8}
+            max={300}
+            value={draft.motion_min_seconds}
+            aria-label={t("Motion minimum seconds")}
+            onChange={(event) => setDraft({ ...draft, motion_min_seconds: Number(event.target.value) })}
+            onBlur={(event) => saveNumber("motion_min_seconds", event.target.value)}
+          />
+          <span aria-hidden="true">-</span>
+          <input
+            type="number"
+            min={8}
+            max={300}
+            value={draft.motion_max_seconds}
+            aria-label={t("Motion maximum seconds")}
+            onChange={(event) => setDraft({ ...draft, motion_max_seconds: Number(event.target.value) })}
+            onBlur={(event) => saveNumber("motion_max_seconds", event.target.value)}
+          />
+          <span>{t("seconds")}</span>
+        </div>
+      )}
       <label>
         <span>{t("Spoken check-ins")}</span>
         <select value={draft.speech_cadence} onChange={(event) => void save({ ...draft, speech_cadence: event.target.value })}>
           {speechOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
         </select>
       </label>
+      {draft.speech_cadence === "custom" && (
+        <div className="autopilot-window autopilot-window-range">
+          <span>{t("Speech range")}</span>
+          <input
+            type="number"
+            min={8}
+            max={600}
+            value={draft.speech_min_seconds}
+            aria-label={t("Speech minimum seconds")}
+            onChange={(event) => setDraft({ ...draft, speech_min_seconds: Number(event.target.value) })}
+            onBlur={(event) => saveNumber("speech_min_seconds", event.target.value)}
+          />
+          <span aria-hidden="true">-</span>
+          <input
+            type="number"
+            min={8}
+            max={600}
+            value={draft.speech_max_seconds}
+            aria-label={t("Speech maximum seconds")}
+            onChange={(event) => setDraft({ ...draft, speech_max_seconds: Number(event.target.value) })}
+            onBlur={(event) => saveNumber("speech_max_seconds", event.target.value)}
+          />
+          <span>{t("seconds")}</span>
+        </div>
+      )}
+      <div className="autopilot-buildup-setting">
+        <label className="toggle-line">
+          <span className="toggle">
+            <input
+              type="checkbox"
+              checked={draft.session_arc}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                void save({
+                  ...draft,
+                  session_arc: enabled,
+                  session_tracking: enabled || draft.session_tracking,
+                });
+              }}
+            />
+            <span className="track" aria-hidden="true" />
+          </span>
+          <span>{t("Session buildup")}</span>
+        </label>
+        {draft.session_arc && (
+          <div className="autopilot-window">
+            <span>{t("Buildup duration")}</span>
+            <input
+              type="number"
+              min={minimumBuildupMinutes}
+              value={draft.session_arc_minutes}
+              aria-label={t("Session buildup minutes")}
+              onChange={(event) => setDraft({ ...draft, session_arc_minutes: Number(event.target.value) })}
+              onBlur={(event) => saveBuildupMinutes(event.target.value)}
+            />
+            <span>{t("minutes")}</span>
+          </div>
+        )}
+      </div>
       <details className="autopilot-advanced">
         <summary>{t("Advanced")}</summary>
         <label className="autopilot-authority">
@@ -363,83 +453,6 @@ function AutopilotPreferences({
           <span>{t("Session tracking")}</span>
         </label>
         <p className="hint">{t("Lets the assistant see how long the session has run and whether the pace has been holding. It informs decisions and changes no limits.")}</p>
-        <label className="toggle-line">
-          <span className="toggle">
-            <input
-              type="checkbox"
-              checked={draft.session_arc}
-              disabled={!draft.session_tracking}
-              onChange={(event) => void save({ ...draft, session_arc: event.target.checked })}
-            />
-            <span className="track" aria-hidden="true" />
-          </span>
-          <span>{t("Session arc bar")}</span>
-        </label>
-        {draft.session_arc && (
-          <div className="autopilot-window">
-            <span>{t("Arc length")}</span>
-            <input
-              type="number"
-              min={5}
-              max={180}
-              value={draft.session_arc_minutes}
-              aria-label={t("Session arc minutes")}
-              onChange={(event) => setDraft({ ...draft, session_arc_minutes: Number(event.target.value) })}
-              onBlur={(event) => saveArcMinutes(event.target.value)}
-            />
-            <span>{t("minutes")}</span>
-          </div>
-        )}
-        {draft.motion_cadence === "custom" && (
-          <div className="autopilot-window">
-            <span>{t("Motion range")}</span>
-            <input
-              type="number"
-              min={8}
-              max={300}
-              value={draft.motion_min_seconds}
-              aria-label={t("Motion minimum seconds")}
-              onChange={(event) => setDraft({ ...draft, motion_min_seconds: Number(event.target.value) })}
-              onBlur={(event) => saveNumber("motion_min_seconds", event.target.value)}
-            />
-            <span aria-hidden="true">-</span>
-            <input
-              type="number"
-              min={8}
-              max={300}
-              value={draft.motion_max_seconds}
-              aria-label={t("Motion maximum seconds")}
-              onChange={(event) => setDraft({ ...draft, motion_max_seconds: Number(event.target.value) })}
-              onBlur={(event) => saveNumber("motion_max_seconds", event.target.value)}
-            />
-            <span>{t("seconds")}</span>
-          </div>
-        )}
-        {draft.speech_cadence === "custom" && (
-          <div className="autopilot-window">
-            <span>{t("Speech range")}</span>
-            <input
-              type="number"
-              min={8}
-              max={600}
-              value={draft.speech_min_seconds}
-              aria-label={t("Speech minimum seconds")}
-              onChange={(event) => setDraft({ ...draft, speech_min_seconds: Number(event.target.value) })}
-              onBlur={(event) => saveNumber("speech_min_seconds", event.target.value)}
-            />
-            <span aria-hidden="true">-</span>
-            <input
-              type="number"
-              min={8}
-              max={600}
-              value={draft.speech_max_seconds}
-              aria-label={t("Speech maximum seconds")}
-              onChange={(event) => setDraft({ ...draft, speech_max_seconds: Number(event.target.value) })}
-              onBlur={(event) => saveNumber("speech_max_seconds", event.target.value)}
-            />
-            <span>{t("seconds")}</span>
-          </div>
-        )}
       </details>
     </fieldset>
   );
