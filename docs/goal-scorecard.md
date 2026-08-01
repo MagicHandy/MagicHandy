@@ -146,13 +146,21 @@ Ranked by threat to the stated goals:
   pace and rhythm rather than depth: five intensity bands measured across the
   whole catalog (Gentle/Easy/Steady/Fast/Intense, 10-800 %/s) crossed with a
   rhythm word from stroke-speed variance, ordered by intensity within each band.
-  That removed 26,385 B of catalog payload and brought the live composed prompt to
-  **37,012 B (~9,253 tokens)**, verified through
-  `/api/diagnostics/prompt-composition`. The remaining catalog cost is per-entry
-  JSON structure rather than labels; the only further lever is exposing fewer than
-  199 patterns. A weight-ranked cap was prototyped and backed out: with every
-  weight at the default it pruned by name, dropping hand-designed patterns in
-  favour of bulk imports.
+  That removed 26,385 B of catalog payload. The catalog encoding then changed from
+  an array of JSON objects to one delimited line per pattern, because five
+  repeated keys cost about 62 B per entry against roughly 65 B of actual label --
+  at two hundred patterns the punctuation cost as much as the content. Weight is
+  emitted only once feedback has moved it off the default, since the preference
+  rule cannot apply while every entry is equal. Catalog 32,144 -> **19,661 B**;
+  live composed prompt **40,706 -> 28,223 B (~7,056 tokens)**, against ~15,949
+  tokens before any of this work, verified through
+  `/api/diagnostics/prompt-composition`. Escaping that `json.Marshal` used to
+  provide is now this package's own job, so `promptTableField` collapses
+  whitespace and strips the delimiter and
+  `TestCatalogRowsCannotBeForgedByPatternLabels` asserts a hostile pattern name
+  cannot forge a row. A weight-ranked cap on catalog size was prototyped and
+  backed out: with every weight at the default it pruned by name, dropping
+  hand-designed patterns in favour of bulk imports.
   Personas changed on three prompt seams. The description arrived as a bare
   labelled fact under a profile that said to use it "only for identity and reply
   wording", so a character sheet read as trivia; it now states what it is and asks
