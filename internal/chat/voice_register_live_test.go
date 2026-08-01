@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -55,7 +57,27 @@ type llamaMessage struct {
 	Content string `json:"content"`
 }
 
-func generate(t *testing.T, base, system string, history []llamaMessage, user string) string {
+// loopbackEndpoint bounds the LLAMA environment variable to a plain HTTP
+// loopback address before it is ever used to build a request. A local eval
+// harness has no reason to reach anything else, and constraining it here keeps
+// an operator-supplied string from becoming an arbitrary outbound request.
+func loopbackEndpoint(t *testing.T, base string) string {
+	t.Helper()
+	parsed, err := url.Parse(strings.TrimSuffix(base, "/"))
+	if err != nil {
+		t.Fatalf("LLAMA is not a URL: %v", err)
+	}
+	if parsed.Scheme != "http" {
+		t.Fatalf("LLAMA must be an http:// loopback URL, got scheme %q", parsed.Scheme)
+	}
+	host := parsed.Hostname()
+	if host != "localhost" && !net.ParseIP(host).IsLoopback() {
+		t.Fatalf("LLAMA must point at loopback, got host %q", host)
+	}
+	return "http://" + parsed.Host + "/v1/chat/completions"
+}
+
+func generate(t *testing.T, endpoint, system string, history []llamaMessage, user string) string {
 	t.Helper()
 	messages := append([]llamaMessage{{Role: "system", Content: system}}, history...)
 	messages = append(messages, llamaMessage{Role: "user", Content: user})
@@ -66,12 +88,14 @@ func generate(t *testing.T, base, system string, history []llamaMessage, user st
 		"messages": messages, "temperature": 0.8, "max_tokens": 300, "stream": false,
 		"chat_template_kwargs": map[string]any{"enable_thinking": false},
 	})
-	request, err := http.NewRequest(http.MethodPost, base+"/v1/chat/completions", bytes.NewReader(body))
+	// #nosec G704 -- endpoint is rebuilt from a validated loopback host above.
+	request, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 180 * time.Second}
+	// #nosec G704 -- same validated loopback endpoint.
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -158,8 +182,9 @@ func scoreReplies(label string, replies []string) {
 func TestVoiceRegisterAgainstLiveModel(t *testing.T) {
 	base := os.Getenv("LLAMA")
 	if base == "" {
-		t.Skip("set LLAMA to a llama.cpp base URL to score the live reply register")
+		t.Skip("set LLAMA to a local llama.cpp base URL to score the live reply register")
 	}
+	endpoint := loopbackEndpoint(t, base)
 	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	capabilities := FullCapabilities()
 	capabilities.Voice = VoiceWarm
@@ -179,7 +204,7 @@ func TestVoiceRegisterAgainstLiveModel(t *testing.T) {
 	var history []llamaMessage
 	for _, turn := range evalTurns {
 		system := composeSystem(set, nil, defaultPatternChoices(), capabilities, nil, context)
-		reply := replyOf(generate(t, base, system, history, turn))
+		reply := replyOf(generate(t, endpoint, system, history, turn))
 		replies = append(replies, reply)
 		history = append(history,
 			llamaMessage{Role: "user", Content: turn},
