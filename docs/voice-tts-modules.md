@@ -199,6 +199,13 @@ seed and sounded timid on the rest:
 - **Relaxing articulation** (`loose articulation`, `slurred`). Consonant
   precision is one of the strongest accent cues a synthesizer has. Put lightness
   in pace and pitch, not in diction.
+- **Making the word the prosodic unit** (`every word`, `rather than rushed
+  together`) — the same mistake from the other side. Excited asked to keep "every
+  word clearly articulated rather than rushed together" and got exactly that:
+  each word released separately with an abrupt stop at the end, and a thin, nasal
+  quality from the sustained effort. English runs words together inside a phrase,
+  and forbidding that buys careful diction at the cost of sounding synthetic. Aim
+  articulation at the phrase and let the words connect within it.
 - **Shifting the pitch baseline** (`lifted pitch`, `raise the pitch`). This
   changes the apparent speaker rather than the delivery, and raising it thins the
   voice toward sounding younger. Ask for movement *within* the range instead:
