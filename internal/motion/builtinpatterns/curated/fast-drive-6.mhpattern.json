@@ -7,125 +7,140 @@
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 281,
       "position_percent": 100
     },
     {
-      "time_ms": 647,
+      "time_ms": 466,
       "position_percent": 0
     },
     {
-      "time_ms": 1014,
+      "time_ms": 900,
       "position_percent": 100
     },
     {
-      "time_ms": 1381,
+      "time_ms": 1266,
       "position_percent": 0
     },
     {
-      "time_ms": 1747,
+      "time_ms": 1600,
       "position_percent": 100
     },
     {
-      "time_ms": 2114,
+      "time_ms": 1966,
       "position_percent": 0
     },
     {
-      "time_ms": 2481,
+      "time_ms": 2300,
       "position_percent": 100
     },
     {
-      "time_ms": 2847,
+      "time_ms": 2633,
       "position_percent": 0
     },
     {
-      "time_ms": 3214,
+      "time_ms": 2966,
       "position_percent": 100
     },
     {
-      "time_ms": 3581,
+      "time_ms": 3300,
       "position_percent": 0
     },
     {
-      "time_ms": 3947,
+      "time_ms": 3633,
       "position_percent": 100
     },
     {
-      "time_ms": 4314,
+      "time_ms": 3966,
       "position_percent": 0
     },
     {
-      "time_ms": 4681,
+      "time_ms": 4233,
       "position_percent": 100
     },
     {
-      "time_ms": 5047,
+      "time_ms": 4566,
       "position_percent": 0
     },
     {
-      "time_ms": 5414,
+      "time_ms": 4833,
       "position_percent": 100
     },
     {
-      "time_ms": 5781,
+      "time_ms": 5066,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 5366,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5633,
       "position_percent": 0
     },
     {
-      "time_ms": 6147,
+      "time_ms": 5933,
       "position_percent": 100
     },
     {
-      "time_ms": 6514,
+      "time_ms": 6133,
       "position_percent": 0
     },
     {
-      "time_ms": 6881,
+      "time_ms": 6466,
       "position_percent": 100
     },
     {
-      "time_ms": 7247,
+      "time_ms": 6700,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 7000,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7233,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 7533,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7733,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 8066,
+      "position_percent": 98
+    },
+    {
+      "time_ms": 8366,
       "position_percent": 0
     },
     {
-      "time_ms": 7614,
+      "time_ms": 8700,
       "position_percent": 100
     },
     {
-      "time_ms": 7981,
+      "time_ms": 9000,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 9333,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9733,
       "position_percent": 0
-    },
-    {
-      "time_ms": 8348,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 8714,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9081,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9448,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9814,
-      "position_percent": 100
     },
     {
       "time_ms": 10000,
-      "position_percent": 0
+      "position_percent": 100
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change",
-    "upper-return"
+    "full",
+    "gentle",
+    "breathing"
   ]
 }

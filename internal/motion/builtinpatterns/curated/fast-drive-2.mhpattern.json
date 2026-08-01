@@ -7,116 +7,140 @@
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 367,
       "position_percent": 100
     },
     {
-      "time_ms": 443,
+      "time_ms": 734,
       "position_percent": 0
     },
     {
-      "time_ms": 652,
-      "position_percent": 85
-    },
-    {
-      "time_ms": 882,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 1139,
+      "time_ms": 1068,
       "position_percent": 100
     },
     {
-      "time_ms": 1422,
+      "time_ms": 1402,
       "position_percent": 0
     },
     {
-      "time_ms": 2592,
+      "time_ms": 1769,
       "position_percent": 100
     },
     {
-      "time_ms": 3792,
+      "time_ms": 2136,
       "position_percent": 0
     },
     {
-      "time_ms": 4033,
-      "position_percent": 99
-    },
-    {
-      "time_ms": 4299,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 4491,
-      "position_percent": 79
-    },
-    {
-      "time_ms": 4704,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 4928,
-      "position_percent": 92
-    },
-    {
-      "time_ms": 5176,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 5384,
-      "position_percent": 85
-    },
-    {
-      "time_ms": 5615,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 5872,
+      "time_ms": 2470,
       "position_percent": 100
     },
     {
-      "time_ms": 6156,
+      "time_ms": 2803,
       "position_percent": 0
     },
     {
-      "time_ms": 6412,
+      "time_ms": 3170,
       "position_percent": 100
     },
     {
-      "time_ms": 6695,
+      "time_ms": 3471,
       "position_percent": 0
     },
     {
-      "time_ms": 6952,
+      "time_ms": 3838,
       "position_percent": 100
     },
     {
-      "time_ms": 7236,
+      "time_ms": 4138,
       "position_percent": 0
     },
     {
-      "time_ms": 7780,
+      "time_ms": 4438,
       "position_percent": 100
     },
     {
-      "time_ms": 8383,
-      "position_percent": 0
+      "time_ms": 4738,
+      "position_percent": 50
     },
     {
-      "time_ms": 8783,
+      "time_ms": 5105,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 5339,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 5539,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 5706,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 5906,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 6073,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 6340,
       "position_percent": 100
     },
     {
-      "time_ms": 9226,
+      "time_ms": 6607,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 6907,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7274,
       "position_percent": 0
+    },
+    {
+      "time_ms": 7741,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8309,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8709,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8943,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 9109,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9310,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 9476,
+      "position_percent": 100
     },
     {
       "time_ms": 10000,
-      "position_percent": 100
+      "position_percent": 0
     }
   ],
   "tags": [
-    "paired",
-    "steady",
-    "contrast"
+    "full",
+    "rhythmic",
+    "build"
   ]
 }

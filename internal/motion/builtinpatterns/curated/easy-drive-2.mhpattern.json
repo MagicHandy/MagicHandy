@@ -3,64 +3,65 @@
   "name": "Easy Drive 2",
   "description": "Slow cadence.",
   "kind": "routine",
-  "cycle_ms": 8494,
+  "cycle_ms": 10000,
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 83.606557
-    },
-    {
-      "time_ms": 433,
-      "position_percent": 32.786885
-    },
-    {
-      "time_ms": 1994,
-      "position_percent": 98.360656
-    },
-    {
-      "time_ms": 2727,
-      "position_percent": 32.786885
-    },
-    {
-      "time_ms": 3394,
       "position_percent": 100
     },
     {
-      "time_ms": 4494,
-      "position_percent": 16.393443
-    },
-    {
-      "time_ms": 4827,
-      "position_percent": 49.180328
-    },
-    {
-      "time_ms": 5160,
+      "time_ms": 833,
       "position_percent": 0
     },
     {
-      "time_ms": 5760,
-      "position_percent": 81.967213
+      "time_ms": 1666,
+      "position_percent": 100
     },
     {
-      "time_ms": 6427,
+      "time_ms": 2500,
       "position_percent": 0
     },
     {
-      "time_ms": 7060,
-      "position_percent": 98.360656
+      "time_ms": 3333,
+      "position_percent": 100
     },
     {
-      "time_ms": 7727,
+      "time_ms": 4166,
       "position_percent": 0
     },
     {
-      "time_ms": 8494,
-      "position_percent": 83.606557
+      "time_ms": 5000,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5833,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6666,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7500,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8333,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9167,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
     }
   ],
   "tags": [
-    "full",
-    "steady",
-    "breathing"
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
   ]
 }

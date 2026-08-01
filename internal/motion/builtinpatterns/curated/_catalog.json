@@ -3,7 +3,7 @@
   "status_policy": "runtime-budget-audit",
   "normal_speed_controls": true,
   "reason": "Generated clips remain available; problematic curves are experimental, unsafe source timing is resampled, and every curve passes normal catalog budgets without a bulk exemption.",
-  "pattern_count": 90,
+  "pattern_count": 59,
   "patterns": [
     {
       "file": "easy-drive-1.mhpattern.json",
@@ -26,32 +26,8 @@
       "name": "Easy Drive 5"
     },
     {
-      "file": "easy-drive-6.mhpattern.json",
-      "name": "Easy Drive 6"
-    },
-    {
-      "file": "easy-drive-7.mhpattern.json",
-      "name": "Easy Drive 7"
-    },
-    {
-      "file": "easy-roll-1.mhpattern.json",
-      "name": "Easy Roll 1"
-    },
-    {
-      "file": "easy-roll-2.mhpattern.json",
-      "name": "Easy Roll 2"
-    },
-    {
-      "file": "easy-roll-3.mhpattern.json",
-      "name": "Easy Roll 3"
-    },
-    {
-      "file": "easy-roll-4.mhpattern.json",
-      "name": "Easy Roll 4"
-    },
-    {
-      "file": "easy-surge.mhpattern.json",
-      "name": "Easy Surge"
+      "file": "easy-roll.mhpattern.json",
+      "name": "Easy Roll"
     },
     {
       "file": "fast-drive-1.mhpattern.json",
@@ -72,30 +48,6 @@
     {
       "file": "fast-drive-13.mhpattern.json",
       "name": "Fast Drive 13"
-    },
-    {
-      "file": "fast-drive-14.mhpattern.json",
-      "name": "Fast Drive 14"
-    },
-    {
-      "file": "fast-drive-15.mhpattern.json",
-      "name": "Fast Drive 15"
-    },
-    {
-      "file": "fast-drive-16.mhpattern.json",
-      "name": "Fast Drive 16"
-    },
-    {
-      "file": "fast-drive-17.mhpattern.json",
-      "name": "Fast Drive 17"
-    },
-    {
-      "file": "fast-drive-18.mhpattern.json",
-      "name": "Fast Drive 18"
-    },
-    {
-      "file": "fast-drive-19.mhpattern.json",
-      "name": "Fast Drive 19"
     },
     {
       "file": "fast-drive-2.mhpattern.json",
@@ -134,18 +86,6 @@
       "name": "Fast Roll 1"
     },
     {
-      "file": "fast-roll-10.mhpattern.json",
-      "name": "Fast Roll 10"
-    },
-    {
-      "file": "fast-roll-11.mhpattern.json",
-      "name": "Fast Roll 11"
-    },
-    {
-      "file": "fast-roll-12.mhpattern.json",
-      "name": "Fast Roll 12"
-    },
-    {
       "file": "fast-roll-2.mhpattern.json",
       "name": "Fast Roll 2"
     },
@@ -158,36 +98,12 @@
       "name": "Fast Roll 4"
     },
     {
-      "file": "fast-roll-5.mhpattern.json",
-      "name": "Fast Roll 5"
-    },
-    {
-      "file": "fast-roll-6.mhpattern.json",
-      "name": "Fast Roll 6"
-    },
-    {
-      "file": "fast-roll-7.mhpattern.json",
-      "name": "Fast Roll 7"
-    },
-    {
-      "file": "fast-roll-8.mhpattern.json",
-      "name": "Fast Roll 8"
-    },
-    {
-      "file": "fast-roll-9.mhpattern.json",
-      "name": "Fast Roll 9"
-    },
-    {
       "file": "fast-surge-1.mhpattern.json",
       "name": "Fast Surge 1"
     },
     {
       "file": "fast-surge-2.mhpattern.json",
       "name": "Fast Surge 2"
-    },
-    {
-      "file": "fast-surge-3.mhpattern.json",
-      "name": "Fast Surge 3"
     },
     {
       "file": "gentle-drive-1.mhpattern.json",
@@ -200,14 +116,6 @@
     {
       "file": "gentle-drive-3.mhpattern.json",
       "name": "Gentle Drive 3"
-    },
-    {
-      "file": "gentle-drive-4.mhpattern.json",
-      "name": "Gentle Drive 4"
-    },
-    {
-      "file": "gentle-drive-5.mhpattern.json",
-      "name": "Gentle Drive 5"
     },
     {
       "file": "intense-drive-1.mhpattern.json",
@@ -240,10 +148,6 @@
     {
       "file": "intense-drive-16.mhpattern.json",
       "name": "Intense Drive 16"
-    },
-    {
-      "file": "intense-drive-17.mhpattern.json",
-      "name": "Intense Drive 17"
     },
     {
       "file": "intense-drive-2.mhpattern.json",
@@ -298,10 +202,6 @@
       "name": "Intense Roll 5"
     },
     {
-      "file": "intense-roll-6.mhpattern.json",
-      "name": "Intense Roll 6"
-    },
-    {
       "file": "intense-surge-1.mhpattern.json",
       "name": "Intense Surge 1"
     },
@@ -340,30 +240,6 @@
     {
       "file": "steady-roll-2.mhpattern.json",
       "name": "Steady Roll 2"
-    },
-    {
-      "file": "steady-roll-3.mhpattern.json",
-      "name": "Steady Roll 3"
-    },
-    {
-      "file": "steady-roll-4.mhpattern.json",
-      "name": "Steady Roll 4"
-    },
-    {
-      "file": "steady-roll-5.mhpattern.json",
-      "name": "Steady Roll 5"
-    },
-    {
-      "file": "steady-roll-6.mhpattern.json",
-      "name": "Steady Roll 6"
-    },
-    {
-      "file": "steady-roll-7.mhpattern.json",
-      "name": "Steady Roll 7"
-    },
-    {
-      "file": "steady-surge.mhpattern.json",
-      "name": "Steady Surge"
     }
   ]
 }

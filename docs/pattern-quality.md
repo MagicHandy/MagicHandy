@@ -121,16 +121,47 @@ Taken from the patterns that survived contact with hardware:
 | shortest stroke | ≥ 22% travel | reversal gap × speed floor |
 | speed spread inside one pattern | ≤ 3.3× | wider stops reading as one pattern |
 | mean speed | ≥ 55 %/s | `Drift` and `Flutter` sit at 56–57 |
-| longest stall (rendered, < 30 %/s) | ≤ 200 ms | kept patterns are 25–150 ms |
+| longest dip (rendered, < 45 %/s) | ≤ 120 ms | see below — this is the one that matters |
 | reversal gap | ≥ 450 ms | `catalogMinReversalGap` |
 | acceleration | ≤ 3000 %/s² | `catalogMaxAcceleration` |
 | cycle | 6600–12000 ms | floor plus the manifest ceiling |
 
-**Measure the rendered curve, not the authored chords.** Points are interpolated
-with monotone cubic Hermite, which drives velocity toward zero at every turning
-point. A stroke whose *chord* averages 42 %/s can still sit under 30 %/s around
-its reversals. Filtering the imports on chord speed alone left 62 of 153 still
-stalling; only measuring the rendered curve caught them.
+### Measure the loaded, rendered curve — nothing earlier
+
+This rule was got wrong three times, each time by measuring something one step
+too early. It is the single easiest mistake to make here.
+
+1. **Authored chords are not the rendered curve.** Points are interpolated with
+   monotone cubic Hermite, which drives velocity toward zero at every turning
+   point, so a stroke whose *chord* averages 42 %/s still sits below that around
+   its reversals. Filtering on chords alone left 62 of 153 clips still stalling.
+2. **What you author is not what loads.** `NormalizePatternDefinition` resamples
+   and can rescale the cycle. One clip authored as 9109 ms with 32 clean points
+   loaded as 10470 ms with 21 points and fractional positions — a 1.15× stretch
+   that quietly turned a 42 %/s floor into 36.6 %/s. **Always measure
+   `BuiltinPatternDefinitions()`**, never your own arithmetic.
+3. **"Stopped" is a lower bar than "not moving usefully".** A 30 %/s gate passes
+   a clip that crawls at 35 %/s for three seconds. Use the speed floor itself.
+
+### Why the dip rule is shaped this way
+
+Use the **longest contiguous dip below the speed floor**, not total time below it
+and not a lower "has it stopped" threshold.
+
+Total time is not discriminating: every reversal dips, so a busy pattern spends
+as much time low as a bad one. Measured, time under 45 %/s is a **median 8% for
+the designed patterns and 7% for the imports** — indistinguishable.
+
+The longest dip separates them completely:
+
+| | longest dip under 45 %/s |
+|---|---|
+| every designed pattern | **45–50 ms** (the reversal itself) |
+| `Steady Roll 4`, reported as micro-stalling | **420 ms** |
+| `Gentle Drive 1` | **3,490 ms**, 76% of its cycle |
+
+The distribution is bimodal with nothing between about 60 ms and 150 ms, so
+120 ms sits in empty space rather than on a judgement call.
 
 ## Scripts
 
@@ -174,10 +205,13 @@ gate is in Go.
 
 ## What this cost
 
-Of 171 imported clips, **90 survived and 81 were dropped**. Excision removed 22 s
-of dead time from the set it was applied to, and recovered a meaningful share of
-it — but most of what was dropped went because the dead time *was* the content,
-and no amount of trimming produces a pattern from a pause.
+Of 171 imported clips, **59 survived and 112 were dropped**. Excision recovered a
+meaningful share, but most of what went was dropped because the dead time *was*
+the content, and no amount of trimming produces a pattern from a pause.
+
+The first curation kept 90 and was still wrong: it gated at 30 %/s, so clips that
+crawled between 30 and 45 %/s passed and were reported from hardware as
+micro-stalling. Tightening the floor to 45 %/s removed a further 31.
 
 That is the honest yield of importing captured material, and it is why the
 designer exists: authoring against the envelope produces patterns that pass by

@@ -10,47 +10,47 @@
       "position_percent": 0
     },
     {
-      "time_ms": 848,
+      "time_ms": 834,
       "position_percent": 100
     },
     {
-      "time_ms": 1666,
+      "time_ms": 1667,
       "position_percent": 0
     },
     {
-      "time_ms": 2515,
+      "time_ms": 2500,
       "position_percent": 100
     },
     {
-      "time_ms": 3348,
+      "time_ms": 3334,
       "position_percent": 0
     },
     {
-      "time_ms": 4219,
+      "time_ms": 4167,
       "position_percent": 100
     },
     {
-      "time_ms": 5053,
+      "time_ms": 5000,
       "position_percent": 0
     },
     {
-      "time_ms": 5925,
+      "time_ms": 5834,
       "position_percent": 100
     },
     {
-      "time_ms": 6758,
+      "time_ms": 6667,
       "position_percent": 0
     },
     {
-      "time_ms": 7592,
+      "time_ms": 7500,
       "position_percent": 100
     },
     {
-      "time_ms": 8425,
+      "time_ms": 8334,
       "position_percent": 0
     },
     {
-      "time_ms": 9296,
+      "time_ms": 9167,
       "position_percent": 100
     },
     {
@@ -59,9 +59,9 @@
     }
   ],
   "tags": [
-    "tip",
+    "accent",
     "rhythmic",
-    "varied",
+    "tempo-change",
     "upper-return"
   ]
 }

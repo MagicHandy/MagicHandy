@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
   "name": "Easy Drive 5",
-  "description": "Slow cadence.",
+  "description": "Medium cadence.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -10,47 +10,63 @@
       "position_percent": 0
     },
     {
-      "time_ms": 834,
-      "position_percent": 100
+      "time_ms": 666,
+      "position_percent": 80
     },
     {
-      "time_ms": 1667,
+      "time_ms": 1233,
       "position_percent": 0
     },
     {
-      "time_ms": 2500,
-      "position_percent": 100
+      "time_ms": 1799,
+      "position_percent": 90
     },
     {
-      "time_ms": 3334,
+      "time_ms": 2366,
       "position_percent": 0
     },
     {
-      "time_ms": 4167,
-      "position_percent": 100
+      "time_ms": 2966,
+      "position_percent": 90
     },
     {
-      "time_ms": 5000,
+      "time_ms": 3565,
       "position_percent": 0
     },
     {
-      "time_ms": 5834,
-      "position_percent": 100
+      "time_ms": 4232,
+      "position_percent": 80
     },
     {
-      "time_ms": 6667,
+      "time_ms": 4732,
       "position_percent": 0
     },
     {
-      "time_ms": 7500,
-      "position_percent": 100
+      "time_ms": 5432,
+      "position_percent": 90
     },
     {
-      "time_ms": 8334,
+      "time_ms": 6032,
       "position_percent": 0
     },
     {
-      "time_ms": 9167,
+      "time_ms": 6631,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 7231,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7831,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 8398,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9031,
       "position_percent": 100
     },
     {
@@ -59,9 +75,8 @@
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change",
-    "upper-return"
+    "full",
+    "steady",
+    "balanced"
   ]
 }

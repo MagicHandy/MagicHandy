@@ -150,9 +150,22 @@ Ranked by threat to the stated goals:
   proved an insufficient proxy -- monotone-Hermite smoothing drives velocity
   toward zero at every turning point, so 62 of 153 clips that passed on chords
   still stalled once rendered -- so the decision is made in Go against the real
-  curve and the runtime's own `exceedsCatalogSafetyBudgets`. 90 of 171 survive, 22s
-  of dead time excised; the catalog is 118 patterns and the composed prompt falls
-  to **19,436 B (~4,859 tokens)**, against ~15,949 before this line of work began.
+  curve and the runtime's own `exceedsCatalogSafetyBudgets`.
+  A first pass kept 90 and was still wrong, reported from hardware as
+  micro-stalling: it gated at 30%/s, which is "has it stopped" rather than the
+  45%/s speed floor, so a clip crawling at 35%/s passed -- one spent 76% of its
+  cycle there. Two further corrections came out of that. The gate now uses the
+  floor itself, and it measures the **longest contiguous dip** rather than total
+  time below it: total time does not discriminate at all (median 8% for designed
+  patterns against 7% for imports) because every reversal dips, while the longest
+  dip separates them completely, 45-50ms for every designed pattern against 420ms
+  for the reported clip and 3,490ms for the worst. And what is authored is not
+  what loads -- `NormalizePatternDefinition` resampled one clip from 9,109ms and
+  32 clean points to 10,470ms and 21 fractional ones, a 1.15x stretch that turned
+  a 42%/s floor into 36.6%/s -- so validation reads `BuiltinPatternDefinitions()`
+  rather than its own arithmetic. 59 of 171 survive; the catalog is 87 patterns
+  and the composed prompt falls to **17,589 B (~4,397 tokens)**, against ~15,949
+  before this line of work began.
   `docs/pattern-quality.md` is the plain-language guideline for both failure
   modes, the geometry that constrains them, and which script to reach for. Three
   tests that pinned curated ids or a fixed built-in count now resolve them, so a
