@@ -206,11 +206,14 @@ them as a cue to change accent rather than delivery. They were all found the har
 way, from a Commanding preset that arrived in an audibly foreign accent on one
 seed and sounded timid on the rest:
 
-- **Flattening the pitch contour** (`level pitch`, `flat`, `monotone`, `very
-  little pitch movement`). English declaratives close on a falling contour; a
-  level close is the prosody of a syllable-timed language. It also costs the tone
-  its conviction, since a sentence that never resolves downward sounds tentative.
-  To rule out uptalk, ask for a *falling* close, never a flat one.
+- **Flattening the pitch contour** (`level`, `flat`, `monotone`, `evenly`,
+  `steadily`, `uniform`, `very little pitch movement`). English declaratives close
+  on a falling contour; a level close is the prosody of a syllable-timed language.
+  It also costs the tone its conviction, since a sentence that never resolves
+  downward sounds tentative. To rule out uptalk, ask for a *falling* close, never
+  a flat one. Watch the synonyms especially: Commanding shipped saying "Speak
+  **evenly**" and came back with an accent, having walked straight past a guard
+  that only matched the literal words above.
 - **Relaxing articulation** (`loose articulation`, `slurred`). Consonant
   precision is one of the strongest accent cues a synthesizer has. Put lightness
   in pace and pitch, not in diction.
@@ -254,11 +257,20 @@ has stopped applying to one preset may still be load-bearing for the others, so
 `TestTTSTonePresetsResolveToReviewedInstructions` pins this phrase separately from
 the constant that contains it.
 
-Authority is the case where this bites hardest. Commanding originally earned it
-from volume, telling the model to give important words "more weight and volume"
-on top of a full chest tone; over a real reply that is a repeated push, and it
-strained. Authority in English comes from steadiness and a resolved falling
-close, not from force, and stating it that way costs the voice nothing to hold.
+Authority is the case where this bites hardest, and Commanding has now failed
+three separate ways. It first earned authority from volume — "more weight and
+volume" on important words over a full chest tone — which across a real reply is
+a repeated push, and it strained. Rewriting it around calm evenness then hit two
+more: "**evenly**" flattens the contour exactly as "level pitch" would, and
+"steadiness **rather than force**" negates a continuous effort attribute, which
+is the Warm lesson again. Both shipped.
+
+What is left is authority with nothing to sustain: a measured, unhesitating pace,
+space around the phrases that matter, and sentences that arrive at a settled
+ending rather than trailing off. Pacing and pausing cost the voice nothing to
+hold for three sentences, where loudness and a deep drop on every sentence do.
+The general shape of the mistake: **if a preset asks for authority, check what
+the voice has to spend to produce it.**
 
 `TestTTSTonePresetsAvoidAccentDriftLevers` holds the built-in presets to the four
 accent levers, and `TestTTSTonePresetsStayShortAndAnchored` to the length budget

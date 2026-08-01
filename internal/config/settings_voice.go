@@ -337,7 +337,7 @@ func ResolveTTSTonePrompt(settings VoiceSettings) string {
 	case TTSToneTender:
 		return "Speak gently and a little more slowly, close to the microphone, letting sentences settle softly downward without sinking to the bottom of your range." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneCommanding:
-		return "Speak evenly and unhurried, with a calm certainty that comes from steadiness rather than force, letting each sentence resolve downward with quiet finality." + ttsEaseAnchor + ttsDeliveryFraming
+		return "Speak at a measured, deliberate, unhesitating pace, with a little space around the phrases that matter, and let sentences arrive at a settled ending rather than trailing off." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneExcited:
 		return "Speak with quick, lively energy and wide pitch movement, keeping the voice open and the words connected into flowing phrases, and still letting sentences resolve downward at the end." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneCustom:
