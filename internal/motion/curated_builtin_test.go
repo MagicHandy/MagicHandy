@@ -67,7 +67,22 @@ func TestCuratedBuiltinPatternsLoad(t *testing.T) {
 			stable = append(stable, definition.ID)
 		}
 	}
-	if experimental != 170 || !slices.Equal(stable, []PatternID{"curated-easy-drive-4"}) {
+	// A snapshot of the import's own status tags, not a quality measure: it moves
+	// whenever the curated set is re-curated by scripts/curated-pattern-labeller.js.
+	// It is worth pinning because a silent change in the mix means clips were
+	// added or dropped without the catalog manifest being regenerated with them.
+	//
+	// Motion quality is asserted separately and does not live here: every curated
+	// clip is measured against the catalog budgets by
+	// TestBuiltinCatalogIncludesGeneratedPatternsWithoutExactTimingExemption, and
+	// against the speed envelope by TestCatalogPatternsHoldTheMeasuredSpeedEnvelope.
+	wantStable := []PatternID{
+		"curated-easy-drive-1", "curated-easy-drive-3", "curated-easy-drive-4",
+		"curated-easy-drive-5", "curated-easy-drive-6", "curated-gentle-drive-2",
+		"curated-gentle-drive-3", "curated-gentle-drive-4", "curated-gentle-drive-5",
+		"curated-steady-drive-2",
+	}
+	if experimental != catalog.PatternCount-len(wantStable) || !slices.Equal(stable, wantStable) {
 		t.Fatalf("generated status audit = %d experimental, stable %v", experimental, stable)
 	}
 }

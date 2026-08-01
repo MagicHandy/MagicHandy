@@ -1,6 +1,6 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 20",
+  "name": "Intense Roll 5",
   "description": "Quick cadence.",
   "kind": "routine",
   "cycle_ms": 10000,
@@ -10,324 +10,256 @@
       "position_percent": 100
     },
     {
-      "time_ms": 100,
+      "time_ms": 40,
       "position_percent": 0
     },
     {
-      "time_ms": 234,
+      "time_ms": 207,
       "position_percent": 100
     },
     {
-      "time_ms": 367,
+      "time_ms": 340,
       "position_percent": 0
     },
     {
-      "time_ms": 501,
+      "time_ms": 512,
       "position_percent": 100
     },
     {
-      "time_ms": 601,
+      "time_ms": 674,
       "position_percent": 0
     },
     {
-      "time_ms": 734,
+      "time_ms": 841,
       "position_percent": 100
     },
     {
-      "time_ms": 868,
+      "time_ms": 996,
       "position_percent": 0
     },
     {
-      "time_ms": 1001,
+      "time_ms": 1175,
       "position_percent": 100
     },
     {
-      "time_ms": 1101,
+      "time_ms": 1308,
       "position_percent": 0
     },
     {
-      "time_ms": 1235,
+      "time_ms": 1441,
       "position_percent": 100
     },
     {
-      "time_ms": 1368,
+      "time_ms": 1608,
       "position_percent": 0
     },
     {
-      "time_ms": 1502,
+      "time_ms": 1775,
       "position_percent": 100
     },
     {
-      "time_ms": 1602,
+      "time_ms": 1909,
       "position_percent": 0
     },
     {
-      "time_ms": 1735,
+      "time_ms": 2109,
       "position_percent": 100
     },
     {
-      "time_ms": 1869,
+      "time_ms": 2242,
       "position_percent": 0
     },
     {
-      "time_ms": 1969,
+      "time_ms": 2409,
       "position_percent": 100
     },
     {
-      "time_ms": 2051,
+      "time_ms": 2576,
       "position_percent": 0
     },
     {
-      "time_ms": 2169,
+      "time_ms": 2743,
       "position_percent": 100
     },
     {
-      "time_ms": 2269,
+      "time_ms": 2876,
       "position_percent": 0
     },
     {
-      "time_ms": 2402,
+      "time_ms": 3043,
       "position_percent": 100
     },
     {
-      "time_ms": 2536,
+      "time_ms": 3210,
       "position_percent": 0
     },
     {
-      "time_ms": 2669,
+      "time_ms": 3377,
       "position_percent": 100
     },
     {
-      "time_ms": 2769,
+      "time_ms": 3510,
       "position_percent": 0
     },
     {
-      "time_ms": 2903,
+      "time_ms": 3677,
       "position_percent": 100
     },
     {
-      "time_ms": 3036,
+      "time_ms": 3844,
       "position_percent": 0
     },
     {
-      "time_ms": 3170,
+      "time_ms": 4011,
       "position_percent": 100
     },
     {
-      "time_ms": 3270,
+      "time_ms": 4178,
       "position_percent": 0
     },
     {
-      "time_ms": 3403,
+      "time_ms": 4344,
       "position_percent": 100
     },
     {
-      "time_ms": 3537,
+      "time_ms": 4444,
       "position_percent": 0
     },
     {
-      "time_ms": 3670,
+      "time_ms": 4611,
       "position_percent": 100
     },
     {
-      "time_ms": 3770,
+      "time_ms": 4778,
       "position_percent": 0
     },
     {
-      "time_ms": 3904,
+      "time_ms": 4945,
       "position_percent": 100
     },
     {
-      "time_ms": 4037,
+      "time_ms": 5112,
       "position_percent": 0
     },
     {
-      "time_ms": 4171,
+      "time_ms": 5279,
       "position_percent": 100
     },
     {
-      "time_ms": 4271,
+      "time_ms": 5412,
       "position_percent": 0
     },
     {
-      "time_ms": 4404,
+      "time_ms": 5579,
       "position_percent": 100
     },
     {
-      "time_ms": 4538,
+      "time_ms": 5746,
       "position_percent": 0
     },
     {
-      "time_ms": 4658,
+      "time_ms": 5913,
       "position_percent": 100
     },
     {
-      "time_ms": 4771,
+      "time_ms": 6079,
       "position_percent": 0
     },
     {
-      "time_ms": 4905,
+      "time_ms": 6213,
       "position_percent": 100
     },
     {
-      "time_ms": 5038,
+      "time_ms": 6380,
       "position_percent": 0
     },
     {
-      "time_ms": 5164,
+      "time_ms": 6547,
       "position_percent": 100
     },
     {
-      "time_ms": 5272,
+      "time_ms": 6713,
       "position_percent": 0
     },
     {
-      "time_ms": 5405,
+      "time_ms": 6847,
       "position_percent": 100
     },
     {
-      "time_ms": 5539,
+      "time_ms": 7014,
       "position_percent": 0
     },
     {
-      "time_ms": 5672,
+      "time_ms": 7181,
       "position_percent": 100
     },
     {
-      "time_ms": 5772,
+      "time_ms": 7314,
       "position_percent": 0
     },
     {
-      "time_ms": 5906,
+      "time_ms": 7514,
       "position_percent": 100
     },
     {
-      "time_ms": 6039,
+      "time_ms": 7648,
       "position_percent": 0
     },
     {
-      "time_ms": 6173,
+      "time_ms": 7781,
       "position_percent": 100
     },
     {
-      "time_ms": 6273,
+      "time_ms": 7948,
       "position_percent": 0
     },
     {
-      "time_ms": 6406,
+      "time_ms": 8115,
       "position_percent": 100
     },
     {
-      "time_ms": 6540,
+      "time_ms": 8282,
       "position_percent": 0
     },
     {
-      "time_ms": 6673,
+      "time_ms": 8448,
       "position_percent": 100
     },
     {
-      "time_ms": 6793,
+      "time_ms": 8582,
       "position_percent": 0
     },
     {
-      "time_ms": 6927,
+      "time_ms": 8749,
       "position_percent": 100
     },
     {
-      "time_ms": 7060,
+      "time_ms": 8949,
       "position_percent": 0
     },
     {
-      "time_ms": 7194,
+      "time_ms": 9082,
       "position_percent": 100
     },
     {
-      "time_ms": 7294,
+      "time_ms": 9249,
       "position_percent": 0
     },
     {
-      "time_ms": 7427,
+      "time_ms": 9383,
       "position_percent": 100
     },
     {
-      "time_ms": 7561,
+      "time_ms": 9550,
       "position_percent": 0
     },
     {
-      "time_ms": 7679,
+      "time_ms": 9716,
       "position_percent": 100
     },
     {
-      "time_ms": 7794,
+      "time_ms": 9883,
       "position_percent": 0
-    },
-    {
-      "time_ms": 7928,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 8061,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8195,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 8295,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8428,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 8562,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8695,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 8795,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8929,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9062,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9196,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9296,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9429,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9563,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9679,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9796,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9930,
-      "position_percent": 100
     },
     {
       "time_ms": 10000,

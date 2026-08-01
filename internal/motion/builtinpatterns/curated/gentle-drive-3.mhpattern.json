@@ -7,55 +7,35 @@
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 766,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2400,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3600,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5154,
       "position_percent": 99
     },
     {
-      "time_ms": 293,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 465,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 965,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 2165,
+      "time_ms": 6354,
       "position_percent": 0
     },
     {
-      "time_ms": 2665,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 3865,
+      "time_ms": 8010,
       "position_percent": 100
     },
     {
-      "time_ms": 5065,
+      "time_ms": 9210,
       "position_percent": 0
-    },
-    {
-      "time_ms": 5532,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 6732,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 7932,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8366,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9566,
-      "position_percent": 100
     },
     {
       "time_ms": 10000,

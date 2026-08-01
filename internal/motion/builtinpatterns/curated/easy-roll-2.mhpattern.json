@@ -7,117 +7,84 @@
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 302,
+      "position_percent": 97.5
+    },
+    {
+      "time_ms": 1069,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 1569,
+      "position_percent": 97.5
+    },
+    {
+      "time_ms": 2136,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 2636,
       "position_percent": 100
     },
     {
-      "time_ms": 706,
+      "time_ms": 3169,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 3536,
+      "position_percent": 97.5
+    },
+    {
+      "time_ms": 4069,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 4302,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 5036,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 5469,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6067,
       "position_percent": 0
     },
     {
-      "time_ms": 773,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 1540,
+      "time_ms": 6469,
       "position_percent": 100
     },
     {
-      "time_ms": 1591,
-      "position_percent": 100
+      "time_ms": 7169,
+      "position_percent": 25
     },
     {
-      "time_ms": 2373,
-      "position_percent": 0
+      "time_ms": 7969,
+      "position_percent": 92.5
     },
     {
-      "time_ms": 2440,
-      "position_percent": 0
+      "time_ms": 8636,
+      "position_percent": 25
     },
     {
-      "time_ms": 3206,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 3257,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4040,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 4107,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 4873,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4924,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5707,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 5918,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 6252,
-      "position_percent": 10
-    },
-    {
-      "time_ms": 6918,
-      "position_percent": 50
-    },
-    {
-      "time_ms": 7085,
-      "position_percent": 30
-    },
-    {
-      "time_ms": 7535,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 7702,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 8018,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 8502,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 8984,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 9151,
-      "position_percent": 50
-    },
-    {
-      "time_ms": 9668,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9934,
-      "position_percent": 62
+      "time_ms": 8836,
+      "position_percent": 90
     },
     {
       "time_ms": 10000,
-      "position_percent": 62
+      "position_percent": 25
     }
   ],
   "tags": [
-    "tip",
-    "rhythmic",
-    "varied",
-    "upper-return"
+    "full",
+    "gentle",
+    "breathing"
   ]
 }

@@ -7,60 +7,69 @@
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 53
+    },
+    {
+      "time_ms": 166,
       "position_percent": 0
     },
     {
-      "time_ms": 962,
+      "time_ms": 266,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 366,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2216,
       "position_percent": 100
     },
     {
-      "time_ms": 2162,
+      "time_ms": 3056,
       "position_percent": 0
     },
     {
-      "time_ms": 3362,
+      "time_ms": 3890,
       "position_percent": 100
     },
     {
-      "time_ms": 4562,
+      "time_ms": 4730,
       "position_percent": 0
     },
     {
-      "time_ms": 5762,
+      "time_ms": 5563,
       "position_percent": 100
     },
     {
-      "time_ms": 5962,
-      "position_percent": 50
-    },
-    {
-      "time_ms": 6330,
-      "position_percent": 82.5
-    },
-    {
-      "time_ms": 7530,
+      "time_ms": 6403,
       "position_percent": 0
     },
     {
-      "time_ms": 8197,
-      "position_percent": 82.5
-    },
-    {
-      "time_ms": 9164,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9997,
+      "time_ms": 7236,
       "position_percent": 100
+    },
+    {
+      "time_ms": 8076,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8910,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9750,
+      "position_percent": 0
     },
     {
       "time_ms": 10000,
-      "position_percent": 100
+      "position_percent": 53
     }
   ],
   "tags": [
     "full",
-    "gentle",
-    "breathing"
+    "rhythmic",
+    "varied",
+    "upper-return"
   ]
 }

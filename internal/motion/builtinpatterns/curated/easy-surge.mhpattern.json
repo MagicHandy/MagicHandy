@@ -1,79 +1,83 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Easy Roll 11",
-  "description": "Slow cadence.",
+  "name": "Easy Surge",
+  "description": "Medium cadence.",
   "kind": "routine",
-  "cycle_ms": 10000,
+  "cycle_ms": 8727,
   "points": [
     {
       "time_ms": 0,
       "position_percent": 0
     },
     {
-      "time_ms": 773,
+      "time_ms": 767,
       "position_percent": 100
     },
     {
-      "time_ms": 1606,
+      "time_ms": 1600,
       "position_percent": 0
     },
     {
-      "time_ms": 2439,
+      "time_ms": 2433,
       "position_percent": 100
     },
     {
-      "time_ms": 3273,
+      "time_ms": 3267,
       "position_percent": 0
     },
     {
-      "time_ms": 4106,
+      "time_ms": 4100,
       "position_percent": 100
     },
     {
-      "time_ms": 4939,
+      "time_ms": 4934,
       "position_percent": 0
     },
     {
-      "time_ms": 5773,
+      "time_ms": 6124,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 6741,
       "position_percent": 100
     },
     {
-      "time_ms": 6606,
-      "position_percent": 0
+      "time_ms": 6908,
+      "position_percent": 70
     },
     {
-      "time_ms": 7439,
+      "time_ms": 7622,
       "position_percent": 100
     },
     {
-      "time_ms": 8306,
-      "position_percent": 0
+      "time_ms": 7888,
+      "position_percent": 62
     },
     {
-      "time_ms": 8723,
+      "time_ms": 8088,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 8288,
+      "position_percent": 62
+    },
+    {
+      "time_ms": 8488,
       "position_percent": 100
     },
     {
-      "time_ms": 9090,
-      "position_percent": 0
+      "time_ms": 8688,
+      "position_percent": 62
     },
     {
-      "time_ms": 9457,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9823,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 10000,
+      "time_ms": 8727,
       "position_percent": 0
     }
   ],
   "tags": [
-    "accent",
+    "tip",
     "rhythmic",
-    "tempo-change",
+    "varied",
     "upper-return"
   ]
 }

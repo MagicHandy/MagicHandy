@@ -27,6 +27,11 @@ programs have different SQLite tables, share
 schemas, API routes, and engine definitions so callers cannot accidentally treat
 one as the other.
 
+Before adding, importing or retuning any pattern, read
+[pattern-quality.md](pattern-quality.md). It is the plain-language account of why
+two batches of patterns were rejected after being felt on hardware, the numeric
+envelope that came out of it, and which script to reach for.
+
 ## Built-In Catalog
 
 The built-in catalog contains 199 patterns: three established patterns

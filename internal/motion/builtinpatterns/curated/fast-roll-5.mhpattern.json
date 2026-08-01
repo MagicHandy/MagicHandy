@@ -3,197 +3,208 @@
   "name": "Fast Roll 5",
   "description": "Quick cadence.",
   "kind": "routine",
-  "cycle_ms": 10000,
+  "cycle_ms": 9514,
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 85
+    },
+    {
+      "time_ms": 63,
       "position_percent": 0
     },
     {
-      "time_ms": 120,
+      "time_ms": 348,
       "position_percent": 100
     },
     {
-      "time_ms": 420,
+      "time_ms": 615,
       "position_percent": 0
     },
     {
-      "time_ms": 780,
+      "time_ms": 848,
       "position_percent": 100
     },
     {
-      "time_ms": 1060,
+      "time_ms": 1082,
       "position_percent": 0
     },
     {
-      "time_ms": 1420,
+      "time_ms": 1349,
       "position_percent": 100
     },
     {
-      "time_ms": 1720,
+      "time_ms": 1582,
       "position_percent": 0
     },
     {
-      "time_ms": 2060,
+      "time_ms": 1849,
       "position_percent": 100
     },
     {
-      "time_ms": 2380,
+      "time_ms": 2116,
       "position_percent": 0
     },
     {
-      "time_ms": 2720,
-      "position_percent": 50
+      "time_ms": 2383,
+      "position_percent": 90
     },
     {
-      "time_ms": 2980,
+      "time_ms": 2617,
       "position_percent": 0
     },
     {
-      "time_ms": 3280,
+      "time_ms": 2883,
       "position_percent": 100
     },
     {
-      "time_ms": 3560,
+      "time_ms": 3150,
       "position_percent": 0
     },
     {
-      "time_ms": 3860,
+      "time_ms": 3384,
       "position_percent": 100
     },
     {
-      "time_ms": 4120,
+      "time_ms": 3651,
       "position_percent": 0
     },
     {
-      "time_ms": 4580,
+      "time_ms": 4151,
       "position_percent": 100
     },
     {
-      "time_ms": 4620,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 4660,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4700,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 4740,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4780,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 4820,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4860,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 4900,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4940,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 4980,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5020,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 5060,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5100,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 5140,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5180,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 5220,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5260,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 5300,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5400,
-      "position_percent": 60
-    },
-    {
-      "time_ms": 5500,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5740,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 5980,
-      "position_percent": 50
-    },
-    {
-      "time_ms": 6320,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 6760,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 6980,
-      "position_percent": 10
-    },
-    {
-      "time_ms": 7140,
+      "time_ms": 4865,
       "position_percent": 70
     },
     {
-      "time_ms": 8340,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9240,
+      "time_ms": 5015,
       "position_percent": 100
     },
     {
-      "time_ms": 9400,
-      "position_percent": 40
+      "time_ms": 5165,
+      "position_percent": 70
     },
     {
-      "time_ms": 10000,
-      "position_percent": 40
+      "time_ms": 5299,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5432,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 5566,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5699,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 5799,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5899,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6016,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6133,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6250,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6366,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6450,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6533,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6650,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6767,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6850,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6933,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7017,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7100,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7200,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7300,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7367,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7434,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7518,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7601,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7701,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7801,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 8202,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9070,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 9514,
+      "position_percent": 85
     }
   ],
   "tags": [
-    "accent",
-    "fast",
-    "tempo-change",
-    "upper-return"
+    "full",
+    "rhythmic",
+    "build"
   ]
 }

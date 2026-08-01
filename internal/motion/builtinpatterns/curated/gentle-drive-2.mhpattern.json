@@ -3,28 +3,60 @@
   "name": "Gentle Drive 2",
   "description": "Slow cadence.",
   "kind": "routine",
-  "cycle_ms": 10000,
+  "cycle_ms": 9731,
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 100
+      "position_percent": 78.75
     },
     {
-      "time_ms": 262,
+      "time_ms": 1800,
       "position_percent": 0
     },
     {
-      "time_ms": 762,
+      "time_ms": 2900,
+      "position_percent": 98.75
+    },
+    {
+      "time_ms": 3465,
+      "position_percent": 75
+    },
+    {
+      "time_ms": 4298,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 5498,
+      "position_percent": 98.75
+    },
+    {
+      "time_ms": 6698,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 7464,
       "position_percent": 100
     },
     {
-      "time_ms": 10000,
+      "time_ms": 8131,
+      "position_percent": 25
+    },
+    {
+      "time_ms": 8764,
       "position_percent": 100
+    },
+    {
+      "time_ms": 9231,
+      "position_percent": 37.5
+    },
+    {
+      "time_ms": 9731,
+      "position_percent": 78.75
     }
   ],
   "tags": [
-    "pauses",
-    "steady",
-    "uneven"
+    "full",
+    "gentle",
+    "breathing"
   ]
 }

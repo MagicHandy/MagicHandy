@@ -7,211 +7,179 @@
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 78,
-      "position_percent": 67
-    },
-    {
-      "time_ms": 161,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 245,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 328,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 411,
-      "position_percent": 67
-    },
-    {
-      "time_ms": 495,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 578,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 661,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 745,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 828,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 911,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 995,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 1078,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 1161,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1245,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 1328,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 1411,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 1495,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1578,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 1661,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1745,
-      "position_percent": 67
-    },
-    {
-      "time_ms": 1828,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1911,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 1995,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 2078,
-      "position_percent": 67
-    },
-    {
-      "time_ms": 2161,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 2245,
-      "position_percent": 72
-    },
-    {
-      "time_ms": 2361,
       "position_percent": 100
     },
     {
-      "time_ms": 2478,
+      "time_ms": 217,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 533,
       "position_percent": 100
     },
     {
-      "time_ms": 2561,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 2645,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 3045,
-      "position_percent": 20
-    },
-    {
-      "time_ms": 3411,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 3778,
+      "time_ms": 866,
       "position_percent": 0
     },
     {
-      "time_ms": 4145,
+      "time_ms": 1233,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 1433,
+      "position_percent": 8
+    },
+    {
+      "time_ms": 1733,
+      "position_percent": 59
+    },
+    {
+      "time_ms": 1933,
+      "position_percent": 26
+    },
+    {
+      "time_ms": 2183,
+      "position_percent": 74
+    },
+    {
+      "time_ms": 2366,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 2616,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2800,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 3050,
       "position_percent": 100
     },
     {
-      "time_ms": 4511,
-      "position_percent": 0
+      "time_ms": 3233,
+      "position_percent": 60
     },
     {
-      "time_ms": 4878,
+      "time_ms": 3483,
       "position_percent": 100
     },
     {
-      "time_ms": 5245,
-      "position_percent": 0
+      "time_ms": 3716,
+      "position_percent": 50
     },
     {
-      "time_ms": 5612,
+      "time_ms": 3950,
       "position_percent": 100
     },
     {
-      "time_ms": 5978,
-      "position_percent": 0
+      "time_ms": 4183,
+      "position_percent": 60
     },
     {
-      "time_ms": 6345,
+      "time_ms": 4466,
       "position_percent": 100
     },
     {
-      "time_ms": 6712,
-      "position_percent": 0
+      "time_ms": 4666,
+      "position_percent": 17
     },
     {
-      "time_ms": 7078,
-      "position_percent": 100
+      "time_ms": 4900,
+      "position_percent": 87
     },
     {
-      "time_ms": 7445,
-      "position_percent": 0
+      "time_ms": 5100,
+      "position_percent": 17
     },
     {
-      "time_ms": 7812,
-      "position_percent": 100
+      "time_ms": 5333,
+      "position_percent": 87
     },
     {
-      "time_ms": 8178,
-      "position_percent": 0
+      "time_ms": 5533,
+      "position_percent": 17
     },
     {
-      "time_ms": 8545,
-      "position_percent": 100
+      "time_ms": 5766,
+      "position_percent": 87
     },
     {
-      "time_ms": 8912,
-      "position_percent": 0
+      "time_ms": 5966,
+      "position_percent": 17
     },
     {
-      "time_ms": 9278,
-      "position_percent": 100
+      "time_ms": 6200,
+      "position_percent": 87
     },
     {
-      "time_ms": 9645,
-      "position_percent": 0
+      "time_ms": 6400,
+      "position_percent": 17
     },
     {
-      "time_ms": 9962,
-      "position_percent": 100
+      "time_ms": 6633,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 6833,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 7066,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 7266,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 7500,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 7700,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 7933,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 8133,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 8366,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 8566,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 8800,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 9000,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 9233,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 9433,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 9666,
+      "position_percent": 87
+    },
+    {
+      "time_ms": 9866,
+      "position_percent": 17
     },
     {
       "time_ms": 10000,
@@ -219,9 +187,9 @@
     }
   ],
   "tags": [
-    "tip",
+    "accent",
     "rhythmic",
-    "varied",
+    "tempo-change",
     "upper-return"
   ]
 }
