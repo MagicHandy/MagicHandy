@@ -497,11 +497,7 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 			runtimeErr = errors.Join(runtimeErr, fmt.Errorf("apply media library settings: %w", err))
 		}
 	}
-	if llmRuntimeSettingsChanged(previous.LLM, next.LLM) {
-		if err := s.closeLLM(); err != nil {
-			runtimeErr = errors.Join(runtimeErr, fmt.Errorf("apply LLM settings: %w", err))
-		}
-	}
+	runtimeErr = errors.Join(runtimeErr, s.applyLLMSettingsTransition(previous.LLM, next.LLM))
 	ownerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
 	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
 	cloudConfigChanged := previous.Device.FirmwareAPIRequirement != next.Device.FirmwareAPIRequirement ||
@@ -665,6 +661,7 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
+		s.stopLLMAutoload()
 		if err := s.closeLLM(); err != nil {
 			s.logger.Warn("LLM provider did not close cleanly during shutdown", "error", err)
 		}

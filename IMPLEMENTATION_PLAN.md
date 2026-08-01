@@ -173,7 +173,12 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   pacing-only turns preserve continuity. Model permissions independently gate
   motion, patterns, named area focus, and experimental content. Provider-native
   controls carry visible latency/quality warnings; no hardware tuning knob is
-  promoted without measurement.
+  promoted without measurement. Managed loading is an explicit startup versus
+  on-demand memory choice; one request coordinator gives interactive Chat
+  priority over Autopilot and records preparation, queue, first-token,
+  generation, and repair phases. Managed Windows children use kill-on-close
+  containment, and an exact-path duplicate opens a user-confirmed recovery
+  dialog instead of launching a second model copy.
 - SQLite-backed LLM model manager with managed GGUF copies, standalone GGUF
   import, read-only Ollama library discovery/import, daemon model listing,
   external llama.cpp model listing, SHA-256 verification,

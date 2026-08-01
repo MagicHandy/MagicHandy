@@ -426,6 +426,12 @@ function diagnosticRows(diagnostics: ChatMessageDiagnostics): Array<[string, str
   if (diagnostics.prompt_set) rows.push([t("Prompt set"), diagnostics.prompt_set]);
   if (diagnostics.persona_name) rows.push([t("Persona"), diagnostics.persona_name]);
   if (Number.isFinite(diagnostics.request_ms)) rows.push([t("Run time"), `${Math.max(0, Math.round(diagnostics.request_ms ?? 0))} ms`]);
+  if (Number.isFinite(diagnostics.first_token_ms)) rows.push([t("First token"), `${Math.max(0, Math.round(diagnostics.first_token_ms ?? 0))} ms`]);
+  if (Number.isFinite(diagnostics.preparation_ms)) rows.push([t("Preparation"), `${Math.max(0, Math.round(diagnostics.preparation_ms ?? 0))} ms`]);
+  if (Number.isFinite(diagnostics.scheduler_wait_ms)) rows.push([t("Model queue"), `${Math.max(0, Math.round(diagnostics.scheduler_wait_ms ?? 0))} ms`]);
+  if (Number.isFinite(diagnostics.generation_ms)) rows.push([t("Generation"), `${Math.max(0, Math.round(diagnostics.generation_ms ?? 0))} ms`]);
+  if (Number.isFinite(diagnostics.repair_ms) && (diagnostics.repair_ms ?? 0) > 0) rows.push([t("Repair"), `${Math.max(0, Math.round(diagnostics.repair_ms ?? 0))} ms`]);
+  if ((diagnostics.provider_calls ?? 0) > 1) rows.push([t("Provider calls"), String(diagnostics.provider_calls)]);
   if (diagnostics.motion_action) rows.push([t("Motion"), translateKnown(diagnostics.motion_action)]);
   if (diagnostics.repaired) rows.push([t("Parser"), t("Repaired response")]);
   if (diagnostics.semantic_fallback) rows.push([t("Fallback"), t("Semantic fallback used")]);

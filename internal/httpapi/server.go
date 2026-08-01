@@ -67,6 +67,11 @@ type Server struct {
 	intiface            intifaceRuntime
 	motion              motionRuntime
 	llm                 llmRuntime
+	llmRequests         llmRequestCoordinator
+	llmAutoloadMu       sync.Mutex
+	llmAutoloadCancel   context.CancelFunc
+	llmAutoloadWG       sync.WaitGroup
+	llmAutoloadID       uint64
 	models              *llm.ModelManager
 	managedLLM          *llm.ManagedLlamaRuntimeManager
 	controller          controllerRuntime
@@ -197,6 +202,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	mux := http.NewServeMux()
 	server.routes(mux)
 	server.handler = logRequests(logger, protectBrowserRequests(mux))
+	server.startLLMAutoload(settings.LLM)
 	server.startVoiceAutoload(settings.Voice)
 	server.startMediaAutoScan(settings.Media)
 
@@ -341,6 +347,8 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
+	mux.HandleFunc("GET /api/llm/duplicates", s.handleManagedLLMDuplicates)
+	mux.HandleFunc("POST /api/llm/duplicates/terminate", s.handleTerminateManagedLLMDuplicates)
 	mux.HandleFunc("GET /api/llm/runtime", s.handleManagedLLMRuntime)
 	mux.HandleFunc("POST /api/llm/runtime/build", s.handleBuildManagedLLMRuntime)
 	mux.HandleFunc("DELETE /api/llm/runtime/build", s.handleCancelManagedLLMRuntimeBuild)

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-01, model-owned chat motion and generated-pattern normalization
+## Snapshot — 2026-08-01, local-LLM latency consistency and process recovery
 
 ### Goal 1: Maintainability
 
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 23,496,192 bytes plain and 16,949,248 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; restoring the embedded generated catalog adds 545,792 / 534,528 bytes and remains well below 30 MB. |
-| Cold start to serving UI | < 500 ms | **Met** | A fresh isolated-data launch of the current stripped binary listened in 107.0 ms and returned `/healthz` in 139.1 ms, including process-spawn and loopback-request overhead. No device, model, or voice worker was started. |
+| Binary size | < 30 MB | **Met** | Current tree: 23,285,760 bytes plain and 16,712,192 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; the process-containment and latency diagnostics remain well below 30 MB. |
+| Cold start to serving UI | < 500 ms | **Met** | Three fresh isolated-data launches of the current stripped binary listened in 92.2-121.8 ms and returned `/healthz` in 92.9-136.7 ms, including process-spawn and loopback-request overhead. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -105,17 +105,19 @@ Ranked by threat to the stated goals:
    preserving local teardown. An already-connected Browser Bluetooth owner now
    also invalidates fetched work and writes Stop directly during backend loss;
    current Cloud/Browser retry and teardown hardware evidence remains open.
-2. **Cold start at the boundary.** The available sample used the retired
-   NeuTTS configuration. Client probe overhead and host caching were not
-   separated; treat 500 ms as unconfirmed until Phase 16 measures the current
-   schema-v2 build server-side.
+2. **Cold start at the boundary.** The current three-launch schema-v2 sample is
+   below budget with asynchronous managed-model preload. Host caching was not
+   separated, so Phase 16 still owns controlled release telemetry.
 3. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,535,394 raw / 756,144 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 726,450 raw / 193,763 gzip bytes; all
-   HTML/CSS/JS is 1,091,158 raw / 318,747 gzip bytes. The local-TTS transition
+   browser payload is 1,562,036 raw / 764,363 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 738,698 raw / 196,619 gzip bytes; all
+   HTML/CSS/JS is 1,117,800 raw / 326,966 gzip bytes. LLM loading controls,
+   phase diagnostics, speech policy, and duplicate-process recovery add 21,116
+   raw / 6,163 gzip bytes overall and 9,696 raw / 2,180 gzip bytes to startup
+   against the checked-in predecessor. The local-TTS transition
    removes 14,798 raw / 5,341 gzip bytes overall and 4,402 raw / 1,764 gzip bytes
    from startup relative to its checked-in predecessor. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
@@ -130,10 +132,34 @@ Ranked by threat to the stated goals:
    and total payload growth explicit.
 5. **GPU voice/LLM coexistence.** Faster Qwen3-TTS and Chatterbox are isolated
    optional servers, but each can still compete with a managed LLM for VRAM.
-   Representative warm latency, quality, cancellation, and simultaneous-LLM
-   acceptance remain R17 evidence; Chatterbox CPU is the documented fallback.
+   Chat can now interrupt queued/active speech, and Faster Qwen stops an
+   abandoned stream after the current generator yield. Live simultaneous-LLM
+   cancellation acceptance remains R17 evidence; Chatterbox CPU is the
+   documented fallback.
 
 ## History
+
+- **2026-08-01** - Removed four independent sources of local-model tail
+  latency without changing prompts, sampling, parsing, or motion semantics.
+  Managed llama.cpp now preloads asynchronously by default, with an explicit
+  on-demand memory-saving option. One coordinator serializes generation,
+  prioritizes Chat over queued Autopilot work, and cancels an in-flight
+  autonomous inference before admitting an interactive turn. A new speech
+  policy either interrupts pending TTS (default) or lets it finish, and Faster
+  Qwen now bounds abandoned audio buffering and closes its model generator.
+  Windows managed runners use kill-on-close Job Object containment. An exact
+  executable-path duplicate blocks another launch and opens a confirmation
+  dialog; the controller-gated termination endpoint revalidates the PID's path
+  immediately before stopping it. Eight isolated complete Chat-route turns
+  against the installed Gemma/llama.cpp endpoint had one cache-fill turn at
+  1,836 ms total / 1,537 ms first token, followed by seven turns at 379-614 ms
+  total / 164-441 ms first token (416 / 175 ms medians), all with one provider
+  call and no repair. Current browser payload is 1,562,036 raw / 764,363 gzip
+  bytes (+21,116 / +6,163); plain/stripped binaries are 23,285,760 /
+  16,712,192 bytes. Three fresh stripped launches reached health in
+  92.9-136.7 ms. Go, frontend, localization, installer, Python syntax, lint,
+  vet, and zero-CGo gates pass; local race remains unavailable without GCC and
+  the CI race gate remains authoritative. No hardware command was issued.
 
 - **2026-08-01** - Curated the imported funscript clips against the same speed
   envelope the designed catalog already answers to, after a hardware report that

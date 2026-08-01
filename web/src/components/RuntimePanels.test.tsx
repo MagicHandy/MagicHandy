@@ -180,6 +180,19 @@ describe("runtime panels", () => {
     expect(screen.queryByRole("combobox", { name: "Context size" })).not.toBeInTheDocument();
   });
 
+  it("makes managed startup loading an explicit latency versus memory choice", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    const patch = vi.fn();
+    const user = userEvent.setup();
+    renderModelPanel({ ...llmSettings, managed_load_policy: "on_demand" }, patch);
+
+    const policy = await screen.findByRole("combobox", { name: "Model loading" });
+    expect(policy).toHaveValue("on_demand");
+    expect(screen.getByText(/first request must wait for the model to load/i)).toBeInTheDocument();
+    await user.selectOptions(policy, "startup");
+    expect(patch).toHaveBeenCalledWith({ managed_load_policy: "startup" });
+  });
+
   it("refreshes provider status after the saved managed context changes", async () => {
     llmModels.mockResolvedValue(emptyManager);
     const initial = { ...llmSettings, llama_cpp_context_size: 32768 };
@@ -281,6 +294,38 @@ describe("runtime panels", () => {
     expect(randomSeedPatch.tts_seed).toEqual(expect.any(Number));
   });
 
+  it("offers an explicit chat speech interruption policy", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    settings.voice = {
+      ...settings.voice,
+      tts_provider: "faster_qwen3_tts",
+      speak_replies: true,
+      chat_speech_policy: "interrupt",
+    };
+    settings.options.chat_speech_policies = ["interrupt", "finish_current"];
+    const patch = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <VoiceSettingsPanel
+        settings={settings}
+        locked={false}
+        dirty={false}
+        patch={patch}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    const policy = screen.getByRole("combobox", { name: "When a new message is sent" });
+    expect(policy).toHaveValue("interrupt");
+    expect(screen.getByText(/frees a shared local GPU sooner/i)).toBeInTheDocument();
+    await user.selectOptions(policy, "finish_current");
+    expect(patch).toHaveBeenCalledWith({ chat_speech_policy: "finish_current" });
+  });
+
   it("offers reviewed Faster Qwen tone presets and reveals the custom prompt", async () => {
     voiceStatus.mockImplementation(() => new Promise(() => undefined));
     const settings = voiceSettings();
@@ -350,6 +395,7 @@ function modelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn
       saved={settings}
       providers={["llama_cpp", "ollama"]}
       llamaModes={["managed", "external"]}
+      managedLoadPolicies={["startup", "on_demand"]}
       llamaContextSizes={contextSizes}
       reasoningModes={["off", "auto"]}
       maxOutputOptions={[128, 256, 512]}

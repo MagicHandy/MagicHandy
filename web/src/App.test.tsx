@@ -8,6 +8,7 @@ import type {
   ConnectionCheckResult,
   IntifaceTransportSnapshot,
   LLMModelManagerSnapshot,
+  ManagedLLMDuplicateSnapshot,
   MediaSummary,
   TransportDiagnostics,
 } from "./api/types";
@@ -148,6 +149,7 @@ interface InstallFetchOptions {
   intifaceConnectError?: string;
   chatLog?: unknown[];
   voiceStatus?: unknown;
+  llmDuplicates?: ManagedLLMDuplicateSnapshot;
   library?: typeof libraryFixture;
   modelManager?: LLMModelManagerSnapshot;
   pickedPath?: string;
@@ -211,6 +213,8 @@ function installFetch(opts: InstallFetchOptions = {}) {
     if (u.includes("/api/llm/ollama/models")) return jsonRes({ available: true, models: [{ name: "qwen-test:latest", size_bytes: 4_294_967_296, format: "gguf", family: "qwen", parameter_size: "7B", quantization: "Q4_K_M" }] });
     if (u.includes("/api/llm/imports/ollama")) return jsonRes({ import: { id: "import-1", source: "ollama", display_name: "qwen-test:latest", status: "copying", bytes_copied: 1024, total_bytes: 4_294_967_296, started_at: "now", updated_at: "now" } });
     if (u.includes("/api/llm/runtime/build")) return jsonRes({ build: { id: "runtime-build-1", backend: "auto", status: "queued", message: "Queued managed llama.cpp source build.", started_at: "now", updated_at: "now" } });
+    if (u.includes("/api/llm/duplicates/terminate")) return jsonRes({ managed: true, runner_name: "llama-server.exe", processes: [] });
+    if (u.includes("/api/llm/duplicates")) return jsonRes(opts.llmDuplicates ?? { managed: true, runner_name: "llama-server.exe", processes: [] });
     if (u.includes("/api/llm/models")) return jsonRes(opts.modelManager ?? modelManagerFixture);
     if (u.includes("/api/llm/status")) return jsonRes({ provider: state.settings.llm.provider, base_url: "http://127.0.0.1:8080", model: state.settings.llm.model, available: false, managed: state.settings.llm.llama_cpp_mode === "managed", loaded: false, models: state.settings.llm.llama_cpp_mode === "external" ? ["server-model-a", "server-model-b"] : undefined, message: `llama.cpp runner is not loaded${state.settings.llm.model ? ` (saved model: ${state.settings.llm.model})` : ""}` });
     if (u.includes("/api/diagnostics/prompt-composition")) return jsonRes({
@@ -306,6 +310,46 @@ describe("app shell safety invariants", () => {
 
     await screen.findByRole("button", { name: /emergency stop/i });
     await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "deep-violet"));
+  });
+
+  it("asks before terminating an exact-path duplicate managed model process", async () => {
+    const fetch = installFetch({
+      llmDuplicates: {
+        managed: true,
+        runner_name: "llama-server.exe",
+        processes: [{ pid: 55620, executable: "llama-server.exe" }],
+      },
+    });
+    renderApp();
+
+    const dialog = await screen.findByRole("dialog", { name: "Another model process is running" });
+    expect(within(dialog).getByText(/PID 55620/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/will not launch another copy/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Terminate duplicate" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Another model process is running" })).toBeNull());
+    const terminateCall = fetch.mock.calls.find(([url]) => String(url).includes("/api/llm/duplicates/terminate"));
+    expect(terminateCall?.[1]).toEqual(expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ pids: [55620] }),
+    }));
+  });
+
+  it("leaves a duplicate model process running when the recovery dialog is dismissed", async () => {
+    const fetch = installFetch({
+      llmDuplicates: {
+        managed: true,
+        runner_name: "llama-server.exe",
+        processes: [{ pid: 55620, executable: "llama-server.exe" }],
+      },
+    });
+    renderApp();
+
+    const dialog = await screen.findByRole("dialog", { name: "Another model process is running" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Leave running" }));
+
+    expect(screen.queryByRole("dialog", { name: "Another model process is running" })).toBeNull();
+    expect(fetch.mock.calls.some(([url]) => String(url).includes("/api/llm/duplicates/terminate"))).toBe(false);
   });
 
   it("keeps only shell disclosures in the compact top bar", async () => {

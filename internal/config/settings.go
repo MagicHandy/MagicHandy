@@ -62,6 +62,12 @@ const (
 	LlamaCPPModeManaged = "managed"
 	// LlamaCPPModeExternal connects to a user-managed llama-server process.
 	LlamaCPPModeExternal = "external"
+	// LLMManagedLoadStartup loads a managed llama.cpp model in the background
+	// when the app starts, avoiding a cold first chat or Autopilot decision.
+	LLMManagedLoadStartup = "startup"
+	// LLMManagedLoadOnDemand leaves the managed model unloaded until requested,
+	// saving idle RAM and VRAM at the cost of cold-request latency.
+	LLMManagedLoadOnDemand = "on_demand"
 
 	// PromptSetMagicHandyMotionV1 is the default chat and motion JSON contract.
 	PromptSetMagicHandyMotionV1 = "magichandy_motion_v1"
@@ -176,6 +182,12 @@ const (
 	TTSSeedModeFixed = "fixed"
 	// TTSSeedModeVaried selects a fresh seed for each synthesis request.
 	TTSSeedModeVaried = "varied"
+	// ChatSpeechInterrupt cancels queued and active speech when the user sends a
+	// new chat turn, freeing a shared local GPU for the LLM.
+	ChatSpeechInterrupt = "interrupt"
+	// ChatSpeechFinishCurrent lets existing speech finish before the shared GPU
+	// is fully available to a local LLM.
+	ChatSpeechFinishCurrent = "finish_current"
 	// TTSToneNatural preserves the cloned reference delivery without an extra
 	// model instruction. It is the backward-compatible default.
 	TTSToneNatural = "natural"
@@ -269,6 +281,7 @@ type MotionSettings struct {
 type LLMSettings struct {
 	Provider             string `json:"provider"`
 	LlamaCPPMode         string `json:"llama_cpp_mode"`
+	ManagedLoadPolicy    string `json:"managed_load_policy"`
 	LlamaCPPBaseURL      string `json:"llama_cpp_base_url"`
 	LlamaCPPContextSize  int    `json:"llama_cpp_context_size"`
 	OllamaBaseURL        string `json:"ollama_base_url"`
@@ -377,6 +390,9 @@ type VoiceSettings struct {
 	// SpeakReplies enqueues each displayed chat reply to the running TTS
 	// worker in lockstep (ADR 0003: a spoken reply is always also shown).
 	SpeakReplies bool `json:"speak_replies"`
+	// ChatSpeechPolicy controls whether a new interactive message interrupts
+	// pending speech. This matters when TTS and the LLM share one local GPU.
+	ChatSpeechPolicy string `json:"chat_speech_policy"`
 	// ElevenLabsAPIKey is a private credential like the Handy connection
 	// key: stored at rest, handed to the TTS worker process only via a
 	// private environment variable, never returned by any read API.
@@ -397,6 +413,7 @@ type PublicVoiceSettings struct {
 	ASRWorkerPath      string   `json:"asr_worker_path,omitempty"`
 	ASRWorkerArgs      []string `json:"asr_worker_args,omitempty"`
 	SpeakReplies       bool     `json:"speak_replies"`
+	ChatSpeechPolicy   string   `json:"chat_speech_policy"`
 	ElevenLabsVoiceID  string   `json:"elevenlabs_voice_id,omitempty"`
 	ElevenLabsModelID  string   `json:"elevenlabs_model_id,omitempty"`
 	TTSAutoLaunch      bool     `json:"tts_auto_launch"`
@@ -440,6 +457,7 @@ type VoiceUpdate struct {
 	ASRWorkerPath      string   `json:"asr_worker_path"`
 	ASRWorkerArgs      []string `json:"asr_worker_args"`
 	SpeakReplies       bool     `json:"speak_replies"`
+	ChatSpeechPolicy   *string  `json:"chat_speech_policy,omitempty"`
 	ElevenLabsVoiceID  string   `json:"elevenlabs_voice_id"`
 	ElevenLabsModelID  string   `json:"elevenlabs_model_id"`
 	TTSAutoLaunch      *bool    `json:"tts_auto_launch,omitempty"`
@@ -523,6 +541,7 @@ type PublicSettingsOptionHints struct {
 	AutopilotAuthorities    []string `json:"autopilot_speech_motion_authorities"`
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
+	LLMManagedLoadPolicies  []string `json:"llm_managed_load_policies"`
 	LlamaCPPContextSizes    []int    `json:"llama_cpp_context_sizes"`
 	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
@@ -535,6 +554,7 @@ type PublicSettingsOptionHints struct {
 	ParakeetSources         []string `json:"parakeet_sources"`
 	TTSDevices              []string `json:"tts_devices"`
 	TTSTonePresets          []string `json:"tts_tone_presets"`
+	ChatSpeechPolicies      []string `json:"chat_speech_policies"`
 	ChatStartupBehaviors    []string `json:"chat_startup_behaviors"`
 	Locales                 []string `json:"locales"`
 	Themes                  []string `json:"themes"`
@@ -545,6 +565,7 @@ type PublicSettingsOptionHints struct {
 type LLMUpdate struct {
 	Provider             string  `json:"provider"`
 	LlamaCPPMode         string  `json:"llama_cpp_mode"`
+	ManagedLoadPolicy    *string `json:"managed_load_policy,omitempty"`
 	LlamaCPPBaseURL      string  `json:"llama_cpp_base_url"`
 	LlamaCPPContextSize  *int    `json:"llama_cpp_context_size,omitempty"`
 	OllamaBaseURL        string  `json:"ollama_base_url"`
@@ -572,6 +593,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 	return LLMUpdate{
 		Provider:             settings.Provider,
 		LlamaCPPMode:         settings.LlamaCPPMode,
+		ManagedLoadPolicy:    &settings.ManagedLoadPolicy,
 		LlamaCPPBaseURL:      settings.LlamaCPPBaseURL,
 		LlamaCPPContextSize:  &settings.LlamaCPPContextSize,
 		OllamaBaseURL:        settings.OllamaBaseURL,
@@ -650,6 +672,7 @@ func DefaultSettings() Settings {
 		LLM: LLMSettings{
 			Provider:             LLMProviderLlamaCPP,
 			LlamaCPPMode:         LlamaCPPModeManaged,
+			ManagedLoadPolicy:    LLMManagedLoadStartup,
 			LlamaCPPBaseURL:      DefaultLlamaCPPBaseURL,
 			LlamaCPPContextSize:  DefaultLlamaCPPContextSize,
 			OllamaBaseURL:        DefaultOllamaBaseURL,
@@ -675,6 +698,7 @@ func DefaultSettings() Settings {
 			TTSSeed:            DefaultFasterQwenSeed,
 			TTSSeedMode:        TTSSeedModeFixed,
 			TTSTonePreset:      DefaultTTSTonePreset,
+			ChatSpeechPolicy:   ChatSpeechInterrupt,
 			ParakeetServerPort: DefaultParakeetServerPort,
 			ParakeetSource:     ParakeetSourceApp,
 			InputMode:          VoiceInputModeHandsFree,
@@ -747,6 +771,7 @@ func publicVoiceSettings(settings VoiceSettings) PublicVoiceSettings {
 		ASRWorkerPath:      settings.ASRWorkerPath,
 		ASRWorkerArgs:      cloneStrings(settings.ASRWorkerArgs),
 		SpeakReplies:       settings.SpeakReplies,
+		ChatSpeechPolicy:   settings.ChatSpeechPolicy,
 		ElevenLabsVoiceID:  settings.ElevenLabsVoiceID,
 		ElevenLabsModelID:  settings.ElevenLabsModelID,
 		TTSAutoLaunch:      settings.TTSAutoLaunch,
@@ -880,6 +905,10 @@ func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
 	if update.TTSTonePrompt != nil {
 		ttsTonePrompt = *update.TTSTonePrompt
 	}
+	chatSpeechPolicy := current.ChatSpeechPolicy
+	if update.ChatSpeechPolicy != nil {
+		chatSpeechPolicy = *update.ChatSpeechPolicy
+	}
 	return normalizeVoiceStrings(VoiceSettings{
 		Enabled:            update.Enabled,
 		TTSProvider:        update.TTSProvider,
@@ -907,6 +936,7 @@ func applyVoiceUpdate(current VoiceSettings, update VoiceUpdate) VoiceSettings {
 		TTSSeedMode:        ttsSeedMode,
 		TTSTonePreset:      ttsTonePreset,
 		TTSTonePrompt:      ttsTonePrompt,
+		ChatSpeechPolicy:   chatSpeechPolicy,
 		ParakeetServerPath: update.ParakeetServerPath,
 		ParakeetModelPath:  update.ParakeetModelPath,
 		ParakeetServerPort: update.ParakeetServerPort,
@@ -1124,6 +1154,9 @@ func applyMissingLLMDefaults(settings LLMSettings, defaults LLMSettings) LLMSett
 	if settings.LlamaCPPMode == "" {
 		settings.LlamaCPPMode = defaults.LlamaCPPMode
 	}
+	if settings.ManagedLoadPolicy == "" {
+		settings.ManagedLoadPolicy = defaults.ManagedLoadPolicy
+	}
 	if settings.LlamaCPPBaseURL == "" {
 		settings.LlamaCPPBaseURL = defaults.LlamaCPPBaseURL
 	}
@@ -1216,6 +1249,9 @@ func validateLLMSettings(settings LLMSettings) error {
 	}
 	if !oneOf(settings.LlamaCPPMode, LlamaCPPModeManaged, LlamaCPPModeExternal) {
 		return fmt.Errorf("unknown llama.cpp mode %q", settings.LlamaCPPMode)
+	}
+	if !oneOf(settings.ManagedLoadPolicy, LLMManagedLoadStartup, LLMManagedLoadOnDemand) {
+		return fmt.Errorf("unknown managed LLM load policy %q", settings.ManagedLoadPolicy)
 	}
 	if settings.LlamaCPPBaseURL == "" {
 		return errors.New("llama.cpp base URL is required")
@@ -1313,6 +1349,7 @@ func cloneStrings(values []string) []string {
 func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.Provider = strings.TrimSpace(settings.Provider)
 	settings.LlamaCPPMode = strings.TrimSpace(settings.LlamaCPPMode)
+	settings.ManagedLoadPolicy = strings.TrimSpace(settings.ManagedLoadPolicy)
 	settings.LlamaCPPBaseURL = strings.TrimRight(strings.TrimSpace(settings.LlamaCPPBaseURL), "/")
 	settings.OllamaBaseURL = strings.TrimRight(strings.TrimSpace(settings.OllamaBaseURL), "/")
 	settings.OllamaModelsPath = strings.TrimSpace(settings.OllamaModelsPath)

@@ -215,6 +215,7 @@ export function SettingsRoute() {
         asr_worker_path: s.voice?.asr_worker_path ?? "",
         asr_worker_args: s.voice?.asr_worker_args ?? [],
         speak_replies: s.voice?.speak_replies ?? false,
+        chat_speech_policy: s.voice?.chat_speech_policy ?? "interrupt",
         elevenlabs_voice_id: s.voice?.elevenlabs_voice_id ?? "",
         elevenlabs_model_id: s.voice?.elevenlabs_model_id ?? "",
         tts_auto_launch: s.voice?.tts_auto_launch ?? false,
@@ -310,6 +311,7 @@ export function SettingsRoute() {
     motion_styles: [],
     llm_providers: [],
     llama_cpp_modes: [],
+    llm_managed_load_policies: [],
     llama_cpp_context_sizes: [],
     llm_reasoning_modes: [],
     llm_max_output_tokens: [],
@@ -415,6 +417,7 @@ export function SettingsRoute() {
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}
             llamaModes={opt.llama_cpp_modes ?? []}
+            managedLoadPolicies={opt.llm_managed_load_policies ?? []}
             llamaContextSizes={opt.llama_cpp_context_sizes ?? []}
             reasoningModes={opt.llm_reasoning_modes ?? []}
             maxOutputOptions={opt.llm_max_output_tokens ?? []}

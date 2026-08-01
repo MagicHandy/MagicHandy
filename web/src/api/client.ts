@@ -27,6 +27,7 @@ import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
   LLMProviderStatus,
+  ManagedLLMDuplicateSnapshot,
   ManagedLlamaRuntimeBuild,
   MediaScanState,
   MediaFunscript,
@@ -507,6 +508,9 @@ export const api = {
   llmStatus: () => request<LLMProviderStatus>("GET", "/api/llm/status"),
   llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
   llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
+  llmDuplicates: () => request<ManagedLLMDuplicateSnapshot>("GET", "/api/llm/duplicates"),
+  terminateLLMDuplicates: (pids: number[]) =>
+    request<ManagedLLMDuplicateSnapshot>("POST", "/api/llm/duplicates/terminate", { pids }),
   llmModels: () => request<LLMModelManagerSnapshot>("GET", "/api/llm/models"),
   buildManagedLlamaRuntime: (backend: "auto" | "cpu" | "cuda") =>
     request<{ build: ManagedLlamaRuntimeBuild }>("POST", "/api/llm/runtime/build", { backend }),

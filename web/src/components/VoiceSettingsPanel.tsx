@@ -42,6 +42,11 @@ const TONE_LABELS: Partial<Record<string, MessageKey>> = {
   custom: "Custom",
 };
 
+const SPEECH_POLICY_LABELS: Partial<Record<string, MessageKey>> = {
+  interrupt: "Interrupt current speech",
+  finish_current: "Finish current speech",
+};
+
 const MANAGED_TTS = new Set(["faster_qwen3_tts", "chatterbox_tts"]);
 const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Voice runtime request failed.");
 
@@ -95,6 +100,9 @@ export function VoiceSettingsPanel({
   const tonePresets = s.options.tts_tone_presets?.length
     ? s.options.tts_tone_presets
     : FALLBACK_TONE_PRESETS;
+  const speechPolicies = s.options.chat_speech_policies?.length
+    ? s.options.chat_speech_policies
+    : ["interrupt", "finish_current"];
   const tonePreset = voice.tts_tone_preset ?? "natural";
 
   const providerSelect = (
@@ -241,6 +249,7 @@ export function VoiceSettingsPanel({
           <HostPathField label={t("TTS worker binary override")} kind="file" value={voice.tts_worker_path ?? ""} disabled={locked} onChange={(tts_worker_path) => patch({ tts_worker_path })} />
         </details>}
         {voice.tts_provider !== "none" && <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Speak chat replies")}</span></label>}
+        {voice.tts_provider !== "none" && (voice.speak_replies ?? false) && <div className="field"><label className="label" htmlFor="chat-speech-policy">{t("When a new message is sent")}</label><select id="chat-speech-policy" value={voice.chat_speech_policy || "interrupt"} disabled={locked} onChange={(event) => patch({ chat_speech_policy: event.target.value })}>{speechPolicies.map((policy) => <option key={policy} value={policy}>{translateKnown(SPEECH_POLICY_LABELS[policy] ?? policy)}</option>)}</select><span className="hint">{voice.chat_speech_policy === "finish_current" ? t("Finishing speech preserves playback, but a shared local GPU can delay the next model response.") : t("Interrupting speech frees a shared local GPU sooner for the next model response.")}</span></div>}
         <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} showTTSModule={managedTTS} ttsModuleName={ttsModuleName} {...voiceRuntime} />
       </div>
 

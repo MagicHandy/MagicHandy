@@ -191,6 +191,12 @@ export interface ChatMessageDiagnostics {
   persona_id?: string;
   persona_name?: string;
   request_ms?: number;
+  preparation_ms?: number;
+  scheduler_wait_ms?: number;
+  first_token_ms?: number;
+  generation_ms?: number;
+  repair_ms?: number;
+  provider_calls?: number;
   repaired?: boolean;
   semantic_fallback?: boolean;
   initial_malformed?: boolean;
@@ -679,6 +685,7 @@ export interface VoiceSettings {
   asr_worker_path?: string;
   asr_worker_args?: string[];
   speak_replies?: boolean;
+  chat_speech_policy?: "interrupt" | "finish_current" | string;
   elevenlabs_voice_id?: string;
   elevenlabs_model_id?: string;
   tts_auto_launch: boolean;
@@ -725,6 +732,7 @@ export interface VoiceSettingsUpdate {
   asr_worker_path: string;
   asr_worker_args: string[];
   speak_replies: boolean;
+  chat_speech_policy: "interrupt" | "finish_current" | string;
   elevenlabs_voice_id: string;
   elevenlabs_model_id: string;
   tts_auto_launch: boolean;
@@ -826,6 +834,7 @@ export interface OptionHints {
   autopilot_speech_motion_authorities?: string[];
   llm_providers?: string[];
   llama_cpp_modes?: string[];
+  llm_managed_load_policies?: string[];
   llama_cpp_context_sizes?: number[];
   llm_reasoning_modes?: string[];
   llm_max_output_tokens?: number[];
@@ -837,6 +846,7 @@ export interface OptionHints {
   parakeet_sources?: string[];
   tts_devices?: string[];
   tts_tone_presets?: string[];
+  chat_speech_policies?: string[];
   chat_startup_behaviors?: string[];
   locales?: string[];
   themes?: string[];
@@ -860,6 +870,7 @@ export interface PublicSettings {
   llm: {
     provider: string;
     llama_cpp_mode: string;
+    managed_load_policy?: "startup" | "on_demand" | string;
     llama_cpp_base_url: string;
     llama_cpp_context_size: number;
     ollama_base_url: string;
@@ -894,6 +905,17 @@ export interface LLMProviderStatus {
   loaded?: boolean;
   models?: string[];
   message?: string;
+}
+
+export interface ManagedLLMDuplicateProcess {
+  pid: number;
+  executable: string;
+}
+
+export interface ManagedLLMDuplicateSnapshot {
+  managed: boolean;
+  runner_name?: string;
+  processes: ManagedLLMDuplicateProcess[];
 }
 
 export interface ManagedLLMModel {

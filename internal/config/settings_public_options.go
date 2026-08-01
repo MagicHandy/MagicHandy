@@ -47,6 +47,10 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LlamaCPPModeManaged,
 			LlamaCPPModeExternal,
 		},
+		LLMManagedLoadPolicies: []string{
+			LLMManagedLoadStartup,
+			LLMManagedLoadOnDemand,
+		},
 		LlamaCPPContextSizes: LlamaCPPContextSizes(),
 		LLMReasoningModes: []string{
 			LLMReasoningOff,
@@ -80,6 +84,10 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 		},
 		TTSDevices:     voiceTTSDeviceOptions(),
 		TTSTonePresets: TTSTonePresets(),
+		ChatSpeechPolicies: []string{
+			ChatSpeechInterrupt,
+			ChatSpeechFinishCurrent,
+		},
 		ChatStartupBehaviors: []string{
 			ChatStartupPrevious,
 			ChatStartupNew,

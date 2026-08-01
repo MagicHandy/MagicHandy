@@ -165,6 +165,12 @@ describe("ChatPanel history", () => {
           model: "gemma-3",
           prompt_set: "magichandy_motion_v1",
           request_ms: 184,
+          preparation_ms: 12,
+          scheduler_wait_ms: 31,
+          first_token_ms: 96,
+          generation_ms: 141,
+          repair_ms: 22,
+          provider_calls: 2,
           motion_action: "target",
         },
       }],
@@ -179,6 +185,10 @@ describe("ChatPanel history", () => {
     const avatar = screen.getByRole("button", { name: "Show response diagnostics" });
     expect(avatar).toHaveAttribute("title", expect.stringContaining("Model: gemma-3"));
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Run time\s*184 ms/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/First token\s*96 ms/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Model queue\s*31 ms/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Repair\s*22 ms/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Provider calls\s*2/);
   });
 
   it("marks persona changes from persisted assistant provenance", async () => {

@@ -110,7 +110,7 @@ func TestLLMModelManagerAPIImportsOllamaAndProtectsSelection(t *testing.T) {
 func TestLLMLoadAndUnloadRequireController(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
-	for _, path := range []string{"/api/llm/load", "/api/llm/unload"} {
+	for _, path := range []string{"/api/llm/load", "/api/llm/unload", "/api/llm/duplicates/terminate"} {
 		recorder := httptest.NewRecorder()
 		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
 		if recorder.Code != http.StatusConflict {

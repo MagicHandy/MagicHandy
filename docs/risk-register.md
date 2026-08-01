@@ -435,6 +435,22 @@ paths have regression coverage. This removes one local-service conflict but does
 not change the remaining curated-download and hardware-fit work, so R13 stays
 High.
 
+Latency-consistency follow-up (2026-08-01): direct warm production-prompt probes
+were stable at roughly 128-141 ms to first token and 553-654 ms total while two
+persisted app turns took 32-34 seconds. The tail correlated with a cold
+Autopilot decision, shared-GPU TTS that continued after cancellation, and a
+dead-parent managed runner retaining about 7.1 GB. Managed startup preload is
+now the default with an on-demand memory-saving option; Chat preempts in-flight
+autonomous inference; speech interruption is an explicit policy; Faster Qwen
+closes canceled streaming generators; and Windows children use Job Object
+containment. Exact-path duplicate detection blocks a second managed launch and
+requires user confirmation plus backend path revalidation before termination.
+Per-message phase timings make future attribution inspectable. Eight isolated
+complete-route turns measured one 1.836-second cache-fill request followed by
+seven 379-614 ms requests, with one provider call and no repair in every turn.
+Live simultaneous-TTS cancellation acceptance remains required, so R13 stays
+High.
+
 ## R14: Per-Source Motion Path Divergence
 
 Level: High
