@@ -188,9 +188,9 @@ func TestReversalRampShortensWithSpeedAndFocus(t *testing.T) {
 }
 
 // The reversal ramp exists to keep acceleration bounded. Shortening it must
-// not push a generated pattern past the budget it is derived from. Promoted
-// curated curves are deliberately not time-fitted (content_curated.go), so
-// their authored peaks are out of scope here.
+// not push a fitted pattern past the budget it is derived from. Only the two
+// explicitly promoted, hardware-accepted curves in content_curated.go retain
+// their exact timing and remain out of scope here.
 func TestReversalRampStaysInsideItsAccelerationBudget(t *testing.T) {
 	for _, definition := range BuiltinPatternDefinitions() {
 		if UsesExactImportedCurve(definition) {

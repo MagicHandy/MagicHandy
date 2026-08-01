@@ -478,14 +478,24 @@ func TestStartupCalibrationAllowsSliderOutsideActiveStrokeWindow(t *testing.T) {
 func TestEngineStartsWhenTheDeviceRestsJustBelowItsReportedSlideMinimum(t *testing.T) {
 	owner := &startupStateTransport{
 		Fake: transport.NewFake(),
-		states: []transport.MotionStartupState{{
-			PositionWithinStrokePercent: 0,
-			PositionAbsolute:            4.0,
-			StrokeMinPercent:            0,
-			StrokeMaxPercent:            100,
-			StrokeMinAbsolute:           5.0,
-			StrokeMaxAbsolute:           102.83,
-		}},
+		states: []transport.MotionStartupState{
+			{
+				PositionWithinStrokePercent: 0,
+				PositionAbsolute:            4.0,
+				StrokeMinPercent:            0,
+				StrokeMaxPercent:            100,
+				StrokeMinAbsolute:           5.0,
+				StrokeMaxAbsolute:           102.83,
+			},
+			{
+				PositionWithinStrokePercent: 0,
+				PositionAbsolute:            5.0,
+				StrokeMinPercent:            0,
+				StrokeMaxPercent:            100,
+				StrokeMinAbsolute:           5.0,
+				StrokeMaxAbsolute:           102.83,
+			},
+		},
 	}
 	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
 	settings := config.DefaultSettings().Motion
@@ -496,6 +506,9 @@ func TestEngineStartsWhenTheDeviceRestsJustBelowItsReportedSlideMinimum(t *testi
 	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
 	if err != nil {
 		t.Fatalf("start with a device resting one unit below its reported slide minimum: %v", err)
+	}
+	if countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 2 {
+		t.Fatalf("commands = %+v, want verified startup acquisition before main Play", owner.Commands())
 	}
 }
 
@@ -543,6 +556,9 @@ func TestStartupCalibrationToleranceBoundaries(t *testing.T) {
 			rejected := err != nil && strings.Contains(err.Error(), "outside calibrated full travel")
 			if rejected != test.wantRejection {
 				t.Fatalf("Start error = %v, calibration rejection = %t, want %t", err, rejected, test.wantRejection)
+			}
+			if !test.wantRejection && countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 2 {
+				t.Fatalf("commands = %+v, want accepted offset acquired before main Play", owner.Commands())
 			}
 		})
 	}

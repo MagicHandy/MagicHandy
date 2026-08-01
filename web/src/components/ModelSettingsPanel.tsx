@@ -26,6 +26,7 @@ interface ModelSettingsPanelProps {
   saved?: LLMSettings;
   providers: string[];
   llamaModes: string[];
+  llamaContextSizes: number[];
   reasoningModes: string[];
   maxOutputOptions: number[];
   locked: boolean;
@@ -42,7 +43,7 @@ const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider
 // experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
 const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, llamaContextSizes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
   const [managerMessage, setManagerMessage] = useState("");
@@ -73,8 +74,13 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
   const managedConfigured = Boolean(manager?.runtime.installed && selectedManagedModel?.state === "ready");
   const statusProvider = saved?.provider ?? settings.provider;
   const statusModel = saved?.model ?? settings.model;
+  const statusContextSize = statusProvider === "llama_cpp" && (saved?.llama_cpp_mode ?? settings.llama_cpp_mode) === "managed"
+    ? saved?.llama_cpp_context_size ?? settings.llama_cpp_context_size
+    : undefined;
   const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
   const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).sort((a, b) => a - b);
+  const contextSize = settings.llama_cpp_context_size;
+  const contextSizeOptions = Array.from(new Set([contextSize, ...llamaContextSizes])).sort((a, b) => a - b);
   const capabilities = settings.motion_capabilities ?? defaultCapabilities;
 
   function patchCapability(key: keyof LLMMotionCapabilities, value: boolean) {
@@ -117,7 +123,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
         message: message(error),
       });
     }
-  }, [statusModel, statusProvider]);
+  }, [statusContextSize, statusModel, statusProvider]);
 
   const refreshOllamaModels = useCallback(async () => {
     const generation = ++ollamaGeneration.current;
@@ -378,6 +384,14 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
         )}
 
         <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
+          {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+            <label className="field">
+              <span className="label">{t("Context size")}</span>
+              <select value={contextSize} disabled={locked} onChange={(event) => patch({ llama_cpp_context_size: Number(event.target.value) })}>
+                {contextSizeOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
+              </select>
+            </label>
+          )}
           <label className="field">
             <span className="label">{t("Maximum output")}</span>
             <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
@@ -393,6 +407,9 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, rea
           <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
         </div>
         <div className="generation-notes" role="note">
+          {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+            <p>{t("Larger contexts use more RAM and VRAM. A context smaller than the prompt cannot fit the request. This applies only to managed llama.cpp after Save.")}</p>
+          )}
           <p>{t("The selected cap covers reasoning plus visible JSON, so low limits can truncate JSON. The current pinned managed llama.cpp limits automatic reasoning to half that budget; every repair requests reasoning off to leave more budget for JSON.")}</p>
           <p>{settings.reasoning_mode === "off"
             ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })

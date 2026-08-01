@@ -119,6 +119,9 @@ const (
 	DefaultLLMRequestTimeoutMillis = 120000
 	// DefaultLLMMaxOutputTokens bounds compact intent JSON generation.
 	DefaultLLMMaxOutputTokens = 256
+	// DefaultLlamaCPPContextSize balances the measured prompt size against
+	// managed-runner RAM and VRAM allocation.
+	DefaultLlamaCPPContextSize = 32768
 
 	// LLMReasoningAuto leaves thinking behavior to the provider and model.
 	LLMReasoningAuto = "auto"
@@ -250,6 +253,7 @@ type LLMSettings struct {
 	Provider             string `json:"provider"`
 	LlamaCPPMode         string `json:"llama_cpp_mode"`
 	LlamaCPPBaseURL      string `json:"llama_cpp_base_url"`
+	LlamaCPPContextSize  int    `json:"llama_cpp_context_size"`
 	OllamaBaseURL        string `json:"ollama_base_url"`
 	OllamaModelsPath     string `json:"ollama_models_path,omitempty"`
 	Model                string `json:"model"`
@@ -496,6 +500,7 @@ type PublicSettingsOptionHints struct {
 	AutopilotAuthorities    []string `json:"autopilot_speech_motion_authorities"`
 	LLMProviders            []string `json:"llm_providers"`
 	LlamaCPPModes           []string `json:"llama_cpp_modes"`
+	LlamaCPPContextSizes    []int    `json:"llama_cpp_context_sizes"`
 	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
 	LLMChatVoices           []string `json:"llm_chat_voices"`
@@ -517,6 +522,7 @@ type LLMUpdate struct {
 	Provider             string  `json:"provider"`
 	LlamaCPPMode         string  `json:"llama_cpp_mode"`
 	LlamaCPPBaseURL      string  `json:"llama_cpp_base_url"`
+	LlamaCPPContextSize  *int    `json:"llama_cpp_context_size,omitempty"`
 	OllamaBaseURL        string  `json:"ollama_base_url"`
 	OllamaModelsPath     string  `json:"ollama_models_path,omitempty"`
 	Model                string  `json:"model"`
@@ -543,6 +549,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		Provider:             settings.Provider,
 		LlamaCPPMode:         settings.LlamaCPPMode,
 		LlamaCPPBaseURL:      settings.LlamaCPPBaseURL,
+		LlamaCPPContextSize:  &settings.LlamaCPPContextSize,
 		OllamaBaseURL:        settings.OllamaBaseURL,
 		OllamaModelsPath:     settings.OllamaModelsPath,
 		Model:                settings.Model,
@@ -620,6 +627,7 @@ func DefaultSettings() Settings {
 			Provider:             LLMProviderLlamaCPP,
 			LlamaCPPMode:         LlamaCPPModeManaged,
 			LlamaCPPBaseURL:      DefaultLlamaCPPBaseURL,
+			LlamaCPPContextSize:  DefaultLlamaCPPContextSize,
 			OllamaBaseURL:        DefaultOllamaBaseURL,
 			Model:                DefaultLLMModel,
 			PromptSet:            PromptSetMagicHandyMotionV1,
@@ -769,52 +777,11 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.Autopilot != nil {
 		next.Autopilot = *update.Autopilot
 	}
-	maxOutputTokens := s.LLM.MaxOutputTokens
-	if update.LLM.MaxOutputTokens != nil {
-		maxOutputTokens = *update.LLM.MaxOutputTokens
+	nextLLM, err := applyLLMUpdate(s.LLM, update.LLM)
+	if err != nil {
+		return Settings{}, err
 	}
-	reasoningMode := s.LLM.ReasoningMode
-	if update.LLM.ReasoningMode != nil {
-		reasoningMode = *update.LLM.ReasoningMode
-	}
-	chatVoice := s.LLM.ChatVoice
-	if update.LLM.ChatVoice != nil {
-		chatVoice = *update.LLM.ChatVoice
-	}
-	userAnatomy := s.LLM.UserAnatomy
-	if update.LLM.UserAnatomy != nil {
-		userAnatomy = *update.LLM.UserAnatomy
-	}
-	customAnatomy := s.LLM.CustomAnatomy
-	if update.LLM.CustomAnatomy != nil {
-		customAnatomy = *update.LLM.CustomAnatomy
-	}
-	personaDescription := s.LLM.PersonaDescription
-	if update.LLM.PersonaDescription != nil {
-		personaDescription = *update.LLM.PersonaDescription
-	}
-	capabilities := s.LLM.MotionCapabilities
-	if update.LLM.MotionCapabilities != nil {
-		copied := *update.LLM.MotionCapabilities
-		capabilities = &copied
-	}
-	next.LLM = normalizeLLMStrings(LLMSettings{
-		Provider:             update.LLM.Provider,
-		LlamaCPPMode:         update.LLM.LlamaCPPMode,
-		LlamaCPPBaseURL:      update.LLM.LlamaCPPBaseURL,
-		OllamaBaseURL:        update.LLM.OllamaBaseURL,
-		OllamaModelsPath:     update.LLM.OllamaModelsPath,
-		Model:                update.LLM.Model,
-		PromptSet:            update.LLM.PromptSet,
-		RequestTimeoutMillis: update.LLM.RequestTimeoutMillis,
-		MaxOutputTokens:      maxOutputTokens,
-		ReasoningMode:        reasoningMode,
-		ChatVoice:            chatVoice,
-		UserAnatomy:          userAnatomy,
-		CustomAnatomy:        customAnatomy,
-		PersonaDescription:   personaDescription,
-		MotionCapabilities:   capabilities,
-	})
+	next.LLM = nextLLM
 	next.Voice = applyVoiceUpdate(s.Voice, update.Voice)
 	if update.Chat != nil {
 		next.Chat = *update.Chat
@@ -1123,6 +1090,9 @@ func applyMissingLLMDefaults(settings LLMSettings, defaults LLMSettings) LLMSett
 	if settings.LlamaCPPBaseURL == "" {
 		settings.LlamaCPPBaseURL = defaults.LlamaCPPBaseURL
 	}
+	if settings.LlamaCPPContextSize == 0 {
+		settings.LlamaCPPContextSize = defaults.LlamaCPPContextSize
+	}
 	if settings.OllamaBaseURL == "" {
 		settings.OllamaBaseURL = defaults.OllamaBaseURL
 	}
@@ -1221,6 +1191,9 @@ func validateLLMSettings(settings LLMSettings) error {
 	}
 	if err := validateLLMBaseURL("Ollama", settings.OllamaBaseURL); err != nil {
 		return err
+	}
+	if !oneOfInt(settings.LlamaCPPContextSize, LlamaCPPContextSizes()...) {
+		return fmt.Errorf("unsupported managed llama.cpp context size %d", settings.LlamaCPPContextSize)
 	}
 	if settings.Model == "" {
 		return errors.New("LLM model is required")
@@ -1332,6 +1305,12 @@ func LLMReactionStyles() []string {
 	}
 }
 
+// LlamaCPPContextSizes lists the reviewed managed-runner context allocations.
+// Callers receive a new slice so the settings catalog cannot be mutated.
+func LlamaCPPContextSizes() []int {
+	return []int{16384, 32768, 65536, 131072}
+}
+
 // ValidLLMChatVoice reports whether a reply register is one this build composes.
 func ValidLLMChatVoice(voice string) bool {
 	return oneOf(voice, LLMChatVoices()...)
@@ -1344,6 +1323,15 @@ func ValidLLMReactionStyle(style string) bool {
 }
 
 func oneOf(value string, allowed ...string) bool {
+	for _, item := range allowed {
+		if value == item {
+			return true
+		}
+	}
+	return false
+}
+
+func oneOfInt(value int, allowed ...int) bool {
 	for _, item := range allowed {
 		if value == item {
 			return true

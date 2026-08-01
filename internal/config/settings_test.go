@@ -44,6 +44,9 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.LLM.LlamaCPPBaseURL != DefaultLlamaCPPBaseURL {
 		t.Fatalf("llama.cpp URL = %q, want %q", settings.LLM.LlamaCPPBaseURL, DefaultLlamaCPPBaseURL)
 	}
+	if settings.LLM.LlamaCPPContextSize != DefaultLlamaCPPContextSize {
+		t.Fatalf("llama.cpp context size = %d, want %d", settings.LLM.LlamaCPPContextSize, DefaultLlamaCPPContextSize)
+	}
 	if settings.LLM.OllamaBaseURL != DefaultOllamaBaseURL {
 		t.Fatalf("Ollama URL = %q, want %q", settings.LLM.OllamaBaseURL, DefaultOllamaBaseURL)
 	}
@@ -225,6 +228,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	settings.Device.APIApplicationIDOverride = "dev-app"
 	settings.Device.HandyConnectionKey = "secret"
 	settings.LLM.OllamaModelsPath = `D:\Ollama\models`
+	settings.LLM.LlamaCPPContextSize = 65536
 	capabilities := LLMMotionCapabilities{Motion: true, Patterns: false, AreaFocus: true, ExperimentalPatterns: true}
 	settings.LLM.MotionCapabilities = &capabilities
 	settings.Media.LibraryPaths = []string{filepath.Join(dir, "videos")}
@@ -259,6 +263,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if got.LLM.OllamaModelsPath != `D:\Ollama\models` {
 		t.Fatalf("Ollama models path = %q", got.LLM.OllamaModelsPath)
+	}
+	if got.LLM.LlamaCPPContextSize != 65536 {
+		t.Fatalf("llama.cpp context size = %d, want 65536", got.LLM.LlamaCPPContextSize)
 	}
 	if got.LLM.MotionCapabilities == nil || !got.LLM.MotionCapabilities.Motion || got.LLM.MotionCapabilities.Patterns || !got.LLM.MotionCapabilities.AreaFocus || !got.LLM.MotionCapabilities.ExperimentalPatterns {
 		t.Fatalf("motion capabilities did not persist: %+v", got.LLM.MotionCapabilities)
@@ -450,6 +457,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.LLM.MaxOutputTokens != DefaultLLMMaxOutputTokens || settings.LLM.ReasoningMode != LLMReasoningOff {
 		t.Fatalf("missing LLM generation settings were not defaulted: %+v", settings.LLM)
 	}
+	if settings.LLM.LlamaCPPContextSize != DefaultLlamaCPPContextSize {
+		t.Fatalf("missing llama.cpp context size = %d, want %d", settings.LLM.LlamaCPPContextSize, DefaultLlamaCPPContextSize)
+	}
 	if settings.Device.IntifaceServerAddress != DefaultIntifaceServerAddress {
 		t.Fatalf("missing Intiface server address = %q, want %q", settings.Device.IntifaceServerAddress, DefaultIntifaceServerAddress)
 	}
@@ -462,6 +472,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	current := DefaultSettings()
 	current.UI.Theme = ThemeMoonlight
 	current.LLM.MaxOutputTokens = 1024
+	current.LLM.LlamaCPPContextSize = 65536
 	current.LLM.ReasoningMode = LLMReasoningOff
 	current.Voice.ParakeetSource = ParakeetSourceApp
 	current.Voice.ParakeetServerPath = `C:\retained\server.exe`
@@ -473,6 +484,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	current.Chat = ChatSettings{StartupBehavior: ChatStartupPrevious, KeepUnsavedOnExit: true}
 	llmUpdate := LLMUpdateFromSettings(current.LLM)
 	llmUpdate.MaxOutputTokens = nil
+	llmUpdate.LlamaCPPContextSize = nil
 	llmUpdate.ReasoningMode = nil
 
 	oldUpdate := SettingsUpdate{
@@ -499,7 +511,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal old update: %v", err)
 	}
-	if strings.Contains(string(encoded), "max_output_tokens") || strings.Contains(string(encoded), "reasoning_mode") || strings.Contains(string(encoded), "parakeet_source") || strings.Contains(string(encoded), "input_sensitivity") {
+	if strings.Contains(string(encoded), "llama_cpp_context_size") || strings.Contains(string(encoded), "max_output_tokens") || strings.Contains(string(encoded), "reasoning_mode") || strings.Contains(string(encoded), "parakeet_source") || strings.Contains(string(encoded), "input_sensitivity") {
 		t.Fatalf("old update unexpectedly contains new fields: %s", encoded)
 	}
 	var decoded SettingsUpdate
@@ -510,7 +522,7 @@ func TestOlderSettingsUpdatePreservesNewTuningAndParakeetSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyUpdate: %v", err)
 	}
-	if next.LLM.MaxOutputTokens != 1024 || next.LLM.ReasoningMode != LLMReasoningOff {
+	if next.LLM.LlamaCPPContextSize != 65536 || next.LLM.MaxOutputTokens != 1024 || next.LLM.ReasoningMode != LLMReasoningOff {
 		t.Fatalf("older update reset LLM tuning: %+v", next.LLM)
 	}
 	if next.Voice.ParakeetSource != ParakeetSourceApp {

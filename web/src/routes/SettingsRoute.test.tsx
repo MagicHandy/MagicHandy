@@ -94,6 +94,7 @@ function settings(verbosity: string): PublicSettings {
       provider: "llama_cpp",
       llama_cpp_mode: "managed",
       llama_cpp_base_url: "",
+      llama_cpp_context_size: 32768,
       ollama_base_url: "",
       model: "",
       prompt_set: "default",
@@ -145,6 +146,7 @@ function settings(verbosity: string): PublicSettings {
       motion_styles: ["gentle", "balanced", "intense"],
       llm_providers: ["llama_cpp", "ollama"],
       llama_cpp_modes: ["managed", "external"],
+      llama_cpp_context_sizes: [16384, 32768, 65536, 131072],
       llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512],
       llm_chat_voices: ["utility", "warm", "intimate", "explicit"],
@@ -282,6 +284,23 @@ describe("SettingsRoute", () => {
     expect(panel?.querySelectorAll(":scope > .group")).toHaveLength(3);
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
     expect(screen.getByRole("group", { name: "Model permissions" })).toBeInTheDocument();
+  });
+
+  it("saves managed llama.cpp context size through the shared dirty form", async () => {
+    app.hash = "#/settings/model";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    const contextSize = await screen.findByRole("combobox", { name: "Context size" });
+    expect(contextSize).toHaveValue("32768");
+    expect(screen.getByText(/Larger contexts use more RAM and VRAM/)).toBeInTheDocument();
+    fireEvent.change(contextSize, { target: { value: "65536" } });
+    expect(screen.getByText("Save settings to check this configuration.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].llm.llama_cpp_context_size).toBe(65536);
+    expect(app.refresh).toHaveBeenCalledOnce();
   });
 
   it("reloads the routed form after factory reset before it can be saved again", async () => {

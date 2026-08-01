@@ -68,18 +68,10 @@ func TestCuratedBuiltinPatternsLoad(t *testing.T) {
 	}
 }
 
-func TestBuiltinCatalogIncludesCuratedPatterns(t *testing.T) {
-	expected := expectedCuratedPatternCount(t)
-	curated := 0
+func TestBuiltinCatalogQuarantinesBulkImportedPatterns(t *testing.T) {
 	for _, definition := range BuiltinPatternDefinitions() {
 		if strings.HasPrefix(string(definition.ID), "curated-") {
-			curated++
-			if !UsesExactImportedCurve(definition) {
-				t.Fatalf("curated pattern %q not marked exact imported", definition.ID)
-			}
+			t.Fatalf("unsafe bulk-imported pattern %q remained enabled", definition.ID)
 		}
-	}
-	if curated != expected {
-		t.Fatalf("builtin catalog curated count = %d, want %d", curated, expected)
 	}
 }

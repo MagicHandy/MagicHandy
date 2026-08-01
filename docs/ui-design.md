@@ -624,14 +624,20 @@ cancellation. Repeated rows stay flat and compact on desktop/mobile; they are
 not nested cards or oversized download tiles.
 
 Generation optimizations are a compact three-field row: maximum output,
-thinking/reasoning, and timeout. Maximum output uses backend-advertised reviewed
-choices; reasoning exposes only `Disabled when supported` (the recommended
-small-model default request) and `Automatic / provider default`. Inline notice text
-explains that low caps can still truncate JSON, the current managed automatic
-reasoning path is bounded to half the cap, and repair requests reasoning off to
-leave more budget for JSON. Unsupported external models may ignore or reject the override. These
-controls never claim an unmeasured general speedup or expose unproven
-threads/GPU/context/cache knobs.
+thinking/reasoning, and timeout. Managed llama.cpp has one narrow fourth-field
+exception: a backend-advertised context-size select with only the reviewed
+16,384/32,768/65,536/131,072-token allocations. It is hidden for external
+llama.cpp and Ollama, saves through the normal dirty form, and warns that larger
+values consume more RAM/VRAM while a value below the prompt length cannot fit
+the request. Maximum output uses backend-advertised reviewed choices; reasoning
+exposes only `Disabled when supported` (the recommended small-model default
+request) and `Automatic / provider default`. Inline notice text explains that
+low caps can still truncate JSON, the current managed automatic reasoning path
+is bounded to half the cap, and repair requests reasoning off to leave more
+budget for JSON. Unsupported external models may ignore or reject the override.
+These controls never claim an unmeasured general speedup or expose unproven
+threads/GPU/cache knobs. Context size remains the managed-only reviewed
+exception, not a general provider tuning surface.
 
 Device requirements and app-managed voice modules are status/notice surfaces,
 not fake form fields. Cloud REST firmware v4/API v3 appears as a semantic note.

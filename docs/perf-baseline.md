@@ -14,7 +14,8 @@ core number.
   2026-07-12 (Phase 14B hardware and Phase 14C UI evidence), 2026-07-13
   (Intiface deadline/ACK pacing follow-up), 2026-07-15 (startup, continuous
   voice, and managed NeuTTS follow-up), and 2026-07-18 (SQLite persistence
-  reliability audit)
+  reliability audit), and 2026-08-01 (managed context control and generated
+  pattern quarantine)
 - OS and architecture: Windows / amd64
 - Go toolchain: Go 1.26.3 for earlier Go rows; Go 1.26.4 for Phase 11B and
   later measurements
@@ -385,6 +386,17 @@ Follow-up implementation evidence from 2026-07-13:
   measure a representative corpus. It supports testing the bounded launch policy
   rather than attributing the delta to either flag or making a general model-speed
   claim.
+- Managed mode now exposes backend-reviewed 16,384/32,768/65,536/131,072-token
+  allocations while retaining 32,768 as the default measured above. The value is
+  process configuration, participates in managed-provider cache identity, and is
+  passed as `--ctx-size` on the next load. The larger allocations are deliberately
+  labelled as RAM/VRAM tradeoffs; they have not been benchmarked and carry no
+  performance claim. External llama.cpp and Ollama remain owner-configured.
+- The rebuilt embedded browser payload is 1,535,394 raw / 756,144 level-9 gzip
+  bytes, up 2,749 / 874 bytes from the preceding checked-in bundle. HTML/CSS/JS
+  totals 1,091,158 / 318,747 gzip bytes. The English startup path is 726,450 /
+  193,763 gzip bytes, up 1,246 / 284 bytes. The artwork is unchanged; the delta
+  is the managed-only selector and warning across five localized catalogs.
 
 ## Procedure
 

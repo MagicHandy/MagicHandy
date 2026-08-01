@@ -37,6 +37,18 @@ retained patterns no longer carry the tag or the `Experimental:` description
 prefix. Only `Rising Reach`, `Offbeat`, `Long Return`, `Swell`, `Surge and
 Settle`, and `Crosscut` are experimental.
 
+The 171 generated `curated-*` clips under
+`internal/motion/builtinpatterns/curated` are quarantined source material, not
+active built-ins. A trace captured with a 35% configured maximum showed the
+target correctly clamped to 35%, but `curated-fast-drive-20` still contained
+20-point reversals only 40 ms apart. Those clips had entered the catalog under a
+filename-based test exemption rather than the generator's acceleration and
+reversal budgets. Startup reconciliation removes their prior `builtin` rows.
+The files remain available for offline review or explicit user import; user-owned
+library rows are not silently deleted. Only `Hard and Regular` and `playful
+jerk`, identified by their canonical IDs and the `curated` tag, retain the
+timing-preserved exception based on prior hardware acceptance.
+
 ### The velocity-authored replacement pass
 
 The user disabled 15 built-ins by hand, reporting that they lacked smooth

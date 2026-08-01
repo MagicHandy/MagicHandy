@@ -101,15 +101,18 @@ The helper:
 Build source and intermediates use a job-specific temporary directory beneath
 the runtime root and are removed after success or failure. Runtime inspection
 does no network I/O and starts no process. The managed server itself launches
-with `--offline --no-ui`, one generation slot, and a 32,768-token context. It
-binds to MagicHandy's fixed loopback endpoint and loads only the backend-resolved
-managed model. The explicit context avoids allocating a model-advertised 262k
-window for measured 7k-12k-token requests, while one slot matches the app's one
-interactive stream and cancel-before-yield Autopilot behavior. GPU offload,
-Flash Attention, batching, and ordinary prompt caching retain the pinned
-runner's automatic defaults so CPU builds and competing voice workloads can
-still fit. An incomplete or mismatched app-owned install is replaced on retry;
-users are not asked to repair runtime directories by hand.
+with `--offline --no-ui`, one generation slot (`--parallel 1`), and the saved
+context size. The reviewed choices are 16,384, 32,768 (default), 65,536, and
+131,072 tokens. It binds to MagicHandy's fixed loopback endpoint and loads only
+the backend-resolved managed model. A bounded explicit context avoids allocating
+a model-advertised 262k window for measured 7k-12k-token requests, while one slot
+matches the app's one interactive stream and cancel-before-yield Autopilot
+behavior. Larger contexts consume more RAM and VRAM, and a value below the
+prompt length cannot fit the request. GPU offload, Flash Attention, batching,
+and ordinary prompt caching retain the pinned runner's automatic defaults so
+CPU builds and competing voice workloads can still fit. An incomplete or
+mismatched app-owned install is replaced on retry; users are not asked to repair
+runtime directories by hand.
 
 The app exposes build state, bounded output, cancellation, installed version,
 backend, and current/outdated/invalid state. Cancellation terminates the
@@ -204,6 +207,12 @@ Settings > Model shows:
 
 Generation controls stay deliberately small and provider-aware:
 
+- **Context size** is a managed llama.cpp process-allocation setting, not a
+  request option. It is durable, defaults to 32,768, and exposes only the four
+  backend-reviewed values above. Saving a changed value unloads a stale managed
+  process; the next Load or chat starts it with the new `--ctx-size`. External
+  llama.cpp and Ollama ignore this setting, including for provider cache
+  identity, because those runtimes own their context configuration.
 - **Maximum output** defaults to 256 tokens and applies to both passes.
   llama.cpp receives `max_tokens`; Ollama receives `options.num_predict`.
   Provider `length` completion reasons are handled as truncation rather than a
@@ -254,9 +263,9 @@ Still planned:
 
 ## Diagnostics And Privacy
 
-Diagnostics may include provider type, selected model ID, managed metadata,
-runner version/backend/status/errors, build state/output tail, import state,
-and load timings. They must not include
+Diagnostics may include provider type, selected model ID, saved managed context
+size, managed metadata, runner version/backend/status/errors, build state/output
+tail, import state, and load timings. They must not include
 model bytes, full private chat logs, prompt bodies, connection keys, or API
 keys. Local filesystem paths are operational metadata, not credentials, but
 exports should still avoid including unrelated paths.

@@ -47,6 +47,11 @@ func TestLLMCacheKeyIgnoresPromptSet(t *testing.T) {
 	if got := llmCacheKey(settings, "runtime-b"); got == first {
 		t.Fatal("cache key did not change after managed runtime update")
 	}
+
+	settings.LlamaCPPContextSize = 65536
+	if got := llmCacheKey(settings, "runtime-a"); got == first {
+		t.Fatal("cache key did not change after managed context-size update")
+	}
 }
 
 func TestLLMCacheKeyIgnoresInactiveProviderSettings(t *testing.T) {
@@ -64,10 +69,22 @@ func TestLLMCacheKeyIgnoresInactiveProviderSettings(t *testing.T) {
 
 	settings.Provider = config.LLMProviderOllama
 	first = llmCacheKey(settings, "runtime-a")
+	settings.LlamaCPPContextSize = 65536
 	settings.LlamaCPPMode = config.LlamaCPPModeExternal
 	settings.LlamaCPPBaseURL = "http://192.0.2.30:9000"
 	if got := llmCacheKey(settings, "runtime-b"); got != first {
 		t.Fatal("Ollama cache key changed after inactive llama.cpp settings update")
+	}
+}
+
+func TestLLMCacheKeyIgnoresContextSizeForExternalLlamaCPP(t *testing.T) {
+	settings := config.DefaultSettings().LLM
+	settings.LlamaCPPMode = config.LlamaCPPModeExternal
+	first := llmCacheKey(settings, "")
+
+	settings.LlamaCPPContextSize = 65536
+	if got := llmCacheKey(settings, ""); got != first {
+		t.Fatal("external llama.cpp cache key changed after managed context-size update")
 	}
 }
 
@@ -111,6 +128,39 @@ func TestLLMSettingsTransitionKeepsProviderForRequestOnlyChanges(t *testing.T) {
 	server.llm.cached = nil
 }
 
+func TestLLMSettingsTransitionAppliesContextSizeOnlyToManagedProvider(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		provider   string
+		mode       string
+		wantCloses int32
+	}{
+		{name: "managed", provider: config.LLMProviderLlamaCPP, mode: config.LlamaCPPModeManaged, wantCloses: 1},
+		{name: "external llama.cpp", provider: config.LLMProviderLlamaCPP, mode: config.LlamaCPPModeExternal, wantCloses: 0},
+		{name: "Ollama", provider: config.LLMProviderOllama, mode: config.LlamaCPPModeManaged, wantCloses: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := newTestServer(t)
+			provider := &closeTrackingLLMProvider{}
+			settings, _ := server.store.Snapshot()
+			settings.LLM.Provider = test.provider
+			settings.LLM.LlamaCPPMode = test.mode
+			server.llm.cached = provider
+			server.llm.cacheKey = llmCacheKey(settings.LLM, "runtime-a")
+
+			next := settings
+			next.LLM.LlamaCPPContextSize = 65536
+			if err := server.applySettingsRuntimeTransition(context.Background(), settings, next); err != nil {
+				t.Fatalf("applySettingsRuntimeTransition: %v", err)
+			}
+			if got := provider.closes.Load(); got != test.wantCloses {
+				t.Fatalf("provider close count = %d, want %d", got, test.wantCloses)
+			}
+			server.llm.cached = nil
+		})
+	}
+}
+
 func TestLLMSettingsTransitionRetainsProviderWhenCloseFails(t *testing.T) {
 	server := newTestServer(t)
 	wantErr := errors.New("runner still stopping")
@@ -147,5 +197,21 @@ func TestSelectedLLMBaseURLKeepsManagedRunnerOnLoopback(t *testing.T) {
 	settings.OllamaBaseURL = "http://192.0.2.20:11434"
 	if got := selectedLLMBaseURL(settings); got != settings.OllamaBaseURL {
 		t.Fatalf("Ollama URL = %q", got)
+	}
+}
+
+func TestLLMStateExposesSavedManagedContextSize(t *testing.T) {
+	server := newTestServer(t)
+	_, _, err := server.store.Update(func(settings config.Settings) (config.Settings, error) {
+		settings.LLM.LlamaCPPContextSize = 65536
+		return settings, nil
+	})
+	if err != nil {
+		t.Fatalf("save context size: %v", err)
+	}
+
+	state := server.llmState(context.Background()).(map[string]any)
+	if got := state["llama_cpp_context_size"]; got != 65536 {
+		t.Fatalf("llama_cpp_context_size = %#v, want 65536", got)
 	}
 }

@@ -54,8 +54,9 @@ func TestLivePromptParityManagedGemma(t *testing.T) {
 			Model:   selected.ID,
 			Timeout: 2 * time.Minute,
 		},
-		RunnerPath: runtime.RunnerPath,
-		ModelPath:  selected.ModelPath,
+		RunnerPath:  runtime.RunnerPath,
+		ModelPath:   selected.ModelPath,
+		ContextSize: 32768,
 	})
 	if err != nil {
 		t.Fatal(err)
