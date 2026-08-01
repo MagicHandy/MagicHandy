@@ -31,7 +31,7 @@ func TestVoiceUpdatePreservesAndReplacesTTSTone(t *testing.T) {
 func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 	keyword := map[string]string{
 		TTSToneWarm:       "unhurried",
-		TTSToneTender:     "slowly",
+		TTSToneTender:     "creak",
 		TTSTonePlayful:    "extra beat",
 		TTSToneCommanding: "settled authority",
 		TTSToneExcited:    "lively energy",
@@ -109,6 +109,46 @@ func TestTTSTonePresetsAvoidAccentDriftLevers(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Quiet, slow, low, and falling all push the voice the same direction, and the
+// bottom of that stack is where phonation gives out into press or creak, which is
+// heard as straining. Tender asked for softly AND slowly AND low volume AND
+// audible breath AND a falling close with nothing holding the voice up, and
+// strained. Warm survives the same direction because it reduces on fewer axes and
+// says "relaxed and unforced" outright.
+//
+// This cannot be a banned substring -- "quietly" is exactly right for Warm. What
+// it checks is the pairing: any preset that asks the voice to back off has to
+// also say something that keeps it supported.
+func TestQuietTTSTonePresetsCarryAPhonationCue(t *testing.T) {
+	// Reducers are volume and effort only, not pace. Commanding is unhurried at a
+	// full chest-toned volume and is not backing off at all, so listing "slowly" or
+	// "unhurried" here just produces a false positive on it.
+	reducers := []string{"quiet", "soft", "gently", "low volume"}
+	support := []string{"unforced", "relaxed", "supported", "never pressed", "open", "chest"}
+	voice := DefaultSettings().Voice
+	for _, preset := range TTSTonePresets() {
+		if preset == TTSToneCustom {
+			continue
+		}
+		voice.TTSTonePreset = preset
+		got := strings.ToLower(ResolveTTSTonePrompt(voice))
+		if !containsAny(got, reducers) || containsAny(got, support) {
+			continue
+		}
+		t.Errorf("preset %q asks the voice to back off without any cue keeping it "+
+			"supported, which is how Tender came out straining: %q", preset, got)
+	}
+}
+
+func containsAny(text string, phrases []string) bool {
+	for _, phrase := range phrases {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestTTSToneValidation(t *testing.T) {

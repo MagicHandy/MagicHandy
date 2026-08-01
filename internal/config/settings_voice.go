@@ -285,6 +285,15 @@ const ttsAuthorityFraming = " Sound like a real person who is used to being list
 // the voice toward sounding younger, which is its own version of the timidity
 // problem. Ask for movement within the range instead: wider on stressed words,
 // gentler across a phrase.
+//
+// Do not stack the reducers. Quiet, slow, low, and falling all push the voice
+// the same direction, and the bottom of that stack is where phonation gives out
+// into press or creak -- which is heard as straining. Tender asked for softly
+// AND slowly AND low volume AND audible breath AND a falling close, with nothing
+// holding the voice up, and strained. Warm survives the same direction because
+// it reduces on fewer axes and says "relaxed and unforced" outright. So a preset
+// that asks for a quiet or slow delivery has to pair it with a phonation cue
+// that keeps the voice supported, and leave the bottom of the range unused.
 
 // ResolveTTSTonePrompt maps a saved preset to the instruction sent only to
 // instruction-capable TTS providers. Natural intentionally resolves empty so
@@ -296,7 +305,7 @@ func ResolveTTSTonePrompt(settings VoiceSettings) string {
 	case TTSTonePlayful:
 		return "Speak at an easy conversational pace, not fast, and let the timing carry the teasing instead: hang on a word for an extra beat, then move lightly through the next few, and leave a small pause just before the word being teased with. Keep a smile in the voice and a conversational volume." + ttsDeliveryFraming
 	case TTSToneTender:
-		return "Speak softly and slowly at low volume, close to the microphone, with easy audible breath between phrases. Let each phrase fall gently at the end." + ttsDeliveryFraming
+		return "Speak gently and unhurried, close to the microphone, at a soft conversational volume. Keep the voice relaxed and easily supported, never pressed, strained, or dropping into a creak. Let each phrase settle downward at the end without sinking to the bottom of the range." + ttsDeliveryFraming
 	case TTSToneCommanding:
 		return "Speak with settled authority. Drop the pitch firmly at the end of every sentence so each one resolves rather than hangs. Give the words that matter more weight and volume than the words around them, and pause briefly before them. Keep the pace deliberate and unhurried, at a full chest-toned conversational volume: certain, not loud." + ttsAuthorityFraming
 	case TTSToneExcited:

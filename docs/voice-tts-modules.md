@@ -211,7 +211,18 @@ seed and sounded timid on the rest:
   voice toward sounding younger. Ask for movement *within* the range instead:
   wider on stressed words, gentler across a phrase.
 
-`TestTTSTonePresetsAvoidAccentDriftLevers` holds the built-in presets to this.
+A fifth failure is not about accent but about phonation: **don't stack the
+reducers.** Quiet, slow, low, and falling all push the voice the same direction,
+and the bottom of that stack is where phonation gives out into press or creak,
+which is heard as straining. Tender asked for softly *and* slowly *and* low
+volume *and* audible breath *and* a falling close, with nothing holding the voice
+up. Warm survives the same direction because it reduces on fewer axes and says
+"relaxed and unforced" outright. A preset that asks the voice to back off has to
+pair that with a phonation cue keeping it supported, and leave the bottom of the
+range unused.
+
+`TestTTSTonePresetsAvoidAccentDriftLevers` holds the built-in presets to the four
+accent levers, and `TestQuietTTSTonePresetsCarryAPhonationCue` to the fifth.
 A seed makes a bad sample reproducible, but the instruct text is what decides
 whether that sample was reachable at all, so re-test a prompt change on the same
 seed rather than a fresh one.
