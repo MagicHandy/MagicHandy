@@ -1,6 +1,7 @@
 package config
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,7 @@ func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 		TTSToneWarm:       "quietly",
 		TTSToneTender:     "gently",
 		TTSTonePlayful:    "smile in the voice",
-		TTSToneCommanding: "quiet finality",
+		TTSToneCommanding: "unhesitating",
 		TTSToneExcited:    "lively energy",
 	}
 	presets := TTSTonePresets()
@@ -86,21 +87,21 @@ func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 // changes the apparent speaker rather than the delivery. A preset rules out
 // uptalk by asking for a falling close, and finds its energy in pitch movement
 // and stress rather than in a raised voice or loosened diction.
+// Patterns, not substrings. Commanding shipped saying "Speak evenly" and came
+// back with an accent: "evenly" asks for the same flattening as "level pitch" and
+// walked straight past a literal-substring list. Matching on word boundaries lets
+// synonyms be enumerated without "flat" hitting "flatten" or "force" hitting
+// "unforced", which is what kept the list literal in the first place.
 func TestTTSTonePresetsAvoidAccentDriftLevers(t *testing.T) {
 	banned := map[string]string{
-		"level pitch":           "flattens the contour",
-		"flat":                  "flattens the contour",
-		"monotone":              "flattens the contour",
-		"little pitch movement": "flattens the contour",
-		"loose articulation":    "relaxes diction",
-		"slurred":               "relaxes diction",
-		"lazy":                  "relaxes diction",
-		"every word":            "makes the word the prosodic unit",
-		"each word separately":  "makes the word the prosodic unit",
-		"rushed together":       "makes the word the prosodic unit",
-		"lifted pitch":          "shifts the baseline",
-		"raise the pitch":       "shifts the baseline",
-		"higher-pitched":        "shifts the baseline",
+		`\blevel\b|\bflat\b|\bmonotone\b|\bevenly\b|\bsteadily\b|\buniform\b|little pitch movement`: "flattens the contour",
+		`loose articulation|\bslurred\b|\blazy\b`:                                                   "relaxes diction",
+		`every word|each word separately|rushed together`:                                           "makes the word the prosodic unit",
+		`lifted pitch|raise the pitch|higher-pitched`:                                               "shifts the baseline",
+		// The rule from the Warm regression: negating a continuous effort
+		// attribute puts it in play, since there is no discrete setting to switch
+		// off. Commanding said "steadiness rather than force" and strained.
+		`rather than force|without force|\bnot loud\b|never loud`: "negates an effort attribute instead of describing one",
 	}
 	voice := DefaultSettings().Voice
 	for _, preset := range TTSTonePresets() {
@@ -109,9 +110,9 @@ func TestTTSTonePresetsAvoidAccentDriftLevers(t *testing.T) {
 		}
 		voice.TTSTonePreset = preset
 		got := strings.ToLower(ResolveTTSTonePrompt(voice))
-		for phrase, why := range banned {
-			if strings.Contains(got, phrase) {
-				t.Errorf("preset %q says %q, which %s and invites accent drift: %q", preset, phrase, why, got)
+		for pattern, why := range banned {
+			if match := regexp.MustCompile(pattern).FindString(got); match != "" {
+				t.Errorf("preset %q says %q, which %s: %q", preset, match, why, got)
 			}
 		}
 	}
@@ -146,7 +147,14 @@ func TestTTSTonePresetsStayShortAndAnchored(t *testing.T) {
 			t.Errorf("preset %q is missing the ease anchor, which is what keeps it "+
 				"sustainable across a whole reply: %q", preset, got)
 		}
-		body := strings.TrimSpace(strings.NewReplacer(ttsEaseAnchor, "", ttsDeliveryFraming, "").Replace(got))
+		// Without this the model treats a description of how someone speaks as a
+		// description of who speaks that way, and picks an accent to match.
+		if !strings.Contains(got, ttsIdentityLock) {
+			t.Errorf("preset %q is missing the identity lock, which is what stops "+
+				"delivery wording from being read as a speaker choice: %q", preset, got)
+		}
+		body := strings.TrimSpace(strings.NewReplacer(
+			ttsEaseAnchor, "", ttsDeliveryFraming, "", ttsIdentityLock, "").Replace(got))
 		if len(body) > maxBodyLength {
 			t.Errorf("preset %q body is %d characters, over the %d cap; every extra "+
 				"clause is another constraint the voice has to hold for a whole reply: %q",
