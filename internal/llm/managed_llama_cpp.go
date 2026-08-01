@@ -19,6 +19,15 @@ import (
 const (
 	managedLlamaLoadTimeout   = 30 * time.Second
 	managedLlamaUnloadTimeout = 10 * time.Second
+	// The app admits one interactive stream and cancels Autopilot work before
+	// yielding to it. A brief cancellation overlap does not need another
+	// permanently allocated server slot.
+	managedLlamaParallelSlots = 1
+	// The current model advertises a 262k context. Letting any imported model's
+	// advertised maximum define the process allocation is disproportionate to
+	// MagicHandy's measured 7k-12k-token requests and can force a CUDA runner to
+	// spill into host memory.
+	managedLlamaContextSize = 32 * 1024
 )
 
 // ManagedLlamaCPPOptions configures a managed llama-server process.
@@ -281,6 +290,8 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 		"--alias", p.model,
 		"--offline",
 		"--no-ui",
+		"--ctx-size", strconv.Itoa(managedLlamaContextSize),
+		"--parallel", strconv.Itoa(managedLlamaParallelSlots),
 		"-m", p.modelPath,
 	}
 

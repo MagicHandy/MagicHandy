@@ -345,7 +345,7 @@ Follow-up implementation evidence from 2026-07-13:
   SHA-256-verified copy, deduplication, selected-model deletion protection,
   standalone GGUF import, concurrency limits, and controller enforcement.
 
-## LLM Latency Controls (Unmeasured Runtime Delta)
+## LLM Latency Controls
 
 - Source inspection found no output-token cap in the mainline provider request,
   implicit provider/model reasoning behavior, and redundant managed llama.cpp
@@ -373,6 +373,18 @@ Follow-up implementation evidence from 2026-07-13:
   finishes, and makes repair retain context while requesting reasoning off. Broader
   malformed/repair-rate and quality A/B runs across fixed small models remain
   required before claiming a general speedup.
+- A 2026-08-01 single-request Windows probe found that the managed server had
+  inherited the installed Gemma 4 model's 262,144-token context and auto-created
+  four slots. With the exact 24,680-byte MagicHandy system prompt, the request
+  contained 6,842 prompt tokens and generated 47 tokens. Model defaults took
+  19.512 seconds wall time: 18,230.558 ms prompt evaluation and 1,266.735 ms
+  generation. Explicit `--ctx-size 32768 --parallel 1` took 2.204 seconds:
+  1,650.000 ms prompt evaluation and 544.610 ms generation. This isolated probe
+  changed both allocation controls together and used the same pinned b9966 CUDA
+  runner and model, but did not run TTS, record process memory, repeat trials, or
+  measure a representative corpus. It supports testing the bounded launch policy
+  rather than attributing the delta to either flag or making a general model-speed
+  claim.
 
 ## Procedure
 

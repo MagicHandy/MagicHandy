@@ -471,6 +471,83 @@ func TestStartupCalibrationAllowsSliderOutsideActiveStrokeWindow(t *testing.T) {
 	}
 }
 
+// A Handy parks marginally below the slide minimum it reports for itself. The
+// exact geometry here was measured from a real device that could not start:
+// slide 0-100% spanning absolute 5.00-102.83, resting at absolute 4.00. That is
+// one absolute unit low, 1.02% of a 97.83-unit travel, and it must start.
+func TestEngineStartsWhenTheDeviceRestsJustBelowItsReportedSlideMinimum(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{{
+			PositionWithinStrokePercent: 0,
+			PositionAbsolute:            4.0,
+			StrokeMinPercent:            0,
+			StrokeMaxPercent:            100,
+			StrokeMinAbsolute:           5.0,
+			StrokeMaxAbsolute:           102.83,
+		}},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
+	settings := config.DefaultSettings().Motion
+
+	_, err := engine.Start(context.Background(), MotionTarget{
+		PatternID: PatternStroke, SpeedPercent: 20,
+	}, settings)
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+	if err != nil {
+		t.Fatalf("start with a device resting one unit below its reported slide minimum: %v", err)
+	}
+}
+
+func TestStartupCalibrationToleranceBoundaries(t *testing.T) {
+	tests := []struct {
+		name          string
+		position      float64
+		wantRejection bool
+	}{
+		{name: "lower inside", position: -2.99},
+		{name: "lower outside", position: -3.01, wantRejection: true},
+		{name: "upper inside", position: 102.99},
+		{name: "upper outside", position: 103.01, wantRejection: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			owner := &startupStateTransport{
+				Fake: transport.NewFake(),
+				states: []transport.MotionStartupState{
+					{
+						PositionWithinStrokePercent: test.position,
+						PositionAbsolute:            test.position,
+						StrokeMinPercent:            0,
+						StrokeMaxPercent:            100,
+						StrokeMinAbsolute:           0,
+						StrokeMaxAbsolute:           100,
+					},
+					{
+						PositionWithinStrokePercent: 0,
+						PositionAbsolute:            0,
+						StrokeMinPercent:            0,
+						StrokeMaxPercent:            100,
+						StrokeMinAbsolute:           0,
+						StrokeMaxAbsolute:           100,
+					},
+				},
+			}
+			engine := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
+			engine.startupWait = func(context.Context, time.Duration) error { return nil }
+			_, err := engine.Start(context.Background(), MotionTarget{
+				PatternID: PatternStroke, SpeedPercent: 20,
+			}, config.DefaultSettings().Motion)
+			t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+
+			rejected := err != nil && strings.Contains(err.Error(), "outside calibrated full travel")
+			if rejected != test.wantRejection {
+				t.Fatalf("Start error = %v, calibration rejection = %t, want %t", err, rejected, test.wantRejection)
+			}
+		})
+	}
+}
+
 func TestEngineRejectsStartupPositionOutsideCalibratedTravel(t *testing.T) {
 	owner := &startupStateTransport{
 		Fake: transport.NewFake(),
