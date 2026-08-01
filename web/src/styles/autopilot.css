@@ -115,11 +115,15 @@
 
 .autopilot-window {
   display: grid;
-  grid-template-columns: minmax(72px, 1fr) 50px auto 50px auto;
+  grid-template-columns: minmax(72px, 1fr) 64px auto;
   align-items: center;
   gap: 5px;
   color: var(--muted);
   font-size: 0.72rem;
+}
+
+.autopilot-window-range {
+  grid-template-columns: minmax(72px, 1fr) 50px auto 50px auto;
 }
 
 .autopilot-window input[type="number"] {
@@ -128,11 +132,23 @@
   text-align: center;
 }
 
-/* --- Session arc ---------------------------------------------------------- */
+.autopilot-buildup-setting {
+  display: grid;
+  gap: 7px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
 
-/* The bar is what makes the arc defensible rather than hidden escalation, so it
-   is a real element in the card, not a tooltip or a diagnostics line. */
-.autopilot-arc {
+.autopilot-buildup-setting .toggle-line {
+  font-size: 0.78rem;
+}
+
+/* --- Session buildup ----------------------------------------------------- */
+
+/* The progress is what makes buildup defensible rather than hidden escalation,
+   so it is a real element in the control, not a tooltip or diagnostics line. */
+.autopilot-buildup {
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
@@ -141,20 +157,20 @@
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.autopilot-arc-head {
+.autopilot-buildup-head {
   display: flex;
   gap: 8px;
   align-items: baseline;
   justify-content: space-between;
 }
-.autopilot-arc-track {
+.autopilot-buildup-track {
   overflow: hidden;
   height: 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--bg-inset);
 }
-.autopilot-arc-fill {
+.autopilot-buildup-fill {
   display: block;
   height: 100%;
   border-radius: 999px;
@@ -163,22 +179,22 @@
      steps reads as broken rather than as progress. */
   transition: width 400ms ease-out;
 }
-.autopilot-arc-actions {
+.autopilot-buildup-actions {
   display: flex;
   gap: 10px;
   align-items: flex-start;
   justify-content: space-between;
 }
-.autopilot-arc-actions .hint {
+.autopilot-buildup-actions .hint {
   flex: 1 1 auto;
   min-width: 0;
 }
-.autopilot-arc-actions .btn {
+.autopilot-buildup-actions .btn {
   flex: 0 0 auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .autopilot-arc-fill {
+  .autopilot-buildup-fill {
     transition: none;
   }
 }

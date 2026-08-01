@@ -75,7 +75,7 @@ type DecisionInput struct {
 	// it is false the prompt omits them rather than sending zeros, because a model
 	// cannot act on a field it never saw.
 	SessionTracking bool
-	// ArcEnabled and ArcPercent describe the visible session arc. Absent from the
+	// ArcEnabled and ArcPercent describe the visible session buildup. Absent from the
 	// prompt entirely when disabled.
 	ArcEnabled bool
 	ArcPercent int
@@ -91,8 +91,8 @@ type Decision struct {
 	Next    TimingPreference
 	// Variability is how much the target should wander before the next boundary.
 	Variability VariabilityPreference
-	// ArcIntent is a request to advance or ease the session arc by one clamped
-	// step. It is honored only while the arc is enabled, and never sets a value.
+	// ArcIntent is a request to advance or ease the session buildup by one clamped
+	// step. It is honored only while buildup is enabled, and never sets a value.
 	ArcIntent string
 }
 

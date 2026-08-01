@@ -93,13 +93,15 @@ func TestSessionArcRequiresSessionTracking(t *testing.T) {
 	}
 }
 
-func TestSessionArcLengthIsBounded(t *testing.T) {
-	for _, minutes := range []int{
-		0,
-		1,
-		AutopilotMinimumArcMinutes - 1,
-		AutopilotMaximumArcMinutes + 1,
-	} {
+func TestSessionBuildupAcceptsAnyPositivePracticalDuration(t *testing.T) {
+	for _, minutes := range []int{1, 5, 30, 180, 24 * 60} {
+		settings := DefaultAutopilotSettings()
+		settings.SessionArcMinutes = minutes
+		if err := validateAutopilotSettings(settings); err != nil {
+			t.Fatalf("%d minutes should be accepted: %v", minutes, err)
+		}
+	}
+	for _, minutes := range []int{0, AutopilotMaximumArcMinutes + 1} {
 		settings := DefaultAutopilotSettings()
 		settings.SessionArcMinutes = minutes
 		if err := validateAutopilotSettings(settings); err == nil {

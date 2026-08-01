@@ -232,7 +232,7 @@ the canonical conversation plus style, speed limits, recent pattern ids, and
 its last autonomous line. At each segment boundary it may select an **enabled**
 pattern and intensity or keep the current segment. Deterministic code chooses
 the bounded dwell time. Focus regions, programs, freeform arrangements,
-session arcs, and user-configurable speech cadence remain planned; the initial
+session buildup, and user-configurable speech cadence remain planned; the initial
 slice must not be described as already controlling them.
 
 **How it routes (no separate pathway).** Autopilot emits the same bounded

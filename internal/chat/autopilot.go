@@ -25,8 +25,8 @@ type AutopilotContext struct {
 	SessionSeconds        int
 	SecondsAtCurrentSpeed int
 	SpeedTrend            string
-	// ArcEnabled gates the session arc. Disabled means the arc is never described,
-	// so the model cannot build along a bar it was never shown.
+	// ArcEnabled gates the visible session buildup. Disabled means the buildup is
+	// never described, so the model cannot act on progress the user was not shown.
 	ArcEnabled bool
 	ArcPercent int
 }
@@ -50,9 +50,9 @@ func writeSessionProgress(builder *strings.Builder, context AutopilotContext) {
 	}
 	if context.ArcEnabled {
 		fmt.Fprintf(builder,
-			"Session arc: %d%% of the way along, and the user can see this bar. Aim higher within the allowed speed range as it fills and ease back as it empties. The allowed range itself never moves.\n",
+			"Session buildup: %d%% of the way along, and the user can see this progress. Aim higher within the allowed speed range as it fills and ease back as it empties. The allowed range itself never moves.\n",
 			context.ArcPercent)
-		builder.WriteString("Set arc to \"advance\" to move the bar forward, \"ease\" to move it back, or \"hold\" to leave it. The app bounds each step.\n")
+		builder.WriteString("Set arc to \"advance\" to move the buildup forward, \"ease\" to move it back, or \"hold\" to leave it. The app bounds each step.\n")
 	}
 }
 

@@ -20,7 +20,7 @@ func arcSettings(enabled bool, tracking bool, minutes int) config.AutopilotSetti
 func TestSessionArcIsOffAndTrackingIsOnByDefault(t *testing.T) {
 	defaults := config.DefaultAutopilotSettings()
 	if defaults.SessionArc {
-		t.Fatal("the session arc must be opt-in")
+		t.Fatal("session buildup must be opt-in")
 	}
 	if !defaults.SessionTracking {
 		t.Fatal("session tracking is inert context and should default on")
@@ -44,12 +44,12 @@ func TestDisabledArcReportsNothing(t *testing.T) {
 
 // Time is the floor so a session that is simply left running still progresses.
 func TestArcAdvancesWithElapsedTime(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 10))
+	manager := swayTestManager(t, arcSettings(true, true, 1))
 	start := time.Unix(1000, 0)
 	manager.mu.Lock()
 	manager.arc.startedAt = start
-	quarter := manager.arcPercentLocked(start.Add(150 * time.Second))
-	full := manager.arcPercentLocked(start.Add(10 * time.Minute))
+	quarter := manager.arcPercentLocked(start.Add(15 * time.Second))
+	full := manager.arcPercentLocked(start.Add(time.Minute))
 	over := manager.arcPercentLocked(start.Add(40 * time.Minute))
 	manager.mu.Unlock()
 	if quarter < 23 || quarter > 27 {

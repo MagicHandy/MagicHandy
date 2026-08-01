@@ -133,7 +133,7 @@ segment interior:
 - Every schedule carries the segment generation that created it. Chat handoffs,
   settings changes, Stop, and other generation changes discard stale waypoints
   so texture sampled for one target cannot modify its replacement.
-- Pause shifts waypoint, session-arc, and speed-history clocks with the segment
+- Pause shifts waypoint, session-buildup, and speed-history clocks with the segment
   deadline. Resume continues the remaining schedule instead of firing a burst
   of overdue adjustments or counting paused time as motion progress.
 
@@ -180,7 +180,7 @@ fabricate it, visible in traces, and authorizing nothing. Off omits the facts
 from the prompt entirely rather than sending zeros, because a model cannot reason
 from a number that means "unknown".
 
-### Session arc
+### Session buildup
 
 A separate switch, **off by default**, that renders a visible fill bar and tells
 the model to aim higher within the allowed speed range as it fills.
@@ -191,25 +191,32 @@ properties, all load bearing:
 
 - **Visible.** The value is rendered in the Autopilot card, so nothing about the
   progression is hidden from the person it is happening to.
-- **User-armed.** Off is the default, and off removes the arc from the prompt
+- **User-armed.** Off is the default, and off removes the buildup from the prompt
   entirely — the same discipline the capability gates use.
 - **Bounded.** A percentage with a full mark, not a counter that grows.
 - **Backend-owned.** The model may return `arc: advance|ease|hold` to move the
   bar by at most 6 points per turn. It can never write the value, so it cannot
   sprint the bar to full, and every nudge appears in the trace.
 
-The arc positions intent *inside* the user's existing speed band. It never widens
+The buildup positions intent *inside* the user's existing speed band. It never widens
 the band, the focus range, or any capability gate — asserted by
 `TestArcNudgeDoesNotTouchSpeedLimits`, which advances the bar 40 times and checks
 the motion settings are untouched.
 
 Time is the floor, so a session left running still progresses; nudges let the
 model lead or lag that baseline. `ease` exists so the bar is not a ratchet. The
-user can place or reset it, and placement is refused with a 409 while no
-Autopilot session exists — `Start` clears the arc for a fresh run, so accepting a
-placement beforehand would store a value discarded a moment later. The arc
+user can place or reset it. Duration accepts any positive whole number of
+minutes; there is no product-level maximum, only an implementation guard against
+overflowing Go's duration type. Placement is refused with a 409 while no
+Autopilot session exists — `Start` clears buildup for a fresh run, so accepting a
+placement beforehand would store a value discarded a moment later. Buildup
 requires session tracking; the settings validator rejects the combination rather
 than letting the document express a state the runtime would silently ignore.
+
+In the Chat control, Motion changes and Spoken check-ins reveal their custom
+timing rows directly beneath the corresponding selector. Session buildup and its
+duration are primary controls as well; only adaptive timing, speech-motion
+authority, and the lower-level tracking switch remain under Advanced.
 
 ## Scheduling
 
@@ -287,7 +294,7 @@ Acceptance requires:
   (covered by `TestSpeechPlaybackFallbackRecoversALostAcknowledgement`, which the
   first pass left untested);
 - sway never leaves the user speed band and never plans a no-op waypoint;
-- the session arc never widens a limit, and a disabled switch keeps its section
+- session buildup never widens a limit, and a disabled switch keeps its section
   out of the prompt entirely;
 - pause preserves remaining time and Stop leaves no autonomous goroutine or
   voice request alive; and
