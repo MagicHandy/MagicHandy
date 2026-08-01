@@ -31,10 +31,10 @@ func TestVoiceUpdatePreservesAndReplacesTTSTone(t *testing.T) {
 func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 	keyword := map[string]string{
 		TTSToneWarm:       "unhurried",
-		TTSTonePlayful:    "quicker",
 		TTSToneTender:     "slowly",
+		TTSTonePlayful:    "extra beat",
 		TTSToneCommanding: "settled authority",
-		TTSToneExcited:    "briskly",
+		TTSToneExcited:    "lively energy",
 	}
 	presets := TTSTonePresets()
 	if len(presets) != len(keyword)+2 || presets[0] != TTSToneNatural || presets[len(presets)-1] != TTSToneCustom {
@@ -89,6 +89,9 @@ func TestTTSTonePresetsAvoidAccentDriftLevers(t *testing.T) {
 		"loose articulation":    "relaxes diction",
 		"slurred":               "relaxes diction",
 		"lazy":                  "relaxes diction",
+		"every word":            "makes the word the prosodic unit",
+		"each word separately":  "makes the word the prosodic unit",
+		"rushed together":       "makes the word the prosodic unit",
 		"lifted pitch":          "shifts the baseline",
 		"raise the pitch":       "shifts the baseline",
 		"higher-pitched":        "shifts the baseline",
