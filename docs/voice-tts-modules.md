@@ -57,10 +57,11 @@ revision ref is accepted only when it contains exactly one complete snapshot.
 MagicHandy's small launcher wrapper is copied beside the module and refreshed
 by ordinary app updates without touching the Python environment or model cache.
 It extends only the managed Faster Qwen endpoint with an unsigned generation
-seed and an optional Base-model tone instruction, then performs one short
-discarded streaming warm-up before reporting ready.
+seed and an optional Base-model tone instruction, then consumes one discarded
+codec frame through the complete streaming path before reporting ready.
 The warm-up prevents one-time model initialization from changing the first
-user-visible fixed-seed clip; the pinned upstream model remains unchanged.
+Stopping after one frame avoids decoding an entire throwaway utterance while
+retaining the warm first-visible-request behavior.
 
 Retries also reuse a source checkout and managed environment left by a failure
 before `module-state.json` was written. The installer records only its known
@@ -89,6 +90,16 @@ Auto-launch means MagicHandy's TTS worker starts the configured module server
 when the worker model is loaded. It waits for the configured health endpoint and
 stops only the child process it created. If the port is occupied, startup fails
 instead of attaching to or killing an unknown process.
+
+Settings that change process ownership or model conditioning, such as the
+provider, module, device, port, reference WAV, or reference transcript, stop the
+old worker and asynchronously restore every role whose auto-launch policy says
+it should be ready. Faster Qwen seed mode, seed value, and tone instruction are
+request controls instead: saving them does not reload the model or discard its
+reference cache. A health check also verifies the managed server child rather
+than trusting the Go adapter's cached state. If that child exits, the worker is
+reported as not ready, the failure remains visible until reload or deliberate
+unload, and the next explicit Start can launch and load it again.
 
 For Chatterbox, readiness is not inferred from HTTP status alone. MagicHandy
 probes `GET /api/model-info` and requires its `loaded` field to be `true`.
@@ -140,9 +151,9 @@ The managed Faster Qwen Base model accepts these instructions while cloning in
 the existing in-context-learning mode. Instruction following is experimental:
 the reference WAV, exact transcript, generated text, and seed still materially
 affect delivery, and a prompt cannot repair a noisy or mismatched reference.
-Saving a changed tone reconfigures the managed worker before the next request.
-The prompt is persisted with the other voice settings and is never sent to
-generic OpenAI-compatible TTS providers.
+Saving a changed tone applies it to the next request without restarting the
+managed worker. The prompt is persisted with the other voice settings and is
+never sent to generic OpenAI-compatible TTS providers.
 
 Chatterbox accepts a local reference WAV as a named voice. The installer copies
 that source into the module's voice directory and stores the resulting voice
@@ -220,3 +231,12 @@ took 15.4 seconds; a warm 1.52-second clip took about 0.8 seconds. SoX was not
 installed and its upstream warning did not prevent synthesis. This single
 reference check does not close the representative-reference listening,
 Firefox, cancellation, or GPU/LLM coexistence items above.
+
+Follow-up evidence from 2026-08-01 on an RTX 5070 Ti with the installed
+0.6B Base module: the prior full hidden warm-up reached ready in 14.82 seconds.
+The one-frame warm-up reached ready in 13.06 seconds while preserving about
+0.40 seconds to first audio and 0.86 seconds total for the same 3.6-second WAV.
+A tone and seed save completed in 7 ms with the worker start timestamp
+unchanged; a request through the current Go core, worker, and managed server
+then produced a valid 24 kHz mono WAV in 1.52 seconds. These are local
+development measurements, not a cross-hardware release guarantee.

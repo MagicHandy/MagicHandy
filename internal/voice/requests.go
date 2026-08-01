@@ -609,6 +609,13 @@ type Config struct {
 	ASR WorkerConfig
 }
 
+// Equal reports whether applying other would leave both worker processes on
+// the same launch configuration. Runtime speech controls are carried on each
+// request and therefore do not belong here.
+func (c Config) Equal(other Config) bool {
+	return c.TTS.equal(other.TTS) && c.ASR.equal(other.ASR)
+}
+
 // Configure applies settings to both supervisors.
 func (m *Manager) Configure(config Config) {
 	m.workers[RoleTTS].SetConfig(config.TTS)

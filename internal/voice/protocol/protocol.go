@@ -97,8 +97,11 @@ type Request struct {
 	TargetID string `json:"target_id,omitempty"`
 
 	// speak
-	Text  string `json:"text,omitempty"`
-	Voice string `json:"voice,omitempty"`
+	Text          string  `json:"text,omitempty"`
+	Voice         string  `json:"voice,omitempty"`
+	Instruct      string  `json:"instruct,omitempty"`
+	Seed          *uint32 `json:"seed,omitempty"`
+	RandomizeSeed bool    `json:"randomize_seed,omitempty"`
 
 	// transcribe; stubs and tests inline small payloads, real providers get a
 	// file/stream reference instead of megabytes of base64 on one line

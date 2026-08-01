@@ -74,7 +74,7 @@ def max_generation_tokens(text: str) -> int:
 
 
 def warm_up_model() -> None:
-    """Consume one short hidden generation before the server reports ready."""
+    """Warm the complete streaming path with one discarded codec frame."""
     voice_cfg = upstream.resolve_voice(upstream.default_voice)
     with upstream._model_lock:
         seed_generators(DEFAULT_SEED)
@@ -83,8 +83,9 @@ def warm_up_model() -> None:
             language=voice_cfg.get("language", "Auto"),
             ref_audio=voice_cfg["ref_audio"],
             ref_text=voice_cfg.get("ref_text", ""),
-            max_new_tokens=max_generation_tokens("Ready."),
-            chunk_size=voice_cfg.get("chunk_size", 12),
+            max_new_tokens=2,
+            min_new_tokens=1,
+            chunk_size=1,
             non_streaming_mode=False,
         )
         try:
@@ -93,7 +94,7 @@ def warm_up_model() -> None:
             pass
         finally:
             stream.close()
-    upstream.logger.info("MagicHandy streaming warm-up complete")
+    upstream.logger.info("MagicHandy one-frame streaming warm-up complete")
 
 
 async def stream_chunks(

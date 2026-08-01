@@ -84,6 +84,7 @@ type Server struct {
 	voiceAutoloadMu     sync.Mutex
 	voiceAutoloadCancel context.CancelFunc
 	voiceAutoloadWG     sync.WaitGroup
+	voiceAutoloadID     uint64
 	stopSequence        atomic.Uint64
 	quiescing           atomic.Bool
 	lifecycleCtx        context.Context

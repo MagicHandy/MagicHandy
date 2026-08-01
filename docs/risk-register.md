@@ -636,6 +636,13 @@ Mitigation:
   serialized inference lock; never add this extension to generic compatible
   providers; bound managed generation to a generous text-proportional window so
   a sampled failure to emit an end token cannot monopolize the queue
+- carry Faster Qwen seed and tone controls on each speech request so normal
+  delivery edits preserve the loaded model and reference cache; for actual
+  process-configuration changes, reconfigure and restore the persisted
+  auto-launch roles instead of leaving a stopped worker behind
+- verify the owned model-server child during health checks and clear stale
+  readiness when it exits, so an explicit Start can relaunch it rather than
+  returning success from the still-running adapter process
 - recommend a clean, exact-transcript, 3-to-10-second Faster Qwen reference and
   retest with a shorter excerpt before treating stochastic sampling as the sole
   cause of inconsistent cloning
@@ -674,8 +681,12 @@ accounts. Interrupted installs can resume before module state exists without
 discarding completed packages or treating installer-generated metadata as a
 source edit, and nested module verification no longer invalidates the parent
 installer: TTS module scripts now run in an isolated Windows PowerShell process
-before launcher and state finalization continue. Live listening, latency,
-browser, and VRAM
+before launcher and state finalization continue. Qwen seed and tone saves now
+apply per request without stopping the resident model; true runtime changes
+restore auto-launch policy, and owned-child exits invalidate cached readiness.
+A one-frame full-path warm-up reduced the measured local cold start from 14.82
+to 13.06 seconds while retaining about 0.40 seconds to first audio. Live
+listening, broader latency, browser, and VRAM
 acceptance remains open. Historical NeuTTS measurements remain in
 `docs/goal-scorecard.md` and `docs/perf-baseline.md`; they are not evidence for
 the replacement modules.

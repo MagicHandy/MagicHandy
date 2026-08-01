@@ -1174,7 +1174,10 @@ textarea:disabled {
 }
 .voice-worker-error {
   color: var(--danger);
+  max-block-size: 7.5rem;
+  overflow-y: auto;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .voice-request-queue {
   overflow: hidden;

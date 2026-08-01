@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 23,285,760 bytes plain and 16,712,192 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; the process-containment and latency diagnostics remain well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 23,296,000 bytes plain and 16,720,896 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; the voice lifecycle recovery changes remain well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Three fresh isolated-data launches of the current stripped binary listened in 92.2-121.8 ms and returned `/healthz` in 92.9-136.7 ms, including process-spawn and loopback-request overhead. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
@@ -112,7 +112,7 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,562,036 raw / 764,363 level-9 gzip bytes. Lazy loading
+   browser payload is 1,562,162 raw / 763,714 level-9 gzip bytes. Lazy loading
    limits the English startup path to 738,698 raw / 196,619 gzip bytes; all
    HTML/CSS/JS is 1,117,800 raw / 326,966 gzip bytes. LLM loading controls,
    phase diagnostics, speech policy, and duplicate-process recovery add 21,116
@@ -138,6 +138,24 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-01** - Fixed managed Faster Qwen stopping after ordinary seed or
+  tone saves. Those controls now travel with each speech request, preserving
+  the resident model and reference cache; actual provider, model, device, port,
+  or reference changes reconfigure and asynchronously restore persisted
+  auto-launch roles. Health checks invalidate stale readiness when an owned
+  Python server exits, and explicit Start retries the child launch and model
+  load. A one-frame full streaming warm-up reduced local RTX 5070 Ti cold
+  readiness from 14.82 to 13.06 seconds while preserving about 0.40 seconds to
+  first audio. A live settings save completed in 7 ms without changing the
+  worker start timestamp; the next full-path request returned 3.6 seconds of
+  valid audio in 1.52 seconds and passed a Parakeet intelligibility check.
+  A managed-child failure now renders as Not ready with a bounded diagnostic
+  and the existing Load model recovery action instead of a green Running
+  readout. The complete embedded browser payload is 1,562,162 raw / 763,714
+  level-9 gzip bytes (+126 / -649).
+  Plain/stripped `CGO_ENABLED=0` binaries are 23,296,000 / 16,720,896 bytes
+  (+10,240 / +8,704), still below budget. No hardware command was issued.
 
 - **2026-08-01** - Removed four independent sources of local-model tail
   latency without changing prompts, sampling, parsing, or motion semantics.

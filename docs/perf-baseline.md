@@ -55,7 +55,17 @@ Still required for current-build evidence:
 - repeat the matched Intiface run with the deadline-driven pacer and
   `motion_trace.v3`, including subjective feel
 
-## Voice Startup and NeuTTS Evidence
+## Voice Startup and Local TTS Evidence
+
+- 2026-08-01 managed Faster Qwen3-TTS lifecycle/latency check on an RTX 5070
+  Ti: a full discarded-utterance warm-up reached ready in 14.82 seconds. The
+  replacement one-frame full-path warm-up reached ready in 13.06 seconds while
+  preserving about 0.40 seconds to first audio and 0.86 seconds total for the
+  same 3.6-second WAV. A seed/tone settings save completed in 7 ms without
+  changing the worker start timestamp. The next request through the current Go
+  core, adapter, and managed server returned a valid 172,844-byte 24 kHz mono
+  WAV in 1.52 seconds; managed Parakeet recognized the sentence, differing only
+  on the phonetic spelling of "Qwen." No hardware motion was issued.
 
 - The installed schema-2 CPU-only `stream_pcm.exe` exposed the latency defect.
   A direct instrumented run took 127.27 s wall time: 10.91 s model load, 90.86 s

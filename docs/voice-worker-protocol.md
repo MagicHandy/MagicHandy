@@ -15,8 +15,9 @@ model-free implementation).
 
 - The core launches the worker only after the user enables voice and selects a
   provider. Built-in providers resolve their worker binary automatically with
-  an advanced path override; custom providers use explicit path + args. Workers
-  never start implicitly.
+  an advanced path override; custom providers use explicit path + args. A role
+  starts either from an explicit Start command or its persisted auto-launch
+  policy.
 - Frames are NDJSON: exactly one JSON object per line. Requests arrive on the
   worker's stdin; responses leave on stdout. stderr is free-form logging —
   the core captures a bounded tail and shows it on crash.
@@ -51,7 +52,7 @@ workers.
 | `hello` | `protocol_version` | version/identity negotiation; must be first |
 | `health` | — | state probe; answered with `health` |
 | `load` / `unload` | — | model lifecycle; answered with `health` |
-| `speak` | `text`, `voice`, optional `delay_ms` (stub) | TTS; streams `audio_chunk` frames, ends with `done` |
+| `speak` | `text`, `voice`; optional provider-scoped `instruct`, `seed`, `randomize_seed`; optional `delay_ms` (stub) | TTS; streams `audio_chunk` frames, ends with `done` |
 | `transcribe` | `audio_b64` or `audio_ref`, `audio_format`, optional `delay_ms` (stub) | ASR; ends with one `transcript` |
 | `cancel` | `target_id` | cancel a queued or active request |
 | `shutdown` | — | graceful stop; worker answers `done` and exits |
@@ -91,12 +92,16 @@ enter chat history, TTS playback, or motion (ADR 0003).
 - One serialized work request per worker; the core queue is bounded and rejects
   new work when full for catch-up flood protection.
 - Per-request timeouts: handshake and ordinary control 5 s, work 60 s (then a
-  cancel frame + a `timeout` failure). Model load honors a longer caller
-  deadline (30 s for Start) because a managed local server may boot inside it.
+  cancel frame + a `timeout` failure). Model load honors a 15-minute caller
+  deadline because first installation validation and managed local startup may
+  include a large CUDA model load.
 - Status surfaces every lifecycle state (`disabled`, `not_configured`,
   `stopped`, `starting`, `running`, `crashed`) plus provider identity, model
   state, queue depth, last error, and the crash stderr tail — in
   `GET /api/voice/status`, `/api/state`, and the Settings → Voice UI.
+- A managed adapter verifies that its owned model-server child is still alive
+  during health checks. A dead child clears cached readiness, and explicit
+  Start retries its launch and model load.
 
 ## HTTP Surface
 

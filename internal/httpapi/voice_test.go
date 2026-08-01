@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -118,7 +119,6 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 		t.Fatalf("managed Faster Qwen environment = %+v", got.TTS.Env)
 	}
 	assertArgumentsContain(t, got.TTS.Args,
-		[2]string{"-seed", "1337"},
 		[2]string{"-server-command", python},
 		[2]string{"-server-dir", filepath.Join(root, "source")},
 		[2]string{"-server-port", "9015"},
@@ -136,15 +136,24 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	if got.TTS.JobTimeout != voiceModelLoadTimeout {
 		t.Fatalf("managed Faster Qwen job timeout = %v", got.TTS.JobTimeout)
 	}
-	settings.TTSSeedMode = config.TTSSeedModeVaried
-	if varied := voiceManagerConfig(settings, "", t.TempDir()); !slices.Contains(varied.TTS.Args, "-randomize-seed") {
-		t.Fatalf("varied Faster Qwen seed mode args = %+v", varied.TTS.Args)
+	for _, runtimeControl := range []string{"-seed", "-randomize-seed", "-instruct"} {
+		if slices.Contains(got.TTS.Args, runtimeControl) {
+			t.Fatalf("per-request Qwen control %q leaked into process args: %+v", runtimeControl, got.TTS.Args)
+		}
 	}
+
+	settings.TTSSeedMode = config.TTSSeedModeVaried
 	settings.TTSTonePreset = config.TTSToneWarm
-	tone := voiceManagerConfig(settings, "", t.TempDir())
-	assertArgumentsContain(t, tone.TTS.Args,
-		[2]string{"-instruct", config.ResolveTTSTonePrompt(settings)},
-	)
+	settings.TTSSeed = 42
+	updated := voiceManagerConfig(settings, "", t.TempDir())
+	if !got.Equal(updated) {
+		t.Fatalf("seed/tone edit changed Qwen process config:\nbefore=%+v\nafter=%+v", got.TTS, updated.TTS)
+	}
+	request := voiceSpeechRequest(settings, "Speak now.")
+	if request.Seed == nil || *request.Seed != 42 || !request.RandomizeSeed ||
+		request.Instruct != config.ResolveTTSTonePrompt(settings) {
+		t.Fatalf("Qwen speech request controls = %+v", request)
+	}
 
 	settings.TTSReferenceText = ""
 	if incomplete := voiceManagerConfig(settings, "", ""); incomplete.TTS.Command != "" {
@@ -703,16 +712,61 @@ func TestVoiceWorkersAutoloadFromPersistedSettings(t *testing.T) {
 	}
 }
 
+func TestVoiceSettingsTransitionRestartsAutoloadWorker(t *testing.T) {
+	server := newTestServer(t)
+	previous := snapshotSettings(t, server)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.Enabled = true
+		settings.Voice.SpeakReplies = true
+		settings.Voice.TTSProvider = config.VoiceProviderCustom
+		settings.Voice.TTSWorkerPath = chatStubBinary(t)
+		settings.Voice.TTSWorkerArgs = []string{"-role", "tts"}
+		return settings
+	})
+	next := snapshotSettings(t, server)
+	server.applyVoiceSettingsTransition(previous, next)
+	waitForVoiceWorkerReady(t, server.voice.Worker(voice.RoleTTS))
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	if err := server.voice.Worker(voice.RoleTTS).Stop(stopCtx); err != nil {
+		t.Fatalf("stop first worker: %v", err)
+	}
+	cancel()
+
+	previous = next
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.TTSWorkerArgs = []string{"-role", "tts", "-start-loaded"}
+		return settings
+	})
+	next = snapshotSettings(t, server)
+	server.applyVoiceSettingsTransition(previous, next)
+	waitForVoiceWorkerReady(t, server.voice.Worker(voice.RoleTTS))
+}
+
+func waitForVoiceWorkerReady(t *testing.T, worker *voice.Supervisor) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		status := worker.Status()
+		if status.State == voice.StateRunning && status.ModelState == voice.ModelStateReady {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("voice worker did not become ready: %+v", status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestVoiceWorkerStartAutoLoadsModel(t *testing.T) {
 	server := newTestServer(t)
-	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+	saveAndApplyVoiceSettings(t, server, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
 		settings.Voice.TTSProvider = config.VoiceProviderCustom
 		settings.Voice.TTSWorkerPath = chatStubBinary(t)
 		settings.Voice.TTSWorkerArgs = []string{"-role", "tts"}
 		return settings
 	})
-	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
 
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/tts/start", nil)))
@@ -769,12 +823,11 @@ func TestVoiceWorkerStartWhileDisabledFails(t *testing.T) {
 
 func TestVoiceWorkerStartWithoutCommandFails(t *testing.T) {
 	server := newTestServer(t)
-	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+	saveAndApplyVoiceSettings(t, server, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
 		settings.Voice.ASRProvider = config.VoiceProviderCustom
 		return settings
 	})
-	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
 
 	recorder := httptest.NewRecorder()
 	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/asr/start", nil))
@@ -820,14 +873,13 @@ func TestVoiceUnknownRequestIsNotFound(t *testing.T) {
 
 func TestVoiceTranscriptionUsesASRQueueAndReturnsTranscript(t *testing.T) {
 	server := newTestServer(t)
-	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+	saveAndApplyVoiceSettings(t, server, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
 		settings.Voice.ASRProvider = config.VoiceProviderCustom
 		settings.Voice.ASRWorkerPath = chatStubBinary(t)
 		settings.Voice.ASRWorkerArgs = []string{"-role", "asr", "-start-loaded"}
 		return settings
 	})
-	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
 
 	start := httptest.NewRecorder()
 	server.Handler().ServeHTTP(start, withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/asr/start", nil)))
@@ -910,14 +962,13 @@ func TestVoiceTranscriptionRejectsStaleStopSequence(t *testing.T) {
 func TestEmergencyStopInvalidatesTrackedTTSAudio(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
-	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+	saveAndApplyVoiceSettings(t, server, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
 		settings.Voice.TTSProvider = config.VoiceProviderCustom
 		settings.Voice.TTSWorkerPath = chatStubBinary(t)
 		settings.Voice.TTSWorkerArgs = []string{"-role", "tts", "-start-loaded"}
 		return settings
 	})
-	server.applyVoiceSettingsTransition(snapshotSettings(t, server))
 	start := httptest.NewRecorder()
 	server.Handler().ServeHTTP(start, withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/tts/start", nil)))
 	if start.Code != http.StatusOK {
@@ -1087,4 +1138,11 @@ func snapshotSettings(t *testing.T, server *Server) config.Settings {
 	t.Helper()
 	settings, _ := server.store.Snapshot()
 	return settings
+}
+
+func saveAndApplyVoiceSettings(t *testing.T, server *Server, mutate func(config.Settings) config.Settings) {
+	t.Helper()
+	previous := snapshotSettings(t, server)
+	saveSettings(t, server.store, mutate)
+	server.applyVoiceSettingsTransition(previous, snapshotSettings(t, server))
 }

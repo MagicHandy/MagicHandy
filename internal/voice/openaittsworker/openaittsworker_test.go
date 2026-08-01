@@ -314,6 +314,41 @@ func TestSpeechRequestIncludesConfiguredInstruction(t *testing.T) {
 	}
 }
 
+func TestSpeechRequestRuntimeControlsOverrideProcessDefaults(t *testing.T) {
+	var requestBody struct {
+		Instruct string  `json:"instruct"`
+		Seed     *uint32 `json:"seed"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "audio/wav")
+		_, _ = w.Write(streamingTestWAV())
+	}))
+	t.Cleanup(server.Close)
+
+	defaultSeed := uint32(1)
+	requestSeed := uint32(42)
+	driver := loadWorkerWithOptions(t, Options{
+		BaseURL: server.URL, ResponseFormat: "wav", Instruct: "Old tone.", Seed: &defaultSeed,
+	})
+	driver.send(t, protocol.Request{
+		Type: protocol.RequestSpeak, ID: "runtime-controls", Text: "Hello.",
+		Instruct: "New tone.", Seed: &requestSeed,
+	})
+	if terminal, _ := driver.terminal(t); terminal.Type != protocol.ResponseDone {
+		t.Fatalf("runtime control response = %+v", terminal)
+	}
+	if requestBody.Instruct != "New tone." || requestBody.Seed == nil || *requestBody.Seed != requestSeed {
+		t.Fatalf("runtime request controls = %+v", requestBody)
+	}
+}
+
 func TestSpeechRequestSeedIsProviderScopedAndCanVary(t *testing.T) {
 	var mu sync.Mutex
 	var seeds []uint32
@@ -510,6 +545,50 @@ func TestManagedServerStopTerminatesOwnedChild(t *testing.T) {
 	}
 }
 
+func TestHealthReportsManagedServerExit(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newManagedServer(
+		executable,
+		[]string{"-test.run=^TestManagedServerHelperProcess$"},
+		"",
+		freeLoopbackPort(t),
+		map[string]string{"MAGICHANDY_TTS_HELPER_PROCESS": "1"},
+	)
+	if err := server.Start(); err != nil {
+		t.Fatalf("start managed server helper: %v", err)
+	}
+
+	var output bytes.Buffer
+	s := &session{writer: &output, server: server}
+	s.setLoaded(true)
+	if err := server.Stop(); err != nil {
+		t.Fatalf("stop managed server helper: %v", err)
+	}
+	s.handleHealth(protocol.Request{Type: protocol.RequestHealth, ID: "health-1"})
+	s.handleHealth(protocol.Request{Type: protocol.RequestHealth, ID: "health-2"})
+
+	scanner := bufio.NewScanner(&output)
+	for index := 0; index < 2; index++ {
+		if !scanner.Scan() {
+			t.Fatalf("missing managed child health response %d: %v", index+1, scanner.Err())
+		}
+		var response protocol.Response
+		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
+			t.Fatalf("decode health response %d: %v", index+1, err)
+		}
+		if response.Type != protocol.ResponseError || response.Error == nil ||
+			!strings.Contains(response.Error.Message, "exited unexpectedly") {
+			t.Fatalf("managed child health response %d = %+v", index+1, response)
+		}
+	}
+	if s.modelLoaded() {
+		t.Fatal("managed child exit left the model marked loaded")
+	}
+}
+
 func TestManagedServerHelperProcess(_ *testing.T) {
 	if os.Getenv("MAGICHANDY_TTS_HELPER_PROCESS") != "1" {
 		return
@@ -597,4 +676,17 @@ func streamingTestWAV() []byte {
 	binary.LittleEndian.PutUint32(audio[40:44], ^uint32(0))
 	copy(audio[44:], []byte{1, 2, 3, 4})
 	return audio
+}
+
+func freeLoopbackPort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return port
 }

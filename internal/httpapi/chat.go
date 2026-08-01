@@ -866,10 +866,7 @@ func (s *Server) enqueueSpeech(reply string) *voice.PendingRequest {
 	if !settings.Voice.Enabled || !settings.Voice.SpeakReplies {
 		return nil
 	}
-	pending, err := s.voice.Submit(voice.RoleTTS, voice.Request{
-		Type: voice.RequestSpeak,
-		Text: reply,
-	})
+	pending, err := s.voice.Submit(voice.RoleTTS, voiceSpeechRequest(settings.Voice, reply))
 	if err != nil {
 		s.logger.Warn("TTS enqueue skipped", "error", err)
 		return nil
