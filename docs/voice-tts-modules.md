@@ -186,6 +186,29 @@ mechanics (volume, pace, pitch range, mic distance, breath) reads better than a
 bare emotion adjective, which the model tends to act out. The Go adapter adds these
 nonstandard fields only for that provider.
 
+Three phrasings to keep out of an `instruct`, because a multilingual model reads
+them as a cue to change accent rather than delivery. They were all found the hard
+way, from a Commanding preset that arrived in an audibly foreign accent on one
+seed and sounded timid on the rest:
+
+- **Flattening the pitch contour** (`level pitch`, `flat`, `monotone`, `very
+  little pitch movement`). English declaratives close on a falling contour; a
+  level close is the prosody of a syllable-timed language. It also costs the tone
+  its conviction, since a sentence that never resolves downward sounds tentative.
+  To rule out uptalk, ask for a *falling* close, never a flat one.
+- **Relaxing articulation** (`loose articulation`, `slurred`). Consonant
+  precision is one of the strongest accent cues a synthesizer has. Put lightness
+  in pace and pitch, not in diction.
+- **Shifting the pitch baseline** (`lifted pitch`, `raise the pitch`). This
+  changes the apparent speaker rather than the delivery, and raising it thins the
+  voice toward sounding younger. Ask for movement *within* the range instead:
+  wider on stressed words, gentler across a phrase.
+
+`TestTTSTonePresetsAvoidAccentDriftLevers` holds the built-in presets to this.
+A seed makes a bad sample reproducible, but the instruct text is what decides
+whether that sample was reachable at all, so re-test a prompt change on the same
+seed rather than a fresh one.
+
 `model` and `voice` may be omitted when the server does not require them. The
 worker accepts WAV, MP3, Opus, AAC, or FLAC responses. WAV is preferred
 because it avoids optional browser codec differences. A streamed WAV with

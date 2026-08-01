@@ -33,7 +33,7 @@ func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 		TTSToneWarm:       "unhurried",
 		TTSTonePlayful:    "quicker",
 		TTSToneTender:     "slowly",
-		TTSToneCommanding: "level pitch",
+		TTSToneCommanding: "settled authority",
 		TTSToneExcited:    "briskly",
 	}
 	presets := TTSTonePresets()
@@ -59,13 +59,52 @@ func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("ResolveTTSTonePrompt(%q) = %q, want it to mention %q", preset, got, want)
 		}
-		if !strings.Contains(got, ttsDeliveryFraming) {
-			t.Errorf("ResolveTTSTonePrompt(%q) = %q, missing the shared delivery framing", preset, got)
+		if !strings.Contains(got, ttsDeliveryFraming) && !strings.Contains(got, ttsAuthorityFraming) {
+			t.Errorf("ResolveTTSTonePrompt(%q) = %q, missing a delivery framing clause", preset, got)
 		}
 		if other, duplicate := seen[got]; duplicate {
 			t.Errorf("presets %q and %q resolve to the same instruction", preset, other)
 		}
 		seen[got] = preset
+	}
+}
+
+// Three ways to ask a multilingual synthesizer for an accent by accident. All
+// three surfaced from one report: Commanding arrived in an audibly foreign
+// accent on seed 2783659410 and sounded timid on every other seed.
+//
+// Flattening the pitch contour is the prosody of a syllable-timed language, not
+// of English, and it costs the tone its conviction besides -- a sentence that
+// never resolves downward sounds tentative. Relaxing articulation gives up one
+// of the strongest accent cues a synthesizer has. Shifting the pitch baseline
+// changes the apparent speaker rather than the delivery. A preset rules out
+// uptalk by asking for a falling close, and finds its energy in pitch movement
+// and stress rather than in a raised voice or loosened diction.
+func TestTTSTonePresetsAvoidAccentDriftLevers(t *testing.T) {
+	banned := map[string]string{
+		"level pitch":           "flattens the contour",
+		"flat":                  "flattens the contour",
+		"monotone":              "flattens the contour",
+		"little pitch movement": "flattens the contour",
+		"loose articulation":    "relaxes diction",
+		"slurred":               "relaxes diction",
+		"lazy":                  "relaxes diction",
+		"lifted pitch":          "shifts the baseline",
+		"raise the pitch":       "shifts the baseline",
+		"higher-pitched":        "shifts the baseline",
+	}
+	voice := DefaultSettings().Voice
+	for _, preset := range TTSTonePresets() {
+		if preset == TTSToneCustom {
+			continue // the user's own text is theirs to write
+		}
+		voice.TTSTonePreset = preset
+		got := strings.ToLower(ResolveTTSTonePrompt(voice))
+		for phrase, why := range banned {
+			if strings.Contains(got, phrase) {
+				t.Errorf("preset %q says %q, which %s and invites accent drift: %q", preset, phrase, why, got)
+			}
+		}
 	}
 }
 
