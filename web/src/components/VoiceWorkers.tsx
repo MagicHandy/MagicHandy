@@ -89,7 +89,15 @@ export function VoiceWorkers({
   async function sendTest(role: "tts" | "asr") {
     setBusyRole(role);
     try {
-      const result = await api.voiceWorkerTest(role, { text: t("MagicHandy voice test"), delay_ms: 0 });
+      // The TTS preview has to be long enough to be worth listening to. A
+      // four-word sample carries barely one intonation contour, so a tone preset
+      // that falls apart over a real multi-sentence reply still previews clean --
+      // which is exactly how several shipped sounding strained in use.
+      // ASR ignores the content and only checks that the text is non-empty.
+      const text = role === "tts"
+        ? t("This is how I sound with your current voice settings. Listen to a full sentence or two before deciding.")
+        : t("MagicHandy voice test");
+      const result = await api.voiceWorkerTest(role, { text, delay_ms: 0 });
       if (role === "tts" && result.request?.id) queueSpeech(result.request.id);
     } catch (error) {
       show(t("Test request failed: {message}", { message: message(error) }), "error");

@@ -186,7 +186,22 @@ mechanics (volume, pace, pitch range, mic distance, breath) reads better than a
 bare emotion adjective, which the model tends to act out. The Go adapter adds these
 nonstandard fields only for that provider.
 
-Three phrasings to keep out of an `instruct`, because a multilingual model reads
+**Keep an `instruct` short — this matters more than any individual phrasing.**
+Every clause is a constraint the model has to satisfy simultaneously and hold for
+the length of the utterance. A preset stacking five or six of them leaves only an
+extreme corner of the model's range to satisfy them all in, and extreme corners
+are where the artifacts live: straining, shouting, nasality. One defining
+mechanic, one contour rule, and the shared ease anchor is the whole budget.
+Anything more belongs in a Custom prompt.
+
+That budget was learned late, because the presets kept previewing clean and
+failing in use. **The TTS preview button now speaks a two-sentence sample for
+exactly this reason.** It used to speak four words, over which there is barely one
+intonation contour to get wrong, so a preset that came apart over a real
+multi-sentence reply still sounded fine in the settings panel. Judge a tone change
+on something at least as long as the replies it will actually speak.
+
+Four phrasings to keep out of an `instruct`, because a multilingual model reads
 them as a cue to change accent rather than delivery. They were all found the hard
 way, from a Commanding preset that arrived in an audibly foreign accent on one
 seed and sounded timid on the rest:
@@ -216,16 +231,21 @@ reducers.** Quiet, slow, low, and falling all push the voice the same direction,
 and the bottom of that stack is where phonation gives out into press or creak,
 which is heard as straining. Tender asked for softly *and* slowly *and* low
 volume *and* audible breath *and* a falling close, with nothing holding the voice
-up. Warm survives the same direction because it reduces on fewer axes and says
-"relaxed and unforced" outright. A preset that asks the voice to back off has to
-pair that with a phonation cue keeping it supported, and leave the bottom of the
-range unused.
+up. Every preset now ends with a shared ease anchor naming the ceiling — relaxed
+and comfortable the whole way through, never pushed or strained — and it says
+"the whole way through" because sustaining the delivery is the part that fails.
+
+Authority is the case where this bites hardest. Commanding originally earned it
+from volume, telling the model to give important words "more weight and volume"
+on top of a full chest tone; over a real reply that is a repeated push, and it
+strained. Authority in English comes from steadiness and a resolved falling
+close, not from force, and stating it that way costs the voice nothing to hold.
 
 `TestTTSTonePresetsAvoidAccentDriftLevers` holds the built-in presets to the four
-accent levers, and `TestQuietTTSTonePresetsCarryAPhonationCue` to the fifth.
-A seed makes a bad sample reproducible, but the instruct text is what decides
-whether that sample was reachable at all, so re-test a prompt change on the same
-seed rather than a fresh one.
+accent levers, and `TestTTSTonePresetsStayShortAndAnchored` to the length budget
+and the ease anchor. A seed makes a bad sample reproducible, but the instruct
+text is what decides whether that sample was reachable at all, so re-test a
+prompt change on the same seed rather than a fresh one.
 
 `model` and `voice` may be omitted when the server does not require them. The
 worker accepts WAV, MP3, Opus, AAC, or FLAC responses. WAV is preferred

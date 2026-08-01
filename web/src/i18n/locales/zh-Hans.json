@@ -1101,6 +1101,7 @@
   "This browser refused to decode this file. Converting it to H.264 in an MP4 makes it playable without touching the original.": "此浏览器拒绝解码该文件。将其转换为 MP4 中的 H.264 即可播放，且不改动原文件。",
   "This container is one the browser cannot open. Converting to MP4 usually copies the streams across untouched, which takes seconds.": "浏览器无法打开这种容器格式。转换为 MP4 通常只是原样复制流，只需几秒。",
   "This file cannot be played here": "该文件无法在此播放",
+  "This is how I sound with your current voice settings. Listen to a full sentence or two before deciding.": "这就是当前语音设置下我的声音。请先完整听一两句话再做判断。",
   "This is the exact system prompt the backend would compose for the active chat now. A new message can change Relevant only lore matches.": "这是后端当前会为活动对话组合的完整系统提示词。新消息可能会改变“仅相关”模式下的背景匹配。",
   "This loop has {count} essential reversal knots; trim to a simpler section with 255 or fewer.": "此循环包含 {count} 个必要的反转节点；请裁剪为不超过 255 个节点的更简单片段。",
   "This tab is the controller": "此标签页拥有控制权",

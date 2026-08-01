@@ -1101,6 +1101,7 @@
   "This browser refused to decode this file. Converting it to H.264 in an MP4 makes it playable without touching the original.": "Este navegador recusou decodificar este arquivo. Convertê-lo para H.264 em um MP4 o torna reproduzível sem tocar no original.",
   "This container is one the browser cannot open. Converting to MP4 usually copies the streams across untouched, which takes seconds.": "Este contêiner é um que o navegador não consegue abrir. Converter para MP4 normalmente copia as trilhas intactas, o que leva segundos.",
   "This file cannot be played here": "Este arquivo não pode ser reproduzido aqui",
+  "This is how I sound with your current voice settings. Listen to a full sentence or two before deciding.": "É assim que eu soo com suas configurações de voz atuais. Ouça uma ou duas frases completas antes de decidir.",
   "This is the exact system prompt the backend would compose for the active chat now. A new message can change Relevant only lore matches.": "Estas são as instruções de sistema exatas que o servidor comporia agora para o chat ativo. Uma nova mensagem pode alterar as correspondências de história em Somente relevante.",
   "This loop has {count} essential reversal knots; trim to a simpler section with 255 or fewer.": "Este loop tem {count} nós de reversão essenciais; corte uma seção mais simples com 255 ou menos.",
   "This tab is the controller": "Esta aba tem o controle",
