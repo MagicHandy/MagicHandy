@@ -273,6 +273,9 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 	if initialControls != wantInitialControls {
 		t.Fatalf("initial sampling controls = %+v", initial)
 	}
+	if initial.Temperature <= 0 || initial.TopP <= 0 || initial.TopP >= 1 {
+		t.Fatalf("ordinary chat must retain stochastic sampling for model-owned choices: %+v", initial)
+	}
 	repair := provider.requests[1]
 	repairControls := [4]float64{repair.Temperature, repair.TopP, repair.RepeatPenalty, float64(repair.RepeatLastN)}
 	if repairControls != [4]float64{} {

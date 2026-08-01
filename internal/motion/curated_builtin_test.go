@@ -10,7 +10,17 @@ import (
 	"testing"
 )
 
-func expectedCuratedPatternCount(t *testing.T) int {
+type curatedCatalogFixture struct {
+	Schema       string `json:"schema"`
+	Quarantined  bool   `json:"quarantined"`
+	PatternCount int    `json:"pattern_count"`
+	Patterns     []struct {
+		File string `json:"file"`
+		Name string `json:"name"`
+	} `json:"patterns"`
+}
+
+func expectedCuratedCatalog(t *testing.T) curatedCatalogFixture {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -21,23 +31,37 @@ func expectedCuratedPatternCount(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("read curated catalog: %v", err)
 	}
-	var catalog struct {
-		PatternCount int `json:"pattern_count"`
-	}
+	var catalog curatedCatalogFixture
 	if err := json.Unmarshal(data, &catalog); err != nil {
 		t.Fatalf("decode curated catalog: %v", err)
 	}
 	if catalog.PatternCount <= 0 {
 		t.Fatalf("curated catalog pattern_count = %d, want > 0", catalog.PatternCount)
 	}
-	return catalog.PatternCount
+	if catalog.Schema != "magichandy.quarantined-pattern-catalog.v2" || !catalog.Quarantined {
+		t.Fatalf("curated catalog must be explicitly quarantined: %+v", catalog)
+	}
+	if len(catalog.Patterns) != catalog.PatternCount {
+		t.Fatalf("curated catalog entries = %d, want pattern_count %d", len(catalog.Patterns), catalog.PatternCount)
+	}
+	return catalog
 }
 
 func TestCuratedBuiltinPatternsLoad(t *testing.T) {
-	expected := expectedCuratedPatternCount(t)
+	catalog := expectedCuratedCatalog(t)
 	definitions := loadCuratedBuiltinPatterns()
-	if len(definitions) != expected {
-		t.Fatalf("curated catalog size = %d, want %d", len(definitions), expected)
+	if len(definitions) != catalog.PatternCount {
+		t.Fatalf("curated catalog size = %d, want %d", len(definitions), catalog.PatternCount)
+	}
+	expectedNames := make(map[string]string, len(catalog.Patterns))
+	for _, entry := range catalog.Patterns {
+		if entry.File == "" || entry.Name == "" {
+			t.Fatalf("curated catalog contains an incomplete entry: %+v", entry)
+		}
+		if _, exists := expectedNames[entry.File]; exists {
+			t.Fatalf("curated catalog contains duplicate file %q", entry.File)
+		}
+		expectedNames[entry.File] = entry.Name
 	}
 	seen := make(map[PatternID]bool, len(definitions))
 	seenNames := make(map[string]bool, len(definitions))
@@ -49,6 +73,14 @@ func TestCuratedBuiltinPatternsLoad(t *testing.T) {
 			t.Fatalf("duplicate curated pattern id %q", definition.ID)
 		}
 		seen[definition.ID] = true
+		filename := strings.TrimPrefix(string(definition.ID), "curated-") + ".mhpattern.json"
+		expectedName, exists := expectedNames[filename]
+		if !exists {
+			t.Fatalf("curated file %q is absent from the quarantine catalog", filename)
+		}
+		if definition.Name != expectedName {
+			t.Fatalf("curated file %q name = %q, catalog has %q", filename, definition.Name, expectedName)
+		}
 		if seenNames[definition.Name] {
 			t.Fatalf("duplicate curated pattern name %q", definition.Name)
 		}

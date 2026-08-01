@@ -192,10 +192,10 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	}
 }
 
-func TestChatStreamRecoversDirectPartnerStartOmittedByModel(t *testing.T) {
+func TestChatStreamPreservesDirectPartnerNoMotionChoice(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"Starting with you."}`,
+		`{"reply":"Come closer."}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{
 		Transport:       fake,
@@ -204,15 +204,36 @@ func TestChatStreamRecoversDirectPartnerStartOmittedByModel(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	body := postChatStream(t, server, `{"message":"Fuck me"}`)
-	if !strings.Contains(body, `"reply":"Starting with you."`) {
+	body := postChatStream(t, server, `{"message":"Suck me"}`)
+	if !strings.Contains(body, `"reply":"Come closer."`) {
 		t.Fatalf("chat stream missing assistant message:\n%s", body)
 	}
-	if !strings.Contains(body, `"semantic_fallback":true`) {
-		t.Fatalf("chat stream did not report the omitted-start fallback:\n%s", body)
+	if strings.Contains(body, `"semantic_fallback":true`) || strings.Contains(body, `event: motion`) {
+		t.Fatalf("chat stream replaced the model's no-motion choice:\n%s", body)
 	}
+	if commands := fake.Commands(); len(commands) != 0 {
+		t.Fatalf("model no-motion choice dispatched commands: %+v", commands)
+	}
+}
+
+func TestChatStreamAcceptsDirectPartnerStartChosenByModel(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Right there.","motion":{"action":"start","speed_percent":25}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+		LLMProvider:     provider,
+	})
+	t.Cleanup(server.Close)
+
+	body := postChatStream(t, server, `{"message":"kiss it"}`)
 	if !strings.Contains(body, `event: motion`) || !strings.Contains(body, `"action":"start"`) {
-		t.Fatalf("chat stream missing recovered start motion:\n%s", body)
+		t.Fatalf("chat stream stripped the model-selected start:\n%s", body)
+	}
+	if strings.Contains(body, `"semantic_fallback":true`) {
+		t.Fatalf("chat stream reported deterministic fallback for a model-selected start:\n%s", body)
 	}
 
 	commands := fake.Commands()
@@ -222,7 +243,7 @@ func TestChatStreamRecoversDirectPartnerStartOmittedByModel(t *testing.T) {
 	if commands[0].Kind != transport.CommandKindStrokeWindow ||
 		commands[1].Kind != transport.CommandKindPointsAdd ||
 		commands[2].Kind != transport.CommandKindPointsPlay {
-		t.Fatalf("recovered start bypassed the motion engine: %+v", commands[:3])
+		t.Fatalf("model-selected start bypassed the motion engine: %+v", commands[:3])
 	}
 }
 

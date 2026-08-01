@@ -878,6 +878,15 @@ preserve their accepted user timing under a `curated` tag. Automated hardware
 motion was not run for the replacements; their below-40% physical-feel pass
 remains open.
 
+Status 2026-08-01: a later bulk generator placed 171 clips into the enabled
+catalog without the generator motion budgets above; one traced clip reversed
+20% of travel every 40 ms. All 171 remain quarantined from active built-ins.
+Their v2 source manifest is now filename/name complete and enforced by tests,
+the offline generator has no live-app posting path, and the sole Go bulk
+importer requires explicit quarantine acknowledgment. These controls prevent
+accidental re-seeding but do not substitute for per-clip budget review or
+capped hardware acceptance.
+
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).
 

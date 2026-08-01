@@ -49,6 +49,16 @@ library rows are not silently deleted. Only `Hard and Regular` and `playful
 jerk`, identified by their canonical IDs and the `curated` tag, retain the
 timing-preserved exception based on prior hardware acceptance.
 
+The source directory carries an explicit
+`magichandy.quarantined-pattern-catalog.v2` manifest. Tests require every
+manifest filename and display name to match the embedded source, preventing the
+stale 171-file manifest left by the later statistical relabel. The relabel tool
+resolves the repository path instead of naming one developer machine and keeps
+that manifest synchronized. The Python sampler is offline-only and cannot post
+to a running app. The sole bulk-import command is the Go utility, which requires
+`-allow-quarantined`. That acknowledgment does not promote or hardware-approve
+a clip.
+
 ### The velocity-authored replacement pass
 
 The user disabled 15 built-ins by hand, reporting that they lacked smooth

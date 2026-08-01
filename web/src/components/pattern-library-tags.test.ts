@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { collectPatternTags, patternMatchesQuery, patternMatchesTags, visiblePatternTags } from "./pattern-library-tags";
 
 describe("pattern-library-tags", () => {
-  it("hides internal catalog tags from the browser", () => {
-    expect(visiblePatternTags(["steady", "curated", "imported", "pose-blowjob", "zone-tip", "full"])).toEqual([
+  it("hides implementation tags but keeps experimental status visible", () => {
+    expect(visiblePatternTags(["steady", "curated", "imported", "experimental", "pose-blowjob", "zone-tip", "full"])).toEqual([
       "steady",
+      "experimental",
       "full",
     ]);
   });

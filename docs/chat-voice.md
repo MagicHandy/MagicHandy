@@ -256,14 +256,16 @@ JSON output alone were insufficient.
 Profile, memory, mood, and recent-line text remain quoted or bounded context and
 cannot grant motion authority.
 
-Follow-up, 2026-07-25: the standalone command `Fuck me` exposed a separate
-motion-intent gap after this voice review. The model returned a valid explicit
-reply but no motion, and the deterministic authorization matcher would also
-have stripped a generated start. Direct partner-action starts now have a
-narrow positive matcher plus a stopped-state omitted-motion fallback. Quoted,
-negated, definitional, and conversational uses remain inert. The isolated
-`TestLiveDirectPartnerStart` evaluator exercises the real prompt, provider,
-parser, authorization, and fallback without creating a transport.
+Follow-up, 2026-08-01: the later deterministic omitted-motion fallback was
+removed after it made the backend decide whether an embodied chat turn should
+move. Direct partner-action wording now grants only bounded current-turn
+permission; the model chooses `start` or no motion from context. The matcher
+recognizes additional unambiguous wording such as `suck me` and `kiss it`, while
+quoted, negated, definitional, and conversational uses remain inert. The
+isolated `TestLiveDirectPartnerMotionChoice` evaluator exercises the real
+prompt, provider, parser, and authorization without creating an engine or
+transport. Against the installed Gemma model, `Fuck me`, `Suck me`, and `kiss
+it` each produced a model-authored `start`; none used semantic fallback.
 
 ## Limits
 

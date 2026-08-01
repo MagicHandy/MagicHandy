@@ -1295,13 +1295,15 @@ A later 171-pattern generated import is no longer part of the active built-in
 catalog. A 35%-maximum trace selected `curated-fast-drive-20`, whose dense curve
 still reversed across 20% of travel every 40 ms even though the semantic target
 itself was correctly clamped. The generated files remain embedded as review
-source, while idempotent seed reconciliation removes their obsolete `builtin`
-rows. Exact-timing budget exemptions now require one of the two canonical
-hardware-promoted IDs plus the `curated` tag; neither a filename prefix nor a
-new tag alone can weaken the catalog gates. Explicit user imports remain user
-data and continue through the shared engine. Post-quarantine physical feel and
-the accepted-calibration-offset startup acquisition still require a capped
-Cloud REST run.
+source under a test-enforced v2 quarantine manifest, while idempotent seed
+reconciliation removes their obsolete `builtin` rows. Offline generation has
+no live-app posting path, and the sole Go bulk-import utility requires explicit
+quarantine acknowledgment. Exact-timing budget exemptions now
+require one of the two canonical hardware-promoted IDs plus the `curated` tag;
+neither a filename prefix nor a new tag alone can weaken the catalog gates.
+Explicit user imports remain user data and continue through the shared engine.
+Post-quarantine physical feel and the accepted-calibration-offset startup
+acquisition still require a capped Cloud REST run.
 
 A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
 buffered frames now preserve authored knots through a bounded adaptive sampler,

@@ -1,4 +1,4 @@
-const HIDDEN_TAGS = new Set(["curated", "imported", "experimental"]);
+const HIDDEN_TAGS = new Set(["curated", "imported"]);
 
 export function visiblePatternTags(tags: string[]): string[] {
   return tags.filter((tag) => {

@@ -13,7 +13,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const DIR = "C:\\Users\\welli\\Documents\\MagicHandy\\internal\\motion\\builtinpatterns\\curated";
+const DIR = path.resolve(__dirname, "..", "internal", "motion", "builtinpatterns", "curated");
+const CATALOG_PATH = path.join(DIR, "_catalog.json");
 const APPLY = process.env.APPLY === "1";
 
 // Bands span the whole catalog, not just the curated import, so a label means the
@@ -119,12 +120,26 @@ if (ids.size !== entries.length) {
 console.log(`\nall ${ids.size} ids unique`);
 
 if (APPLY) {
+  const catalogEntries = [];
   for (const e of entries) {
     e.doc.name = e.newName;
     e.doc.description = e.newDesc;
     fs.writeFileSync(e.full, JSON.stringify(e.doc, null, 2) + "\n");
     const target = path.join(DIR, e.newId.replace(/^curated-/, "") + ".mhpattern.json");
     if (target !== e.full) { fs.renameSync(e.full, target); }
+    catalogEntries.push({
+      file: path.basename(target),
+      name: e.newName,
+    });
   }
-  console.log("applied: rewrote names/descriptions and renamed files");
+  catalogEntries.sort((a, b) => a.file.localeCompare(b.file));
+  const catalog = {
+    schema: "magichandy.quarantined-pattern-catalog.v2",
+    quarantined: true,
+    reason: "Generated clips require motion-budget review and hardware acceptance before promotion.",
+    pattern_count: catalogEntries.length,
+    patterns: catalogEntries,
+  };
+  fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalog, null, 2) + "\n");
+  console.log("applied: rewrote labels, renamed files, and synchronized the quarantine catalog");
 }
