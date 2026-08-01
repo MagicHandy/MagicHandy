@@ -132,6 +132,41 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-07-31** - Cut chat latency and made personas actually change the voice.
+  A report that replies had slowed traced to the curated funscript import: it
+  added 171 built-ins, all seeded enabled, taking the composed system prompt from
+  roughly 1,738 tokens to **15,949**, of which the pattern catalog was **93.8%**.
+  Neither suspected cause contributed - the replacement pattern names average
+  12.9 B, and the persona sections are absent entirely when no lore is set. The
+  imported labels were also unusable for selection: every part of a source script
+  shared one name, description and tag set ("... Part 1/7" through "Part 7/7")
+  while the parts differ in measured intensity by 2.04x at the median and up to
+  12.45x, so the model saw seven indistinguishable options that feel nothing
+  alike. Span is 100% of range at every percentile, so the relabelling carries
+  pace and rhythm rather than depth: five intensity bands measured across the
+  whole catalog (Gentle/Easy/Steady/Fast/Intense, 10-800 %/s) crossed with a
+  rhythm word from stroke-speed variance, ordered by intensity within each band.
+  That removed 26,385 B of catalog payload and brought the live composed prompt to
+  **37,012 B (~9,253 tokens)**, verified through
+  `/api/diagnostics/prompt-composition`. The remaining catalog cost is per-entry
+  JSON structure rather than labels; the only further lever is exposing fewer than
+  199 patterns. A weight-ranked cap was prototyped and backed out: with every
+  weight at the default it pruned by name, dropping hand-designed patterns in
+  favour of bulk imports.
+  Personas changed on three prompt seams. The description arrived as a bare
+  labelled fact under a profile that said to use it "only for identity and reply
+  wording", so a character sheet read as trivia; it now states what it is and asks
+  the model to play it, with the injection guard kept as a separate, unweakened
+  sentence. Lore now says it is background fact rather than a manner to imitate,
+  naming the description as the source of manner. Repetition of one pet name
+  traced to the anti-repetition rule listing sentence structure, key nouns and
+  sensation focus - a term of address is none of those, so nothing discouraged it
+  while three recent lines containing it read as an established habit; terms of
+  address are now named. All five prompt locales match, and the editor states that
+  the model reads the description every reply and that lore is separate. gofmt,
+  vet, golangci-lint (0 issues), full Go tests, typecheck, 354 frontend tests, and
+  the 1,330-key x 5-locale audit pass.
+
 - **2026-07-31** - Stabilized managed Faster Qwen output after a real 2 MiB
   retained-audio rejection and highly variable speech. The core now retains up
   to 8 MiB per playable clip and nine clips (72 MiB worst case), while the

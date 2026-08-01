@@ -1,0 +1,210 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Drive 8",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 200,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 400,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 567,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 767,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 934,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1168,
+      "position_percent": 55
+    },
+    {
+      "time_ms": 1335,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1535,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 1702,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2002,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 2436,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2803,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 3170,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3570,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 3904,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4238,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 4471,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 4805,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 4972,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 5172,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 5339,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 5506,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 5673,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 5906,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 6039,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6140,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 6240,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6406,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 6540,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6640,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 6773,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6907,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 7074,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7207,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 7307,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7407,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 7541,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7641,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 7775,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7908,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 8342,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8709,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9043,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9276,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9476,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9677,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9910,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "pauses",
+    "rhythmic",
+    "uneven"
+  ]
+}

@@ -519,7 +519,7 @@
   "Loop pattern": "Patrón de bucle",
   "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes.": "Los patrones en bucle se repiten. El tiempo activo se conserva según la selección; los ciclos de menos de 6,6 segundos se alargan por seguridad hasta 6,6 segundos. Las pausas estacionarias válidas de más de 5 segundos se reducen, las posiciones se amplían al rango relativo completo y el bucle se cierra.",
   "Lore": "Historia",
-  "Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "La historia se cita como datos antes del contrato de respuesta. No puede conceder acceso al movimiento ni cambiar los límites del dispositivo.",
+  "Background facts the model stays consistent with, not a manner to imitate — the description sets the manner. Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "Datos de fondo con los que el modelo mantiene la coherencia, no una forma de hablar que imitar: la descripción define la forma. La historia se cita como datos antes del contrato de respuesta. No puede conceder acceso al movimiento ni cambiar los límites del dispositivo.",
   "Lore stays saved but does not enter the model prompt.": "La historia permanece guardada, pero no entra en las instrucciones del modelo.",
   "Lore text": "Texto de la historia",
   "Loving": "Cariñoso/a",
@@ -1327,5 +1327,6 @@
   "{total} videos / {paired} with scripts": "{total} videos / {paired} con scripts",
   "{total} videos · {missing} missing": "{total} videos · {missing} faltantes",
   "{used} / {total} characters": "{used} / {total} caracteres",
-  "{visible} of {total} videos": "{visible} de {total} videos"
+  "{visible} of {total} videos": "{visible} de {total} videos",
+  "The model reads this on every reply. It is the character being played: manner, attitude, and how they speak. Lore is separate and holds background facts.": "El modelo lee esto en cada respuesta. Es el personaje que interpreta: su forma de ser, su actitud y cómo habla. La historia va aparte y guarda datos de fondo."
 }

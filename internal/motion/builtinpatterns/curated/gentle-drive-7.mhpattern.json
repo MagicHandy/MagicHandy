@@ -1,0 +1,30 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Gentle Drive 7",
+  "description": "Slow cadence.",
+  "kind": "routine",
+  "cycle_ms": 3563,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1163,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2363,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3563,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "accent",
+    "fast",
+    "tempo-change"
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Surge 12",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 40,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 241,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 541,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 741,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1041,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1242,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1509,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1742,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2009,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2209,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2510,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2710,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3010,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3210,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3511,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3677,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3978,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4178,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4478,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 4645,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4945,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5146,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5412,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5613,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5913,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6113,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6413,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6647,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6947,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7181,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7815,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 8215,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8816,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9250,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9784,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "full",
+    "rhythmic",
+    "balanced"
+  ]
+}

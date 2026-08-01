@@ -1,0 +1,206 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Intense Drive 14",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 206,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 439,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 619,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 868,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1039,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1286,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1472,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1687,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1872,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2120,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2285,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2534,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2755,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3007,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3201,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3420,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3635,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3853,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4068,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4301,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4473,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4721,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4906,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5138,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5353,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5553,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5753,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5987,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6186,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6407,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6620,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6873,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7055,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7273,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7487,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7706,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7905,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8139,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8340,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8573,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8773,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9006,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9201,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9439,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9654,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9888,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "deep",
+    "rhythmic",
+    "build"
+  ]
+}

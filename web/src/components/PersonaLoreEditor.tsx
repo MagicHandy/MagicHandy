@@ -194,7 +194,7 @@ export function PersonaLoreEditor({
             </button>
           )}
           <p className="hint">
-            {t("Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.")}
+            {t("Background facts the model stays consistent with, not a manner to imitate — the description sets the manner. Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.")}
           </p>
         </>
       )}

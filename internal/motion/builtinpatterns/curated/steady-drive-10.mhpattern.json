@@ -1,0 +1,134 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Steady Drive 10",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 143,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 410,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 710,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 944,
+      "position_percent": 75
+    },
+    {
+      "time_ms": 1178,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1478,
+      "position_percent": 75
+    },
+    {
+      "time_ms": 1912,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 2412,
+      "position_percent": 81.25
+    },
+    {
+      "time_ms": 2679,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 2980,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 3213,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 3514,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3747,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 4014,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 4348,
+      "position_percent": 37.5
+    },
+    {
+      "time_ms": 4748,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5049,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 5549,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5883,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 6216,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 6984,
+      "position_percent": 12.5
+    },
+    {
+      "time_ms": 7518,
+      "position_percent": 87.5
+    },
+    {
+      "time_ms": 7885,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8319,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8686,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9186,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9553,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9954,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "full",
+    "steady",
+    "build"
+  ]
+}

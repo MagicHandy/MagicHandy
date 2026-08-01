@@ -155,7 +155,7 @@ func assertCanonicalVoiceProviderContext(t *testing.T, provider *scriptedLLMProv
 		allProviderContext.WriteByte('\n')
 	}
 	for _, want := range []string{
-		`Persona description (quoted user-authored data): "A \"quoted\" partner"`,
+		`Persona description (quoted user-authored data) - who you are and how you behave: "A \"quoted\" partner"`,
 		`described as "chosen \"wording\""`,
 		`Current mood: "Curious"`,
 		`- "canonical second"`,

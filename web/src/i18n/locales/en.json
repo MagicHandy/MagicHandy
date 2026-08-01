@@ -519,7 +519,7 @@
   "Loop pattern": "Loop pattern",
   "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes.": "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes.",
   "Lore": "Lore",
-  "Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.",
+  "Background facts the model stays consistent with, not a manner to imitate — the description sets the manner. Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "Background facts the model stays consistent with, not a manner to imitate — the description sets the manner. Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.",
   "Lore stays saved but does not enter the model prompt.": "Lore stays saved but does not enter the model prompt.",
   "Lore text": "Lore text",
   "Loving": "Loving",
@@ -1327,5 +1327,6 @@
   "{total} videos / {paired} with scripts": "{total} videos / {paired} with scripts",
   "{total} videos · {missing} missing": "{total} videos · {missing} missing",
   "{used} / {total} characters": "{used} / {total} characters",
-  "{visible} of {total} videos": "{visible} of {total} videos"
+  "{visible} of {total} videos": "{visible} of {total} videos",
+  "The model reads this on every reply. It is the character being played: manner, attitude, and how they speak. Lore is separate and holds background facts.": "The model reads this on every reply. It is the character being played: manner, attitude, and how they speak. Lore is separate and holds background facts."
 }

@@ -1,0 +1,70 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Gentle Drive 3",
+  "description": "Slow cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 99
+    },
+    {
+      "time_ms": 293,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 465,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 965,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 2165,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2665,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3865,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5065,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5532,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6732,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7932,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8366,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9566,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "full",
+    "gentle",
+    "breathing"
+  ]
+}

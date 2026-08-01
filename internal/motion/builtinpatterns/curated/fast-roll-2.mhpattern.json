@@ -1,0 +1,126 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Roll 2",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 321,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 688,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1088,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1208,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1609,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1976,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2410,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2743,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3211,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3511,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3945,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 4278,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4745,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5146,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5546,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5980,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6414,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6814,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7248,
+      "position_percent": 85
+    },
+    {
+      "time_ms": 7615,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8049,
+      "position_percent": 75
+    },
+    {
+      "time_ms": 8416,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8816,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 9150,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9550,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9884,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "full",
+    "steady",
+    "balanced"
+  ]
+}

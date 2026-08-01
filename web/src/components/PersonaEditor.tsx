@@ -339,6 +339,9 @@ export function PersonaEditor({
                     disabled={disabled}
                     onChange={(event) => setDescription(limitCodePoints(event.target.value, options.max_description))}
                   />
+                  <span className="hint">
+                    {t("The model reads this on every reply. It is the character being played: manner, attitude, and how they speak. Lore is separate and holds background facts.")}
+                  </span>
                 </label>
               </span>
             </div>

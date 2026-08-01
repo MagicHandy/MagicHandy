@@ -1,0 +1,79 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Easy Roll 11",
+  "description": "Slow cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 773,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1606,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2439,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3273,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4106,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4939,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5773,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6606,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7439,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8306,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8723,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9090,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9457,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9823,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
+  ]
+}

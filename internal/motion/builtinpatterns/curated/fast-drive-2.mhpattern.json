@@ -1,0 +1,215 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Drive 2",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 114,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 281,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 448,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 614,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 781,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 948,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1115,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 1281,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1448,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 1615,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1781,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 1948,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2115,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 2281,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2448,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 2615,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2781,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 2948,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3115,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 3281,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3448,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 3615,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3781,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 3948,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4115,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 4281,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4564,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4664,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 4765,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5064,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5630,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 6064,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6264,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 6480,
+      "position_percent": 8
+    },
+    {
+      "time_ms": 6747,
+      "position_percent": 52
+    },
+    {
+      "time_ms": 6980,
+      "position_percent": 17
+    },
+    {
+      "time_ms": 7247,
+      "position_percent": 64
+    },
+    {
+      "time_ms": 7480,
+      "position_percent": 24
+    },
+    {
+      "time_ms": 7747,
+      "position_percent": 72
+    },
+    {
+      "time_ms": 7980,
+      "position_percent": 31
+    },
+    {
+      "time_ms": 8247,
+      "position_percent": 82
+    },
+    {
+      "time_ms": 8480,
+      "position_percent": 41
+    },
+    {
+      "time_ms": 8747,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 8980,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 9247,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9480,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 9747,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9980,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 50
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
+  ]
+}

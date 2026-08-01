@@ -1,0 +1,142 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Drive 22",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 261,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 595,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 862,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1196,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1396,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 1563,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1797,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 2030,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2297,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2631,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2898,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 3131,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3398,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3632,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3832,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4065,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4299,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4566,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4766,
+      "position_percent": 85.714286
+    },
+    {
+      "time_ms": 4966,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5200,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5467,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5967,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6601,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7035,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7602,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8103,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8670,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9204,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9671,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "full",
+    "steady",
+    "build"
+  ]
+}
