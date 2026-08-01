@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
@@ -38,6 +38,7 @@ const llmSettings = {
   provider: "llama_cpp",
   llama_cpp_mode: "managed",
   llama_cpp_base_url: "",
+  llama_cpp_context_size: 32768,
   ollama_base_url: "",
   ollama_models_path: "",
   model: "",
@@ -161,6 +162,36 @@ describe("runtime panels", () => {
     expect(disclosure).toHaveAttribute("open");
   });
 
+  it("shows only managed context sizes and preserves the current saved option", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    const patch = vi.fn();
+    const user = userEvent.setup();
+    const managed = { ...llmSettings, llama_cpp_context_size: 65536 };
+    const view = renderModelPanel(managed, patch, [16384, 32768, 131072]);
+
+    const select = await screen.findByRole("combobox", { name: "Context size" });
+    expect(select).toHaveValue("65536");
+    expect(screen.getByRole("option", { name: "65536 tokens" })).toBeInTheDocument();
+    expect(screen.getByText(/A context smaller than the prompt cannot fit the request/)).toBeInTheDocument();
+    await user.selectOptions(select, "131072");
+    expect(patch).toHaveBeenCalledWith({ llama_cpp_context_size: 131072 });
+
+    view.rerender(modelPanel({ ...managed, llama_cpp_mode: "external" }, patch));
+    expect(screen.queryByRole("combobox", { name: "Context size" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes provider status after the saved managed context changes", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    const initial = { ...llmSettings, llama_cpp_context_size: 32768 };
+    const view = render(modelPanel(initial));
+    await waitFor(() => expect(llmStatus).toHaveBeenCalled());
+    llmStatus.mockClear();
+
+    view.rerender(modelPanel({ ...initial, llama_cpp_context_size: 65536 }));
+
+    await waitFor(() => expect(llmStatus).toHaveBeenCalledOnce());
+  });
+
   it("names speech providers distinctly and surfaces voice-status failures", async () => {
     voiceStatus.mockRejectedValue(new Error("voice endpoint unavailable"));
     render(
@@ -251,19 +282,24 @@ describe("runtime panels", () => {
   });
 });
 
-function renderModelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn()) {
-  return render(
+function modelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn(), contextSizes = [16384, 32768, 65536, 131072]) {
+  return (
     <ModelSettingsPanel
       settings={settings}
       saved={settings}
       providers={["llama_cpp", "ollama"]}
       llamaModes={["managed", "external"]}
+      llamaContextSizes={contextSizes}
       reasoningModes={["off", "auto"]}
       maxOutputOptions={[128, 256, 512]}
       locked={false}
       patch={patch}
-    />,
+    />
   );
+}
+
+function renderModelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn(), contextSizes = [16384, 32768, 65536, 131072]) {
+  return render(modelPanel(settings, patch, contextSizes));
 }
 
 function voiceSettings(): PublicSettings {

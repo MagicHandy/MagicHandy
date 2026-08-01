@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-07-31, Faster Qwen output stability
+## Snapshot — 2026-08-01, managed context control and pattern quarantine
 
 ### Goal 1: Maintainability
 
@@ -31,8 +31,8 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,353 lines, `internal/config/settings_test.go` 1,453, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,095, `internal/httpapi/voice_test.go` 1,071, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Voice normalization/defaulting/validation is isolated in a focused config file, and the OpenAI-compatible adapter has its own package. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,138 lines, `web/src/App.test.tsx` 1,440, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,443, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Provider-specific TTS fields replace the retired reference-code dialog without another UI tree; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,341 lines, `internal/config/settings_test.go` 1,467, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,095, `internal/httpapi/voice_test.go` 1,071, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. LLM update merging and context-size tests are isolated in focused config files; voice normalization/defaulting/validation remains separate as well. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,140 lines, `web/src/App.test.tsx` 1,441, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,443, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Provider-specific TTS fields replace the retired reference-code dialog without another UI tree; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,319 physical lines and remains outside the Go/web architecture size test as a manually reviewed guideline exception. Optional Python/PyTorch speech setup lives in dedicated install/update scripts; the shared module only validates, invokes, and refreshes their small app-owned launchers. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
@@ -110,9 +110,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,522,566 raw / 751,506 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 720,468 raw / 192,040 gzip bytes; all
-   HTML/CSS/JS is 1,078,330 raw / 314,109 gzip bytes. The local-TTS transition
+   browser payload is 1,535,394 raw / 756,144 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 726,450 raw / 193,763 gzip bytes; all
+   HTML/CSS/JS is 1,091,158 raw / 318,747 gzip bytes. The local-TTS transition
    removes 14,798 raw / 5,341 gzip bytes overall and 4,402 raw / 1,764 gzip bytes
    from startup relative to its checked-in predecessor. Independent Autopilot clocks,
    preferences, localization, and playback acknowledgement add 12,158 raw /
@@ -132,6 +132,29 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-08-01** - Made managed llama.cpp context allocation explicit and
+  quarantined a pattern-catalog safety regression. Settings > Model now offers
+  backend-reviewed 16,384/32,768/65,536/131,072-token values only for the
+  app-owned runner, persists 32,768 by default, invalidates a stale managed
+  provider when changed, and passes the value as `--ctx-size`; external
+  llama.cpp and Ollama keep ownership of their context. The UI and docs state
+  the RAM/VRAM and prompt-fit tradeoff without claiming the unmeasured larger
+  values are faster. A read-only `motion_trace.v3` investigation of a reported
+  35% speed-limit failure found the semantic target correctly clamped at 35%,
+  while selected `curated-fast-drive-20` contained 40 ms reversals that a broad
+  imported-curve test exemption had allowed into the enabled catalog. All 171
+  bulk generated clips are removed from active built-ins and prior builtin rows
+  are purged on reconciliation; their source remains available for review, and
+  user-owned imports are preserved. Exact timing exemptions now require either
+  `hard-and-regular` or `playful-jerk` plus the `curated` tag. Accepted startup
+  calibration excursions retain the raw observed position for the skip test, so
+  clamping cannot bypass verified acquisition. No hardware command was issued;
+  capped post-fix Cloud validation remains open under R1. The canonical browser
+  build is 1,535,394 raw / 756,144 gzip bytes (+2,749 / +874), with the startup
+  path +1,246 / +284 bytes. Full Go tests, vet, golangci-lint, the zero-CGo
+  build, live-tag compilation, all 357 frontend tests, typecheck, localization,
+  and production build pass. Local race testing remains unavailable because the
+  Windows host has no C compiler; CI retains the mandatory race gate.
 - **2026-08-01** - Recovered a real-device startup failure and removed a managed
   LLM allocation mismatch. The Handy reported slide 0-100% as absolute
   5.00-102.83 while parked at 4.00, placing it 1.02% below its own calibrated

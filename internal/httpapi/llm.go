@@ -87,6 +87,7 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 				HTTPProviderOptions: options,
 				RunnerPath:          managedRunnerPath,
 				ModelPath:           managedModelPath,
+				ContextSize:         settings.LlamaCPPContextSize,
 			})
 		} else {
 			provider, err = llm.NewLlamaCPPProvider(options)
@@ -133,6 +134,7 @@ func (s *Server) llmState(ctx context.Context) any {
 		"model":                   settings.LLM.Model,
 		"prompt_set":              settings.LLM.PromptSet,
 		"request_timeout_ms":      settings.LLM.RequestTimeoutMillis,
+		"llama_cpp_context_size":  settings.LLM.LlamaCPPContextSize,
 		"max_output_tokens":       settings.LLM.MaxOutputTokens,
 		"reasoning_mode":          settings.LLM.ReasoningMode,
 		"model_manager_available": false,
@@ -251,7 +253,7 @@ func llmCacheKey(settings config.LLMSettings, managedKey string) string {
 	case config.LLMProviderLlamaCPP:
 		parts = append(parts, settings.LlamaCPPMode, selectedLLMBaseURL(settings))
 		if settings.LlamaCPPMode == config.LlamaCPPModeManaged {
-			parts = append(parts, managedKey)
+			parts = append(parts, fmt.Sprint(settings.LlamaCPPContextSize), managedKey)
 		}
 	case config.LLMProviderOllama:
 		parts = append(parts, settings.OllamaBaseURL)

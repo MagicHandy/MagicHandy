@@ -278,6 +278,7 @@ func TestManagedLlamaCPPStatusRequiresManagedRuntimeAndModel(t *testing.T) {
 			BaseURL: "http://127.0.0.1:8080",
 			Model:   "local-model",
 		},
+		ContextSize: 32768,
 	})
 	if err != nil {
 		t.Fatalf("NewManagedLlamaCPPProvider: %v", err)
@@ -292,6 +293,21 @@ func TestManagedLlamaCPPStatusRequiresManagedRuntimeAndModel(t *testing.T) {
 	}
 	if !strings.Contains(status.Message, "runtime is not installed") {
 		t.Fatalf("status message = %q, want managed runtime setup error", status.Message)
+	}
+}
+
+func TestManagedLlamaCPPRejectsNonpositiveContextSize(t *testing.T) {
+	for _, contextSize := range []int{0, -1} {
+		_, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
+			HTTPProviderOptions: HTTPProviderOptions{
+				BaseURL: "http://127.0.0.1:8080",
+				Model:   "local-model",
+			},
+			ContextSize: contextSize,
+		})
+		if err == nil || !strings.Contains(err.Error(), "context size must be positive") {
+			t.Fatalf("context size %d error = %v", contextSize, err)
+		}
 	}
 }
 
@@ -339,8 +355,9 @@ func TestManagedLlamaCPPSelectsFallbackWhenPreferredPortIsOccupied(t *testing.T)
 			BaseURL: fmt.Sprintf("http://127.0.0.1:%d", preferredPort),
 			Model:   "local-model",
 		},
-		RunnerPath: os.Args[0],
-		ModelPath:  modelPath,
+		RunnerPath:  os.Args[0],
+		ModelPath:   modelPath,
+		ContextSize: 32768,
 	})
 	if err != nil {
 		t.Fatalf("NewManagedLlamaCPPProvider: %v", err)
@@ -389,8 +406,9 @@ func TestManagedLlamaCPPLoadReportsEarlyRunnerExit(t *testing.T) {
 			BaseURL: "http://127.0.0.1:18080",
 			Model:   "local-model",
 		},
-		RunnerPath: os.Args[0],
-		ModelPath:  modelPath,
+		RunnerPath:  os.Args[0],
+		ModelPath:   modelPath,
+		ContextSize: 32768,
 	})
 	if err != nil {
 		t.Fatalf("NewManagedLlamaCPPProvider: %v", err)
@@ -426,8 +444,9 @@ func TestManagedLlamaCPPEnsureStartedIsSerialized(t *testing.T) {
 			BaseURL: "http://127.0.0.1:18080",
 			Model:   "local-model",
 		},
-		RunnerPath: os.Args[0],
-		ModelPath:  modelPath,
+		RunnerPath:  os.Args[0],
+		ModelPath:   modelPath,
+		ContextSize: 65536,
 	})
 	if err != nil {
 		t.Fatalf("NewManagedLlamaCPPProvider: %v", err)
@@ -467,7 +486,7 @@ func TestManagedLlamaCPPEnsureStartedIsSerialized(t *testing.T) {
 		"--no-ui",
 		"--alias",
 		"local-model",
-		"--ctx-size\n32768",
+		"--ctx-size\n65536",
 		"--parallel\n1",
 		"-m",
 		modelPath,

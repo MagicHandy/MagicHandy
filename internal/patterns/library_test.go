@@ -72,7 +72,7 @@ func TestLibraryPurgesRetiredBuiltinsAndImportedClipDuplicates(t *testing.T) {
 		INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
 			cycle_ms, points_json, tags_json, created_at, updated_at)
 		VALUES(?, ?, '', 'builtin', 'routine', 1, 1.0, 6600, ?, ?, ?, ?)
-	`, "curated-legacy-clip", "Legacy Clip", pointsJSON, tagsJSON, now, now); err != nil {
+	`, "curated-fast-drive-20", "Fast Drive 20", pointsJSON, tagsJSON, now, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := library.db.SQL().Exec(`
@@ -91,7 +91,7 @@ func TestLibraryPurgesRetiredBuiltinsAndImportedClipDuplicates(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	if _, err := reopened.Pattern("curated-legacy-clip"); !errors.Is(err, ErrPatternNotFound) {
+	if _, err := reopened.Pattern("curated-fast-drive-20"); !errors.Is(err, ErrPatternNotFound) {
 		t.Fatalf("retired built-in error = %v, want ErrPatternNotFound", err)
 	}
 	if _, err := reopened.Pattern("pattern-imported-clip"); !errors.Is(err, ErrPatternNotFound) {

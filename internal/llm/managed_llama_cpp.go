@@ -23,18 +23,14 @@ const (
 	// yielding to it. A brief cancellation overlap does not need another
 	// permanently allocated server slot.
 	managedLlamaParallelSlots = 1
-	// The current model advertises a 262k context. Letting any imported model's
-	// advertised maximum define the process allocation is disproportionate to
-	// MagicHandy's measured 7k-12k-token requests and can force a CUDA runner to
-	// spill into host memory.
-	managedLlamaContextSize = 32 * 1024
 )
 
 // ManagedLlamaCPPOptions configures a managed llama-server process.
 type ManagedLlamaCPPOptions struct {
 	HTTPProviderOptions
-	RunnerPath string
-	ModelPath  string
+	RunnerPath  string
+	ModelPath   string
+	ContextSize int
 }
 
 // ManagedLlamaCPPProvider starts and owns one configured llama-server process.
@@ -45,6 +41,7 @@ type ManagedLlamaCPPProvider struct {
 	model            string
 	runnerPath       string
 	modelPath        string
+	contextSize      int
 	client           *LlamaCPPProvider
 
 	mu       sync.Mutex
@@ -57,6 +54,9 @@ type ManagedLlamaCPPProvider struct {
 
 // NewManagedLlamaCPPProvider creates a managed llama.cpp provider.
 func NewManagedLlamaCPPProvider(options ManagedLlamaCPPOptions) (*ManagedLlamaCPPProvider, error) {
+	if options.ContextSize <= 0 {
+		return nil, errors.New("managed llama.cpp context size must be positive")
+	}
 	httpOptions, err := normalizeHTTPOptions(options.HTTPProviderOptions)
 	if err != nil {
 		return nil, err
@@ -75,6 +75,7 @@ func NewManagedLlamaCPPProvider(options ManagedLlamaCPPOptions) (*ManagedLlamaCP
 		model:            httpOptions.Model,
 		runnerPath:       strings.TrimSpace(options.RunnerPath),
 		modelPath:        strings.TrimSpace(options.ModelPath),
+		contextSize:      options.ContextSize,
 		client:           client,
 		stderr:           newTailBuffer(4096),
 	}, nil
@@ -290,7 +291,7 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 		"--alias", p.model,
 		"--offline",
 		"--no-ui",
-		"--ctx-size", strconv.Itoa(managedLlamaContextSize),
+		"--ctx-size", strconv.Itoa(p.contextSize),
 		"--parallel", strconv.Itoa(managedLlamaParallelSlots),
 		"-m", p.modelPath,
 	}

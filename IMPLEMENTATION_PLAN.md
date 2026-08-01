@@ -1291,6 +1291,18 @@ real device, capped below 40% intensity; synthetic tests cannot establish
 physical feel. The six retired rows and two promoted user curves reflect prior
 live curation, not a new automated hardware run.
 
+A later 171-pattern generated import is no longer part of the active built-in
+catalog. A 35%-maximum trace selected `curated-fast-drive-20`, whose dense curve
+still reversed across 20% of travel every 40 ms even though the semantic target
+itself was correctly clamped. The generated files remain embedded as review
+source, while idempotent seed reconciliation removes their obsolete `builtin`
+rows. Exact-timing budget exemptions now require one of the two canonical
+hardware-promoted IDs plus the `curated` tag; neither a filename prefix nor a
+new tag alone can weaken the catalog gates. Explicit user imports remain user
+data and continue through the shared engine. Post-quarantine physical feel and
+the accepted-calibration-offset startup acquisition still require a capped
+Cloud REST run.
+
 A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
 buffered frames now preserve authored knots through a bounded adaptive sampler,
 loop PCHIP carries velocity through non-reversing seams, rapid <=2% reversal

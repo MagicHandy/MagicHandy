@@ -89,6 +89,18 @@ remains open under R1; closing it requires either reliable position feedback or
 a conservative owner contract whose first command is bounded for worst-case
 travel by the configured speed.
 
+Status 2026-08-01: a read-only trace for a reported speed-limit regression
+showed the target correctly clamped to the configured 35% maximum, but the
+selected generated `curated-fast-drive-20` curve contained 40 ms reversals that
+had bypassed catalog acceleration/reversal gates through a broad imported-curve
+test exemption. All 171 generated `curated-*` clips are now quarantined from the
+built-in catalog, obsolete builtin rows are removed during seed reconciliation,
+and exact timing exceptions name only the two previously hardware-accepted
+patterns. Accepted calibration excursions also retain their raw observed
+position for startup decisions, so clamping cannot skip the verified lead-in.
+No post-fix hardware motion was run; capped Cloud REST startup and pattern-feel
+evidence remain open.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -468,6 +480,15 @@ Unused raw Cloud/Bluetooth stroke/add/play HTTP routes were removed, so only the
 engine calls mutating transport methods other than emergency Stop. Physical
 feel and immediate stroke-envelope changes remain covered by R1/R22 rather than
 being declared solved from simulation.
+
+Status 2026-08-01: the bulk generated pattern regression did not create a
+second dispatch path, but it exposed a parallel safety-policy exception in the
+catalog tests. The active catalog no longer includes those 171 clips, and the
+only exact-curve exemptions are the canonical `hard-and-regular` and
+`playful-jerk` IDs carrying the `curated` tag. User-authored/imported content
+still resolves to semantic targets and runs through the same engine; explicit
+user library rows remain non-destructive data rather than being reclassified as
+built-ins.
 
 ## R15: Chat And Voice Delivery Ordering
 

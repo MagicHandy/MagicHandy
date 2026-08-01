@@ -308,6 +308,7 @@ export function SettingsRoute() {
     motion_styles: [],
     llm_providers: [],
     llama_cpp_modes: [],
+    llama_cpp_context_sizes: [],
     llm_reasoning_modes: [],
     llm_max_output_tokens: [],
     llm_chat_voices: [],
@@ -412,6 +413,7 @@ export function SettingsRoute() {
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}
             llamaModes={opt.llama_cpp_modes ?? []}
+            llamaContextSizes={opt.llama_cpp_context_sizes ?? []}
             reasoningModes={opt.llm_reasoning_modes ?? []}
             maxOutputOptions={opt.llm_max_output_tokens ?? []}
             locked={locked}

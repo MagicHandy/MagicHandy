@@ -822,6 +822,7 @@ export interface OptionHints {
   autopilot_speech_motion_authorities?: string[];
   llm_providers?: string[];
   llama_cpp_modes?: string[];
+  llama_cpp_context_sizes?: number[];
   llm_reasoning_modes?: string[];
   llm_max_output_tokens?: number[];
   llm_chat_voices?: string[];
@@ -855,6 +856,7 @@ export interface PublicSettings {
     provider: string;
     llama_cpp_mode: string;
     llama_cpp_base_url: string;
+    llama_cpp_context_size: number;
     ollama_base_url: string;
     ollama_models_path?: string;
     model: string;

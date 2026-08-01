@@ -248,6 +248,9 @@ func TestPromotedUserPatternsKeepAcceptedNamesAndTiming(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected promoted pattern %q", definition.ID)
 		}
+		if !UsesExactImportedCurve(definition) {
+			t.Fatalf("promoted pattern %q is not an exact timing exception", definition.ID)
+		}
 		if definition.Name != expected.name || definition.CycleMillis != expected.cycle || len(definition.Points) != expected.pointCount {
 			t.Fatalf("promoted pattern %q = name %q cycle %d points %d", definition.ID, definition.Name, definition.CycleMillis, len(definition.Points))
 		}
@@ -258,6 +261,9 @@ func TestPromotedUserPatternsKeepAcceptedNamesAndTiming(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing promoted patterns: %+v", want)
+	}
+	if UsesExactImportedCurve(PatternDefinition{ID: "unreviewed", Tags: []string{TagCurated}}) {
+		t.Fatal("unreviewed curated tag bypassed generated-catalog safety budgets")
 	}
 }
 

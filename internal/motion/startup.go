@@ -42,19 +42,20 @@ const (
 )
 
 type startupMotionProfile struct {
-	settings           transport.StrokeWindowCommand
-	currentFullPercent float64
-	targetFullPercent  float64
-	targetAbsolute     float64
-	finalMinAbsolute   float64
-	finalMaxAbsolute   float64
-	fullTravelAbsolute float64
-	currentSemantic    float64
-	targetSemantic     float64
-	unionWindow        transport.StrokeWindowCommand
-	leadInDuration     time.Duration
-	startupStreamID    string
-	finalWindowReady   bool
+	settings            transport.StrokeWindowCommand
+	observedFullPercent float64
+	currentFullPercent  float64
+	targetFullPercent   float64
+	targetAbsolute      float64
+	finalMinAbsolute    float64
+	finalMaxAbsolute    float64
+	fullTravelAbsolute  float64
+	currentSemantic     float64
+	targetSemantic      float64
+	unionWindow         transport.StrokeWindowCommand
+	leadInDuration      time.Duration
+	startupStreamID     string
+	finalWindowReady    bool
 }
 
 // prepareMotionStartup anchors a new stream to measured physical state when
@@ -79,10 +80,10 @@ func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, pref
 		return err
 	}
 
-	currentInsideFinalWindow := profile.currentFullPercent >= float64(profile.settings.MinPercent) &&
-		profile.currentFullPercent <= float64(profile.settings.MaxPercent)
+	currentInsideFinalWindow := profile.observedFullPercent >= float64(profile.settings.MinPercent) &&
+		profile.observedFullPercent <= float64(profile.settings.MaxPercent)
 	if currentInsideFinalWindow &&
-		math.Abs(profile.targetFullPercent-profile.currentFullPercent) <= startupPositionTolerancePercent {
+		math.Abs(profile.targetFullPercent-profile.observedFullPercent) <= startupPositionTolerancePercent {
 		return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false)
 	}
 
@@ -249,20 +250,20 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 	}
 	first := sampleMotionPath(e.plan, e.transition, 0).PositionPercent
 	targetFullPercent := physicalPositionForSemantic(first, settings)
-	currentFullPercent := calibration.fullPercentAt(state.PositionAbsolute)
-	if currentFullPercent < -startupCalibrationTolerancePercent ||
-		currentFullPercent > 100+startupCalibrationTolerancePercent {
+	observedFullPercent := calibration.fullPercentAt(state.PositionAbsolute)
+	if observedFullPercent < -startupCalibrationTolerancePercent ||
+		observedFullPercent > 100+startupCalibrationTolerancePercent {
 		// The geometry the device reported is the only thing that can explain this
 		// refusal, so it belongs in the message. Without it the failure is a dead
 		// end: it names a calibration nobody can see.
 		return startupMotionProfile{}, fmt.Errorf(
 			"motion startup absolute position was outside calibrated full travel "+
 				"(position %.2f maps to %.1f%% of travel; device reported slide %.1f-%.1f%% as %.2f-%.2f)",
-			state.PositionAbsolute, currentFullPercent,
+			state.PositionAbsolute, observedFullPercent,
 			state.StrokeMinPercent, state.StrokeMaxPercent,
 			state.StrokeMinAbsolute, state.StrokeMaxAbsolute)
 	}
-	currentFullPercent = math.Max(0, math.Min(100, currentFullPercent))
+	currentFullPercent := math.Max(0, math.Min(100, observedFullPercent))
 	unionMinimum := math.Floor(min(currentFullPercent, state.StrokeMinPercent, float64(settings.MinPercent)))
 	unionMaximum := math.Ceil(max(currentFullPercent, state.StrokeMaxPercent, float64(settings.MaxPercent)))
 	union := transport.StrokeWindowCommand{
@@ -274,20 +275,21 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 		return startupMotionProfile{}, errors.New("motion startup could not construct a valid physical stroke window")
 	}
 
-	delta := math.Abs(targetFullPercent - currentFullPercent)
+	delta := math.Abs(targetFullPercent - observedFullPercent)
 	return startupMotionProfile{
-		settings:           settings,
-		currentFullPercent: currentFullPercent,
-		targetFullPercent:  targetFullPercent,
-		targetAbsolute:     calibration.absoluteAt(targetFullPercent),
-		finalMinAbsolute:   calibration.absoluteAt(float64(settings.MinPercent)),
-		finalMaxAbsolute:   calibration.absoluteAt(float64(settings.MaxPercent)),
-		fullTravelAbsolute: calibration.fullTravelAbsolute,
-		currentSemantic:    semanticPositionForPhysical(currentFullPercent, union),
-		targetSemantic:     semanticPositionForPhysical(targetFullPercent, union),
-		unionWindow:        union,
-		leadInDuration:     startupLeadInDuration(delta, e.plan.Target.SpeedPercent),
-		startupStreamID:    e.streamID + "-startup",
+		settings:            settings,
+		observedFullPercent: observedFullPercent,
+		currentFullPercent:  currentFullPercent,
+		targetFullPercent:   targetFullPercent,
+		targetAbsolute:      calibration.absoluteAt(targetFullPercent),
+		finalMinAbsolute:    calibration.absoluteAt(float64(settings.MinPercent)),
+		finalMaxAbsolute:    calibration.absoluteAt(float64(settings.MaxPercent)),
+		fullTravelAbsolute:  calibration.fullTravelAbsolute,
+		currentSemantic:     semanticPositionForPhysical(currentFullPercent, union),
+		targetSemantic:      semanticPositionForPhysical(targetFullPercent, union),
+		unionWindow:         union,
+		leadInDuration:      startupLeadInDuration(delta, e.plan.Target.SpeedPercent),
+		startupStreamID:     e.streamID + "-startup",
 	}, nil
 }
 

@@ -65,7 +65,12 @@ model, with the current pinned managed llama.cpp bounding hidden reasoning to
 half the total budget through its pinned API. Repair always uses `off` and retains the original
 conversation. Arbitrary external GGUF/Ollama models do not share one capability
 contract, so suppression remains best-effort there. Hardware/runtime flags
-remain managed defaults until measurements justify user-facing controls. Warm
+remain managed defaults until measurements justify user-facing controls, with
+one bounded exception: managed llama.cpp context size is durable and selectable
+as 16,384, 32,768 (default), 65,536, or 131,072 tokens. Larger values allocate
+more RAM and VRAM; values below the prompt length cannot fit a request. This
+setting becomes `--ctx-size` only for the app-owned process, while external
+llama.cpp and Ollama retain full ownership of their context configuration. Warm
 managed requests do not repeat readiness and model-list probes after a
 successful load.
 
@@ -85,6 +90,7 @@ The llama.cpp provider manages:
 - health checks
 - model load errors
 - stderr capture for diagnostics
+- saved context-size launch allocation with a reviewed finite catalog
 - GPU/VRAM fit warnings where practical
 - timeout and crash handling
 

@@ -106,7 +106,6 @@ func buildBuiltinPatternCatalog() []PatternDefinition {
 	}
 	definitions = append(definitions, generateCatalogPatterns()...)
 	definitions = append(definitions, PromotedBuiltinPatternDefinitions()...)
-	definitions = append(definitions, loadCuratedBuiltinPatterns()...)
 	return definitions
 }
 
@@ -184,12 +183,13 @@ func (c Curve) Preview(intervalMillis int64) []CurvePoint {
 	return points
 }
 
-// UsesExactImportedCurve marks dense imported curves exempt from generated-catalog budgets.
+// UsesExactImportedCurve marks the small explicit allowlist of hardware-accepted
+// timing exceptions. A bulk-imported filename is never sufficient evidence.
 func UsesExactImportedCurve(definition PatternDefinition) bool {
-	if slices.Contains(definition.Tags, TagCurated) {
-		return true
+	if !slices.Contains(definition.Tags, TagCurated) {
+		return false
 	}
-	return strings.HasPrefix(string(definition.ID), "curated-")
+	return definition.ID == PatternHardAndRegular || definition.ID == PatternPlayfulJerk
 }
 
 // BuiltinPatternDefinitions returns the parametrically generated catalog.
@@ -832,7 +832,7 @@ func mustFitCatalog(definition PatternDefinition) PatternDefinition {
 		normalized.Points = scalePointTimes(normalized.Points, normalized.CycleMillis, nextDuration)
 		normalized.CycleMillis = nextDuration
 	}
-	panic("generated pattern could not satisfy motion budgets")
+	panic(fmt.Sprintf("pattern %q could not satisfy motion budgets", definition.ID))
 }
 
 func reversalGap(points []CurvePoint) int64 {

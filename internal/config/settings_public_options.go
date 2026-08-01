@@ -47,6 +47,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LlamaCPPModeManaged,
 			LlamaCPPModeExternal,
 		},
+		LlamaCPPContextSizes: LlamaCPPContextSizes(),
 		LLMReasoningModes: []string{
 			LLMReasoningOff,
 			LLMReasoningAuto,

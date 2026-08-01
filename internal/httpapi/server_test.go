@@ -332,6 +332,7 @@ func TestSettingsAPIReadsAndSavesSettings(t *testing.T) {
 		"llm": {
 			"provider": "ollama",
 			"llama_cpp_base_url": "http://127.0.0.1:8080/",
+			"llama_cpp_context_size": 65536,
 			"ollama_base_url": "http://127.0.0.1:11434/",
 			"model": "test-model",
 			"prompt_set": "magichandy_motion_v1",
@@ -363,6 +364,9 @@ func TestSettingsAPIReadsAndSavesSettings(t *testing.T) {
 	}
 	if settings.LLM.Provider != config.LLMProviderOllama || settings.LLM.Model != "test-model" {
 		t.Fatalf("LLM settings were not saved: %+v", settings.LLM)
+	}
+	if settings.LLM.LlamaCPPContextSize != 65536 {
+		t.Fatalf("llama.cpp context size = %d, want saved 65536", settings.LLM.LlamaCPPContextSize)
 	}
 	if strings.HasSuffix(settings.LLM.OllamaBaseURL, "/") {
 		t.Fatalf("Ollama URL should be normalized without trailing slash: %q", settings.LLM.OllamaBaseURL)
