@@ -245,7 +245,7 @@ func TTSTonePresets() []string {
 	}
 }
 
-// ttsDeliveryFraming closes every built-in tone preset. An instruction-following
+// ttsDeliveryFraming closes most built-in tone presets. An instruction-following
 // TTS model reads a bare emotion adjective as a cue to act the emotion out, which
 // is why the presets used to arrive as caricature: "excited" became shouting and
 // "commanding" became an announcer. Each preset now names the mechanics that
@@ -253,21 +253,46 @@ func TTSTonePresets() []string {
 // shared clause asks for those mechanics delivered straight.
 const ttsDeliveryFraming = " Sound like a real person talking to one listener in the same room, not a performance or an announcement."
 
+// ttsAuthorityFraming replaces it for Commanding, the one preset the shared
+// clause worked against: "not an announcement" reads as a cue to back off, and
+// backing off is the whole failure mode being corrected there.
+const ttsAuthorityFraming = " Sound like a real person who is used to being listened to, speaking to one listener in the same room."
+
+// Three rules hold across every preset below, learned from Commanding arriving
+// in an audibly foreign accent on one seed and sounding timid on the rest.
+//
+// Never ask for level or flat pitch. English declaratives close on a falling
+// contour; a level close is the prosody of a syllable-timed language, so asking
+// for one pushes a multilingual model toward accented English and can land there
+// outright on an unlucky seed. It also costs the tone its conviction, since a
+// sentence that never resolves downward sounds tentative. Where a preset needs
+// to rule out uptalk, the instruction is "falling", never "flat".
+//
+// Never ask for loose, slurred, or reduced articulation. Consonant precision is
+// one of the strongest accent cues a synthesizer has, so relaxing it invites the
+// same drift. Lightness belongs in pace and pitch, not in diction.
+//
+// Shape the pitch range rather than moving the whole voice. "Lifted pitch" or
+// "low pitch" as a baseline shift changes the apparent speaker -- raising it thins
+// the voice toward sounding younger, which is its own version of the timidity
+// problem. Ask for movement within the range instead: wider on stressed words,
+// gentler across a phrase.
+
 // ResolveTTSTonePrompt maps a saved preset to the instruction sent only to
 // instruction-capable TTS providers. Natural intentionally resolves empty so
 // existing Faster Qwen installations retain their previous behavior.
 func ResolveTTSTonePrompt(settings VoiceSettings) string {
 	switch settings.TTSTonePreset {
 	case TTSToneWarm:
-		return "Speak quietly and close to the microphone at an unhurried pace, with a relaxed low pitch and small, easy pitch movement. Let phrases settle at the end rather than lifting." + ttsDeliveryFraming
+		return "Speak quietly and close to the microphone at an unhurried pace, relaxed and unforced. Let each phrase fall softly at the end rather than lifting, and keep the words themselves clear." + ttsDeliveryFraming
 	case TTSTonePlayful:
-		return "Speak lightly and a little quicker than normal, with a smile in the voice, loose articulation, and small lifts at the ends of phrases. Keep the volume conversational." + ttsDeliveryFraming
+		return "Speak lightly and a little quicker than normal, with a smile in the voice and clear, easy diction. Let the pitch lift here and there inside a phrase rather than at the end of every one, and keep the volume conversational." + ttsDeliveryFraming
 	case TTSToneTender:
-		return "Speak softly and slowly at low volume, close to the microphone, with audible easy breath between phrases and very little pitch movement." + ttsDeliveryFraming
+		return "Speak softly and slowly at low volume, close to the microphone, with easy audible breath between phrases. Let each phrase fall gently at the end." + ttsDeliveryFraming
 	case TTSToneCommanding:
-		return "Speak at steady moderate volume with a low, level pitch and clean articulation. Pause briefly before the words that matter and let each sentence land flat instead of rising." + ttsDeliveryFraming
+		return "Speak with settled authority. Drop the pitch firmly at the end of every sentence so each one resolves rather than hangs. Give the words that matter more weight and volume than the words around them, and pause briefly before them. Keep the pace deliberate and unhurried, at a full chest-toned conversational volume: certain, not loud." + ttsAuthorityFraming
 	case TTSToneExcited:
-		return "Speak briskly with a lifted pitch and wider pitch movement, a little louder than conversational, keeping every word clearly articulated rather than rushed together." + ttsDeliveryFraming
+		return "Speak briskly and a little louder than conversational, with wide pitch movement that reaches up on the stressed words and still comes down at the end of each sentence. Keep every word clearly articulated rather than rushed together." + ttsDeliveryFraming
 	case TTSToneCustom:
 		return strings.TrimSpace(settings.TTSTonePrompt)
 	default:
