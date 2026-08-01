@@ -180,7 +180,10 @@ MagicHandy sends:
 ```
 
 The managed Faster Qwen wrapper also accepts `"seed": 1337` and an optional
-`"instruct": "Speak in a warm, intimate tone."`. The Go adapter adds these
+`"instruct": "Speak quietly and close to the microphone at an unhurried pace."`.
+The built-in tone presets are written this way on purpose: naming the delivery
+mechanics (volume, pace, pitch range, mic distance, breath) reads better than a
+bare emotion adjective, which the model tends to act out. The Go adapter adds these
 nonstandard fields only for that provider.
 
 `model` and `voice` may be omitted when the server does not require them. The

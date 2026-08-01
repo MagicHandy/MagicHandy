@@ -245,21 +245,29 @@ func TTSTonePresets() []string {
 	}
 }
 
+// ttsDeliveryFraming closes every built-in tone preset. An instruction-following
+// TTS model reads a bare emotion adjective as a cue to act the emotion out, which
+// is why the presets used to arrive as caricature: "excited" became shouting and
+// "commanding" became an announcer. Each preset now names the mechanics that
+// produce the tone -- volume, pace, pitch range, mic distance, breath -- and this
+// shared clause asks for those mechanics delivered straight.
+const ttsDeliveryFraming = " Sound like a real person talking to one listener in the same room, not a performance or an announcement."
+
 // ResolveTTSTonePrompt maps a saved preset to the instruction sent only to
 // instruction-capable TTS providers. Natural intentionally resolves empty so
 // existing Faster Qwen installations retain their previous behavior.
 func ResolveTTSTonePrompt(settings VoiceSettings) string {
 	switch settings.TTSTonePreset {
 	case TTSToneWarm:
-		return "Speak in a warm, intimate tone with gentle pacing and natural emotional variation."
+		return "Speak quietly and close to the microphone at an unhurried pace, with a relaxed low pitch and small, easy pitch movement. Let phrases settle at the end rather than lifting." + ttsDeliveryFraming
 	case TTSTonePlayful:
-		return "Speak in a playful, teasing tone with lively rhythm and expressive emphasis."
+		return "Speak lightly and a little quicker than normal, with a smile in the voice, loose articulation, and small lifts at the ends of phrases. Keep the volume conversational." + ttsDeliveryFraming
 	case TTSToneTender:
-		return "Speak softly in a tender, reassuring tone with calm pacing."
+		return "Speak softly and slowly at low volume, close to the microphone, with audible easy breath between phrases and very little pitch movement." + ttsDeliveryFraming
 	case TTSToneCommanding:
-		return "Speak in a confident, commanding tone with deliberate pacing and clear emphasis."
+		return "Speak at steady moderate volume with a low, level pitch and clean articulation. Pause briefly before the words that matter and let each sentence land flat instead of rising." + ttsDeliveryFraming
 	case TTSToneExcited:
-		return "Speak with excited, energetic delivery, varied pitch, and brisk but intelligible pacing."
+		return "Speak briskly with a lifted pitch and wider pitch movement, a little louder than conversational, keeping every word clearly articulated rather than rushed together." + ttsDeliveryFraming
 	case TTSToneCustom:
 		return strings.TrimSpace(settings.TTSTonePrompt)
 	default:
