@@ -1,4 +1,4 @@
-// Command import-curated-patterns loads generated .mhpattern.json files into the local library.
+// Command import-curated-patterns explicitly loads generated review files into a local library.
 package main
 
 import (
@@ -15,10 +15,15 @@ import (
 func main() {
 	source := flag.String("source", "", "directory containing .mhpattern.json files")
 	dataDir := flag.String("data-dir", "", "MagicHandy data directory")
+	allowExperimental := flag.Bool("allow-experimental", false, "acknowledge that generated clips may not be hardware-approved")
 	flag.Parse()
 
 	if strings.TrimSpace(*source) == "" {
 		fmt.Fprintln(os.Stderr, "source directory is required")
+		os.Exit(2)
+	}
+	if !*allowExperimental {
+		fmt.Fprintln(os.Stderr, "refusing to import generated review clips without -allow-experimental")
 		os.Exit(2)
 	}
 

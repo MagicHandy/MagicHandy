@@ -75,18 +75,22 @@ existing combination, state, speed-band, engine, and transport check. `stop`
 remains unconditionally safe, and conservative exact Chat Stop phrases bypass
 the model in every built-in prompt language.
 
-A standalone direct partner-action imperative such as `fuck me`, `stroke me`,
-`jerk me off`, or `ride me` is also a positive `start` request when motion is
-stopped. The matcher requires the action at the beginning of the normalized
-turn and accepts only bounded motion qualifiers or direct continuations.
-Negated requests, quoted wording, definitions, stories, and conversational
-expletives such as `well, fuck me` remain inert. If the model returns a valid
-reply with no motion or `action:none` for one of those authorized turns,
-deterministic recovery adds only `action:start`. Recovery is disabled when
-model motion is off, motion is running or paused, or the input is an Autopilot
-decision. The semantic start still goes through normal engine admission,
-target normalization, configured speed/range limits, Stop epochs, and the
-selected transport; it is not a private motion path.
+A standalone embodied partner-action request such as `fuck me`, `suck me`,
+`kiss it`, `stroke me`, or `ride me` can grant current-turn permission for a
+`start` from stopped or a `target` from running even when it does not mention
+the device. That permission is not a
+deterministic instruction to move: the model decides from the current wording
+and conversation whether to return `start` or no motion. The backend never
+synthesizes an omitted start. Ordinary chat retains stochastic model sampling
+(`temperature=0.3`, `top_p=0.95`), so repeated equivalent turns can produce
+different model-owned action/no-action choices; there is no backend coin flip
+or phrase-to-action ruleset. The matcher's only role is to prevent an otherwise
+valid model command from exceeding the user's current-turn authority; negated
+requests, quoted wording, definitions, stories, and conversational expletives
+such as `well, fuck me` remain inert. A model-selected semantic start still
+passes normal engine admission, target normalization, configured speed/range
+limits, Stop epochs, and the selected transport; it is not a private motion
+path.
 
 Each interactive turn also receives one authoritative runtime snapshot:
 stopped/running/paused state, current pattern or program, current speed and

@@ -85,12 +85,12 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	for _, choice := range gated {
 		gatedIDs[choice.ID] = true
 	}
-	for _, id := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut} {
+	for _, id := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, "curated-fast-drive-20"} {
 		if gatedIDs[string(id)] {
 			t.Fatalf("experimental pattern %q leaked into the default catalog", id)
 		}
 	}
-	for _, id := range []motion.PatternID{motion.PatternRocking, motion.PatternFlutter, motion.PatternHighLowBlocks, motion.PatternHardAndRegular, motion.PatternPlayfulJerk} {
+	for _, id := range []motion.PatternID{motion.PatternRocking, motion.PatternFlutter, motion.PatternHighLowBlocks, motion.PatternHardAndRegular, motion.PatternPlayfulJerk, "curated-easy-drive-4"} {
 		if !gatedIDs[string(id)] {
 			t.Fatalf("accepted pattern %q was hidden by the experimental gate", id)
 		}
@@ -104,7 +104,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	for _, choice := range open {
 		found[choice.ID] = true
 	}
-	for _, want := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut} {
+	for _, want := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, "curated-fast-drive-20"} {
 		if !found[string(want)] {
 			t.Fatalf("experimental pattern %q missing with the gate enabled", want)
 		}

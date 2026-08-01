@@ -23,6 +23,8 @@ const (
 	// ProgramFileSchema is the share-file schema for one finite program.
 	ProgramFileSchema = "magichandy.program.v1"
 
+	// maxPatterns limits user-owned rows; built-ins are reconciled separately
+	// and must not consume the user's authoring/import capacity.
 	maxPatterns      = 250
 	maxPrograms      = 100
 	maxPatternPoints = 256

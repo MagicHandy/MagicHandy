@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-01, managed context control and pattern quarantine
+## Snapshot — 2026-08-01, model-owned chat motion and generated-pattern normalization
 
 ### Goal 1: Maintainability
 
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,945,792 bytes plain and 16,410,112 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
-| Cold start to serving UI | < 500 ms | **Unmeasured** | The prior 679 / 282 / 287 ms sample used a now-retired managed NeuTTS configuration. Scripted TTS servers are optional child processes and are not part of core readiness, but schema-v2 startup still needs a fresh server-side measurement in Phase 16. |
+| Binary size | < 30 MB | **Met** | Current tree: 23,496,192 bytes plain and 16,949,248 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; restoring the embedded generated catalog adds 545,792 / 534,528 bytes and remains well below 30 MB. |
+| Cold start to serving UI | < 500 ms | **Met** | A fresh isolated-data launch of the current stripped binary listened in 107.0 ms and returned `/healthz` in 139.1 ms, including process-spawn and loopback-request overhead. No device, model, or voice worker was started. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -92,6 +92,9 @@ supports named area focus, and bounds explicit pattern variation.
 Opted-in chat voice now also receives bounded persona/anatomy context, strict
 per-session model mood, and three canonical recent assistant lines while
 utility remains byte-identical and all motion gates remain unchanged.
+Direct embodied chat wording grants bounded current-turn permission, but the
+model now owns the action/no-action choice; deterministic code no longer
+synthesizes an omitted start.
 
 ## Watch List
 
@@ -132,6 +135,36 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-08-01** - Restored model ownership of embodied chat motion and closed
+  two follow-on defects in the bulk pattern import. Read-only inspection of the
+  active session showed `Fuck me` produced a model-authored start, while `Suck
+  me` and `kiss it` produced no motion and never entered the engine. The prompt
+  and positive permission matcher now understand those embodied requests, but
+  the stopped-state omitted-motion fallback was removed: the model chooses
+  `start`, `target`, or no action, while negation/meta-conversation, capability,
+  state, speed/range, engine, Stop-epoch, and transport gates remain
+  deterministic. Ordinary chat retains nonzero-temperature/top-p sampling, so
+  the choice can vary without introducing a backend coin flip. Two isolated
+  live runs against the installed Gemma/llama.cpp model selected starts for all
+  three inputs without an engine or transport.
+  The live evaluator accepts the managed runner's backend-reported fallback
+  port instead of assuming 8080. Separately, all 171 Rockfire files remain
+  active through a synchronized, test-enforced v3 manifest and ordinary catalog
+  controls: 165 unsafe source curves are resampled, low-prominence reversals are
+  removed, and 170 are visibly experimental while `Easy Drive 4` remains
+  normally labeled. No `curated-*` filename receives an exact-timing exemption.
+  The relabel tool is repository-relative, Python generation is offline-only,
+  and the Go bulk import requires explicit experimental acknowledgment.
+  Plain/stripped zero-CGo binaries are 23,496,192 / 16,949,248 bytes
+  (+545,792 / +534,528 from the quarantine tree). A fresh isolated launch
+  listened in 107.0 ms and returned `/healthz` in 139.1 ms. The Pattern Library
+  again exposes `experimental` as a visible/filterable review status instead of
+  hiding it with implementation-only tags; the canonical web
+  build is 1,535,379 raw / 756,133 gzip bytes (-15 / -11). Full Go tests, vet,
+  golangci-lint, all 357 frontend tests,
+  typecheck, production build, script checks, and live Gemma evaluation pass.
+  Local race execution remains unavailable because `gcc` is absent; CI retains
+  the mandatory race gate. No hardware command was issued.
 - **2026-08-01** - Made managed llama.cpp context allocation explicit and
   quarantined a pattern-catalog safety regression. Settings > Model now offers
   backend-reviewed 16,384/32,768/65,536/131,072-token values only for the

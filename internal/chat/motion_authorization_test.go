@@ -61,14 +61,23 @@ func TestDirectPartnerActionCommandsAuthorizeOnlyClearStarts(t *testing.T) {
 	for _, message := range []string{
 		"Fuck me",
 		"Please fuck me",
+		"Could you suck me?",
+		"I want you to kiss it",
 		"Fuck me harder",
 		"Fuck me and talk to me",
 		"Stroke me gently",
 		"Jerk me off",
 		"Ride me however you want",
+		"Suck me",
+		"Suck it gently",
+		"kiss it",
+		"Lick it slowly",
 	} {
 		if !userAuthorizesMotion(message, MotionActionStart) {
 			t.Errorf("direct partner-action start was refused: %q", message)
+		}
+		if !userAuthorizesMotion(message, MotionActionTarget) {
+			t.Errorf("direct partner-action target was refused: %q", message)
 		}
 	}
 
@@ -78,6 +87,8 @@ func TestDirectPartnerActionCommandsAuthorizeOnlyClearStarts(t *testing.T) {
 		"They said fuck me in the story",
 		"Tell me what fuck me means",
 		"Say fuck me",
+		"Tell me to say suck me",
+		"They wrote kiss it in the story",
 		"Don't fuck me",
 		"I do not want you to stroke me",
 		"Should I say fuck me?",

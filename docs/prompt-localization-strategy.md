@@ -132,10 +132,12 @@ running local model:
 go test -tags liveeval ./internal/chat -run TestLivePromptLocalizationGemma -v
 ```
 
-Prerequisite: an OpenAI-compatible llama.cpp server at
-`http://127.0.0.1:8080`. The test discovers the loaded model through
-`/v1/models`. It creates no motion engine or transport and therefore cannot send
-a device command.
+Prerequisite: an OpenAI-compatible llama.cpp server. The evaluator defaults to
+`http://127.0.0.1:8080`; when managed mode selects a fallback port, set
+`MAGICHANDY_LIVE_LLAMA_URL` to the backend-reported `base_url` from
+`GET /api/llm/status`. The test discovers the loaded model through `/v1/models`.
+It creates no motion engine or transport and therefore cannot send a device
+command.
 
 The live test exercises prompt composition, provider output, strict parsing,
 and repair. It does not call `Service.Complete`, pin a model artifact hash, or

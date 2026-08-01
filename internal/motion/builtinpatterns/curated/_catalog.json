@@ -1,1826 +1,693 @@
 {
-  "schema": "magichandy.curated.catalog.v1",
-  "segment_ms_max": 10000,
-  "target_total": 200,
-  "upstream_builtin_count": 29,
+  "schema": "magichandy.generated-pattern-catalog.v3",
+  "status_policy": "runtime-budget-audit",
+  "normal_speed_controls": true,
+  "reason": "Generated clips remain available; problematic curves are experimental, unsafe source timing is resampled, and every curve passes normal catalog budgets without a bulk exemption.",
   "pattern_count": 171,
   "patterns": [
     {
-      "file": "blowjob-finish-finisher-fast-v2-blowjob-finisher-v2-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "blowjob-finisher-v2",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v2-blowjob-finisher-v2-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "blowjob-finisher-v2",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v2-blowjob-finisher-v2-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "blowjob-finisher-v2",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v2-blowjob-finisher-v2-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "blowjob-finisher-v2",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v2-blowjob-finisher-v2-s05.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "blowjob-finisher-v2",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v3-blowjob-finisher-v3-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "blowjob-finisher-v3",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v3-blowjob-finisher-v3-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "blowjob-finisher-v3",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v3-blowjob-finisher-v3-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "blowjob-finisher-v3",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v3-blowjob-finisher-v3-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "blowjob-finisher-v3",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v3-blowjob-finisher-v3-s07.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 3.2s \u00b7 Part 7/7",
-      "source": "blowjob-finisher-v3",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v4-blowjob-finisher-v4-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "blowjob-finisher-v4",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v4-blowjob-finisher-v4-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "blowjob-finisher-v4",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v4-blowjob-finisher-v4-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "blowjob-finisher-v4",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v4-blowjob-finisher-v4-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "blowjob-finisher-v4",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v4-blowjob-finisher-v4-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "blowjob-finisher-v4",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 1/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 2/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 3/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 4/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 6/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s07.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 7/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s08.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 8/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s09.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 9/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s10.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 10/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-fast-v5-blowjob-finisher-v5-s12.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 12/13",
-      "source": "blowjob-finisher-v5",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s05.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-finish-finisher-very-fast-blowjob-finisher-s07.mhpattern.json",
-      "name": "Blowjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 5.1s \u00b7 Part 7/7",
-      "source": "blowjob-finisher",
-      "pose": "blowjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "blowjob-full-flow-fast-v2-blowjobfull-v2-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "blowjobfull-v2",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-full-flow-fast-v2-blowjobfull-v2-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "blowjobfull-v2",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-full-flow-fast-v2-blowjobfull-v2-s05.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "blowjobfull-v2",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-full-flow-fast-v2-blowjobfull-v2-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "blowjobfull-v2",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-full-flow-medium-blowjobfull-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Medium \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "blowjobfull",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-full-flow-medium-blowjobfull-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Medium \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "blowjobfull",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-full-flow-medium-blowjobfull-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Full \u00b7 Flow \u00b7 Medium \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "blowjobfull",
-      "pose": "blowjob",
-      "zone": "full",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-bjtip-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "bjtip",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-bjtip-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "bjtip",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-bjtip-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "bjtip",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-bjtip-s05.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "bjtip",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-bjtip-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "bjtip",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-v2-bjtip-v2-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/10",
-      "source": "bjtip-v2",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-v2-bjtip-v2-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 3/10",
-      "source": "bjtip-v2",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-v2-bjtip-v2-s04.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 4/10",
-      "source": "bjtip-v2",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-v2-bjtip-v2-s05.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 5/10",
-      "source": "bjtip-v2",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-v2-bjtip-v2-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 6/10",
-      "source": "bjtip-v2",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-fast-v2-bjtip-v2-s09.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 9/10",
-      "source": "bjtip-v2",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s01.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 1/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s02.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 2/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s03.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 3/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s05.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 5/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s06.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 6/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s07.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 7/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s10.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 10/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s11.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 11/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s12.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 12/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "blowjob-tip-flow-medium-v3-bjtip-v3-s13.mhpattern.json",
-      "name": "Blowjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 v3 \u00b7 5.1s \u00b7 Part 13/13",
-      "source": "bjtip-v3",
-      "pose": "blowjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "cowgirl-deep-fast-medium-cowgirlfast-s01.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Fast \u00b7 Medium \u00b7 10.0s \u00b7 Part 1/6",
-      "source": "cowgirlfast",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "fast",
-      "speed": "medium"
-    },
-    {
-      "file": "cowgirl-deep-fast-medium-cowgirlfast-s02.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Fast \u00b7 Medium \u00b7 10.0s \u00b7 Part 2/6",
-      "source": "cowgirlfast",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "fast",
-      "speed": "medium"
-    },
-    {
-      "file": "cowgirl-deep-fast-medium-cowgirlfast-s03.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Fast \u00b7 Medium \u00b7 10.0s \u00b7 Part 3/6",
-      "source": "cowgirlfast",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "fast",
-      "speed": "medium"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-cowgirlintense-s01.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "cowgirlintense",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-cowgirlintense-s02.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "cowgirlintense",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-cowgirlintense-s03.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "cowgirlintense",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-cowgirlintense-s04.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "cowgirlintense",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-cowgirlintense-s05.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "cowgirlintense",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-cowgirlintense-s06.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "cowgirlintense",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-v2-cowgirlintense-v2-s01.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/6",
-      "source": "cowgirlintense-v2",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-v2-cowgirlintense-v2-s02.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 2/6",
-      "source": "cowgirlintense-v2",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "cowgirl-deep-intense-fast-v2-cowgirlintense-v2-s03.mhpattern.json",
-      "name": "Cowgirl \u00b7 Deep \u00b7 Intense \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 3/6",
-      "source": "cowgirlintense-v2",
-      "pose": "cowgirl",
-      "zone": "deep",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-edge-edging-fast-v2-handjob-edging-v2-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "handjob-edging-v2",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-edge-edging-fast-v2-handjob-edging-v2-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "handjob-edging-v2",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-edge-edging-fast-v2-handjob-edging-v2-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "handjob-edging-v2",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-edge-edging-fast-v2-handjob-edging-v2-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Fast \u00b7 v2 \u00b7 3.3s \u00b7 Part 7/7",
-      "source": "handjob-edging-v2",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-edge-edging-medium-handjob-edging-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Medium \u00b7 10.0s \u00b7 Part 3/6",
-      "source": "handjob-edging",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-edge-edging-medium-handjob-edging-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Medium \u00b7 10.0s \u00b7 Part 4/6",
-      "source": "handjob-edging",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-edge-edging-medium-handjob-edging-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Edge \u00b7 Edging \u00b7 Medium \u00b7 10.0s \u00b7 Part 5/6",
-      "source": "handjob-edging",
-      "pose": "handjob",
-      "zone": "edge",
-      "style": "edging",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v3-handjob-finisher-v3-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "handjob-finisher-v3",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v3-handjob-finisher-v3-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "handjob-finisher-v3",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v3-handjob-finisher-v3-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 6/7",
-      "source": "handjob-finisher-v3",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v4-handjob-finisher-v4-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "handjob-finisher-v4",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v4-handjob-finisher-v4-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "handjob-finisher-v4",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v4-handjob-finisher-v4-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "handjob-finisher-v4",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v4-handjob-finisher-v4-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "handjob-finisher-v4",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v4-handjob-finisher-v4-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v4 \u00b7 4.2s \u00b7 Part 7/7",
-      "source": "handjob-finisher-v4",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v5-handjob-finisher-v5-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v5 \u00b7 10.0s \u00b7 Part 4/8",
-      "source": "handjob-finisher-v5",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 1/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 3/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 5/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 7/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s08.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 8/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s09.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 9/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-fast-v6-handjob-finisher-v6-s11.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 11/12",
-      "source": "handjob-finisher-v6",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-handjob-finisher-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 1/6",
-      "source": "handjob-finisher",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-v2-handjob-finisher-v2-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "handjob-finisher-v2",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-v2-handjob-finisher-v2-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 2/7",
-      "source": "handjob-finisher-v2",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-v2-handjob-finisher-v2-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 3/7",
-      "source": "handjob-finisher-v2",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-v2-handjob-finisher-v2-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "handjob-finisher-v2",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-v2-handjob-finisher-v2-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "handjob-finisher-v2",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-finish-finisher-very-fast-v2-handjob-finisher-v2-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Finish \u00b7 Finisher \u00b7 Very Fast \u00b7 v2 \u00b7 3.6s \u00b7 Part 7/7",
-      "source": "handjob-finisher-v2",
-      "pose": "handjob",
-      "zone": "finish",
-      "style": "finisher",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v10-handjob-base-v10-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v10 \u00b7 10.0s \u00b7 Part 2/10",
-      "source": "handjob-base-v10",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v10-handjob-base-v10-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v10 \u00b7 10.0s \u00b7 Part 6/10",
-      "source": "handjob-base-v10",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v11-handjob-base-v11-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v11 \u00b7 10.0s \u00b7 Part 1/12",
-      "source": "handjob-base-v11",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v11-handjob-base-v11-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v11 \u00b7 10.0s \u00b7 Part 5/12",
-      "source": "handjob-base-v11",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v11-handjob-base-v11-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v11 \u00b7 10.0s \u00b7 Part 7/12",
-      "source": "handjob-base-v11",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v11-handjob-base-v11-s10.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v11 \u00b7 10.0s \u00b7 Part 10/12",
-      "source": "handjob-base-v11",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-fast-v9-handjob-base-v9-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Fast \u00b7 v9 \u00b7 10.0s \u00b7 Part 1/7",
-      "source": "handjob-base-v9",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-base-medium-v2-handjob-base-v2-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v2 \u00b7 10.0s \u00b7 Part 6/6",
-      "source": "handjob-base-v2",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v4-handjob-base-v4-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v4 \u00b7 10.0s \u00b7 Part 7/11",
-      "source": "handjob-base-v4",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v5-handjob-base-v5-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v5 \u00b7 10.0s \u00b7 Part 5/13",
-      "source": "handjob-base-v5",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v5-handjob-base-v5-s11.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v5 \u00b7 10.0s \u00b7 Part 11/13",
-      "source": "handjob-base-v5",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v6-handjob-base-v6-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v6 \u00b7 10.0s \u00b7 Part 6/6",
-      "source": "handjob-base-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v7-handjob-base-v7-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v7 \u00b7 10.0s \u00b7 Part 2/6",
-      "source": "handjob-base-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v7-handjob-base-v7-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v7 \u00b7 10.0s \u00b7 Part 3/6",
-      "source": "handjob-base-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v7-handjob-base-v7-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v7 \u00b7 10.0s \u00b7 Part 4/6",
-      "source": "handjob-base-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-base-medium-v8-handjob-base-v8-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Base \u00b7 Medium \u00b7 v8 \u00b7 10.0s \u00b7 Part 3/8",
-      "source": "handjob-base-v8",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "base",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-intense-fast-v2-handjob-full-intense-v2-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 6/6",
-      "source": "handjob-full-intense-v2",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v3-handjob-full-intense-v3-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v3 \u00b7 10.0s \u00b7 Part 1/9",
-      "source": "handjob-full-intense-v3",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v4-handjob-full-intense-v4-s09.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 9/12",
-      "source": "handjob-full-intense-v4",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v4-handjob-full-intense-v4-s10.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v4 \u00b7 10.0s \u00b7 Part 10/12",
-      "source": "handjob-full-intense-v4",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v6-handjob-full-intense-v6-s09.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v6 \u00b7 10.0s \u00b7 Part 9/13",
-      "source": "handjob-full-intense-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 10.0s \u00b7 Part 1/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 10.0s \u00b7 Part 5/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s10.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 10.0s \u00b7 Part 10/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s11.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 10.0s \u00b7 Part 11/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s12.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 10.0s \u00b7 Part 12/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s13.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 10.0s \u00b7 Part 13/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-fast-v7-handjob-full-intense-v7-s14.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Fast \u00b7 v7 \u00b7 8.8s \u00b7 Part 14/14",
-      "source": "handjob-full-intense-v7",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-full-intense-medium-handjob-full-intense-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Medium \u00b7 10.0s \u00b7 Part 4/6",
-      "source": "handjob-full-intense",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-intense-medium-v5-handjob-full-intense-v5-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Intense \u00b7 Medium \u00b7 v5 \u00b7 10.0s \u00b7 Part 2/13",
-      "source": "handjob-full-intense-v5",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "intense",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-slow-medium-v5-handjob-full-slow-v5-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Medium \u00b7 v5 \u00b7 10.0s \u00b7 Part 3/13",
-      "source": "handjob-full-slow-v5",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-full-slow-slow-handjob-full-slow-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 10.0s \u00b7 Part 3/11",
-      "source": "handjob-full-slow",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-handjob-full-slow-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 10.0s \u00b7 Part 4/11",
-      "source": "handjob-full-slow",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-handjob-full-slow-s08.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 10.0s \u00b7 Part 8/11",
-      "source": "handjob-full-slow",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v3-handjob-full-slow-v3-s09.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v3 \u00b7 10.0s \u00b7 Part 9/12",
-      "source": "handjob-full-slow-v3",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v4-handjob-full-slow-v4-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v4 \u00b7 10.0s \u00b7 Part 3/15",
-      "source": "handjob-full-slow-v4",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v4-handjob-full-slow-v4-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v4 \u00b7 10.0s \u00b7 Part 4/15",
-      "source": "handjob-full-slow-v4",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v4-handjob-full-slow-v4-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v4 \u00b7 10.0s \u00b7 Part 7/15",
-      "source": "handjob-full-slow-v4",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v6-handjob-full-slow-v6-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v6 \u00b7 10.0s \u00b7 Part 1/6",
-      "source": "handjob-full-slow-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v6-handjob-full-slow-v6-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v6 \u00b7 10.0s \u00b7 Part 2/6",
-      "source": "handjob-full-slow-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v6-handjob-full-slow-v6-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v6 \u00b7 10.0s \u00b7 Part 3/6",
-      "source": "handjob-full-slow-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v6-handjob-full-slow-v6-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v6 \u00b7 10.0s \u00b7 Part 4/6",
-      "source": "handjob-full-slow-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v6-handjob-full-slow-v6-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v6 \u00b7 10.0s \u00b7 Part 5/6",
-      "source": "handjob-full-slow-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-full-slow-slow-v6-handjob-full-slow-v6-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Full \u00b7 Slow \u00b7 Slow \u00b7 v6 \u00b7 10.0s \u00b7 Part 6/6",
-      "source": "handjob-full-slow-v6",
-      "pose": "handjob",
-      "zone": "full",
-      "style": "slow",
-      "speed": "slow"
-    },
-    {
-      "file": "handjob-middle-base-very-fast-handjob-base-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Mid \u00b7 Base \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 1/6",
-      "source": "handjob-base",
-      "pose": "handjob",
-      "zone": "middle",
-      "style": "base",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 1/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 3/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s06.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 6/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s09.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 9/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s10.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 10/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s11.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 11/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s12.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 12/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s14.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 10.0s \u00b7 Part 14/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-medium-v3-handjob-mlking-v3-s15.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Medium \u00b7 v3 \u00b7 3.4s \u00b7 Part 15/15",
-      "source": "handjob-mlking-v3",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-shaft-mlking-very-fast-handjob-mlking-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 2/6",
-      "source": "handjob-mlking",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-shaft-mlking-very-fast-handjob-mlking-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 3/6",
-      "source": "handjob-mlking",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-shaft-mlking-very-fast-handjob-mlking-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Very Fast \u00b7 10.0s \u00b7 Part 4/6",
-      "source": "handjob-mlking",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-shaft-mlking-very-fast-v2-handjob-mlking-v2-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 4/7",
-      "source": "handjob-mlking-v2",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-shaft-mlking-very-fast-v2-handjob-mlking-v2-s05.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Very Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 5/7",
-      "source": "handjob-mlking-v2",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-shaft-mlking-very-fast-v2-handjob-mlking-v2-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Shaft \u00b7 Milking \u00b7 Very Fast \u00b7 v2 \u00b7 3.8s \u00b7 Part 7/7",
-      "source": "handjob-mlking-v2",
-      "pose": "handjob",
-      "zone": "shaft",
-      "style": "mlking",
-      "speed": "very_fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 1/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s03.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 3/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s04.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 4/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s07.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 7/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s09.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 9/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s10.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 10/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-fast-v2-handjob-tip-v2-s11.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Fast \u00b7 v2 \u00b7 10.0s \u00b7 Part 11/12",
-      "source": "handjob-tip-v2",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "fast"
-    },
-    {
-      "file": "handjob-tip-flow-medium-handjob-tip-s01.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 10.0s \u00b7 Part 1/6",
-      "source": "handjob-tip",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
-    },
-    {
-      "file": "handjob-tip-flow-medium-handjob-tip-s02.mhpattern.json",
-      "name": "Handjob \u00b7 Tip \u00b7 Flow \u00b7 Medium \u00b7 10.0s \u00b7 Part 2/6",
-      "source": "handjob-tip",
-      "pose": "handjob",
-      "zone": "tip",
-      "style": "flow",
-      "speed": "medium"
+      "file": "easy-drive-1.mhpattern.json",
+      "name": "Easy Drive 1"
+    },
+    {
+      "file": "easy-drive-2.mhpattern.json",
+      "name": "Easy Drive 2"
+    },
+    {
+      "file": "easy-drive-3.mhpattern.json",
+      "name": "Easy Drive 3"
+    },
+    {
+      "file": "easy-drive-4.mhpattern.json",
+      "name": "Easy Drive 4"
+    },
+    {
+      "file": "easy-drive-5.mhpattern.json",
+      "name": "Easy Drive 5"
+    },
+    {
+      "file": "easy-roll-1.mhpattern.json",
+      "name": "Easy Roll 1"
+    },
+    {
+      "file": "easy-roll-10.mhpattern.json",
+      "name": "Easy Roll 10"
+    },
+    {
+      "file": "easy-roll-11.mhpattern.json",
+      "name": "Easy Roll 11"
+    },
+    {
+      "file": "easy-roll-2.mhpattern.json",
+      "name": "Easy Roll 2"
+    },
+    {
+      "file": "easy-roll-3.mhpattern.json",
+      "name": "Easy Roll 3"
+    },
+    {
+      "file": "easy-roll-4.mhpattern.json",
+      "name": "Easy Roll 4"
+    },
+    {
+      "file": "easy-roll-5.mhpattern.json",
+      "name": "Easy Roll 5"
+    },
+    {
+      "file": "easy-roll-6.mhpattern.json",
+      "name": "Easy Roll 6"
+    },
+    {
+      "file": "easy-roll-7.mhpattern.json",
+      "name": "Easy Roll 7"
+    },
+    {
+      "file": "easy-roll-8.mhpattern.json",
+      "name": "Easy Roll 8"
+    },
+    {
+      "file": "easy-roll-9.mhpattern.json",
+      "name": "Easy Roll 9"
+    },
+    {
+      "file": "easy-surge-1.mhpattern.json",
+      "name": "Easy Surge 1"
+    },
+    {
+      "file": "easy-surge-2.mhpattern.json",
+      "name": "Easy Surge 2"
+    },
+    {
+      "file": "easy-surge-3.mhpattern.json",
+      "name": "Easy Surge 3"
+    },
+    {
+      "file": "easy-surge-4.mhpattern.json",
+      "name": "Easy Surge 4"
+    },
+    {
+      "file": "easy-surge-5.mhpattern.json",
+      "name": "Easy Surge 5"
+    },
+    {
+      "file": "easy-surge-6.mhpattern.json",
+      "name": "Easy Surge 6"
+    },
+    {
+      "file": "fast-drive-1.mhpattern.json",
+      "name": "Fast Drive 1"
+    },
+    {
+      "file": "fast-drive-10.mhpattern.json",
+      "name": "Fast Drive 10"
+    },
+    {
+      "file": "fast-drive-11.mhpattern.json",
+      "name": "Fast Drive 11"
+    },
+    {
+      "file": "fast-drive-12.mhpattern.json",
+      "name": "Fast Drive 12"
+    },
+    {
+      "file": "fast-drive-13.mhpattern.json",
+      "name": "Fast Drive 13"
+    },
+    {
+      "file": "fast-drive-14.mhpattern.json",
+      "name": "Fast Drive 14"
+    },
+    {
+      "file": "fast-drive-15.mhpattern.json",
+      "name": "Fast Drive 15"
+    },
+    {
+      "file": "fast-drive-16.mhpattern.json",
+      "name": "Fast Drive 16"
+    },
+    {
+      "file": "fast-drive-17.mhpattern.json",
+      "name": "Fast Drive 17"
+    },
+    {
+      "file": "fast-drive-18.mhpattern.json",
+      "name": "Fast Drive 18"
+    },
+    {
+      "file": "fast-drive-19.mhpattern.json",
+      "name": "Fast Drive 19"
+    },
+    {
+      "file": "fast-drive-2.mhpattern.json",
+      "name": "Fast Drive 2"
+    },
+    {
+      "file": "fast-drive-20.mhpattern.json",
+      "name": "Fast Drive 20"
+    },
+    {
+      "file": "fast-drive-21.mhpattern.json",
+      "name": "Fast Drive 21"
+    },
+    {
+      "file": "fast-drive-22.mhpattern.json",
+      "name": "Fast Drive 22"
+    },
+    {
+      "file": "fast-drive-23.mhpattern.json",
+      "name": "Fast Drive 23"
+    },
+    {
+      "file": "fast-drive-24.mhpattern.json",
+      "name": "Fast Drive 24"
+    },
+    {
+      "file": "fast-drive-25.mhpattern.json",
+      "name": "Fast Drive 25"
+    },
+    {
+      "file": "fast-drive-26.mhpattern.json",
+      "name": "Fast Drive 26"
+    },
+    {
+      "file": "fast-drive-27.mhpattern.json",
+      "name": "Fast Drive 27"
+    },
+    {
+      "file": "fast-drive-28.mhpattern.json",
+      "name": "Fast Drive 28"
+    },
+    {
+      "file": "fast-drive-29.mhpattern.json",
+      "name": "Fast Drive 29"
+    },
+    {
+      "file": "fast-drive-3.mhpattern.json",
+      "name": "Fast Drive 3"
+    },
+    {
+      "file": "fast-drive-30.mhpattern.json",
+      "name": "Fast Drive 30"
+    },
+    {
+      "file": "fast-drive-31.mhpattern.json",
+      "name": "Fast Drive 31"
+    },
+    {
+      "file": "fast-drive-32.mhpattern.json",
+      "name": "Fast Drive 32"
+    },
+    {
+      "file": "fast-drive-33.mhpattern.json",
+      "name": "Fast Drive 33"
+    },
+    {
+      "file": "fast-drive-34.mhpattern.json",
+      "name": "Fast Drive 34"
+    },
+    {
+      "file": "fast-drive-35.mhpattern.json",
+      "name": "Fast Drive 35"
+    },
+    {
+      "file": "fast-drive-36.mhpattern.json",
+      "name": "Fast Drive 36"
+    },
+    {
+      "file": "fast-drive-4.mhpattern.json",
+      "name": "Fast Drive 4"
+    },
+    {
+      "file": "fast-drive-5.mhpattern.json",
+      "name": "Fast Drive 5"
+    },
+    {
+      "file": "fast-drive-6.mhpattern.json",
+      "name": "Fast Drive 6"
+    },
+    {
+      "file": "fast-drive-7.mhpattern.json",
+      "name": "Fast Drive 7"
+    },
+    {
+      "file": "fast-drive-8.mhpattern.json",
+      "name": "Fast Drive 8"
+    },
+    {
+      "file": "fast-drive-9.mhpattern.json",
+      "name": "Fast Drive 9"
+    },
+    {
+      "file": "fast-roll-1.mhpattern.json",
+      "name": "Fast Roll 1"
+    },
+    {
+      "file": "fast-roll-10.mhpattern.json",
+      "name": "Fast Roll 10"
+    },
+    {
+      "file": "fast-roll-11.mhpattern.json",
+      "name": "Fast Roll 11"
+    },
+    {
+      "file": "fast-roll-12.mhpattern.json",
+      "name": "Fast Roll 12"
+    },
+    {
+      "file": "fast-roll-13.mhpattern.json",
+      "name": "Fast Roll 13"
+    },
+    {
+      "file": "fast-roll-14.mhpattern.json",
+      "name": "Fast Roll 14"
+    },
+    {
+      "file": "fast-roll-15.mhpattern.json",
+      "name": "Fast Roll 15"
+    },
+    {
+      "file": "fast-roll-16.mhpattern.json",
+      "name": "Fast Roll 16"
+    },
+    {
+      "file": "fast-roll-17.mhpattern.json",
+      "name": "Fast Roll 17"
+    },
+    {
+      "file": "fast-roll-18.mhpattern.json",
+      "name": "Fast Roll 18"
+    },
+    {
+      "file": "fast-roll-19.mhpattern.json",
+      "name": "Fast Roll 19"
+    },
+    {
+      "file": "fast-roll-2.mhpattern.json",
+      "name": "Fast Roll 2"
+    },
+    {
+      "file": "fast-roll-20.mhpattern.json",
+      "name": "Fast Roll 20"
+    },
+    {
+      "file": "fast-roll-21.mhpattern.json",
+      "name": "Fast Roll 21"
+    },
+    {
+      "file": "fast-roll-22.mhpattern.json",
+      "name": "Fast Roll 22"
+    },
+    {
+      "file": "fast-roll-3.mhpattern.json",
+      "name": "Fast Roll 3"
+    },
+    {
+      "file": "fast-roll-4.mhpattern.json",
+      "name": "Fast Roll 4"
+    },
+    {
+      "file": "fast-roll-5.mhpattern.json",
+      "name": "Fast Roll 5"
+    },
+    {
+      "file": "fast-roll-6.mhpattern.json",
+      "name": "Fast Roll 6"
+    },
+    {
+      "file": "fast-roll-7.mhpattern.json",
+      "name": "Fast Roll 7"
+    },
+    {
+      "file": "fast-roll-8.mhpattern.json",
+      "name": "Fast Roll 8"
+    },
+    {
+      "file": "fast-roll-9.mhpattern.json",
+      "name": "Fast Roll 9"
+    },
+    {
+      "file": "fast-surge-1.mhpattern.json",
+      "name": "Fast Surge 1"
+    },
+    {
+      "file": "fast-surge-10.mhpattern.json",
+      "name": "Fast Surge 10"
+    },
+    {
+      "file": "fast-surge-11.mhpattern.json",
+      "name": "Fast Surge 11"
+    },
+    {
+      "file": "fast-surge-12.mhpattern.json",
+      "name": "Fast Surge 12"
+    },
+    {
+      "file": "fast-surge-2.mhpattern.json",
+      "name": "Fast Surge 2"
+    },
+    {
+      "file": "fast-surge-3.mhpattern.json",
+      "name": "Fast Surge 3"
+    },
+    {
+      "file": "fast-surge-4.mhpattern.json",
+      "name": "Fast Surge 4"
+    },
+    {
+      "file": "fast-surge-5.mhpattern.json",
+      "name": "Fast Surge 5"
+    },
+    {
+      "file": "fast-surge-6.mhpattern.json",
+      "name": "Fast Surge 6"
+    },
+    {
+      "file": "fast-surge-7.mhpattern.json",
+      "name": "Fast Surge 7"
+    },
+    {
+      "file": "fast-surge-8.mhpattern.json",
+      "name": "Fast Surge 8"
+    },
+    {
+      "file": "fast-surge-9.mhpattern.json",
+      "name": "Fast Surge 9"
+    },
+    {
+      "file": "gentle-drive-1.mhpattern.json",
+      "name": "Gentle Drive 1"
+    },
+    {
+      "file": "gentle-drive-2.mhpattern.json",
+      "name": "Gentle Drive 2"
+    },
+    {
+      "file": "gentle-drive-3.mhpattern.json",
+      "name": "Gentle Drive 3"
+    },
+    {
+      "file": "gentle-drive-4.mhpattern.json",
+      "name": "Gentle Drive 4"
+    },
+    {
+      "file": "gentle-drive-5.mhpattern.json",
+      "name": "Gentle Drive 5"
+    },
+    {
+      "file": "gentle-drive-6.mhpattern.json",
+      "name": "Gentle Drive 6"
+    },
+    {
+      "file": "gentle-drive-7.mhpattern.json",
+      "name": "Gentle Drive 7"
+    },
+    {
+      "file": "gentle-drive-8.mhpattern.json",
+      "name": "Gentle Drive 8"
+    },
+    {
+      "file": "gentle-roll-1.mhpattern.json",
+      "name": "Gentle Roll 1"
+    },
+    {
+      "file": "gentle-roll-2.mhpattern.json",
+      "name": "Gentle Roll 2"
+    },
+    {
+      "file": "gentle-roll-3.mhpattern.json",
+      "name": "Gentle Roll 3"
+    },
+    {
+      "file": "gentle-roll-4.mhpattern.json",
+      "name": "Gentle Roll 4"
+    },
+    {
+      "file": "gentle-roll-5.mhpattern.json",
+      "name": "Gentle Roll 5"
+    },
+    {
+      "file": "gentle-surge-1.mhpattern.json",
+      "name": "Gentle Surge 1"
+    },
+    {
+      "file": "gentle-surge-2.mhpattern.json",
+      "name": "Gentle Surge 2"
+    },
+    {
+      "file": "gentle-surge-3.mhpattern.json",
+      "name": "Gentle Surge 3"
+    },
+    {
+      "file": "intense-drive-1.mhpattern.json",
+      "name": "Intense Drive 1"
+    },
+    {
+      "file": "intense-drive-10.mhpattern.json",
+      "name": "Intense Drive 10"
+    },
+    {
+      "file": "intense-drive-11.mhpattern.json",
+      "name": "Intense Drive 11"
+    },
+    {
+      "file": "intense-drive-12.mhpattern.json",
+      "name": "Intense Drive 12"
+    },
+    {
+      "file": "intense-drive-13.mhpattern.json",
+      "name": "Intense Drive 13"
+    },
+    {
+      "file": "intense-drive-14.mhpattern.json",
+      "name": "Intense Drive 14"
+    },
+    {
+      "file": "intense-drive-15.mhpattern.json",
+      "name": "Intense Drive 15"
+    },
+    {
+      "file": "intense-drive-16.mhpattern.json",
+      "name": "Intense Drive 16"
+    },
+    {
+      "file": "intense-drive-17.mhpattern.json",
+      "name": "Intense Drive 17"
+    },
+    {
+      "file": "intense-drive-18.mhpattern.json",
+      "name": "Intense Drive 18"
+    },
+    {
+      "file": "intense-drive-19.mhpattern.json",
+      "name": "Intense Drive 19"
+    },
+    {
+      "file": "intense-drive-2.mhpattern.json",
+      "name": "Intense Drive 2"
+    },
+    {
+      "file": "intense-drive-20.mhpattern.json",
+      "name": "Intense Drive 20"
+    },
+    {
+      "file": "intense-drive-3.mhpattern.json",
+      "name": "Intense Drive 3"
+    },
+    {
+      "file": "intense-drive-4.mhpattern.json",
+      "name": "Intense Drive 4"
+    },
+    {
+      "file": "intense-drive-5.mhpattern.json",
+      "name": "Intense Drive 5"
+    },
+    {
+      "file": "intense-drive-6.mhpattern.json",
+      "name": "Intense Drive 6"
+    },
+    {
+      "file": "intense-drive-7.mhpattern.json",
+      "name": "Intense Drive 7"
+    },
+    {
+      "file": "intense-drive-8.mhpattern.json",
+      "name": "Intense Drive 8"
+    },
+    {
+      "file": "intense-drive-9.mhpattern.json",
+      "name": "Intense Drive 9"
+    },
+    {
+      "file": "intense-roll-1.mhpattern.json",
+      "name": "Intense Roll 1"
+    },
+    {
+      "file": "intense-roll-2.mhpattern.json",
+      "name": "Intense Roll 2"
+    },
+    {
+      "file": "intense-roll-3.mhpattern.json",
+      "name": "Intense Roll 3"
+    },
+    {
+      "file": "intense-roll-4.mhpattern.json",
+      "name": "Intense Roll 4"
+    },
+    {
+      "file": "intense-surge-1.mhpattern.json",
+      "name": "Intense Surge 1"
+    },
+    {
+      "file": "intense-surge-2.mhpattern.json",
+      "name": "Intense Surge 2"
+    },
+    {
+      "file": "intense-surge-3.mhpattern.json",
+      "name": "Intense Surge 3"
+    },
+    {
+      "file": "intense-surge-4.mhpattern.json",
+      "name": "Intense Surge 4"
+    },
+    {
+      "file": "intense-surge-5.mhpattern.json",
+      "name": "Intense Surge 5"
+    },
+    {
+      "file": "intense-surge-6.mhpattern.json",
+      "name": "Intense Surge 6"
+    },
+    {
+      "file": "steady-drive-1.mhpattern.json",
+      "name": "Steady Drive 1"
+    },
+    {
+      "file": "steady-drive-10.mhpattern.json",
+      "name": "Steady Drive 10"
+    },
+    {
+      "file": "steady-drive-11.mhpattern.json",
+      "name": "Steady Drive 11"
+    },
+    {
+      "file": "steady-drive-12.mhpattern.json",
+      "name": "Steady Drive 12"
+    },
+    {
+      "file": "steady-drive-13.mhpattern.json",
+      "name": "Steady Drive 13"
+    },
+    {
+      "file": "steady-drive-2.mhpattern.json",
+      "name": "Steady Drive 2"
+    },
+    {
+      "file": "steady-drive-3.mhpattern.json",
+      "name": "Steady Drive 3"
+    },
+    {
+      "file": "steady-drive-4.mhpattern.json",
+      "name": "Steady Drive 4"
+    },
+    {
+      "file": "steady-drive-5.mhpattern.json",
+      "name": "Steady Drive 5"
+    },
+    {
+      "file": "steady-drive-6.mhpattern.json",
+      "name": "Steady Drive 6"
+    },
+    {
+      "file": "steady-drive-7.mhpattern.json",
+      "name": "Steady Drive 7"
+    },
+    {
+      "file": "steady-drive-8.mhpattern.json",
+      "name": "Steady Drive 8"
+    },
+    {
+      "file": "steady-drive-9.mhpattern.json",
+      "name": "Steady Drive 9"
+    },
+    {
+      "file": "steady-roll-1.mhpattern.json",
+      "name": "Steady Roll 1"
+    },
+    {
+      "file": "steady-roll-10.mhpattern.json",
+      "name": "Steady Roll 10"
+    },
+    {
+      "file": "steady-roll-11.mhpattern.json",
+      "name": "Steady Roll 11"
+    },
+    {
+      "file": "steady-roll-12.mhpattern.json",
+      "name": "Steady Roll 12"
+    },
+    {
+      "file": "steady-roll-13.mhpattern.json",
+      "name": "Steady Roll 13"
+    },
+    {
+      "file": "steady-roll-14.mhpattern.json",
+      "name": "Steady Roll 14"
+    },
+    {
+      "file": "steady-roll-15.mhpattern.json",
+      "name": "Steady Roll 15"
+    },
+    {
+      "file": "steady-roll-2.mhpattern.json",
+      "name": "Steady Roll 2"
+    },
+    {
+      "file": "steady-roll-3.mhpattern.json",
+      "name": "Steady Roll 3"
+    },
+    {
+      "file": "steady-roll-4.mhpattern.json",
+      "name": "Steady Roll 4"
+    },
+    {
+      "file": "steady-roll-5.mhpattern.json",
+      "name": "Steady Roll 5"
+    },
+    {
+      "file": "steady-roll-6.mhpattern.json",
+      "name": "Steady Roll 6"
+    },
+    {
+      "file": "steady-roll-7.mhpattern.json",
+      "name": "Steady Roll 7"
+    },
+    {
+      "file": "steady-roll-8.mhpattern.json",
+      "name": "Steady Roll 8"
+    },
+    {
+      "file": "steady-roll-9.mhpattern.json",
+      "name": "Steady Roll 9"
+    },
+    {
+      "file": "steady-surge-1.mhpattern.json",
+      "name": "Steady Surge 1"
+    },
+    {
+      "file": "steady-surge-2.mhpattern.json",
+      "name": "Steady Surge 2"
+    },
+    {
+      "file": "steady-surge-3.mhpattern.json",
+      "name": "Steady Surge 3"
+    },
+    {
+      "file": "steady-surge-4.mhpattern.json",
+      "name": "Steady Surge 4"
+    },
+    {
+      "file": "steady-surge-5.mhpattern.json",
+      "name": "Steady Surge 5"
     }
-  ],
-  "skipped": [
-    "handjob-tip part 4: exact duplicate",
-    "blowjob-finisher-v3 part 1: curated out for catalog budget",
-    "blowjob-finisher-v5 part 5: curated out for catalog budget",
-    "blowjob-finisher-v4 part 5: curated out for catalog budget",
-    "blowjob-finisher-v3 part 5: curated out for catalog budget",
-    "blowjob-finisher-v2 part 6: curated out for catalog budget",
-    "blowjob-finisher-v5 part 11: curated out for catalog budget",
-    "blowjobfull-v2 part 2: curated out for catalog budget",
-    "blowjobfull-v2 part 3: curated out for catalog budget",
-    "blowjobfull part 1: curated out for catalog budget",
-    "blowjobfull part 5: curated out for catalog budget",
-    "blowjobfull part 6: curated out for catalog budget",
-    "bjtip-v2 part 2: curated out for catalog budget",
-    "bjtip part 3: curated out for catalog budget",
-    "bjtip-v2 part 7: curated out for catalog budget",
-    "bjtip-v2 part 8: curated out for catalog budget",
-    "bjtip-v3 part 4: curated out for catalog budget",
-    "bjtip-v3 part 8: curated out for catalog budget",
-    "bjtip-v3 part 9: curated out for catalog budget",
-    "handjob-edging-v2 part 3: curated out for catalog budget",
-    "handjob-edging-v2 part 4: curated out for catalog budget",
-    "handjob-edging-v2 part 6: curated out for catalog budget",
-    "handjob-edging part 1: curated out for catalog budget",
-    "handjob-edging part 2: curated out for catalog budget",
-    "handjob-finisher-v5 part 1: curated out for catalog budget",
-    "handjob-finisher-v3 part 1: curated out for catalog budget",
-    "handjob-finisher-v6 part 2: curated out for catalog budget",
-    "handjob-finisher-v5 part 2: curated out for catalog budget",
-    "handjob-finisher-v5 part 3: curated out for catalog budget",
-    "handjob-finisher-v4 part 3: curated out for catalog budget",
-    "handjob-finisher-v3 part 3: curated out for catalog budget",
-    "handjob-finisher-v6 part 4: curated out for catalog budget",
-    "handjob-finisher-v3 part 4: curated out for catalog budget",
-    "handjob-finisher-v5 part 5: curated out for catalog budget",
-    "handjob-finisher-v6 part 6: curated out for catalog budget",
-    "handjob-finisher-v5 part 6: curated out for catalog budget",
-    "handjob-finisher-v4 part 6: curated out for catalog budget",
-    "handjob-finisher-v5 part 7: curated out for catalog budget",
-    "handjob-finisher-v5 part 8: curated out for catalog budget",
-    "handjob-finisher-v6 part 10: curated out for catalog budget",
-    "handjob-finisher-v6 part 12: curated out for catalog budget",
-    "handjob-finisher-v2 part 6: curated out for catalog budget",
-    "handjob-base-v10 part 1: curated out for catalog budget",
-    "handjob-base-v11 part 2: curated out for catalog budget",
-    "handjob-base-v9 part 2: curated out for catalog budget",
-    "handjob-base-v11 part 3: curated out for catalog budget",
-    "handjob-base-v10 part 3: curated out for catalog budget",
-    "handjob-base-v9 part 3: curated out for catalog budget",
-    "handjob-base-v11 part 4: curated out for catalog budget",
-    "handjob-base-v10 part 4: curated out for catalog budget",
-    "handjob-base-v9 part 4: curated out for catalog budget",
-    "handjob-base-v10 part 5: curated out for catalog budget",
-    "handjob-base-v9 part 5: curated out for catalog budget",
-    "handjob-base-v11 part 6: curated out for catalog budget",
-    "handjob-base-v9 part 6: curated out for catalog budget",
-    "handjob-base-v10 part 7: curated out for catalog budget",
-    "handjob-base-v11 part 8: curated out for catalog budget",
-    "handjob-base-v10 part 8: curated out for catalog budget",
-    "handjob-base-v11 part 9: curated out for catalog budget",
-    "handjob-base-v10 part 9: curated out for catalog budget",
-    "handjob-base-v11 part 11: curated out for catalog budget",
-    "handjob-base-v11 part 12: curated out for catalog budget",
-    "handjob-base-v8 part 1: curated out for catalog budget",
-    "handjob-base-v7 part 1: curated out for catalog budget",
-    "handjob-base-v6 part 1: curated out for catalog budget",
-    "handjob-base-v5 part 1: curated out for catalog budget",
-    "handjob-base-v4 part 1: curated out for catalog budget",
-    "handjob-base-v3 part 1: curated out for catalog budget",
-    "handjob-base-v2 part 1: curated out for catalog budget",
-    "handjob-base-v8 part 2: curated out for catalog budget",
-    "handjob-base-v6 part 2: curated out for catalog budget",
-    "handjob-base-v5 part 2: curated out for catalog budget",
-    "handjob-base-v4 part 2: curated out for catalog budget",
-    "handjob-base-v3 part 2: curated out for catalog budget",
-    "handjob-base-v2 part 2: curated out for catalog budget",
-    "handjob-base-v6 part 3: curated out for catalog budget",
-    "handjob-base-v5 part 3: curated out for catalog budget",
-    "handjob-base-v4 part 3: curated out for catalog budget",
-    "handjob-base-v3 part 3: curated out for catalog budget",
-    "handjob-base-v2 part 3: curated out for catalog budget",
-    "handjob-base-v8 part 4: curated out for catalog budget",
-    "handjob-base-v6 part 4: curated out for catalog budget",
-    "handjob-base-v5 part 4: curated out for catalog budget",
-    "handjob-base-v4 part 4: curated out for catalog budget",
-    "handjob-base-v3 part 4: curated out for catalog budget",
-    "handjob-base-v2 part 4: curated out for catalog budget",
-    "handjob-base-v8 part 5: curated out for catalog budget",
-    "handjob-base-v7 part 5: curated out for catalog budget",
-    "handjob-base-v6 part 5: curated out for catalog budget",
-    "handjob-base-v4 part 5: curated out for catalog budget",
-    "handjob-base-v3 part 5: curated out for catalog budget",
-    "handjob-base-v2 part 5: curated out for catalog budget",
-    "handjob-base-v8 part 6: curated out for catalog budget",
-    "handjob-base-v7 part 6: curated out for catalog budget",
-    "handjob-base-v5 part 6: curated out for catalog budget",
-    "handjob-base-v4 part 6: curated out for catalog budget",
-    "handjob-base-v3 part 6: curated out for catalog budget",
-    "handjob-base-v8 part 7: curated out for catalog budget",
-    "handjob-base-v5 part 7: curated out for catalog budget",
-    "handjob-base-v8 part 8: curated out for catalog budget",
-    "handjob-base-v5 part 8: curated out for catalog budget",
-    "handjob-base-v4 part 8: curated out for catalog budget",
-    "handjob-base-v5 part 9: curated out for catalog budget",
-    "handjob-base-v4 part 9: curated out for catalog budget",
-    "handjob-base-v5 part 10: curated out for catalog budget",
-    "handjob-base-v4 part 10: curated out for catalog budget",
-    "handjob-base-v4 part 11: curated out for catalog budget",
-    "handjob-base-v5 part 12: curated out for catalog budget",
-    "handjob-full-intense-v6 part 1: curated out for catalog budget",
-    "handjob-full-intense-v4 part 1: curated out for catalog budget",
-    "handjob-full-intense-v2 part 1: curated out for catalog budget",
-    "handjob-full-intense-v7 part 2: curated out for catalog budget",
-    "handjob-full-intense-v6 part 2: curated out for catalog budget",
-    "handjob-full-intense-v4 part 2: curated out for catalog budget",
-    "handjob-full-intense-v3 part 2: curated out for catalog budget",
-    "handjob-full-intense-v2 part 2: curated out for catalog budget",
-    "handjob-full-intense-v7 part 3: curated out for catalog budget",
-    "handjob-full-intense-v6 part 3: curated out for catalog budget",
-    "handjob-full-intense-v4 part 3: curated out for catalog budget",
-    "handjob-full-intense-v3 part 3: curated out for catalog budget",
-    "handjob-full-intense-v2 part 3: curated out for catalog budget",
-    "handjob-full-intense-v7 part 4: curated out for catalog budget",
-    "handjob-full-intense-v6 part 4: curated out for catalog budget",
-    "handjob-full-intense-v4 part 4: curated out for catalog budget",
-    "handjob-full-intense-v3 part 4: curated out for catalog budget",
-    "handjob-full-intense-v2 part 4: curated out for catalog budget",
-    "handjob-full-intense-v6 part 5: curated out for catalog budget",
-    "handjob-full-intense-v4 part 5: curated out for catalog budget",
-    "handjob-full-intense-v3 part 5: curated out for catalog budget",
-    "handjob-full-intense-v2 part 5: curated out for catalog budget",
-    "handjob-full-intense-v7 part 6: curated out for catalog budget",
-    "handjob-full-intense-v6 part 6: curated out for catalog budget",
-    "handjob-full-intense-v4 part 6: curated out for catalog budget",
-    "handjob-full-intense-v3 part 6: curated out for catalog budget",
-    "handjob-full-intense-v7 part 7: curated out for catalog budget",
-    "handjob-full-intense-v6 part 7: curated out for catalog budget",
-    "handjob-full-intense-v4 part 7: curated out for catalog budget",
-    "handjob-full-intense-v3 part 7: curated out for catalog budget",
-    "handjob-full-intense-v7 part 8: curated out for catalog budget",
-    "handjob-full-intense-v6 part 8: curated out for catalog budget",
-    "handjob-full-intense-v4 part 8: curated out for catalog budget",
-    "handjob-full-intense-v3 part 8: curated out for catalog budget",
-    "handjob-full-intense-v7 part 9: curated out for catalog budget",
-    "handjob-full-intense-v3 part 9: curated out for catalog budget",
-    "handjob-full-intense-v6 part 10: curated out for catalog budget",
-    "handjob-full-intense-v6 part 11: curated out for catalog budget",
-    "handjob-full-intense-v4 part 11: curated out for catalog budget",
-    "handjob-full-intense-v6 part 12: curated out for catalog budget",
-    "handjob-full-intense-v6 part 13: curated out for catalog budget",
-    "handjob-full-intense-v5 part 1: curated out for catalog budget",
-    "handjob-full-intense part 1: curated out for catalog budget",
-    "handjob-full-intense part 2: curated out for catalog budget",
-    "handjob-full-intense-v5 part 3: curated out for catalog budget",
-    "handjob-full-intense part 3: curated out for catalog budget",
-    "handjob-full-intense-v5 part 4: curated out for catalog budget",
-    "handjob-full-intense-v5 part 5: curated out for catalog budget",
-    "handjob-full-intense part 5: curated out for catalog budget",
-    "handjob-full-intense-v5 part 6: curated out for catalog budget",
-    "handjob-full-intense part 6: curated out for catalog budget",
-    "handjob-full-intense-v5 part 7: curated out for catalog budget",
-    "handjob-full-intense-v5 part 8: curated out for catalog budget",
-    "handjob-full-intense-v5 part 9: curated out for catalog budget",
-    "handjob-full-intense-v5 part 10: curated out for catalog budget",
-    "handjob-full-intense-v5 part 11: curated out for catalog budget",
-    "handjob-full-intense-v5 part 12: curated out for catalog budget",
-    "handjob-full-slow-v5 part 1: curated out for catalog budget",
-    "handjob-full-slow-v5 part 2: curated out for catalog budget",
-    "handjob-full-slow-v5 part 4: curated out for catalog budget",
-    "handjob-full-slow-v5 part 5: curated out for catalog budget",
-    "handjob-full-slow-v5 part 6: curated out for catalog budget",
-    "handjob-full-slow-v5 part 7: curated out for catalog budget",
-    "handjob-full-slow-v5 part 8: curated out for catalog budget",
-    "handjob-full-slow-v5 part 9: curated out for catalog budget",
-    "handjob-full-slow-v5 part 10: curated out for catalog budget",
-    "handjob-full-slow-v5 part 11: curated out for catalog budget",
-    "handjob-full-slow-v5 part 12: curated out for catalog budget",
-    "handjob-full-slow-v4 part 1: curated out for catalog budget",
-    "handjob-full-slow-v3 part 1: curated out for catalog budget",
-    "handjob-full-slow-v2 part 1: curated out for catalog budget",
-    "handjob-full-slow part 1: curated out for catalog budget",
-    "handjob-full-slow-v4 part 2: curated out for catalog budget",
-    "handjob-full-slow-v3 part 2: curated out for catalog budget",
-    "handjob-full-slow-v2 part 2: curated out for catalog budget",
-    "handjob-full-slow part 2: curated out for catalog budget",
-    "handjob-full-slow-v3 part 3: curated out for catalog budget",
-    "handjob-full-slow-v2 part 3: curated out for catalog budget",
-    "handjob-full-slow-v3 part 4: curated out for catalog budget",
-    "handjob-full-slow-v2 part 4: curated out for catalog budget",
-    "handjob-full-slow-v4 part 5: curated out for catalog budget",
-    "handjob-full-slow-v3 part 5: curated out for catalog budget",
-    "handjob-full-slow-v2 part 5: curated out for catalog budget",
-    "handjob-full-slow part 5: curated out for catalog budget",
-    "handjob-full-slow-v4 part 6: curated out for catalog budget",
-    "handjob-full-slow-v3 part 6: curated out for catalog budget",
-    "handjob-full-slow-v2 part 6: curated out for catalog budget",
-    "handjob-full-slow part 6: curated out for catalog budget",
-    "handjob-full-slow-v3 part 7: curated out for catalog budget",
-    "handjob-full-slow-v2 part 7: curated out for catalog budget",
-    "handjob-full-slow part 7: curated out for catalog budget",
-    "handjob-full-slow-v4 part 8: curated out for catalog budget",
-    "handjob-full-slow-v3 part 8: curated out for catalog budget",
-    "handjob-full-slow-v2 part 8: curated out for catalog budget",
-    "handjob-full-slow-v4 part 9: curated out for catalog budget",
-    "handjob-full-slow-v2 part 9: curated out for catalog budget",
-    "handjob-full-slow part 9: curated out for catalog budget",
-    "handjob-full-slow-v4 part 10: curated out for catalog budget",
-    "handjob-full-slow-v3 part 10: curated out for catalog budget",
-    "handjob-full-slow-v2 part 10: curated out for catalog budget",
-    "handjob-full-slow part 10: curated out for catalog budget",
-    "handjob-full-slow-v4 part 11: curated out for catalog budget",
-    "handjob-full-slow-v3 part 11: curated out for catalog budget",
-    "handjob-full-slow-v2 part 11: curated out for catalog budget",
-    "handjob-full-slow part 11: curated out for catalog budget",
-    "handjob-full-slow-v4 part 12: curated out for catalog budget",
-    "handjob-full-slow-v3 part 12: curated out for catalog budget",
-    "handjob-full-slow-v2 part 12: curated out for catalog budget",
-    "handjob-full-slow-v4 part 13: curated out for catalog budget",
-    "handjob-full-slow-v2 part 13: curated out for catalog budget",
-    "handjob-full-slow-v4 part 14: curated out for catalog budget",
-    "handjob-mlking-v3 part 2: curated out for catalog budget",
-    "handjob-mlking-v3 part 4: curated out for catalog budget",
-    "handjob-mlking-v3 part 5: curated out for catalog budget",
-    "handjob-mlking-v3 part 7: curated out for catalog budget",
-    "handjob-mlking-v3 part 8: curated out for catalog budget",
-    "handjob-mlking-v3 part 13: curated out for catalog budget",
-    "handjob-mlking-v2 part 1: curated out for catalog budget",
-    "handjob-mlking part 1: curated out for catalog budget",
-    "handjob-mlking-v2 part 2: curated out for catalog budget",
-    "handjob-mlking-v2 part 3: curated out for catalog budget",
-    "handjob-mlking part 5: curated out for catalog budget",
-    "handjob-mlking-v2 part 6: curated out for catalog budget",
-    "handjob-tip-v2 part 2: curated out for catalog budget",
-    "handjob-tip-v2 part 5: curated out for catalog budget",
-    "handjob-tip-v2 part 6: curated out for catalog budget",
-    "handjob-tip-v2 part 8: curated out for catalog budget",
-    "handjob-tip-v2 part 12: curated out for catalog budget",
-    "handjob-tip part 3: curated out for catalog budget"
-  ],
-  "issues": [
-    "bjtip-v2.funscript part 10: segment shorter than 3000ms",
-    "bjtip.funscript part 7: segment shorter than 3000ms",
-    "blowjob-finisher-v2.funscript part 7: segment shorter than 3000ms",
-    "blowjob-finisher-v4.funscript part 7: segment shorter than 3000ms",
-    "blowjob-finisher-v5.funscript part 13: segment shorter than 3000ms",
-    "blowjobfull-v2.funscript part 7: segment shorter than 3000ms",
-    "blowjobfull.funscript part 7: segment shorter than 3000ms",
-    "cowgirlfast.funscript part 4: segment has no usable motion span",
-    "cowgirlfast.funscript part 5: segment has no usable motion span",
-    "cowgirlfast.funscript part 6: segment has no usable motion span",
-    "cowgirlintense-v2.funscript part 4: segment has no usable motion span",
-    "cowgirlintense-v2.funscript part 5: segment has no usable motion span",
-    "cowgirlintense-v2.funscript part 6: segment has no usable motion span",
-    "cowgirlintense.funscript part 7: segment shorter than 3000ms",
-    "handjob-base-v10.funscript part 10: segment shorter than 3000ms",
-    "handjob-base-v3.funscript part 7: segment shorter than 3000ms",
-    "handjob-base-v5.funscript part 13: segment shorter than 3000ms",
-    "handjob-base-v9.funscript part 7: segment shorter than 3000ms",
-    "handjob-base.funscript part 2: segment has no usable motion span",
-    "handjob-base.funscript part 3: segment has no usable motion span",
-    "handjob-base.funscript part 4: segment has no usable motion span",
-    "handjob-base.funscript part 5: segment has no usable motion span",
-    "handjob-base.funscript part 6: segment has no usable motion span",
-    "handjob-edging.funscript part 6: segment has no usable motion span",
-    "handjob-finisher-v3.funscript part 7: segment shorter than 3000ms",
-    "handjob-finisher.funscript part 2: segment has no usable motion span",
-    "handjob-finisher.funscript part 3: segment has no usable motion span",
-    "handjob-finisher.funscript part 4: segment has no usable motion span",
-    "handjob-finisher.funscript part 5: segment has no usable motion span",
-    "handjob-finisher.funscript part 6: segment has no usable motion span",
-    "handjob-full-intense-v4.funscript part 12: segment shorter than 3000ms",
-    "handjob-full-intense-v5.funscript part 13: segment shorter than 3000ms",
-    "handjob-full-slow-v4.funscript part 15: segment shorter than 3000ms",
-    "handjob-full-slow-v5.funscript part 13: segment shorter than 3000ms",
-    "handjob-mlking.funscript part 6: segment has no usable motion span",
-    "handjob-tip.funscript part 5: segment has no usable motion span",
-    "handjob-tip.funscript part 6: segment has no usable motion span"
   ]
 }

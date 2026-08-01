@@ -26,6 +26,12 @@ const (
 	MaximumMediaTimelinePoints = 100_000
 	catalogMinReversalGap      = 450
 	catalogMaxAcceleration     = 3000.0
+	catalogMinStrokeAmplitude  = 22.0
+	catalogMinStrokeVelocity   = 42.0
+	catalogMaxSpeedRatio       = 3.3
+	catalogMinMeanVelocity     = 55.0
+	catalogMaxStallMillis      = int64(200)
+	catalogStallVelocity       = 30.0
 
 	// TagExperimental marks catalog content that is fully playable in the
 	// library but exposed to the model only behind the user's
@@ -80,6 +86,22 @@ type CurveMetrics struct {
 	MinReversalGapMillis             int64   `json:"min_reversal_gap_ms"`
 }
 
+type catalogFeelMetrics struct {
+	MinimumAmplitude  float64
+	MinimumVelocity   float64
+	MaximumVelocity   float64
+	MeanVelocity      float64
+	LongestStallMilli int64
+}
+
+func (metrics catalogFeelMetrics) acceptable() bool {
+	return metrics.MinimumAmplitude >= catalogMinStrokeAmplitude &&
+		metrics.MinimumVelocity >= catalogMinStrokeVelocity &&
+		metrics.MaximumVelocity/metrics.MinimumVelocity <= catalogMaxSpeedRatio &&
+		metrics.MeanVelocity >= catalogMinMeanVelocity &&
+		metrics.LongestStallMilli <= catalogMaxStallMillis
+}
+
 // Curve is a validated time-parameterized sampler. Pattern curves use
 // monotone cubic interpolation; media timelines preserve linear segments.
 type Curve struct {
@@ -106,6 +128,7 @@ func buildBuiltinPatternCatalog() []PatternDefinition {
 	}
 	definitions = append(definitions, generateCatalogPatterns()...)
 	definitions = append(definitions, PromotedBuiltinPatternDefinitions()...)
+	definitions = append(definitions, loadCuratedBuiltinPatterns()...)
 	return definitions
 }
 
@@ -306,6 +329,53 @@ func MeasureCurve(points []CurvePoint, durationMillis int64, loop bool) (CurveMe
 		acceleration := math.Abs(velocity-previousVelocity) * 1000 / float64(catalogSampleMillis)
 		metrics.MaxAccelerationPercentPerSecond2 = math.Max(metrics.MaxAccelerationPercentPerSecond2, acceleration)
 		previousVelocity = velocity
+	}
+	return metrics, nil
+}
+
+func exceedsCatalogSafetyBudgets(metrics CurveMetrics) bool {
+	return metrics.MaxAccelerationPercentPerSecond2 > catalogMaxAcceleration ||
+		(metrics.MinReversalGapMillis > 0 && metrics.MinReversalGapMillis < catalogMinReversalGap)
+}
+
+func measureCatalogPatternFeel(definition PatternDefinition) (catalogFeelMetrics, error) {
+	curve, err := NewCurve(definition.Points, definition.CycleMillis, true)
+	if err != nil {
+		return catalogFeelMetrics{}, err
+	}
+	metrics := catalogFeelMetrics{
+		MinimumAmplitude: math.Inf(1),
+		MinimumVelocity:  math.Inf(1),
+	}
+	travel := 0.0
+	for index := 1; index < len(definition.Points); index++ {
+		previous, point := definition.Points[index-1], definition.Points[index]
+		amplitude := math.Abs(point.PositionPercent - previous.PositionPercent)
+		millis := point.TimeMillis - previous.TimeMillis
+		if amplitude == 0 || millis <= 0 {
+			continue
+		}
+		velocity := amplitude / (float64(millis) / 1000)
+		metrics.MinimumAmplitude = math.Min(metrics.MinimumAmplitude, amplitude)
+		metrics.MinimumVelocity = math.Min(metrics.MinimumVelocity, velocity)
+		metrics.MaximumVelocity = math.Max(metrics.MaximumVelocity, velocity)
+		travel += amplitude
+	}
+	if math.IsInf(metrics.MinimumAmplitude, 1) {
+		metrics.MinimumAmplitude = 0
+		metrics.MinimumVelocity = 0
+	}
+	if definition.CycleMillis > 0 {
+		metrics.MeanVelocity = travel / (float64(definition.CycleMillis) / 1000)
+	}
+	run := int64(0)
+	for at := int64(0); at < definition.CycleMillis; at += catalogSampleMillis {
+		if math.Abs(curve.Velocity(at)) < catalogStallVelocity {
+			run += catalogSampleMillis
+			metrics.LongestStallMilli = max(metrics.LongestStallMilli, run)
+			continue
+		}
+		run = 0
 	}
 	return metrics, nil
 }
@@ -825,7 +895,7 @@ func mustFitCatalog(definition PatternDefinition) PatternDefinition {
 		if metrics.MaxAccelerationPercentPerSecond2 > catalogMaxAcceleration {
 			factor = math.Max(factor, math.Sqrt(metrics.MaxAccelerationPercentPerSecond2/catalogMaxAcceleration))
 		}
-		if factor <= 1.001 {
+		if factor <= 1.0001 {
 			return normalized
 		}
 		nextDuration := int64(math.Ceil(float64(normalized.CycleMillis) * factor * 1.01))

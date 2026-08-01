@@ -167,8 +167,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	response, parseErr := s.parseAndValidateResponse(raw, capabilities, userMessage)
 	if parseErr == nil {
-		response, semanticFallback := s.recoverAuthorizedOmittedStart(response, capabilities, userMessage)
-		return Result{Response: response, Raw: raw, SemanticFallback: semanticFallback}, nil
+		return Result{Response: response, Raw: raw}, nil
 	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
@@ -223,28 +222,10 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, nil
 	}
 
-	repaired, semanticFallback := s.recoverAuthorizedOmittedStart(repaired, capabilities, userMessage)
 	result.Response = repaired
 	result.Malformed = false
 	result.Repaired = true
-	result.SemanticFallback = semanticFallback
 	return result, nil
-}
-
-// recoverAuthorizedOmittedStart handles one narrow model failure: a valid reply
-// that omits motion for an unambiguous start command. It never widens current-
-// turn authority and never resumes paused or retargets running motion.
-func (s Service) recoverAuthorizedOmittedStart(response AssistantResponse, capabilities Capabilities, userMessage string) (AssistantResponse, bool) {
-	if !capabilities.Motion || s.TrustedMotionInput || s.MotionContext == nil ||
-		s.MotionContext.Running || s.MotionContext.Paused ||
-		!userAuthorizesMotion(userMessage, MotionActionStart) {
-		return response, false
-	}
-	if response.Motion != nil && response.Motion.Action != MotionActionNone {
-		return response, false
-	}
-	response.Motion = &MotionCommand{Action: MotionActionStart}
-	return response, true
 }
 
 func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage string, repairErr error) (AssistantResponse, bool) {
@@ -288,7 +269,7 @@ func userAuthorizesMotion(message, action string) bool {
 	if normalized == "" || motionIntentIsNegated(normalized) {
 		return false
 	}
-	if action == MotionActionStart && authorizesDirectPartnerStart(normalized) {
+	if authorizesDirectPartnerMotion(normalized) {
 		return true
 	}
 	if motionIntentIsConversation(normalized) {
@@ -377,10 +358,23 @@ func motionIntentIsPermissionQuestion(message string) bool {
 	return japaneseMotion && japaneseQuestion
 }
 
-func authorizesDirectPartnerStart(message string) bool {
-	message = strings.TrimSpace(strings.TrimPrefix(message, "please "))
+// authorizesDirectPartnerMotion grants a model-authored command permission to
+// pass the current-turn gate. It does not decide or synthesize motion.
+func authorizesDirectPartnerMotion(message string) bool {
+	for _, prefix := range []string{
+		"please ", "can you ", "could you ", "would you ", "will you ",
+		"i want you to ", "i need you to ", "go ahead and ",
+	} {
+		if strings.HasPrefix(message, prefix) {
+			message = strings.TrimSpace(strings.TrimPrefix(message, prefix))
+			break
+		}
+	}
 	message = strings.TrimSpace(strings.TrimSuffix(message, " please"))
-	for _, command := range []string{"fuck me", "stroke me", "jerk me off", "ride me"} {
+	for _, command := range []string{
+		"fuck me", "stroke me", "jerk me off", "ride me",
+		"suck me", "suck it", "kiss it", "lick me", "lick it",
+	} {
 		if message == command {
 			return true
 		}

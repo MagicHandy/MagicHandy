@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -59,22 +60,21 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	}
 }
 
-func TestLibraryPurgesRetiredBuiltinsAndImportedClipDuplicates(t *testing.T) {
+func TestLibraryReconcilesGeneratedBuiltinsAndPurgesImportedClipDuplicates(t *testing.T) {
 	dir := t.TempDir()
 	library, err := Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
 	pointsJSON := `[{"time_ms":0,"position_percent":0},{"time_ms":6600,"position_percent":100}]`
 	tagsJSON := `["imported","curated"]`
 	if _, err := library.db.SQL().Exec(`
-		INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
-			cycle_ms, points_json, tags_json, created_at, updated_at)
-		VALUES(?, ?, '', 'builtin', 'routine', 1, 1.0, 6600, ?, ?, ?, ?)
-	`, "curated-fast-drive-20", "Fast Drive 20", pointsJSON, tagsJSON, now, now); err != nil {
+		UPDATE patterns SET description = '', cycle_ms = 6600, points_json = ?, tags_json = ?
+		WHERE id = 'curated-fast-drive-20'
+	`, pointsJSON, tagsJSON); err != nil {
 		t.Fatal(err)
 	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if _, err := library.db.SQL().Exec(`
 		INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
 			cycle_ms, points_json, tags_json, created_at, updated_at)
@@ -91,8 +91,12 @@ func TestLibraryPurgesRetiredBuiltinsAndImportedClipDuplicates(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	if _, err := reopened.Pattern("curated-fast-drive-20"); !errors.Is(err, ErrPatternNotFound) {
-		t.Fatalf("retired built-in error = %v, want ErrPatternNotFound", err)
+	restored, err := reopened.Pattern("curated-fast-drive-20")
+	if err != nil {
+		t.Fatalf("restored generated built-in: %v", err)
+	}
+	if restored.Origin != OriginBuiltin || !slices.Contains(restored.Tags, motion.TagExperimental) || len(restored.Points) <= 2 {
+		t.Fatalf("restored generated built-in = %+v", restored)
 	}
 	if _, err := reopened.Pattern("pattern-imported-clip"); !errors.Is(err, ErrPatternNotFound) {
 		t.Fatalf("imported clip duplicate error = %v, want ErrPatternNotFound", err)
@@ -103,6 +107,34 @@ func TestLibraryPurgesRetiredBuiltinsAndImportedClipDuplicates(t *testing.T) {
 	}
 	if len(patterns) != len(motion.BuiltinPatternDefinitions()) {
 		t.Fatalf("patterns after purge = %d, want %d", len(patterns), len(motion.BuiltinPatternDefinitions()))
+	}
+}
+
+func TestBuiltinsDoNotConsumeUserPatternCapacity(t *testing.T) {
+	library, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = library.Close() })
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	pointsJSON := `[{"time_ms":0,"position_percent":0},{"time_ms":6600,"position_percent":0}]`
+	for index := 0; index < 60; index++ {
+		if _, err := library.db.SQL().Exec(`
+			INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
+				cycle_ms, points_json, tags_json, created_at, updated_at)
+			VALUES(?, ?, '', 'builtin', 'routine', 1, 1.0, 6600, ?, '[]', ?, ?)
+		`, fmt.Sprintf("capacity-builtin-%d", index), fmt.Sprintf("Capacity builtin %d", index), pointsJSON, now, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := library.ensurePatternCapacity(); err != nil {
+		t.Fatalf("built-ins consumed user capacity: %v", err)
+	}
+	if _, err := library.db.SQL().Exec("UPDATE patterns SET origin = 'user'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.ensurePatternCapacity(); !errors.Is(err, ErrLibraryLimit) {
+		t.Fatalf("user capacity error = %v, want ErrLibraryLimit", err)
 	}
 }
 

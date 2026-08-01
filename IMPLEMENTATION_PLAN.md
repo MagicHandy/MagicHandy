@@ -1291,17 +1291,22 @@ real device, capped below 40% intensity; synthetic tests cannot establish
 physical feel. The six retired rows and two promoted user curves reflect prior
 live curation, not a new automated hardware run.
 
-A later 171-pattern generated import is no longer part of the active built-in
-catalog. A 35%-maximum trace selected `curated-fast-drive-20`, whose dense curve
-still reversed across 20% of travel every 40 ms even though the semantic target
-itself was correctly clamped. The generated files remain embedded as review
-source, while idempotent seed reconciliation removes their obsolete `builtin`
-rows. Exact-timing budget exemptions now require one of the two canonical
-hardware-promoted IDs plus the `curated` tag; neither a filename prefix nor a
-new tag alone can weaken the catalog gates. Explicit user imports remain user
-data and continue through the shared engine. Post-quarantine physical feel and
-the accepted-calibration-offset startup acquisition still require a capped
-Cloud REST run.
+A later 171-pattern generated import exposed a catalog-policy defect. A
+35%-maximum trace selected `curated-fast-drive-20`, whose dense source curve
+reversed across 20% of travel every 40 ms even though the semantic target itself
+was correctly clamped. The files remain active built-ins under a test-enforced
+v3 generated-catalog manifest, but no `curated-*` ID receives an exact-timing
+exception. A runtime source audit resamples the 165 curves that exceed normal
+acceleration or reversal budgets into complete roughly 450 ms buckets, removes
+low-prominence reversal chatter, and passes every result through the ordinary
+catalog fitter. Existing feel-envelope checks mark 170 problematic results
+`experimental`; `Easy Drive 4` is the sole normally labeled generated curve.
+Only the two canonical hardware-promoted user patterns retain their explicit
+timing exception. Offline generation has no live-app posting path, and the Go
+bulk-import utility requires `-allow-experimental`. Explicit user imports remain
+user data and continue through the shared engine. Capped physical-feel checks
+for the restored generated catalog and the accepted-calibration-offset startup
+acquisition remain open.
 
 A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
 buffered frames now preserve authored knots through a bounded adaptive sampler,

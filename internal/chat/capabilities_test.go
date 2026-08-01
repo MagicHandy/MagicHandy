@@ -126,7 +126,7 @@ func TestComposeSystemUsesAuthoritativeMotionContext(t *testing.T) {
 		`"area":"tip"`, `"low":[20,26]`, `"middle":[27,33]`, `"high":[34,40]`,
 		`Fresh enabled pattern IDs (current and recent patterns excluded): ["sway"]`,
 		`For "continue", "steady", "same", or "hold it there"`,
-		`a direct partner-action imperative such as "fuck me", "stroke me", or "ride me"`,
+		`A direct embodied partner-action request such as "fuck me", "suck me", "kiss it", "stroke me", or "ride me"`,
 		`For an explicit request to vary, mix up, surprise, or change the feel`,
 		`For a pacing-only request, keep the current pattern`,
 	} {
@@ -263,36 +263,71 @@ func TestOrdinaryConversationStripsModelMotionWithoutRepair(t *testing.T) {
 	}
 }
 
-func TestDirectPartnerStartRecoversValidReplyWithoutMotion(t *testing.T) {
+func TestDirectPartnerStartPreservesModelChoice(t *testing.T) {
 	capabilities := FullCapabilities()
 	capabilities.Voice = VoiceExplicit
 	context := MotionContext{SpeedMinPercent: 20, SpeedMaxPercent: 40}
 
-	for _, raw := range []string{
-		`{"reply":"Starting with you."}`,
-		`{"reply":"Starting with you.","motion":{"action":"none"}}`,
+	for _, testCase := range []struct {
+		name       string
+		message    string
+		raw        string
+		wantMotion bool
+	}{
+		{name: "model omits motion", message: "Suck me", raw: `{"reply":"Come closer."}`},
+		{name: "model chooses none", message: "kiss it", raw: `{"reply":"Not yet.","motion":{"action":"none"}}`},
+		{name: "model chooses start", message: "Suck me", raw: `{"reply":"Come closer.","motion":{"action":"start","speed_percent":30}}`, wantMotion: true},
+		{name: "contextual action chooses start", message: "kiss it", raw: `{"reply":"Right there.","motion":{"action":"start","speed_percent":25}}`, wantMotion: true},
 	} {
-		provider := &scriptedProvider{responses: []string{raw}}
-		service := Service{
-			Provider: provider, MotionContext: &context, Capabilities: &capabilities,
-		}
-		result, err := service.Complete(t.Context(), Request{Message: "Fuck me"}, nil)
-		if err != nil {
-			t.Fatalf("Complete(%s): %v", raw, err)
-		}
-		if result.Malformed || result.Repaired || !result.SemanticFallback {
-			t.Fatalf("omitted start result = %+v", result)
-		}
-		if result.Response.Motion == nil || result.Response.Motion.Action != MotionActionStart {
-			t.Fatalf("recovered motion = %+v, want start", result.Response.Motion)
-		}
-		if len(provider.requests) != 1 {
-			t.Fatalf("provider requests = %d, want one valid generation", len(provider.requests))
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []string{testCase.raw}}
+			service := Service{
+				Provider: provider, MotionContext: &context, Capabilities: &capabilities,
+			}
+			result, err := service.Complete(t.Context(), Request{Message: testCase.message}, nil)
+			if err != nil {
+				t.Fatalf("Complete(%s): %v", testCase.raw, err)
+			}
+			if result.Malformed || result.Repaired || result.SemanticFallback {
+				t.Fatalf("model choice was replaced: %+v", result)
+			}
+			if testCase.wantMotion {
+				if result.Response.Motion == nil || result.Response.Motion.Action != MotionActionStart {
+					t.Fatalf("motion = %+v, want model-selected start", result.Response.Motion)
+				}
+			} else if result.Response.Motion != nil && result.Response.Motion.Action != MotionActionNone {
+				t.Fatalf("motion = %+v, want model-selected no action", result.Response.Motion)
+			}
+			if len(provider.requests) != 1 {
+				t.Fatalf("provider requests = %d, want one valid generation", len(provider.requests))
+			}
+		})
 	}
 }
 
-func TestDirectPartnerStartFallbackDoesNotWidenCapabilitiesOrState(t *testing.T) {
+func TestDirectPartnerRunningTargetPreservesModelChoice(t *testing.T) {
+	capabilities := FullCapabilities()
+	capabilities.Voice = VoiceExplicit
+	context := MotionContext{
+		Running: true, PatternID: "stroke", SpeedPercent: 25,
+		SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"Let me change that.","motion":{"action":"target","speed_percent":30}}`,
+	}}
+	service := Service{
+		Provider: provider, MotionContext: &context, Capabilities: &capabilities,
+	}
+	result, err := service.Complete(t.Context(), Request{Message: "kiss it"}, nil)
+	if err != nil || result.Malformed || result.Repaired || result.SemanticFallback {
+		t.Fatalf("model-selected target result = %+v, err = %v", result, err)
+	}
+	if result.Response.Motion == nil || result.Response.Motion.Action != MotionActionTarget {
+		t.Fatalf("motion = %+v, want model-selected target", result.Response.Motion)
+	}
+}
+
+func TestDirectPartnerNoMotionChoiceNeverStartsFromCapabilitiesOrState(t *testing.T) {
 	full := FullCapabilities()
 	disabled := full
 	disabled.Motion = false

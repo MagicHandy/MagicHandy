@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +16,16 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
-const liveEvalLlamaURL = "http://127.0.0.1:8080"
+const defaultLiveEvalLlamaURL = "http://127.0.0.1:8080"
+
+var liveEvalLlamaURL = configuredLiveEvalLlamaURL()
+
+func configuredLiveEvalLlamaURL() string {
+	if configured := strings.TrimRight(strings.TrimSpace(os.Getenv("MAGICHANDY_LIVE_LLAMA_URL")), "/"); configured != "" {
+		return configured
+	}
+	return defaultLiveEvalLlamaURL
+}
 
 func TestLivePromptParity(t *testing.T) {
 	model := liveEvalModel(t)
@@ -262,9 +272,10 @@ func assertLiveReplyLanguage(t *testing.T, locale promptLocale, reply string) {
 	}
 }
 
-// TestLiveDirectPartnerStart exercises the app's real prompt, provider, parser,
-// authorization, and semantic fallback without creating an engine or transport.
-func TestLiveDirectPartnerStart(t *testing.T) {
+// TestLiveDirectPartnerMotionChoice exercises the app's real prompt, provider,
+// parser, and authorization without creating an engine or transport. The model
+// owns the action/no-action choice; deterministic code must not synthesize one.
+func TestLiveDirectPartnerMotionChoice(t *testing.T) {
 	model := liveEvalModel(t)
 	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
@@ -306,18 +317,24 @@ func TestLiveDirectPartnerStart(t *testing.T) {
 		Capabilities:        &capabilities,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	result, err := service.Complete(ctx, Request{Message: "Fuck me"}, nil)
-	cancel()
-	if err != nil {
-		t.Fatal(err)
+	starts := 0
+	for _, message := range []string{"Fuck me", "Suck me", "kiss it"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, completeErr := service.Complete(ctx, Request{Message: message}, nil)
+		cancel()
+		if completeErr != nil {
+			t.Fatalf("%q: %v", message, completeErr)
+		}
+		t.Logf("direct partner choice %q | motion=%+v | %s", message, result.Response.Motion, compactLiveEvalJSON(result.Raw))
+		if result.Malformed || result.SemanticFallback || strings.TrimSpace(result.Response.Reply) == "" {
+			t.Fatalf("direct partner choice replaced or unusable for %q: %+v", message, result)
+		}
+		if result.Response.Motion != nil && result.Response.Motion.Action == MotionActionStart {
+			starts++
+		}
 	}
-	t.Logf("direct partner start | semantic_fallback=%t | %s", result.SemanticFallback, compactLiveEvalJSON(result.Raw))
-	if result.Malformed || strings.TrimSpace(result.Response.Reply) == "" {
-		t.Fatalf("direct partner start produced no usable reply: %+v", result)
-	}
-	if result.Response.Motion == nil || result.Response.Motion.Action != MotionActionStart {
-		t.Fatalf("direct partner start motion = %+v, want start", result.Response.Motion)
+	if starts == 0 {
+		t.Fatal("model chose no motion for every direct embodied request")
 	}
 }
 

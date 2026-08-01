@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import adapter funscripts into MagicHandy built-in pattern files."""
+"""Generate experimental MagicHandy review patterns from adapter funscripts."""
 
 from __future__ import annotations
 
@@ -8,9 +8,6 @@ import hashlib
 import json
 import re
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,8 +34,6 @@ DEFAULT_OUTPUT = (
     / "builtinpatterns"
     / "curated"
 )
-DEFAULT_API = "http://127.0.0.1:48080"
-CLIENT_ID = "funscript-import"
 CATALOG_NAME = "_catalog.json"
 
 POSE_LABELS = {
@@ -662,7 +657,10 @@ def ensure_unique_names(candidates: list[SegmentCandidate]) -> None:
 
 def write_catalog(output_dir: Path, candidates: list[SegmentCandidate], skipped: list[str], issues: list[str]) -> None:
     catalog = {
-        "schema": "magichandy.curated.catalog.v1",
+        "schema": "magichandy.generated-pattern-catalog.v3",
+        "status_policy": "runtime-budget-audit",
+        "normal_speed_controls": True,
+        "reason": "Generated clips remain available; problematic curves are experimental, unsafe source timing is resampled, and every curve passes normal catalog budgets without a bulk exemption.",
         "segment_ms_max": MAX_SEGMENT_MS,
         "target_total": CATALOG_TARGET_TOTAL,
         "upstream_builtin_count": UPSTREAM_BUILTIN_COUNT,
@@ -685,28 +683,10 @@ def write_catalog(output_dir: Path, candidates: list[SegmentCandidate], skipped:
     (output_dir / CATALOG_NAME).write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
 
 
-def post_import(api_base: str, filename: str, payload: dict) -> dict:
-    body = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        f"{api_base.rstrip('/')}/api/library/import?filename={urllib.parse.quote(filename)}&as=pattern",
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "X-MagicHandy-Client-ID": CLIENT_ID,
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=120) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", nargs="?", default=str(DEFAULT_SOURCE))
     parser.add_argument("output", nargs="?", default=str(DEFAULT_OUTPUT))
-    parser.add_argument("api_base", nargs="?", default=DEFAULT_API)
-    parser.add_argument("--no-api", action="store_true", help="skip live API import")
     parser.add_argument("--clean", action="store_true", help="remove stale pattern files")
     parser.add_argument(
         "--tolerance",
@@ -755,24 +735,12 @@ def main() -> int:
     ensure_unique_names(kept)
 
     written_files: list[Path] = []
-    imported = 0
     for candidate in kept:
         filename = build_filename(candidate)
         payload = build_pattern(candidate)
         path = output_dir / filename
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         written_files.append(path)
-
-        if args.no_api:
-            continue
-        try:
-            post_import(args.api_base, filename, payload)
-            imported += 1
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            issues.append(f"{filename}: HTTP {exc.code} {detail}")
-        except Exception as exc:  # noqa: BLE001
-            issues.append(f"{filename}: {exc}")
 
     removed = 0
     if args.clean:
@@ -792,7 +760,6 @@ def main() -> int:
         f" target={curated_target}"
         f" skipped={len(skipped)}"
         f" removed={removed}"
-        f" imported={imported}"
         f" output={output_dir}"
     )
     if skipped:

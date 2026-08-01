@@ -290,6 +290,12 @@ func TestServiceRepairsMalformedResponseOnce(t *testing.T) {
 	}
 }
 
+func TestChatSamplingRetainsStochasticModelChoice(t *testing.T) {
+	if chatTemperature <= 0 || chatTopP <= 0 || chatTopP >= 1 {
+		t.Fatalf("ordinary chat sampling = temperature %.2f, top-p %.2f; want stochastic sampling", chatTemperature, chatTopP)
+	}
+}
+
 func TestServiceReservesAutomaticReasoningAndRepairsTruncationWithoutThinking(t *testing.T) {
 	provider := &scriptedProvider{
 		responses:      []string{"", `{"reply":"Recovered."}`},
