@@ -252,19 +252,31 @@ func TTSTonePresets() []string {
 // produce the tone -- pace, pitch movement, mic distance, timing -- and this
 // shared clause asks for those mechanics delivered straight.
 //
-// It used to end "not a performance or an announcement", which Commanding had to
-// opt out of because backing off was that preset's own failure mode. Commanding
-// no longer earns its authority from volume, so the clause stops working against
-// it, and one shared framing serves all five again.
-const ttsDeliveryFraming = " Sound like a real person speaking to one listener, not a performance."
+// "or an announcement" is load-bearing and must stay. Commanding once needed its
+// own framing to opt out of it, back when that preset earned authority from
+// volume and any cue to back off worked against it. When Commanding was rewritten
+// to take its authority from steadiness instead, the two framings were merged --
+// and the merge quietly dropped those three words from the four presets that were
+// still relying on them. Warm, which had been the one consistently good preset,
+// immediately came back sounding like a sports announcer. A clause that stopped
+// applying to one preset was still doing work for the rest.
+const ttsDeliveryFraming = " Sound like a real person speaking to one listener, not a performance or an announcement."
 
-// ttsEaseAnchor closes every built-in preset, and is the single most load-bearing
-// clause here. Whatever a preset asks for has to be held across a whole reply,
-// and the failures reported from real use -- Commanding and Tender straining,
-// Warm turning shouty, Excited going nasal -- were all the voice being driven
-// past what it can sustain. Naming the ceiling explicitly, and saying it applies
-// all the way through, is what keeps the delivery inside it.
-const ttsEaseAnchor = " Keep the voice relaxed and comfortable the whole way through, never pushed, strained, or louder than it needs to be."
+// ttsEaseAnchor closes every built-in preset. Whatever a preset asks for has to
+// be held across a whole reply, and the failures reported from real use --
+// Commanding and Tender straining, Warm turning shouty, Excited going nasal --
+// were all the voice being driven past what it can sustain. Naming the ceiling,
+// and saying it holds all the way through, is what keeps the delivery inside it.
+//
+// State that positively. This first read "never pushed, strained, or louder than
+// it needs to be", and Warm came back stressed -- having been fine on the older
+// wording "relaxed and unforced". The working theory is that negating continuous
+// acoustic attributes puts them in play: the model has no discrete "strained"
+// setting to switch off, so naming loudness and strain mostly makes them salient.
+// Negation still earns its place in the framing clause above, which rules out a
+// whole speaking register the model can recognise and step away from. Rule of
+// thumb: negate a register, describe an effort level.
+const ttsEaseAnchor = " Keep the voice relaxed and unforced the whole way through, at a comfortable volume."
 
 // Three rules hold across every preset below, learned from Commanding arriving
 // in an audibly foreign accent on one seed and sounding timid on the rest.

@@ -62,6 +62,12 @@ func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 		if !strings.Contains(got, ttsDeliveryFraming) {
 			t.Errorf("ResolveTTSTonePrompt(%q) = %q, missing the delivery framing clause", preset, got)
 		}
+		// Pinned separately from the constant: merging two framing clauses once
+		// dropped these three words, and Warm came back sounding like a sports
+		// announcer. Rewording the rest of the framing is fine; losing this is not.
+		if !strings.Contains(got, "not a performance or an announcement") {
+			t.Errorf("ResolveTTSTonePrompt(%q) lost the announcer negation: %q", preset, got)
+		}
 		if other, duplicate := seen[got]; duplicate {
 			t.Errorf("presets %q and %q resolve to the same instruction", preset, other)
 		}
