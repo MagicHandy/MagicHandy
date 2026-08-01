@@ -1101,6 +1101,7 @@
   "This browser refused to decode this file. Converting it to H.264 in an MP4 makes it playable without touching the original.": "This browser refused to decode this file. Converting it to H.264 in an MP4 makes it playable without touching the original.",
   "This container is one the browser cannot open. Converting to MP4 usually copies the streams across untouched, which takes seconds.": "This container is one the browser cannot open. Converting to MP4 usually copies the streams across untouched, which takes seconds.",
   "This file cannot be played here": "This file cannot be played here",
+  "This is how I sound with your current voice settings. Listen to a full sentence or two before deciding.": "This is how I sound with your current voice settings. Listen to a full sentence or two before deciding.",
   "This is the exact system prompt the backend would compose for the active chat now. A new message can change Relevant only lore matches.": "This is the exact system prompt the backend would compose for the active chat now. A new message can change Relevant only lore matches.",
   "This loop has {count} essential reversal knots; trim to a simpler section with 255 or fewer.": "This loop has {count} essential reversal knots; trim to a simpler section with 255 or fewer.",
   "This tab is the controller": "This tab is the controller",

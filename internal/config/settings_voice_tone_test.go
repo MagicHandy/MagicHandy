@@ -30,10 +30,10 @@ func TestVoiceUpdatePreservesAndReplacesTTSTone(t *testing.T) {
 // A keyword per preset still catches a swapped or duplicated mapping.
 func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 	keyword := map[string]string{
-		TTSToneWarm:       "unhurried",
-		TTSToneTender:     "creak",
-		TTSTonePlayful:    "extra beat",
-		TTSToneCommanding: "settled authority",
+		TTSToneWarm:       "quietly",
+		TTSToneTender:     "gently",
+		TTSTonePlayful:    "smile in the voice",
+		TTSToneCommanding: "quiet finality",
 		TTSToneExcited:    "lively energy",
 	}
 	presets := TTSTonePresets()
@@ -59,8 +59,8 @@ func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("ResolveTTSTonePrompt(%q) = %q, want it to mention %q", preset, got, want)
 		}
-		if !strings.Contains(got, ttsDeliveryFraming) && !strings.Contains(got, ttsAuthorityFraming) {
-			t.Errorf("ResolveTTSTonePrompt(%q) = %q, missing a delivery framing clause", preset, got)
+		if !strings.Contains(got, ttsDeliveryFraming) {
+			t.Errorf("ResolveTTSTonePrompt(%q) = %q, missing the delivery framing clause", preset, got)
 		}
 		if other, duplicate := seen[got]; duplicate {
 			t.Errorf("presets %q and %q resolve to the same instruction", preset, other)
@@ -111,44 +111,42 @@ func TestTTSTonePresetsAvoidAccentDriftLevers(t *testing.T) {
 	}
 }
 
-// Quiet, slow, low, and falling all push the voice the same direction, and the
-// bottom of that stack is where phonation gives out into press or creak, which is
-// heard as straining. Tender asked for softly AND slowly AND low volume AND
-// audible breath AND a falling close with nothing holding the voice up, and
-// strained. Warm survives the same direction because it reduces on fewer axes and
-// says "relaxed and unforced" outright.
+// Every built-in preset carries the ease anchor, and stays short.
 //
-// This cannot be a banned substring -- "quietly" is exactly right for Warm. What
-// it checks is the pairing: any preset that asks the voice to back off has to
-// also say something that keeps it supported.
-func TestQuietTTSTonePresetsCarryAPhonationCue(t *testing.T) {
-	// Reducers are volume and effort only, not pace. Commanding is unhurried at a
-	// full chest-toned volume and is not backing off at all, so listing "slowly" or
-	// "unhurried" here just produces a false positive on it.
-	reducers := []string{"quiet", "soft", "gently", "low volume"}
-	support := []string{"unforced", "relaxed", "supported", "never pressed", "open", "chest"}
+// Both halves come from the same finding. Whatever a preset asks for has to hold
+// across a whole reply, and the reported failures in real use -- Commanding and
+// Tender straining, Warm turning shouty, Excited going nasal -- were the voice
+// being driven past what it can sustain. The anchor names that ceiling. The
+// length cap is why the ceiling is reachable: every clause is one more constraint
+// to satisfy simultaneously, and a preset stacking five or six leaves only an
+// extreme corner of the model's range to satisfy them all in.
+//
+// The earlier presets tested clean and failed in use because the preview button
+// speaks four words, over which there is barely one intonation contour to get
+// wrong. sampleTTSPreviewLength guards the preview text for the same reason.
+func TestTTSTonePresetsStayShortAndAnchored(t *testing.T) {
+	// Generous: the longest preset body at the time of writing is around 180
+	// characters, so this catches a return to five- and six-clause instructions
+	// without failing on ordinary rewording.
+	const maxBodyLength = 240
 	voice := DefaultSettings().Voice
 	for _, preset := range TTSTonePresets() {
-		if preset == TTSToneCustom {
-			continue
+		if preset == TTSToneCustom || preset == TTSToneNatural {
+			continue // Custom is the user's to write; Natural resolves empty.
 		}
 		voice.TTSTonePreset = preset
-		got := strings.ToLower(ResolveTTSTonePrompt(voice))
-		if !containsAny(got, reducers) || containsAny(got, support) {
-			continue
+		got := ResolveTTSTonePrompt(voice)
+		if !strings.Contains(got, ttsEaseAnchor) {
+			t.Errorf("preset %q is missing the ease anchor, which is what keeps it "+
+				"sustainable across a whole reply: %q", preset, got)
 		}
-		t.Errorf("preset %q asks the voice to back off without any cue keeping it "+
-			"supported, which is how Tender came out straining: %q", preset, got)
-	}
-}
-
-func containsAny(text string, phrases []string) bool {
-	for _, phrase := range phrases {
-		if strings.Contains(text, phrase) {
-			return true
+		body := strings.TrimSpace(strings.NewReplacer(ttsEaseAnchor, "", ttsDeliveryFraming, "").Replace(got))
+		if len(body) > maxBodyLength {
+			t.Errorf("preset %q body is %d characters, over the %d cap; every extra "+
+				"clause is another constraint the voice has to hold for a whole reply: %q",
+				preset, len(body), maxBodyLength, body)
 		}
 	}
-	return false
 }
 
 func TestTTSToneValidation(t *testing.T) {

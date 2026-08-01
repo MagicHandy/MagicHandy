@@ -1101,6 +1101,7 @@
   "This browser refused to decode this file. Converting it to H.264 in an MP4 makes it playable without touching the original.": "このブラウザーはこのファイルのデコードを拒否しました。MP4 の H.264 に変換すれば、元のファイルに触れずに再生できます。",
   "This container is one the browser cannot open. Converting to MP4 usually copies the streams across untouched, which takes seconds.": "このコンテナー形式はブラウザーが開けません。MP4 への変換は通常ストリームをそのままコピーするだけで、数秒で終わります。",
   "This file cannot be played here": "このファイルはここでは再生できません",
+  "This is how I sound with your current voice settings. Listen to a full sentence or two before deciding.": "現在の音声設定では、このように聞こえます。判断する前に、一文か二文をすべて聞いてみてください。",
   "This is the exact system prompt the backend would compose for the active chat now. A new message can change Relevant only lore matches.": "これは、バックエンドが現在のアクティブなチャット用に構成する正確なシステムプロンプトです。新しいメッセージにより「関連のみ」の背景情報の一致結果が変わることがあります。",
   "This loop has {count} essential reversal knots; trim to a simpler section with 255 or fewer.": "このループには必須の反転ノットが{count}個あります。255個以下のより単純な範囲にトリミングしてください。",
   "This tab is the controller": "このタブがコントローラーです",

@@ -245,18 +245,26 @@ func TTSTonePresets() []string {
 	}
 }
 
-// ttsDeliveryFraming closes most built-in tone presets. An instruction-following
+// ttsDeliveryFraming closes every built-in tone preset. An instruction-following
 // TTS model reads a bare emotion adjective as a cue to act the emotion out, which
 // is why the presets used to arrive as caricature: "excited" became shouting and
 // "commanding" became an announcer. Each preset now names the mechanics that
-// produce the tone -- volume, pace, pitch range, mic distance, breath -- and this
+// produce the tone -- pace, pitch movement, mic distance, timing -- and this
 // shared clause asks for those mechanics delivered straight.
-const ttsDeliveryFraming = " Sound like a real person talking to one listener in the same room, not a performance or an announcement."
+//
+// It used to end "not a performance or an announcement", which Commanding had to
+// opt out of because backing off was that preset's own failure mode. Commanding
+// no longer earns its authority from volume, so the clause stops working against
+// it, and one shared framing serves all five again.
+const ttsDeliveryFraming = " Sound like a real person speaking to one listener, not a performance."
 
-// ttsAuthorityFraming replaces it for Commanding, the one preset the shared
-// clause worked against: "not an announcement" reads as a cue to back off, and
-// backing off is the whole failure mode being corrected there.
-const ttsAuthorityFraming = " Sound like a real person who is used to being listened to, speaking to one listener in the same room."
+// ttsEaseAnchor closes every built-in preset, and is the single most load-bearing
+// clause here. Whatever a preset asks for has to be held across a whole reply,
+// and the failures reported from real use -- Commanding and Tender straining,
+// Warm turning shouty, Excited going nasal -- were all the voice being driven
+// past what it can sustain. Naming the ceiling explicitly, and saying it applies
+// all the way through, is what keeps the delivery inside it.
+const ttsEaseAnchor = " Keep the voice relaxed and comfortable the whole way through, never pushed, strained, or louder than it needs to be."
 
 // Three rules hold across every preset below, learned from Commanding arriving
 // in an audibly foreign accent on one seed and sounding timid on the rest.
@@ -294,6 +302,16 @@ const ttsAuthorityFraming = " Sound like a real person who is used to being list
 // it reduces on fewer axes and says "relaxed and unforced" outright. So a preset
 // that asks for a quiet or slow delivery has to pair it with a phonation cue
 // that keeps the voice supported, and leave the bottom of the range unused.
+//
+// Above all, keep each preset short. Every clause is a constraint the model must
+// satisfy simultaneously and hold for the length of the utterance, so a preset
+// that stacks five or six of them leaves only an extreme corner of the model's
+// range to satisfy them all in, and extreme corners are where the artifacts are.
+// This is what made the earlier presets test clean and fail in use: the preview
+// button speaks four words, over which there is barely one intonation contour to
+// get wrong, while a real reply is several sentences that the demands have to
+// survive. One defining mechanic, one contour rule, and the shared ease anchor
+// is the whole budget. Anything more belongs in a Custom prompt.
 
 // ResolveTTSTonePrompt maps a saved preset to the instruction sent only to
 // instruction-capable TTS providers. Natural intentionally resolves empty so
@@ -301,15 +319,15 @@ const ttsAuthorityFraming = " Sound like a real person who is used to being list
 func ResolveTTSTonePrompt(settings VoiceSettings) string {
 	switch settings.TTSTonePreset {
 	case TTSToneWarm:
-		return "Speak quietly and close to the microphone at an unhurried pace, relaxed and unforced. Let each phrase fall softly at the end rather than lifting, and keep the words themselves clear." + ttsDeliveryFraming
+		return "Speak quietly and close to the microphone, unhurried and easy, letting sentences settle downward at the end." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSTonePlayful:
-		return "Speak at an easy conversational pace, not fast, and let the timing carry the teasing instead: hang on a word for an extra beat, then move lightly through the next few, and leave a small pause just before the word being teased with. Keep a smile in the voice and a conversational volume." + ttsDeliveryFraming
+		return "Speak at an easy conversational pace with a light smile in the voice, varying the timing: linger on a word, then move lightly through the next few." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneTender:
-		return "Speak gently and unhurried, close to the microphone, at a soft conversational volume. Keep the voice relaxed and easily supported, never pressed, strained, or dropping into a creak. Let each phrase settle downward at the end without sinking to the bottom of the range." + ttsDeliveryFraming
+		return "Speak gently and a little more slowly, close to the microphone, letting sentences settle softly downward without sinking to the bottom of your range." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneCommanding:
-		return "Speak with settled authority. Drop the pitch firmly at the end of every sentence so each one resolves rather than hangs. Give the words that matter more weight and volume than the words around them, and pause briefly before them. Keep the pace deliberate and unhurried, at a full chest-toned conversational volume: certain, not loud." + ttsAuthorityFraming
+		return "Speak evenly and unhurried, with a calm certainty that comes from steadiness rather than force, letting each sentence resolve downward with quiet finality." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneExcited:
-		return "Speak with quick, lively energy, a little louder than conversational, with wide pitch movement that still settles downward at the end of each sentence. Keep the voice full and open in the chest rather than thin or pinched. Let words run together into connected phrases the way they do in ordinary speech, instead of landing each one separately." + ttsDeliveryFraming
+		return "Speak with quick, lively energy and wide pitch movement, keeping the voice open and the words connected into flowing phrases, and still letting sentences resolve downward at the end." + ttsEaseAnchor + ttsDeliveryFraming
 	case TTSToneCustom:
 		return strings.TrimSpace(settings.TTSTonePrompt)
 	default:
