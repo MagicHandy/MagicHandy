@@ -232,8 +232,27 @@ and the bottom of that stack is where phonation gives out into press or creak,
 which is heard as straining. Tender asked for softly *and* slowly *and* low
 volume *and* audible breath *and* a falling close, with nothing holding the voice
 up. Every preset now ends with a shared ease anchor naming the ceiling — relaxed
-and comfortable the whole way through, never pushed or strained — and it says
-"the whole way through" because sustaining the delivery is the part that fails.
+and unforced the whole way through, at a comfortable volume — and it says "the
+whole way through" because sustaining the delivery is the part that fails.
+
+**State that anchor positively.** It first read "never pushed, strained, or louder
+than it needs to be", and Warm came back stressed, having been fine on the older
+wording "relaxed and unforced". The working theory is that negating a continuous
+acoustic attribute puts it in play: there is no discrete "strained" setting to
+switch off, so naming loudness and strain mostly makes them salient. Negation
+still earns its place in the framing clause, which rules out a whole speaking
+register the model can recognise and step away from. Rule of thumb: **negate a
+register, describe an effort level.**
+
+**Do not drop "or an announcement" from the framing.** Commanding once needed a
+separate framing constant to opt out of it, back when that preset earned its
+authority from volume and any cue to back off worked against it. Rewriting
+Commanding around steadiness made the opt-out unnecessary, and merging the two
+framings quietly removed those three words from the four presets still relying on
+them — Warm immediately came back sounding like a sports announcer. A clause that
+has stopped applying to one preset may still be load-bearing for the others, so
+`TestTTSTonePresetsResolveToReviewedInstructions` pins this phrase separately from
+the constant that contains it.
 
 Authority is the case where this bites hardest. Commanding originally earned it
 from volume, telling the model to give important words "more weight and volume"
