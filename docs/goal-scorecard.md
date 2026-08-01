@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-01, model-owned chat motion and pattern quarantine
+## Snapshot — 2026-08-01, model-owned chat motion and generated-pattern normalization
 
 ### Goal 1: Maintainability
 
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 22,950,400 bytes plain and 16,414,720 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; still well below 30 MB. |
-| Cold start to serving UI | < 500 ms | **Unmeasured** | The prior 679 / 282 / 287 ms sample used a now-retired managed NeuTTS configuration. Scripted TTS servers are optional child processes and are not part of core readiness, but schema-v2 startup still needs a fresh server-side measurement in Phase 16. |
+| Binary size | < 30 MB | **Met** | Current tree: 23,496,192 bytes plain and 16,949,248 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; restoring the embedded generated catalog adds 545,792 / 534,528 bytes and remains well below 30 MB. |
+| Cold start to serving UI | < 500 ms | **Met** | A fresh isolated-data launch of the current stripped binary listened in 107.0 ms and returned `/healthz` in 139.1 ms, including process-spawn and loopback-request overhead. No device, model, or voice worker was started. |
 | Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -148,11 +148,16 @@ Ranked by threat to the stated goals:
   live runs against the installed Gemma/llama.cpp model selected starts for all
   three inputs without an engine or transport.
   The live evaluator accepts the managed runner's backend-reported fallback
-  port instead of assuming 8080. Separately, the 171 quarantined Rockfire files
-  now have a synchronized, test-enforced v2 manifest; the relabel tool is
-  repository-relative, Python generation is offline-only, and the sole Go bulk
-  import requires explicit quarantine acknowledgment. Plain/stripped zero-CGo
-  binaries are 22,950,400 / 16,414,720 bytes (+4,608 each). The Pattern Library
+  port instead of assuming 8080. Separately, all 171 Rockfire files remain
+  active through a synchronized, test-enforced v3 manifest and ordinary catalog
+  controls: 165 unsafe source curves are resampled, low-prominence reversals are
+  removed, and 170 are visibly experimental while `Easy Drive 4` remains
+  normally labeled. No `curated-*` filename receives an exact-timing exemption.
+  The relabel tool is repository-relative, Python generation is offline-only,
+  and the Go bulk import requires explicit experimental acknowledgment.
+  Plain/stripped zero-CGo binaries are 23,496,192 / 16,949,248 bytes
+  (+545,792 / +534,528 from the quarantine tree). A fresh isolated launch
+  listened in 107.0 ms and returned `/healthz` in 139.1 ms. The Pattern Library
   again exposes `experimental` as a visible/filterable review status instead of
   hiding it with implementation-only tags; the canonical web
   build is 1,535,379 raw / 756,133 gzip bytes (-15 / -11). Full Go tests, vet,

@@ -29,35 +29,43 @@ one as the other.
 
 ## Built-In Catalog
 
-The built-in catalog contains 28 patterns: three established patterns
+The built-in catalog contains 199 patterns: three established patterns
 (`Stroke`, `Pulse`, and `Tease`), eight retained generated patterns, 15
-velocity-authored replacements, and two timing-preserved user-curated patterns.
+velocity-authored replacements, two timing-preserved user-curated patterns, and
+171 generated Rockfire/Claude patterns.
 `experimental` is an active review state rather than a historical label:
 retained patterns no longer carry the tag or the `Experimental:` description
 prefix. Only `Rising Reach`, `Offbeat`, `Long Return`, `Swell`, `Surge and
-Settle`, and `Crosscut` are experimental.
+Settle`, and `Crosscut` are experimental among the original 28.
 
 The 171 generated `curated-*` clips under
-`internal/motion/builtinpatterns/curated` are quarantined source material, not
-active built-ins. A trace captured with a 35% configured maximum showed the
-target correctly clamped to 35%, but `curated-fast-drive-20` still contained
-20-point reversals only 40 ms apart. Those clips had entered the catalog under a
-filename-based test exemption rather than the generator's acceleration and
-reversal budgets. Startup reconciliation removes their prior `builtin` rows.
-The files remain available for offline review or explicit user import; user-owned
-library rows are not silently deleted. Only `Hard and Regular` and `playful
-jerk`, identified by their canonical IDs and the `curated` tag, retain the
-timing-preserved exception based on prior hardware acceptance.
+`internal/motion/builtinpatterns/curated` are active built-ins, but they have no
+bulk timing exemption. A trace captured with a 35% configured maximum showed
+the target correctly clamped to 35%, while `curated-fast-drive-20` still
+contained 20-point reversals only 40 ms apart. A source audit found 165 of the
+171 clips outside the normal acceleration or reversal budgets. Those curves are
+resampled across their complete source cycle into roughly 450 ms buckets,
+low-prominence reversal chatter is removed, and every generated result passes
+the same catalog fitter as ordinary built-ins. The existing physical-feel
+envelope marks 170 results `experimental`; `Easy Drive 4` is the sole generated
+curve that clears both source safety and fitted feel checks. Only `Hard and
+Regular` and `playful jerk`, identified by their canonical IDs and the `curated`
+tag, retain timing-preserved exceptions based on prior hardware acceptance.
 
 The source directory carries an explicit
-`magichandy.quarantined-pattern-catalog.v2` manifest. Tests require every
+`magichandy.generated-pattern-catalog.v3` manifest. Tests require every
 manifest filename and display name to match the embedded source, preventing the
 stale 171-file manifest left by the later statistical relabel. The relabel tool
 resolves the repository path instead of naming one developer machine and keeps
 that manifest synchronized. The Python sampler is offline-only and cannot post
 to a running app. The sole bulk-import command is the Go utility, which requires
-`-allow-quarantined`. That acknowledgment does not promote or hardware-approve
+`-allow-experimental`. That acknowledgment does not promote or hardware-approve
 a clip.
+
+The 250-pattern persistence limit applies to user-authored, generated, and
+imported rows only. Reconciled built-ins do not consume that capacity, so the
+larger shipped catalog cannot reduce how many patterns an existing user may
+save.
 
 ### The velocity-authored replacement pass
 

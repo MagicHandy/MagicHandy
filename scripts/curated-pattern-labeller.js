@@ -134,12 +134,13 @@ if (APPLY) {
   }
   catalogEntries.sort((a, b) => a.file.localeCompare(b.file));
   const catalog = {
-    schema: "magichandy.quarantined-pattern-catalog.v2",
-    quarantined: true,
-    reason: "Generated clips require motion-budget review and hardware acceptance before promotion.",
+    schema: "magichandy.generated-pattern-catalog.v3",
+    status_policy: "runtime-budget-audit",
+    normal_speed_controls: true,
+    reason: "Generated clips remain available; problematic curves are experimental, unsafe source timing is resampled, and every curve passes normal catalog budgets without a bulk exemption.",
     pattern_count: catalogEntries.length,
     patterns: catalogEntries,
   };
   fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalog, null, 2) + "\n");
-  console.log("applied: rewrote labels, renamed files, and synchronized the quarantine catalog");
+  console.log("applied: rewrote labels, renamed files, and synchronized the generated catalog");
 }

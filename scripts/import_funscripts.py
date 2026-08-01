@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate quarantined MagicHandy review patterns from adapter funscripts."""
+"""Generate experimental MagicHandy review patterns from adapter funscripts."""
 
 from __future__ import annotations
 
@@ -657,9 +657,10 @@ def ensure_unique_names(candidates: list[SegmentCandidate]) -> None:
 
 def write_catalog(output_dir: Path, candidates: list[SegmentCandidate], skipped: list[str], issues: list[str]) -> None:
     catalog = {
-        "schema": "magichandy.quarantined-pattern-catalog.v2",
-        "quarantined": True,
-        "reason": "Generated clips require motion-budget review and hardware acceptance before promotion.",
+        "schema": "magichandy.generated-pattern-catalog.v3",
+        "status_policy": "runtime-budget-audit",
+        "normal_speed_controls": True,
+        "reason": "Generated clips remain available; problematic curves are experimental, unsafe source timing is resampled, and every curve passes normal catalog budgets without a bulk exemption.",
         "segment_ms_max": MAX_SEGMENT_MS,
         "target_total": CATALOG_TARGET_TOTAL,
         "upstream_builtin_count": UPSTREAM_BUILTIN_COUNT,

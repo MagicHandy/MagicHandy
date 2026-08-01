@@ -93,13 +93,15 @@ Status 2026-08-01: a read-only trace for a reported speed-limit regression
 showed the target correctly clamped to the configured 35% maximum, but the
 selected generated `curated-fast-drive-20` curve contained 40 ms reversals that
 had bypassed catalog acceleration/reversal gates through a broad imported-curve
-test exemption. All 171 generated `curated-*` clips are now quarantined from the
-built-in catalog, obsolete builtin rows are removed during seed reconciliation,
-and exact timing exceptions name only the two previously hardware-accepted
-patterns. Accepted calibration excursions also retain their raw observed
+test exemption. The 171 generated clips remain active, but none receives that
+exemption: 165 unsafe source curves are time-bucketed, all low-prominence
+reversal chatter is removed, and every result passes the normal catalog fitter.
+The existing feel envelope leaves 170 visibly experimental and one normally
+labeled. Exact timing exceptions name only the two previously hardware-accepted
+user patterns. Accepted calibration excursions also retain their raw observed
 position for startup decisions, so clamping cannot skip the verified lead-in.
-No post-fix hardware motion was run; capped Cloud REST startup and pattern-feel
-evidence remain open.
+No post-fix hardware motion was run; capped Cloud REST startup and restored
+pattern-feel evidence remain open.
 
 ## R2: Two-Codebase Drift
 
@@ -483,8 +485,9 @@ being declared solved from simulation.
 
 Status 2026-08-01: the bulk generated pattern regression did not create a
 second dispatch path, but it exposed a parallel safety-policy exception in the
-catalog tests. The active catalog no longer includes those 171 clips, and the
-only exact-curve exemptions are the canonical `hard-and-regular` and
+catalog tests. The active catalog includes those 171 clips through the ordinary
+normalization and fitter path, while 170 remain behind the experimental-pattern
+gate. The only exact-curve exemptions are the canonical `hard-and-regular` and
 `playful-jerk` IDs carrying the `curated` tag. User-authored/imported content
 still resolves to semantic targets and runs through the same engine; explicit
 user library rows remain non-destructive data rather than being reclassified as
@@ -880,12 +883,14 @@ remains open.
 
 Status 2026-08-01: a later bulk generator placed 171 clips into the enabled
 catalog without the generator motion budgets above; one traced clip reversed
-20% of travel every 40 ms. All 171 remain quarantined from active built-ins.
-Their v2 source manifest is now filename/name complete and enforced by tests,
-the offline generator has no live-app posting path, and the sole Go bulk
-importer requires explicit quarantine acknowledgment. These controls prevent
-accidental re-seeding but do not substitute for per-clip budget review or
-capped hardware acceptance.
+20% of travel every 40 ms. All 171 remain active without a bulk exemption. A v3
+manifest and tests enforce source identity, normal speed controls, complete
+roughly 450 ms resampling for the 165 source curves outside hard budgets,
+low-prominence reversal removal, and final acceleration/reversal compliance.
+The established feel envelope labels 170 experimental and leaves only `Easy
+Drive 4` normally labeled. The offline generator has no live-app posting path,
+and the Go bulk importer requires explicit experimental acknowledgment. These
+controls do not substitute for capped hardware acceptance.
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).

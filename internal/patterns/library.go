@@ -719,7 +719,7 @@ func validateMetadata(name, description string) (string, string, error) {
 
 func (l *Library) ensurePatternCapacity() error {
 	var count int
-	if err := l.db.SQL().QueryRow("SELECT COUNT(*) FROM patterns").Scan(&count); err != nil {
+	if err := l.db.SQL().QueryRow("SELECT COUNT(*) FROM patterns WHERE origin <> 'builtin'").Scan(&count); err != nil {
 		return err
 	}
 	if count >= maxPatterns {
@@ -751,7 +751,7 @@ func ensureCapacityTx(ctx context.Context, tx *sql.Tx, table string, limit int, 
 	var query string
 	switch table {
 	case "patterns":
-		query = "SELECT COUNT(*) FROM patterns"
+		query = "SELECT COUNT(*) FROM patterns WHERE origin <> 'builtin'"
 	case "programs":
 		query = "SELECT COUNT(*) FROM programs"
 	default:
