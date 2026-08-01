@@ -201,6 +201,22 @@ intonation contour to get wrong, so a preset that came apart over a real
 multi-sentence reply still sounded fine in the settings panel. Judge a tone change
 on something at least as long as the replies it will actually speak.
 
+**Lock the speaker identity explicitly.** Every built-in preset ends with a clause
+saying the directions are about delivery only, not about who is speaking, and it
+is the single most effective thing here. An `instruct` is a natural-language
+description of *how someone speaks*, and in a multilingual model trained on
+described audio that kind of text correlates with **who** speaks that way, not
+only how — adjectives like relaxed, easy, or unhurried describe a speaker as much
+as a delivery. Without the lock, the model is free to pick a matching speaker, and
+did: Commanding arrived sounding Brazilian on one seed, and Warm faintly Jamaican
+on wording it had previously been fine on. Five earlier rounds each chased the
+individual word that seemed to be the cue, and each time a different preset
+drifted somewhere else. Unlike a prosodic demand, the lock constrains the search
+space rather than pushing the voice anywhere, so it adds nothing to sustain.
+
+The word-level rules below still matter — they are what stops a preset asking for
+non-English prosody outright — but treat them as second line now, not first.
+
 Four phrasings to keep out of an `instruct`, because a multilingual model reads
 them as a cue to change accent rather than delivery. They were all found the hard
 way, from a Commanding preset that arrived in an audibly foreign accent on one

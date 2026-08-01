@@ -147,7 +147,14 @@ func TestTTSTonePresetsStayShortAndAnchored(t *testing.T) {
 			t.Errorf("preset %q is missing the ease anchor, which is what keeps it "+
 				"sustainable across a whole reply: %q", preset, got)
 		}
-		body := strings.TrimSpace(strings.NewReplacer(ttsEaseAnchor, "", ttsDeliveryFraming, "").Replace(got))
+		// Without this the model treats a description of how someone speaks as a
+		// description of who speaks that way, and picks an accent to match.
+		if !strings.Contains(got, ttsIdentityLock) {
+			t.Errorf("preset %q is missing the identity lock, which is what stops "+
+				"delivery wording from being read as a speaker choice: %q", preset, got)
+		}
+		body := strings.TrimSpace(strings.NewReplacer(
+			ttsEaseAnchor, "", ttsDeliveryFraming, "", ttsIdentityLock, "").Replace(got))
 		if len(body) > maxBodyLength {
 			t.Errorf("preset %q body is %d characters, over the %d cap; every extra "+
 				"clause is another constraint the voice has to hold for a whole reply: %q",

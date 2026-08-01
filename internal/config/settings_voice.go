@@ -262,6 +262,22 @@ func TTSTonePresets() []string {
 // applying to one preset was still doing work for the rest.
 const ttsDeliveryFraming = " Sound like a real person speaking to one listener, not a performance or an announcement."
 
+// ttsIdentityLock is the answer to accent drift, and it should have been the
+// first thing tried rather than the sixth. Every previous attempt chased the
+// individual word that seemed to cue an accent -- "level pitch", then "evenly" --
+// and each time another preset drifted somewhere else, most recently Warm
+// arriving sounding faintly Jamaican on wording it had previously been fine on.
+//
+// The root cause is not any one word. An instruct is a natural-language
+// description of how someone speaks, and in a multilingual model trained on
+// described audio that kind of text correlates with WHO speaks that way, not only
+// how. Adjectives like relaxed, easy, or unhurried describe a speaker as much as
+// a delivery, so the model is free to pick one -- and nothing in these presets
+// ever told it that the speaker was already decided. Saying so directly costs one
+// clause and constrains the search space instead of pushing the voice anywhere,
+// so unlike a prosodic demand it adds nothing for the voice to sustain.
+const ttsIdentityLock = " Keep the same speaker, voice, and accent throughout: these are directions for delivery only, not for who is speaking."
+
 // ttsEaseAnchor closes every built-in preset. Whatever a preset asks for has to
 // be held across a whole reply, and the failures reported from real use --
 // Commanding and Tender straining, Warm turning shouty, Excited going nasal --
@@ -331,15 +347,15 @@ const ttsEaseAnchor = " Keep the voice relaxed and unforced the whole way throug
 func ResolveTTSTonePrompt(settings VoiceSettings) string {
 	switch settings.TTSTonePreset {
 	case TTSToneWarm:
-		return "Speak quietly and close to the microphone, unhurried and easy, letting sentences settle downward at the end." + ttsEaseAnchor + ttsDeliveryFraming
+		return "Speak quietly and close to the microphone, at an unhurried pace, letting sentences settle downward at the end." + ttsEaseAnchor + ttsDeliveryFraming + ttsIdentityLock
 	case TTSTonePlayful:
-		return "Speak at an easy conversational pace with a light smile in the voice, varying the timing: linger on a word, then move lightly through the next few." + ttsEaseAnchor + ttsDeliveryFraming
+		return "Speak at a conversational pace with a light smile in the voice, varying the timing: linger on a word, then move lightly through the next few." + ttsEaseAnchor + ttsDeliveryFraming + ttsIdentityLock
 	case TTSToneTender:
-		return "Speak gently and a little more slowly, close to the microphone, letting sentences settle softly downward without sinking to the bottom of your range." + ttsEaseAnchor + ttsDeliveryFraming
+		return "Speak gently and a little more slowly, close to the microphone, letting sentences settle softly downward without sinking to the bottom of your range." + ttsEaseAnchor + ttsDeliveryFraming + ttsIdentityLock
 	case TTSToneCommanding:
-		return "Speak at a measured, deliberate, unhesitating pace, with a little space around the phrases that matter, and let sentences arrive at a settled ending rather than trailing off." + ttsEaseAnchor + ttsDeliveryFraming
+		return "Speak at a measured, deliberate, unhesitating pace, with a little space around the phrases that matter, and let sentences arrive at a settled ending rather than trailing off." + ttsEaseAnchor + ttsDeliveryFraming + ttsIdentityLock
 	case TTSToneExcited:
-		return "Speak with quick, lively energy and wide pitch movement, keeping the voice open and the words connected into flowing phrases, and still letting sentences resolve downward at the end." + ttsEaseAnchor + ttsDeliveryFraming
+		return "Speak with quick, lively energy and wide pitch movement, keeping the voice open and the words connected into flowing phrases, and still letting sentences resolve downward at the end." + ttsEaseAnchor + ttsDeliveryFraming + ttsIdentityLock
 	case TTSToneCustom:
 		return strings.TrimSpace(settings.TTSTonePrompt)
 	default:
