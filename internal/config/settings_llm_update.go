@@ -18,6 +18,10 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	if update.ReasoningMode != nil {
 		reasoningMode = *update.ReasoningMode
 	}
+	managedLoadPolicy := current.ManagedLoadPolicy
+	if update.ManagedLoadPolicy != nil {
+		managedLoadPolicy = *update.ManagedLoadPolicy
+	}
 	chatVoice := current.ChatVoice
 	if update.ChatVoice != nil {
 		chatVoice = *update.ChatVoice
@@ -42,6 +46,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	return normalizeLLMStrings(LLMSettings{
 		Provider:             update.Provider,
 		LlamaCPPMode:         update.LlamaCPPMode,
+		ManagedLoadPolicy:    managedLoadPolicy,
 		LlamaCPPBaseURL:      update.LlamaCPPBaseURL,
 		LlamaCPPContextSize:  contextSize,
 		OllamaBaseURL:        update.OllamaBaseURL,

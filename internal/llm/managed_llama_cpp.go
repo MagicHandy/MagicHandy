@@ -50,6 +50,7 @@ type ManagedLlamaCPPProvider struct {
 	stderr   *tailBuffer
 	ready    bool
 	stopping bool
+	lifetime managedLlamaProcessLifetime
 }
 
 // NewManagedLlamaCPPProvider creates a managed llama.cpp provider.
@@ -189,6 +190,7 @@ func (p *ManagedLlamaCPPProvider) Unload(ctx context.Context) ProviderStatus {
 	p.ready = false
 
 	if process == nil || process.Process == nil {
+		p.releaseProcessLifetimeLocked()
 		status.Message = "llama.cpp runner is not loaded"
 		status.Loaded = false
 		return status
@@ -205,7 +207,9 @@ func (p *ManagedLlamaCPPProvider) Unload(ctx context.Context) ProviderStatus {
 			p.process = nil
 			p.done = nil
 			p.stopping = false
+			p.releaseProcessLifetimeLocked()
 		case <-waitCtx.Done():
+			p.releaseProcessLifetimeLocked()
 			status.Loaded = false
 			status.Message = "llama.cpp runner termination timed out: " + waitCtx.Err().Error()
 			return status
@@ -269,6 +273,13 @@ func (p *ManagedLlamaCPPProvider) ensureStarted() error {
 }
 
 func (p *ManagedLlamaCPPProvider) startLocked() error {
+	duplicates, err := FindManagedRunnerProcesses(p.runnerPath, 0)
+	if err != nil {
+		return fmt.Errorf("check for an existing managed llama.cpp process: %w", err)
+	}
+	if len(duplicates) > 0 {
+		return fmt.Errorf("another MagicHandy-managed llama.cpp process is already running (PID %d); review it in the app before loading this model", duplicates[0].PID)
+	}
 	baseURL, err := selectManagedLlamaBaseURL(p.preferredBaseURL)
 	if err != nil {
 		return err
@@ -300,11 +311,18 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 	// and are passed directly to exec without shell expansion.
 	command := exec.Command(p.runnerPath, args...)
 	command.Dir = filepath.Dir(p.runnerPath)
+	configureManagedLlamaProcess(command)
 	p.stderr.Reset()
 	command.Stderr = p.stderr
 	command.Stdout = p.stderr
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start llama.cpp runner: %w", err)
+	}
+	lifetime, err := attachManagedLlamaProcess(command)
+	if err != nil {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return fmt.Errorf("contain llama.cpp runner process: %w", err)
 	}
 
 	done := make(chan error, 1)
@@ -316,7 +334,18 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 	p.done = done
 	p.ready = false
 	p.stopping = false
+	p.lifetime = lifetime
 	return nil
+}
+
+// ProcessID reports the process currently owned by this provider, if any.
+func (p *ManagedLlamaCPPProvider) ProcessID() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.runningLocked() || p.process == nil || p.process.Process == nil {
+		return 0
+	}
+	return p.process.Process.Pid
 }
 
 func (p *ManagedLlamaCPPProvider) readyToServe() bool {
@@ -352,6 +381,7 @@ func (p *ManagedLlamaCPPProvider) runningLocked() bool {
 		p.process = nil
 		p.done = nil
 		p.ready = false
+		p.releaseProcessLifetimeLocked()
 		if err != nil && !p.stopping {
 			p.stderr.WriteString(err.Error())
 		}
@@ -360,6 +390,16 @@ func (p *ManagedLlamaCPPProvider) runningLocked() bool {
 	default:
 		return !p.stopping
 	}
+}
+
+func (p *ManagedLlamaCPPProvider) releaseProcessLifetimeLocked() {
+	if p.lifetime == nil {
+		return
+	}
+	if err := p.lifetime.Close(); err != nil {
+		p.stderr.WriteString("release managed process containment: " + err.Error())
+	}
+	p.lifetime = nil
 }
 
 func (p *ManagedLlamaCPPProvider) stderrMessage(fallback string) string {

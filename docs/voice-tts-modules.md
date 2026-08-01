@@ -188,6 +188,15 @@ The managed Chatterbox launcher suppresses the upstream server's automatic
 browser opening. MagicHandy remains the only user interface while the pinned
 server continues to provide its normal API.
 
+When chat speech and a local LLM share one GPU, a new message can either
+interrupt active/queued speech (the default) or let speech finish. This is an
+explicit Settings > Voice tradeoff. Interruption preserves completed request
+history and playable audio but cancels unfinished TTS work. The managed Faster
+Qwen wrapper uses a two-chunk producer queue, propagates a disconnected HTTP
+consumer to the producer, and closes the upstream streaming generator so an
+abandoned utterance does not retain the CUDA inference lock for all remaining
+text. The currently executing model chunk is not forcibly interrupted.
+
 For a protected compatible endpoint, the API key is stored as a private setting
 and passed to the worker only as `OPENAI_TTS_API_KEY`.
 

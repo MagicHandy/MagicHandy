@@ -227,6 +227,9 @@ try {
     $installedQwenLauncherSource = Get-Content -Raw -LiteralPath $installedQwenLauncher
     Assert-True -Condition ($installedQwenLauncherSource -match 'instruct=request\.instruct or None') -Message 'synced Faster Qwen launcher should forward tone instructions'
     Assert-True -Condition ($installedQwenLauncherSource -match 'generate_voice_clone_streaming') -Message 'synced Faster Qwen launcher should retain streaming synthesis'
+    Assert-True -Condition ($installedQwenLauncherSource -match 'threading\.Event\(\)') -Message 'synced Faster Qwen launcher should propagate client cancellation to its producer'
+    Assert-True -Condition ($installedQwenLauncherSource -match 'queue\.Queue\(maxsize=2\)') -Message 'synced Faster Qwen launcher should bound abandoned streaming audio'
+    Assert-True -Condition ($installedQwenLauncherSource -match 'stream\.close\(\)') -Message 'synced Faster Qwen launcher should close canceled model generators'
     $moduleState = [ordered]@{
         schema_version = 2
         module = 'faster-qwen3-tts'

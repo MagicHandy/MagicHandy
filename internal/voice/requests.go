@@ -705,6 +705,28 @@ func (m *Manager) InvalidateAll(role Role) []*PendingRequest {
 	return active
 }
 
+// CancelPending cancels only queued or active work for one role. Unlike the
+// Emergency Stop invalidation path, it preserves completed audio and history;
+// interactive chat uses it as an optional speech barge-in policy.
+func (m *Manager) CancelPending(role Role) []*PendingRequest {
+	m.mu.Lock()
+	worker := m.workers[role]
+	active := make([]*PendingRequest, 0, len(m.requests))
+	for _, pending := range m.requests {
+		if pending.Role == role && pending.markCanceled() {
+			active = append(active, pending)
+		}
+	}
+	m.mu.Unlock()
+
+	if worker != nil {
+		for _, pending := range active {
+			worker.cancelPending(pending)
+		}
+	}
+	return active
+}
+
 // CancelInvalidated sends worker-side cancellation after the caller has
 // completed its higher-priority safety work.
 func (m *Manager) CancelInvalidated(role Role, requests []*PendingRequest) {

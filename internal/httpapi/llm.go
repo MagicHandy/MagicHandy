@@ -21,6 +21,8 @@ type llmRuntime struct {
 	cacheKey   string
 }
 
+const llmAutoloadTimeout = 45 * time.Second
+
 func newLLMRuntime(runtime Runtime) llmRuntime {
 	return llmRuntime{
 		provider:   runtime.LLMProvider,
@@ -106,6 +108,93 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 	return provider, nil
 }
 
+func (s *Server) startLLMAutoload(settings config.LLMSettings) {
+	if s.llm.provider != nil ||
+		settings.Provider != config.LLMProviderLlamaCPP ||
+		settings.LlamaCPPMode != config.LlamaCPPModeManaged ||
+		settings.ManagedLoadPolicy != config.LLMManagedLoadStartup {
+		return
+	}
+
+	s.llmAutoloadMu.Lock()
+	if s.llmAutoloadCancel != nil {
+		s.llmAutoloadMu.Unlock()
+		return
+	}
+	s.llmAutoloadID++
+	autoloadID := s.llmAutoloadID
+	ctx, cancel := context.WithCancel(s.lifecycleCtx)
+	s.llmAutoloadCancel = cancel
+	s.llmAutoloadWG.Add(1)
+	s.llmAutoloadMu.Unlock()
+
+	go func() {
+		defer func() {
+			s.llmAutoloadMu.Lock()
+			if s.llmAutoloadID == autoloadID {
+				s.llmAutoloadCancel = nil
+			}
+			s.llmAutoloadMu.Unlock()
+			s.llmAutoloadWG.Done()
+		}()
+
+		loadCtx, loadCancel := context.WithTimeout(ctx, llmAutoloadTimeout)
+		defer loadCancel()
+		started := time.Now()
+		provider, err := s.newLLMProvider(loadCtx, settings)
+		if err != nil {
+			if loadCtx.Err() == nil {
+				s.logger.Warn("managed LLM startup preload could not prepare", "error", err)
+			}
+			return
+		}
+		loadable, ok := provider.(llm.LoadableProvider)
+		if !ok {
+			return
+		}
+		status := loadable.Load(loadCtx)
+		if loadCtx.Err() != nil {
+			return
+		}
+		if !status.Available {
+			s.logger.Warn("managed LLM startup preload failed",
+				"elapsed_ms", time.Since(started).Milliseconds(), "message", status.Message)
+			return
+		}
+		s.logger.Info("managed LLM startup preload complete",
+			"model", settings.Model, "elapsed_ms", time.Since(started).Milliseconds())
+	}()
+}
+
+func (s *Server) stopLLMAutoload() {
+	s.llmAutoloadMu.Lock()
+	cancel := s.llmAutoloadCancel
+	s.llmAutoloadCancel = nil
+	s.llmAutoloadID++
+	s.llmAutoloadMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	s.llmAutoloadWG.Wait()
+}
+
+func (s *Server) applyLLMSettingsTransition(previous, next config.LLMSettings) error {
+	runtimeChanged := llmRuntimeSettingsChanged(previous, next)
+	loadPolicyChanged := previous.ManagedLoadPolicy != next.ManagedLoadPolicy
+	if !runtimeChanged && !loadPolicyChanged {
+		return nil
+	}
+	s.stopLLMAutoload()
+	var transitionErr error
+	if runtimeChanged || next.ManagedLoadPolicy == config.LLMManagedLoadOnDemand {
+		if err := s.closeLLM(); err != nil {
+			transitionErr = fmt.Errorf("apply LLM settings: %w", err)
+		}
+	}
+	s.startLLMAutoload(next)
+	return transitionErr
+}
+
 func managedRuntimeBuildInProgress(build *llm.ManagedLlamaRuntimeBuild) bool {
 	return build != nil && (build.Status == llm.RuntimeBuildStatusQueued || build.Status == llm.RuntimeBuildStatusBuilding)
 }
@@ -137,6 +226,7 @@ func (s *Server) llmState(ctx context.Context) any {
 		"llama_cpp_context_size":  settings.LLM.LlamaCPPContextSize,
 		"max_output_tokens":       settings.LLM.MaxOutputTokens,
 		"reasoning_mode":          settings.LLM.ReasoningMode,
+		"managed_load_policy":     settings.LLM.ManagedLoadPolicy,
 		"model_manager_available": false,
 	}
 	var managedRuntimeInstalled bool

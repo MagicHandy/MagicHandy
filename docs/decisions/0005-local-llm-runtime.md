@@ -74,6 +74,16 @@ llama.cpp and Ollama retain full ownership of their context configuration. Warm
 managed requests do not repeat readiness and model-list probes after a
 successful load.
 
+Managed loading is an explicit resource/latency choice. The default `startup`
+policy loads the selected app-owned model asynchronously after the core begins
+serving; `on_demand` keeps idle RAM/VRAM free and makes the first request pay the
+load cost. Interactive and autonomous generation share one admission
+coordinator. Waiting Chat work overtakes queued Autopilot work and cancels an
+in-flight autonomous inference before taking the single managed server slot;
+autonomous work never preempts Chat. Per-message diagnostics separate
+preparation, scheduler wait, first token, generation, and repair time. See
+`docs/llm-latency-consistency.md`.
+
 Model inventory is a sibling concern, not part of `Provider`. A provider is a
 configured runtime adapter; the model manager owns durable records, managed
 copies, imports, and filesystem state. This keeps model setup usable even when
@@ -87,6 +97,7 @@ The llama.cpp provider manages:
 - runner version and acceleration metadata
 - localhost port selection
 - process startup/shutdown
+- Windows Job Object containment and exact-path duplicate-process recovery
 - health checks
 - model load errors
 - stderr capture for diagnostics

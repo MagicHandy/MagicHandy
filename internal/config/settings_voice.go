@@ -32,6 +32,9 @@ func applyMissingVoiceDefaults(settings, defaults VoiceSettings) VoiceSettings {
 	if settings.InputSilenceMillis == 0 {
 		settings.InputSilenceMillis = defaults.InputSilenceMillis
 	}
+	if settings.ChatSpeechPolicy == "" {
+		settings.ChatSpeechPolicy = defaults.ChatSpeechPolicy
+	}
 	return settings
 }
 
@@ -129,6 +132,7 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.TTSSeedMode = strings.ToLower(strings.TrimSpace(settings.TTSSeedMode))
 	settings.TTSTonePreset = strings.ToLower(strings.TrimSpace(settings.TTSTonePreset))
 	settings.TTSTonePrompt = strings.TrimSpace(settings.TTSTonePrompt)
+	settings.ChatSpeechPolicy = strings.ToLower(strings.TrimSpace(settings.ChatSpeechPolicy))
 	settings.ParakeetServerPath = strings.TrimSpace(settings.ParakeetServerPath)
 	settings.ParakeetModelPath = strings.TrimSpace(settings.ParakeetModelPath)
 	settings.ParakeetSource = strings.TrimSpace(settings.ParakeetSource)
@@ -139,6 +143,9 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 }
 
 func validateVoiceSettings(settings VoiceSettings) error {
+	if !oneOf(settings.ChatSpeechPolicy, ChatSpeechInterrupt, ChatSpeechFinishCurrent) {
+		return fmt.Errorf("unknown chat speech policy %q", settings.ChatSpeechPolicy)
+	}
 	if err := validateVoiceProviders(settings); err != nil {
 		return err
 	}

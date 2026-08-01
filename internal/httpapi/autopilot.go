@@ -105,7 +105,12 @@ func (s *Server) autopilotModelTurn(
 	if kind == chat.AutopilotKindSpeech {
 		message = chat.AutopilotSpeechMessage(modelContext)
 	}
-	return service.Complete(ctx, kind, chat.Request{
+	providerCtx, _, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestAutonomous)
+	if err != nil {
+		return chat.AutopilotResponse{}, err
+	}
+	defer releaseLLM()
+	return service.Complete(providerCtx, kind, chat.Request{
 		Message: message,
 		History: promptContext.History,
 	})

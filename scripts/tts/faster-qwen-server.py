@@ -99,18 +99,50 @@ def warm_up_model() -> None:
 async def stream_chunks(
     voice_cfg: dict, text: str, seed: int, instruct: str
 ) -> AsyncGenerator[bytes, None]:
-    chunks: queue.Queue = queue.Queue()
+    # Keep back-pressure close to the model. An unbounded queue lets a client
+    # disconnect while the producer continues allocating audio and occupying
+    # the CUDA inference lock for the entire abandoned utterance.
+    chunks: queue.Queue = queue.Queue(maxsize=2)
     done = object()
+    canceled = threading.Event()
+
+    def put_chunk(item) -> bool:
+        while not canceled.is_set():
+            try:
+                chunks.put(item, timeout=0.1)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def finish_producer() -> None:
+        if not canceled.is_set():
+            chunks.put(done)
+            return
+        # Wake an executor thread already blocked in Queue.get after the async
+        # consumer was canceled. At that point queued audio is abandoned.
+        while True:
+            try:
+                chunks.put_nowait(done)
+                return
+            except queue.Full:
+                try:
+                    chunks.get_nowait()
+                except queue.Empty:
+                    continue
 
     def producer() -> None:
+        stream = None
         try:
             with upstream._model_lock:
+                if canceled.is_set():
+                    return
                 seed_generators(seed)
                 token_limit = max_generation_tokens(text)
                 upstream.logger.info(
                     "MagicHandy generation seed=%d max_new_tokens=%d", seed, token_limit
                 )
-                for chunk, _sample_rate, _timing in upstream.tts_model.generate_voice_clone_streaming(
+                stream = upstream.tts_model.generate_voice_clone_streaming(
                     text=text,
                     language=voice_cfg.get("language", "Auto"),
                     ref_audio=voice_cfg["ref_audio"],
@@ -119,22 +151,31 @@ async def stream_chunks(
                     chunk_size=voice_cfg.get("chunk_size", 12),
                     non_streaming_mode=False,
                     instruct=instruct or None,
-                ):
-                    chunks.put(chunk)
+                )
+                for chunk, _sample_rate, _timing in stream:
+                    if canceled.is_set() or not put_chunk(chunk):
+                        break
         except Exception as exc:
-            chunks.put(exc)
+            put_chunk(exc)
         finally:
-            chunks.put(done)
+            try:
+                if stream is not None:
+                    stream.close()
+            finally:
+                finish_producer()
 
     threading.Thread(target=producer, daemon=True).start()
     loop = asyncio.get_running_loop()
-    while True:
-        item = await loop.run_in_executor(None, chunks.get)
-        if item is done:
-            break
-        if isinstance(item, Exception):
-            raise item
-        yield upstream._to_pcm16(item)
+    try:
+        while True:
+            item = await loop.run_in_executor(None, chunks.get)
+            if item is done:
+                break
+            if isinstance(item, Exception):
+                raise item
+            yield upstream._to_pcm16(item)
+    finally:
+        canceled.set()
 
 
 @app.get("/health")

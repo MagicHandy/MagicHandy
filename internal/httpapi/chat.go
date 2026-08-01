@@ -89,6 +89,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	s.modes.NotifyChatActivity()
 	defer s.modes.NotifyChatActivityComplete()
 	started := time.Now()
+	s.interruptChatSpeech(settings.Voice)
 
 	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM, body.Message)
 	if err != nil {
@@ -127,33 +128,83 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		ConversationContext:   promptContext.ConversationContext,
 		Capabilities:          &capabilities,
 	}
-	emit := sseEmitter(func(event string, payload any) error {
-		return writeSSE(w, event, payload)
-	})
-
-	// Persist before starting SSE so canonical history failure cannot produce
-	// an untracked model turn. The seq rides the status event for client sync.
-	userSeq, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleUser, body.Message, clientIDFromRequest(r), nil)
-	if err != nil {
-		s.writeChatStorageError(w, err)
+	emit, ok := s.beginInteractiveChatStream(w, r, settings.LLM, prompt.ID, sessionID, body.Message, promptContext)
+	if !ok {
 		return
 	}
-	setSSEHeaders(w)
-
-	if err := emitChatStarted(emit, settings.LLM, prompt.ID, sessionID, userSeq, promptContext.CurrentMood, promptContext.Persona); err != nil {
-		return
-	}
-
-	result, err := service.Complete(chatCtx, chat.Request{
+	preparation := time.Since(started)
+	diagnostics := interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona)
+	result, ok, completionErr := s.completeInteractiveChat(chatCtx, service, chat.Request{
 		Message: body.Message,
 		History: promptContext.History,
-	}, func(event chat.StreamEvent) error {
+	}, emit, started, preparation, &diagnostics)
+	if !ok {
+		return
+	}
+	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
+	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
+		diagnostics,
+		promptContext.CurrentMood, started)
+}
+
+func (s *Server) beginInteractiveChatStream(
+	w http.ResponseWriter,
+	r *http.Request,
+	settings config.LLMSettings,
+	promptID string,
+	sessionID string,
+	message string,
+	promptContext interactiveChatPromptContext,
+) (sseEmitter, bool) {
+	emit := sseEmitter(func(event string, payload any) error { return writeSSE(w, event, payload) })
+	// Persist before starting SSE so canonical history failure cannot produce
+	// an untracked model turn. The seq rides the status event for client sync.
+	userSeq, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
+	if err != nil {
+		s.writeChatStorageError(w, err)
+		return nil, false
+	}
+	setSSEHeaders(w)
+	if err := emitChatStarted(emit, settings, promptID, sessionID, userSeq, promptContext.CurrentMood, promptContext.Persona); err != nil {
+		return nil, false
+	}
+	return emit, true
+}
+
+func (s *Server) interruptChatSpeech(settings config.VoiceSettings) {
+	if !settings.SpeakReplies || settings.ChatSpeechPolicy != config.ChatSpeechInterrupt || s.voice == nil {
+		return
+	}
+	canceled := s.voice.CancelPending(voice.RoleTTS)
+	if len(canceled) > 0 {
+		s.logger.Debug("chat interrupted pending speech", "request_count", len(canceled))
+	}
+}
+
+func (s *Server) completeInteractiveChat(
+	ctx context.Context,
+	service chat.Service,
+	request chat.Request,
+	emit sseEmitter,
+	started time.Time,
+	preparation time.Duration,
+	diagnostics *chat.MessageDiagnostics,
+) (chat.Result, bool, error) {
+	providerCtx, schedulerWait, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestInteractive)
+	if err != nil {
+		_ = emit("error", map[string]string{"message": err.Error()})
+		_ = emit("done", map[string]any{"ok": false})
+		return chat.Result{}, false, err
+	}
+	defer releaseLLM()
+	timedProvider := newTimedLLMProvider(service.Provider)
+	service.Provider = timedProvider
+	result, completionErr := service.Complete(providerCtx, request, func(event chat.StreamEvent) error {
 		return emitChatStreamEvent(emit, event)
 	})
-	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
-	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, err, sessionID,
-		interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona),
-		promptContext.CurrentMood, started)
+	releaseLLM()
+	timedProvider.applyDiagnostics(diagnostics, started, preparation, schedulerWait)
+	return result, true, completionErr
 }
 
 // interactiveDiagnostics is the bounded, non-secret provenance stored on the
