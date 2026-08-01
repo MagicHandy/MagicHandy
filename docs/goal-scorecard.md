@@ -132,6 +132,23 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-08-01** - Recovered a real-device startup failure and removed a managed
+  LLM allocation mismatch. The Handy reported slide 0-100% as absolute
+  5.00-102.83 while parked at 4.00, placing it 1.02% below its own calibrated
+  minimum and just outside the shared 1% tolerance. Calibration sanity now has
+  a separate 3% bound while commanded lead-in arrival remains at 1%. A Cloud
+  REST check started Stroke at 5%, remained running 3.153 seconds later, then
+  stopped successfully. The `motion_trace.v3` export contained 18 rows with no
+  drops; relevant Cloud calls were 302-317 ms and preflight Stop through Play
+  spanned 1.95 seconds. Sampling, sanitization, arrival verification, dispatch,
+  and Stop semantics were intentionally unchanged. Separately, two dead-parent
+  llama-server processes left by force-killed app instances were removed before
+  an isolated same-model benchmark. The model-default 262k/four-slot server took
+  19.512 seconds for a 6,842-token prompt and 47-token response; a 32k/single-slot
+  server took 2.204 seconds in the same single-request probe. Managed mode now
+  pins that bounded launch shape, while GPU offload, Flash Attention, batching,
+  and prompt caching stay automatic; repeated and simultaneous-TTS trials remain
+  open.
 - **2026-07-31** - Cut chat latency and made personas actually change the voice.
   A report that replies had slowed traced to the curated funscript import: it
   added 171 built-ins, all seeded enabled, taking the composed system prompt from

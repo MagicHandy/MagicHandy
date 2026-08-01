@@ -101,10 +101,15 @@ The helper:
 Build source and intermediates use a job-specific temporary directory beneath
 the runtime root and are removed after success or failure. Runtime inspection
 does no network I/O and starts no process. The managed server itself launches
-with `--offline --no-ui`, binds to MagicHandy's fixed loopback endpoint, and
-loads only the backend-resolved managed model. An incomplete or mismatched
-app-owned install is replaced on retry; users are not asked to repair runtime
-directories by hand.
+with `--offline --no-ui`, one generation slot, and a 32,768-token context. It
+binds to MagicHandy's fixed loopback endpoint and loads only the backend-resolved
+managed model. The explicit context avoids allocating a model-advertised 262k
+window for measured 7k-12k-token requests, while one slot matches the app's one
+interactive stream and cancel-before-yield Autopilot behavior. GPU offload,
+Flash Attention, batching, and ordinary prompt caching retain the pinned
+runner's automatic defaults so CPU builds and competing voice workloads can
+still fit. An incomplete or mismatched app-owned install is replaced on retry;
+users are not asked to repair runtime directories by hand.
 
 The app exposes build state, bounded output, cancellation, installed version,
 backend, and current/outdated/invalid state. Cancellation terminates the
@@ -242,7 +247,7 @@ Still planned:
 
 - checksum-pinned curated model downloads with license/source metadata;
 - RAM/VRAM and GPU-fit recommendations;
-- context-window and JSON-compliance scoring;
+- aggregate request budgeting plus context-window and JSON-compliance scoring;
 - resumable downloads and persisted cross-restart import jobs; and
 - split-GGUF and auxiliary projector/adapter launch support if the managed
   runner contract grows to support them safely.

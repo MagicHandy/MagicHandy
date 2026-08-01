@@ -11,15 +11,34 @@ import (
 )
 
 const (
+	// startupPositionTolerancePercent is how far the device may settle from the
+	// commanded lead-in target and still count as arrived. It is a correctness
+	// check on a move the app just asked for, so it stays tight.
 	startupPositionTolerancePercent = 1.0
-	startupStationarySpeedAbsolute  = 5.0
-	startupStationaryRetryDelay     = 150 * time.Millisecond
-	startupArrivalRetryDelay        = 150 * time.Millisecond
-	startupMinimumLeadIn            = 500 * time.Millisecond
-	startupArrivalSettle            = 150 * time.Millisecond
-	startupTargetHold               = 10 * time.Second
-	startupStationaryAttempts       = 3
-	startupArrivalAttempts          = 6
+	// startupCalibrationTolerancePercent is a different question with a different
+	// answer: how far outside its own calibrated travel the device may be found
+	// resting before its geometry is treated as nonsense.
+	//
+	// These shared one constant, and that was wrong in the direction that
+	// refused real hardware. A Handy reported slide 0-100% as absolute
+	// 5.00-102.83 while parked at absolute 4.00 -- one unit below its own stated
+	// minimum, which is 1.02% of the 97.83-unit travel. Against a 1.0% bound it
+	// failed by two hundredths of a percentage point and refused every start.
+	//
+	// One absolute unit is the measured device's quantization at the ends of its
+	// range, so this has to clear 1.02% with room rather than land just under it.
+	// The 3% boundary still rejects genuinely wrong geometry: the regression case
+	// sits at -15.3%. The value is clamped into 0-100 immediately after the check,
+	// so a small excursion was always meant to be absorbed rather than refused.
+	startupCalibrationTolerancePercent = 3.0
+	startupStationarySpeedAbsolute     = 5.0
+	startupStationaryRetryDelay        = 150 * time.Millisecond
+	startupArrivalRetryDelay           = 150 * time.Millisecond
+	startupMinimumLeadIn               = 500 * time.Millisecond
+	startupArrivalSettle               = 150 * time.Millisecond
+	startupTargetHold                  = 10 * time.Second
+	startupStationaryAttempts          = 3
+	startupArrivalAttempts             = 6
 )
 
 type startupMotionProfile struct {
@@ -231,9 +250,17 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 	first := sampleMotionPath(e.plan, e.transition, 0).PositionPercent
 	targetFullPercent := physicalPositionForSemantic(first, settings)
 	currentFullPercent := calibration.fullPercentAt(state.PositionAbsolute)
-	if currentFullPercent < -startupPositionTolerancePercent ||
-		currentFullPercent > 100+startupPositionTolerancePercent {
-		return startupMotionProfile{}, errors.New("motion startup absolute position was outside calibrated full travel")
+	if currentFullPercent < -startupCalibrationTolerancePercent ||
+		currentFullPercent > 100+startupCalibrationTolerancePercent {
+		// The geometry the device reported is the only thing that can explain this
+		// refusal, so it belongs in the message. Without it the failure is a dead
+		// end: it names a calibration nobody can see.
+		return startupMotionProfile{}, fmt.Errorf(
+			"motion startup absolute position was outside calibrated full travel "+
+				"(position %.2f maps to %.1f%% of travel; device reported slide %.1f-%.1f%% as %.2f-%.2f)",
+			state.PositionAbsolute, currentFullPercent,
+			state.StrokeMinPercent, state.StrokeMaxPercent,
+			state.StrokeMinAbsolute, state.StrokeMaxAbsolute)
 	}
 	currentFullPercent = math.Max(0, math.Min(100, currentFullPercent))
 	unionMinimum := math.Floor(min(currentFullPercent, state.StrokeMinPercent, float64(settings.MinPercent)))
