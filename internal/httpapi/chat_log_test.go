@@ -416,7 +416,7 @@ func chatStubBinary(t *testing.T) string {
 
 func startSpeakingTTS(t *testing.T, server *Server, speakReplies bool) {
 	t.Helper()
-	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+	saveAndApplyVoiceSettings(t, server, func(settings config.Settings) config.Settings {
 		settings.Voice.Enabled = true
 		settings.Voice.TTSProvider = config.VoiceProviderCustom
 		settings.Voice.SpeakReplies = speakReplies
@@ -424,8 +424,6 @@ func startSpeakingTTS(t *testing.T, server *Server, speakReplies bool) {
 		settings.Voice.TTSWorkerArgs = []string{"-role", "tts", "-start-loaded"}
 		return settings
 	})
-	settings, _ := server.store.Snapshot()
-	server.applyVoiceSettingsTransition(settings)
 
 	recorder := httptest.NewRecorder()
 	request := withController(httptest.NewRequest(http.MethodPost, "/api/voice/workers/tts/start", nil))

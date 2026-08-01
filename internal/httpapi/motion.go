@@ -487,7 +487,7 @@ func (s *Server) updateSettingsAndRuntime(
 }
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
-	s.applyVoiceSettingsTransition(next)
+	s.applyVoiceSettingsTransition(previous, next)
 	if s.modes != nil && previous.Autopilot != next.Autopilot {
 		s.modes.NotifyAutopilotSettingsChanged()
 	}

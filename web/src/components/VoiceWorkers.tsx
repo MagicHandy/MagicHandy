@@ -124,6 +124,7 @@ export function VoiceWorkers({
         const modelLoaded = worker?.model_state === "ready";
         const isRunning = state === "running";
         const isStarting = state === "starting";
+        const modelFailed = isRunning && !modelLoaded && Boolean(worker?.last_error);
         const lastResult = requests.find(
           (request) => request.role === role && (request.state === "done" || request.state === "failed" || request.state === "canceled"),
         );
@@ -132,8 +133,8 @@ export function VoiceWorkers({
             <div className="voice-worker-head">
               <span className="voice-worker-name">{selectedRole ? t("Worker") : translateKnown(ROLE_LABEL[role] ?? role)}</span>
               <span className="status-readout">
-                <span className="status-dot" data-state={dotState(state)} />
-                <span className="status-text">{translateKnown(STATE_LABEL[state] ?? state)}</span>
+                <span className="status-dot" data-state={modelFailed ? "error" : dotState(state)} />
+                <span className="status-text">{modelFailed ? t("Not ready") : translateKnown(STATE_LABEL[state] ?? state)}</span>
               </span>
               {worker?.provider && state === "running" && (
                 <span className="hint-inline">
@@ -147,7 +148,7 @@ export function VoiceWorkers({
             {state === "disabled" && providerSelected && (
               <p className="form-status">{enabled ? t("Save these voice settings; Start will appear here once the worker is configured.") : t("Enable voice workers and save; Start will appear here when the worker is ready.")}</p>
             )}
-            {worker?.last_error && state !== "running" && (
+            {worker?.last_error && (state !== "running" || modelFailed) && (
               <p className="form-status voice-worker-error">{worker.last_error}</p>
             )}
             {lastResult && (

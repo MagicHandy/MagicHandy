@@ -127,11 +127,12 @@ type session struct {
 	writeMu sync.Mutex
 	writer  io.Writer
 
-	mu       sync.Mutex
-	loaded   bool
-	pending  int
-	canceled map[string]bool
-	cancels  map[string]context.CancelFunc
+	mu             sync.Mutex
+	loaded         bool
+	pending        int
+	managedFailure string
+	canceled       map[string]bool
+	cancels        map[string]context.CancelFunc
 
 	queue chan protocol.Request
 
@@ -157,7 +158,7 @@ func (s *session) readLoop(reader io.Reader) error {
 		case protocol.RequestHello:
 			s.handleHello(request)
 		case protocol.RequestHealth:
-			s.send(s.healthResponse(request.ID))
+			s.handleHealth(request)
 		case protocol.RequestLoad:
 			s.handleLoad(request)
 		case protocol.RequestUnload:
@@ -175,6 +176,19 @@ func (s *session) readLoop(reader io.Reader) error {
 		}
 	}
 	return scanner.Err()
+}
+
+func (s *session) handleHealth(request protocol.Request) {
+	if s.server != nil && s.modelLoaded() && !s.server.Running() {
+		s.setLoaded(false)
+		err := s.server.failureMessage(errors.New("managed TTS server exited unexpectedly"))
+		s.setManagedFailure(sanitize(err.Error(), s.options.APIKey))
+	}
+	if failure := s.managedFailureMessage(); failure != "" {
+		s.sendError(request.ID, protocol.ErrorCodeInternal, failure, true)
+		return
+	}
+	s.send(s.healthResponse(request.ID))
 }
 
 func (s *session) handleHello(request protocol.Request) {
@@ -209,8 +223,9 @@ func (s *session) handleLoad(request protocol.Request) {
 	if s.server != nil {
 		timeout = managedLoadTimeout
 		if err := s.server.Start(); err != nil {
-			s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
-				"local TTS server could not start: "+sanitize(err.Error(), s.options.APIKey), true)
+			message := "local TTS server could not start: " + sanitize(err.Error(), s.options.APIKey)
+			s.setManagedFailure(message)
+			s.sendError(request.ID, protocol.ErrorCodeMissingDependency, message, true)
 			return
 		}
 	}
@@ -226,8 +241,11 @@ func (s *session) handleLoad(request protocol.Request) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			code = protocol.ErrorCodeTimeout
 		}
-		s.sendError(request.ID, code,
-			"TTS server did not become ready: "+sanitize(err.Error(), s.options.APIKey), true)
+		message := "TTS server did not become ready: " + sanitize(err.Error(), s.options.APIKey)
+		if s.server != nil {
+			s.setManagedFailure(message)
+		}
+		s.sendError(request.ID, code, message, true)
 		return
 	}
 
@@ -237,6 +255,7 @@ func (s *session) handleLoad(request protocol.Request) {
 
 func (s *session) handleUnload(request protocol.Request) {
 	s.setLoaded(false)
+	s.setManagedFailure("")
 	s.cancelAll()
 	if s.server != nil {
 		if err := s.server.Stop(); err != nil {
@@ -391,20 +410,41 @@ func (s *session) speechRequestBody(request protocol.Request, text string) ([]by
 	if voice != "" {
 		payload["voice"] = voice
 	}
-	if s.options.Instruct != "" {
-		payload["instruct"] = s.options.Instruct
+	instruct := strings.TrimSpace(request.Instruct)
+	if instruct == "" {
+		instruct = s.options.Instruct
 	}
-	if s.options.Seed != nil {
-		seed := *s.options.Seed
-		if s.options.RandomizeSeed {
+	if len(instruct) > maxInstructBytes {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
+			fmt.Sprintf("TTS instruction exceeds %d KiB", maxInstructBytes>>10), false)
+		return nil, false
+	}
+	if instruct != "" {
+		payload["instruct"] = instruct
+	}
+
+	seed := request.Seed
+	randomizeSeed := request.RandomizeSeed
+	if seed == nil {
+		seed = s.options.Seed
+		randomizeSeed = s.options.RandomizeSeed
+	}
+	if randomizeSeed && seed == nil {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest,
+			"randomized TTS seed mode requires a configured seed", false)
+		return nil, false
+	}
+	if seed != nil {
+		value := *seed
+		if randomizeSeed {
 			var randomBytes [4]byte
 			if _, err := rand.Read(randomBytes[:]); err != nil {
 				s.sendError(request.ID, protocol.ErrorCodeInternal, "generate random TTS seed", true)
 				return nil, false
 			}
-			seed = binary.LittleEndian.Uint32(randomBytes[:])
+			value = binary.LittleEndian.Uint32(randomBytes[:])
 		}
-		payload["seed"] = seed
+		payload["seed"] = value
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -735,7 +775,28 @@ func (s *session) canceledLocked(id string) bool {
 func (s *session) setLoaded(loaded bool) {
 	s.mu.Lock()
 	s.loaded = loaded
+	if loaded {
+		s.managedFailure = ""
+	}
 	s.mu.Unlock()
+}
+
+func (s *session) modelLoaded() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loaded
+}
+
+func (s *session) setManagedFailure(message string) {
+	s.mu.Lock()
+	s.managedFailure = message
+	s.mu.Unlock()
+}
+
+func (s *session) managedFailureMessage() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.managedFailure
 }
 
 func (s *session) healthResponse(requestID string) protocol.Response {

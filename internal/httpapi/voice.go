@@ -12,8 +12,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -106,15 +108,6 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 	if settings.TTSProvider == config.VoiceTTSProviderChatterbox {
 		worker.Args = append(worker.Args, "-health-ready-field", "loaded")
 	}
-	if settings.TTSProvider == config.VoiceTTSProviderFasterQwen {
-		worker.Args = append(worker.Args, "-seed", strconv.FormatUint(uint64(settings.TTSSeed), 10))
-		if instruct := config.ResolveTTSTonePrompt(settings); instruct != "" {
-			worker.Args = append(worker.Args, "-instruct", instruct)
-		}
-		if settings.TTSSeedMode == config.TTSSeedModeVaried {
-			worker.Args = append(worker.Args, "-randomize-seed")
-		}
-	}
 	if settings.TTSProvider == config.VoiceTTSProviderOpenAICompat || !settings.TTSAutoLaunch {
 		return worker
 	}
@@ -144,6 +137,18 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 		worker.Env["TRANSFORMERS_OFFLINE"] = "1"
 	}
 	return worker
+}
+
+func voiceSpeechRequest(settings config.VoiceSettings, text string) voice.Request {
+	request := voice.Request{Type: voice.RequestSpeak, Text: text}
+	if settings.TTSProvider != config.VoiceTTSProviderFasterQwen {
+		return request
+	}
+	seed := settings.TTSSeed
+	request.Seed = &seed
+	request.RandomizeSeed = settings.TTSSeedMode == config.TTSSeedModeVaried
+	request.Instruct = config.ResolveTTSTonePrompt(settings)
+	return request
 }
 
 type managedTTSLaunch struct {
@@ -564,7 +569,13 @@ func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervi
 func ensureVoiceWorkerReady(ctx context.Context, worker *voice.Supervisor) error {
 	status := worker.Status()
 	if status.State == voice.StateRunning && status.ModelState == voice.ModelStateReady {
-		return nil
+		response, err := worker.Health(ctx)
+		if err == nil && response.ModelState == voice.ModelStateReady {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 	}
 	if err := worker.Start(ctx); err != nil {
 		return err
@@ -582,34 +593,65 @@ func (s *Server) startVoiceAutoload(settings config.VoiceSettings) {
 	if len(roles) == 0 || s.voice == nil {
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	s.voiceAutoloadMu.Lock()
-	s.voiceAutoloadCancel = cancel
-	s.voiceAutoloadMu.Unlock()
-	for _, role := range roles {
-		worker := s.voice.Worker(role)
-		s.voiceAutoloadWG.Add(1)
-		go func() {
-			defer s.voiceAutoloadWG.Done()
-			status := worker.Status()
-			if !status.Configured {
-				s.logger.Warn("voice worker autoload skipped", "role", role, "reason", "worker is not configured")
-				return
-			}
-			loadCtx, loadCancel := context.WithTimeout(ctx, voiceModelLoadTimeout)
-			defer loadCancel()
-			if err := ensureVoiceWorkerReady(loadCtx, worker); err != nil {
-				if ctx.Err() == nil {
-					s.logger.Warn("voice worker autoload failed", "role", role, "error", err)
-				}
-				stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
-				_ = worker.Stop(stopCtx)
-				stopCancel()
-				return
-			}
-			s.logger.Info("voice worker autoloaded", "role", role, "model_state", worker.Status().ModelState)
-		}()
+	parent := s.lifecycleCtx
+	if parent == nil {
+		parent = context.Background()
 	}
+
+	s.voiceAutoloadMu.Lock()
+	if s.voiceAutoloadCancel != nil {
+		s.voiceAutoloadMu.Unlock()
+		return
+	}
+	s.voiceAutoloadID++
+	autoloadID := s.voiceAutoloadID
+	ctx, cancel := context.WithCancel(parent)
+	s.voiceAutoloadCancel = cancel
+	s.voiceAutoloadWG.Add(1)
+	s.voiceAutoloadMu.Unlock()
+
+	go func() {
+		defer func() {
+			cancel()
+			s.voiceAutoloadMu.Lock()
+			if s.voiceAutoloadID == autoloadID {
+				s.voiceAutoloadCancel = nil
+			}
+			s.voiceAutoloadMu.Unlock()
+			s.voiceAutoloadWG.Done()
+		}()
+
+		var rolesWG sync.WaitGroup
+		for _, role := range roles {
+			rolesWG.Add(1)
+			go func(role voice.Role) {
+				defer rolesWG.Done()
+				s.autoloadVoiceWorker(ctx, role)
+			}(role)
+		}
+		rolesWG.Wait()
+	}()
+}
+
+func (s *Server) autoloadVoiceWorker(ctx context.Context, role voice.Role) {
+	worker := s.voice.Worker(role)
+	status := worker.Status()
+	if !status.Configured {
+		s.logger.Warn("voice worker autoload skipped", "role", role, "reason", "worker is not configured")
+		return
+	}
+	loadCtx, loadCancel := context.WithTimeout(ctx, voiceModelLoadTimeout)
+	defer loadCancel()
+	if err := ensureVoiceWorkerReady(loadCtx, worker); err != nil {
+		if ctx.Err() == nil {
+			s.logger.Warn("voice worker autoload failed", "role", role, "error", err)
+		}
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
+		_ = worker.Stop(stopCtx)
+		stopCancel()
+		return
+	}
+	s.logger.Info("voice worker autoloaded", "role", role, "model_state", worker.Status().ModelState)
 }
 
 func voiceAutoloadRoles(settings config.VoiceSettings) []voice.Role {
@@ -630,6 +672,7 @@ func (s *Server) stopVoiceAutoload() {
 	s.voiceAutoloadMu.Lock()
 	cancel := s.voiceAutoloadCancel
 	s.voiceAutoloadCancel = nil
+	s.voiceAutoloadID++
 	s.voiceAutoloadMu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -739,8 +782,9 @@ func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 			request.AudioFormat = "wav"
 		}
 	} else {
-		request.Type = voice.RequestSpeak
-		request.Text = body.Text
+		settings, _ := s.store.Snapshot()
+		request = voiceSpeechRequest(settings.Voice, body.Text)
+		request.DelayMillis = body.DelayMillis
 	}
 
 	pending, err := s.voice.Submit(worker.Status().Role, request)
@@ -874,11 +918,22 @@ func (s *Server) handleVoiceRequestPlayed(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"acknowledged": acknowledged})
 }
 
-// applyVoiceSettingsTransition reconfigures workers after a settings save.
-// A changed command or a disable stops the affected worker. Startup autoload
-// is intentionally separate; unchanged configs are a no-op inside SetConfig.
-func (s *Server) applyVoiceSettingsTransition(next config.Settings) {
-	s.voice.Configure(voiceManagerConfig(next.Voice, s.voiceExecutable, s.voiceDataDir))
+// applyVoiceSettingsTransition reconfigures workers after a settings save and
+// restores every role whose persisted policy says it should be ready. Common
+// Qwen seed/tone edits ride each speech request, so they do not churn the
+// process or discard its loaded model and reference cache.
+func (s *Server) applyVoiceSettingsTransition(previous, next config.Settings) {
+	previousConfig := voiceManagerConfig(previous.Voice, s.voiceExecutable, s.voiceDataDir)
+	nextConfig := voiceManagerConfig(next.Voice, s.voiceExecutable, s.voiceDataDir)
+	previousRoles := voiceAutoloadRoles(previous.Voice)
+	nextRoles := voiceAutoloadRoles(next.Voice)
+	if previousConfig.Equal(nextConfig) && slices.Equal(previousRoles, nextRoles) {
+		return
+	}
+
+	s.stopVoiceAutoload()
+	s.voice.Configure(nextConfig)
+	s.startVoiceAutoload(next.Voice)
 }
 
 func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request) {
