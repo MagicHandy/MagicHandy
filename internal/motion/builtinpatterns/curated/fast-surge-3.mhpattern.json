@@ -1,0 +1,119 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Surge 3",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 5110,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 43,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 243,
+      "position_percent": 96
+    },
+    {
+      "time_ms": 443,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 643,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 843,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 1043,
+      "position_percent": 96
+    },
+    {
+      "time_ms": 1243,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 1443,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 1643,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 1743,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 1843,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 1977,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 2127,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2394,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2510,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 2677,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2877,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 3010,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3144,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3560,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 3794,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4227,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 4460,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4877,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 5110,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "tip",
+    "steady",
+    "varied",
+    "upper-return"
+  ]
+}

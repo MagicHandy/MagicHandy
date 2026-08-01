@@ -1,0 +1,71 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Easy Drive 1",
+  "description": "Slow cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 470,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1303,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2136,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2970,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3803,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4636,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5470,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6303,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7136,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7970,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8803,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9637,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
+  ]
+}

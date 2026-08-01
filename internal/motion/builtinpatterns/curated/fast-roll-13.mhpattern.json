@@ -1,0 +1,134 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Roll 13",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 157,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 404,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 623,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 837,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1057,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1270,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1457,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1675,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1891,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2123,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2323,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2557,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2756,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2975,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3175,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3409,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3623,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4075,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4409,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4742,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5304,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5942,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6509,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6976,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7776,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8242,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8775,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9490,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "deep",
+    "rhythmic",
+    "build"
+  ]
+}

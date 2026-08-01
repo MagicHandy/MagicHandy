@@ -1,0 +1,126 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Easy Roll 4",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 125,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 291,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 458,
+      "position_percent": 83.333333
+    },
+    {
+      "time_ms": 666,
+      "position_percent": 83.333333
+    },
+    {
+      "time_ms": 1166,
+      "position_percent": 83.333333
+    },
+    {
+      "time_ms": 1666,
+      "position_percent": 83.333333
+    },
+    {
+      "time_ms": 2866,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3075,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3408,
+      "position_percent": 66.666667
+    },
+    {
+      "time_ms": 3533,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3741,
+      "position_percent": 66.666667
+    },
+    {
+      "time_ms": 4450,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4700,
+      "position_percent": 33.333333
+    },
+    {
+      "time_ms": 5241,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5491,
+      "position_percent": 66.666667
+    },
+    {
+      "time_ms": 5741,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6033,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 6616,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7283,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7575,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8033,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 8450,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8825,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 9200,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9575,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 9908,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "paired",
+    "fast",
+    "contrast"
+  ]
+}

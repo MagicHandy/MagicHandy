@@ -1,0 +1,210 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Roll 4",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 85
+    },
+    {
+      "time_ms": 63,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 348,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 615,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 848,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1082,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1349,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1582,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1849,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2116,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2383,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2617,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2883,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3150,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3384,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3651,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4151,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5351,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 5501,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5651,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 5785,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5918,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6052,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6185,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6285,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6385,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6502,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6619,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6736,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6852,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6936,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7019,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7136,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7253,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7336,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7419,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7503,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7586,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7686,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7786,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 7853,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7920,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 8004,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8087,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 8187,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8287,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 8688,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9556,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 50
+    }
+  ],
+  "tags": [
+    "full",
+    "rhythmic",
+    "build"
+  ]
+}

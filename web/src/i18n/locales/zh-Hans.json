@@ -519,7 +519,7 @@
   "Loop pattern": "循环动作模式",
   "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes.": "循环模式会重复。活动时序保留所选设置；短于 6.6 秒的周期会出于安全原因拉伸到 6.6 秒。符合条件的 5 秒以上静止停顿会被压缩，位置扩展到完整相对范围，并闭合循环。",
   "Lore": "角色背景",
-  "Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "角色背景会在回复契约之前以引用数据的形式加入。它不能授予运动权限或改变设备限制。",
+  "Background facts the model stays consistent with, not a manner to imitate — the description sets the manner. Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "模型需与之保持一致的背景事实，而不是要模仿的说话方式——说话方式由角色描述设定。角色背景会在回复契约之前以引用数据的形式加入。它不能授予运动权限或改变设备限制。",
   "Lore stays saved but does not enter the model prompt.": "角色背景会继续保存，但不会加入模型提示词。",
   "Lore text": "背景文本",
   "Loving": "深情",
@@ -1327,5 +1327,6 @@
   "{total} videos / {paired} with scripts": "{total} 个视频 / {paired} 个带有脚本",
   "{total} videos · {missing} missing": "{total} 个视频 · 缺失 {missing} 个",
   "{used} / {total} characters": "{used} / {total} 个字符",
-  "{visible} of {total} videos": "{visible} / {total} 个视频"
+  "{visible} of {total} videos": "{visible} / {total} 个视频",
+  "The model reads this on every reply. It is the character being played: manner, attitude, and how they speak. Lore is separate and holds background facts.": "模型在每次回复时都会读取此内容。这就是它所扮演的角色：举止、态度和说话方式。角色背景是独立的，用于保存背景事实。"
 }

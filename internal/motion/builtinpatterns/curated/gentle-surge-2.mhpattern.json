@@ -1,0 +1,54 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Gentle Surge 2",
+  "description": "Slow cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 133,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 1028,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1641,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 2415,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3582,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 4782,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5282,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6482,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "full",
+    "steady",
+    "balanced"
+  ]
+}

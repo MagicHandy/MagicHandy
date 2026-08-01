@@ -1,0 +1,263 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Roll 11",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 267,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 567,
+      "position_percent": 7.777778
+    },
+    {
+      "time_ms": 850,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1117,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 1401,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1651,
+      "position_percent": 7.777778
+    },
+    {
+      "time_ms": 1934,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2184,
+      "position_percent": 11.111111
+    },
+    {
+      "time_ms": 2467,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2717,
+      "position_percent": 7.777778
+    },
+    {
+      "time_ms": 3001,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3251,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 3534,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3784,
+      "position_percent": 7.777778
+    },
+    {
+      "time_ms": 4067,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4317,
+      "position_percent": 11.111111
+    },
+    {
+      "time_ms": 4601,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4851,
+      "position_percent": 7.777778
+    },
+    {
+      "time_ms": 5134,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5384,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 5667,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5917,
+      "position_percent": 7.777778
+    },
+    {
+      "time_ms": 6201,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6451,
+      "position_percent": 11.111111
+    },
+    {
+      "time_ms": 6767,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6953,
+      "position_percent": 55.555556
+    },
+    {
+      "time_ms": 7001,
+      "position_percent": 55.555556
+    },
+    {
+      "time_ms": 7134,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7467,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 7507,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7547,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 7587,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7627,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 7667,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7707,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 7747,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7787,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 7827,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7867,
+      "position_percent": 44.444444
+    },
+    {
+      "time_ms": 8067,
+      "position_percent": 77.777778
+    },
+    {
+      "time_ms": 8107,
+      "position_percent": 72.222222
+    },
+    {
+      "time_ms": 8147,
+      "position_percent": 77.777778
+    },
+    {
+      "time_ms": 8187,
+      "position_percent": 72.222222
+    },
+    {
+      "time_ms": 8227,
+      "position_percent": 77.777778
+    },
+    {
+      "time_ms": 8267,
+      "position_percent": 72.222222
+    },
+    {
+      "time_ms": 8307,
+      "position_percent": 77.777778
+    },
+    {
+      "time_ms": 8347,
+      "position_percent": 72.222222
+    },
+    {
+      "time_ms": 8387,
+      "position_percent": 77.777778
+    },
+    {
+      "time_ms": 8427,
+      "position_percent": 72.222222
+    },
+    {
+      "time_ms": 8467,
+      "position_percent": 77.777778
+    },
+    {
+      "time_ms": 8507,
+      "position_percent": 72.222222
+    },
+    {
+      "time_ms": 8674,
+      "position_percent": 61.111111
+    },
+    {
+      "time_ms": 8714,
+      "position_percent": 66.666667
+    },
+    {
+      "time_ms": 8754,
+      "position_percent": 61.111111
+    },
+    {
+      "time_ms": 8794,
+      "position_percent": 66.666667
+    },
+    {
+      "time_ms": 8834,
+      "position_percent": 61.111111
+    },
+    {
+      "time_ms": 8874,
+      "position_percent": 66.666667
+    },
+    {
+      "time_ms": 9157,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9607,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9658,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "tip",
+    "rhythmic",
+    "varied",
+    "upper-return"
+  ]
+}

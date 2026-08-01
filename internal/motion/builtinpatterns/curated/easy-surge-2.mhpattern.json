@@ -1,0 +1,123 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Easy Surge 2",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 6,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 223,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 873,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 1273,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 1506,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 1723,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2373,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 2773,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 3007,
+      "position_percent": 40
+    },
+    {
+      "time_ms": 3223,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3557,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 3890,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4390,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4656,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 4856,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 5056,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 5423,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5923,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6723,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 6923,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 7123,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 7406,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7906,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9106,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9939,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
+  ]
+}

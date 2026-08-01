@@ -1,0 +1,182 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Intense Surge 2",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 16,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 317,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 584,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 884,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1118,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1384,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1618,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1885,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2119,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2385,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2619,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2886,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3120,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3420,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3620,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3887,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4121,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4454,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4654,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4955,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5155,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5455,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5655,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5956,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6156,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6490,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6690,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7023,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7190,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7491,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7691,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8024,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8225,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8525,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8725,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8992,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9226,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9493,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9659,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9960,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change"
+  ]
+}

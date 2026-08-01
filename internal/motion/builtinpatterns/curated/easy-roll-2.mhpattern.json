@@ -1,0 +1,123 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Easy Roll 2",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 706,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 773,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1540,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1591,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2373,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2440,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3206,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3257,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4040,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4107,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4873,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4924,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5707,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5918,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6252,
+      "position_percent": 10
+    },
+    {
+      "time_ms": 6918,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 7085,
+      "position_percent": 30
+    },
+    {
+      "time_ms": 7535,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7702,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 8018,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 8502,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 8984,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 9151,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 9668,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9934,
+      "position_percent": 62
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 62
+    }
+  ],
+  "tags": [
+    "tip",
+    "rhythmic",
+    "varied",
+    "upper-return"
+  ]
+}

@@ -1,0 +1,154 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Drive 28",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1053,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1734,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2253,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2805,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3538,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4200,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4405,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4634,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4835,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5005,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5234,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5386,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5639,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5820,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6052,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6253,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6505,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6720,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6953,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7172,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7372,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7567,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7819,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8005,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8239,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8440,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8672,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8872,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9105,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9322,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9554,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9753,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9987,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "deep",
+    "rhythmic",
+    "build"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Easy Roll 9",
+  "description": "Slow cadence.",
+  "kind": "routine",
+  "cycle_ms": 3343,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 373,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1441,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1675,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2376,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2709,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3343,
+      "position_percent": 50
+    }
+  ],
+  "tags": [
+    "pauses",
+    "rhythmic",
+    "uneven"
+  ]
+}

@@ -1,0 +1,291 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Drive 9",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 81,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 164,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 247,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 331,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 414,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 481,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 564,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 647,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 731,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 814,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 897,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 981,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 1064,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 1147,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 1231,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1314,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 1397,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1481,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 1564,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1647,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 1731,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1814,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 1897,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1981,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 2064,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2147,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 2231,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2314,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 2397,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 2481,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 2564,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2647,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 2731,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 2814,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 2897,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 2981,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 3064,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 3147,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 3231,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3314,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 3397,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3481,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 3564,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3647,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 3731,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3814,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 3897,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 3981,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 4097,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4214,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4297,
+      "position_percent": 95
+    },
+    {
+      "time_ms": 4381,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4781,
+      "position_percent": 20
+    },
+    {
+      "time_ms": 5147,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5514,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5881,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6247,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6614,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6981,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7348,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7714,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8081,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8448,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8814,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9181,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9548,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9914,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
+  ]
+}

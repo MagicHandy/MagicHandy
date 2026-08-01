@@ -1,0 +1,175 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Steady Roll 6",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 62
+    },
+    {
+      "time_ms": 129,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 329,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 529,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 729,
+      "position_percent": 62
+    },
+    {
+      "time_ms": 929,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 1129,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 1229,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 1329,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 1463,
+      "position_percent": 60
+    },
+    {
+      "time_ms": 1613,
+      "position_percent": 50
+    },
+    {
+      "time_ms": 1880,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2013,
+      "position_percent": 81
+    },
+    {
+      "time_ms": 2163,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2346,
+      "position_percent": 82
+    },
+    {
+      "time_ms": 2496,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2630,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3046,
+      "position_percent": 72
+    },
+    {
+      "time_ms": 3280,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3713,
+      "position_percent": 70
+    },
+    {
+      "time_ms": 3946,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4363,
+      "position_percent": 72
+    },
+    {
+      "time_ms": 4596,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4846,
+      "position_percent": 61
+    },
+    {
+      "time_ms": 5162,
+      "position_percent": 90
+    },
+    {
+      "time_ms": 5213,
+      "position_percent": 76
+    },
+    {
+      "time_ms": 5298,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5665,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6032,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6398,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6765,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7132,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7498,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7865,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8232,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8598,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8965,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9332,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9698,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "tip",
+    "steady",
+    "varied",
+    "upper-return"
+  ]
+}

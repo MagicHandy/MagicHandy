@@ -1,0 +1,55 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Drive 18",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 3200,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 267,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 634,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1000,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1367,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1734,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2100,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2467,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2834,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3200,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Intense Drive 3",
+  "description": "Quick cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 177,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 377,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 711,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 944,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1245,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1445,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1712,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1945,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2212,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2446,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2746,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2946,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3180,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3414,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3714,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3881,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4114,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4348,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4615,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4815,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5049,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5282,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5516,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5716,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5983,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6216,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6483,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6684,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6984,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7184,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7451,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7685,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7985,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8152,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8452,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8652,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8919,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9119,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9419,
+      "position_percent": 80
+    },
+    {
+      "time_ms": 9653,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "tip",
+    "rhythmic",
+    "varied"
+  ]
+}

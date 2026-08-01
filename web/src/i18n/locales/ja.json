@@ -519,7 +519,7 @@
   "Loop pattern": "ループパターン",
   "Loop patterns repeat. Active timing remains as selected; cycles shorter than 6.6 seconds are safety-stretched to 6.6 seconds. Qualifying stationary pauses over 5 seconds collapse, positions expand to the full relative span, and the loop closes.": "ループパターンは反復します。動作中のタイミングは選択どおり保持され、6.6秒未満のサイクルは安全のため6.6秒まで引き伸ばされます。条件を満たす5秒超の静止区間は短縮され、位置は相対範囲全体に拡張され、ループが閉じられます。",
   "Lore": "背景情報",
-  "Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "背景情報は応答契約より前に引用データとして追加されます。モーション権限を与えたり、デバイス上限を変更したりすることはできません。",
+  "Background facts the model stays consistent with, not a manner to imitate — the description sets the manner. Lore is quoted as data before the response contract. It cannot grant motion access or change device limits.": "モデルが矛盾しないようにする背景事実であり、真似すべき話し方ではありません。話し方は説明が決めます。背景情報は応答契約より前に引用データとして追加されます。モーション権限を与えたり、デバイス上限を変更したりすることはできません。",
   "Lore stays saved but does not enter the model prompt.": "背景情報は保存されたままですが、モデルのプロンプトには入りません。",
   "Lore text": "背景テキスト",
   "Loving": "愛情深い",
@@ -1327,5 +1327,6 @@
   "{total} videos / {paired} with scripts": "{total} 個動画 / {paired} 個スクリプト対応",
   "{total} videos · {missing} missing": "{total} 個ビデオ · {missing} 個不足",
   "{used} / {total} characters": "{used} / {total} 文字",
-  "{visible} of {total} videos": "{total} 個動画のうち {visible} 個を表示"
+  "{visible} of {total} videos": "{total} 個動画のうち {visible} 個を表示",
+  "The model reads this on every reply. It is the character being played: manner, attitude, and how they speak. Lore is separate and holds background facts.": "モデルは返信のたびにこれを読みます。演じる人物像そのもので、振る舞い、態度、話し方を決めます。背景情報は別枠で、背景事実を保持します。"
 }

@@ -1,0 +1,154 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Fast Surge 9",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 18,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 354,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 726,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1079,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1471,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1806,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2177,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2450,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2751,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2928,
+      "position_percent": 72
+    },
+    {
+      "time_ms": 3123,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3396,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 3697,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4017,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4371,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4821,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5317,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5670,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6061,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6428,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6835,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7108,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7410,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7650,
+      "position_percent": 98
+    },
+    {
+      "time_ms": 7915,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8035,
+      "position_percent": 99
+    },
+    {
+      "time_ms": 8301,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8478,
+      "position_percent": 72
+    },
+    {
+      "time_ms": 8673,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8833,
+      "position_percent": 65
+    },
+    {
+      "time_ms": 9010,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9298,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9617,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 0
+    }
+  ],
+  "tags": [
+    "paired",
+    "steady",
+    "contrast"
+  ]
+}

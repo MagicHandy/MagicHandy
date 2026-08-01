@@ -1,0 +1,98 @@
+{
+  "schema": "magichandy.pattern.v1",
+  "name": "Steady Roll 8",
+  "description": "Medium cadence.",
+  "kind": "routine",
+  "cycle_ms": 10000,
+  "points": [
+    {
+      "time_ms": 0,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 98,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 630,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1030,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 1473,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1745,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2046,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2367,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 2722,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2930,
+      "position_percent": 85
+    },
+    {
+      "time_ms": 3160,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3577,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4038,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5238,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6438,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6903,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7417,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7754,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8126,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9326,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 10000,
+      "position_percent": 100
+    }
+  ],
+  "tags": [
+    "paired",
+    "steady",
+    "contrast"
+  ]
+}
