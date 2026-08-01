@@ -153,14 +153,18 @@ func TestVoiceLevelsComposeIdentityAndTerminalRegisterSections(t *testing.T) {
 			voice:          VoiceWarm,
 			identityHeader: "REPLY IDENTITY - WARM COMPANION:",
 			finalHeader:    "FINAL CHAT VOICE CHECK - WARM:",
-			required:       []string{"never explicit", "specific affectionate or flirtatious reaction"},
-			banned:         []string{"direct erotic and anatomical language"},
+			// A voice level bounds explicitness and nothing else. Asserting an
+			// affectionate manner here is what let the level overwrite the
+			// persona's own temperament, so the anchors are the boundary and the
+			// deferral to the profile, not a prescribed mood.
+			required: []string{"suggestive at most, never explicit", "come from the chat profile"},
+			banned:   []string{"direct erotic and anatomical language"},
 		},
 		{
 			voice:          VoiceIntimate,
 			identityHeader: "REPLY IDENTITY - INTIMATE PARTNER:",
 			finalHeader:    "FINAL CHAT VOICE CHECK - INTIMATE:",
-			required:       []string{"intimate adult partner here in the room", "evocative rather than graphically sexual"},
+			required:       []string{"intimate adult partner here in the room", "stopping short of graphic anatomical description"},
 			banned:         []string{"direct erotic and anatomical language"},
 		},
 		{

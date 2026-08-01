@@ -23,26 +23,49 @@ func TestVoiceUpdatePreservesAndReplacesTTSTone(t *testing.T) {
 	}
 }
 
+// The preset wording is tuning copy, so this pins the behavior around it rather
+// than the sentences: Natural stays silent for backward compatibility, Custom
+// passes the user's text through trimmed, and every built-in preset resolves to
+// its own distinct instruction carrying the shared unperformed-delivery clause.
+// A keyword per preset still catches a swapped or duplicated mapping.
 func TestTTSTonePresetsResolveToReviewedInstructions(t *testing.T) {
-	want := map[string]string{
-		TTSToneNatural:    "",
-		TTSToneWarm:       "Speak in a warm, intimate tone with gentle pacing and natural emotional variation.",
-		TTSTonePlayful:    "Speak in a playful, teasing tone with lively rhythm and expressive emphasis.",
-		TTSToneTender:     "Speak softly in a tender, reassuring tone with calm pacing.",
-		TTSToneCommanding: "Speak in a confident, commanding tone with deliberate pacing and clear emphasis.",
-		TTSToneExcited:    "Speak with excited, energetic delivery, varied pitch, and brisk but intelligible pacing.",
-		TTSToneCustom:     "Use close, breathy delivery.",
+	keyword := map[string]string{
+		TTSToneWarm:       "unhurried",
+		TTSTonePlayful:    "quicker",
+		TTSToneTender:     "slowly",
+		TTSToneCommanding: "level pitch",
+		TTSToneExcited:    "briskly",
 	}
-	if got := TTSTonePresets(); len(got) != len(want) || got[0] != TTSToneNatural || got[len(got)-1] != TTSToneCustom {
-		t.Fatalf("tone preset catalog = %v", got)
+	presets := TTSTonePresets()
+	if len(presets) != len(keyword)+2 || presets[0] != TTSToneNatural || presets[len(presets)-1] != TTSToneCustom {
+		t.Fatalf("tone preset catalog = %v", presets)
 	}
-	for preset, prompt := range want {
-		voice := DefaultSettings().Voice
+
+	voice := DefaultSettings().Voice
+	voice.TTSTonePrompt = "  Use close, breathy delivery.  "
+	voice.TTSTonePreset = TTSToneNatural
+	if got := ResolveTTSTonePrompt(voice); got != "" {
+		t.Errorf("Natural must stay silent, got %q", got)
+	}
+	voice.TTSTonePreset = TTSToneCustom
+	if got := ResolveTTSTonePrompt(voice); got != "Use close, breathy delivery." {
+		t.Errorf("Custom = %q, want the trimmed user prompt", got)
+	}
+
+	seen := map[string]string{}
+	for preset, want := range keyword {
 		voice.TTSTonePreset = preset
-		voice.TTSTonePrompt = "  Use close, breathy delivery.  "
-		if got := ResolveTTSTonePrompt(voice); got != prompt {
-			t.Errorf("ResolveTTSTonePrompt(%q) = %q, want %q", preset, got, prompt)
+		got := ResolveTTSTonePrompt(voice)
+		if !strings.Contains(got, want) {
+			t.Errorf("ResolveTTSTonePrompt(%q) = %q, want it to mention %q", preset, got, want)
 		}
+		if !strings.Contains(got, ttsDeliveryFraming) {
+			t.Errorf("ResolveTTSTonePrompt(%q) = %q, missing the shared delivery framing", preset, got)
+		}
+		if other, duplicate := seen[got]; duplicate {
+			t.Errorf("presets %q and %q resolve to the same instruction", preset, other)
+		}
+		seen[got] = preset
 	}
 }
 

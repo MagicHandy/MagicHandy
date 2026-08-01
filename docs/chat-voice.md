@@ -189,17 +189,55 @@ reintroducing reply prose.
 
 ## Level Contract
 
-| Level | Intended output |
+| Level | How far the language may go |
 | --- | --- |
-| `utility` | concise, clear, non-sexual assistant |
-| `warm` | affectionate and flirtatious, suggestive at most, no explicit anatomy |
-| `intimate` | embodied and sensual, but non-graphic with indirect anatomy |
+| `utility` | non-sexual; concise and clear |
+| `warm` | affection and flirtation welcome, suggestive at most, no explicit anatomy |
+| `intimate` | sensual and embodied, stopping short of graphic anatomical description |
 | `explicit` | direct adult partner language and saved anatomy when the turn concerns motion, arousal, anatomy, or sexual touch |
 
 `utility` is still the default, but it is no longer byte-identical to the old
 prompt. That compatibility claim was dropped deliberately: utility now has a
 code-owned early identity and terminal check, while remaining behaviorally
 neutral and excluding persona, anatomy, mood, and recent-line context.
+
+## A Level Bounds Explicitness; The Persona Owns Manner
+
+A voice level is a ceiling on how far the language may go, and nothing else. It
+must not describe a mood, an attitude, or a temperament, because whatever it
+says about manner will beat the persona: the level is phrased as identity
+("you are..."), while the persona description arrives as quoted user data.
+
+The `warm` level used to open with "you are my warm, playful adult companion...
+Be affectionate and flirtatious", and its terminal check demanded "a specific
+affectionate or flirtatious reaction". Against a restrained noir persona whose
+own description read "his voice stays low and calm... clipped stillness", the
+level won every time. Measured over twelve turns on the local Gemma build, that
+prompt produced a pet name in 58% of replies, a trailing "-ing" clause in 50%,
+and steady purple ornament ("a beautiful contrast of strength and surrender that
+makes my heart ache"). It was the same effusive character regardless of who the
+user had configured.
+
+Both blocks now state their own scope: the level names only the explicitness
+boundary and then defers ("who you are and how you carry yourself come from the
+chat profile below"), and the profile block closes with "stay in character
+throughout the reply, within the selected voice level". Reaction styles follow
+the same rule -- `submissive` sets who leads, not how warm the reply is, so a
+reserved character defers quietly instead of gushing.
+
+The terminal checks carry three register rules that are about writing rather
+than personality: prefer plain physical words over abstract stand-ins, finish
+each sentence instead of extending it with a comma and an "-ing" word, and do
+not trail off into ellipses. On the same twelve turns those took pet names,
+participles, abstraction, and ornament all to zero while the persona's own
+clipped voice came through. No word blacklist is involved; the anatomy limits
+under `intimate` are a separate explicitness boundary, not a style rule.
+
+When changing any of this, measure it. `internal/chat` composes the real prompt,
+so a scratch test can drive a live local model through a fixed turn list and
+count faults before and after. Assert invariants rather than sentences in the
+committed tests -- `TestVoiceLevelsComposeIdentityAndTerminalRegisterSections`
+pins the boundary phrasing and the deferral to the profile, not the copy.
 
 ## Live Rubric
 
