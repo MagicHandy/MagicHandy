@@ -59,6 +59,7 @@ func main() {
 	baseURL := flag.String("base-url", "", "externally managed OpenAI-compatible TTS server URL")
 	model := flag.String("model", "", "server-side model name")
 	voiceName := flag.String("voice", "", "server-side voice name")
+	instruct := flag.String("instruct", "", "optional provider-specific voice style instruction")
 	responseFormat := flag.String("response-format", openaittsworker.DefaultResponseFormat, "audio response format")
 	healthPath := flag.String("health-path", openaittsworker.DefaultHealthPath, "server health endpoint path")
 	healthReadyField := flag.String("health-ready-field", "", "optional dot-separated boolean field required to be true")
@@ -84,6 +85,7 @@ func main() {
 		APIKey:           os.Getenv("OPENAI_TTS_API_KEY"),
 		Model:            *model,
 		Voice:            *voiceName,
+		Instruct:         *instruct,
 		ResponseFormat:   *responseFormat,
 		HealthPath:       *healthPath,
 		HealthReadyField: *healthReadyField,

@@ -221,6 +221,16 @@ func TestRandomizedSeedRequiresSeedContract(t *testing.T) {
 	}
 }
 
+func TestInstructionHasDefensiveSizeLimit(t *testing.T) {
+	options := normalizeOptions(Options{
+		BaseURL:  "http://127.0.0.1:8991",
+		Instruct: strings.Repeat("x", maxInstructBytes+1),
+	})
+	if err := validateOptions(options); err == nil || !strings.Contains(err.Error(), "instruction exceeds") {
+		t.Fatalf("validation error = %v", err)
+	}
+}
+
 func TestOpenAICompatibleSpeechRequestAndStreamingWAVRepair(t *testing.T) {
 	var requestBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +280,37 @@ func TestOpenAICompatibleSpeechRequestAndStreamingWAVRepair(t *testing.T) {
 	}
 	if got, want := binary.LittleEndian.Uint32(audio[40:44]), uint32(4); got != want {
 		t.Fatalf("data length = %d, want %d", got, want)
+	}
+}
+
+func TestSpeechRequestIncludesConfiguredInstruction(t *testing.T) {
+	var instruct string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		var requestBody struct {
+			Instruct string `json:"instruct"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		instruct = requestBody.Instruct
+		w.Header().Set("Content-Type", "audio/wav")
+		_, _ = w.Write(streamingTestWAV())
+	}))
+	t.Cleanup(server.Close)
+
+	driver := loadWorkerWithOptions(t, Options{
+		BaseURL: server.URL, ResponseFormat: "wav", Instruct: "  Speak warmly.  ",
+	})
+	driver.send(t, protocol.Request{Type: protocol.RequestSpeak, ID: "tone", Text: "Hello."})
+	if terminal, _ := driver.terminal(t); terminal.Type != protocol.ResponseDone {
+		t.Fatalf("tone response = %+v", terminal)
+	}
+	if instruct != "Speak warmly." {
+		t.Fatalf("instruction = %q, want normalized prompt", instruct)
 	}
 }
 

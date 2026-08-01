@@ -140,10 +140,29 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	if varied := voiceManagerConfig(settings, "", t.TempDir()); !slices.Contains(varied.TTS.Args, "-randomize-seed") {
 		t.Fatalf("varied Faster Qwen seed mode args = %+v", varied.TTS.Args)
 	}
+	settings.TTSTonePreset = config.TTSToneWarm
+	tone := voiceManagerConfig(settings, "", t.TempDir())
+	assertArgumentsContain(t, tone.TTS.Args,
+		[2]string{"-instruct", config.ResolveTTSTonePrompt(settings)},
+	)
 
 	settings.TTSReferenceText = ""
 	if incomplete := voiceManagerConfig(settings, "", ""); incomplete.TTS.Command != "" {
 		t.Fatalf("incomplete managed Faster Qwen module must not start: %+v", incomplete.TTS)
+	}
+}
+
+func TestOpenAITTSInstructionIsScopedToFasterQwen(t *testing.T) {
+	settings := config.DefaultSettings().Voice
+	settings.Enabled = true
+	settings.TTSProvider = config.VoiceTTSProviderOpenAICompat
+	settings.TTSWorkerPath = "voice-openai-tts-worker"
+	settings.TTSModel = "external-model"
+	settings.TTSTonePreset = config.TTSToneWarm
+
+	got := voiceManagerConfig(settings, "", "")
+	if slices.Contains(got.TTS.Args, "-instruct") {
+		t.Fatalf("generic compatible provider received Qwen instruction args: %+v", got.TTS.Args)
 	}
 }
 

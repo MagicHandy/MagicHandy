@@ -85,6 +85,9 @@ func applyMissingTTSDefaults(settings, defaults VoiceSettings) VoiceSettings {
 		settings.TTSSeedMode = defaults.TTSSeedMode
 		settings.TTSSeed = defaults.TTSSeed
 	}
+	if settings.TTSTonePreset == "" {
+		settings.TTSTonePreset = defaults.TTSTonePreset
+	}
 	return settings
 }
 
@@ -124,6 +127,8 @@ func normalizeVoiceStrings(settings VoiceSettings) VoiceSettings {
 	settings.TTSLanguage = strings.TrimSpace(settings.TTSLanguage)
 	settings.TTSDevice = strings.ToLower(strings.TrimSpace(settings.TTSDevice))
 	settings.TTSSeedMode = strings.ToLower(strings.TrimSpace(settings.TTSSeedMode))
+	settings.TTSTonePreset = strings.ToLower(strings.TrimSpace(settings.TTSTonePreset))
+	settings.TTSTonePrompt = strings.TrimSpace(settings.TTSTonePrompt)
 	settings.ParakeetServerPath = strings.TrimSpace(settings.ParakeetServerPath)
 	settings.ParakeetModelPath = strings.TrimSpace(settings.ParakeetModelPath)
 	settings.ParakeetSource = strings.TrimSpace(settings.ParakeetSource)
@@ -184,6 +189,13 @@ func validateTTSSettings(settings VoiceSettings) error {
 	if !oneOf(settings.TTSSeedMode, TTSSeedModeFixed, TTSSeedModeVaried) {
 		return fmt.Errorf("unknown TTS seed mode %q", settings.TTSSeedMode)
 	}
+	if !oneOf(settings.TTSTonePreset, TTSTonePresets()...) {
+		return fmt.Errorf("unknown TTS tone preset %q", settings.TTSTonePreset)
+	}
+	if settings.TTSProvider == VoiceTTSProviderFasterQwen &&
+		settings.TTSTonePreset == TTSToneCustom && settings.TTSTonePrompt == "" {
+		return errors.New("custom TTS tone requires a prompt")
+	}
 	if settings.TTSProvider == VoiceTTSProviderFasterQwen &&
 		!oneOf(settings.TTSDevice, TTSDeviceAuto, TTSDeviceCUDA) {
 		return errors.New("faster Qwen3-TTS requires an NVIDIA CUDA device")
@@ -204,10 +216,48 @@ func validateTTSFieldBounds(settings VoiceSettings) error {
 	if len(settings.TTSReferenceText) > 8<<10 {
 		return errors.New("TTS reference transcript must not exceed 8 KiB")
 	}
+	if len(settings.TTSTonePrompt) > 2<<10 {
+		return errors.New("TTS tone prompt must not exceed 2 KiB")
+	}
 	if settings.TTSServerPort < 1 || settings.TTSServerPort > 65535 {
 		return errors.New("TTS server port must be between 1 and 65535")
 	}
 	return nil
+}
+
+// TTSTonePresets returns the backend-authoritative tone choices in UI order.
+func TTSTonePresets() []string {
+	return []string{
+		TTSToneNatural,
+		TTSToneWarm,
+		TTSTonePlayful,
+		TTSToneTender,
+		TTSToneCommanding,
+		TTSToneExcited,
+		TTSToneCustom,
+	}
+}
+
+// ResolveTTSTonePrompt maps a saved preset to the instruction sent only to
+// instruction-capable TTS providers. Natural intentionally resolves empty so
+// existing Faster Qwen installations retain their previous behavior.
+func ResolveTTSTonePrompt(settings VoiceSettings) string {
+	switch settings.TTSTonePreset {
+	case TTSToneWarm:
+		return "Speak in a warm, intimate tone with gentle pacing and natural emotional variation."
+	case TTSTonePlayful:
+		return "Speak in a playful, teasing tone with lively rhythm and expressive emphasis."
+	case TTSToneTender:
+		return "Speak softly in a tender, reassuring tone with calm pacing."
+	case TTSToneCommanding:
+		return "Speak in a confident, commanding tone with deliberate pacing and clear emphasis."
+	case TTSToneExcited:
+		return "Speak with excited, energetic delivery, varied pitch, and brisk but intelligible pacing."
+	case TTSToneCustom:
+		return strings.TrimSpace(settings.TTSTonePrompt)
+	default:
+		return ""
+	}
 }
 
 func validateChatterboxVoice(provider, voice string) error {

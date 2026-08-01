@@ -2,8 +2,9 @@
 """MagicHandy launcher for the pinned faster-qwen3-tts OpenAI server.
 
 The upstream server intentionally follows the standard OpenAI request shape and
-does not expose generation seeds. MagicHandy adds one optional unsigned seed and
-reseeds all generators while holding upstream's single inference lock.
+does not expose generation seeds or Base-model instructions. MagicHandy adds an
+optional unsigned seed and tone instruction while retaining upstream's single
+inference lock.
 """
 
 import asyncio
@@ -53,6 +54,7 @@ class SpeechRequest(BaseModel):
     response_format: str = "wav"
     speed: float = 1.0
     seed: int = Field(default=DEFAULT_SEED, ge=0, le=0xFFFFFFFF)
+    instruct: str = Field(default="", max_length=2048)
 
 
 def seed_generators(seed: int) -> None:
@@ -94,7 +96,9 @@ def warm_up_model() -> None:
     upstream.logger.info("MagicHandy streaming warm-up complete")
 
 
-async def stream_chunks(voice_cfg: dict, text: str, seed: int) -> AsyncGenerator[bytes, None]:
+async def stream_chunks(
+    voice_cfg: dict, text: str, seed: int, instruct: str
+) -> AsyncGenerator[bytes, None]:
     chunks: queue.Queue = queue.Queue()
     done = object()
 
@@ -114,6 +118,7 @@ async def stream_chunks(voice_cfg: dict, text: str, seed: int) -> AsyncGenerator
                     max_new_tokens=token_limit,
                     chunk_size=voice_cfg.get("chunk_size", 12),
                     non_streaming_mode=False,
+                    instruct=instruct or None,
                 ):
                     chunks.put(chunk)
         except Exception as exc:
@@ -175,6 +180,7 @@ async def create_speech(request: SpeechRequest):
                     ref_audio=voice_cfg["ref_audio"],
                     ref_text=voice_cfg.get("ref_text", ""),
                     max_new_tokens=token_limit,
+                    instruct=request.instruct or None,
                 )
 
         audio_arrays, sample_rate = await loop.run_in_executor(None, generate)
@@ -187,7 +193,9 @@ async def create_speech(request: SpeechRequest):
     async def audio_stream():
         if output_format == "wav":
             yield upstream._wav_header(upstream.SAMPLE_RATE)
-        async for raw_chunk in stream_chunks(voice_cfg, request.input, request.seed):
+        async for raw_chunk in stream_chunks(
+            voice_cfg, request.input, request.seed, request.instruct
+        ):
             yield raw_chunk
 
     return StreamingResponse(audio_stream(), media_type=content_types[output_format])

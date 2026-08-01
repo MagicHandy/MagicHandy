@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PublicSettings, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
@@ -29,6 +29,17 @@ const DEVICE_LABELS: Partial<Record<string, MessageKey>> = {
   auto: "Automatic / provider default",
   cuda: "NVIDIA CUDA",
   cpu: "CPU",
+};
+
+const FALLBACK_TONE_PRESETS = ["natural", "warm", "playful", "tender", "commanding", "excited", "custom"];
+const TONE_LABELS: Partial<Record<string, MessageKey>> = {
+  natural: "Natural (default)",
+  warm: "Warm and intimate",
+  playful: "Playful and teasing",
+  tender: "Soft and reassuring",
+  commanding: "Confident and commanding",
+  excited: "Excited and energetic",
+  custom: "Custom",
 };
 
 const MANAGED_TTS = new Set(["faster_qwen3_tts", "chatterbox_tts"]);
@@ -63,6 +74,8 @@ export function VoiceSettingsPanel({
   clearOpenAIKey = false,
   setClearOpenAIKey = () => undefined,
 }: Props) {
+  const tonePromptID = useId();
+  const tonePromptHintID = `${tonePromptID}-hint`;
   const voice = s.voice;
   const voiceRuntime = useVoiceRuntimeStatus();
   const parakeetSource = voice.parakeet_source || "app_managed";
@@ -79,6 +92,10 @@ export function VoiceSettingsPanel({
     : voice.tts_provider === "chatterbox_tts"
       ? ["wav", "mp3", "opus"]
       : ["wav", "mp3", "opus", "aac", "flac"];
+  const tonePresets = s.options.tts_tone_presets?.length
+    ? s.options.tts_tone_presets
+    : FALLBACK_TONE_PRESETS;
+  const tonePreset = voice.tts_tone_preset ?? "natural";
 
   const providerSelect = (
     accessibleLabel: string,
@@ -183,6 +200,9 @@ export function VoiceSettingsPanel({
             <label className="field"><span className="label">{t("Exact reference transcript")}</span><textarea rows={3} value={voice.tts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ tts_reference_text: event.target.value })} /></label>
             <p className="form-status">{t("Use clean single-speaker audio, ideally 3 to 10 seconds, with an exact transcript.")}</p>
             <label className="field"><span className="label">{t("Language")}</span><input type="text" value={voice.tts_language ?? "Auto"} disabled={locked} onChange={(event) => patch({ tts_language: event.target.value })} /></label>
+            <label className="field"><span className="label">{t("Voice tone")}</span><select value={tonePreset} disabled={locked} onChange={(event) => patch({ tts_tone_preset: event.target.value })}>{tonePresets.map((preset) => <option key={preset} value={preset}>{translateKnown(TONE_LABELS[preset] ?? preset)}</option>)}</select></label>
+            {tonePreset === "custom" && <div className="field"><label className="label" htmlFor={tonePromptID}>{t("Custom tone prompt")}</label><textarea id={tonePromptID} aria-describedby={tonePromptHintID} rows={3} maxLength={2048} required value={voice.tts_tone_prompt ?? ""} disabled={locked} onChange={(event) => patch({ tts_tone_prompt: event.target.value })} /><span id={tonePromptHintID} className="hint">{t("Describe the delivery you want, such as pace, emotion, pitch, or emphasis.")}</span></div>}
+            <p className="form-status">{t("Tone prompting is experimental for cloned Base voices; results vary with the reference audio and seed.")}</p>
           </>}
           {voice.tts_provider === "chatterbox_tts" && <>
             <HostPathField label={t("Reference WAV")} kind="wav" value={voice.tts_reference_wav ?? ""} disabled={locked} onChange={(tts_reference_wav) => patch({ tts_reference_wav })} />
