@@ -10,52 +10,36 @@
       "position_percent": 100
     },
     {
-      "time_ms": 766,
-      "position_percent": 0
-    },
-    {
       "time_ms": 1200,
       "position_percent": 0
     },
     {
-      "time_ms": 2400,
+      "time_ms": 2744,
       "position_percent": 100
     },
     {
-      "time_ms": 3600,
+      "time_ms": 3944,
       "position_percent": 0
     },
     {
-      "time_ms": 3954,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 5154,
-      "position_percent": 99
-    },
-    {
-      "time_ms": 6354,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 6810,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8010,
+      "time_ms": 5644,
       "position_percent": 100
     },
     {
-      "time_ms": 9210,
+      "time_ms": 6611,
       "position_percent": 0
     },
     {
-      "time_ms": 9577,
+      "time_ms": 7946,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8913,
       "position_percent": 0
     },
     {
       "time_ms": 10000,
-      "position_percent": 0
+      "position_percent": 100
     }
   ],
   "tags": [

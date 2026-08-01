@@ -3,88 +3,80 @@
   "name": "Steady Drive 5",
   "description": "Medium cadence.",
   "kind": "routine",
-  "cycle_ms": 10000,
+  "cycle_ms": 6708,
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 467,
-      "position_percent": 88.888889
-    },
-    {
-      "time_ms": 834,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 1634,
       "position_percent": 100
     },
     {
-      "time_ms": 2102,
+      "time_ms": 1200,
       "position_percent": 0
     },
     {
-      "time_ms": 2836,
+      "time_ms": 1504,
       "position_percent": 100
     },
     {
-      "time_ms": 3303,
+      "time_ms": 1841,
       "position_percent": 0
     },
     {
-      "time_ms": 4003,
+      "time_ms": 2114,
       "position_percent": 100
     },
     {
-      "time_ms": 4504,
+      "time_ms": 2416,
       "position_percent": 0
     },
     {
-      "time_ms": 5171,
+      "time_ms": 2721,
       "position_percent": 100
     },
     {
-      "time_ms": 5738,
+      "time_ms": 3057,
       "position_percent": 0
     },
     {
-      "time_ms": 6372,
+      "time_ms": 3354,
       "position_percent": 100
     },
     {
-      "time_ms": 6906,
+      "time_ms": 4554,
       "position_percent": 0
     },
     {
-      "time_ms": 7607,
+      "time_ms": 4858,
       "position_percent": 100
     },
     {
-      "time_ms": 8141,
+      "time_ms": 5195,
       "position_percent": 0
     },
     {
-      "time_ms": 8808,
-      "position_percent": 88.888889
-    },
-    {
-      "time_ms": 9342,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9976,
+      "time_ms": 5468,
       "position_percent": 100
     },
     {
-      "time_ms": 10000,
+      "time_ms": 5770,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6075,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6411,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6708,
       "position_percent": 100
     }
   ],
   "tags": [
-    "full",
+    "paired",
     "steady",
-    "balanced"
+    "contrast"
   ]
 }

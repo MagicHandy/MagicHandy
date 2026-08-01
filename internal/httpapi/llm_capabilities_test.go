@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -69,6 +70,21 @@ func TestResolveAreaFocusPersistsUntilChanged(t *testing.T) {
 	}
 }
 
+// anyExperimentalCuratedID resolves a curated built-in carrying the experimental
+// tag rather than naming one. Curation renumbers curated ids, so a hard-coded
+// name turns a routine re-curation into an unrelated failure here.
+func anyExperimentalCuratedID(t *testing.T) string {
+	t.Helper()
+	for _, definition := range motion.BuiltinPatternDefinitions() {
+		id := string(definition.ID)
+		if strings.HasPrefix(id, "curated-") && slices.Contains(definition.Tags, motion.TagExperimental) {
+			return id
+		}
+	}
+	t.Fatal("no experimental curated built-in in the catalog")
+	return ""
+}
+
 func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
@@ -85,7 +101,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	for _, choice := range gated {
 		gatedIDs[choice.ID] = true
 	}
-	for _, id := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, "curated-fast-drive-20"} {
+	for _, id := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, motion.PatternID(anyExperimentalCuratedID(t))} {
 		if gatedIDs[string(id)] {
 			t.Fatalf("experimental pattern %q leaked into the default catalog", id)
 		}
@@ -104,7 +120,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	for _, choice := range open {
 		found[choice.ID] = true
 	}
-	for _, want := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, "curated-fast-drive-20"} {
+	for _, want := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, motion.PatternID(anyExperimentalCuratedID(t))} {
 		if !found[string(want)] {
 			t.Fatalf("experimental pattern %q missing with the gate enabled", want)
 		}

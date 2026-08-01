@@ -1,291 +1,162 @@
 {
   "schema": "magichandy.pattern.v1",
   "name": "Fast Drive 9",
-  "description": "Quick cadence.",
+  "description": "Medium cadence.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
     {
       "time_ms": 0,
-      "position_percent": 70
+      "position_percent": 72
     },
     {
-      "time_ms": 81,
-      "position_percent": 95
+      "time_ms": 195,
+      "position_percent": 0
     },
     {
-      "time_ms": 164,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 247,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 331,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 414,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 481,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 564,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 647,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 731,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 814,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 897,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 981,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 1064,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 1147,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 1231,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1314,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 1397,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1481,
+      "time_ms": 355,
       "position_percent": 65
     },
     {
-      "time_ms": 1564,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1647,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 1731,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1814,
-      "position_percent": 65
-    },
-    {
-      "time_ms": 1897,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 1981,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 2064,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 2147,
-      "position_percent": 65
-    },
-    {
-      "time_ms": 2231,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 2314,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 2397,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 2481,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 2564,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 2647,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 2731,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 2814,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 2897,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 2981,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 3064,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 3147,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 3231,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 3314,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 3397,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 3481,
-      "position_percent": 65
-    },
-    {
-      "time_ms": 3564,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 3647,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 3731,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 3814,
-      "position_percent": 65
-    },
-    {
-      "time_ms": 3897,
-      "position_percent": 90
-    },
-    {
-      "time_ms": 3981,
-      "position_percent": 70
-    },
-    {
-      "time_ms": 4097,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4214,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4297,
-      "position_percent": 95
-    },
-    {
-      "time_ms": 4381,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 4781,
-      "position_percent": 20
-    },
-    {
-      "time_ms": 5147,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 5514,
+      "time_ms": 532,
       "position_percent": 0
     },
     {
-      "time_ms": 5881,
-      "position_percent": 100
+      "time_ms": 660,
+      "position_percent": 52
     },
     {
-      "time_ms": 6247,
+      "time_ms": 802,
       "position_percent": 0
     },
     {
-      "time_ms": 6614,
-      "position_percent": 100
+      "time_ms": 947,
+      "position_percent": 59
     },
     {
-      "time_ms": 6981,
+      "time_ms": 1106,
       "position_percent": 0
     },
     {
-      "time_ms": 7348,
-      "position_percent": 100
+      "time_ms": 1250,
+      "position_percent": 59
     },
     {
-      "time_ms": 7714,
+      "time_ms": 1410,
       "position_percent": 0
     },
     {
-      "time_ms": 8081,
-      "position_percent": 100
+      "time_ms": 1539,
+      "position_percent": 52
     },
     {
-      "time_ms": 8448,
+      "time_ms": 1681,
       "position_percent": 0
     },
     {
-      "time_ms": 8814,
-      "position_percent": 100
+      "time_ms": 1825,
+      "position_percent": 59
     },
     {
-      "time_ms": 9181,
+      "time_ms": 1984,
       "position_percent": 0
     },
     {
-      "time_ms": 9548,
+      "time_ms": 2128,
+      "position_percent": 59
+    },
+    {
+      "time_ms": 2287,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2431,
+      "position_percent": 59
+    },
+    {
+      "time_ms": 2591,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2767,
+      "position_percent": 72
+    },
+    {
+      "time_ms": 2962,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3347,
       "position_percent": 100
     },
     {
-      "time_ms": 9914,
+      "time_ms": 3772,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4125,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 4515,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4820,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 5157,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5558,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6001,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 6385,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 6811,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7051,
+      "position_percent": 99
+    },
+    {
+      "time_ms": 7317,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 7589,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 7889,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8258,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8666,
       "position_percent": 0
     },
     {
       "time_ms": 10000,
-      "position_percent": 0
+      "position_percent": 72
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change",
-    "upper-return"
+    "paired",
+    "steady",
+    "contrast"
   ]
 }

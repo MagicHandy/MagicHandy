@@ -1,126 +1,171 @@
 {
   "schema": "magichandy.pattern.v1",
   "name": "Fast Roll 2",
-  "description": "Medium cadence.",
+  "description": "Quick cadence.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
     {
       "time_ms": 0,
+      "position_percent": 98.181818
+    },
+    {
+      "time_ms": 183,
       "position_percent": 0
     },
     {
-      "time_ms": 321,
-      "position_percent": 90
+      "time_ms": 283,
+      "position_percent": 54.545455
     },
     {
-      "time_ms": 688,
+      "time_ms": 383,
       "position_percent": 0
     },
     {
-      "time_ms": 1088,
+      "time_ms": 1183,
+      "position_percent": 90.909091
+    },
+    {
+      "time_ms": 1366,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 1483,
+      "position_percent": 54.545455
+    },
+    {
+      "time_ms": 1600,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2383,
+      "position_percent": 87.272727
+    },
+    {
+      "time_ms": 2566,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 2683,
+      "position_percent": 50.909091
+    },
+    {
+      "time_ms": 2800,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3566,
+      "position_percent": 85.454545
+    },
+    {
+      "time_ms": 3750,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 3866,
+      "position_percent": 49.090909
+    },
+    {
+      "time_ms": 3983,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4116,
+      "position_percent": 36.363636
+    },
+    {
+      "time_ms": 4300,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 4717,
+      "position_percent": 81.818182
+    },
+    {
+      "time_ms": 4901,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5017,
+      "position_percent": 45.454545
+    },
+    {
+      "time_ms": 5134,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5307,
+      "position_percent": 27.272727
+    },
+    {
+      "time_ms": 5474,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 5874,
       "position_percent": 100
     },
     {
-      "time_ms": 1208,
+      "time_ms": 6040,
       "position_percent": 0
     },
     {
-      "time_ms": 1609,
-      "position_percent": 100
+      "time_ms": 6140,
+      "position_percent": 47.272727
     },
     {
-      "time_ms": 1976,
+      "time_ms": 6240,
       "position_percent": 0
     },
     {
-      "time_ms": 2410,
-      "position_percent": 100
+      "time_ms": 6524,
+      "position_percent": 36.363636
     },
     {
-      "time_ms": 2743,
+      "time_ms": 7207,
       "position_percent": 0
     },
     {
-      "time_ms": 3211,
-      "position_percent": 100
+      "time_ms": 7907,
+      "position_percent": 98.181818
     },
     {
-      "time_ms": 3511,
+      "time_ms": 8090,
       "position_percent": 0
     },
     {
-      "time_ms": 3945,
-      "position_percent": 90
+      "time_ms": 8207,
+      "position_percent": 43.636364
     },
     {
-      "time_ms": 4278,
+      "time_ms": 8323,
       "position_percent": 0
     },
     {
-      "time_ms": 4745,
-      "position_percent": 100
+      "time_ms": 9273,
+      "position_percent": 90.909091
     },
     {
-      "time_ms": 5146,
+      "time_ms": 9457,
       "position_percent": 0
     },
     {
-      "time_ms": 5546,
-      "position_percent": 100
+      "time_ms": 9573,
+      "position_percent": 38.181818
     },
     {
-      "time_ms": 5980,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 6414,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 6814,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 7248,
-      "position_percent": 85
-    },
-    {
-      "time_ms": 7615,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8049,
-      "position_percent": 75
-    },
-    {
-      "time_ms": 8416,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 8816,
-      "position_percent": 80
-    },
-    {
-      "time_ms": 9150,
-      "position_percent": 0
-    },
-    {
-      "time_ms": 9550,
-      "position_percent": 100
-    },
-    {
-      "time_ms": 9884,
+      "time_ms": 9690,
       "position_percent": 0
     },
     {
       "time_ms": 10000,
-      "position_percent": 0
+      "position_percent": 98.181818
     }
   ],
   "tags": [
-    "full",
-    "steady",
-    "balanced"
+    "accent",
+    "rhythmic",
+    "tempo-change",
+    "upper-return"
   ]
 }

@@ -1,6 +1,6 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Surge 4",
+  "name": "Intense Roll 6",
   "description": "Quick cadence.",
   "kind": "routine",
   "cycle_ms": 10000,
@@ -10,201 +10,265 @@
       "position_percent": 100
     },
     {
-      "time_ms": 6,
+      "time_ms": 1353,
       "position_percent": 0
     },
     {
-      "time_ms": 207,
+      "time_ms": 1553,
       "position_percent": 100
     },
     {
-      "time_ms": 441,
+      "time_ms": 1719,
       "position_percent": 0
     },
     {
-      "time_ms": 655,
+      "time_ms": 1918,
       "position_percent": 100
     },
     {
-      "time_ms": 841,
+      "time_ms": 2084,
       "position_percent": 0
     },
     {
-      "time_ms": 1041,
+      "time_ms": 2282,
       "position_percent": 100
     },
     {
-      "time_ms": 1240,
+      "time_ms": 2448,
       "position_percent": 0
     },
     {
-      "time_ms": 1442,
+      "time_ms": 2645,
       "position_percent": 100
     },
     {
-      "time_ms": 1655,
+      "time_ms": 2810,
       "position_percent": 0
     },
     {
-      "time_ms": 1904,
+      "time_ms": 3007,
       "position_percent": 100
     },
     {
-      "time_ms": 2107,
+      "time_ms": 3172,
       "position_percent": 0
     },
     {
-      "time_ms": 2309,
+      "time_ms": 3368,
       "position_percent": 100
     },
     {
-      "time_ms": 2503,
+      "time_ms": 3533,
       "position_percent": 0
     },
     {
-      "time_ms": 2741,
+      "time_ms": 3728,
       "position_percent": 100
     },
     {
-      "time_ms": 2955,
+      "time_ms": 3893,
       "position_percent": 0
     },
     {
-      "time_ms": 3188,
+      "time_ms": 4087,
       "position_percent": 100
     },
     {
-      "time_ms": 3388,
+      "time_ms": 4251,
       "position_percent": 0
     },
     {
-      "time_ms": 3655,
+      "time_ms": 4444,
       "position_percent": 100
     },
     {
-      "time_ms": 3855,
+      "time_ms": 4607,
       "position_percent": 0
     },
     {
-      "time_ms": 4077,
+      "time_ms": 4799,
       "position_percent": 100
     },
     {
-      "time_ms": 4275,
+      "time_ms": 4962,
       "position_percent": 0
     },
     {
-      "time_ms": 4489,
+      "time_ms": 5154,
       "position_percent": 100
     },
     {
-      "time_ms": 4689,
+      "time_ms": 5316,
       "position_percent": 0
     },
     {
-      "time_ms": 4922,
+      "time_ms": 5508,
       "position_percent": 100
     },
     {
-      "time_ms": 5109,
+      "time_ms": 5670,
       "position_percent": 0
     },
     {
-      "time_ms": 5321,
+      "time_ms": 5861,
       "position_percent": 100
     },
     {
-      "time_ms": 5521,
+      "time_ms": 6023,
       "position_percent": 0
     },
     {
-      "time_ms": 5742,
+      "time_ms": 6213,
       "position_percent": 100
     },
     {
-      "time_ms": 5974,
+      "time_ms": 6374,
       "position_percent": 0
     },
     {
-      "time_ms": 6221,
+      "time_ms": 6564,
       "position_percent": 100
     },
     {
-      "time_ms": 6409,
+      "time_ms": 6725,
       "position_percent": 0
     },
     {
-      "time_ms": 6641,
+      "time_ms": 6914,
       "position_percent": 100
     },
     {
-      "time_ms": 6841,
+      "time_ms": 7075,
       "position_percent": 0
     },
     {
-      "time_ms": 7103,
+      "time_ms": 7263,
       "position_percent": 100
     },
     {
-      "time_ms": 7289,
+      "time_ms": 7424,
       "position_percent": 0
     },
     {
-      "time_ms": 7522,
+      "time_ms": 7611,
       "position_percent": 100
     },
     {
-      "time_ms": 7689,
+      "time_ms": 7771,
       "position_percent": 0
     },
     {
-      "time_ms": 7904,
+      "time_ms": 7871,
       "position_percent": 100
     },
     {
-      "time_ms": 8088,
+      "time_ms": 7971,
       "position_percent": 0
     },
     {
-      "time_ms": 8322,
+      "time_ms": 8071,
       "position_percent": 100
     },
     {
-      "time_ms": 8509,
+      "time_ms": 8171,
       "position_percent": 0
     },
     {
-      "time_ms": 8740,
+      "time_ms": 8271,
       "position_percent": 100
     },
     {
-      "time_ms": 8922,
+      "time_ms": 8338,
       "position_percent": 0
     },
     {
-      "time_ms": 9141,
+      "time_ms": 8472,
       "position_percent": 100
     },
     {
-      "time_ms": 9340,
+      "time_ms": 8572,
       "position_percent": 0
     },
     {
-      "time_ms": 9590,
+      "time_ms": 8672,
       "position_percent": 100
     },
     {
-      "time_ms": 9788,
+      "time_ms": 8739,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 8839,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 8939,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9039,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9106,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9173,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9240,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9307,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9374,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9441,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9508,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9575,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9642,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9709,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9776,
+      "position_percent": 0
+    },
+    {
+      "time_ms": 9843,
+      "position_percent": 100
+    },
+    {
+      "time_ms": 9910,
       "position_percent": 0
     },
     {
       "time_ms": 10000,
-      "position_percent": 0
+      "position_percent": 100
     }
   ],
   "tags": [
-    "deep",
+    "tip",
     "rhythmic",
-    "build"
+    "varied"
   ]
 }

@@ -135,6 +135,30 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-08-01** - Curated the imported funscript clips against the same speed
+  envelope the designed catalog already answers to, after a hardware report that
+  nearly all of them stuttered. Measured, 95 of 171 (56%) held a contiguous span
+  under 30%/s longer than 200ms, against 0 of 28 for the designed set. The
+  failures tracked the intensity band the earlier relabelling had assigned,
+  monotonically: 100% of Gentle contained a dead stroke against 23% of Intense,
+  because that pass had labelled by *mean* stroke speed, which averages motion
+  together with stillness -- a clip that was mostly stopped scored a low mean and
+  came out labelled in the band that reads as most inviting. Excision now removes
+  stillness without touching geometry (strokes too small to feel are merged,
+  strokes slower than the floor are shortened to it, bounded by the reversal gap
+  and the acceleration budget), and whatever still fails is dropped. Chord speed
+  proved an insufficient proxy -- monotone-Hermite smoothing drives velocity
+  toward zero at every turning point, so 62 of 153 clips that passed on chords
+  still stalled once rendered -- so the decision is made in Go against the real
+  curve and the runtime's own `exceedsCatalogSafetyBudgets`. 90 of 171 survive, 22s
+  of dead time excised; the catalog is 118 patterns and the composed prompt falls
+  to **19,436 B (~4,859 tokens)**, against ~15,949 before this line of work began.
+  `docs/pattern-quality.md` is the plain-language guideline for both failure
+  modes, the geometry that constrains them, and which script to reach for. Three
+  tests that pinned curated ids or a fixed built-in count now resolve them, so a
+  future re-curation cannot fail unrelated tests. gofmt, go vet, golangci-lint
+  (0 issues), full Go tests and the CGO_ENABLED=0 build pass.
+
 - **2026-08-01** - Restored model ownership of embodied chat motion and closed
   two follow-on defects in the bulk pattern import. Read-only inspection of the
   active session showed `Fuck me` produced a model-authored start, while `Suck

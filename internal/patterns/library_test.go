@@ -68,10 +68,13 @@ func TestLibraryReconcilesGeneratedBuiltinsAndPurgesImportedClipDuplicates(t *te
 	}
 	pointsJSON := `[{"time_ms":0,"position_percent":0},{"time_ms":6600,"position_percent":100}]`
 	tagsJSON := `["imported","curated"]`
+	// Resolved rather than named: the curated set is re-curated periodically by
+	// scripts/curated-pattern-labeller.js, which renumbers ids.
+	victim := anyExperimentalCuratedID(t)
 	if _, err := library.db.SQL().Exec(`
 		UPDATE patterns SET description = '', cycle_ms = 6600, points_json = ?, tags_json = ?
-		WHERE id = 'curated-fast-drive-20'
-	`, pointsJSON, tagsJSON); err != nil {
+		WHERE id = ?
+	`, pointsJSON, tagsJSON, victim); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -91,7 +94,7 @@ func TestLibraryReconcilesGeneratedBuiltinsAndPurgesImportedClipDuplicates(t *te
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	restored, err := reopened.Pattern("curated-fast-drive-20")
+	restored, err := reopened.Pattern(victim)
 	if err != nil {
 		t.Fatalf("restored generated built-in: %v", err)
 	}
@@ -118,7 +121,14 @@ func TestBuiltinsDoNotConsumeUserPatternCapacity(t *testing.T) {
 	t.Cleanup(func() { _ = library.Close() })
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	pointsJSON := `[{"time_ms":0,"position_percent":0},{"time_ms":6600,"position_percent":0}]`
-	for index := 0; index < 60; index++ {
+	// Enough extra rows that flipping every row to user origin is over the limit
+	// whatever the built-in catalog currently holds. A fixed count silently
+	// stopped testing anything when curation shrank the catalog.
+	var existing int
+	if err := library.db.SQL().QueryRow("SELECT COUNT(*) FROM patterns").Scan(&existing); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < maxPatterns-existing+1; index++ {
 		if _, err := library.db.SQL().Exec(`
 			INSERT INTO patterns(id, name, description, origin, kind, enabled, weight,
 				cycle_ms, points_json, tags_json, created_at, updated_at)
@@ -136,6 +146,21 @@ func TestBuiltinsDoNotConsumeUserPatternCapacity(t *testing.T) {
 	if err := library.ensurePatternCapacity(); !errors.Is(err, ErrLibraryLimit) {
 		t.Fatalf("user capacity error = %v, want ErrLibraryLimit", err)
 	}
+}
+
+// anyExperimentalCuratedID returns a curated built-in carrying the experimental
+// tag. Tests resolve one instead of naming it: curation renumbers ids, and a
+// hard-coded name turns a routine re-curation into an unrelated test failure.
+func anyExperimentalCuratedID(t *testing.T) string {
+	t.Helper()
+	for _, definition := range motion.BuiltinPatternDefinitions() {
+		id := string(definition.ID)
+		if strings.HasPrefix(id, "curated-") && slices.Contains(definition.Tags, motion.TagExperimental) {
+			return id
+		}
+	}
+	t.Fatal("no experimental curated built-in in the catalog")
+	return ""
 }
 
 func TestLibraryReconcilesRetiredAndPromotedBuiltins(t *testing.T) {
