@@ -3,7 +3,7 @@
 The Windows install story needs three things a portable zip and a console
 script cannot deliver alone: a real install binary (shortcuts, uninstall
 entry, no Go toolchain), a **heavily interactive** setup experience (choose
-whether to build llama.cpp, pick and download LLM/voice models with sizes and
+whether to install managed llama.cpp, pick and download LLM/voice models with sizes and
 licenses visible, enter cloud keys, port data from StrokeGPT-ReVibed), and
 the existing consent/checksum law applied to all of it. This doc evaluates
 how to get there and records the decision. It extends
@@ -15,8 +15,9 @@ architecture decision; this document is the detailed implementation design.
 Status 2026-08-02: the thin Inno shell, portable payload, first-run detection,
 re-runnable seven-step GUI, unified optional llama.cpp/Parakeet/TTS install-plan
 endpoint, release lifecycle tests, and tag-gated publication are implemented.
-The first unsigned Windows alpha is `v0.1.0-alpha.1`. Prebuilt llama.cpp
-bundles, curated model downloads, signing, and broader optional-component
+The first unsigned Windows alpha is `v0.1.0-alpha.1`; `v0.1.0-alpha.2`
+replaces the fragile source-build path with verified upstream llama.cpp
+bundles. Curated model downloads, signing, and broader optional-component
 acceptance remain open.
 
 ## What already exists (and changes the answer)
@@ -24,8 +25,8 @@ acceptance remain open.
 The hard installer machinery is already **inside the app, behind the API,
 with progress reporting**, as of PRs #55/#56:
 
-- Pinned llama.cpp **source builds** with backend choice (auto/CPU/CUDA),
-  queued/building/complete/failed/cancelled states, cancellation, and
+- Pinned, checksum-verified llama.cpp **release installs** with backend choice
+  (auto/CPU/CUDA), queued/running/complete/failed/cancelled states, cancellation, and
   manifest validation (`POST /api/llm/runtime/build`), plus an opt-out path
   for existing Ollama users.
 - A checksummed **model store** with GGUF import, Ollama store scanning and
@@ -126,12 +127,12 @@ screen anatomy, visual treatment, and branding slots — lives in
 2. **Device** — connection key (write-only), dispatch owner, non-motion
    connection check. Existing settings surface, embedded.
 3. **LLM runtime** — the Recommended fresh-install default is a pinned managed
-   **source build** (backend auto/CPU/CUDA), with its compiler and disk cost
-   visible. CPU can reuse/provision MSYS2 UCRT64 GCC/CMake/Ninja or fall back to
-   Visual Studio; CUDA uses Visual Studio and the NVIDIA Toolkit. **Use existing
-   Ollama** is never selected implicitly and avoids that compiler/runtime
-   footprint; use an external compatible server; or skip. Checksummed prebuilt
-   CPU/CUDA bundles remain a planned replacement for the default managed path.
+   **verified release** (backend auto/CPU/CUDA), with download and installed
+   size visible. CPU downloads about 18 MiB. CUDA downloads about 628 MiB,
+   installs about 1.1 GiB, and requires a compatible NVIDIA driver. Neither
+   installs a compiler or CUDA Toolkit. **Use existing Ollama** is never
+   selected implicitly and avoids that managed-runtime footprint; users may
+   also choose an external compatible server or skip.
 4. **LLM model** — import a local GGUF into the checksummed managed store,
    scan an existing Ollama library and explicitly copy one compatible model,
    choose a model exposed by an Ollama daemon, enter an external server model
@@ -175,8 +176,8 @@ where the logic lives.
 
 | Gap | Where it lands |
 | --- | --- |
-| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; first alpha is `v0.1.0-alpha.1` |
-| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Open; current managed path is an explicit source build |
+| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; current corrective alpha is `v0.1.0-alpha.2` |
+| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b9966` CPU and CUDA 12.4 assets |
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |
 | Parakeet and managed TTS provisioning jobs | Implemented; full hardware/listening acceptance open |

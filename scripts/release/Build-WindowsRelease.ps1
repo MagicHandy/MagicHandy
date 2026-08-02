@@ -262,6 +262,9 @@ try {
     Copy-Item `
         -LiteralPath (Join-Path $repository 'internal\llm\runtimeassets\build-managed-llama.ps1') `
         -Destination (Join-Path $scriptsRoot 'build-managed-llama.ps1')
+    Copy-Item `
+        -LiteralPath (Join-Path $repository 'internal\llm\runtimeassets\LICENSE-llama.cpp') `
+        -Destination (Join-Path $scriptsRoot 'LICENSE-llama.cpp')
     Copy-Item -LiteralPath (Join-Path $repository 'scripts\installer') -Destination $scriptsRoot -Recurse
     $ttsScriptsRoot = Join-Path $scriptsRoot 'tts'
     New-Item -ItemType Directory -Force -Path $ttsScriptsRoot | Out-Null

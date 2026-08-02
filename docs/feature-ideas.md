@@ -173,7 +173,7 @@ independent of everything.
   with the app's privacy-first stance; PIN is deterrence, not encryption, and
   must say so.
 - **Completion notifications.** Windows toast (or tab-title badge) when a
-  long operation finishes — model download, source build, import. **Strong
+  long operation finishes — model download, runtime install, import. **Strong
   candidate, small**; the tab-title form needs no new permissions.
 - **Localization.** Already owned by the LSO merge decision 6 (one pipeline);
   cross-referenced here so it is not re-invented as a fresh idea.

@@ -212,7 +212,7 @@ function installFetch(opts: InstallFetchOptions = {}) {
     if (u.includes("/api/llm/ollama/scan")) return jsonRes(ollamaScanFixture);
     if (u.includes("/api/llm/ollama/models")) return jsonRes({ available: true, models: [{ name: "qwen-test:latest", size_bytes: 4_294_967_296, format: "gguf", family: "qwen", parameter_size: "7B", quantization: "Q4_K_M" }] });
     if (u.includes("/api/llm/imports/ollama")) return jsonRes({ import: { id: "import-1", source: "ollama", display_name: "qwen-test:latest", status: "copying", bytes_copied: 1024, total_bytes: 4_294_967_296, started_at: "now", updated_at: "now" } });
-    if (u.includes("/api/llm/runtime/build")) return jsonRes({ build: { id: "runtime-build-1", backend: "auto", status: "queued", message: "Queued managed llama.cpp source build.", started_at: "now", updated_at: "now" } });
+    if (u.includes("/api/llm/runtime/build")) return jsonRes({ build: { id: "runtime-build-1", backend: "auto", status: "queued", message: "Queued managed llama.cpp installation.", started_at: "now", updated_at: "now" } });
     if (u.includes("/api/llm/duplicates/terminate")) return jsonRes({ managed: true, runner_name: "llama-server.exe", processes: [] });
     if (u.includes("/api/llm/duplicates")) return jsonRes(opts.llmDuplicates ?? { managed: true, runner_name: "llama-server.exe", processes: [] });
     if (u.includes("/api/llm/models")) return jsonRes(opts.modelManager ?? modelManagerFixture);

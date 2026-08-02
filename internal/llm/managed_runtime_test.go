@@ -1,12 +1,40 @@
 package llm
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestManagedRuntimeInstallerMaterializesPinnedLicense(t *testing.T) {
+	manager, err := OpenManagedLlamaRuntimeManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("open runtime manager: %v", err)
+	}
+	defer manager.Close()
+
+	scriptPath, err := manager.installBuildScript()
+	if err != nil {
+		t.Fatalf("materialize installer assets: %v", err)
+	}
+	if filepath.Base(scriptPath) != "build-managed-llama.ps1" {
+		t.Fatalf("installer path = %q", scriptPath)
+	}
+	wantLicense, err := managedRuntimeAssets.ReadFile("runtimeassets/LICENSE-llama.cpp")
+	if err != nil {
+		t.Fatalf("read embedded license: %v", err)
+	}
+	gotLicense, err := os.ReadFile(filepath.Join(filepath.Dir(scriptPath), "LICENSE-llama.cpp"))
+	if err != nil {
+		t.Fatalf("read materialized license: %v", err)
+	}
+	if !bytes.Equal(gotLicense, wantLicense) {
+		t.Fatal("materialized llama.cpp license differs from embedded asset")
+	}
+}
 
 func TestInspectManagedLlamaRuntimeValidatesAppOwnedManifest(t *testing.T) {
 	dataDir := t.TempDir()
@@ -18,7 +46,7 @@ func TestInspectManagedLlamaRuntimeValidatesAppOwnedManifest(t *testing.T) {
 		Commit:        ManagedLlamaCommit,
 		Backend:       "cpu",
 		Runner:        runnerRelative,
-		Source:        "built_from_source",
+		Source:        "verified_upstream_release",
 		BuiltAt:       time.Now().UTC().Format(time.RFC3339Nano),
 	})
 
@@ -29,6 +57,25 @@ func TestInspectManagedLlamaRuntimeValidatesAppOwnedManifest(t *testing.T) {
 	wantRunner := filepath.Join(ManagedLlamaRuntimeRoot(dataDir), filepath.FromSlash(runnerRelative))
 	if status.RunnerPath != wantRunner || status.Version != ManagedLlamaVersion || status.Backend != "cpu" {
 		t.Fatalf("runtime metadata = %+v, want runner %q", status, wantRunner)
+	}
+}
+
+func TestInspectManagedLlamaRuntimeAcceptsLegacySourceBuild(t *testing.T) {
+	dataDir := t.TempDir()
+	writeManagedRuntimeFixture(t, dataDir, managedRuntimeManifest{
+		SchemaVersion: managedRuntimeManifestVersion,
+		Runtime:       "llama.cpp",
+		Version:       ManagedLlamaVersion,
+		Commit:        ManagedLlamaCommit,
+		Backend:       "cpu",
+		Runner:        "installs/legacy/bin/llama-server.exe",
+		Source:        "built_from_source",
+		BuiltAt:       time.Now().UTC().Format(time.RFC3339Nano),
+	})
+
+	status := InspectManagedLlamaRuntime(dataDir)
+	if !status.Installed || !status.Current || status.Source != "built_from_source" {
+		t.Fatalf("legacy source-built runtime status = %+v", status)
 	}
 }
 

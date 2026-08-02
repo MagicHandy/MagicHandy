@@ -13,7 +13,31 @@ $ErrorActionPreference = 'Stop'
 
 $LlamaVersion = 'b9966'
 $LlamaCommit = 'c749cb041706647f460bb918cccc9d91995205ab'
-$LlamaRepository = 'https://github.com/ggml-org/llama.cpp.git'
+$LlamaReleaseURL = 'https://github.com/ggml-org/llama.cpp/releases/tag/b9966'
+$LlamaAssets = @{
+    cpu = @(
+        [pscustomobject]@{
+            Name = 'llama-b9966-bin-win-cpu-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b9966/llama-b9966-bin-win-cpu-x64.zip'
+            SHA256 = 'a2e791df47c8abd09e23f85a00699d6d6552445f6bba21e810263eaeefbf672a'
+            Bytes = 18211851L
+        }
+    )
+    cuda = @(
+        [pscustomobject]@{
+            Name = 'llama-b9966-bin-win-cuda-12.4-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b9966/llama-b9966-bin-win-cuda-12.4-x64.zip'
+            SHA256 = 'bd95fbe38267b41ba109f922b978985e3ce982fef47040f90534a291617fcee9'
+            Bytes = 267340684L
+        },
+        [pscustomobject]@{
+            Name = 'cudart-llama-bin-win-cuda-12.4-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b9966/cudart-llama-bin-win-cuda-12.4-x64.zip'
+            SHA256 = '8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6'
+            Bytes = 391443627L
+        }
+    )
+}
 
 function Resolve-Executable([string]$Name) {
     $command = Get-Command $Name -ErrorAction SilentlyContinue
@@ -21,26 +45,12 @@ function Resolve-Executable([string]$Name) {
         return $command.Source
     }
 
-    $candidates = switch ($Name.ToLowerInvariant()) {
-        'git' { @((Join-Path $env:ProgramFiles 'Git\cmd\git.exe')) }
-        'cmake' { @((Join-Path $env:ProgramFiles 'CMake\bin\cmake.exe')) }
-        default { @() }
-    }
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            return $candidate
-        }
-    }
-
-    if ($Name -eq 'nvcc') {
-        $cudaRoot = Join-Path $env:ProgramFiles 'NVIDIA GPU Computing Toolkit\CUDA'
-        if (Test-Path -LiteralPath $cudaRoot) {
-            $candidate = Get-ChildItem -LiteralPath $cudaRoot -Directory -ErrorAction SilentlyContinue |
-                Sort-Object Name -Descending |
-                ForEach-Object { Join-Path $_.FullName 'bin\nvcc.exe' } |
-                Where-Object { Test-Path -LiteralPath $_ } |
-                Select-Object -First 1
-            if ($candidate) {
+    if ($Name -eq 'nvidia-smi') {
+        foreach ($candidate in @(
+            (Join-Path $env:SystemRoot 'System32\nvidia-smi.exe'),
+            (Join-Path $env:ProgramFiles 'NVIDIA Corporation\NVSMI\nvidia-smi.exe')
+        )) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
                 return $candidate
             }
         }
@@ -48,89 +58,24 @@ function Resolve-Executable([string]$Name) {
     return $null
 }
 
-function Resolve-CMake {
-    $cmake = Resolve-Executable 'cmake'
-    if ($cmake) {
-        return $cmake
-    }
-
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path -LiteralPath $vswhere) {
-        $candidate = & $vswhere -latest -products * -find 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe' | Select-Object -First 1
-        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
-            return $candidate
-        }
-    }
-
-    foreach ($programFilesRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
-        $visualStudioRoot = Join-Path $programFilesRoot 'Microsoft Visual Studio'
-        if (Test-Path -LiteralPath $visualStudioRoot) {
-            $candidate = Get-ChildItem -Path $visualStudioRoot -Filter cmake.exe -File -Recurse -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -like '*CommonExtensions*Microsoft*CMake*bin*' } |
-                Select-Object -First 1
-            if ($null -ne $candidate) {
-                return $candidate.FullName
-            }
-        }
-    }
-    return $null
-}
-
-function Resolve-MSYS2UCRTToolchain {
-    $roots = @('C:\msys64')
-    if (-not [string]::IsNullOrWhiteSpace($env:SystemDrive)) {
-        $roots += (Join-Path $env:SystemDrive 'msys64')
-    }
-    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
-        $roots += (Join-Path $env:ProgramFiles 'MSYS2')
-    }
-    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-        $roots += (Join-Path $env:LOCALAPPDATA 'Programs\msys64')
-    }
-    foreach ($root in ($roots | Select-Object -Unique)) {
-        $bin = Join-Path $root 'ucrt64\bin'
-        $tools = [ordered]@{
-            Bin = $bin
-            C = Join-Path $bin 'gcc.exe'
-            CXX = Join-Path $bin 'g++.exe'
-            CMake = Join-Path $bin 'cmake.exe'
-            Ninja = Join-Path $bin 'ninja.exe'
-        }
-        $required = @($tools.C, $tools.CXX, $tools.CMake, $tools.Ninja)
-        $missing = @($required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })
-        if ($missing.Count -eq 0) {
-            return [pscustomobject]$tools
-        }
-    }
-    return $null
-}
-
-function Initialize-CudaToolkitEnvironment([string]$Nvcc) {
-    $nvccPath = [System.IO.Path]::GetFullPath($Nvcc)
-    $cudaToolkitDir = Split-Path -Parent (Split-Path -Parent $nvccPath)
-    if ([string]::IsNullOrWhiteSpace($cudaToolkitDir)) {
-        throw "Could not resolve the CUDA Toolkit directory from '$nvccPath'."
-    }
-
-    # CMake and NVIDIA's Visual Studio targets consult different properties.
-    $env:CUDA_PATH = $cudaToolkitDir.TrimEnd('\')
-    $env:CudaToolkitDir = $cudaToolkitDir.TrimEnd('\') + '\'
-}
-
-function Test-VCToolchain {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (-not (Test-Path -LiteralPath $vswhere)) {
+function Test-NVIDIAGPU {
+    $nvidiaSMI = Resolve-Executable 'nvidia-smi'
+    if (-not $nvidiaSMI) {
         return $false
     }
-    $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-    return -not [string]::IsNullOrWhiteSpace(($installation | Select-Object -First 1))
+    try {
+        & $nvidiaSMI '--query-gpu=name' '--format=csv,noheader' 2>$null | Out-Null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
 }
 
-function Invoke-Checked([string]$Executable, [string[]]$Arguments, [string]$Failure) {
-    & $Executable @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Failure (exit $LASTEXITCODE)."
+function Get-LlamaReleaseAssets([string]$SelectedBackend) {
+    if ($SelectedBackend -notin @('cpu', 'cuda')) {
+        throw "Unsupported managed llama.cpp backend '$SelectedBackend'."
     }
+    return @($LlamaAssets[$SelectedBackend])
 }
 
 function Invoke-Captured([string]$Executable, [string[]]$Arguments, [string]$Failure) {
@@ -161,24 +106,285 @@ function Assert-ChildPath([string]$Root, [string]$Candidate) {
     }
 }
 
-function Write-RuntimeManifest(
-    [string]$RuntimeRoot,
-    [string]$InstallID,
+function Get-SHA256([string]$Path) {
+    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+}
+
+function Test-VerifiedFile([string]$Path, [string]$ExpectedSHA256, [long]$ExpectedBytes) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $false
+    }
+    try {
+        $file = Get-Item -LiteralPath $Path
+        return $file.Length -eq $ExpectedBytes -and (Get-SHA256 $Path) -eq $ExpectedSHA256
+    } catch {
+        return $false
+    }
+}
+
+function Format-ByteCount([long]$Bytes) {
+    if ($Bytes -ge 1GB) { return ('{0:N2} GiB' -f ($Bytes / 1GB)) }
+    if ($Bytes -ge 1MB) { return ('{0:N1} MiB' -f ($Bytes / 1MB)) }
+    if ($Bytes -ge 1KB) { return ('{0:N1} KiB' -f ($Bytes / 1KB)) }
+    return "$Bytes B"
+}
+
+function Install-VerifiedDownload(
+    [string]$URL,
+    [string]$Destination,
+    [string]$ExpectedSHA256,
+    [long]$ExpectedBytes
+) {
+    $downloadURI = $null
+    if (-not [Uri]::TryCreate($URL, [UriKind]::Absolute, [ref]$downloadURI) -or $downloadURI.Scheme -ne 'https') {
+        throw 'Managed llama.cpp assets must use an absolute HTTPS URL.'
+    }
+    if ($ExpectedSHA256 -notmatch '^[0-9a-f]{64}$' -or $ExpectedBytes -le 0) {
+        throw 'Managed llama.cpp asset metadata is invalid.'
+    }
+
+    $parent = Split-Path -Parent $Destination
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    if (Test-VerifiedFile $Destination $ExpectedSHA256 $ExpectedBytes) {
+        Write-Host "Verified cached $(Split-Path -Leaf $Destination)." -ForegroundColor Green
+        return
+    }
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Force
+    }
+
+    $partial = "$Destination.partial"
+    $name = Split-Path -Leaf $Destination
+    [Net.ServicePointManager]::SecurityProtocol =
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $lastFailure = ''
+
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        $offset = if (Test-Path -LiteralPath $partial -PathType Leaf) {
+            (Get-Item -LiteralPath $partial).Length
+        } else {
+            0L
+        }
+        if ($offset -eq $ExpectedBytes) {
+            if (Test-VerifiedFile $partial $ExpectedSHA256 $ExpectedBytes) {
+                Move-Item -LiteralPath $partial -Destination $Destination -Force
+                Write-Host "Verified completed partial $name." -ForegroundColor Green
+                return
+            }
+            Remove-Item -LiteralPath $partial -Force
+            $offset = 0L
+        }
+        if ($offset -gt $ExpectedBytes) {
+            Remove-Item -LiteralPath $partial -Force
+            $offset = 0L
+        }
+
+        if ($offset -gt 0) {
+            Write-Host "Resuming $name from $(Format-ByteCount $offset)..."
+        } else {
+            Write-Host "Downloading $name ($(Format-ByteCount $ExpectedBytes))..."
+        }
+
+        $response = $null
+        $input = $null
+        $output = $null
+        try {
+            $request = [System.Net.HttpWebRequest][System.Net.WebRequest]::Create($downloadURI)
+            $request.Method = 'GET'
+            $request.UserAgent = 'MagicHandy-Installer/1.0'
+            $request.AllowAutoRedirect = $true
+            $request.MaximumAutomaticRedirections = 10
+            $request.AutomaticDecompression = [System.Net.DecompressionMethods]::None
+            $request.Headers['Accept-Encoding'] = 'identity'
+            $request.Timeout = 60000
+            $request.ReadWriteTimeout = 60000
+            $request.CachePolicy = [System.Net.Cache.RequestCachePolicy]::new(
+                [System.Net.Cache.RequestCacheLevel]::NoCacheNoStore
+            )
+            if ($offset -gt 0) {
+                $request.AddRange([long]$offset)
+            }
+
+            $response = [System.Net.HttpWebResponse]$request.GetResponse()
+            if ($response.ResponseUri.Scheme -ne 'https') {
+                throw 'Managed llama.cpp download refused an HTTPS-to-HTTP redirect.'
+            }
+            if (-not [string]::IsNullOrWhiteSpace($response.ContentEncoding) -and $response.ContentEncoding -ne 'identity') {
+                throw "Download server returned unsupported content encoding '$($response.ContentEncoding)'."
+            }
+
+            $append = $false
+            if ([int]$response.StatusCode -eq 206) {
+                $contentRange = $response.Headers['Content-Range']
+                if ($contentRange -notmatch '^bytes\s+(\d+)-(\d+)/(\d+)$' -or
+                    [long]$Matches[1] -ne $offset -or [long]$Matches[3] -ne $ExpectedBytes) {
+                    throw "Download server returned an unexpected byte range: '$contentRange'."
+                }
+                $append = $offset -gt 0
+            } elseif ([int]$response.StatusCode -eq 200) {
+                if ($offset -gt 0) {
+                    Write-Warning 'The download server did not resume the saved partial; restarting this asset from zero.'
+                    $offset = 0L
+                }
+            } else {
+                throw "Download server returned HTTP $([int]$response.StatusCode)."
+            }
+
+            $mode = if ($append) { [System.IO.FileMode]::OpenOrCreate } else { [System.IO.FileMode]::Create }
+            $output = [System.IO.File]::Open(
+                $partial,
+                $mode,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::None
+            )
+            if ($append) {
+                if ($output.Length -ne $offset) {
+                    throw 'Download partial changed while it was being resumed.'
+                }
+                $output.Position = $offset
+            }
+
+            $input = $response.GetResponseStream()
+            $buffer = New-Object byte[] (1MB)
+            $nextProgress = [DateTime]::UtcNow.AddSeconds(5)
+            while ($true) {
+                $count = $input.Read($buffer, 0, $buffer.Length)
+                if ($count -eq 0) {
+                    break
+                }
+                $output.Write($buffer, 0, $count)
+                if ($output.Position -gt $ExpectedBytes) {
+                    throw 'Downloaded bytes exceeded the pinned asset size.'
+                }
+                if ([DateTime]::UtcNow -ge $nextProgress) {
+                    Write-Host "Downloaded $(Format-ByteCount $output.Position) / $(Format-ByteCount $ExpectedBytes) of $name..."
+                    $nextProgress = [DateTime]::UtcNow.AddSeconds(5)
+                }
+            }
+            $output.Flush()
+            if ($output.Length -ne $ExpectedBytes) {
+                throw "Download ended at $(Format-ByteCount $output.Length); expected $(Format-ByteCount $ExpectedBytes)."
+            }
+            $lastFailure = ''
+        } catch {
+            $lastFailure = $_.Exception.Message
+        } finally {
+            if ($null -ne $input) { $input.Dispose() }
+            if ($null -ne $output) { $output.Dispose() }
+            if ($null -ne $response) { $response.Dispose() }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($lastFailure)) {
+            Write-Host "Verifying $name SHA-256..."
+            if (-not (Test-VerifiedFile $partial $ExpectedSHA256 $ExpectedBytes)) {
+                Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+                throw "SHA-256 verification failed for $name. The untrusted download was removed."
+            }
+            Move-Item -LiteralPath $partial -Destination $Destination -Force
+            Write-Host "Verified $name." -ForegroundColor Green
+            return
+        }
+
+        if ($attempt -eq 6) {
+            throw "Downloading $name failed after 6 attempts: $lastFailure. Partial data was retained for retry."
+        }
+        Write-Warning "Downloading $name was interrupted: $lastFailure. Retrying ($($attempt + 1)/6)..."
+        Start-Sleep -Seconds ([Math]::Min(20, [Math]::Pow(2, $attempt - 1)))
+    }
+}
+
+function Expand-VerifiedZip([string]$Archive, [string]$Destination) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    $destinationPrefix = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\') + '\'
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($Archive)
+    try {
+        foreach ($entry in $zip.Entries) {
+            $relative = $entry.FullName.Replace('/', '\')
+            if ([string]::IsNullOrWhiteSpace($relative)) {
+                throw 'Verified llama.cpp archive contains an empty path.'
+            }
+            $segments = @($relative.Split('\') | Where-Object { $_ -ne '' })
+            if ([System.IO.Path]::IsPathRooted($relative) -or $relative.Contains(':') -or
+                $segments -contains '..' -or $segments -contains '.') {
+                throw "Verified llama.cpp archive contains an unsafe path: '$($entry.FullName)'."
+            }
+            $target = [System.IO.Path]::GetFullPath((Join-Path $Destination $relative))
+            if (-not $target.StartsWith($destinationPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Verified llama.cpp archive path escapes its staging directory: '$($entry.FullName)'."
+            }
+            $unixType = (($entry.ExternalAttributes -shr 16) -band 0xF000)
+            if ($unixType -eq 0xA000) {
+                throw "Verified llama.cpp archive contains a symbolic link: '$($entry.FullName)'."
+            }
+            if (-not $entry.FullName.EndsWith('/') -and -not $seen.Add($target)) {
+                throw "Verified llama.cpp archive contains a duplicate path: '$($entry.FullName)'."
+            }
+        }
+    } finally {
+        $zip.Dispose()
+    }
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($Archive, $Destination)
+}
+
+function Copy-ArchiveFiles([string]$Source, [string]$Destination) {
+    foreach ($file in (Get-ChildItem -LiteralPath $Source -File -Recurse)) {
+        $target = Join-Path $Destination $file.Name
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            if ((Get-SHA256 $target) -ne (Get-SHA256 $file.FullName)) {
+                throw "Verified llama.cpp assets contain conflicting files named '$($file.Name)'."
+            }
+            continue
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $target
+    }
+}
+
+function Test-ExistingRuntime(
+    [string]$InstallManifest,
+    [string]$Runner,
     [string]$SelectedBackend,
     [string]$RunnerRelativePath
 ) {
-    $builtAt = [DateTimeOffset]::UtcNow.ToString('o')
-    $installManifest = Join-Path $RuntimeRoot "installs\$InstallID\runtime.json"
-    if (Test-Path -LiteralPath $installManifest) {
-        try {
-            $installed = Get-Content -LiteralPath $installManifest -Raw | ConvertFrom-Json
-            if ($installed.version -eq $LlamaVersion -and $installed.commit -eq $LlamaCommit -and $installed.backend -eq $SelectedBackend -and $installed.built_at) {
-                $builtAt = [string]$installed.built_at
-            }
-        } catch {
-            Write-Warning 'Existing managed runtime metadata was unreadable; replacing it.'
-        }
+    if (-not (Test-Path -LiteralPath $InstallManifest -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $Runner -PathType Leaf)) {
+        return $false
     }
+    try {
+        $manifest = Get-Content -LiteralPath $InstallManifest -Raw | ConvertFrom-Json
+        if ($manifest.schema_version -ne 1 -or $manifest.runtime -ne 'llama.cpp' -or
+            $manifest.version -ne $LlamaVersion -or $manifest.commit -ne $LlamaCommit -or
+            $manifest.backend -ne $SelectedBackend -or $manifest.runner -ne $RunnerRelativePath -or
+            $manifest.source -notin @('built_from_source', 'verified_upstream_release')) {
+            return $false
+        }
+        [DateTimeOffset]::Parse([string]$manifest.built_at) | Out-Null
+        $versionOutput = Invoke-Captured $Runner @('--version') 'Probe existing llama-server'
+        return $versionOutput -match $LlamaCommit.Substring(0, 7)
+    } catch {
+        Write-Warning "The existing managed runtime failed validation: $_"
+        return $false
+    }
+}
+
+function Activate-ExistingManifest([string]$InstallManifest, [string]$RuntimeRoot) {
+    $json = Get-Content -LiteralPath $InstallManifest -Raw
+    $active = Join-Path $RuntimeRoot 'active.json'
+    $partial = "$active.partial"
+    Write-UTF8NoBOM $partial $json
+    Move-Item -LiteralPath $partial -Destination $active -Force
+}
+
+function Write-RuntimeMetadata(
+    [string]$RuntimeRoot,
+    [string]$InstallID,
+    [string]$SelectedBackend,
+    [string]$RunnerRelativePath,
+    [object[]]$Assets
+) {
+    $installedAt = [DateTimeOffset]::UtcNow.ToString('o')
+    $installManifest = Join-Path $RuntimeRoot "installs\$InstallID\runtime.json"
     $manifest = [ordered]@{
         schema_version = 1
         runtime = 'llama.cpp'
@@ -186,11 +392,30 @@ function Write-RuntimeManifest(
         commit = $LlamaCommit
         backend = $SelectedBackend
         runner = $RunnerRelativePath
-        source = 'built_from_source'
-        built_at = $builtAt
+        source = 'verified_upstream_release'
+        built_at = $installedAt
     }
     $json = $manifest | ConvertTo-Json
     Write-UTF8NoBOM $installManifest $json
+
+    $provenance = [ordered]@{
+        schema_version = 1
+        runtime = 'llama.cpp'
+        version = $LlamaVersion
+        commit = $LlamaCommit
+        backend = $SelectedBackend
+        release = $LlamaReleaseURL
+        verified_at = $installedAt
+        assets = @($Assets | ForEach-Object {
+            [ordered]@{
+                name = $_.Name
+                url = $_.URL
+                sha256 = $_.SHA256
+                bytes = $_.Bytes
+            }
+        })
+    }
+    Write-UTF8NoBOM (Join-Path $RuntimeRoot "installs\$InstallID\provenance.json") ($provenance | ConvertTo-Json -Depth 5)
 
     $active = Join-Path $RuntimeRoot 'active.json'
     $partial = "$active.partial"
@@ -199,174 +424,130 @@ function Write-RuntimeManifest(
 }
 
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
-    throw 'Managed llama.cpp source builds are currently supported on Windows only.'
+    throw 'Managed llama.cpp runtime installation is currently supported on Windows only.'
 }
 if (-not [Environment]::Is64BitOperatingSystem) {
     throw 'Managed llama.cpp requires 64-bit Windows.'
 }
 
-$git = Resolve-Executable 'git'
-if (-not $git) {
-    throw 'Git is required to fetch the pinned llama.cpp source. Install Git, then retry.'
-}
-$nvcc = Resolve-Executable 'nvcc'
 $selectedBackend = $Backend
+$hasNVIDIA = Test-NVIDIAGPU
 if ($selectedBackend -eq 'auto') {
-    $selectedBackend = if ((Resolve-Executable 'nvidia-smi') -and $nvcc) { 'cuda' } else { 'cpu' }
+    $selectedBackend = if ($hasNVIDIA) { 'cuda' } else { 'cpu' }
 }
-if ($selectedBackend -eq 'cuda') {
-    if (-not $nvcc) {
-        throw 'The CUDA backend requires the NVIDIA CUDA Toolkit (nvcc). Install it or choose the CPU backend.'
-    }
-    Initialize-CudaToolkitEnvironment -Nvcc $nvcc
+if ($selectedBackend -eq 'cuda' -and -not $hasNVIDIA) {
+    throw 'The CUDA backend requires a working NVIDIA driver and GPU. Choose the CPU backend on this machine.'
 }
-
-$msysToolchain = if ($selectedBackend -eq 'cpu') { Resolve-MSYS2UCRTToolchain } else { $null }
-$useMSYS2 = $null -ne $msysToolchain
-if ($useMSYS2) {
-    $cmake = $msysToolchain.CMake
-    $env:Path = "$($msysToolchain.Bin);$env:Path"
-    Write-Host "Using MSYS2 UCRT64 GCC from $($msysToolchain.Bin)."
-} else {
-    $cmake = Resolve-CMake
-    if (-not $cmake) {
-        throw 'CMake is required to build llama.cpp. Install CMake, MSYS2 UCRT64 CMake, or the Visual Studio CMake tools, then retry.'
-    }
-    if (-not (Test-VCToolchain)) {
-        throw 'The Visual Studio Desktop C++ Build Tools workload is required for this llama.cpp build. CPU builds may alternatively use MSYS2 UCRT64 GCC/CMake/Ninja.'
-    }
-}
+$assets = @(Get-LlamaReleaseAssets $selectedBackend)
 
 $resolvedDataDir = [System.IO.Path]::GetFullPath($DataDir)
 $runtimeRoot = Join-Path $resolvedDataDir 'runtimes\llama.cpp'
 $installID = "$LlamaVersion-$selectedBackend-$($LlamaCommit.Substring(0, 7))"
-$installDir = Join-Path $runtimeRoot "installs\$InstallID"
+$installDir = Join-Path $runtimeRoot "installs\$installID"
+$installManifest = Join-Path $installDir 'runtime.json'
 $runner = Join-Path $installDir 'bin\llama-server.exe'
 $runnerRelative = "installs/$installID/bin/llama-server.exe"
+$downloadDir = Join-Path $runtimeRoot 'downloads'
+$license = Join-Path $PSScriptRoot 'LICENSE-llama.cpp'
 New-Item -ItemType Directory -Force -Path (Join-Path $runtimeRoot 'installs') | Out-Null
+New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
 
-if (Test-Path -LiteralPath $installDir) {
-    $existingMatches = $false
-    if (Test-Path -LiteralPath $runner) {
-        try {
-            $versionOutput = Invoke-Captured $runner @('--version') 'Probe existing llama-server'
-            $existingMatches = $versionOutput -match $LlamaCommit.Substring(0, 7)
-        } catch {
-            Write-Warning "The existing managed runtime failed validation: $_"
-        }
-    }
-    if ($existingMatches) {
-        Write-RuntimeManifest $runtimeRoot $installID $selectedBackend $runnerRelative
-        Write-Host "Managed llama.cpp $LlamaVersion ($selectedBackend) is already built." -ForegroundColor Green
-        return
-    }
-    Assert-ChildPath $runtimeRoot $installDir
-    Write-Warning 'Replacing an incomplete or mismatched app-owned llama.cpp install.'
-    Remove-Item -LiteralPath $installDir -Recurse -Force
+if (-not (Test-Path -LiteralPath $license -PathType Leaf)) {
+    throw 'The pinned llama.cpp MIT license file is missing. Repair MagicHandy and retry.'
 }
 
-$token = [Guid]::NewGuid().ToString('N')
-$workspace = Join-Path $runtimeRoot ".build-$token"
-$sourceDir = Join-Path $workspace 'source'
-$buildDir = Join-Path $workspace 'build'
-$installStage = Join-Path $runtimeRoot "installs\$InstallID.partial-$token"
-
+$lockPath = Join-Path $runtimeRoot '.install.lock'
+$lock = $null
 try {
-    New-Item -ItemType Directory -Force -Path $sourceDir | Out-Null
-    Write-Host "Fetching pinned llama.cpp $LlamaVersion source..."
-    Invoke-Checked $git @('-C', $sourceDir, 'init', '--quiet') 'Initialize llama.cpp source checkout'
-    Invoke-Checked $git @('-C', $sourceDir, 'config', 'core.longpaths', 'true') 'Enable long paths for llama.cpp source'
-    Invoke-Checked $git @('-C', $sourceDir, 'remote', 'add', 'origin', $LlamaRepository) 'Configure llama.cpp source remote'
-    Invoke-Checked $git @('-C', $sourceDir, 'fetch', '--quiet', '--depth', '1', 'origin', 'tag', $LlamaVersion) 'Fetch pinned llama.cpp source'
-    Invoke-Checked $git @('-C', $sourceDir, 'checkout', '--quiet', '--detach', $LlamaVersion) 'Check out pinned llama.cpp source'
-    $actualCommit = (& $git -C $sourceDir rev-parse HEAD).Trim()
-    if ($LASTEXITCODE -ne 0 -or $actualCommit -ne $LlamaCommit) {
-        throw "Pinned llama.cpp source verification failed: got '$actualCommit'."
-    }
-
-    Write-Host "Configuring llama.cpp $LlamaVersion ($selectedBackend)..."
-    $configure = @(
-        '-S', $sourceDir,
-        '-B', $buildDir,
-        '-DLLAMA_BUILD_SERVER=ON',
-        '-DLLAMA_BUILD_TOOLS=ON',
-        '-DLLAMA_BUILD_TESTS=OFF',
-        '-DLLAMA_BUILD_EXAMPLES=OFF',
-        '-DLLAMA_BUILD_APP=OFF',
-        '-DLLAMA_BUILD_UI=OFF',
-        '-DLLAMA_USE_PREBUILT_UI=OFF',
-        '-DLLAMA_CURL=OFF',
-        '-DLLAMA_OPENSSL=OFF',
-        '-DGGML_CCACHE=OFF',
-        "-DGGML_CUDA=$(if ($selectedBackend -eq 'cuda') { 'ON' } else { 'OFF' })"
-    )
-    if ($useMSYS2) {
-        $configure += @(
-            '-G', 'Ninja',
-            '-DCMAKE_BUILD_TYPE=Release',
-            "-DCMAKE_C_COMPILER=$($msysToolchain.C)",
-            "-DCMAKE_CXX_COMPILER=$($msysToolchain.CXX)",
-            "-DCMAKE_MAKE_PROGRAM=$($msysToolchain.Ninja)"
+    try {
+        $lock = [System.IO.File]::Open(
+            $lockPath,
+            [System.IO.FileMode]::OpenOrCreate,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
         )
-    } else {
-        $configure += @('-A', 'x64')
-    }
-    Invoke-Checked $cmake $configure 'Configure llama.cpp'
-
-    Write-Host 'Building llama-server from source. This can take several minutes...'
-    $buildArguments = @('--build', $buildDir, '--target', 'llama-server', '--parallel')
-    if (-not $useMSYS2) {
-        $buildArguments += @('--config', 'Release')
-    }
-    Invoke-Checked $cmake $buildArguments 'Build llama-server'
-
-    $builtRunner = Join-Path $buildDir 'bin\Release\llama-server.exe'
-    if (-not (Test-Path -LiteralPath $builtRunner)) {
-        $builtRunner = Join-Path $buildDir 'bin\llama-server.exe'
-    }
-    if (-not (Test-Path -LiteralPath $builtRunner)) {
-        throw 'The llama.cpp build completed without producing llama-server.exe.'
-    }
-    $versionOutput = Invoke-Captured $builtRunner @('--version') 'Probe built llama-server'
-    if ($versionOutput -notmatch $LlamaCommit.Substring(0, 7)) {
-        throw 'The built llama-server failed its pinned-version probe.'
+    } catch [System.IO.IOException] {
+        throw 'Another managed llama.cpp installation is already running.'
     }
 
-    $builtBin = Split-Path -Parent $builtRunner
-    $stageBin = Join-Path $installStage 'bin'
-    New-Item -ItemType Directory -Force -Path $stageBin | Out-Null
-    Get-ChildItem -LiteralPath $builtBin -File | Copy-Item -Destination $stageBin -Force
-    if ($useMSYS2) {
-        foreach ($runtimeDLL in @('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll', 'libgomp-1.dll')) {
-            $runtimePath = Join-Path $msysToolchain.Bin $runtimeDLL
-            if (Test-Path -LiteralPath $runtimePath -PathType Leaf) {
-                Copy-Item -LiteralPath $runtimePath -Destination $stageBin -Force
-            }
+    if (Test-ExistingRuntime $installManifest $runner $selectedBackend $runnerRelative) {
+        Activate-ExistingManifest $installManifest $runtimeRoot
+        Write-Host "Managed llama.cpp $LlamaVersion ($selectedBackend) is already installed." -ForegroundColor Green
+        return
+    }
+    if (Test-Path -LiteralPath $installDir) {
+        Assert-ChildPath $runtimeRoot $installDir
+        Write-Warning 'Replacing an incomplete or mismatched app-owned llama.cpp install.'
+        Remove-Item -LiteralPath $installDir -Recurse -Force
+    }
+
+    foreach ($asset in $assets) {
+        Install-VerifiedDownload `
+            -URL $asset.URL `
+            -Destination (Join-Path $downloadDir $asset.Name) `
+            -ExpectedSHA256 $asset.SHA256 `
+            -ExpectedBytes $asset.Bytes
+    }
+
+    $token = [Guid]::NewGuid().ToString('N')
+    $workspace = Join-Path $runtimeRoot ".extract-$token"
+    $installStage = Join-Path $runtimeRoot "installs\$installID.partial-$token"
+    foreach ($path in @($workspace, $installStage)) {
+        Assert-ChildPath $runtimeRoot $path
+    }
+    try {
+        $stageBin = Join-Path $installStage 'bin'
+        New-Item -ItemType Directory -Force -Path $stageBin | Out-Null
+        for ($index = 0; $index -lt $assets.Count; $index++) {
+            $asset = $assets[$index]
+            $extractDir = Join-Path $workspace "asset-$index"
+            Write-Host "Extracting $($asset.Name)..."
+            Expand-VerifiedZip (Join-Path $downloadDir $asset.Name) $extractDir
+            Copy-ArchiveFiles $extractDir $stageBin
         }
 
-        # The build-time PATH contains the full UCRT64 directory. Probe the
-        # staged runner without it so a missing GCC runtime DLL cannot produce
-        # an install that only works while MSYS2 happens to be on PATH.
-        $buildPath = $env:Path
+        $stagedRunner = Join-Path $stageBin 'llama-server.exe'
+        if (-not (Test-Path -LiteralPath $stagedRunner -PathType Leaf)) {
+            throw 'The verified llama.cpp release did not contain llama-server.exe.'
+        }
+        Copy-Item -LiteralPath $license -Destination (Join-Path $installStage 'LICENSE-llama.cpp')
+
+        $savedPath = $env:Path
         try {
             $env:Path = "$stageBin;$env:SystemRoot\System32;$env:SystemRoot"
-            $stagedVersion = Invoke-Captured (Join-Path $stageBin 'llama-server.exe') @('--version') 'Probe self-contained MSYS2 llama-server'
-            if ($stagedVersion -notmatch $LlamaCommit.Substring(0, 7)) {
-                throw 'The staged MSYS2 llama-server failed its pinned-version probe.'
+            $versionOutput = Invoke-Captured $stagedRunner @('--version') 'Probe verified llama-server'
+            if ($versionOutput -notmatch $LlamaCommit.Substring(0, 7)) {
+                throw 'The verified llama-server failed its pinned-version probe.'
+            }
+            if ($selectedBackend -eq 'cuda') {
+                $devices = Invoke-Captured $stagedRunner @('--list-devices') 'Probe verified CUDA llama-server'
+                if ($devices -notmatch '(?im)^\s*CUDA\d*:') {
+                    throw 'The verified CUDA llama-server could not detect an NVIDIA CUDA device. Update the NVIDIA driver or choose CPU.'
+                }
             }
         } finally {
-            $env:Path = $buildPath
+            $env:Path = $savedPath
+        }
+
+        Move-Item -LiteralPath $installStage -Destination $installDir
+        Write-RuntimeMetadata $runtimeRoot $installID $selectedBackend $runnerRelative $assets
+        Write-Host "Installed verified managed llama.cpp $LlamaVersion ($selectedBackend)." -ForegroundColor Green
+
+        foreach ($asset in $assets) {
+            Remove-Item -LiteralPath (Join-Path $downloadDir $asset.Name) -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath (Join-Path $downloadDir "$($asset.Name).partial") -Force -ErrorAction SilentlyContinue
+        }
+    } finally {
+        if (Test-Path -LiteralPath $workspace) {
+            Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $installStage) {
+            Remove-Item -LiteralPath $installStage -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
-    Copy-Item -LiteralPath (Join-Path $sourceDir 'LICENSE') -Destination (Join-Path $installStage 'LICENSE-llama.cpp') -Force
-    Move-Item -LiteralPath $installStage -Destination $installDir
-    Write-RuntimeManifest $runtimeRoot $installID $selectedBackend $runnerRelative
-    Write-Host "Built and installed managed llama.cpp $LlamaVersion ($selectedBackend)." -ForegroundColor Green
 } finally {
-    if (Test-Path -LiteralPath $workspace) {
-        Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue
+    if ($null -ne $lock) {
+        $lock.Dispose()
     }
-    if (Test-Path -LiteralPath $installStage) {
-        Remove-Item -LiteralPath $installStage -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
 }

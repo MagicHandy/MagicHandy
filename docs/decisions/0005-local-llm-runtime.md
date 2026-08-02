@@ -2,10 +2,10 @@
 
 ## Status
 
-Accepted. Provider adapters, the app-owned pinned llama.cpp source-build and
-process lifecycle, SQLite-backed model inventory, ID-based selection, and
-explicit GGUF/Ollama import are implemented. Curated model downloads remain
-planned.
+Accepted. Provider adapters, the app-owned checksum-verified llama.cpp release
+installation and process lifecycle, SQLite-backed model inventory, ID-based
+selection, and explicit GGUF/Ollama import are implemented. Curated model
+downloads remain planned.
 
 ## Context
 
@@ -27,14 +27,23 @@ The llama.cpp path is primary because it is the path MagicHandy can tune most ti
 The Go core must not link libllama or require CGo for the early implementation. It should manage `llama-server` as an external process and communicate over localhost using the OpenAI-compatible HTTP API. This preserves the pure-Go core and cross-build guardrail while allowing llama.cpp to evolve independently.
 
 Managed mode does not accept runner or GGUF paths in settings. MagicHandy embeds
-a build helper pinned to llama.cpp `b9966` / commit
+an installer pinned to llama.cpp `b9966` / commit
 `c749cb041706647f460bb918cccc9d91995205ab`. An explicit controller action (or
-the interactive installer) fetches that source, verifies the commit, builds the
-CPU or CUDA server, probes the result, and atomically activates a constrained
-manifest under the app data directory. Startup and status checks only inspect
-that manifest; they never fetch source or start a build.
+the interactive installer) downloads the official Windows x64 CPU archive or
+the CUDA 12.4 runner and runtime archives, verifies fixed sizes and SHA-256
+digests, rejects unsafe archive paths, probes the exact commit, and atomically
+activates a constrained manifest under the app data directory. CUDA activation
+also requires the staged runner to detect a CUDA device. Startup and status
+checks only inspect that manifest; they never download or install a runtime.
 
-Users may decline the managed build and use an existing Ollama installation.
+The managed installer needs PowerShell 5.1 and HTTPS. It does not install Git,
+CMake, Visual Studio, MSYS2, or the CUDA Toolkit. CUDA requires only a
+compatible NVIDIA driver and GPU. The app ships the pinned upstream MIT license
+beside the helper and writes archive URLs, sizes, and digests to an app-owned
+provenance manifest. Valid earlier `built_from_source` manifests remain
+accepted so updates do not discard a working runtime.
+
+Users may decline the managed installation and use an existing Ollama installation.
 That avoids the managed runtime and, unless the user explicitly imports a
 model, avoids duplicate model storage. This choice is functional, not a
 degraded fallback: Ollama retains provider health, model listing/selection, and
@@ -93,7 +102,7 @@ no provider can be constructed because the current model selection is missing.
 
 The llama.cpp provider manages:
 
-- pinned source build, app-owned runner activation, and version/backend metadata
+- pinned verified release, app-owned runner activation, and version/backend metadata
 - runner version and acceleration metadata
 - localhost port selection
 - process startup/shutdown
@@ -113,12 +122,12 @@ Initial target:
 
 Do not attempt to bundle every llama.cpp acceleration backend in the first implementation. CPU, Vulkan, ROCm, Metal, Linux, and macOS llama.cpp paths can be added later if they become worth the packaging and support cost. Ollama covers broad compatibility until then.
 
-The current source builder supports Windows/amd64 CPU and CUDA. `auto` chooses
-CUDA only when both an NVIDIA GPU and `nvcc` are present; otherwise it builds
-CPU. Git, CMake, and Visual Studio C++ Build Tools are build-time prerequisites,
-not runtime dependencies of the Go core. Phase 16 may package prebuilt outputs
-to remove those prerequisites for ordinary release users without changing the
-manifest/provider contract.
+The current installer supports Windows/amd64 CPU and CUDA. `auto` chooses CUDA
+when a working NVIDIA driver and GPU are detected; otherwise it installs CPU.
+CPU downloads one approximately 18 MiB archive. CUDA downloads the official
+CUDA 12.4 runner and runtime archives, approximately 628 MiB compressed and
+1.1 GiB installed. This preserves one provider/manifest contract while removing
+the multi-gigabyte compiler-toolchain failure surface from ordinary installs.
 
 ## Ollama Runtime Model
 

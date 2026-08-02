@@ -350,7 +350,7 @@ MagicHandy is intentionally making llama.cpp the quality-first Windows/NVIDIA LL
 Mitigation:
 
 - keep the Go core pure-Go and manage llama.cpp as an external `llama-server` process
-- pin runner builds and record compatibility metadata
+- pin official runner releases, archive digests, and compatibility metadata
 - start with a small curated GGUF catalog instead of an open-ended model zoo
 - support importing a local GGUF without forcing a download
 - keep model metadata in SQLite and model bytes in one private managed store;
@@ -424,6 +424,17 @@ eligible. The same final service completed the matrix against Ollama/Granite
 supplies real CUDA load/chat and secondary-provider evidence without dispatching
 to hardware. Curated downloads and hardware-fit guidance remain open, so R13
 stays High.
+
+Distribution mitigation (2026-08-02): a fresh Windows install exposed that a
+present CUDA Toolkit is not sufficient for a Visual Studio CMake build when
+NVIDIA's VS build customizations are missing. The managed path now downloads
+the official `b9966` CPU archive or CUDA 12.4 runner/runtime archives, verifies
+fixed sizes and SHA-256 digests, rejects unsafe archive paths, stages atomically,
+probes commit `c749cb0`, and requires CUDA device detection before activation.
+It ships the pinned MIT license and provenance manifest, needs no Git/CMake/
+MSVC/MSYS2/CUDA Toolkit, and preserves valid legacy source-built runtimes. Real
+network CPU and CUDA installs completed locally; the CUDA runner detected the
+RTX GPU. R13 remains High for curated model downloads and hardware-fit guidance.
 
 Managed-endpoint hardening (2026-07-21): live diagnosis found NVIDIA Broadcast
 occupying the former fixed managed port 8080 while the installed CUDA runner and
@@ -1256,9 +1267,9 @@ release during release-upgrade acceptance.
 Level: High
 
 Description:
-The Windows setup shell installs an executable that can later launch privileged
-or multi-gigabyte optional provisioning: compiler tools, CUDA, external source
-checkouts, Python environments, and model downloads. Unsigned development
+The Windows setup shell installs an executable that can later launch
+multi-gigabyte optional provisioning: managed runtime archives, Python
+environments, GPU runtime packages, and model downloads. Unsigned development
 artifacts also trigger Windows reputation warnings and provide no publisher
 identity. A stale helper, unverified payload, accidental release publication,
 or silent replay of old installer choices could change the machine or replace a
@@ -1278,6 +1289,10 @@ Mitigation:
 - keep that plan in one sequential cancellable backend queue with per-component
   state, bounded terminal output, process-tree teardown, and resumable partial
   downloads
+- install managed llama.cpp only from official pinned CPU/CUDA archives with
+  fixed size and SHA-256 checks, safe extraction, a bundled upstream license,
+  staged commit/device probes, and atomic activation; do not provision a C++ or
+  CUDA compiler toolchain for that path
 - make source updates core-only so saved legacy installer state cannot silently
   rebuild llama.cpp, Parakeet, or a Python environment
 - make uninstall data disposition explicit: recommend a bounded purge of the
@@ -1307,5 +1322,7 @@ non-executing release discovery are implemented. Release acceptance verifies
 every staged and outer hash, custom and Program Files installs, shortcut/ARP
 metadata, active-process over-install, retained settings, explicit data
 retention, bounded clean purge, and fresh state after reinstall. R28 remains
-High pending broader clean-machine acceptance of optional components and a
-production signing decision.
+High pending broader clean-machine acceptance of voice components and a
+production signing decision. The managed llama.cpp CPU and CUDA bundle paths
+have passed real-network install, checksum, extraction, activation, and runner
+probes without developer toolchains.

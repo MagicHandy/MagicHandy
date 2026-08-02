@@ -15,10 +15,9 @@ Native installer frameworks are good at installing files, shortcuts, and
 uninstall metadata but poor at model catalogs, consent, progress, cancellation,
 and migration previews. A dedicated Electron, Tauri, or WebView2 installer would
 add another runtime and UI stack while still needing to call the MagicHandy API.
-The source-build path can now start on a clean machine by provisioning Go, Git,
-CMake, and Visual Studio C++ Build Tools itself. That improves bootstrap parity,
-but it still cannot satisfy a no-toolchain end-user claim because those tools
-are installed on the machine and consume several GB.
+The source bootstrap can start on a clean machine by provisioning the tools
+needed for the pure-Go app build. Optional managed llama.cpp must not expand
+that requirement into a C++/CUDA compiler installation for packaged users.
 
 ## Decision
 
@@ -33,12 +32,11 @@ are installed on the machine and consume several GB.
    logic in installer script.
 3. The portable zip and setup binary are built from the same versioned release
    payload. Inno Setup is a build-time dependency only.
-4. The initial wizard exposes the existing pinned managed llama.cpp source
-   build and states its compiler and disk cost. Existing Ollama, an external
-   server, and skipping chat are no-toolchain alternatives. Checksummed CPU and
-   CUDA llama.cpp bundles remain the intended future default; the app cannot
-   claim a no-toolchain managed-llama path until those bundles are implemented
-   and tested without Git, CMake, or Visual Studio.
+4. The wizard exposes checksum-pinned official llama.cpp CPU and CUDA bundles,
+   their download/install cost, MIT license, and hardware requirements. The
+   managed path requires no compiler or CUDA Toolkit and is tested without Git,
+   CMake, or Visual Studio. Existing Ollama, an external server, and skipping
+   chat remain explicit alternatives.
 5. Every network download remains an explicit user action with visible size,
    license, checksum verification, progress, cancellation, and atomic install.
 6. Production signing, auto-update, a WebView2 presentation shell, and LAN/HTTPS

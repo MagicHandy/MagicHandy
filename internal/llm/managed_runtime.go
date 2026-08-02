@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// ManagedLlamaVersion is the source release built and owned by MagicHandy.
+	// ManagedLlamaVersion is the upstream release installed and owned by MagicHandy.
 	ManagedLlamaVersion = "b9966"
 	// ManagedLlamaCommit pins the exact upstream source represented by ManagedLlamaVersion.
 	ManagedLlamaCommit = "c749cb041706647f460bb918cccc9d91995205ab"
@@ -37,7 +37,7 @@ const (
 	ManagedRuntimeStateInvalid  = "invalid"
 )
 
-// Managed llama.cpp source-build states reported to the API and UI.
+// Managed llama.cpp installation states reported to the API and UI.
 const (
 	RuntimeBuildStatusQueued    = "queued"
 	RuntimeBuildStatusBuilding  = "building"
@@ -46,7 +46,7 @@ const (
 	RuntimeBuildStatusCancelled = "cancelled"
 )
 
-//go:embed runtimeassets/build-managed-llama.ps1
+//go:embed runtimeassets/build-managed-llama.ps1 runtimeassets/LICENSE-llama.cpp
 var managedRuntimeAssets embed.FS
 
 // ManagedLlamaRuntimeStatus is the backend-authoritative app-owned runner state.
@@ -66,7 +66,7 @@ type ManagedLlamaRuntimeStatus struct {
 	RunnerPath        string   `json:"-"`
 }
 
-// ManagedLlamaRuntimeBuild is one in-process source-build job.
+// ManagedLlamaRuntimeBuild is one in-process runtime installation job.
 type ManagedLlamaRuntimeBuild struct {
 	ID        string `json:"id"`
 	Backend   string `json:"backend"`
@@ -106,7 +106,7 @@ func InspectManagedLlamaRuntime(dataDir string) ManagedLlamaRuntimeStatus {
 		BuildSupported:    runtime.GOOS == "windows" && runtime.GOARCH == "amd64",
 		SupportedBackends: []string{"auto", "cpu", "cuda"},
 		ExpectedVersion:   ManagedLlamaVersion,
-		Message:           "Managed llama.cpp is not built yet.",
+		Message:           "Managed llama.cpp is not installed yet.",
 	}
 	root := ManagedLlamaRuntimeRoot(dataDir)
 	manifestPath := filepath.Join(root, "active.json")
@@ -188,8 +188,9 @@ func validateManagedRuntimeManifest(manifest managedRuntimeManifest) error {
 	if manifest.Backend != "cpu" && manifest.Backend != "cuda" {
 		return errors.New("managed llama.cpp manifest has an unsupported backend")
 	}
-	if strings.TrimSpace(manifest.Runner) == "" || strings.TrimSpace(manifest.Source) != "built_from_source" {
-		return errors.New("managed llama.cpp manifest does not describe an app-built runner")
+	if strings.TrimSpace(manifest.Runner) == "" ||
+		(manifest.Source != "built_from_source" && manifest.Source != "verified_upstream_release") {
+		return errors.New("managed llama.cpp manifest does not describe an app-owned runner")
 	}
 	if _, err := time.Parse(time.RFC3339Nano, manifest.BuiltAt); err != nil {
 		return errors.New("managed llama.cpp manifest has an invalid build timestamp")
@@ -211,7 +212,7 @@ type managedRuntimeBuildState struct {
 	cancel context.CancelFunc
 }
 
-// ManagedLlamaRuntimeManager owns explicit source-build jobs for the managed runner.
+// ManagedLlamaRuntimeManager owns explicit installation jobs for the managed runner.
 type ManagedLlamaRuntimeManager struct {
 	dataDir string
 	root    string
@@ -246,7 +247,7 @@ func (m *ManagedLlamaRuntimeManager) Snapshot() ManagedLlamaRuntimeSnapshot {
 	return snapshot
 }
 
-// StartBuild starts an explicit pinned source build without accepting paths or URLs.
+// StartBuild installs the pinned upstream runtime without accepting paths or URLs.
 func (m *ManagedLlamaRuntimeManager) StartBuild(backend string) (ManagedLlamaRuntimeBuild, error) {
 	backend = strings.ToLower(strings.TrimSpace(backend))
 	if backend == "" {
@@ -256,7 +257,7 @@ func (m *ManagedLlamaRuntimeManager) StartBuild(backend string) (ManagedLlamaRun
 		return ManagedLlamaRuntimeBuild{}, errors.New("managed llama.cpp backend must be auto, cpu, or cuda")
 	}
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
-		return ManagedLlamaRuntimeBuild{}, errors.New("managed llama.cpp source builds are currently supported on Windows/amd64 only")
+		return ManagedLlamaRuntimeBuild{}, errors.New("managed llama.cpp installation is currently supported on Windows/amd64 only")
 	}
 	id, err := randomImportID()
 	if err != nil {
@@ -270,13 +271,13 @@ func (m *ManagedLlamaRuntimeManager) StartBuild(backend string) (ManagedLlamaRun
 		return ManagedLlamaRuntimeBuild{}, errors.New("managed llama.cpp runtime manager is closed")
 	}
 	if m.build != nil && (m.build.Status == RuntimeBuildStatusQueued || m.build.Status == RuntimeBuildStatusBuilding) {
-		return ManagedLlamaRuntimeBuild{}, errors.New("a managed llama.cpp build is already running")
+		return ManagedLlamaRuntimeBuild{}, errors.New("a managed llama.cpp installation is already running")
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.build = &managedRuntimeBuildState{
 		ManagedLlamaRuntimeBuild: ManagedLlamaRuntimeBuild{
 			ID: id, Backend: backend, Status: RuntimeBuildStatusQueued,
-			Message: "Queued managed llama.cpp source build.", StartedAt: now, UpdatedAt: now,
+			Message: "Queued managed llama.cpp installation.", StartedAt: now, UpdatedAt: now,
 		},
 		cancel: cancel,
 	}
@@ -286,18 +287,18 @@ func (m *ManagedLlamaRuntimeManager) StartBuild(backend string) (ManagedLlamaRun
 	return result, nil
 }
 
-// CancelBuild cancels the active source build and its process tree.
+// CancelBuild cancels the active runtime installation and its process tree.
 func (m *ManagedLlamaRuntimeManager) CancelBuild() (ManagedLlamaRuntimeBuild, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.build == nil || (m.build.Status != RuntimeBuildStatusQueued && m.build.Status != RuntimeBuildStatusBuilding) {
-		return ManagedLlamaRuntimeBuild{}, errors.New("no managed llama.cpp build is running")
+		return ManagedLlamaRuntimeBuild{}, errors.New("no managed llama.cpp installation is running")
 	}
 	m.build.cancel()
 	return m.build.ManagedLlamaRuntimeBuild, nil
 }
 
-// Close cancels and waits for a source build before app shutdown completes.
+// Close cancels and waits for a runtime installation before app shutdown completes.
 func (m *ManagedLlamaRuntimeManager) Close() {
 	m.mu.Lock()
 	if !m.closed {
@@ -310,7 +311,7 @@ func (m *ManagedLlamaRuntimeManager) Close() {
 
 func (m *ManagedLlamaRuntimeManager) runBuild(ctx context.Context, id string) {
 	defer m.wg.Done()
-	m.updateBuild(id, RuntimeBuildStatusBuilding, "Building managed llama.cpp from pinned source.", "")
+	m.updateBuild(id, RuntimeBuildStatusBuilding, "Downloading and verifying managed llama.cpp.", "")
 
 	scriptPath, err := m.installBuildScript()
 	if err != nil {
@@ -337,7 +338,7 @@ func (m *ManagedLlamaRuntimeManager) runBuild(ctx context.Context, id string) {
 	if err == nil {
 		status := InspectManagedLlamaRuntime(m.dataDir)
 		if !status.Installed || !status.Current {
-			err = errors.New("source build finished without installing the pinned managed runtime")
+			err = errors.New("runtime installation finished without activating the pinned managed runtime")
 		}
 	}
 	m.finishBuild(ctx, id, err)
@@ -346,9 +347,9 @@ func (m *ManagedLlamaRuntimeManager) runBuild(ctx context.Context, id string) {
 func (m *ManagedLlamaRuntimeManager) finishBuild(ctx context.Context, id string, err error) {
 	switch {
 	case ctx.Err() != nil:
-		m.updateBuild(id, RuntimeBuildStatusCancelled, "Managed llama.cpp build cancelled.", "")
+		m.updateBuild(id, RuntimeBuildStatusCancelled, "Managed llama.cpp installation cancelled.", "")
 	case err != nil:
-		m.updateBuild(id, RuntimeBuildStatusFailed, fmt.Sprintf("Managed llama.cpp build failed: %v", err), "")
+		m.updateBuild(id, RuntimeBuildStatusFailed, fmt.Sprintf("Managed llama.cpp installation failed: %v", err), "")
 	default:
 		status := InspectManagedLlamaRuntime(m.dataDir)
 		m.updateBuild(id, RuntimeBuildStatusComplete, status.Message, "")
@@ -356,28 +357,42 @@ func (m *ManagedLlamaRuntimeManager) finishBuild(ctx context.Context, id string,
 }
 
 func (m *ManagedLlamaRuntimeManager) installBuildScript() (string, error) {
-	payload, err := managedRuntimeAssets.ReadFile("runtimeassets/build-managed-llama.ps1")
-	if err != nil {
-		return "", fmt.Errorf("read embedded llama.cpp build helper: %w", err)
-	}
 	directory := filepath.Join(m.root, ".tools")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return "", fmt.Errorf("create llama.cpp build tools directory: %w", err)
+		return "", fmt.Errorf("create llama.cpp installer tools directory: %w", err)
 	}
-	path := filepath.Join(directory, "build-managed-llama.ps1")
+	for _, asset := range []struct {
+		name string
+		mode os.FileMode
+	}{
+		{name: "build-managed-llama.ps1", mode: 0o600},
+		{name: "LICENSE-llama.cpp", mode: 0o600},
+	} {
+		payload, err := managedRuntimeAssets.ReadFile("runtimeassets/" + asset.name)
+		if err != nil {
+			return "", fmt.Errorf("read embedded llama.cpp installer asset %s: %w", asset.name, err)
+		}
+		if err := writeManagedRuntimeAsset(filepath.Join(directory, asset.name), payload, asset.mode); err != nil {
+			return "", err
+		}
+	}
+	return filepath.Join(directory, "build-managed-llama.ps1"), nil
+}
+
+func writeManagedRuntimeAsset(path string, payload []byte, mode os.FileMode) error {
 	if existing, readErr := os.ReadFile(path); readErr == nil && bytes.Equal(existing, payload) { // #nosec G304 -- fixed app-owned path.
-		return path, nil
+		return nil
 	}
 	partial := path + ".partial"
-	if err := os.WriteFile(partial, payload, 0o600); err != nil {
-		return "", fmt.Errorf("write llama.cpp build helper: %w", err)
+	if err := os.WriteFile(partial, payload, mode); err != nil {
+		return fmt.Errorf("write llama.cpp installer asset %s: %w", filepath.Base(path), err)
 	}
 	_ = os.Remove(path)
 	if err := os.Rename(partial, path); err != nil {
 		_ = os.Remove(partial)
-		return "", fmt.Errorf("install llama.cpp build helper: %w", err)
+		return fmt.Errorf("install llama.cpp installer asset %s: %w", filepath.Base(path), err)
 	}
-	return path, nil
+	return nil
 }
 
 func findPowerShell() (string, error) {
@@ -386,7 +401,7 @@ func findPowerShell() (string, error) {
 			return path, nil
 		}
 	}
-	return "", errors.New("PowerShell is required to build managed llama.cpp")
+	return "", errors.New("PowerShell is required to install managed llama.cpp")
 }
 
 func (m *ManagedLlamaRuntimeManager) buildBackend(id string) string {

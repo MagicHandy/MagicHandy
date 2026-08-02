@@ -43,14 +43,13 @@ type setupLlamaRuntimeCatalog struct {
 
 var setupLlamaRuntime = setupLlamaRuntimeCatalog{
 	Name:          "Managed llama.cpp",
-	Summary:       "A pinned app-owned local LLM runner. Building it avoids a separate Ollama runtime and model copy.",
+	Summary:       "A pinned app-owned local LLM runner. Installing it avoids requiring a separate Ollama runtime.",
 	License:       "MIT",
 	SourceVersion: "b9966 (c749cb0)",
-	DiskEstimate:  "Several GiB of temporary compiler tooling and build files; CUDA requires the NVIDIA toolkit.",
+	DiskEstimate:  "CPU downloads about 18 MiB; CUDA downloads about 628 MiB and installs about 1.1 GiB.",
 	BuildDependencies: []string{
-		"Git for Windows",
-		"MSYS2 UCRT64 GCC, CMake, and Ninja for CPU builds",
-		"Visual Studio C++ Build Tools, Windows SDK, and CUDA Toolkit for CUDA builds",
+		"PowerShell 5.1 or newer",
+		"A compatible NVIDIA driver and GPU for CUDA",
 	},
 	Backends: []string{"auto", "cpu", "cuda"},
 }
@@ -113,7 +112,7 @@ func (m *setupManager) runLlamaInstall(ctx context.Context, id, backend string) 
 }
 
 func (m *setupManager) installLlama(ctx context.Context, id, backend string) error {
-	m.updateJob(id, setupJobRunning, "Preparing managed llama.cpp prerequisites.", "")
+	m.updateJob(id, setupJobRunning, "Preparing the verified managed llama.cpp download.", "")
 	script, err := resolvePackagedSetupScript(m.executablePath, "install-llama-runtime.ps1")
 	if err != nil {
 		return err

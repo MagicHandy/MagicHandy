@@ -70,6 +70,8 @@ The staged `MagicHandy` directory contains:
 - `voice-openai-tts-worker.exe`;
 - `voice-elevenlabs-worker.exe`;
 - setup and TTS PowerShell/Python helpers under `scripts\`;
+- the managed llama.cpp installer plus its pinned upstream MIT license under
+  `scripts\`;
 - the project documentation tree, so relative links in the packaged README stay
   usable offline;
 - `LICENSE`, `README.md`, and `SOURCE.txt`; and
@@ -148,8 +150,9 @@ are marked as GitHub prereleases.
   users install a reviewed newer package over the existing app.
 - The app binds loopback by default. Do not port-forward it; authenticated HTTPS
   and LAN/mobile access are separate future work.
-- Optional external runtimes are downloaded or built only after an explicit GUI
-  action. Their multi-gigabyte files do not inflate the core release payload.
+- Optional external runtimes are downloaded or installed only after an explicit
+  GUI action. Managed llama.cpp uses official checksum-pinned CPU/CUDA bundles
+  and no compiler toolchain; its files do not inflate the core release payload.
 
 See [ADR 0013](decisions/0013-windows-distribution-boundaries.md) for the policy
 behind these boundaries.

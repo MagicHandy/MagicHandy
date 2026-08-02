@@ -16,7 +16,7 @@ export const setupFixture: SetupStatus = {
   ],
   llama_runtime: {
     name: "Managed llama.cpp", summary: "Pinned local runner.", license: "MIT", source_version: "fixture",
-    disk_estimate: "Several GiB", build_dependencies: ["Git", "CMake", "Visual Studio"], backends: ["auto", "cpu", "cuda"],
+    disk_estimate: "CPU 18 MiB; CUDA 628 MiB", build_dependencies: ["PowerShell", "NVIDIA driver for CUDA"], backends: ["auto", "cpu", "cuda"],
   },
   parakeet: {
     name: "Parakeet", summary: "Local speech recognition.", runner_license: "MIT", model_license: "CC-BY-4.0",

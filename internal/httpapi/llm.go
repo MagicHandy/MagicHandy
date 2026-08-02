@@ -39,7 +39,7 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 	if settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeManaged {
 		runtimeSnapshot := s.managedLLM.Snapshot()
 		if managedRuntimeBuildInProgress(runtimeSnapshot.Build) {
-			return nil, errors.New("managed llama.cpp source build is in progress")
+			return nil, errors.New("managed llama.cpp installation is in progress")
 		}
 		runtimeStatus := runtimeSnapshot.Runtime
 		if !runtimeStatus.Installed {

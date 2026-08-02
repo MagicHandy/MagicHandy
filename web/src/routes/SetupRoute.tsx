@@ -446,14 +446,14 @@ function RuntimeStep({ choice, backend, settings, setup, models, locked, select,
     <p>{t("The runtime generates chat replies and motion decisions. Voice models are configured separately.")}</p>
     <div className="setup-hardware"><span className="status-dot" data-state={setup.hardware.nvidia ? "ok" : "idle"} />{setup.hardware.nvidia ? t("Detected {gpu}", { gpu: setup.hardware.gpu_name ?? "NVIDIA GPU" }) : t("No NVIDIA GPU detected; CPU is the compatible managed option.")}</div>
     <div className="setup-choices">
-      <Choice selected={choice === "managed"} title={t("Managed llama.cpp")} detail={t("App-owned and pinned. A source build installs compiler tools and can use several GiB; it avoids requiring Ollama.")} badge={t("Recommended")} onSelect={() => select("managed")} />
-      <Choice selected={choice === "ollama"} title={t("Use my existing Ollama")} detail={t("Saves the managed runtime and compiler footprint. MagicHandy uses your existing Ollama service and model library.")} onSelect={() => select("ollama")} />
+      <Choice selected={choice === "managed"} title={t("Managed llama.cpp")} detail={t("App-owned, pinned, and checksum-verified. It avoids requiring Ollama or a compiler toolchain.")} badge={t("Recommended")} onSelect={() => select("managed")} />
+      <Choice selected={choice === "ollama"} title={t("Use my existing Ollama")} detail={t("Uses no managed runtime disk. MagicHandy uses your existing Ollama service and model library.")} onSelect={() => select("ollama")} />
       <Choice selected={choice === "external"} title={t("External llama.cpp server")} detail={t("Use a compatible server you manage. MagicHandy will not install or own that process.")} onSelect={() => select("external")} />
       <Choice selected={choice === "skip"} title={t("Skip chat model setup")} detail={t("The app remains usable for manual, pattern, and video control.")} onSelect={() => select("skip")} />
     </div>
     {choice === "managed" && <div className="setup-subsection">
-      <label className="field"><span className="label">{t("Build backend")}</span><select value={backend} disabled={locked} onChange={(event) => setBackend(event.target.value as typeof backend)}>{setup.llama_runtime.backends.map((value) => <option key={value} value={value}>{value === "auto" ? t("Automatic") : value.toUpperCase()}</option>)}</select></label>
-      <p className="hint-block">{setup.llama_runtime.disk_estimate} {t("CPU builds can use an existing MSYS2 UCRT64 toolchain; CUDA builds use Visual Studio C++ and the NVIDIA toolkit. License: {license}.", { license: setup.llama_runtime.license })}</p>
+      <label className="field"><span className="label">{t("Runtime backend")}</span><select value={backend} disabled={locked} onChange={(event) => setBackend(event.target.value as typeof backend)}>{setup.llama_runtime.backends.map((value) => <option key={value} value={value}>{value === "auto" ? t("Automatic") : value.toUpperCase()}</option>)}</select></label>
+      <p className="hint-block">{setup.llama_runtime.disk_estimate} {t("Official Windows bundles need no compiler or CUDA Toolkit. CUDA requires a compatible NVIDIA driver. License: {license}.", { license: setup.llama_runtime.license })}</p>
       <p className="setup-selection-state" data-ready={runtimeReady}>{runtimeReady ? t("Managed runtime is already installed and verified.") : t("Selected for installation after the voice step.")}</p>
     </div>}
     {choice === "ollama" && <div className="setup-subsection"><label className="field"><span className="label">{t("Ollama base URL")}</span><input value={settings.ollama_base_url} onChange={(event) => patchLLM({ ollama_base_url: event.target.value })} /></label></div>}

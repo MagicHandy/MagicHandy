@@ -33,14 +33,14 @@ on your machine — no account, no tracking.
 - **Windows** is the primary platform today; Linux and macOS builds are
   best-effort.
 - A **local LLM** for chat: a managed
-  [llama.cpp](https://github.com/ggml-org/llama.cpp) runtime MagicHandy builds
+  [llama.cpp](https://github.com/ggml-org/llama.cpp) runtime MagicHandy installs
   and owns, or an existing [Ollama](https://ollama.com/) install. Models are
   never bundled or downloaded at startup.
 
 ## Get started
 
 For Windows x64, download the setup EXE and SHA-256 checksum file from the
-[v0.1.0-alpha.1 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.1).
+[v0.1.0-alpha.2 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.2).
 The unsigned installer defaults to `C:\Program Files\MagicHandy`, lets you
 choose another path and an optional desktop shortcut, then opens guided setup.
 No Go, Node, Python, CMake, or compiler is needed to run the core. Optional
@@ -61,9 +61,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 The PowerShell bootstrap repairs WinGet and installs Git when they are missing,
 then installs only the dependencies needed to build the
 pure-Go core. Device, model, runtime, and voice choices live in the same GUI
-used later from Settings. Choosing managed llama.cpp explains and installs its
-source compiler toolchain; choosing an existing Ollama install avoids that
-runtime and compiler footprint. Parakeet and local TTS remain explicit,
+used later from Settings. Choosing managed llama.cpp downloads an official,
+checksum-pinned CPU or CUDA bundle without installing a compiler or CUDA
+Toolkit; choosing an existing Ollama install avoids that managed runtime
+footprint. Parakeet and local TTS remain explicit,
 separate GUI actions and install into app-owned data folders. Unattended flags
 remain available for managed deployments. Flags, voice options, model imports,
 updater behavior, and manual setup are covered in the
@@ -102,9 +103,9 @@ MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working from source
 today: chat-driven motion (Handy Cloud, browser Bluetooth, Intiface), live
 controls, Freestyle, Chat Autopilot, long-term memory, editable prompt sets, a
 pattern/program library, voice providers with push-to-talk, and model
-management. The guided setup flow and first unsigned Windows alpha are
-available; curated model downloads, prebuilt managed llama.cpp bundles,
-signing, and broader release acceptance remain. See
+management. The guided setup flow, unsigned Windows alpha, and verified
+managed llama.cpp bundles are available; curated model downloads, signing,
+and broader release acceptance remain. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full roadmap.
 
 MagicHandy and [LSO (Local Stroke Orchestrator)](docs/lso-merge-integration.md)

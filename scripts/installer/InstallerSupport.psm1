@@ -818,11 +818,6 @@ function Get-MagicHandyProvisionPlan {
         )))
     }
     if (-not $CoreOnly -and [bool]$State.build_managed_llama) {
-        $plan.Add((Get-MagicHandyText -Key 'plan_git_cmake'))
-        $plan.Add((Get-MagicHandyText -Key 'plan_cpp'))
-        if ([string]$State.llama_backend -eq 'cuda') {
-            $plan.Add((Get-MagicHandyText -Key 'plan_cuda'))
-        }
         $plan.Add((Get-MagicHandyText -Key 'plan_llama' -Values @($State.llama_backend)))
     }
     if (-not $CoreOnly -and [bool]$State.ensure_ollama) {
@@ -2180,16 +2175,10 @@ function Invoke-MagicHandyProvision {
 
     if (-not $CoreOnly -and [bool]$State.build_managed_llama) {
         Write-InstallerHeading "Managed llama.cpp ($($State.llama_backend))"
-        $git = Ensure-MagicHandyGit -AssumeYes:$AssumeYes
-        $cmake = Ensure-MagicHandyCMake -AssumeYes:$AssumeYes
-        Ensure-MagicHandyVCToolchain -AssumeYes:$AssumeYes
-        if ([string]$State.llama_backend -eq 'cuda') {
-            Ensure-MagicHandyCUDA -AssumeYes:$AssumeYes | Out-Null
-        }
         $builder = Join-Path $RepositoryPath 'internal\llm\runtimeassets\build-managed-llama.ps1'
         & $builder -DataDir $State.data_dir -Backend $State.llama_backend
         if ($LASTEXITCODE -ne 0) {
-            throw "Managed llama.cpp build failed (exit $LASTEXITCODE)."
+            throw "Managed llama.cpp installation failed (exit $LASTEXITCODE)."
         }
     }
 
