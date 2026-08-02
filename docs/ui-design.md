@@ -360,11 +360,15 @@ hoc per-widget colors) are not.
   history while excluding routine confirmations and successful background
   work. This preference affects the bell and unread badge only; live Activity,
   current Attention, backend locking, and Emergency Stop remain visible.
-- This separation follows the useful part of VS Code's notification model:
-  users can suppress a source/category without erasing error state or the
-  notification center. MagicHandy keeps fewer controls because it has five
-  product-owned categories rather than an extension ecosystem. Reference:
-  <https://code.visualstudio.com/docs/editing/userinterface#_configure-notification-behavior>.
+- This separation follows the useful parts of three established notification
+  models: VS Code lets users suppress a source while retaining its notification
+  center; Windows configures banners separately from notification-center
+  retention; and Slack lets users choose which event types enter Activity.
+  MagicHandy keeps fewer controls because it has five product-owned categories
+  rather than an extension or messaging ecosystem. References:
+  <https://code.visualstudio.com/docs/editing/userinterface#_configure-notification-behavior>,
+  <https://support.microsoft.com/en-us/windows/experience/notifications-and-do-not-disturb-in-windows>,
+  and <https://slack.com/help/articles/201355156-Configure-your-Slack-notifications>.
 - The notification and connection disclosures occupy the top bar and are
   mutually exclusive: opening either closes the other. Their panels link to the
   owning Settings route and close after navigation.
