@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -102,6 +104,10 @@ func TestSetupMutationRequiresControllerAndValidChoices(t *testing.T) {
 			request:    withController(httptest.NewRequest(http.MethodPost, "/api/setup/voice/install", strings.NewReader(`{"module":"unknown","device":"cpu"}`))),
 			wantStatus: http.StatusConflict,
 		},
+		"empty install plan": {
+			request:    withController(httptest.NewRequest(http.MethodPost, "/api/setup/install", strings.NewReader(`{}`))),
+			wantStatus: http.StatusConflict,
+		},
 		"cancel idle queue": {
 			request:    withController(httptest.NewRequest(http.MethodDelete, "/api/setup/install", nil)),
 			wantStatus: http.StatusConflict,
@@ -140,4 +146,100 @@ func TestSetupOutputIsBoundedAndKeepsCompleteUTF8(t *testing.T) {
 	if got := lastSetupOutputLine("first\r\n\r\nlast\r\n"); got != "last" {
 		t.Fatalf("last output line = %q, want last", got)
 	}
+}
+
+func TestSetupInstallPlanTracksStepsAndReturnsIndependentSnapshots(t *testing.T) {
+	server := newTestServer(t)
+	manager := server.setup
+	ctx, job, err := manager.reserveJob("install_plan", "selected_components", "", "queued")
+	if err != nil {
+		t.Fatalf("reserve install plan: %v", err)
+	}
+	runOrder := make([]string, 0, 2)
+	tasks := []setupPlanTask{
+		{
+			step: setupJobStep{ID: "runtime", Label: "Runtime", Status: setupJobQueued},
+			run: func(context.Context, string) error {
+				runOrder = append(runOrder, "runtime")
+				return nil
+			},
+		},
+		{
+			step: setupJobStep{ID: "voice", Label: "Voice", Status: setupJobQueued},
+			run: func(context.Context, string) error {
+				runOrder = append(runOrder, "voice")
+				return nil
+			},
+		},
+	}
+	manager.setJobSteps(job.ID, []setupJobStep{tasks[0].step, tasks[1].step})
+	manager.wg.Add(1)
+	manager.runInstallPlan(ctx, job.ID, tasks)
+
+	snapshot := manager.Snapshot()
+	if snapshot == nil || snapshot.Status != setupJobComplete || snapshot.CompletedSteps != 2 || snapshot.TotalSteps != 2 {
+		t.Fatalf("completed plan snapshot = %+v", snapshot)
+	}
+	if strings.Join(runOrder, ",") != "runtime,voice" {
+		t.Fatalf("install order = %v", runOrder)
+	}
+	for _, step := range snapshot.Steps {
+		if step.Status != setupJobComplete {
+			t.Fatalf("completed step = %+v", step)
+		}
+	}
+	snapshot.Steps[0].Status = "tampered"
+	if current := manager.Snapshot(); current.Steps[0].Status != setupJobComplete {
+		t.Fatal("setup snapshot shared its mutable step storage")
+	}
+}
+
+func TestSetupInstallPlanDistinguishesFailureFromCancellation(t *testing.T) {
+	t.Run("failure", func(t *testing.T) {
+		server := newTestServer(t)
+		manager := server.setup
+		ctx, job, err := manager.reserveJob("install_plan", "selected_components", "", "queued")
+		if err != nil {
+			t.Fatalf("reserve install plan: %v", err)
+		}
+		tasks := []setupPlanTask{{
+			step: setupJobStep{ID: "runtime", Label: "Runtime", Status: setupJobQueued},
+			run:  func(context.Context, string) error { return errors.New("compiler failed") },
+		}}
+		manager.setJobSteps(job.ID, []setupJobStep{tasks[0].step})
+		manager.wg.Add(1)
+		manager.runInstallPlan(ctx, job.ID, tasks)
+
+		snapshot := manager.Snapshot()
+		if snapshot.Status != setupJobFailed || snapshot.Steps[0].Status != setupJobFailed {
+			t.Fatalf("failed plan snapshot = %+v", snapshot)
+		}
+	})
+
+	t.Run("cancelled", func(t *testing.T) {
+		server := newTestServer(t)
+		manager := server.setup
+		ctx, job, err := manager.reserveJob("install_plan", "selected_components", "", "queued")
+		if err != nil {
+			t.Fatalf("reserve install plan: %v", err)
+		}
+		tasks := []setupPlanTask{
+			{step: setupJobStep{ID: "runtime", Label: "Runtime", Status: setupJobQueued}, run: func(context.Context, string) error { return nil }},
+			{step: setupJobStep{ID: "voice", Label: "Voice", Status: setupJobQueued}, run: func(context.Context, string) error { return nil }},
+		}
+		manager.setJobSteps(job.ID, []setupJobStep{tasks[0].step, tasks[1].step})
+		if _, err := manager.Cancel(); err != nil {
+			t.Fatalf("cancel install plan: %v", err)
+		}
+		manager.wg.Add(1)
+		manager.runInstallPlan(ctx, job.ID, tasks)
+
+		snapshot := manager.Snapshot()
+		if snapshot.Status != setupJobCancelled {
+			t.Fatalf("cancelled plan status = %q", snapshot.Status)
+		}
+		if snapshot.Steps[0].Status != setupJobCancelled || snapshot.Steps[1].Status != setupJobCancelled {
+			t.Fatalf("cancelled plan steps = %+v", snapshot.Steps)
+		}
+	})
 }

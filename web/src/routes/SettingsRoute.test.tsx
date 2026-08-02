@@ -192,7 +192,13 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "ja", theme: "steel-azure", setup_completed: true, update_check_mode: "automatic" });
+    expect(saveSettings.mock.calls[0][0].ui).toEqual({
+      locale: "ja",
+      theme: "steel-azure",
+      setup_completed: true,
+      update_check_mode: "automatic",
+      notification_categories: ["system", "voice", "updates"],
+    });
   });
 
 
@@ -210,8 +216,34 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "en", theme: "deep-violet", setup_completed: true, update_check_mode: "automatic" });
+    expect(saveSettings.mock.calls[0][0].ui).toEqual({
+      locale: "en",
+      theme: "deep-violet",
+      setup_completed: true,
+      update_check_mode: "automatic",
+      notification_categories: ["system", "voice", "updates"],
+    });
   });
+
+  it("uses quiet notification defaults and persists category changes", async () => {
+    app.hash = "#/settings/general";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+
+    expect(await screen.findByRole("checkbox", { name: /Routine app feedback/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Core and device status/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Library and media tasks/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Voice worker alerts/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Software updates/ })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Library and media tasks/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Software updates/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].ui?.notification_categories).toEqual(["system", "voice", "library"]);
+  });
+
   it("does not overwrite immediate playback filters from a stale settings draft", async () => {
     app.hash = "#/settings/general";
     getSettings.mockResolvedValue({ settings: settings("normal") });

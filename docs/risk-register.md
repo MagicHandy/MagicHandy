@@ -1272,10 +1272,12 @@ Mitigation:
   GitHub Release or describe unsigned artifacts as production-signed
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
   all optional decisions and progress remain in the backend-authoritative GUI
-- require a separate controller-gated GUI action for every optional runtime or
-  model operation and show purpose, license, hardware, and disk cost first
-- keep one cancellable backend setup queue, bounded logs, process-tree teardown,
-  and resumable partial downloads
+- collect optional runtime/voice choices without executing them, show purpose,
+  license, hardware, and disk cost first, then require one controller-gated GUI
+  action to submit the reviewed installation plan
+- keep that plan in one sequential cancellable backend queue with per-component
+  state, bounded terminal output, process-tree teardown, and resumable partial
+  downloads
 - make source updates core-only so saved legacy installer state cannot silently
   rebuild llama.cpp, Parakeet, or a Python environment
 - retain user data on uninstall and disclose its path; never delete model or
@@ -1298,7 +1300,8 @@ Exit evidence:
   project explicitly accepts and communicates unsigned distribution risk
 
 Status 2026-08-02: manifest/checksum generation, artifact-only CI, thin Inno
-shell, GUI-owned choices, controller gates, cancellation, core-only source
+shell, GUI-owned choices, the unified install plan, controller gates,
+cancellation, core-only source
 updates, and non-executing release discovery are implemented on the Phase 16
 branch. Local acceptance verified every staged and outer hash, first install,
 the versioned app's live GitHub check, an over-install while that app was

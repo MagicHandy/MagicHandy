@@ -8,6 +8,8 @@ import { NotificationCenter } from "./NotificationCenter";
 const app = vi.hoisted(() => ({
   mode: "automatic",
   push: vi.fn(),
+  voiceEnabled: false,
+  workers: undefined as Record<string, { state: string; started_at?: string }> | undefined,
 }));
 
 vi.mock("../api/client", () => ({
@@ -22,8 +24,9 @@ vi.mock("../state/app-state", () => ({
       version: "1.0.0",
       settings: {
         ui: { setup_completed: true, update_check_mode: app.mode },
-        voice: { enabled: false },
+        voice: { enabled: app.voiceEnabled },
       },
+      voice: { workers: app.workers },
     },
   }),
   useNotifications: () => ({
@@ -42,8 +45,11 @@ describe("NotificationCenter release checks", () => {
   beforeEach(() => {
     setLocaleForTest("en", english);
     app.mode = "automatic";
+    app.voiceEnabled = false;
+    app.workers = undefined;
     app.push.mockReset();
     updateStatus.mockReset();
+    updateStatus.mockResolvedValue({ state: "current", current_version: "1.0.0" });
   });
 
   it("records one actionable notification for an available stable release", async () => {
@@ -66,5 +72,25 @@ describe("NotificationCenter release checks", () => {
     render(<NotificationCenter open={false} onOpenChange={vi.fn()} />);
 
     expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it("records a voice worker crash without treating startup loading as history", async () => {
+    app.voiceEnabled = true;
+    app.workers = {
+      tts: { state: "crashed", started_at: "2026-08-02T12:00:00Z" },
+      asr: { state: "starting", started_at: "2026-08-02T12:00:01Z" },
+    };
+
+    render(<NotificationCenter open={false} onOpenChange={vi.fn()} />);
+
+    await waitFor(() => expect(app.push).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Voice worker crashed",
+      category: "voice",
+      href: "#/settings/voice",
+      sourceKey: "voice-worker-crashed:tts:2026-08-02T12:00:00Z",
+    })));
+    expect(app.push).not.toHaveBeenCalledWith(expect.objectContaining({
+      sourceKey: expect.stringContaining("asr"),
+    }));
   });
 });

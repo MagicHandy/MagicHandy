@@ -56,3 +56,18 @@
   overflow-wrap: anywhere;
   font-size: 0.8rem;
 }
+.notification-preference-list {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.notification-preference-list .toggle-line {
+  margin: 0;
+  padding-block: 5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notification-preference-list .toggle-line:last-child {
+  border-bottom: 0;
+}

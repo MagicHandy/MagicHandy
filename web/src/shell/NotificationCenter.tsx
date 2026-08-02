@@ -69,6 +69,21 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
     if (draft) push(draft);
   }, [job, push]);
 
+  useEffect(() => {
+    for (const role of ["tts", "asr"] as const) {
+      const worker = voiceWorkers?.[role];
+      if (worker?.state !== "crashed") continue;
+      push({
+        title: t("Voice worker crashed"),
+        detail: `${role === "tts" ? t("Speech output") : t("Speech input")}. ${t("Open Voice settings for diagnostics and recovery.")}`,
+        category: "voice",
+        tone: "error",
+        href: "#/settings/voice",
+        sourceKey: `voice-worker-crashed:${role}:${worker.started_at || "current"}`,
+      });
+    }
+  }, [push, voiceWorkers]);
+
   const setupComplete = state?.settings?.ui?.setup_completed !== false;
   const automaticUpdateChecks = state?.settings?.ui?.update_check_mode !== "manual";
   const releaseBuild = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(state?.version?.trim() ?? "");
@@ -80,7 +95,7 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
       push({
         title: t("New MagicHandy release"),
         detail: t("{version} is available. Open General settings to review the release.", { version: status.latest.version || status.latest.tag }),
-        category: "system",
+        category: "updates",
         tone: "info",
         href: "#/settings/general",
         sourceKey: `update-available:${status.latest.tag}`,

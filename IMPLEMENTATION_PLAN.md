@@ -1571,8 +1571,9 @@ paths must remain available.
 
 Status 2026-08-02: **in progress**. The Phase 16 branch implements the unsigned
 portable/setup artifacts, artifact-only CI workflow, fresh-store detection,
-six-step `#/setup` route, optional llama.cpp/Parakeet/TTS job endpoints, and
-GUI-delegating source install/update scripts. Versioned builds also implement
+seven-step `#/setup` route, one optional llama.cpp/Parakeet/TTS install-plan
+endpoint, and GUI-delegating source install/update scripts. Versioned builds
+also implement
 cached latest-stable GitHub release discovery, an automatic/manual preference,
 and a notification plus explicit release-page handoff; this is not an artifact
 download or auto-update path. A local packaged acceptance run verified manifest
@@ -1588,7 +1589,13 @@ owns schema v9 inventory, managed GGUF storage, standalone/Ollama import,
 ID-based selection, and the Model UI. The app also owns a pinned source-build
 lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build
 status, cancellation, manifest validation, and installer opt-out for existing
-Ollama users. The source installer can bootstrap WinGet/Go/Git/CMake/MSVC/CUDA,
+Ollama users. Managed llama.cpp remains the Recommended fresh-setup default;
+Ollama is never selected implicitly and is presented as the existing-runtime,
+lower-disk alternative. Compatible Ollama-library GGUF files can be scanned and
+explicitly copied into the managed store from the setup model picker. CPU
+source builds can reuse or provision MSYS2 UCRT64 GCC/CMake/Ninja and fall back
+to Visual Studio, while CUDA continues through Visual Studio and the NVIDIA
+Toolkit. The source installer can bootstrap WinGet/Go/Git/CMake/MSVC/CUDA,
 build all first-party workers, persist non-secret choices, and reuse them from a
 fast-forward-only updater. The installer/update reliability pass additionally
 enforces typed closed-schema choices, coherent rollback-capable binary builds,
@@ -1633,14 +1640,16 @@ Implement, as slices:
   over-install upgrades, finish page launching first-run setup
 - **16.2 — first-run onboarding wizard (implemented, acceptance open)**
   (`#/setup`, re-runnable from Settings): UI/chat language → device → LLM
-  runtime (current managed source build, existing Ollama, external URL, or
-  skip) → LLM model (GGUF import, Ollama model, external ID, or skip) → optional voice provisioning
-  (Parakeet runner+model, Faster Qwen3-TTS or Chatterbox module installation,
-  or an external compatible endpoint; ElevenLabs and detailed reference/tuning
-  remain in Settings > Voice; all large runtime and model work remains
-  size/license-visible and progress-reporting) → finish.
-  Every step skippable; every step is the
-  existing settings/API surface, never a second implementation. The user
+  runtime (Recommended managed source build, explicit existing Ollama,
+  external URL, or skip) → LLM model (GGUF import, explicit copy from an
+  existing Ollama library, Ollama daemon model, external ID, or skip) →
+  optional voice selection (Parakeet runner+model, Faster Qwen3-TTS or
+  Chatterbox module installation, or an external compatible endpoint) → one
+  backend-owned installation/progress/terminal page → finish. ElevenLabs and
+  detailed reference/tuning remain in Settings > Voice; all large runtime and
+  model work remains size/license-visible before the plan starts.
+  Every optional feature is skippable before installation; each decision uses
+  the existing settings/API surface, never a second implementation. The user
   decision tree, screen design, and branding slots are specified in
   `docs/setup-wizard-design.md` (wireframe: `docs/setup-wizard-sketch.svg`);
   the app icon and Inno banner slots there are inputs to slice 16.1

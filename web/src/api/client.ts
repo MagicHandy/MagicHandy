@@ -28,6 +28,7 @@ import type {
   LLMModelManagerSnapshot,
   LLMProviderStatus,
   ManagedLLMDuplicateSnapshot,
+  SetupInstallPlan,
   SetupJob,
   SetupStatus,
   ManagedLlamaRuntimeBuild,
@@ -555,8 +556,10 @@ export const api = {
     request<{ installation: SetupJob }>("POST", "/api/setup/parakeet/install", {}),
   installSetupVoice: (module: string, device: "cpu" | "cuda", auto_launch: boolean) =>
     request<{ installation: SetupJob }>("POST", "/api/setup/voice/install", { module, device, auto_launch }),
+  installSetupPlan: (plan: SetupInstallPlan) =>
+    request<{ installation: SetupJob }>("POST", "/api/setup/install", plan),
   cancelSetupInstall: () => request<{ installation: SetupJob }>("DELETE", "/api/setup/install"),
-  completeSetup: () => request<{ settings: PublicSettings }>("POST", "/api/setup/complete", {}),
+  completeSetup: (allow_unready_llm = false) => request<{ settings: PublicSettings }>("POST", "/api/setup/complete", { allow_unready_llm }),
 
   // Provider checks are diagnostic-only. Cloud Connect/Disconnect own the
   // controller-gated command lifecycle.

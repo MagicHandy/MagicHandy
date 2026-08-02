@@ -20,6 +20,17 @@ type setupLlamaInstallRequest struct {
 	Backend string `json:"backend"`
 }
 
+type setupInstallPlanRequest struct {
+	Llama    *setupLlamaInstallRequest `json:"llama,omitempty"`
+	Voice    *setupVoiceInstallRequest `json:"voice,omitempty"`
+	Parakeet bool                      `json:"parakeet"`
+}
+
+type setupPlanTask struct {
+	step setupJobStep
+	run  func(context.Context, string) error
+}
+
 type setupLlamaRuntimeCatalog struct {
 	Name              string   `json:"name"`
 	Summary           string   `json:"summary"`
@@ -38,8 +49,8 @@ var setupLlamaRuntime = setupLlamaRuntimeCatalog{
 	DiskEstimate:  "Several GiB of temporary compiler tooling and build files; CUDA requires the NVIDIA toolkit.",
 	BuildDependencies: []string{
 		"Git for Windows",
-		"CMake",
-		"Visual Studio C++ Build Tools and Windows SDK",
+		"MSYS2 UCRT64 GCC, CMake, and Ninja for CPU builds",
+		"Visual Studio C++ Build Tools, Windows SDK, and CUDA Toolkit for CUDA builds",
 	},
 	Backends: []string{"auto", "cpu", "cuda"},
 }
@@ -65,40 +76,51 @@ var setupParakeet = setupParakeetCatalog{
 }
 
 func (m *setupManager) StartLlamaInstall(request setupLlamaInstallRequest) (setupJob, error) {
+	backend, err := m.validateLlamaInstall(request)
+	if err != nil {
+		return setupJob{}, err
+	}
+	ctx, job, err := m.reserveJob("llama_runtime", "llama.cpp", backend, "Managed llama.cpp installation queued.")
+	if err != nil {
+		return setupJob{}, err
+	}
+	m.wg.Add(1)
+	go m.runLlamaInstall(ctx, job.ID, backend)
+	return job, nil
+}
+
+func (m *setupManager) validateLlamaInstall(request setupLlamaInstallRequest) (string, error) {
 	request.Backend = strings.ToLower(strings.TrimSpace(request.Backend))
 	if request.Backend == "" {
 		request.Backend = "auto"
 	}
 	if !stringInSlice(request.Backend, setupLlamaRuntime.Backends) {
-		return setupJob{}, fmt.Errorf("unknown managed llama.cpp backend %q", request.Backend)
+		return "", fmt.Errorf("unknown managed llama.cpp backend %q", request.Backend)
 	}
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
-		return setupJob{}, errors.New("managed llama.cpp installation is currently supported on Windows/amd64 only")
+		return "", errors.New("managed llama.cpp installation is currently supported on Windows/amd64 only")
 	}
 	if request.Backend == "cuda" && !m.hasNVIDIA() {
-		return setupJob{}, errors.New("the CUDA backend requires a detected NVIDIA GPU; choose CPU instead")
+		return "", errors.New("the CUDA backend requires a detected NVIDIA GPU; choose CPU instead")
 	}
-	ctx, job, err := m.reserveJob("llama_runtime", "llama.cpp", request.Backend, "Managed llama.cpp installation queued.")
-	if err != nil {
-		return setupJob{}, err
-	}
-	m.wg.Add(1)
-	go m.runLlamaInstall(ctx, job.ID, request.Backend)
-	return job, nil
+	return request.Backend, nil
 }
 
 func (m *setupManager) runLlamaInstall(ctx context.Context, id, backend string) {
 	defer m.wg.Done()
+	err := m.installLlama(ctx, id, backend)
+	m.finishJob(ctx, id, err, "Managed llama.cpp")
+}
+
+func (m *setupManager) installLlama(ctx context.Context, id, backend string) error {
 	m.updateJob(id, setupJobRunning, "Preparing managed llama.cpp prerequisites.", "")
 	script, err := resolvePackagedSetupScript(m.executablePath, "install-llama-runtime.ps1")
 	if err != nil {
-		m.finishJob(ctx, id, err, "Managed llama.cpp")
-		return
+		return err
 	}
 	powerShell, err := resolveSetupPowerShell()
 	if err != nil {
-		m.finishJob(ctx, id, err, "Managed llama.cpp")
-		return
+		return err
 	}
 	command := exec.CommandContext(ctx, powerShell, // #nosec G204 -- helper is app-discovered and arguments are app-owned paths or closed enums.
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script,
@@ -111,17 +133,17 @@ func (m *setupManager) runLlamaInstall(ctx context.Context, id, backend string) 
 	command.Stdout = writer
 	command.Stderr = writer
 	if !m.attachCommand(id, command) {
-		m.finishJob(ctx, id, context.Canceled, "Managed llama.cpp")
-		return
+		return context.Canceled
 	}
 	err = command.Run()
+	m.detachCommand(id, command)
 	if err == nil {
 		status := llm.InspectManagedLlamaRuntime(m.dataDir)
 		if !status.Installed || !status.Current {
 			err = fmt.Errorf("runtime verification failed: %s", status.Message)
 		}
 	}
-	m.finishJob(ctx, id, err, "Managed llama.cpp")
+	return err
 }
 
 func (m *setupManager) StartParakeetInstall() (setupJob, error) {
@@ -139,16 +161,19 @@ func (m *setupManager) StartParakeetInstall() (setupJob, error) {
 
 func (m *setupManager) runParakeetInstall(ctx context.Context, id string) {
 	defer m.wg.Done()
+	err := m.installParakeet(ctx, id)
+	m.finishJob(ctx, id, err, "Parakeet")
+}
+
+func (m *setupManager) installParakeet(ctx context.Context, id string) error {
 	m.updateJob(id, setupJobRunning, "Preparing the verified Parakeet download.", "")
 	script, err := resolvePackagedSetupScript(m.executablePath, "install-parakeet-module.ps1")
 	if err != nil {
-		m.finishJob(ctx, id, err, "Parakeet")
-		return
+		return err
 	}
 	powerShell, err := resolveSetupPowerShell()
 	if err != nil {
-		m.finishJob(ctx, id, err, "Parakeet")
-		return
+		return err
 	}
 	command := exec.CommandContext(ctx, powerShell, // #nosec G204 -- helper is app-discovered and arguments are app-owned paths.
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script,
@@ -161,10 +186,10 @@ func (m *setupManager) runParakeetInstall(ctx context.Context, id string) {
 	command.Stdout = writer
 	command.Stderr = writer
 	if !m.attachCommand(id, command) {
-		m.finishJob(ctx, id, context.Canceled, "Parakeet")
-		return
+		return context.Canceled
 	}
 	err = command.Run()
+	m.detachCommand(id, command)
 	result := setupParakeetInstallResult{
 		ServerPath: filepath.Join(m.dataDir, "voice", "parakeet", "runner", "parakeet-server.exe"),
 		ModelPath:  filepath.Join(m.dataDir, "voice", "parakeet", "tdt-0.6b-v3-q4_k.gguf"),
@@ -175,7 +200,92 @@ func (m *setupManager) runParakeetInstall(ctx context.Context, id string) {
 	if err == nil && ctx.Err() == nil && m.onParakeet != nil {
 		err = m.onParakeet(context.WithoutCancel(ctx), result)
 	}
-	m.finishJob(ctx, id, err, "Parakeet")
+	return err
+}
+
+func (m *setupManager) StartInstallPlan(request setupInstallPlanRequest) (setupJob, error) {
+	tasks := make([]setupPlanTask, 0, 3)
+	if request.Llama != nil {
+		backend, err := m.validateLlamaInstall(*request.Llama)
+		if err != nil {
+			return setupJob{}, err
+		}
+		tasks = append(tasks, setupPlanTask{
+			step: setupJobStep{ID: "llama_runtime", Label: "Managed llama.cpp", Status: setupJobQueued},
+			run:  func(ctx context.Context, id string) error { return m.installLlama(ctx, id, backend) },
+		})
+	}
+	if request.Voice != nil {
+		module, normalized, err := m.validateVoiceInstall(*request.Voice)
+		if err != nil {
+			return setupJob{}, err
+		}
+		tasks = append(tasks, setupPlanTask{
+			step: setupJobStep{ID: "voice_module", Label: module.Name, Status: setupJobQueued},
+			run:  func(ctx context.Context, id string) error { return m.installVoice(ctx, id, module, normalized) },
+		})
+	}
+	if request.Parakeet {
+		if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+			return setupJob{}, errors.New("managed Parakeet installation is currently supported on Windows/amd64 only")
+		}
+		tasks = append(tasks, setupPlanTask{
+			step: setupJobStep{ID: "parakeet", Label: "Parakeet speech input", Status: setupJobQueued},
+			run:  m.installParakeet,
+		})
+	}
+	if len(tasks) == 0 {
+		return setupJob{}, errors.New("select at least one component to install")
+	}
+
+	ctx, job, err := m.reserveJob("install_plan", "selected_components", "", "Selected component installation queued.")
+	if err != nil {
+		return setupJob{}, err
+	}
+	steps := make([]setupJobStep, len(tasks))
+	for index, task := range tasks {
+		steps[index] = task.step
+	}
+	job = m.setJobSteps(job.ID, steps)
+	m.wg.Add(1)
+	go m.runInstallPlan(ctx, job.ID, tasks)
+	return job, nil
+}
+
+func (m *setupManager) runInstallPlan(ctx context.Context, id string, tasks []setupPlanTask) {
+	defer m.wg.Done()
+	m.updateJob(id, setupJobRunning, "Installing selected components.", "")
+	for index, task := range tasks {
+		if err := ctx.Err(); err != nil {
+			m.cancelPlanSteps(id, tasks[index:])
+			m.finishJob(ctx, id, err, "Selected components")
+			return
+		}
+		m.updateJobStep(id, task.step.ID, setupJobRunning, "Installing")
+		m.updateJob(id, setupJobRunning, "Installing "+task.step.Label+".", "")
+		if err := task.run(ctx, id); err != nil {
+			if ctx.Err() != nil {
+				m.cancelPlanSteps(id, tasks[index:])
+				m.finishJob(ctx, id, err, "Selected components")
+				return
+			}
+			m.updateJobStep(id, task.step.ID, setupJobFailed, err.Error())
+			m.finishJob(ctx, id, err, task.step.Label)
+			return
+		}
+		m.updateJobStep(id, task.step.ID, setupJobComplete, "Installed")
+	}
+	m.updateJob(id, setupJobComplete, "Selected components installed and verified.", "")
+}
+
+func (m *setupManager) cancelPlanSteps(id string, tasks []setupPlanTask) {
+	for index, task := range tasks {
+		message := "Not started"
+		if index == 0 {
+			message = "Cancelled"
+		}
+		m.updateJobStep(id, task.step.ID, setupJobCancelled, message)
+	}
 }
 
 func (m *setupManager) attachCommand(id string, command *exec.Cmd) bool {
@@ -186,6 +296,14 @@ func (m *setupManager) attachCommand(id string, command *exec.Cmd) bool {
 	}
 	m.job.command = command
 	return true
+}
+
+func (m *setupManager) detachCommand(id string, command *exec.Cmd) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.job != nil && m.job.ID == id && m.job.command == command {
+		m.job.command = nil
+	}
 }
 
 func verifyRegularFiles(paths ...string) error {
@@ -220,6 +338,23 @@ func (s *Server) handleSetupParakeetInstall(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	job, err := s.setup.StartParakeetInstall()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"installation": job})
+}
+
+func (s *Server) handleSetupInstallPlan(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var request setupInstallPlanRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	job, err := s.setup.StartInstallPlan(request)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

@@ -644,10 +644,11 @@ func DefaultSettings() Settings {
 			Port: DefaultServerPort,
 		},
 		UI: UISettings{
-			Locale:          LocaleEnglish,
-			Theme:           ThemeSteelAzure,
-			SetupCompleted:  false,
-			UpdateCheckMode: UpdateCheckAutomatic,
+			Locale:                 LocaleEnglish,
+			Theme:                  ThemeSteelAzure,
+			SetupCompleted:         false,
+			UpdateCheckMode:        UpdateCheckAutomatic,
+			NotificationCategories: append([]string(nil), DefaultNotificationCategories...),
 		},
 		Media: MediaSettings{
 			RemoveMissingOnScan: true,
@@ -822,6 +823,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		updateCheckMode := strings.TrimSpace(update.UI.UpdateCheckMode)
 		if updateCheckMode != "" {
 			next.UI.UpdateCheckMode = updateCheckMode
+		}
+		if update.UI.NotificationCategories != nil {
+			next.UI.NotificationCategories = append([]string{}, update.UI.NotificationCategories...)
 		}
 	}
 	if update.Media != nil {
@@ -1065,14 +1069,8 @@ func validateSettings(settings Settings) error {
 	if settings.Server.Port < 1 || settings.Server.Port > 65535 {
 		return fmt.Errorf("server port must be between 1 and 65535")
 	}
-	if !oneOf(settings.UI.Locale, LocaleEnglish, LocaleSpanish, LocalePortugueseBrazil, LocaleSimplifiedChinese, LocaleJapanese) {
-		return fmt.Errorf("unknown UI locale %q", settings.UI.Locale)
-	}
-	if !IsSupportedUITheme(settings.UI.Theme) {
-		return fmt.Errorf("unknown UI theme %q", settings.UI.Theme)
-	}
-	if !oneOf(settings.UI.UpdateCheckMode, UpdateCheckAutomatic, UpdateCheckManual) {
-		return fmt.Errorf("unknown update check mode %q", settings.UI.UpdateCheckMode)
+	if err := validateUISettings(settings.UI); err != nil {
+		return err
 	}
 	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
@@ -1110,6 +1108,29 @@ func validateSettings(settings Settings) error {
 	return validateVoiceSettings(settings.Voice)
 }
 
+func validateUISettings(settings UISettings) error {
+	if !oneOf(settings.Locale, LocaleEnglish, LocaleSpanish, LocalePortugueseBrazil, LocaleSimplifiedChinese, LocaleJapanese) {
+		return fmt.Errorf("unknown UI locale %q", settings.Locale)
+	}
+	if !IsSupportedUITheme(settings.Theme) {
+		return fmt.Errorf("unknown UI theme %q", settings.Theme)
+	}
+	if !oneOf(settings.UpdateCheckMode, UpdateCheckAutomatic, UpdateCheckManual) {
+		return fmt.Errorf("unknown update check mode %q", settings.UpdateCheckMode)
+	}
+	seenCategories := make(map[string]struct{}, len(settings.NotificationCategories))
+	for _, category := range settings.NotificationCategories {
+		if !oneOf(category, NotificationCategoryApp, NotificationCategorySystem, NotificationCategoryLibrary, NotificationCategoryVoice, NotificationCategoryUpdates) {
+			return fmt.Errorf("unknown notification category %q", category)
+		}
+		if _, duplicate := seenCategories[category]; duplicate {
+			return fmt.Errorf("duplicate notification category %q", category)
+		}
+		seenCategories[category] = struct{}{}
+	}
+	return nil
+}
+
 func applyMissingDefaults(settings Settings) Settings {
 	defaults := DefaultSettings()
 	if settings.Server.Port == 0 {
@@ -1126,6 +1147,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	settings.UI.UpdateCheckMode = strings.TrimSpace(settings.UI.UpdateCheckMode)
 	if settings.UI.UpdateCheckMode == "" {
 		settings.UI.UpdateCheckMode = defaults.UI.UpdateCheckMode
+	}
+	if settings.UI.NotificationCategories == nil {
+		settings.UI.NotificationCategories = append([]string(nil), defaults.UI.NotificationCategories...)
 	}
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner

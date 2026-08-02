@@ -188,10 +188,19 @@ window and direction; the buffered queue tail is diagnostics, not position.
   regions: backend-derived **Activity**, current **Attention**, and bounded
   current-session **Recent** history. Activity rows show honest progress and
   link to their owning Settings section.
-- Toasts feed the same history. Mark-read and clear are a compact management
-  group separated from Close; clear uses the standard trash icon. All icon
-  commands retain labels/tooltips. Notification history is UI feedback, not
-  durable application state. Backend scan/job/health snapshots remain authoritative.
+- Toasts remain transient feedback; whether their category also enters bell
+  history is a saved General setting. History categories are routine app
+  feedback, core/device status, library/media tasks, voice worker alerts, and
+  software updates. The quiet default records system, voice, and update events,
+  not routine confirmations or successful background scans. Mark-read and clear
+  are a compact management group separated from Close; clear uses the standard
+  trash icon. All icon commands retain labels/tooltips. Notification history is
+  session UI feedback, not durable application state. Backend scan/job/health
+  snapshots remain authoritative.
+- Category controls never hide live Activity, current Attention, backend-offline
+  locking, or Emergency Stop. Consumed backend event keys survive reload in
+  session storage even when their category is hidden, so a stale completion
+  cannot reappear after a refresh.
 - Only one shell popover is open at a time. Opening notifications closes the
   connection manager and vice versa; selecting a linked item closes the panel.
   The trigger and close button preserve keyboard focus.

@@ -728,6 +728,75 @@ function Show-MagicHandyInstallState {
     }
 }
 
+function Resolve-MagicHandyMSYS2Root {
+    $candidates = New-Object System.Collections.Generic.List[string]
+    $candidates.Add('C:\msys64')
+    if (-not [string]::IsNullOrWhiteSpace($env:SystemDrive)) {
+        $candidates.Add((Join-Path $env:SystemDrive 'msys64'))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates.Add((Join-Path $env:ProgramFiles 'MSYS2'))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $candidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\msys64'))
+    }
+    foreach ($candidate in ($candidates | Select-Object -Unique)) {
+        if (Test-Path -LiteralPath (Join-Path $candidate 'usr\bin\bash.exe') -PathType Leaf) {
+            return [System.IO.Path]::GetFullPath($candidate)
+        }
+    }
+    return $null
+}
+
+function Test-MagicHandyMSYS2LlamaToolchain {
+    $root = Resolve-MagicHandyMSYS2Root
+    if ([string]::IsNullOrWhiteSpace($root)) {
+        return $false
+    }
+    foreach ($relative in @(
+        'ucrt64\bin\gcc.exe',
+        'ucrt64\bin\g++.exe',
+        'ucrt64\bin\cmake.exe',
+        'ucrt64\bin\ninja.exe'
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $root $relative) -PathType Leaf)) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Ensure-MagicHandyLlamaCPUToolchain {
+    [CmdletBinding()]
+    param([switch]$AssumeYes)
+
+    if (Test-MagicHandyMSYS2LlamaToolchain) {
+        Write-Host 'Using the existing MSYS2 UCRT64 GCC/CMake/Ninja toolchain.' -ForegroundColor Green
+        return 'msys2-ucrt64'
+    }
+
+    $msysRoot = Resolve-MagicHandyMSYS2Root
+    if (-not [string]::IsNullOrWhiteSpace($msysRoot)) {
+        Confirm-MagicHandyPackageInstall `
+            -Name 'MSYS2 UCRT64 C++ toolchain' `
+            -Purpose 'compiling the CPU-only managed llama.cpp runner without installing Visual Studio Build Tools' `
+            -License 'GPL and compatible package-specific licenses; https://www.msys2.org/docs/package-management/' `
+            -Size 'approximately 1-2 GB' `
+            -AssumeYes:$AssumeYes
+        $bash = Join-Path $msysRoot 'usr\bin\bash.exe'
+        Write-Host 'Installing missing MSYS2 UCRT64 GCC, CMake, and Ninja packages...'
+        & $bash -lc 'pacman -S --needed --noconfirm mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja'
+        if ($LASTEXITCODE -eq 0 -and (Test-MagicHandyMSYS2LlamaToolchain)) {
+            return 'msys2-ucrt64'
+        }
+        Write-Warning 'The existing MSYS2 installation could not provide a complete UCRT64 toolchain. Falling back to the Visual Studio build path.'
+    }
+
+    Ensure-MagicHandyCMake -AssumeYes:$AssumeYes | Out-Null
+    Ensure-MagicHandyVCToolchain -AssumeYes:$AssumeYes
+    return 'visual-studio'
+}
+
 function Get-MagicHandyProvisionPlan {
     [CmdletBinding()]
     param(
@@ -2361,6 +2430,7 @@ Export-ModuleMember -Function @(
     'Invoke-MagicHandyWinGetInstall',
     'Ensure-MagicHandyGit',
     'Ensure-MagicHandyCMake',
+    'Ensure-MagicHandyLlamaCPUToolchain',
     'Ensure-MagicHandyVCToolchain',
     'Ensure-MagicHandyCUDA',
     'Install-MagicHandyParakeet',

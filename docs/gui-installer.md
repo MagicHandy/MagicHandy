@@ -13,7 +13,8 @@ setup wizard") and feeds Phase 16.
 architecture decision; this document is the detailed implementation design.
 
 Status 2026-08-02: the thin Inno shell, portable payload, first-run detection,
-re-runnable six-step GUI, and optional llama.cpp/Parakeet/TTS job endpoints are
+re-runnable seven-step GUI, and unified optional llama.cpp/Parakeet/TTS
+install-plan endpoint are
 implemented on the Phase 16 branch. The workflow intentionally publishes only
 short-lived CI artifacts; no installer binary has been released. Prebuilt
 llama.cpp bundles, curated model downloads, signing, and clean-machine release
@@ -106,8 +107,8 @@ For the install binary itself, **Inno Setup** over WiX/NSIS/hand-rolled:
 ## First-run onboarding wizard (`#/setup`)
 
 Trigger: fresh data directory (no settings/database) or an explicit
-`-setup` flag; re-runnable later from Settings. Every step is skippable and
-non-blocking — the app must remain fully usable with everything declined
+`-setup` flag; re-runnable later from Settings. Every optional feature is
+skippable before installation and non-blocking — the app must remain usable with everything declined
 (voice optional, Ollama instead of managed builds, no migration).
 
 The steps below are the *contract* (what each step may do and through which
@@ -117,17 +118,22 @@ screen anatomy, visual treatment, and branding slots — lives in
 [setup-wizard-sketch.svg](setup-wizard-sketch.svg).
 
 1. **Welcome / consent** — what setup will and won't do: nothing downloads
-   or builds without an explicit per-item click showing size and license;
+   or builds before the user selects components with size/license disclosure
+   and explicitly continues to installation;
    nothing here ever commands the device.
 2. **Device** — connection key (write-only), dispatch owner, non-motion
    connection check. Existing settings surface, embedded.
-3. **LLM runtime** — the current managed path is a pinned **source build**
-   (backend auto/CPU/CUDA, streaming status, cancel), with its compiler and disk
-   cost visible; **use existing Ollama** to avoid that compiler/runtime
+3. **LLM runtime** — the Recommended fresh-install default is a pinned managed
+   **source build** (backend auto/CPU/CUDA), with its compiler and disk cost
+   visible. CPU can reuse/provision MSYS2 UCRT64 GCC/CMake/Ninja or fall back to
+   Visual Studio; CUDA uses Visual Studio and the NVIDIA Toolkit. **Use existing
+   Ollama** is never selected implicitly and avoids that compiler/runtime
    footprint; use an external compatible server; or skip. Checksummed prebuilt
    CPU/CUDA bundles remain a planned replacement for the default managed path.
 4. **LLM model** — import a local GGUF into the checksummed managed store,
-   choose a model exposed by Ollama, enter an external server model ID, or skip.
+   scan an existing Ollama library and explicitly copy one compatible model,
+   choose a model exposed by an Ollama daemon, enter an external server model
+   ID, or skip.
    Curated checksum-pinned downloads and hardware-fit recommendations remain
    planned and are not represented as available actions.
 5. **Voice (optional)** — Parakeet ASR: download the pinned parakeet.cpp
@@ -136,13 +142,15 @@ screen anatomy, visual treatment, and branding slots — lives in
     path). Local TTS: choose Faster Qwen3-TTS for NVIDIA/CUDA, Chatterbox for
     broader hardware, or an existing OpenAI-compatible endpoint; show pinned
     source/model licenses, disk impact, reference requirements, and process
-    ownership before installation. ElevenLabs: write-only key entry. Installing
-    assets does not enable or start voice;
+    ownership before installation. Installing assets does not enable or start voice;
     enablement is explicit and a separate Start action confirms model readiness.
     App-managed modules and custom local paths are separate choices. Reference
     WAV/transcript selection, enabling voice, and starting workers stay in
     Settings > Voice.
-6. **Finish** — where things live (data dir, local URL), what was
+6. **Install** — submit the selected local components once, then show the
+   backend-owned sequential queue, per-component state, bounded terminal
+   output, cancellation, and retry.
+7. **Finish** — where things live (data dir, local URL), what was
    skipped and where to do it later.
 
 The Phase 15 importer does not exist, so setup contains no disabled or
@@ -150,9 +158,9 @@ placeholder migration step. Add it only with a real dry-run and
 non-destructive importer API.
 
 Invariants: all mutating steps sit behind the controller lease like every
-other surface; downloads are server-side, checksum-pinned, size/license
-visible, individually consented; the wizard adds no second copy of any
-operation — every step is the existing settings/API surface arranged in
+other surface; downloads are server-side, checksum-pinned, and size/license
+visible before one reviewed install plan starts. The wizard adds no second copy
+of any operation — every step is the existing settings/API surface arranged in
 order.
 
 Presentation: the default stays "binary opens the default browser at the

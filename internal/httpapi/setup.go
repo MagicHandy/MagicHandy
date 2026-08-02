@@ -87,6 +87,10 @@ type setupPreferencesRequest struct {
 	LLM           *config.LLMSettings `json:"llm,omitempty"`
 }
 
+type setupCompleteRequest struct {
+	AllowUnreadyLLM bool `json:"allow_unready_llm"`
+}
+
 type setupVoiceInstallResult struct {
 	Module     setupVoiceModule
 	Device     string
@@ -100,15 +104,25 @@ type setupParakeetInstallResult struct {
 }
 
 type setupJob struct {
-	ID        string `json:"id"`
-	Kind      string `json:"kind"`
-	Module    string `json:"module"`
-	Device    string `json:"device"`
-	Status    string `json:"status"`
-	Message   string `json:"message"`
-	Output    string `json:"output,omitempty"`
-	StartedAt string `json:"started_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID             string         `json:"id"`
+	Kind           string         `json:"kind"`
+	Module         string         `json:"module"`
+	Device         string         `json:"device"`
+	Status         string         `json:"status"`
+	Message        string         `json:"message"`
+	Output         string         `json:"output,omitempty"`
+	Steps          []setupJobStep `json:"steps,omitempty"`
+	CompletedSteps int            `json:"completed_steps,omitempty"`
+	TotalSteps     int            `json:"total_steps,omitempty"`
+	StartedAt      string         `json:"started_at"`
+	UpdatedAt      string         `json:"updated_at"`
+}
+
+type setupJobStep struct {
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
 }
 
 type setupJobState struct {
@@ -179,14 +193,34 @@ func (m *setupManager) Snapshot() *setupJob {
 	if m.job == nil {
 		return nil
 	}
-	job := m.job.setupJob
+	job := cloneSetupJob(m.job.setupJob)
 	return &job
 }
 
+func cloneSetupJob(job setupJob) setupJob {
+	job.Steps = append([]setupJobStep(nil), job.Steps...)
+	return job
+}
+
 func (m *setupManager) StartVoiceInstall(request setupVoiceInstallRequest) (setupJob, error) {
-	module, err := findSetupVoiceModule(request.Module)
+	module, normalized, err := m.validateVoiceInstall(request)
 	if err != nil {
 		return setupJob{}, err
+	}
+
+	ctx, job, err := m.reserveJob("voice_module", module.ID, normalized.Device, "Voice module installation queued.")
+	if err != nil {
+		return setupJob{}, err
+	}
+	m.wg.Add(1)
+	go m.runVoiceInstall(ctx, job.ID, module, normalized)
+	return job, nil
+}
+
+func (m *setupManager) validateVoiceInstall(request setupVoiceInstallRequest) (setupVoiceModule, setupVoiceInstallRequest, error) {
+	module, err := findSetupVoiceModule(request.Module)
+	if err != nil {
+		return setupVoiceModule{}, request, err
 	}
 	request.Device = strings.ToLower(strings.TrimSpace(request.Device))
 	if request.Device == "" || request.Device == config.TTSDeviceAuto {
@@ -199,22 +233,15 @@ func (m *setupManager) StartVoiceInstall(request setupVoiceInstallRequest) (setu
 		}
 	}
 	if !stringInSlice(request.Device, module.SupportedDevices) {
-		return setupJob{}, fmt.Errorf("%s does not support device %q", module.Name, request.Device)
+		return setupVoiceModule{}, request, fmt.Errorf("%s does not support device %q", module.Name, request.Device)
 	}
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
-		return setupJob{}, errors.New("managed voice module installation is currently supported on Windows/amd64 only")
+		return setupVoiceModule{}, request, errors.New("managed voice module installation is currently supported on Windows/amd64 only")
 	}
 	if module.ID == "faster-qwen3-tts" && !m.hasNVIDIA() {
-		return setupJob{}, errors.New("an NVIDIA GPU is required for Faster Qwen3-TTS; choose Chatterbox CPU instead")
+		return setupVoiceModule{}, request, errors.New("an NVIDIA GPU is required for Faster Qwen3-TTS; choose Chatterbox CPU instead")
 	}
-
-	ctx, job, err := m.reserveJob("voice_module", module.ID, request.Device, "Voice module installation queued.")
-	if err != nil {
-		return setupJob{}, err
-	}
-	m.wg.Add(1)
-	go m.runVoiceInstall(ctx, job.ID, module, request)
-	return job, nil
+	return module, request, nil
 }
 
 func (m *setupManager) reserveJob(kind, module, device, message string) (context.Context, setupJob, error) {
@@ -250,7 +277,7 @@ func (m *setupManager) Cancel() (setupJob, error) {
 	}
 	m.job.cancel()
 	command := m.job.command
-	job := m.job.setupJob
+	job := cloneSetupJob(m.job.setupJob)
 	m.mu.Unlock()
 	if command != nil {
 		_ = killSetupProcess(command)
@@ -282,17 +309,25 @@ func (m *setupManager) runVoiceInstall(
 	request setupVoiceInstallRequest,
 ) {
 	defer m.wg.Done()
+	err := m.installVoice(ctx, id, module, request)
+	m.finishJob(ctx, id, err, "Voice module")
+}
+
+func (m *setupManager) installVoice(
+	ctx context.Context,
+	id string,
+	module setupVoiceModule,
+	request setupVoiceInstallRequest,
+) error {
 	m.updateJob(id, setupJobRunning, "Preparing the managed voice installer.", "")
 
 	script, err := resolveTTSInstallerScript(m.executablePath)
 	if err != nil {
-		m.finishJob(ctx, id, err, "Voice module")
-		return
+		return err
 	}
 	powerShell, err := resolveSetupPowerShell()
 	if err != nil {
-		m.finishJob(ctx, id, err, "Voice module")
-		return
+		return err
 	}
 	folder := "faster-qwen3-tts"
 	if module.ID == "chatterbox" {
@@ -316,16 +351,12 @@ func (m *setupManager) runVoiceInstall(
 	command.Stdout = writer
 	command.Stderr = writer
 
-	m.mu.Lock()
-	if m.job == nil || m.job.ID != id || m.closed {
-		m.mu.Unlock()
-		m.finishJob(ctx, id, context.Canceled, "Voice module")
-		return
+	if !m.attachCommand(id, command) {
+		return context.Canceled
 	}
-	m.job.command = command
-	m.mu.Unlock()
 
 	err = command.Run()
+	m.detachCommand(id, command)
 	if err == nil {
 		err = verifyInstalledVoiceModule(root, module.ID)
 	}
@@ -334,7 +365,43 @@ func (m *setupManager) runVoiceInstall(
 			Module: module, Device: request.Device, AutoLaunch: request.AutoLaunch, Root: root,
 		})
 	}
-	m.finishJob(ctx, id, err, "Voice module")
+	return err
+}
+
+func (m *setupManager) setJobSteps(id string, steps []setupJobStep) setupJob {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.job == nil || m.job.ID != id {
+		return setupJob{}
+	}
+	m.job.Steps = append([]setupJobStep(nil), steps...)
+	m.job.TotalSteps = len(steps)
+	m.job.CompletedSteps = 0
+	return cloneSetupJob(m.job.setupJob)
+}
+
+func (m *setupManager) updateJobStep(id, stepID, status, message string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.job == nil || m.job.ID != id {
+		return
+	}
+	for index := range m.job.Steps {
+		if m.job.Steps[index].ID != stepID {
+			continue
+		}
+		m.job.Steps[index].Status = status
+		m.job.Steps[index].Message = message
+		break
+	}
+	completed := 0
+	for _, step := range m.job.Steps {
+		if step.Status == setupJobComplete {
+			completed++
+		}
+	}
+	m.job.CompletedSteps = completed
+	m.job.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 }
 
 func (m *setupManager) finishJob(ctx context.Context, id string, err error, subject string) {
@@ -542,6 +609,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/setup/llm/install", s.handleSetupLlamaInstall)
 	mux.HandleFunc("POST /api/setup/parakeet/install", s.handleSetupParakeetInstall)
 	mux.HandleFunc("POST /api/setup/voice/install", s.handleSetupVoiceInstall)
+	mux.HandleFunc("POST /api/setup/install", s.handleSetupInstallPlan)
 	mux.HandleFunc("DELETE /api/setup/install", s.handleSetupInstallCancel)
 	mux.HandleFunc("POST /api/setup/complete", s.handleSetupComplete)
 }
@@ -664,6 +732,11 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	var request setupCompleteRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
 		current.UI.SetupCompleted = true
 		return current, nil
@@ -675,8 +748,12 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 	payload := map[string]any{"settings": saved.Public()}
 	status := http.StatusOK
 	if runtimeErr != nil {
-		status = http.StatusBadGateway
-		payload["error"] = "setup was saved, but an active runtime could not apply the final settings"
+		if request.AllowUnreadyLLM {
+			payload["warning"] = "setup was saved without a ready chat model"
+		} else {
+			status = http.StatusBadGateway
+			payload["error"] = "setup was saved, but an active runtime could not apply the final settings"
+		}
 	}
 	writeJSON(w, status, payload)
 }

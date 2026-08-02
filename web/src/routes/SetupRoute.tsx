@@ -2,18 +2,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type {
   ConnectionCheckResult,
+  LLMModelImport,
   LLMModelManagerSnapshot,
   OllamaModelInfo,
   PublicSettings,
+  SetupInstallPlan,
   SetupJob,
   SetupStatus,
 } from "../api/types";
 import { HostPathField } from "../components/HostPathField";
+import { OllamaLibraryImport } from "../components/OllamaLibraryImport";
 import { LOCALE_OPTIONS, t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
 
-const STEPS = ["welcome", "device", "runtime", "model", "voice", "finish"] as const;
+const STEPS = ["welcome", "device", "runtime", "model", "voice", "install", "finish"] as const;
 type SetupStep = (typeof STEPS)[number];
 
 function setupStepLabel(step: SetupStep): string {
@@ -22,6 +25,7 @@ function setupStepLabel(step: SetupStep): string {
   if (step === "runtime") return t("Model runtime");
   if (step === "model") return t("Model library");
   if (step === "voice") return t("Voice (optional)");
+  if (step === "install") return t("Install selected features");
   return t("Finish");
 }
 
@@ -52,18 +56,21 @@ export function SetupRoute() {
   const [voiceChoice, setVoiceChoice] = useState<VoiceChoice>("none");
   const [voiceDevice, setVoiceDevice] = useState<"cpu" | "cuda">("cpu");
   const [voiceAutoLaunch, setVoiceAutoLaunch] = useState(true);
+  const [parakeetSelected, setParakeetSelected] = useState(false);
   const [connectionKey, setConnectionKey] = useState("");
   const [connectionResult, setConnectionResult] = useState<ConnectionCheckResult | null>(null);
   const [ggufPath, setGGUFPath] = useState("");
   const [ggufName, setGGUFName] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [installJobID, setInstallJobID] = useState("");
+  const [installSubmitted, setInstallSubmitted] = useState(false);
   const mounted = useRef(true);
 
   const locked = !backendOnline || readOnly || !settings || !setup || Boolean(busy);
   const installationActive = activeJob(setup?.installation);
+  const installJob = setup?.installation?.id === installJobID ? setup.installation : undefined;
   const activeImport = models?.imports.find((job) => job.status === "queued" || job.status === "copying");
-  const selectedVoice = setup?.voice_modules.find((module) => module.id === voiceChoice);
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +78,11 @@ export function SetupRoute() {
       if (!mounted.current) return;
       setSetup(setupStatus);
       setModels(modelStatus);
+      if (setupStatus.installation?.kind === "install_plan" && (setupStatus.required || activeJob(setupStatus.installation))) {
+        setInstallJobID(setupStatus.installation.id);
+        setInstallSubmitted(true);
+        setStep(STEPS.indexOf("install"));
+      }
       setError("");
     } catch (reason) {
       if (mounted.current) setError(message(reason));
@@ -161,11 +173,31 @@ export function SetupRoute() {
 
   const continueStep = () => void run("continue", async () => {
     await saveCurrentStep();
+    if (step === STEPS.indexOf("voice")) {
+      await beginInstall();
+    }
     setStep((current) => Math.min(STEPS.length - 1, current + 1));
   });
 
   const skipStep = () => {
     setError("");
+    if (step === STEPS.indexOf("runtime")) {
+      setRuntimeChoice("skip");
+      setStep(STEPS.indexOf("voice"));
+      return;
+    }
+    if (step === STEPS.indexOf("model")) {
+      setRuntimeChoice("skip");
+    }
+    if (step === STEPS.indexOf("voice")) {
+      setVoiceChoice("none");
+      setParakeetSelected(false);
+      void run("continue", async () => {
+        await beginInstall("none", false);
+        setStep(STEPS.indexOf("install"));
+      });
+      return;
+    }
     setStep((current) => Math.min(STEPS.length - 1, current + 1));
   };
 
@@ -175,23 +207,6 @@ export function SetupRoute() {
     if (choice === "ollama") patchLLM({ provider: "ollama" });
     if (choice === "external") patchLLM({ provider: "llama_cpp", llama_cpp_mode: "external" });
   };
-
-  const startLlamaInstall = () => void run("llama", async () => {
-    const response = await api.installSetupLlama(runtimeBackend);
-    setSetup((current) => current ? { ...current, installation: response.installation } : current);
-  });
-
-  const startVoiceInstall = () => void run("voice", async () => {
-    if (!selectedVoice) return;
-    const device = selectedVoice.id === "faster-qwen3-tts" ? "cuda" : voiceDevice;
-    const response = await api.installSetupVoice(selectedVoice.id, device, voiceAutoLaunch);
-    setSetup((current) => current ? { ...current, installation: response.installation } : current);
-  });
-
-  const startParakeetInstall = () => void run("parakeet", async () => {
-    const response = await api.installSetupParakeet();
-    setSetup((current) => current ? { ...current, installation: response.installation } : current);
-  });
 
   const cancelInstall = () => void run("cancel", async () => {
     const response = await api.cancelSetupInstall();
@@ -206,6 +221,41 @@ export function SetupRoute() {
     setModels(await api.llmModels());
   });
 
+  const mergeImport = (job: LLMModelImport) => {
+    setModels((current) => current ? {
+      ...current,
+      imports: [job, ...current.imports.filter((item) => item.id !== job.id)],
+    } : current);
+  };
+
+  function installPlan(nextVoiceChoice = voiceChoice, nextParakeet = parakeetSelected): SetupInstallPlan {
+    const plan: SetupInstallPlan = { parakeet: nextParakeet };
+    if (runtimeChoice === "managed" && !(models?.runtime.installed && models.runtime.current)) {
+      plan.llama = { backend: runtimeBackend };
+    }
+    const module = setup?.voice_modules.find((item) => item.id === nextVoiceChoice);
+    if (module) {
+      plan.voice = {
+        module: module.id,
+        device: module.id === "faster-qwen3-tts" ? "cuda" : voiceDevice,
+        auto_launch: voiceAutoLaunch,
+      };
+    }
+    return plan;
+  }
+
+  async function beginInstall(nextVoiceChoice = voiceChoice, nextParakeet = parakeetSelected) {
+    const plan = installPlan(nextVoiceChoice, nextParakeet);
+    setInstallSubmitted(true);
+    if (!plan.llama && !plan.voice && !plan.parakeet) {
+      setInstallJobID("");
+      return;
+    }
+    const response = await api.installSetupPlan(plan);
+    setInstallJobID(response.installation.id);
+    setSetup((current) => current ? { ...current, installation: response.installation } : current);
+  }
+
   const verifyCloud = () => void run("verify", async () => {
     if (!settings) return;
     await savePreferences({
@@ -217,10 +267,21 @@ export function SetupRoute() {
   });
 
   const finish = () => void run("finish", async () => {
-    await api.completeSetup();
+    await api.completeSetup(runtimeChoice === "skip");
     await refresh();
     window.location.hash = "#/chat";
   });
+
+  const managedModels = models?.models.filter((model) => model.state === "ready") ?? [];
+  const managedModelReady = managedModels.some((model) => model.id === settings?.llm.model);
+  const modelChoiceReady = runtimeChoice === "skip"
+    || (runtimeChoice === "managed" && managedModelReady)
+    || ((runtimeChoice === "ollama" || runtimeChoice === "external") && Boolean(settings?.llm.model.trim()));
+  const installationReady = installSubmitted && (!installJob || installJob.status === "complete");
+  const currentStepReady = step !== STEPS.indexOf("model") || modelChoiceReady;
+  const canFinish = runtimeChoice === "skip" || (
+    modelChoiceReady && (runtimeChoice !== "managed" || Boolean(models?.runtime.installed && models.runtime.current))
+  );
 
   const title = [
     t("Set up MagicHandy"),
@@ -228,6 +289,7 @@ export function SetupRoute() {
     t("Choose your model runtime"),
     t("Choose a chat model"),
     t("Add voice features"),
+    t("Installing selected features"),
     t("Setup is ready"),
   ][step];
 
@@ -278,7 +340,6 @@ export function SetupRoute() {
             select={selectRuntime}
             setBackend={setRuntimeBackend}
             patchLLM={patchLLM}
-            startInstall={startLlamaInstall}
           />}
           {step === 3 && <ModelStep
             choice={runtimeChoice}
@@ -292,6 +353,7 @@ export function SetupRoute() {
             setGGUFPath={setGGUFPath}
             setGGUFName={setGGUFName}
             importGGUF={importGGUF}
+            mergeImport={mergeImport}
             refreshOllama={() => void loadOllama()}
           />}
           {step === 4 && <VoiceStep
@@ -299,16 +361,24 @@ export function SetupRoute() {
             choice={voiceChoice}
             device={voiceDevice}
             autoLaunch={voiceAutoLaunch}
+            parakeetSelected={parakeetSelected}
             locked={locked || installationActive}
             setChoice={setVoiceChoice}
             setDevice={setVoiceDevice}
             setAutoLaunch={setVoiceAutoLaunch}
-            installVoice={startVoiceInstall}
-            installParakeet={startParakeetInstall}
+            setParakeetSelected={setParakeetSelected}
           />}
-          {step === 5 && <FinishStep setup={setup} runtimeChoice={runtimeChoice} voiceChoice={voiceChoice} />}
+          {step === 5 && <InstallStep
+            job={installJob}
+            submitted={installSubmitted}
+            runtimeChoice={runtimeChoice}
+            voiceChoice={voiceChoice}
+            parakeetSelected={parakeetSelected}
+            cancel={cancelInstall}
+            retry={() => void run("retry", beginInstall)}
+          />}
+          {step === 6 && <FinishStep setup={setup} settings={settings} models={models} runtimeChoice={runtimeChoice} voiceChoice={voiceChoice} parakeetSelected={parakeetSelected} />}
 
-          {setup.installation && step >= 2 && step <= 4 && <SetupJobPanel job={setup.installation} cancel={cancelInstall} />}
           {activeImport && <p className="setup-inline-status" role="status">{t("Importing {name}: {copied} of {total}", {
             name: activeImport.display_name,
             copied: formatBytes(activeImport.bytes_copied),
@@ -320,11 +390,11 @@ export function SetupRoute() {
         <footer className="setup-actions">
           <button type="button" className="btn btn-secondary" disabled={step === 0 || installationActive || Boolean(busy)} onClick={() => setStep((current) => current - 1)}>{t("Back")}</button>
           <span className="setup-action-spacer" />
-          {step < STEPS.length - 1 && <button type="button" className="btn btn-quiet" disabled={installationActive || Boolean(busy)} onClick={skipStep}>{t("Skip for now")}</button>}
+          {step < STEPS.length - 1 && step !== STEPS.indexOf("install") && <button type="button" className="btn btn-quiet" disabled={installationActive || Boolean(busy)} onClick={skipStep}>{t("Skip for now")}</button>}
           {step < STEPS.length - 1 ? (
-            <button type="button" className="btn btn-primary" disabled={locked || installationActive} onClick={continueStep}>{busy === "continue" ? t("Saving...") : t("Continue")}</button>
+            <button type="button" className="btn btn-primary" disabled={locked || installationActive || !currentStepReady || (step === STEPS.indexOf("install") && !installationReady)} onClick={continueStep}>{busy === "continue" ? t("Saving...") : t("Continue")}</button>
           ) : (
-            <button type="button" className="btn btn-primary" disabled={locked} onClick={finish}>{busy === "finish" ? t("Finishing setup...") : t("Open MagicHandy")}</button>
+            <button type="button" className="btn btn-primary" disabled={locked || !canFinish} onClick={finish}>{busy === "finish" ? t("Finishing setup...") : t("Open MagicHandy")}</button>
           )}
         </footer>
       </div>
@@ -365,11 +435,11 @@ function DeviceStep({ settings, connectionKey, connectionResult, locked, setConn
   </div>;
 }
 
-function RuntimeStep({ choice, backend, settings, setup, models, locked, select, setBackend, patchLLM, startInstall }: {
+function RuntimeStep({ choice, backend, settings, setup, models, locked, select, setBackend, patchLLM }: {
   choice: RuntimeChoice; backend: "auto" | "cpu" | "cuda"; settings: PublicSettings["llm"];
   setup: SetupStatus; models: LLMModelManagerSnapshot | null; locked: boolean;
   select: (choice: RuntimeChoice) => void; setBackend: (backend: "auto" | "cpu" | "cuda") => void;
-  patchLLM: (patch: Partial<PublicSettings["llm"]>) => void; startInstall: () => void;
+  patchLLM: (patch: Partial<PublicSettings["llm"]>) => void;
 }) {
   const runtimeReady = models?.runtime.installed && models.runtime.current;
   return <div className="setup-copy">
@@ -383,27 +453,42 @@ function RuntimeStep({ choice, backend, settings, setup, models, locked, select,
     </div>
     {choice === "managed" && <div className="setup-subsection">
       <label className="field"><span className="label">{t("Build backend")}</span><select value={backend} disabled={locked} onChange={(event) => setBackend(event.target.value as typeof backend)}>{setup.llama_runtime.backends.map((value) => <option key={value} value={value}>{value === "auto" ? t("Automatic") : value.toUpperCase()}</option>)}</select></label>
-      <p className="hint-block">{setup.llama_runtime.disk_estimate} {t("License: {license}.", { license: setup.llama_runtime.license })}</p>
-      <button type="button" className="btn btn-secondary" disabled={locked || runtimeReady || !setup.helpers.llama} onClick={startInstall}>{runtimeReady ? t("Managed runtime installed") : t("Install build tools and build runtime")}</button>
+      <p className="hint-block">{setup.llama_runtime.disk_estimate} {t("CPU builds can use an existing MSYS2 UCRT64 toolchain; CUDA builds use Visual Studio C++ and the NVIDIA toolkit. License: {license}.", { license: setup.llama_runtime.license })}</p>
+      <p className="setup-selection-state" data-ready={runtimeReady}>{runtimeReady ? t("Managed runtime is already installed and verified.") : t("Selected for installation after the voice step.")}</p>
     </div>}
     {choice === "ollama" && <div className="setup-subsection"><label className="field"><span className="label">{t("Ollama base URL")}</span><input value={settings.ollama_base_url} onChange={(event) => patchLLM({ ollama_base_url: event.target.value })} /></label></div>}
     {choice === "external" && <div className="setup-subsection"><label className="field"><span className="label">{t("Server base URL")}</span><input value={settings.llama_cpp_base_url} onChange={(event) => patchLLM({ llama_cpp_base_url: event.target.value })} /></label></div>}
   </div>;
 }
 
-function ModelStep({ choice, settings, models, ollamaModels, ggufPath, ggufName, locked, patch, setGGUFPath, setGGUFName, importGGUF, refreshOllama }: {
+function ModelStep({ choice, settings, models, ollamaModels, ggufPath, ggufName, locked, patch, setGGUFPath, setGGUFName, importGGUF, mergeImport, refreshOllama }: {
   choice: RuntimeChoice; settings: PublicSettings["llm"]; models: LLMModelManagerSnapshot | null; ollamaModels: OllamaModelInfo[];
   ggufPath: string; ggufName: string; locked: boolean; patch: (patch: Partial<PublicSettings["llm"]>) => void;
-  setGGUFPath: (value: string) => void; setGGUFName: (value: string) => void; importGGUF: () => void; refreshOllama: () => void;
+  setGGUFPath: (value: string) => void; setGGUFName: (value: string) => void; importGGUF: () => void;
+  mergeImport: (job: LLMModelImport) => void; refreshOllama: () => void;
 }) {
   if (choice === "skip") return <div className="setup-copy"><p>{t("No model will be configured. You can open Settings > Model at any time.")}</p></div>;
   if (choice === "managed") return <div className="setup-copy">
     <p>{t("Managed llama.cpp reads GGUF models copied into MagicHandy's checksummed model store.")}</p>
     {models?.models.filter((model) => model.state === "ready").length ? <label className="field"><span className="label">{t("Managed model")}</span><select value={settings.model} onChange={(event) => patch({ model: event.target.value })}><option value="">{t("Choose a model")}</option>{models.models.filter((model) => model.state === "ready").map((model) => <option key={model.id} value={model.id}>{model.display_name} · {formatBytes(model.size_bytes)}</option>)}</select></label> : <p className="setup-empty">{t("No managed models have been imported yet.")}</p>}
     <div className="setup-subsection">
+      <h2>{t("Import a GGUF file")}</h2>
       <HostPathField label={t("GGUF model file")} value={ggufPath} kind="gguf" disabled={locked} onChange={setGGUFPath} />
       <label className="field"><span className="label">{t("Display name")}</span><input value={ggufName} disabled={locked} placeholder={t("Optional model name")} onChange={(event) => setGGUFName(event.target.value)} /></label>
       <button type="button" className="btn btn-secondary" disabled={locked || !ggufPath.trim()} onClick={importGGUF}>{t("Import GGUF")}</button>
+    </div>
+    <div className="setup-divider" />
+    <div className="setup-subsection">
+      <h2>{t("Import from an existing Ollama library")}</h2>
+      <p className="hint-block">{t("Choose the Ollama models folder. MagicHandy scans manifests first and copies only the model you select into its verified managed store.")}</p>
+      <OllamaLibraryImport
+        path={settings.ollama_models_path ?? ""}
+        suggestedPath={models?.suggested_ollama_path}
+        managedModels={models?.models ?? []}
+        locked={locked}
+        onPathChange={(ollama_models_path) => patch({ ollama_models_path })}
+        onImportStarted={mergeImport}
+      />
     </div>
   </div>;
   if (choice === "ollama") return <div className="setup-copy">
@@ -418,10 +503,10 @@ function ModelStep({ choice, settings, models, ollamaModels, ggufPath, ggufName,
   </div>;
 }
 
-function VoiceStep({ setup, choice, device, autoLaunch, locked, setChoice, setDevice, setAutoLaunch, installVoice, installParakeet }: {
-  setup: SetupStatus; choice: VoiceChoice; device: "cpu" | "cuda"; autoLaunch: boolean; locked: boolean;
+function VoiceStep({ setup, choice, device, autoLaunch, parakeetSelected, locked, setChoice, setDevice, setAutoLaunch, setParakeetSelected }: {
+  setup: SetupStatus; choice: VoiceChoice; device: "cpu" | "cuda"; autoLaunch: boolean; parakeetSelected: boolean; locked: boolean;
   setChoice: (choice: VoiceChoice) => void; setDevice: (device: "cpu" | "cuda") => void; setAutoLaunch: (enabled: boolean) => void;
-  installVoice: () => void; installParakeet: () => void;
+  setParakeetSelected: (selected: boolean) => void;
 }) {
   const module = setup.voice_modules.find((item) => item.id === choice);
   return <div className="setup-copy">
@@ -436,23 +521,55 @@ function VoiceStep({ setup, choice, device, autoLaunch, locked, setChoice, setDe
       {module.supported_devices.length > 1 && <label className="field"><span className="label">{t("Execution device")}</span><select value={device} disabled={locked} onChange={(event) => setDevice(event.target.value as typeof device)}>{module.supported_devices.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label>}
       <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={autoLaunch} disabled={locked} onChange={(event) => setAutoLaunch(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>{t("Launch the local voice server with MagicHandy")}<small>{module.disk_estimate}</small></span></label>
       <p className="hint-block">{t("Code license: {code}. Model license: {model}.", { code: module.license, model: module.model_license })}</p>
-      <button type="button" className="btn btn-secondary" disabled={locked || !setup.helpers.voice} onClick={installVoice}>{t("Install {name}", { name: module.name })}</button>
+      <p className="setup-selection-state">{t("Selected for installation on the next step.")}</p>
     </div>}
     <div className="setup-divider" />
     <h2>{t("Speech input")}</h2>
-    <p>{setup.parakeet.summary}</p>
-    <p className="hint-block">{t("Download: {size}. Runner: {runner}; model: {model}.", { size: setup.parakeet.download_size, runner: setup.parakeet.runner_license, model: setup.parakeet.model_license })}</p>
-    <button type="button" className="btn btn-secondary" disabled={locked || !setup.helpers.parakeet} onClick={installParakeet}>{t("Install Parakeet")}</button>
+    <div className="setup-choices">
+      <Choice selected={!parakeetSelected} title={t("No speech input")} detail={t("Keep microphone transcription off. It can be added later in Voice settings.")} onSelect={() => setParakeetSelected(false)} />
+      <Choice selected={parakeetSelected} title={setup.parakeet.name} detail={`${setup.parakeet.summary} ${t("Download: {size}.", { size: setup.parakeet.download_size })}`} onSelect={() => setParakeetSelected(true)} />
+    </div>
+    {parakeetSelected && <p className="hint-block">{t("Runner license: {runner}; model license: {model}.", { runner: setup.parakeet.runner_license, model: setup.parakeet.model_license })}</p>}
   </div>;
 }
 
-function FinishStep({ setup, runtimeChoice, voiceChoice }: { setup: SetupStatus; runtimeChoice: RuntimeChoice; voiceChoice: VoiceChoice }) {
+function InstallStep({ job, submitted, runtimeChoice, voiceChoice, parakeetSelected, cancel, retry }: {
+  job?: SetupJob; submitted: boolean; runtimeChoice: RuntimeChoice; voiceChoice: VoiceChoice; parakeetSelected: boolean;
+  cancel: () => void; retry: () => void;
+}) {
+  if (!submitted) return <div className="setup-copy"><p>{t("Preparing the installation plan...")}</p></div>;
+  if (!job) return <div className="setup-copy">
+    <p>{t("No selected component needs installation. Existing services and skipped features were left unchanged.")}</p>
+    <dl className="setup-summary">
+      <div><dt>{t("Model runtime")}</dt><dd>{translateKnown(runtimeChoice)}</dd></div>
+      <div><dt>{t("Speech output")}</dt><dd>{translateKnown(voiceChoice)}</dd></div>
+      <div><dt>{t("Speech input")}</dt><dd>{parakeetSelected ? t("Parakeet") : t("Not selected")}</dd></div>
+    </dl>
+  </div>;
+  return <div className="setup-copy">
+    <p>{t("MagicHandy is installing and verifying the selected local components. You can leave this page open; the backend owns the queue.")}</p>
+    <SetupJobPanel job={job} cancel={cancel} />
+    {(job.status === "failed" || job.status === "cancelled") && <button type="button" className="btn btn-primary" onClick={retry}>{t("Retry installation")}</button>}
+  </div>;
+}
+
+function FinishStep({ setup, settings, models, runtimeChoice, voiceChoice, parakeetSelected }: {
+  setup: SetupStatus; settings: PublicSettings; models: LLMModelManagerSnapshot | null;
+  runtimeChoice: RuntimeChoice; voiceChoice: VoiceChoice; parakeetSelected: boolean;
+}) {
+  const selectedModel = models?.models.find((model) => model.id === settings.llm.model);
+  const runtimeSummary = runtimeChoice === "skip"
+    ? t("Skipped; chat and Autopilot remain unavailable")
+    : runtimeChoice === "managed"
+      ? t("Managed llama.cpp, verified with {model}", { model: selectedModel?.display_name || settings.llm.model })
+      : `${runtimeChoice === "ollama" ? "Ollama" : "External llama.cpp"} | ${settings.llm.model}`;
   return <div className="setup-copy">
     <p>{t("Your choices are saved. Skipped features remain available from Settings without rerunning the Windows installer.")}</p>
     <dl className="setup-summary">
       <div><dt>{t("Data folder")}</dt><dd>{setup.data_dir}</dd></div>
-      <div><dt>{t("Model runtime")}</dt><dd>{translateKnown(runtimeChoice)}</dd></div>
+      <div><dt>{t("Model runtime")}</dt><dd>{runtimeSummary}</dd></div>
       <div><dt>{t("Speech output")}</dt><dd>{translateKnown(voiceChoice)}</dd></div>
+      <div><dt>{t("Speech input")}</dt><dd>{parakeetSelected ? t("Parakeet installed") : t("Not selected")}</dd></div>
       <div><dt>{t("Local address")}</dt><dd>{window.location.origin}</dd></div>
     </dl>
     <div className="setup-notice"><strong>{t("Before commanding motion")}</strong><span>{t("Connect The Handy, confirm the active transport, and review speed and stroke limits in the top-bar connection manager.")}</span></div>
@@ -469,10 +586,13 @@ function Choice({ selected, title, detail, badge, disabled, onSelect }: { select
 
 function SetupJobPanel({ job, cancel }: { job: SetupJob; cancel: () => void }) {
   const active = activeJob(job);
+  const completed = job.completed_steps ?? 0;
+  const total = Math.max(job.total_steps ?? job.steps?.length ?? 0, 1);
   return <section className="setup-job" aria-live="polite" aria-busy={active}>
     <div><span className="status-dot" data-state={job.status === "complete" ? "ok" : job.status === "failed" ? "error" : active ? "working" : "idle"} /><strong>{translateKnown(job.message)}</strong></div>
-    {active && <span className="setup-job-progress" aria-hidden="true" />}
-    {job.output && <details><summary>{t("Installation log")}</summary><pre>{job.output}</pre></details>}
+    <progress className="setup-install-progress" max={total} value={Math.min(completed, total)} aria-label={t("Installation progress")} />
+    {job.steps && <ol className="setup-install-steps">{job.steps.map((item) => <li key={item.id} data-state={item.status}><span className="status-dot" data-state={item.status === "complete" ? "ok" : item.status === "failed" ? "error" : item.status === "running" ? "working" : "idle"} /><span><strong>{item.label}</strong>{item.message && <small>{translateKnown(item.message)}</small>}</span></li>)}</ol>}
+    <div className="setup-terminal" role="log" aria-label={t("Installation terminal output")}><pre>{job.output || t("Waiting for installer output...")}</pre></div>
     {active && <button type="button" className="btn btn-secondary" onClick={cancel}>{t("Cancel installation")}</button>}
   </section>;
 }

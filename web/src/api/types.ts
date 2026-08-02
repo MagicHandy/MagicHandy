@@ -4,6 +4,7 @@
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
 export type MotionStyle = "gentle" | "balanced" | "intense";
+export type NotificationCategory = "app" | "system" | "library" | "voice" | "updates";
 
 export interface MotionSettings {
   speed_min_percent: number;
@@ -855,7 +856,13 @@ export interface OptionHints {
 export interface PublicSettings {
   version: number;
   server: { port: number };
-  ui?: { locale: string; theme?: string; setup_completed?: boolean; update_check_mode?: "automatic" | "manual" | string };
+  ui?: {
+    locale: string;
+    theme?: string;
+    setup_completed?: boolean;
+    update_check_mode?: "automatic" | "manual" | string;
+    notification_categories?: NotificationCategory[];
+  };
   media?: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;
@@ -926,8 +933,22 @@ export interface SetupJob {
   status: "queued" | "running" | "complete" | "failed" | "cancelled" | string;
   message: string;
   output?: string;
+  steps?: Array<{
+    id: string;
+    label: string;
+    status: "queued" | "running" | "complete" | "failed" | "cancelled" | string;
+    message?: string;
+  }>;
+  completed_steps?: number;
+  total_steps?: number;
   started_at: string;
   updated_at: string;
+}
+
+export interface SetupInstallPlan {
+  llama?: { backend: "auto" | "cpu" | "cuda" };
+  voice?: { module: string; device: "cpu" | "cuda"; auto_launch: boolean };
+  parakeet: boolean;
 }
 
 export interface SetupVoiceModule {
@@ -1085,7 +1106,13 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
-  ui?: { locale: string; theme: string; setup_completed: boolean; update_check_mode: "automatic" | "manual" | string };
+  ui?: {
+    locale: string;
+    theme: string;
+    setup_completed: boolean;
+    update_check_mode: "automatic" | "manual" | string;
+    notification_categories: NotificationCategory[];
+  };
   media: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;

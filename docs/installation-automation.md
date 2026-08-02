@@ -33,13 +33,16 @@ Guided setup owns:
 
 1. app and chat reply language;
 2. device transport, write-only Cloud key, and non-motion connection check;
-3. managed llama.cpp, existing Ollama, external llama.cpp, or skip;
-4. managed GGUF import, Ollama model selection, or external model ID;
+3. Recommended managed llama.cpp, explicit existing Ollama, external
+   llama.cpp, or skip;
+4. managed GGUF import, explicit copy from an existing Ollama library, Ollama
+   daemon model selection, or external model ID;
 5. optional Faster Qwen3-TTS or Chatterbox installation and execution device;
 6. optional Parakeet installation; and
-7. completion plus the data directory and local address summary.
+7. one backend-owned installation/progress/terminal page, followed by the data
+   directory and local address summary.
 
-Every step is skippable. Installing a voice module does not enable voice,
+Every optional feature is skippable before the plan starts. Installing a voice module does not enable voice,
 start microphone capture, speak text, connect hardware, or command motion.
 Reference WAV and transcript selection remains in Settings > Voice.
 
@@ -50,7 +53,7 @@ Optional dependencies stay outside the core process:
 
 | Choice | Additional dependencies | Why it may be chosen |
 | --- | --- | --- |
-| Managed llama.cpp source build | Git, CMake, Visual Studio C++ Build Tools; CUDA Toolkit for CUDA | App-owned pinned runner, startup, diagnostics, and lifecycle |
+| Managed llama.cpp source build | Git; MSYS2 UCRT64 GCC/CMake/Ninja or Visual Studio C++ for CPU; Visual Studio C++ and CUDA Toolkit for CUDA | App-owned pinned runner, startup, diagnostics, and lifecycle |
 | Existing Ollama | Existing Ollama service only | Avoid duplicate compiler/runtime storage and use an existing model library |
 | Parakeet | Pinned `parakeet.cpp` runner and roughly 646 MiB GGUF model | Local speech recognition |
 | Faster Qwen3-TTS | `uv`, managed Python 3.11, CUDA PyTorch, pinned source/model | Faster NVIDIA voice cloning |
@@ -65,13 +68,15 @@ Ollama or skipping chat setup keeps that toolchain off the machine.
 
 - No model, runtime, Python environment, CUDA toolkit, or optional worker is
   downloaded during app startup or a status check.
-- Each GUI install button is a separate user action and shows purpose, disk
-  impact, and source/model licenses before it starts.
+- Runtime and voice screens collect choices without build buttons. Purpose,
+  disk impact, hardware requirements, and source/model licenses are visible
+  before one Continue action submits the complete local installation plan.
 - Pinned downloads use the same verification and resumable paths as the
   source scripts. Parakeet verifies runner and model hashes; managed TTS pins
   source revisions and keeps resumable model caches.
-- The backend owns one cancellable setup queue and streams bounded status and
-  logs to the UI. Cancellation retains safe partial downloads for retry.
+- The backend owns one sequential cancellable setup queue and streams bounded
+  per-component status plus terminal output to the UI. Cancellation retains
+  safe partial downloads for retry.
 - `-Yes` is the unattended equivalent of consent and is honored only when the
   caller explicitly selects optional features.
 

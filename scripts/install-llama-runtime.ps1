@@ -45,13 +45,20 @@ $resolvedDataDir = [System.IO.Path]::GetFullPath($DataDir)
 New-Item -ItemType Directory -Force -Path $resolvedDataDir | Out-Null
 
 Write-Host 'Managed llama.cpp is optional. Building it keeps inference under MagicHandy control and avoids a separate Ollama model copy.'
-Write-Host 'The source build requires Git, CMake, and Visual Studio C++ Build Tools; CUDA also requires the NVIDIA CUDA Toolkit.' -ForegroundColor DarkGray
+Write-Host 'CPU builds can use MSYS2 UCRT64 GCC/CMake/Ninja or Visual Studio C++ Build Tools. CUDA builds require Visual Studio C++ and the NVIDIA CUDA Toolkit.' -ForegroundColor DarkGray
 
 InstallerSupport\Ensure-MagicHandyGit -AssumeYes:$Yes | Out-Null
-InstallerSupport\Ensure-MagicHandyCMake -AssumeYes:$Yes | Out-Null
-InstallerSupport\Ensure-MagicHandyVCToolchain -AssumeYes:$Yes
-if ($Backend -eq 'cuda') {
+$cudaSelected = $Backend -eq 'cuda' -or (
+    $Backend -eq 'auto' -and
+    $null -ne (Get-Command 'nvidia-smi' -ErrorAction SilentlyContinue) -and
+    -not [string]::IsNullOrWhiteSpace((InstallerSupport\Resolve-MagicHandyExecutable -Name 'nvcc'))
+)
+if ($cudaSelected) {
+    InstallerSupport\Ensure-MagicHandyCMake -AssumeYes:$Yes | Out-Null
+    InstallerSupport\Ensure-MagicHandyVCToolchain -AssumeYes:$Yes
     InstallerSupport\Ensure-MagicHandyCUDA -AssumeYes:$Yes | Out-Null
+} else {
+    InstallerSupport\Ensure-MagicHandyLlamaCPUToolchain -AssumeYes:$Yes | Out-Null
 }
 
 & $BuildScript -DataDir $resolvedDataDir -Backend $Backend

@@ -54,11 +54,14 @@ core build is ready it opens `#/setup`, where the user can choose:
 2. device transport and a write-only Handy key when Cloud REST is selected;
 3. managed llama.cpp, an existing Ollama service, an external compatible
    server, or no chat setup;
-4. a managed GGUF import, an Ollama model, or an external model identifier;
+4. a managed GGUF import, an explicit copy from an existing Ollama library, an
+   Ollama daemon model, or an external model identifier;
 5. optional Faster Qwen3-TTS or Chatterbox provisioning; and
-6. optional Parakeet speech recognition.
+6. optional Parakeet speech recognition;
+7. one installation page with per-component progress and terminal output.
 
-The GUI explains why managed llama.cpp is useful: MagicHandy owns a
+Managed llama.cpp is the Recommended fresh-install default; Ollama is never
+selected implicitly. The GUI explains why managed llama.cpp is useful: MagicHandy owns a
 pinned, tuned runtime and controls startup, GGUF loading, structured-response
 behavior, and diagnostics. Selecting Ollama avoids that source build and saves
 compiler/runtime space when the user already has a suitable installation, at
@@ -79,8 +82,8 @@ non-interactive provisioning path. Flags are not required for normal use.
 | --- | --- | --- |
 | Always | `GoLang.Go` | Build the pure-Go app and worker adapters |
 | Managed llama.cpp | Git | Fetch the pinned llama.cpp revision |
-| Managed llama.cpp | `Kitware.CMake` | Generate the native build |
-| Managed llama.cpp | Visual Studio Build Tools, Desktop C++ workload, Windows SDK | Compile the Windows runtime |
+| Managed llama.cpp (CPU) | Existing or provisioned MSYS2 UCRT64 GCC, CMake, and Ninja; Visual Studio fallback | Compile the Windows runtime |
+| Managed llama.cpp (CUDA) | `Kitware.CMake`, Visual Studio Build Tools, Desktop C++ workload, Windows SDK | Compile the accelerated Windows runtime |
 | Managed llama.cpp with CUDA | `Nvidia.CUDA` | Build NVIDIA acceleration |
 | Unattended `-SkipLlamaBuild` path | `Ollama.Ollama` | Install the external local-model daemon when explicitly requested by flags |
 | Parakeet | pinned runner archive and GGUF model | Optional managed ASR |

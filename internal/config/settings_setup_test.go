@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestSetupCompletionDefaultsOnlyForExistingDocuments(t *testing.T) {
 	legacyCurrent, migrated, err := loadSettingsFromBytes([]byte(
@@ -17,6 +20,9 @@ func TestSetupCompletionDefaultsOnlyForExistingDocuments(t *testing.T) {
 	}
 	if legacyCurrent.UI.UpdateCheckMode != UpdateCheckAutomatic {
 		t.Fatalf("existing settings update mode = %q, want automatic", legacyCurrent.UI.UpdateCheckMode)
+	}
+	if !reflect.DeepEqual(legacyCurrent.UI.NotificationCategories, DefaultNotificationCategories) {
+		t.Fatalf("existing settings notification categories = %v, want %v", legacyCurrent.UI.NotificationCategories, DefaultNotificationCategories)
 	}
 
 	explicitFresh, migrated, err := loadSettingsFromBytes([]byte(
@@ -81,5 +87,44 @@ func TestUpdateCheckModePersistsAndSurvivesOlderUIWrites(t *testing.T) {
 	}
 	if next.UI.UpdateCheckMode != UpdateCheckManual {
 		t.Fatalf("older UI update reset update check mode to %q", next.UI.UpdateCheckMode)
+	}
+	if !reflect.DeepEqual(next.UI.NotificationCategories, DefaultNotificationCategories) {
+		t.Fatalf("older UI update reset notification categories to %v", next.UI.NotificationCategories)
+	}
+}
+
+func TestNotificationCategoriesPersistIncludingExplicitNone(t *testing.T) {
+	current := DefaultSettings()
+	update := SettingsUpdate{
+		Server: current.Server,
+		UI: &UISettings{
+			Locale:                 current.UI.Locale,
+			Theme:                  current.UI.Theme,
+			SetupCompleted:         current.UI.SetupCompleted,
+			UpdateCheckMode:        current.UI.UpdateCheckMode,
+			NotificationCategories: []string{},
+		},
+		Device: DeviceUpdate{
+			HSPDispatchOwner:       current.Device.HSPDispatchOwner,
+			IntifaceServerAddress:  current.Device.IntifaceServerAddress,
+			FirmwareAPIRequirement: current.Device.FirmwareAPIRequirement,
+			APIApplicationIDSource: current.Device.APIApplicationIDSource,
+		},
+		Motion:      current.Motion,
+		LLM:         LLMUpdateFromSettings(current.LLM),
+		Voice:       VoiceUpdate{},
+		Diagnostics: current.Diagnostics,
+	}
+	next, err := current.ApplyUpdate(update)
+	if err != nil {
+		t.Fatalf("ApplyUpdate: %v", err)
+	}
+	if next.UI.NotificationCategories == nil || len(next.UI.NotificationCategories) != 0 {
+		t.Fatalf("explicit empty notification categories were not preserved: %#v", next.UI.NotificationCategories)
+	}
+
+	next.UI.NotificationCategories = []string{"library", "library"}
+	if _, err := NormalizeSettings(next); err == nil {
+		t.Fatal("duplicate notification categories were accepted")
 	}
 }

@@ -340,9 +340,9 @@ hoc per-widget colors) are not.
 ## Feedback And Status
 
 - One shell-owned feedback system, layered above content, that a modal or route
-  cannot cover. A transient bottom toast and the top-bar notification center are
-  two presentations of the same channel: toast feedback is retained in a
-  bounded current-session history instead of disappearing without a trace.
+  cannot cover. A transient bottom toast gives immediate feedback; enabled
+  categories also enter the top-bar notification center's bounded
+  current-session history.
 - Every status carries severity as text + icon + color, never color alone.
 - Transient confirmations appear inline next to the control that changed; system
   events (connection lost, device offline, worker crash) use the persistent
@@ -354,6 +354,17 @@ hoc per-widget colors) are not.
   event IDs survive page reloads in browser-session storage, but are not
   persisted to the application database. Clearing history must not let a stale
   completion snapshot recreate a notification; a new backend event ID may.
+- General settings persist five history categories in the application database:
+  routine app feedback, core/device status, library/media tasks, voice worker
+  alerts, and software updates. The default keeps system, voice, and update
+  history while excluding routine confirmations and successful background
+  work. This preference affects the bell and unread badge only; live Activity,
+  current Attention, backend locking, and Emergency Stop remain visible.
+- This separation follows the useful part of VS Code's notification model:
+  users can suppress a source/category without erasing error state or the
+  notification center. MagicHandy keeps fewer controls because it has five
+  product-owned categories rather than an extension ecosystem. Reference:
+  <https://code.visualstudio.com/docs/editing/userinterface#_configure-notification-behavior>.
 - The notification and connection disclosures occupy the top bar and are
   mutually exclusive: opening either closes the other. Their panels link to the
   owning Settings route and close after navigation.
