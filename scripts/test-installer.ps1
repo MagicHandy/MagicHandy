@@ -92,7 +92,13 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains('Test-UvExecutable')) -Message 'TTS install should probe uv instead of trusting path presence'
     Assert-True -Condition ($ttsInstallerSource.Contains("Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv'")) -Message 'TTS install should repair WinGet and refresh PATH after installing uv'
     Assert-True -Condition ($ttsInstallerSource.Contains('Initialize-TTSGit')) -Message 'TTS install should expose its verified Git executable to uv child processes'
-    Assert-True -Condition ($ttsInstallerSource.Contains("@('python', 'install', `$PythonVersion)")) -Message 'TTS install should explicitly provision its managed Python runtime'
+    Assert-True -Condition ($ttsInstallerSource.Contains('Get-TTSNvidiaGPUName')) -Message 'Faster Qwen install should probe the NVIDIA driver before downloading dependencies'
+    Assert-True -Condition ($ttsInstallerSource.Contains('Find-TTSManagedPython')) -Message 'TTS install should resolve the patch-specific managed Python without depending on uv junctions'
+    Assert-True -Condition ($ttsInstallerSource.Contains('--install-dir $managedPythonRoot --no-bin --no-registry')) -Message 'TTS install should keep Python app-owned without global executable or registry links'
+    Assert-True -Condition ($ttsInstallerSource.Contains("`$env:UV_CACHE_DIR = `$uvCacheRoot")) -Message 'TTS install should keep the uv cache inside the managed module'
+    Assert-True -Condition ($ttsInstallerSource.Contains("`$env:UV_CREDENTIALS_DIR = `$uvCredentialsRoot")) -Message 'TTS install should keep uv credential locks out of restricted global profile paths'
+    Assert-True -Condition ($ttsInstallerSource.Contains("'--no-python-downloads'")) -Message 'TTS venv creation should use the exact validated app-owned interpreter without another download'
+    Assert-True -Condition ($ttsInstallerSource.Contains('optional minor-version junction')) -Message 'TTS install should recover when Windows rejects uv minor-version junction creation after extraction'
     Assert-True -Condition ($ttsInstallerSource.Contains('Reusing the existing $reportedVersion environment')) -Message 'TTS reinstall should not replace an in-use compatible Python launcher'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('pip', 'check', '--python', `$python)")) -Message 'TTS install should reject an inconsistent final Python dependency graph'
     Assert-True -Condition ($ttsInstallerSource.Contains('faster-qwen-constraints.txt')) -Message 'Faster Qwen install should use the packaged validated dependency constraints'
@@ -138,7 +144,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Invoke-Checked', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -159,20 +165,97 @@ import (
 	"strings"
 )
 
+func hasArg(value string) bool {
+	for _, arg := range os.Args[1:] {
+		if arg == value {
+			return true
+		}
+	}
+	return false
+}
+
+func valueAfter(name string) string {
+	for index := 1; index+1 < len(os.Args); index++ {
+		if os.Args[index] == name {
+			return os.Args[index+1]
+		}
+	}
+	return ""
+}
+
+func copySelf(destination string) {
+	contents, err := os.ReadFile(os.Args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(91)
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(92)
+	}
+	if err := os.WriteFile(destination, contents, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(93)
+	}
+}
+
 func main() {
 	base := filepath.Base(os.Args[0])
 	if strings.EqualFold(base, "git.exe") {
 		fmt.Println("git version 2.50.1.windows.1")
 		return
 	}
+	if strings.EqualFold(base, "nvidia-smi.exe") {
+		if os.Getenv("MAGICHANDY_FAKE_NVIDIA_FAILURE") == "1" {
+			fmt.Fprintln(os.Stderr, "driver communication failed")
+			os.Exit(9)
+		}
+		fmt.Println("MagicHandy test GPU")
+		return
+	}
 	if strings.EqualFold(base, "uv.exe") {
+		if os.Getenv("MAGICHANDY_FAKE_UV_FAIL") == "1" {
+			fmt.Fprintln(os.Stderr, "compatible environments must not invoke uv")
+			os.Exit(97)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "--version" {
 			fmt.Println("uv 0.11.32")
 			return
 		}
+		if len(os.Args) > 2 && os.Args[1] == "python" && os.Args[2] == "install" {
+			installDir := valueAfter("--install-dir")
+			if installDir == "" || !hasArg("--no-bin") || !hasArg("--no-registry") {
+				fmt.Fprintln(os.Stderr, "managed Python install was not isolated")
+				os.Exit(94)
+			}
+			if !strings.EqualFold(os.Getenv("UV_PYTHON_INSTALL_DIR"), installDir) {
+				fmt.Fprintln(os.Stderr, "managed Python environment did not match install directory")
+				os.Exit(95)
+			}
+			expectedCredentials := filepath.Join(filepath.Dir(installDir), "uv-credentials")
+			if !strings.EqualFold(os.Getenv("UV_CREDENTIALS_DIR"), expectedCredentials) {
+				fmt.Fprintln(os.Stderr, "uv credential storage was not isolated")
+				os.Exit(98)
+			}
+			copySelf(filepath.Join(installDir, "cpython-3.11.15-windows-x86_64-none", "python.exe"))
+			if os.Getenv("MAGICHANDY_FAKE_UV_UNRELATED_FAILURE") == "1" {
+				fmt.Fprintln(os.Stderr, "unrelated package metadata failure")
+				os.Exit(3)
+			}
+			if os.Getenv("MAGICHANDY_FAKE_UV_JUNCTION_FAILURE") == "1" {
+				fmt.Fprintln(os.Stderr, "Failed to create Python minor version link directory")
+				fmt.Fprintln(os.Stderr, "Caused by: The path cannot be traversed because it contains an untrusted mount point. (os error 448)")
+				os.Exit(2)
+			}
+			return
+		}
 		if len(os.Args) > 1 && os.Args[1] == "venv" {
-			fmt.Fprintln(os.Stderr, "compatible environments must not be recreated")
-			os.Exit(97)
+			if !hasArg("--no-python-downloads") || len(os.Args) < 2 {
+				fmt.Fprintln(os.Stderr, "venv did not use the exact managed interpreter")
+				os.Exit(96)
+			}
+			copySelf(filepath.Join(os.Args[len(os.Args)-1], "Scripts", "python.exe"))
+			return
 		}
 		return
 	}
@@ -223,23 +306,88 @@ func main() {
         $env:Path = ''
         $resolvedGit = Initialize-TTSGit -Git $fakeGit
         Assert-Equal -Expected $fakeGit -Actual $resolvedGit -Message 'TTS install should retain the verified absolute Git path'
-        Assert-Equal -Expected $fakeGitDirectory -Actual $env:Path -Message 'TTS install should expose Git to uv child processes'
+        $firstPathEntry = @($env:Path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })[0]
+        Assert-Equal -Expected $fakeGitDirectory -Actual $firstPathEntry -Message 'TTS install should put verified Git first for uv child processes'
     } finally {
         $env:Path = $savedGitPath
     }
 
-    $reuseRoot = Join-Path $tempRoot 'tts-reuse'
-    $reuseScripts = Join-Path $reuseRoot '.venv\Scripts'
-    New-Item -ItemType Directory -Force -Path $reuseScripts | Out-Null
-    $fakeUv = Join-Path $tempRoot 'uv.exe'
-    $fakePython = Join-Path $reuseScripts 'python.exe'
-    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeUv
-    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakePython
-    $reusedEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $reuseRoot -PythonVersion '3.11'
-    Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
-    Assert-Equal -Expected 'Python 3.11.15' -Actual ([string]$reusedEnvironment.Version) -Message 'compatible TTS Python version should be retained'
-    Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
-    Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda
+    $fakeNvidia = Join-Path $tempRoot 'nvidia-smi.exe'
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeNvidia
+    $savedNvidiaPath = $env:Path
+    $savedFakeNvidiaFailure = $env:MAGICHANDY_FAKE_NVIDIA_FAILURE
+    try {
+        $env:Path = "$tempRoot;$env:Path"
+        Assert-Equal -Expected 'MagicHandy test GPU' -Actual (Get-TTSNvidiaGPUName) -Message 'Faster Qwen should accept a runnable NVIDIA driver probe'
+        $env:MAGICHANDY_FAKE_NVIDIA_FAILURE = '1'
+        Assert-Throws -Action { Get-TTSNvidiaGPUName | Out-Null } -Pattern 'NVIDIA driver probe failed' -Message 'Faster Qwen should reject an unusable NVIDIA driver before dependency downloads'
+    } finally {
+        $env:Path = $savedNvidiaPath
+        $env:MAGICHANDY_FAKE_NVIDIA_FAILURE = $savedFakeNvidiaFailure
+    }
+
+    $savedUvPythonInstallDir = $env:UV_PYTHON_INSTALL_DIR
+    $savedUvPythonInstallBin = $env:UV_PYTHON_INSTALL_BIN
+    $savedUvPythonInstallRegistry = $env:UV_PYTHON_INSTALL_REGISTRY
+    $savedUvCacheDir = $env:UV_CACHE_DIR
+    $savedUvCredentialsDir = $env:UV_CREDENTIALS_DIR
+    $savedFakeUvFailure = $env:MAGICHANDY_FAKE_UV_FAIL
+    $savedFakeUvJunctionFailure = $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE
+    $savedFakeUvUnrelatedFailure = $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE
+    try {
+        $reuseRoot = Join-Path $tempRoot 'tts-reuse'
+        $reuseScripts = Join-Path $reuseRoot '.venv\Scripts'
+        New-Item -ItemType Directory -Force -Path $reuseScripts | Out-Null
+        $fakeUv = Join-Path $tempRoot 'uv.exe'
+        $fakePython = Join-Path $reuseScripts 'python.exe'
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeUv
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakePython
+        $env:MAGICHANDY_FAKE_UV_FAIL = '1'
+        $reusedEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $reuseRoot -PythonVersion '3.11'
+        Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
+        Assert-Equal -Expected 'Python 3.11.15' -Actual ([string]$reusedEnvironment.Version) -Message 'compatible TTS Python version should be retained'
+        Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
+        Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda
+
+        $env:MAGICHANDY_FAKE_UV_FAIL = $null
+        $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = '1'
+        $fallbackRoot = Join-Path $tempRoot 'tts-junction-fallback'
+        $staleEnvironment = Join-Path $fallbackRoot '.venv'
+        New-Item -ItemType Directory -Force -Path $staleEnvironment | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $staleEnvironment 'partial.txt'), 'interrupted venv')
+        $fallbackEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $fallbackRoot -PythonVersion '3.11'
+        $expectedManagedRoot = Join-Path $fallbackRoot 'managed-python'
+        $expectedFallbackPython = Join-Path $fallbackRoot '.venv\Scripts\python.exe'
+        Assert-Equal -Expected $expectedFallbackPython -Actual ([string]$fallbackEnvironment.Python) -Message 'junction failure should still create the app-owned venv'
+        Assert-True -Condition (Test-Path -LiteralPath $expectedFallbackPython -PathType Leaf) -Message 'junction fallback should produce a runnable Python launcher'
+        Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $staleEnvironment 'partial.txt'))) -Message 'junction fallback should replace an interrupted venv'
+        Assert-Equal -Expected $expectedManagedRoot -Actual $env:UV_PYTHON_INSTALL_DIR -Message 'managed Python should stay inside the TTS module'
+        Assert-Equal -Expected (Join-Path $fallbackRoot 'uv-cache') -Actual $env:UV_CACHE_DIR -Message 'uv cache should stay inside the TTS module'
+        Assert-Equal -Expected (Join-Path $fallbackRoot 'uv-credentials') -Actual $env:UV_CREDENTIALS_DIR -Message 'uv credentials should stay inside the TTS module'
+        Assert-Equal -Expected '0' -Actual $env:UV_PYTHON_INSTALL_BIN -Message 'managed Python should not create global executable links'
+        Assert-Equal -Expected '0' -Actual $env:UV_PYTHON_INSTALL_REGISTRY -Message 'managed Python should not create registry entries'
+
+        $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = $null
+        $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE = '1'
+        $unrelatedRoot = Join-Path $tempRoot 'tts-unrelated-uv-failure'
+        $unrelatedFailureRejected = $false
+        try {
+            Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $unrelatedRoot -PythonVersion '3.11' | Out-Null
+        } catch {
+            $unrelatedFailureRejected = $_.Exception.Message -match 'refusing to mask an unrelated uv failure'
+        }
+        Assert-True -Condition $unrelatedFailureRejected -Message 'a non-junction uv failure after extraction must remain fatal'
+        Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $unrelatedRoot '.venv'))) -Message 'an unrelated uv failure must not proceed to venv creation'
+    } finally {
+        $env:UV_PYTHON_INSTALL_DIR = $savedUvPythonInstallDir
+        $env:UV_PYTHON_INSTALL_BIN = $savedUvPythonInstallBin
+        $env:UV_PYTHON_INSTALL_REGISTRY = $savedUvPythonInstallRegistry
+        $env:UV_CACHE_DIR = $savedUvCacheDir
+        $env:UV_CREDENTIALS_DIR = $savedUvCredentialsDir
+        $env:MAGICHANDY_FAKE_UV_FAIL = $savedFakeUvFailure
+        $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = $savedFakeUvJunctionFailure
+        $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE = $savedFakeUvUnrelatedFailure
+    }
 
     foreach ($constraintsFile in @('faster-qwen-constraints.txt', 'chatterbox-constraints.txt')) {
         Assert-True `

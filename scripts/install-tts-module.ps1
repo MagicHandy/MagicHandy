@@ -178,6 +178,75 @@ function Initialize-TTSGit {
     return $resolved
 }
 
+function Get-TTSNvidiaGPUName {
+    $nvidia = Get-Command 'nvidia-smi.exe' -ErrorAction SilentlyContinue
+    if (-not $nvidia -or [string]::IsNullOrWhiteSpace([string]$nvidia.Source)) {
+        throw 'Faster Qwen3-TTS requires a working NVIDIA driver, but nvidia-smi.exe was not found.'
+    }
+
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $gpuNames = @(& $nvidia.Source --query-gpu=name --format=csv,noheader 2>&1)
+        $exitCode = $LASTEXITCODE
+    } catch {
+        throw "The NVIDIA driver probe could not start. Repair the NVIDIA driver before installing Faster Qwen3-TTS: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    $reported = @($gpuNames | ForEach-Object { [string]$_ }) -join '; '
+    $usableNames = @($gpuNames | ForEach-Object { [string]$_ } | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '(?i)no devices were found'
+    })
+    if ($exitCode -ne 0 -or $usableNames.Count -eq 0) {
+        throw "The NVIDIA driver probe failed (exit $exitCode; reported '$reported'). Repair the driver before installing Faster Qwen3-TTS."
+    }
+    return $usableNames -join ', '
+}
+
+function Find-TTSManagedPython {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstallDirectory,
+        [Parameter(Mandatory = $true)][string]$PythonVersion
+    )
+
+    if (-not (Test-Path -LiteralPath $InstallDirectory -PathType Container)) {
+        return $null
+    }
+
+    $requested = [Version]"$PythonVersion.0"
+    $candidates = foreach ($directory in (Get-ChildItem -LiteralPath $InstallDirectory -Directory -ErrorAction SilentlyContinue)) {
+        if ($directory.Name -notmatch '^cpython-(?<version>\d+\.\d+\.\d+)-windows-x86_64-none$') {
+            continue
+        }
+        $candidateVersion = [Version]$Matches.version
+        if ($candidateVersion.Major -ne $requested.Major -or $candidateVersion.Minor -ne $requested.Minor) {
+            continue
+        }
+        $candidate = Join-Path $directory.FullName 'python.exe'
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            continue
+        }
+        try {
+            $reported = @(& $candidate --version 2>&1) -join ' '
+            if ($LASTEXITCODE -eq 0 -and $reported -match "^Python $([regex]::Escape($PythonVersion))\.") {
+                [pscustomobject]@{
+                    Path = [System.IO.Path]::GetFullPath($candidate)
+                    Version = $candidateVersion
+                }
+            }
+        } catch {
+            Write-Verbose "Ignoring unusable managed Python candidate '$candidate': $($_.Exception.Message)"
+        }
+    }
+
+    $selected = $candidates | Sort-Object Version -Descending | Select-Object -First 1
+    if ($null -eq $selected) {
+        return $null
+    }
+    return [string]$selected.Path
+}
+
 function Initialize-TTSPythonEnvironment {
     param(
         [Parameter(Mandatory = $true)][string]$Uv,
@@ -185,11 +254,25 @@ function Initialize-TTSPythonEnvironment {
         [Parameter(Mandatory = $true)][string]$PythonVersion
     )
 
-    Invoke-Checked -Executable $Uv -Arguments @('python', 'install', $PythonVersion) -Description "Python $PythonVersion installation"
-
     $venv = Join-Path $Root '.venv'
     $python = Join-Path $venv 'Scripts\python.exe'
+    $managedPythonRoot = Join-Path $Root 'managed-python'
+    $uvCacheRoot = Join-Path $Root 'uv-cache'
+    $uvCredentialsRoot = Join-Path $Root 'uv-credentials'
     Assert-MagicHandyChildPath -Root $Root -Candidate $venv
+    Assert-MagicHandyChildPath -Root $Root -Candidate $managedPythonRoot
+    Assert-MagicHandyChildPath -Root $Root -Candidate $uvCacheRoot
+    Assert-MagicHandyChildPath -Root $Root -Candidate $uvCredentialsRoot
+
+    # Keep uv's runtime, cache, and credential lock files inside the TTS module.
+    # The process-scoped settings also prevent later dependency commands from
+    # touching uv's global profile directories during this installer run.
+    $env:UV_PYTHON_INSTALL_DIR = $managedPythonRoot
+    $env:UV_PYTHON_INSTALL_BIN = '0'
+    $env:UV_PYTHON_INSTALL_REGISTRY = '0'
+    $env:UV_CACHE_DIR = $uvCacheRoot
+    $env:UV_CREDENTIALS_DIR = $uvCredentialsRoot
+
     if (Test-Path -LiteralPath $python -PathType Leaf) {
         $reportedVersion = @(& $python --version 2>&1) -join ' '
         if ($LASTEXITCODE -eq 0 -and $reportedVersion -match "^Python $([regex]::Escape($PythonVersion))\.") {
@@ -202,9 +285,45 @@ function Initialize-TTSPythonEnvironment {
         }
         Write-Warning "Replacing the module environment because it does not use required Python $PythonVersion."
         Remove-Item -LiteralPath $venv -Recurse -Force
+    } elseif (Test-Path -LiteralPath $venv) {
+        Write-Warning 'Replacing an incomplete managed Python environment from an interrupted setup.'
+        Remove-Item -LiteralPath $venv -Recurse -Force
     }
 
-    Invoke-Checked -Executable $Uv -Arguments @('venv', '--python', $PythonVersion, '--allow-existing', $venv) -Description 'Python environment creation'
+    $managedPython = Find-TTSManagedPython -InstallDirectory $managedPythonRoot -PythonVersion $PythonVersion
+    if ([string]::IsNullOrWhiteSpace($managedPython)) {
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $installOutput = @(& $Uv python install --install-dir $managedPythonRoot --no-bin --no-registry $PythonVersion 2>&1)
+            $installExit = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        $installOutput | ForEach-Object { Write-Host $_ }
+        $installText = @($installOutput | ForEach-Object { [string]$_ }) -join "`n"
+        $managedPython = Find-TTSManagedPython -InstallDirectory $managedPythonRoot -PythonVersion $PythonVersion
+        if ([string]::IsNullOrWhiteSpace($managedPython)) {
+            throw "Python $PythonVersion installation did not produce a runnable patch-specific interpreter (uv exit $installExit)."
+        }
+        if ($installExit -ne 0) {
+            $isJunctionOnlyFailure =
+                $installText -match '(?i)Failed to create Python minor version link directory' -and
+                $installText -match '(?i)untrusted mount point|os error 448'
+            if (-not $isJunctionOnlyFailure) {
+                throw "Python $PythonVersion installation failed after extraction (uv exit $installExit); refusing to mask an unrelated uv failure."
+            }
+            Write-Warning 'uv installed a usable app-owned Python but Windows refused its optional minor-version junction; continuing with the patch-specific interpreter.'
+        }
+    } else {
+        Write-Host "Reusing app-owned managed Python at '$managedPython'."
+    }
+
+    Assert-MagicHandyChildPath -Root $managedPythonRoot -Candidate $managedPython
+    Invoke-Checked `
+        -Executable $Uv `
+        -Arguments @('venv', '--python', $managedPython, '--no-python-downloads', '--allow-existing', $venv) `
+        -Description 'Python environment creation'
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
         throw "The isolated Python executable was not created at '$python'."
     }
@@ -626,6 +745,11 @@ if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
     if (-not (Test-Path -LiteralPath $ReferenceWav -PathType Leaf) -or [System.IO.Path]::GetExtension($ReferenceWav) -ne '.wav') {
         throw "Reference WAV is unavailable or is not a .wav file: '$ReferenceWav'."
     }
+}
+
+if ($Module -eq 'faster-qwen3-tts') {
+    $gpuName = Get-TTSNvidiaGPUName
+    Write-Host "NVIDIA runtime: $gpuName" -ForegroundColor Green
 }
 
 Confirm-TTSAction 'Proceed with the optional TTS module download and installation?'
