@@ -26,13 +26,19 @@ Choose a managed module in `install.ps1`, or run
 1. displays the selected project's license, model, hardware target, source
    revision, download implications, and install root;
 2. repairs WinGet through Microsoft's supported path when needed, then installs
-   `uv` after consent;
+   Git and `uv` after consent; every discovered executable must pass a version
+   probe, and an unusable WinGet alias is bypassed through the real package
+   binary;
 3. installs a managed Python runtime and creates a private virtual environment
    below the MagicHandy data directory;
-4. installs a pinned upstream revision and dependencies;
-5. downloads the chosen model only after consent;
-6. configures the server for `127.0.0.1`, not all interfaces; and
-7. calls the MagicHandy settings command so the provider, paths, port, and
+4. installs a pinned upstream revision with app-owned constraints for the
+   dependency versions that are sensitive to the selected runtime;
+5. verifies generated launchers, package compatibility where upstream metadata
+   is reliable, native Python imports, and CUDA access before downloading the
+   model;
+6. downloads the chosen model only after consent;
+7. configures the server for `127.0.0.1`, not all interfaces; and
+8. calls the MagicHandy settings command so the provider, paths, port, and
    auto-launch choice are persisted in SQLite. Faster Qwen reference fields
    remain empty until the user completes them in Settings > Voice.
 
@@ -41,6 +47,13 @@ uses managed Python 3.11. The pinned Chatterbox dependency set uses Python 3.10
 because its supported Windows Torch, torchvision, and ONNX packages are
 available as wheels there; this avoids an accidental native build on a clean
 machine.
+
+The managed services request and return WAV audio. FFmpeg is therefore not a
+runtime dependency. `qwen-tts` can print a SoX warning while it registers its
+older 25 Hz tokenizer, but MagicHandy's pinned Qwen model uses the separate 12
+Hz tokenizer and does not use native SoX for audio processing. The package's
+import-time availability check may still attempt `sox -h`; that warning does
+not mean setup omitted a required component.
 
 Model downloads do not require Windows symlink privileges. The installer uses
 one Hugging Face file-finalization worker on Windows to avoid a first-use
@@ -70,6 +83,9 @@ cleans the checkout or ignores arbitrary files, so tracked edits and unrelated
 untracked files remain a hard stop. New clones use a sibling staging directory,
 and retries complete the empty no-checkout worktree produced by older installers
 without misclassifying Git's deleted-file report as a user modification.
+The verified Git directory is also added to the installer process PATH so
+`uv` can resolve pinned `git+https` dependencies even when Git was discovered
+through an absolute fallback path.
 
 When the main installer invokes a TTS module script, it uses a child Windows
 PowerShell process. This keeps the module script's support-module reload and
@@ -167,6 +183,15 @@ requirements on RTX 20/30/40-series GPUs and CUDA 12.8 on compute-capability
 12.x hardware such as the RTX 50 series. Explicit CUDA selection fails early
 when NVIDIA driver tools are unavailable; `-Device cpu` remains the portable
 fallback.
+
+Chatterbox's pinned engine and server intentionally disagree on one legacy
+metadata bound: `descript-audiotools` declares `protobuf<3.20`, while ONNX 1.16
+requires a newer protobuf and the server maintainers validate that newer
+runtime. MagicHandy mirrors the pinned server's repair with protobuf 4.25.8,
+then imports the original and Turbo engine paths, ONNX, audio libraries, and
+the selected PyTorch backend before any model download. It does not run a
+metadata-wide `pip check` for that provider because the known obsolete bound
+would reject the supported runtime; Faster Qwen retains the strict check.
 
 ## OpenAI-Compatible Contract
 

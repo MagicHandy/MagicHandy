@@ -1,0 +1,15 @@
+# Versions validated together on Windows amd64 with managed Python 3.11 and
+# the CUDA 12.8 PyTorch wheel index. Keep the upstream source revision in
+# install-tts-module.ps1 and these API-sensitive dependencies in sync.
+qwen-tts==0.1.1
+transformers==4.57.3
+torch==2.11.0
+torchaudio==2.11.0
+numpy==2.4.6
+soundfile==0.14.0
+huggingface-hub==0.36.2
+fastapi==0.141.1
+uvicorn==0.52.0
+python-multipart==0.0.32
+onnxruntime==1.28.0
+sox==1.5.0

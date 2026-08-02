@@ -70,18 +70,68 @@ function Confirm-TTSAction {
     }
 }
 
-function Resolve-Uv {
-    $command = Get-Command 'uv.exe' -ErrorAction SilentlyContinue
-    if ($command) {
-        return [string]$command.Source
+function Test-UvExecutable {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $false
     }
-    foreach ($candidate in @(
+    try {
+        $reported = @(& $Path --version 2>&1) -join ' '
+        return $LASTEXITCODE -eq 0 -and $reported -match '^uv\s+\d+\.\d+'
+    } catch {
+        Write-Verbose "Ignoring unusable uv candidate '$Path': $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Resolve-Uv {
+    [CmdletBinding()]
+    param([scriptblock]$Probe)
+
+    if ($null -eq $Probe) {
+        $Probe = { param([string]$Candidate) Test-UvExecutable -Path $Candidate }
+    }
+
+    $candidates = @()
+    $command = Get-Command 'uv.exe' -ErrorAction SilentlyContinue
+    if ($command -and -not [string]::IsNullOrWhiteSpace([string]$command.Source)) {
+        $candidates += [string]$command.Source
+    }
+    $candidates += @(
         (Join-Path $env:USERPROFILE '.local\bin\uv.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\uv\uv.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\uv.exe')
+        (Join-Path $env:LOCALAPPDATA 'Programs\uv\uv.exe')
+    )
+
+    # WinGet portable links can be visible before Windows can execute them in
+    # the current logon session. Prefer the real package binary when present.
+    foreach ($packageRoot in @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'),
+        (Join-Path $env:ProgramFiles 'WinGet\Packages')
     )) {
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-            return $candidate
+        if (-not (Test-Path -LiteralPath $packageRoot -PathType Container)) {
+            continue
+        }
+        $packageDirectories = @(
+            Get-ChildItem -LiteralPath $packageRoot -Directory -Filter 'astral-sh.uv_*' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTimeUtc -Descending
+        )
+        foreach ($packageDirectory in $packageDirectories) {
+            $candidates += @(
+                Get-ChildItem -LiteralPath $packageDirectory.FullName -File -Filter 'uv.exe' -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -ExpandProperty FullName
+            )
+        }
+    }
+
+    $candidates += @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\uv.exe'),
+        (Join-Path $env:ProgramFiles 'WinGet\Links\uv.exe')
+    )
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$candidate) -and (& $Probe ([string]$candidate))) {
+            return [System.IO.Path]::GetFullPath([string]$candidate)
         }
     }
     return $null
@@ -94,11 +144,38 @@ function Ensure-Uv {
     }
     Confirm-TTSAction 'uv is required to create an isolated Python environment. Install uv with WinGet?'
     Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv' -AssumeYes:$Yes
-    $uv = Resolve-Uv
+    for ($attempt = 0; $attempt -lt 10 -and -not $uv; $attempt++) {
+        $uv = Resolve-Uv
+        if (-not $uv) {
+            Start-Sleep -Milliseconds 250
+        }
+    }
     if (-not $uv) {
-        throw 'uv was installed but is not visible yet. Restart PowerShell and rerun this script.'
+        throw 'uv was installed, but no runnable uv.exe could be found. Repair astral-sh.uv in WinGet and retry setup.'
     }
     return $uv
+}
+
+function Initialize-TTSGit {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Git)
+
+    try {
+        $reported = @(& $Git --version 2>&1) -join ' '
+    } catch {
+        throw "Git was found at '$Git' but could not run. Repair Git for Windows and retry setup: $($_.Exception.Message)"
+    }
+    if ($LASTEXITCODE -ne 0 -or $reported -notmatch '^git version\s+\d+') {
+        throw "Git was found at '$Git' but failed its version probe (reported '$reported'). Repair Git for Windows and retry setup."
+    }
+
+    $resolved = [System.IO.Path]::GetFullPath($Git)
+    $directory = Split-Path -Parent $resolved
+    $pathEntries = @($env:Path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if (-not [bool]($pathEntries | Where-Object { $_.TrimEnd('\') -eq $directory.TrimEnd('\') })) {
+        $env:Path = if ([string]::IsNullOrWhiteSpace($env:Path)) { $directory } else { "$directory;$env:Path" }
+    }
+    return $resolved
 }
 
 function Initialize-TTSPythonEnvironment {
@@ -140,6 +217,51 @@ function Initialize-TTSPythonEnvironment {
         Python = $python
         Version = $verifiedVersion
     }
+}
+
+function Test-TTSPythonRuntime {
+    param(
+        [Parameter(Mandatory = $true)][string]$Python,
+        [Parameter(Mandatory = $true)][string]$Module,
+        [Parameter(Mandatory = $true)][string]$RuntimeDevice
+    )
+
+    $probe = @'
+import importlib
+import sys
+
+module_name, device = sys.argv[1:3]
+required = ["torch", "numpy", "soundfile", "fastapi", "uvicorn", "huggingface_hub"]
+if module_name == "faster-qwen3-tts":
+    required.extend(["faster_qwen3_tts", "qwen_tts"])
+else:
+    required.extend([
+        "chatterbox.tts",
+        "chatterbox.tts_turbo",
+        "s3tokenizer",
+        "onnx",
+        "google.protobuf",
+        "librosa",
+        "torchaudio",
+        "perth",
+        "pyloudnorm",
+    ])
+for dependency in required:
+    importlib.import_module(dependency)
+
+import torch
+if device == "cuda" and not torch.cuda.is_available():
+    raise RuntimeError(
+        "the installed PyTorch CUDA runtime cannot use this NVIDIA driver; "
+        "update the driver or choose a CPU-capable voice module"
+    )
+backend = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+print(f"Verified Python voice runtime ({backend}).")
+'@
+    Invoke-Checked `
+        -Executable $Python `
+        -Arguments @('-c', $probe, $Module, $RuntimeDevice) `
+        -Description 'Python voice runtime verification'
 }
 
 function Get-ChatterboxRequirements {
@@ -507,7 +629,7 @@ if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
 }
 
 Confirm-TTSAction 'Proceed with the optional TTS module download and installation?'
-$git = InstallerSupport\Ensure-MagicHandyGit -AssumeYes:$Yes
+$git = Initialize-TTSGit -Git (InstallerSupport\Ensure-MagicHandyGit -AssumeYes:$Yes)
 $uv = Ensure-Uv
 $sourceRoot = Join-Path $InstallRoot 'source'
 $installerGeneratedPaths = if ($Module -eq 'faster-qwen3-tts') {
@@ -528,16 +650,31 @@ $venv = [string]$pythonEnvironment.Root
 $python = [string]$pythonEnvironment.Python
 
 if ($Module -eq 'faster-qwen3-tts') {
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--torch-backend', 'cu128', '--editable', "$sourceRoot[demo]") -Description 'Faster Qwen3-TTS dependency installation'
+    $constraints = Join-Path $PSScriptRoot 'tts\faster-qwen-constraints.txt'
+    if (-not (Test-Path -LiteralPath $constraints -PathType Leaf)) {
+        throw "The Faster Qwen3-TTS dependency constraints are unavailable: '$constraints'."
+    }
+    Invoke-Checked `
+        -Executable $uv `
+        -Arguments @('pip', 'install', '--python', $python, '--torch-backend', 'cu128', '--constraint', $constraints, '--editable', "$sourceRoot[demo]") `
+        -Description 'Faster Qwen3-TTS dependency installation'
 } else {
     $requirements = Get-ChatterboxRequirements -RuntimeDevice $Device
     $requirementsPath = Join-Path $sourceRoot $requirements
     if (-not (Test-Path -LiteralPath $requirementsPath -PathType Leaf)) {
         throw "The pinned Chatterbox dependency set is unavailable: '$requirementsPath'."
     }
+    $constraints = Join-Path $PSScriptRoot 'tts\chatterbox-constraints.txt'
+    if (-not (Test-Path -LiteralPath $constraints -PathType Leaf)) {
+        throw "The Chatterbox dependency constraints are unavailable: '$constraints'."
+    }
     Write-Host "Chatterbox dependency set: $requirements"
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '-r', $requirementsPath) -Description 'Chatterbox dependency installation'
+    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--constraint', $constraints, '-r', $requirementsPath) -Description 'Chatterbox dependency installation'
     Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--no-deps', $chatterboxEngine, 's3tokenizer==0.3.0', 'onnx==1.16.0') -Description 'Pinned Chatterbox engine installation'
+    # The pinned server intentionally overrides descript-audiotools' obsolete
+    # protobuf metadata bound; ONNX 1.16 requires a newer runtime and the
+    # Chatterbox maintainers validate that combination at runtime.
+    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--no-deps', 'protobuf==4.25.8') -Description 'Chatterbox ONNX protobuf compatibility installation'
 }
 
 $hf = Join-Path $venv 'Scripts\hf.exe'
@@ -547,6 +684,13 @@ if (-not (Test-Path -LiteralPath $hf -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $hf -PathType Leaf)) {
     throw "The Hugging Face client was not installed at '$hf'."
 }
+if ($Module -eq 'faster-qwen3-tts') {
+    Invoke-Checked -Executable $uv -Arguments @('pip', 'check', '--python', $python) -Description 'Python dependency compatibility check'
+} else {
+    Write-Host 'Validating Chatterbox through its runtime imports; its pinned ONNX protobuf override intentionally conflicts with obsolete package metadata.'
+}
+Invoke-Checked -Executable $hf -Arguments @('version') -Description 'Hugging Face client verification'
+Test-TTSPythonRuntime -Python $python -Module $Module -RuntimeDevice $Device
 $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/chatterbox-turbo' }
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
 Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache

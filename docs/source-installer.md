@@ -81,13 +81,10 @@ non-interactive provisioning path. Flags are not required for normal use.
 | Selection | Package or tool | Purpose |
 | --- | --- | --- |
 | Always | `GoLang.Go` | Build the pure-Go app and worker adapters |
-| Managed llama.cpp | Git | Fetch the pinned llama.cpp revision |
-| Managed llama.cpp (CPU) | Existing or provisioned MSYS2 UCRT64 GCC, CMake, and Ninja; Visual Studio fallback | Compile the Windows runtime |
-| Managed llama.cpp (CUDA) | `Kitware.CMake`, Visual Studio Build Tools, Desktop C++ workload, Windows SDK | Compile the accelerated Windows runtime |
-| Managed llama.cpp with CUDA | `Nvidia.CUDA` | Build NVIDIA acceleration |
+| Managed llama.cpp | checksum-pinned official Windows archive | Install the verified CPU or CUDA runtime without a compiler |
 | Unattended `-SkipLlamaBuild` path | `Ollama.Ollama` | Install the external local-model daemon when explicitly requested by flags |
 | Parakeet | pinned runner archive and GGUF model | Optional managed ASR |
-| Managed local TTS | `astral-sh.uv`, managed Python 3.10 or 3.11, pinned Python packages and model | Optional isolated local speech |
+| Managed local TTS | Git, `astral-sh.uv`, managed Python 3.10 or 3.11, constrained Python packages and model | Optional isolated local speech |
 
 Package agreements and large downloads are shown before installation.
 `-Yes` is the unattended form of that consent. Every installed dependency is
@@ -120,6 +117,16 @@ downloads PyTorch and the model. No preinstalled Python or compiler is
 required. Faster Qwen uses Python 3.11; pinned Chatterbox uses Python 3.10 so
 Windows receives prebuilt Torch, torchvision, and ONNX wheels rather than
 attempting native builds.
+
+The module installer probes Git and `uv` before use, bypasses an unusable
+WinGet portable alias through the real package binary, and exposes Git to
+`uv` child processes. App-owned dependency constraints keep the API-sensitive
+Qwen and Chatterbox versions repeatable. Before downloading a model, setup
+checks the generated Hugging Face launcher, imports the provider's actual
+Python/audio/native runtime surface, and verifies CUDA through PyTorch when
+selected. Chatterbox also applies its pinned server's ONNX/protobuf
+compatibility override. Native SoX and FFmpeg are not needed for the managed
+12 Hz Qwen and WAV-only Chatterbox paths.
 
 The same flow remains directly callable after MagicHandy is built:
 
@@ -320,5 +327,8 @@ in-memory settings snapshot cannot overwrite the correction.
 - unsafe dirty-tree/update-state failures.
 
 Release acceptance still requires a clean Windows VM run because a plan test
-cannot prove WinGet repair, Visual Studio workload installation, CUDA driver
-compatibility, model download reliability, or local TTS listening quality.
+cannot prove WinGet repair, third-party package availability, CUDA driver
+compatibility, multi-gigabyte model download reliability, or local TTS
+listening quality. The release workflow separately exercises the exact Windows
+payload, Program Files and custom installs, over-install, uninstall, and clean
+reinstall.
