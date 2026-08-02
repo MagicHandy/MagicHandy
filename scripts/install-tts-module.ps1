@@ -279,6 +279,7 @@ function Sync-PinnedSource {
         [Parameter(Mandatory = $true)][string]$Destination,
         [string[]]$InstallerGeneratedPaths = @()
     )
+    $freshClone = $false
     if (Test-Path -LiteralPath $Destination) {
         if (-not (Test-Path -LiteralPath (Join-Path $Destination '.git') -PathType Container)) {
             throw "The module source path exists but is not a Git checkout: '$Destination'."
@@ -286,18 +287,49 @@ function Sync-PinnedSource {
     } else {
         $parent = Split-Path -Parent $Destination
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
-        Invoke-Checked -Executable $Git -Arguments @('clone', '--filter=blob:none', '--no-checkout', $URL, $Destination) -Description 'Source clone'
+        $cloneStage = "$Destination.partial-$PID-$([Guid]::NewGuid().ToString('N'))"
+        try {
+            Invoke-Checked -Executable $Git -Arguments @('clone', '--filter=blob:none', '--no-checkout', $URL, $cloneStage) -Description 'Source clone'
+            if (Test-Path -LiteralPath $Destination) {
+                throw "The module source path appeared while cloning: '$Destination'. Retry after the other installation finishes."
+            }
+            Move-Item -LiteralPath $cloneStage -Destination $Destination
+            $freshClone = $true
+        } finally {
+            if (Test-Path -LiteralPath $cloneStage) {
+                Remove-Item -LiteralPath $cloneStage -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
+
+    $origin = (& $Git -C $Destination remote get-url origin 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or
+        -not [string]::Equals($origin.TrimEnd('/'), $URL.TrimEnd('/'), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "The managed module source remote is not the pinned repository. Preserve or remove '$Destination' before updating."
+    }
+
     InstallerSupport\Add-MagicHandyGitInfoExclusions -RepositoryPath $Destination -RelativePaths $InstallerGeneratedPaths
     $dirty = @(& $Git -C $Destination status --porcelain)
-    if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "The managed module source could not be inspected: '$Destination'."
+    }
+    $worktreeEntries = @(Get-ChildItem -LiteralPath $Destination -Force | Where-Object { $_.Name -ne '.git' })
+    $recoverIncompleteCheckout = $freshClone -or $worktreeEntries.Count -eq 0
+    if ($dirty.Count -gt 0 -and -not $recoverIncompleteCheckout) {
         throw "The managed module source has local changes. Preserve or remove '$Destination' before updating."
+    }
+    if ($dirty.Count -gt 0 -and -not $freshClone) {
+        Write-Warning "Recovering the incomplete managed source checkout at '$Destination'."
     }
     Invoke-Checked -Executable $Git -Arguments @('-C', $Destination, 'fetch', '--depth', '1', 'origin', $Revision) -Description 'Pinned source fetch'
     Invoke-Checked -Executable $Git -Arguments @('-C', $Destination, 'checkout', '--detach', '--force', 'FETCH_HEAD') -Description 'Pinned source checkout'
     $actual = (& $Git -C $Destination rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $actual -ne $Revision) {
         throw "Pinned source verification failed. Expected $Revision, got '$actual'."
+    }
+    $remainingChanges = @(& $Git -C $Destination status --porcelain)
+    if ($LASTEXITCODE -ne 0 -or $remainingChanges.Count -gt 0) {
+        throw "The pinned module source checkout did not finish cleanly: '$Destination'."
     }
 }
 

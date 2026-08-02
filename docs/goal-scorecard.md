@@ -60,7 +60,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.2` publishes one manifest-verified payload and corrects the managed llama.cpp fresh-install path with official checksum-pinned CPU/CUDA bundles. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.3` retains the checksum-pinned llama.cpp bundles and corrects fresh/retried managed TTS source checkout. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -112,9 +112,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,646,533 raw / 788,728 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 781,869 raw / 206,975 gzip bytes; all
-   HTML/CSS/JS is 1,202,297 raw / 351,331 gzip bytes. The Phase 16 setup and
+   browser payload is 1,676,301 raw / 797,485 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 795,608 raw / 210,346 gzip bytes; all
+   HTML/CSS/JS is 1,232,065 raw / 360,088 gzip bytes. The Phase 16 setup and
    update UI add 84,371 raw / 25,014 gzip bytes overall and 43,171 raw / 10,356
    gzip bytes to the English startup path against the preceding snapshot. LLM
    loading controls,
@@ -141,6 +141,24 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-02** - Corrected the managed TTS fresh-install and retry path for
+  `v0.1.0-alpha.3`. A new source clone is staged atomically and its expected
+  no-checkout deleted-file status is no longer mistaken for a user edit. Older
+  empty alpha.2 worktrees recover in place, while populated dirty worktrees,
+  untracked files, and wrong remotes remain protected. Local Git fixtures cover
+  fresh clone, exact alpha.2 residue, clean completion, and tracked-edit
+  preservation. The setup Model Library now fits the routed viewport, keeps its
+  header and action footer fixed, scrolls one bounded body, and separates model
+  selection, GGUF import, and Ollama import into labeled tool regions. A live
+  scan of 16 local Ollama models stayed within a 300 px candidate list with no
+  document-level overflow. This UI pass adds 1,719 raw / 256 level-9 gzip bytes:
+  the complete browser payload is 1,676,301 / 797,485, HTML/CSS/JS is 1,232,065 /
+  360,088, and the English startup path is 795,608 / 210,346. Installer and 382
+  frontend tests, typecheck, build, all non-race Go tests, vet, lint, and the
+  zero-CGo build pass. Local race execution remains unavailable because MSYS2
+  has no MinGW compiler package; CI and the tag workflow retain the race gate.
+  No hardware connection or motion command was used.
 
 - **2026-08-02** - Replaced managed llama.cpp source compilation with official
   `b9966` Windows CPU and CUDA 12.4 archives pinned by exact size and SHA-256.

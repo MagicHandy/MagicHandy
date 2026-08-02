@@ -67,7 +67,9 @@ Retries also reuse a source checkout and managed environment left by a failure
 before `module-state.json` was written. The installer records only its known
 package-metadata directory in the checkout's private Git excludes. It never
 cleans the checkout or ignores arbitrary files, so tracked edits and unrelated
-untracked files remain a hard stop.
+untracked files remain a hard stop. New clones use a sibling staging directory,
+and retries complete the empty no-checkout worktree produced by older installers
+without misclassifying Git's deleted-file report as a user modification.
 
 When the main installer invokes a TTS module script, it uses a child Windows
 PowerShell process. This keeps the module script's support-module reload and

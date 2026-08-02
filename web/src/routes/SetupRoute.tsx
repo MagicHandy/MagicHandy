@@ -468,28 +468,38 @@ function ModelStep({ choice, settings, models, ollamaModels, ggufPath, ggufName,
   mergeImport: (job: LLMModelImport) => void; refreshOllama: () => void;
 }) {
   if (choice === "skip") return <div className="setup-copy"><p>{t("No model will be configured. You can open Settings > Model at any time.")}</p></div>;
-  if (choice === "managed") return <div className="setup-copy">
+  if (choice === "managed") return <div className="setup-copy setup-model-library">
     <p>{t("Managed llama.cpp reads GGUF models copied into MagicHandy's checksummed model store.")}</p>
-    {models?.models.filter((model) => model.state === "ready").length ? <label className="field"><span className="label">{t("Managed model")}</span><select value={settings.model} onChange={(event) => patch({ model: event.target.value })}><option value="">{t("Choose a model")}</option>{models.models.filter((model) => model.state === "ready").map((model) => <option key={model.id} value={model.id}>{model.display_name} · {formatBytes(model.size_bytes)}</option>)}</select></label> : <p className="setup-empty">{t("No managed models have been imported yet.")}</p>}
-    <div className="setup-subsection">
-      <h2>{t("Import a GGUF file")}</h2>
-      <HostPathField label={t("GGUF model file")} value={ggufPath} kind="gguf" disabled={locked} onChange={setGGUFPath} />
-      <label className="field"><span className="label">{t("Display name")}</span><input value={ggufName} disabled={locked} placeholder={t("Optional model name")} onChange={(event) => setGGUFName(event.target.value)} /></label>
-      <button type="button" className="btn btn-secondary" disabled={locked || !ggufPath.trim()} onClick={importGGUF}>{t("Import GGUF")}</button>
-    </div>
-    <div className="setup-divider" />
-    <div className="setup-subsection">
-      <h2>{t("Import from an existing Ollama library")}</h2>
-      <p className="hint-block">{t("Choose the Ollama models folder. MagicHandy scans manifests first and copies only the model you select into its verified managed store.")}</p>
-      <OllamaLibraryImport
-        path={settings.ollama_models_path ?? ""}
-        suggestedPath={models?.suggested_ollama_path}
-        managedModels={models?.models ?? []}
-        locked={locked}
-        onPathChange={(ollama_models_path) => patch({ ollama_models_path })}
-        onImportStarted={mergeImport}
-      />
-    </div>
+    <section className="setup-method" aria-labelledby="setup-managed-model-title">
+      <header className="setup-method-head"><h2 id="setup-managed-model-title">{t("Managed model")}</h2></header>
+      <div className="setup-method-body">
+        {models?.models.filter((model) => model.state === "ready").length ? <label className="field"><span className="visually-hidden">{t("Managed model")}</span><select aria-label={t("Managed model")} value={settings.model} onChange={(event) => patch({ model: event.target.value })}><option value="">{t("Choose a model")}</option>{models.models.filter((model) => model.state === "ready").map((model) => <option key={model.id} value={model.id}>{model.display_name} · {formatBytes(model.size_bytes)}</option>)}</select></label> : <p className="setup-empty">{t("No managed models have been imported yet.")}</p>}
+      </div>
+    </section>
+    <section className="setup-method" aria-labelledby="setup-gguf-import-title">
+      <header className="setup-method-head"><h2 id="setup-gguf-import-title">{t("Import a GGUF file")}</h2></header>
+      <div className="setup-method-body">
+        <HostPathField label={t("GGUF model file")} value={ggufPath} kind="gguf" disabled={locked} onChange={setGGUFPath} />
+        <label className="field"><span className="label">{t("Display name")}</span><input value={ggufName} disabled={locked} placeholder={t("Optional model name")} onChange={(event) => setGGUFName(event.target.value)} /></label>
+        <button type="button" className="btn btn-secondary" disabled={locked || !ggufPath.trim()} onClick={importGGUF}>{t("Import GGUF")}</button>
+      </div>
+    </section>
+    <section className="setup-method" aria-labelledby="setup-ollama-import-title">
+      <header className="setup-method-head">
+        <h2 id="setup-ollama-import-title">{t("Import from an existing Ollama library")}</h2>
+        <p>{t("Choose the Ollama models folder. MagicHandy scans manifests first and copies only the model you select into its verified managed store.")}</p>
+      </header>
+      <div className="setup-method-body">
+        <OllamaLibraryImport
+          path={settings.ollama_models_path ?? ""}
+          suggestedPath={models?.suggested_ollama_path}
+          managedModels={models?.models ?? []}
+          locked={locked}
+          onPathChange={(ollama_models_path) => patch({ ollama_models_path })}
+          onImportStarted={mergeImport}
+        />
+      </div>
+    </section>
   </div>;
   if (choice === "ollama") return <div className="setup-copy">
     <p>{t("Choose a model exposed by your running Ollama service. Existing Ollama files are not copied for this provider.")}</p>
