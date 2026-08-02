@@ -142,7 +142,7 @@ function Ensure-Uv {
     if ($uv) {
         return $uv
     }
-    Confirm-TTSAction 'uv is required to create an isolated Python environment. Install uv with WinGet?'
+    Confirm-TTSAction 'uv is required to install app-owned Python and voice packages. Install uv with WinGet?'
     Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv' -AssumeYes:$Yes
     for ($attempt = 0; $attempt -lt 10 -and -not $uv; $attempt++) {
         $uv = Resolve-Uv
@@ -204,6 +204,77 @@ function Get-TTSNvidiaGPUName {
     return $usableNames -join ', '
 }
 
+function Get-TTSPythonVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$PythonVersion
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $null
+    }
+
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $reported = @(& $Path --version 2>&1) -join ' '
+        $exitCode = $LASTEXITCODE
+    } catch {
+        Write-Verbose "Ignoring unusable Python candidate '$Path': $($_.Exception.Message)"
+        return $null
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($exitCode -ne 0 -or $reported -notmatch "^Python $([regex]::Escape($PythonVersion))\.") {
+        return $null
+    }
+    return $reported
+}
+
+function Get-TTSVirtualEnvironmentVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$ManagedPythonRoot,
+        [Parameter(Mandatory = $true)][string]$PythonVersion
+    )
+
+    $python = Join-Path $Root 'Scripts\python.exe'
+    $configPath = Join-Path $Root 'pyvenv.cfg'
+    if (-not (Test-Path -LiteralPath $python -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $config = [System.IO.File]::ReadAllText($configPath)
+        $homeMatch = [regex]::Match($config, '(?im)^home\s*=\s*(?<path>[^\r\n]+?)\s*$')
+        if (-not $homeMatch.Success -or
+            $config -notmatch '(?im)^include-system-site-packages\s*=\s*false\s*$') {
+            return $null
+        }
+        $pythonHome = [System.IO.Path]::GetFullPath($homeMatch.Groups['path'].Value.Trim())
+        $managedPrefix = [System.IO.Path]::GetFullPath($ManagedPythonRoot).TrimEnd('\') + '\'
+        if (-not $pythonHome.StartsWith($managedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            return $null
+        }
+        $homeName = Split-Path -Leaf $pythonHome
+        if ($homeName -notmatch "^cpython-$([regex]::Escape($PythonVersion))\.\d+-windows-x86_64-none$") {
+            return $null
+        }
+        $basePython = Join-Path $pythonHome 'python.exe'
+        if ([string]::IsNullOrWhiteSpace((Get-TTSPythonVersion -Path $basePython -PythonVersion $PythonVersion))) {
+            return $null
+        }
+    } catch {
+        Write-Verbose "Ignoring invalid virtual environment configuration '$configPath': $($_.Exception.Message)"
+        return $null
+    }
+
+    return Get-TTSPythonVersion -Path $python -PythonVersion $PythonVersion
+}
+
 function Find-TTSManagedPython {
     param(
         [Parameter(Mandatory = $true)][string]$InstallDirectory,
@@ -227,16 +298,12 @@ function Find-TTSManagedPython {
         if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
             continue
         }
-        try {
-            $reported = @(& $candidate --version 2>&1) -join ' '
-            if ($LASTEXITCODE -eq 0 -and $reported -match "^Python $([regex]::Escape($PythonVersion))\.") {
-                [pscustomobject]@{
-                    Path = [System.IO.Path]::GetFullPath($candidate)
-                    Version = $candidateVersion
-                }
+        $reported = Get-TTSPythonVersion -Path $candidate -PythonVersion $PythonVersion
+        if (-not [string]::IsNullOrWhiteSpace($reported)) {
+            [pscustomobject]@{
+                Path = [System.IO.Path]::GetFullPath($candidate)
+                Version = $candidateVersion
             }
-        } catch {
-            Write-Verbose "Ignoring unusable managed Python candidate '$candidate': $($_.Exception.Message)"
         }
     }
 
@@ -274,8 +341,11 @@ function Initialize-TTSPythonEnvironment {
     $env:UV_CREDENTIALS_DIR = $uvCredentialsRoot
 
     if (Test-Path -LiteralPath $python -PathType Leaf) {
-        $reportedVersion = @(& $python --version 2>&1) -join ' '
-        if ($LASTEXITCODE -eq 0 -and $reportedVersion -match "^Python $([regex]::Escape($PythonVersion))\.") {
+        $reportedVersion = Get-TTSVirtualEnvironmentVersion `
+            -Root $venv `
+            -ManagedPythonRoot $managedPythonRoot `
+            -PythonVersion $PythonVersion
+        if (-not [string]::IsNullOrWhiteSpace($reportedVersion)) {
             Write-Host "Reusing the existing $reportedVersion environment; dependency checks will repair only changed packages."
             return [pscustomobject]@{
                 Root = $venv
@@ -283,7 +353,7 @@ function Initialize-TTSPythonEnvironment {
                 Version = $reportedVersion
             }
         }
-        Write-Warning "Replacing the module environment because it does not use required Python $PythonVersion."
+        Write-Warning "Replacing the module environment because it is not a runnable, app-owned Python $PythonVersion environment with an exact patch home."
         Remove-Item -LiteralPath $venv -Recurse -Force
     } elseif (Test-Path -LiteralPath $venv) {
         Write-Warning 'Replacing an incomplete managed Python environment from an interrupted setup.'
@@ -320,16 +390,24 @@ function Initialize-TTSPythonEnvironment {
     }
 
     Assert-MagicHandyChildPath -Root $managedPythonRoot -Candidate $managedPython
+    # uv's Windows venv launcher records the optional minor-version junction as
+    # its home even when an exact patch interpreter is supplied. On redirected
+    # profiles that junction can be rejected after extraction, leaving a
+    # trampoline that cannot start. CPython's own venv writes the real
+    # patch-specific home and standard Windows launchers instead.
     Invoke-Checked `
-        -Executable $Uv `
-        -Arguments @('venv', '--python', $managedPython, '--no-python-downloads', '--allow-existing', $venv) `
+        -Executable $managedPython `
+        -Arguments @('-m', 'venv', '--without-pip', $venv) `
         -Description 'Python environment creation'
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
         throw "The isolated Python executable was not created at '$python'."
     }
-    $verifiedVersion = @(& $python --version 2>&1) -join ' '
-    if ($LASTEXITCODE -ne 0 -or $verifiedVersion -notmatch "^Python $([regex]::Escape($PythonVersion))\.") {
-        throw "The isolated environment did not resolve required Python $PythonVersion (reported '$verifiedVersion')."
+    $verifiedVersion = Get-TTSVirtualEnvironmentVersion `
+        -Root $venv `
+        -ManagedPythonRoot $managedPythonRoot `
+        -PythonVersion $PythonVersion
+    if ([string]::IsNullOrWhiteSpace($verifiedVersion)) {
+        throw "The isolated environment did not produce a runnable Python $PythonVersion interpreter."
     }
     return [pscustomobject]@{
         Root = $venv
@@ -429,9 +507,18 @@ function Invoke-Checked {
         [Parameter(Mandatory = $true)][string[]]$Arguments,
         [Parameter(Mandatory = $true)][string]$Description
     )
-    & $Executable @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Description failed (exit $LASTEXITCODE)."
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $Executable @Arguments
+        $exitCode = $LASTEXITCODE
+    } catch {
+        throw "$Description could not start '$Executable': $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($exitCode -ne 0) {
+        throw "$Description failed (exit $exitCode)."
     }
 }
 
@@ -466,8 +553,17 @@ function Invoke-HuggingFaceModelDownload {
             )
         }
         for ($attempt = 1; $attempt -le 3; $attempt++) {
-            & $Executable @arguments
-            $exitCode = $LASTEXITCODE
+            $previousPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & $Executable @arguments
+                $exitCode = $LASTEXITCODE
+            } catch {
+                $exitCode = -1
+                Write-Warning "Model download attempt $attempt could not start '$Executable': $($_.Exception.Message)"
+            } finally {
+                $ErrorActionPreference = $previousPreference
+            }
             if ($exitCode -eq 0) {
                 return
             }

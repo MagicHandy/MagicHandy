@@ -130,16 +130,19 @@ compatibility override. Native SoX and FFmpeg are not needed for the managed
 
 Managed Python installations, uv's package cache, and its credential lock files
 are rooted inside the selected TTS module. The installer requests no global
-Python executable links or Windows registry entry, then gives `uv venv` the
-exact validated patch-specific interpreter. uv currently attempts an
+Python executable links or Windows registry entry. uv currently attempts an
 additional minor-version junction inside its install directory even when
 global links are disabled. If Windows profile policy rejects only that junction
-after extraction, setup continues with the runnable patch-specific interpreter;
-missing or invalid Python files remain fatal. Purging MagicHandy's app-data
-directory therefore removes the new managed runtime, cache, and credential
-metadata with the provider. Faster Qwen probes `nvidia-smi.exe` before those
-large dependency downloads instead of trusting that a discovered executable is
-runnable.
+after extraction, setup continues with the runnable patch-specific interpreter.
+That interpreter creates the private environment through the standard-library
+`venv --without-pip` path; uv then installs packages into the resulting exact
+Python. This avoids uv's Windows trampoline recording the rejected minor alias
+as its home. Missing or invalid Python files remain fatal, while a broken or
+still-runnable alpha.5 trampoline is replaced automatically on retry. Purging
+MagicHandy's app-data directory therefore removes the managed runtime, cache,
+and credential metadata with the provider. Faster Qwen probes `nvidia-smi.exe`
+before those large dependency downloads instead of trusting that a discovered
+executable is runnable.
 
 The same flow remains directly callable after MagicHandy is built:
 
@@ -196,8 +199,12 @@ Faster Qwen3-TTS requires an NVIDIA GPU and CUDA. It cannot be selected with
 module, model, voice, language, device, port, auto-launch, and speak-replies
 choices, and asks at runtime whether to change them. Reference settings remain
 owned by the app database and are neither prompted for nor overwritten during
-a module update. The script supports `-PlanOnly` and does not update the main
-repository.
+a module update. Its reuse check starts both the private environment and its
+patch-specific base interpreter; a source install repairs an unhealthy saved
+environment in place with those same choices instead of reporting it as
+reusable. The script supports `-PlanOnly` and does not update the main
+repository. Ordinary core-only app updates still refresh only the managed
+launcher shim and do not re-run multi-gigabyte optional installs.
 
 See `docs/voice-tts-modules.md` for endpoint and process-ownership details.
 

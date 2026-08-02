@@ -1998,9 +1998,19 @@ function Invoke-MagicHandyPowerShellScript {
     if ([string]::IsNullOrWhiteSpace($powershell)) {
         throw 'Windows PowerShell 5.1 is required to run the managed TTS installer.'
     }
-    & $powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Description failed (exit $LASTEXITCODE)."
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $exitCode = -1
+    try {
+        & $powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
+        $exitCode = $LASTEXITCODE
+    } catch {
+        throw "$Description could not start Windows PowerShell: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($exitCode -ne 0) {
+        throw "$Description failed (exit $exitCode)."
     }
 }
 
@@ -2089,10 +2099,19 @@ function Install-MagicHandyTTSModule {
 
     if (Test-Path -LiteralPath $moduleStatePath -PathType Leaf) {
         if (-not $Reconfigure) {
-            Invoke-MagicHandyPowerShellScript `
-                -ScriptPath $updater `
-                -Arguments @('-InstallRoot', $installRoot, '-CheckOnly', '-Yes') `
-                -Description 'Installed TTS module validation'
+            try {
+                Invoke-MagicHandyPowerShellScript `
+                    -ScriptPath $updater `
+                    -Arguments @('-InstallRoot', $installRoot, '-CheckOnly', '-Yes') `
+                    -Description 'Installed TTS module validation'
+            } catch {
+                Write-Warning 'The saved TTS module runtime is incomplete or unhealthy. Repairing it in place with its saved choices.'
+                Invoke-MagicHandyPowerShellScript `
+                    -ScriptPath $updater `
+                    -Arguments @('-InstallRoot', $installRoot, '-Yes') `
+                    -Description 'Installed TTS module repair'
+                return
+            }
             Sync-MagicHandyTTSModuleArtifacts `
                 -State $State `
                 -RepositoryPath $RepositoryPath `
