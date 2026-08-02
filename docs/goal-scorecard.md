@@ -60,7 +60,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.4` retains the checksum-pinned llama.cpp bundles and retry-safe TTS source checkout, then hardens clean-machine voice dependencies with executable probes, packaged constraints, provider-specific runtime imports, and CUDA verification before model download. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.5` retains checksum-pinned runtimes, retry-safe source checkout, constrained voice dependencies, and pre-download runtime verification. Managed Python, uv caches, and uv credential locks are now app-owned, avoid global links/registration, and tolerate Windows rejecting uv's optional minor-version junction after a valid extraction. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -141,6 +141,22 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-02** - Corrected the managed-Python boundary for
+  `v0.1.0-alpha.5` after a fresh Windows profile rejected uv's internal
+  minor-version junction with `ERROR_UNTRUSTED_MOUNT_POINT`. Python and uv's
+  cache now live inside the selected TTS provider, with global executable links
+  and registry registration disabled. Setup locates and version-probes the
+  patch-specific interpreter directly, so a junction-only failure after a
+  complete extraction can continue while incomplete extraction remains fatal.
+  uv credential lock files are app-owned too, avoiding a second restricted
+  `%APPDATA%\uv` boundary, and Faster Qwen now probes the NVIDIA driver before
+  large downloads. Recovery fixtures cover the nonzero uv exit, unrelated-error
+  refusal, interrupted venv replacement, exact interpreter handoff,
+  process-scoped ownership settings, driver probing, and compatible venv reuse.
+  Real isolated Python 3.11 and 3.10 installs, venv creation, and current pinned
+  dependency resolution also passed. No frontend bundle, core behavior,
+  hardware connection, or motion changed.
 
 - **2026-08-02** - Audited every executable and native boundary used by managed
   voice setup for `v0.1.0-alpha.4`. The installer now probes `uv.exe`, bypasses

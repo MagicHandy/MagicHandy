@@ -128,6 +128,19 @@ selected. Chatterbox also applies its pinned server's ONNX/protobuf
 compatibility override. Native SoX and FFmpeg are not needed for the managed
 12 Hz Qwen and WAV-only Chatterbox paths.
 
+Managed Python installations, uv's package cache, and its credential lock files
+are rooted inside the selected TTS module. The installer requests no global
+Python executable links or Windows registry entry, then gives `uv venv` the
+exact validated patch-specific interpreter. uv currently attempts an
+additional minor-version junction inside its install directory even when
+global links are disabled. If Windows profile policy rejects only that junction
+after extraction, setup continues with the runnable patch-specific interpreter;
+missing or invalid Python files remain fatal. Purging MagicHandy's app-data
+directory therefore removes the new managed runtime, cache, and credential
+metadata with the provider. Faster Qwen probes `nvidia-smi.exe` before those
+large dependency downloads instead of trusting that a discovered executable is
+runnable.
+
 The same flow remains directly callable after MagicHandy is built:
 
 ```powershell

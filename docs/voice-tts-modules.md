@@ -29,8 +29,10 @@ Choose a managed module in `install.ps1`, or run
    Git and `uv` after consent; every discovered executable must pass a version
    probe, and an unusable WinGet alias is bypassed through the real package
    binary;
-3. installs a managed Python runtime and creates a private virtual environment
-   below the MagicHandy data directory;
+3. installs a managed Python runtime, uv cache, and uv credential store inside
+   the selected provider, without global executable links or a registry entry,
+   then creates a private virtual environment from the exact patch-specific
+   interpreter;
 4. installs a pinned upstream revision with app-owned constraints for the
    dependency versions that are sensitive to the selected runtime;
 5. verifies generated launchers, package compatibility where upstream metadata
@@ -47,6 +49,21 @@ uses managed Python 3.11. The pinned Chatterbox dependency set uses Python 3.10
 because its supported Windows Torch, torchvision, and ONNX packages are
 available as wheels there; this avoids an accidental native build on a clean
 machine.
+
+uv attempts to create a minor-version junction beside each patch-specific
+managed Python directory. Some redirected or policy-restricted Windows profiles
+allow the verified Python archive to be extracted but reject that optional
+junction with `ERROR_UNTRUSTED_MOUNT_POINT`. MagicHandy validates and uses the
+patch-specific `python.exe` directly in that case. A failed or incomplete
+extraction still stops setup. The app-owned runtime, cache, and credential store
+are removed when the MagicHandy data directory is purged; setup does not alter
+a system Python installation, user PATH, or global Python registry state.
+
+Before Faster Qwen provisioning starts, the installer runs `nvidia-smi.exe` and
+requires it to enumerate at least one GPU. This catches a missing, stale, or
+unusable NVIDIA driver before Python, PyTorch, and model downloads. The later
+Python runtime probe still verifies that the installed CUDA build of PyTorch can
+actually use that driver.
 
 The managed services request and return WAV audio. FFmpeg is therefore not a
 runtime dependency. `qwen-tts` can print a SoX warning while it registers its
@@ -72,8 +89,9 @@ by ordinary app updates without touching the Python environment or model cache.
 It extends only the managed Faster Qwen endpoint with an unsigned generation
 seed and an optional Base-model tone instruction, then consumes one discarded
 codec frame through the complete streaming path before reporting ready.
-The warm-up prevents one-time model initialization from changing the first
-Stopping after one frame avoids decoding an entire throwaway utterance while
+The warm-up prevents one-time model initialization from inflating the first
+visible request's latency. Stopping after one frame avoids decoding an entire
+throwaway utterance while
 retaining the warm first-visible-request behavior.
 
 Retries also reuse a source checkout and managed environment left by a failure
@@ -99,8 +117,9 @@ reinstalling several GiB. Both module scripts support non-mutating plan/check
 modes.
 
 The scripts do not reuse or alter a system Python environment. Removing a
-provider from Settings does not delete its model files. Uninstalling large
-module assets is a separate explicit operation.
+provider from Settings does not delete its model files. Purging MagicHandy's
+app data during uninstall removes provider-owned Python, cache, packages, and
+models; selective removal of one provider remains a separate explicit action.
 
 ## Auto-Launch And Ownership
 
