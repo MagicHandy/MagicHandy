@@ -203,6 +203,8 @@ describe("SetupRoute", () => {
 
     await screen.findByRole("heading", { name: "Installing selected features" });
     expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, parakeet: false });
+    expect(screen.getByRole("progressbar", { name: "Installation progress" })).toHaveAttribute("value", "0");
     expect(screen.getByRole("log", { name: "Installation terminal output" })).toBeInTheDocument();
+    expect(screen.getByRole("log", { name: "Installation terminal output" })).toHaveTextContent("Waiting for installer output...");
   });
 });
