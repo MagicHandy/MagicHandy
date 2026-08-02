@@ -91,6 +91,71 @@ function Read-TTSModuleState {
     return $moduleState
 }
 
+function Get-InstalledTTSPythonVersion {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$PythonVersion
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Managed TTS Python environment requires repair: '$Path' is missing."
+    }
+
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $exitCode = -1
+    try {
+        $reported = @(& $Path --version 2>&1) -join ' '
+        $exitCode = $LASTEXITCODE
+    } catch {
+        throw "Managed TTS Python environment requires repair: '$Path' could not start: $($_.Exception.Message)"
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($exitCode -ne 0 -or $reported -notmatch "^Python $([regex]::Escape($PythonVersion))\.") {
+        throw "Managed TTS Python environment requires repair: '$Path' did not report Python $PythonVersion (exit $exitCode; reported '$reported')."
+    }
+    return $reported
+}
+
+function Assert-InstalledTTSPythonEnvironment {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Module
+    )
+
+    $pythonVersion = if ($Module -eq 'chatterbox') { '3.10' } else { '3.11' }
+    $managedRoot = [System.IO.Path]::GetFullPath((Join-Path $Root 'managed-python'))
+    $venv = Join-Path $Root '.venv'
+    $python = Join-Path $venv 'Scripts\python.exe'
+    $configPath = Join-Path $venv 'pyvenv.cfg'
+    if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+        throw "Managed TTS Python environment requires repair: '$configPath' is missing."
+    }
+
+    try {
+        $config = [System.IO.File]::ReadAllText($configPath)
+        $homeMatch = [regex]::Match($config, '(?im)^home\s*=\s*(?<path>[^\r\n]+?)\s*$')
+        if (-not $homeMatch.Success -or
+            $config -notmatch '(?im)^include-system-site-packages\s*=\s*false\s*$') {
+            throw 'pyvenv.cfg does not describe an isolated Python environment.'
+        }
+        $pythonHome = [System.IO.Path]::GetFullPath($homeMatch.Groups['path'].Value.Trim())
+        $managedPrefix = $managedRoot.TrimEnd('\') + '\'
+        $homeName = Split-Path -Leaf $pythonHome
+        if (-not $pythonHome.StartsWith($managedPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+            $homeName -notmatch "^cpython-$([regex]::Escape($pythonVersion))\.\d+-windows-x86_64-none$") {
+            throw "pyvenv.cfg does not use an app-owned, patch-specific Python $pythonVersion home."
+        }
+    } catch {
+        throw "Managed TTS Python environment requires repair: $($_.Exception.Message)"
+    }
+
+    $basePython = Join-Path $pythonHome 'python.exe'
+    Get-InstalledTTSPythonVersion -Path $basePython -PythonVersion $pythonVersion | Out-Null
+    return Get-InstalledTTSPythonVersion -Path $python -PythonVersion $pythonVersion
+}
+
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     $statePath = InstallerSupport\Get-MagicHandyInstallStatePath
     if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
@@ -123,7 +188,8 @@ Write-Host "Port:        $($state.port)"
 Write-Host "Auto-launch: $([bool]$state.auto_launch)"
 
 if ($CheckOnly) {
-    Write-Host 'Module state verified.' -ForegroundColor Green
+    $pythonVersion = Assert-InstalledTTSPythonEnvironment -Root $InstallRoot -Module ([string]$state.module)
+    Write-Host "Module state verified. Managed $pythonVersion environment verified." -ForegroundColor Green
     return
 }
 

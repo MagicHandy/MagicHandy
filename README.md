@@ -8,7 +8,7 @@ on your machine — no account, no tracking.
 > **Status:** early alpha and under active development. Local chat already
 > drives real device motion. The first unsigned Windows setup binary and
 > portable ZIP are available as
-> [v0.1.0-alpha.5](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.5).
+> [v0.1.0-alpha.6](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.6).
 > Expect rough edges — see [what's coming](#roadmap).
 
 ## What it does
@@ -40,7 +40,7 @@ on your machine — no account, no tracking.
 ## Get started
 
 For Windows x64, download the setup EXE and SHA-256 checksum file from the
-[v0.1.0-alpha.5 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.5).
+[v0.1.0-alpha.6 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.6).
 The unsigned installer defaults to `C:\Program Files\MagicHandy`, lets you
 choose another path and an optional desktop shortcut, then opens guided setup.
 No Go, Node, Python, CMake, or compiler is needed to run the core. Optional

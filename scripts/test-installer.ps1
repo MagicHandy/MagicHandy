@@ -97,7 +97,8 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains('--install-dir $managedPythonRoot --no-bin --no-registry')) -Message 'TTS install should keep Python app-owned without global executable or registry links'
     Assert-True -Condition ($ttsInstallerSource.Contains("`$env:UV_CACHE_DIR = `$uvCacheRoot")) -Message 'TTS install should keep the uv cache inside the managed module'
     Assert-True -Condition ($ttsInstallerSource.Contains("`$env:UV_CREDENTIALS_DIR = `$uvCredentialsRoot")) -Message 'TTS install should keep uv credential locks out of restricted global profile paths'
-    Assert-True -Condition ($ttsInstallerSource.Contains("'--no-python-downloads'")) -Message 'TTS venv creation should use the exact validated app-owned interpreter without another download'
+    Assert-True -Condition ($ttsInstallerSource.Contains("-Arguments @('-m', 'venv', '--without-pip', `$venv)")) -Message 'TTS venv creation should use CPython directly without uv launchers or pip bootstrapping'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains("-Arguments @('venv'")) -Message 'TTS venv creation must not restore the uv Windows trampoline path'
     Assert-True -Condition ($ttsInstallerSource.Contains('optional minor-version junction')) -Message 'TTS install should recover when Windows rejects uv minor-version junction creation after extraction'
     Assert-True -Condition ($ttsInstallerSource.Contains('Reusing the existing $reportedVersion environment')) -Message 'TTS reinstall should not replace an in-use compatible Python launcher'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('pip', 'check', '--python', `$python)")) -Message 'TTS install should reject an inconsistent final Python dependency graph'
@@ -115,6 +116,7 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains("@('--max-workers', '1')")) -Message 'Windows TTS model downloads must serialize Hugging Face cache finalization'
     Assert-True -Condition ($ttsInstallerSource.Contains("'HF_HUB_DISABLE_SYMLINKS_WARNING'")) -Message 'Windows TTS installs should replace the Hugging Face symlink warning with installer-owned handling'
     Assert-True -Condition ($ttsInstallerSource.Contains('for ($attempt = 1; $attempt -le 3; $attempt++)')) -Message 'TTS model downloads should retry the resumable cache'
+    Assert-True -Condition ($ttsInstallerSource.Contains("`$ErrorActionPreference = 'Continue'")) -Message 'TTS native dependency commands should not treat ordinary stderr as a terminating PowerShell error'
     Assert-True -Condition ($ttsInstallerSource.Contains('Downloaded files were kept; rerun the installer to resume.')) -Message 'TTS model failure should explain that completed downloads are retained'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('faster_qwen3_tts.egg-info')")) -Message 'partial Faster Qwen installs should recognize installer-generated package metadata'
     $mainInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'install.ps1'))
@@ -129,10 +131,13 @@ try {
     $ttsUpdaterSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\update-tts-module.ps1'))
     Assert-True -Condition (-not $ttsUpdaterSource.Contains('ReferenceTranscript =')) -Message 'TTS updates must not restore stale command-line reference text'
     Assert-True -Condition ($ttsUpdaterSource.Contains('Import-Module $supportPath -Force')) -Message 'standalone TTS update should initialize its isolated installer support module'
+    Assert-True -Condition ($ttsUpdaterSource.Contains('Assert-InstalledTTSPythonEnvironment')) -Message 'TTS reuse checks should validate the installed Python runtime rather than module state alone'
+    Assert-True -Condition ($ttsUpdaterSource.Contains('patch-specific Python')) -Message 'TTS reuse checks should reject uv minor-junction launchers'
     $installerModulePath = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
     $installerModuleSource = [System.IO.File]::ReadAllText($installerModulePath)
     Assert-True -Condition ($installerModuleSource.Contains('function Invoke-MagicHandyPowerShellScript')) -Message 'main installer should isolate managed TTS scripts in a child PowerShell process'
     Assert-True -Condition ($installerModuleSource.Contains('-NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments')) -Message 'TTS process isolation should preserve script paths and argument boundaries'
+    Assert-True -Condition ($installerModuleSource.Contains('Installed TTS module repair')) -Message 'main installer should repair an unhealthy saved TTS runtime instead of silently reusing it'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
 
@@ -144,7 +149,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Invoke-Checked', 'Invoke-HuggingFaceModelDownload', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -201,6 +206,14 @@ func copySelf(destination string) {
 
 func main() {
 	base := filepath.Base(os.Args[0])
+	if hasArg("--stderr-success") {
+		fmt.Fprintln(os.Stderr, "non-fatal native diagnostic")
+		return
+	}
+	if hasArg("--stderr-failure") {
+		fmt.Fprintln(os.Stderr, "fatal native diagnostic")
+		os.Exit(73)
+	}
 	if strings.EqualFold(base, "git.exe") {
 		fmt.Println("git version 2.50.1.windows.1")
 		return
@@ -211,6 +224,12 @@ func main() {
 			os.Exit(9)
 		}
 		fmt.Println("MagicHandy test GPU")
+		return
+	}
+	if strings.EqualFold(base, "hf.exe") {
+		if os.Getenv("MAGICHANDY_FAKE_HF_STDERR") == "1" {
+			fmt.Fprintln(os.Stderr, "download progress on stderr")
+		}
 		return
 	}
 	if strings.EqualFold(base, "uv.exe") {
@@ -250,12 +269,31 @@ func main() {
 			return
 		}
 		if len(os.Args) > 1 && os.Args[1] == "venv" {
-			if !hasArg("--no-python-downloads") || len(os.Args) < 2 {
-				fmt.Fprintln(os.Stderr, "venv did not use the exact managed interpreter")
-				os.Exit(96)
-			}
-			copySelf(filepath.Join(os.Args[len(os.Args)-1], "Scripts", "python.exe"))
-			return
+			fmt.Fprintln(os.Stderr, "uv venv trampoline path must not be used")
+			os.Exit(99)
+		}
+		return
+	}
+	if len(os.Args) > 2 && os.Args[1] == "-m" && os.Args[2] == "venv" {
+		if !hasArg("--without-pip") {
+			fmt.Fprintln(os.Stderr, "native venv must not bootstrap pip")
+			os.Exit(96)
+		}
+		if os.Getenv("MAGICHANDY_FAKE_PYTHON_VENV_FAILURE") == "1" {
+			fmt.Fprintln(os.Stderr, "native venv creation failed")
+			os.Exit(88)
+		}
+		venv := os.Args[len(os.Args)-1]
+		copySelf(filepath.Join(venv, "Scripts", "python.exe"))
+		executable, err := filepath.Abs(os.Args[0])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(89)
+		}
+		config := fmt.Sprintf("home = %s\ninclude-system-site-packages = false\nexecutable = %s\n", filepath.Dir(executable), executable)
+		if err := os.WriteFile(filepath.Join(venv, "pyvenv.cfg"), []byte(config), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(90)
 		}
 		return
 	}
@@ -269,6 +307,30 @@ func main() {
     & $goCommand.Source build -trimpath -o $fakeRuntimeBuild $fakeRuntimeSource
     if ($LASTEXITCODE -ne 0) {
         throw "Could not build the isolated TTS recovery fixture (exit $LASTEXITCODE)."
+    }
+
+    Write-Host 'Checking native command stderr and exit handling...'
+    Invoke-Checked -Executable $fakeRuntimeBuild -Arguments @('--stderr-success') -Description 'Successful native diagnostic fixture'
+    $nativeFailureRejected = $false
+    try {
+        Invoke-Checked -Executable $fakeRuntimeBuild -Arguments @('--stderr-failure') -Description 'Failed native diagnostic fixture'
+    } catch {
+        $nativeFailureRejected = $_.Exception.Message -match 'Failed native diagnostic fixture failed \(exit 73\)'
+    }
+    Assert-True -Condition $nativeFailureRejected -Message 'native stderr must not bypass authoritative exit-code handling'
+
+    Write-Host 'Checking Hugging Face stderr progress handling...'
+    $fakeHF = Join-Path $tempRoot 'hf.exe'
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeHF
+    $savedFakeHFStderr = $env:MAGICHANDY_FAKE_HF_STDERR
+    try {
+        $env:MAGICHANDY_FAKE_HF_STDERR = '1'
+        Invoke-HuggingFaceModelDownload `
+            -Executable $fakeHF `
+            -Repository 'fixture/model' `
+            -CacheDirectory (Join-Path $tempRoot 'hf-cache')
+    } finally {
+        $env:MAGICHANDY_FAKE_HF_STDERR = $savedFakeHFStderr
     }
 
     Write-Host 'Checking WinGet uv alias recovery...'
@@ -334,14 +396,21 @@ func main() {
     $savedFakeUvFailure = $env:MAGICHANDY_FAKE_UV_FAIL
     $savedFakeUvJunctionFailure = $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE
     $savedFakeUvUnrelatedFailure = $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE
+    $savedFakePythonVenvFailure = $env:MAGICHANDY_FAKE_PYTHON_VENV_FAILURE
     try {
         $reuseRoot = Join-Path $tempRoot 'tts-reuse'
         $reuseScripts = Join-Path $reuseRoot '.venv\Scripts'
-        New-Item -ItemType Directory -Force -Path $reuseScripts | Out-Null
+        $reuseManagedPython = Join-Path $reuseRoot 'managed-python\cpython-3.11.15-windows-x86_64-none\python.exe'
+        New-Item -ItemType Directory -Force -Path $reuseScripts, (Split-Path -Parent $reuseManagedPython) | Out-Null
         $fakeUv = Join-Path $tempRoot 'uv.exe'
         $fakePython = Join-Path $reuseScripts 'python.exe'
         Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeUv
         Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakePython
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $reuseManagedPython
+        [System.IO.File]::WriteAllText(
+            (Join-Path $reuseRoot '.venv\pyvenv.cfg'),
+            "home = $(Split-Path -Parent $reuseManagedPython)`ninclude-system-site-packages = false`n"
+        )
         $env:MAGICHANDY_FAKE_UV_FAIL = '1'
         $reusedEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $reuseRoot -PythonVersion '3.11'
         Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
@@ -360,6 +429,9 @@ func main() {
         $expectedFallbackPython = Join-Path $fallbackRoot '.venv\Scripts\python.exe'
         Assert-Equal -Expected $expectedFallbackPython -Actual ([string]$fallbackEnvironment.Python) -Message 'junction failure should still create the app-owned venv'
         Assert-True -Condition (Test-Path -LiteralPath $expectedFallbackPython -PathType Leaf) -Message 'junction fallback should produce a runnable Python launcher'
+        $fallbackConfig = [System.IO.File]::ReadAllText((Join-Path $fallbackRoot '.venv\pyvenv.cfg'))
+        Assert-True -Condition ($fallbackConfig.Contains('cpython-3.11.15-windows-x86_64-none')) -Message 'native venv should retain the exact patch-specific Python home'
+        Assert-True -Condition (-not $fallbackConfig.Contains('cpython-3.11-windows-x86_64-none')) -Message 'native venv must not refer back to uv minor-version junctions'
         Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $staleEnvironment 'partial.txt'))) -Message 'junction fallback should replace an interrupted venv'
         Assert-Equal -Expected $expectedManagedRoot -Actual $env:UV_PYTHON_INSTALL_DIR -Message 'managed Python should stay inside the TTS module'
         Assert-Equal -Expected (Join-Path $fallbackRoot 'uv-cache') -Actual $env:UV_CACHE_DIR -Message 'uv cache should stay inside the TTS module'
@@ -368,6 +440,48 @@ func main() {
         Assert-Equal -Expected '0' -Actual $env:UV_PYTHON_INSTALL_REGISTRY -Message 'managed Python should not create registry entries'
 
         $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = $null
+        $env:MAGICHANDY_FAKE_UV_FAIL = '1'
+        $migrationRoot = Join-Path $tempRoot 'tts-runnable-uv-trampoline'
+        $migrationManagedPython = Join-Path $migrationRoot 'managed-python\cpython-3.11.15-windows-x86_64-none\python.exe'
+        $migrationVenvPython = Join-Path $migrationRoot '.venv\Scripts\python.exe'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $migrationManagedPython), (Split-Path -Parent $migrationVenvPython) | Out-Null
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $migrationManagedPython
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $migrationVenvPython
+        [System.IO.File]::WriteAllText(
+            (Join-Path $migrationRoot '.venv\pyvenv.cfg'),
+            "home = $(Join-Path $migrationRoot 'managed-python\cpython-3.11-windows-x86_64-none')`ninclude-system-site-packages = false`nuv = 0.11.7`n"
+        )
+        $migratedEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $migrationRoot -PythonVersion '3.11'
+        $migratedConfig = [System.IO.File]::ReadAllText((Join-Path $migrationRoot '.venv\pyvenv.cfg'))
+        Assert-Equal -Expected $migrationVenvPython -Actual ([string]$migratedEnvironment.Python) -Message 'a runnable uv trampoline should be migrated in place'
+        Assert-True -Condition ($migratedConfig.Contains('cpython-3.11.15-windows-x86_64-none')) -Message 'trampoline migration should select the exact managed Python home'
+        Assert-True -Condition (-not $migratedConfig.Contains('cpython-3.11-windows-x86_64-none')) -Message 'trampoline migration should remove the minor junction dependency'
+
+        $brokenRoot = Join-Path $tempRoot 'tts-broken-uv-trampoline'
+        $brokenManagedPython = Join-Path $brokenRoot 'managed-python\cpython-3.11.15-windows-x86_64-none\python.exe'
+        $brokenVenvPython = Join-Path $brokenRoot '.venv\Scripts\python.exe'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $brokenManagedPython), (Split-Path -Parent $brokenVenvPython) | Out-Null
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $brokenManagedPython
+        [System.IO.File]::WriteAllText($brokenVenvPython, 'broken uv trampoline')
+        $repairedEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $brokenRoot -PythonVersion '3.11'
+        Assert-Equal -Expected $brokenVenvPython -Actual ([string]$repairedEnvironment.Python) -Message 'a broken uv trampoline should be replaced in place'
+        Assert-Equal -Expected (Get-FileHash -Algorithm SHA256 -LiteralPath $fakeRuntimeBuild).Hash -Actual (Get-FileHash -Algorithm SHA256 -LiteralPath $brokenVenvPython).Hash -Message 'trampoline recovery should use the managed CPython venv launcher path'
+
+        $env:MAGICHANDY_FAKE_PYTHON_VENV_FAILURE = '1'
+        $nativeFailureRoot = Join-Path $tempRoot 'tts-native-venv-failure'
+        $nativeFailurePython = Join-Path $nativeFailureRoot 'managed-python\cpython-3.11.15-windows-x86_64-none\python.exe'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $nativeFailurePython) | Out-Null
+        Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $nativeFailurePython
+        $nativeVenvFailureRejected = $false
+        try {
+            Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $nativeFailureRoot -PythonVersion '3.11' | Out-Null
+        } catch {
+            $nativeVenvFailureRejected = $_.Exception.Message -match 'Python environment creation failed \(exit 88\)'
+        }
+        Assert-True -Condition $nativeVenvFailureRejected -Message 'a real CPython venv creation failure must remain fatal'
+        $env:MAGICHANDY_FAKE_PYTHON_VENV_FAILURE = $null
+        $env:MAGICHANDY_FAKE_UV_FAIL = $null
+
         $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE = '1'
         $unrelatedRoot = Join-Path $tempRoot 'tts-unrelated-uv-failure'
         $unrelatedFailureRejected = $false
@@ -387,6 +501,7 @@ func main() {
         $env:MAGICHANDY_FAKE_UV_FAIL = $savedFakeUvFailure
         $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = $savedFakeUvJunctionFailure
         $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE = $savedFakeUvUnrelatedFailure
+        $env:MAGICHANDY_FAKE_PYTHON_VENV_FAILURE = $savedFakePythonVenvFailure
     }
 
     foreach ($constraintsFile in @('faster-qwen-constraints.txt', 'chatterbox-constraints.txt')) {
@@ -634,8 +749,29 @@ func main() {
     $moduleState.reference_wav = 'C:\voices\sample.wav'
     $moduleState.reference_transcript = 'Exact transcript.'
     [System.IO.File]::WriteAllText((Join-Path $qwenRoot 'module-state.json'), ($moduleState | ConvertTo-Json))
+    $qwenManagedPython = Join-Path $qwenRoot 'managed-python\cpython-3.11.15-windows-x86_64-none\python.exe'
+    $qwenVenvPython = Join-Path $qwenRoot '.venv\Scripts\python.exe'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qwenManagedPython), (Split-Path -Parent $qwenVenvPython) | Out-Null
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $qwenManagedPython
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $qwenVenvPython
+    $qwenVenvConfig = Join-Path $qwenRoot '.venv\pyvenv.cfg'
+    [System.IO.File]::WriteAllText(
+        $qwenVenvConfig,
+        "home = $(Split-Path -Parent $qwenManagedPython)`ninclude-system-site-packages = false`n"
+    )
     $checkOnly = & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Yes 6>&1 | Out-String
-    Assert-True -Condition ($checkOnly -match 'Module state verified') -Message 'main installer should validate legacy module state without restoring its reference fields'
+    Assert-True -Condition ($checkOnly -match 'Module state verified.+Python 3\.11\.15 environment verified') -Message 'main installer should validate legacy module state and its runnable environment without restoring reference fields'
+    [System.IO.File]::WriteAllText(
+        $qwenVenvConfig,
+        "home = $(Join-Path $qwenRoot 'managed-python\cpython-3.11-windows-x86_64-none')`ninclude-system-site-packages = false`n"
+    )
+    Assert-Throws -Action {
+        & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Yes
+    } -Pattern 'requires repair.+patch-specific Python 3\.11 home' -Message 'TTS reuse should reject an alpha.5 uv minor-junction environment'
+    [System.IO.File]::WriteAllText(
+        $qwenVenvConfig,
+        "home = $(Split-Path -Parent $qwenManagedPython)`ninclude-system-site-packages = false`n"
+    )
     Assert-Throws -Action {
         & $ttsUpdater -InstallRoot $qwenRoot -CheckOnly -Device cuda -Yes
     } -Pattern 'CheckOnly cannot be combined' -Message 'TTS check-only override rejection'
@@ -735,6 +871,17 @@ $loaded = Read-MagicHandyInstallState -Path $env:MAGICHANDY_TEST_INSTALLER_STATE
 if ($env:MAGICHANDY_TEST_TTS_FAIL -eq '1') {
     throw 'Intentional TTS process fixture failure.'
 }
+if ($env:MAGICHANDY_TEST_TTS_FAIL -eq 'repair') {
+    if ($CheckOnly) {
+        [Console]::Error.WriteLine('The existing Python launcher is unhealthy.')
+        exit 41
+    }
+    if (-not $Yes -or $ApplyInstallerChoices -or $Device -or $AutoLaunch -or $NoAutoLaunch) {
+        throw 'Saved-choice TTS repair received unexpected installer overrides.'
+    }
+    [System.IO.File]::WriteAllText($env:MAGICHANDY_TEST_TTS_MARKER, 'repaired')
+    return
+}
 if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $AutoLaunch) {
     throw 'Parent installer choices were not preserved across the TTS process boundary.'
 }
@@ -742,6 +889,8 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
 '@
     [System.IO.File]::WriteAllText((Join-Path $ttsProcessScripts 'update-tts-module.ps1'), $ttsProcessUpdater)
     [System.IO.File]::WriteAllText((Join-Path $ttsProcessScripts 'install-tts-module.ps1'), "#Requires -Version 5.1`nparam()`n")
+    $ttsStderrSuccess = Join-Path $ttsProcessScripts 'stderr-success.ps1'
+    [System.IO.File]::WriteAllText($ttsStderrSuccess, "#Requires -Version 5.1`n[Console]::Error.WriteLine('ordinary child diagnostic')`n")
     $originalTestSupport = $env:MAGICHANDY_TEST_INSTALLER_SUPPORT
     $originalTestState = $env:MAGICHANDY_TEST_INSTALLER_STATE
     $originalTestMarker = $env:MAGICHANDY_TEST_TTS_MARKER
@@ -751,6 +900,12 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         $env:MAGICHANDY_TEST_INSTALLER_STATE = $statePath
         $env:MAGICHANDY_TEST_TTS_MARKER = $ttsProcessMarker
         $env:MAGICHANDY_TEST_TTS_FAIL = '0'
+        & $supportModule {
+            param([string]$FixtureScript)
+            Invoke-MagicHandyPowerShellScript `
+                -ScriptPath $FixtureScript `
+                -Description 'Successful child diagnostic fixture'
+        } $ttsStderrSuccess
         $parentModuleSurvivedUpdate = & $supportModule {
             param([object]$FixtureState, [string]$FixtureRepository)
             Install-MagicHandyTTSModule `
@@ -760,6 +915,16 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
                 -AssumeYes
             return $null -ne (Get-Command Write-MagicHandyLauncher -CommandType Function -ErrorAction SilentlyContinue)
         } $state $ttsProcessRepository
+        Assert-Equal -Expected 'chatterbox' -Actual ([System.IO.File]::ReadAllText($ttsProcessMarker)) -Message 'isolated TTS update should retain initialized installer schema state'
+        $env:MAGICHANDY_TEST_TTS_FAIL = 'repair'
+        & $supportModule {
+            param([object]$FixtureState, [string]$FixtureRepository)
+            Install-MagicHandyTTSModule `
+                -State $FixtureState `
+                -RepositoryPath $FixtureRepository `
+                -AssumeYes
+        } $state $ttsProcessRepository
+        Assert-Equal -Expected 'repaired' -Actual ([System.IO.File]::ReadAllText($ttsProcessMarker)) -Message 'an unhealthy reused TTS environment should be repaired with saved choices'
         $env:MAGICHANDY_TEST_TTS_FAIL = '1'
         Assert-Throws -Action {
             & $supportModule {
@@ -778,7 +943,6 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         $env:MAGICHANDY_TEST_TTS_FAIL = $originalTestFailure
     }
     Assert-True -Condition ([bool]$parentModuleSurvivedUpdate) -Message 'TTS update should not invalidate parent installer private helpers'
-    Assert-Equal -Expected 'chatterbox' -Actual ([System.IO.File]::ReadAllText($ttsProcessMarker)) -Message 'isolated TTS update should retain initialized installer schema state'
 
     $unicodeStatePath = Join-Path $tempRoot 'unicode-install-state.json'
     $unicodeDataDir = Join-Path $tempRoot (-join ([char[]]@(0x5229, 0x7528, 0x8005, 0x30c7, 0x30fc, 0x30bf)))

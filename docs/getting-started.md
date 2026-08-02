@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows setup package
 
 The current unsigned Windows x64 setup EXE and portable ZIP are published as
-[v0.1.0-alpha.5](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.5).
+[v0.1.0-alpha.6](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.6).
 The setup EXE defaults to `C:\Program Files\MagicHandy`, exposes the destination
 chooser and an optional desktop shortcut, and installs the prebuilt core,
 Start Menu shortcut, and uninstaller without requiring Go, Node, Python, CMake,
@@ -133,7 +133,8 @@ The script offers Faster Qwen3-TTS for NVIDIA/CUDA systems and Chatterbox
 Turbo as the CPU/broader-hardware fallback. It repairs WinGet if needed and
 shows the pinned source, license, model, destination, and multi-gigabyte
 download warning before
-consent, creates an isolated `uv` environment, and writes the selected
+consent, creates an isolated CPython virtual environment, uses `uv` to install
+its packages, and writes the selected
 provider and auto-launch choice into MagicHandy's SQLite settings. Use
 `-PlanOnly` to inspect the operation without changing the machine.
 
@@ -148,8 +149,13 @@ below the selected voice module in `%APPDATA%\MagicHandy`. Setup does not add
 Python executables to the user PATH or register that Python globally. On
 redirected or policy-restricted Windows profiles, setup validates and uses uv's
 patch-specific interpreter directly when Windows refuses uv's optional
-minor-version junction. Faster Qwen also verifies that the NVIDIA driver can
-enumerate a GPU before dependency downloads begin.
+minor-version junction. It then asks that interpreter to create the virtual
+environment itself, so `pyvenv.cfg` and the Windows launcher retain the real
+patch-specific path instead of referring back to the rejected junction. A retry
+also detects and replaces the uv trampoline environment shipped by alpha.5,
+even if it still starts on that profile. Faster
+Qwen verifies that the NVIDIA driver can enumerate a GPU before dependency
+downloads begin.
 
 For Faster Qwen, the command-line step installs only the runtime and model.
 Add the reference WAV and its exact transcript later in Settings > Voice; an

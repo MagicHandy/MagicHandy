@@ -60,7 +60,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.5` retains checksum-pinned runtimes, retry-safe source checkout, constrained voice dependencies, and pre-download runtime verification. Managed Python, uv caches, and uv credential locks are now app-owned, avoid global links/registration, and tolerate Windows rejecting uv's optional minor-version junction after a valid extraction. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.6` retains checksum-pinned runtimes, retry-safe source checkout, constrained voice dependencies, and pre-download runtime verification. Managed Python, uv caches, and uv credential locks are app-owned and avoid global links/registration. A validated patch-specific CPython now creates the private environment itself, avoiding uv's rejected minor-version junction and dependent Windows trampoline. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -141,6 +141,23 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-02** - Corrected the remaining managed-Python launcher boundary for
+  `v0.1.0-alpha.6`. Alpha.5 recovered the patch-specific interpreter after
+  Windows rejected uv's optional minor-version junction, but `uv venv` then
+  wrote that missing minor alias into `pyvenv.cfg` and installed a 46 KiB uv
+  trampoline. The first launch therefore failed with `uv trampoline failed to
+  spawn Python child process`. Setup now runs the validated interpreter's
+  standard-library `venv --without-pip`, which writes the exact patch path and
+  standard 256 KiB Windows launcher; uv remains the package installer. Retry
+  probes now safely replace alpha.5's broken environment. Native dependency
+  commands also treat exit status as authoritative even when a successful tool
+  writes diagnostics to stderr. Real Python 3.11.15 and 3.10.20 acceptance
+  produced 262,144-byte and 260,608-byte standard launchers, exact patch homes,
+  clean uv package checks, and successful reinstall reuse. Current dependency
+  dry runs resolve 97 Faster Qwen packages, 125 base Chatterbox packages, and
+  the three pinned Chatterbox engine repairs without changing either
+  environment. No frontend, core, hardware, or motion behavior changed.
 
 - **2026-08-02** - Corrected the managed-Python boundary for
   `v0.1.0-alpha.5` after a fresh Windows profile rejected uv's internal

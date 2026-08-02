@@ -15,10 +15,11 @@ architecture decision; this document is the detailed implementation design.
 Status 2026-08-02: the thin Inno shell, portable payload, first-run detection,
 re-runnable seven-step GUI, unified optional llama.cpp/Parakeet/TTS install-plan
 endpoint, release lifecycle tests, and tag-gated publication are implemented.
-The first unsigned Windows alpha is `v0.1.0-alpha.1`; `v0.1.0-alpha.5`
+The first unsigned Windows alpha is `v0.1.0-alpha.1`; `v0.1.0-alpha.6`
 includes verified upstream llama.cpp bundles and app-owned, policy-tolerant
-managed Python setup. Curated model downloads, signing, and broader
-optional-component acceptance remain open.
+managed Python setup with native CPython virtual-environment launchers. Curated
+model downloads, signing, and broader optional-component acceptance remain
+open.
 
 ## What already exists (and changes the answer)
 
@@ -176,7 +177,7 @@ where the logic lives.
 
 | Gap | Where it lands |
 | --- | --- |
-| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; current corrective alpha is `v0.1.0-alpha.5` |
+| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; current corrective alpha is `v0.1.0-alpha.6` |
 | Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b9966` CPU and CUDA 12.4 assets |
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |

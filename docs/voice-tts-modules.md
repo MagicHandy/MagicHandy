@@ -54,10 +54,23 @@ uv attempts to create a minor-version junction beside each patch-specific
 managed Python directory. Some redirected or policy-restricted Windows profiles
 allow the verified Python archive to be extracted but reject that optional
 junction with `ERROR_UNTRUSTED_MOUNT_POINT`. MagicHandy validates and uses the
-patch-specific `python.exe` directly in that case. A failed or incomplete
-extraction still stops setup. The app-owned runtime, cache, and credential store
-are removed when the MagicHandy data directory is purged; setup does not alter
-a system Python installation, user PATH, or global Python registry state.
+patch-specific `python.exe` directly in that case. CPython then creates the
+private environment with `venv --without-pip`; this writes the exact
+patch-specific home and standard Windows launchers rather than uv's trampoline.
+uv still performs dependency installation against that environment, so bundled
+pip is unnecessary. A failed or incomplete extraction still stops setup. A
+compatible existing environment is reused, while an incomplete environment or
+alpha.5's uv trampoline environment is replaced on retry. The app-owned runtime,
+cache, and credential store are removed when the MagicHandy data directory is
+purged; setup does not alter a system Python installation, user PATH, or global
+Python registry state.
+
+Saved-module reuse is also runtime-authoritative. The update validator checks
+`pyvenv.cfg`, the patch-specific base interpreter, and the environment launcher
+instead of trusting `module-state.json` and file presence alone. A full source
+install repairs a failed check with the saved module choices. A normal app
+update remains core-only and does not unexpectedly re-run optional model or
+package downloads.
 
 Before Faster Qwen provisioning starts, the installer runs `nvidia-smi.exe` and
 requires it to enumerate at least one GPU. This catches a missing, stale, or
