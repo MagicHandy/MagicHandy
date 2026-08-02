@@ -5,10 +5,11 @@
 or let Freestyle run hands-free. Conversations, settings, and credentials stay
 on your machine — no account, no tracking.
 
-> **Status:** early and under active development. Local chat already drives
-> real device motion. An unsigned Windows setup binary and portable ZIP can be
-> built by CI, but no installer binary has been released yet. Expect rough
-> edges — see [what's coming](#roadmap).
+> **Status:** early alpha and under active development. Local chat already
+> drives real device motion. The first unsigned Windows setup binary and
+> portable ZIP are available as
+> [v0.1.0-alpha.1](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.1).
+> Expect rough edges — see [what's coming](#roadmap).
 
 ## What it does
 
@@ -38,10 +39,17 @@ on your machine — no account, no tracking.
 
 ## Get started
 
-On Windows, open PowerShell in the folder where you want MagicHandy and paste
-this entire block. It needs only Windows PowerShell and internet access. The
-bootstrap repairs WinGet and installs Git when they are missing, builds the
-core, and opens the guided setup screen:
+For Windows x64, download the setup EXE and SHA-256 checksum file from the
+[v0.1.0-alpha.1 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.1).
+The unsigned installer defaults to `C:\Program Files\MagicHandy`, lets you
+choose another path and an optional desktop shortcut, then opens guided setup.
+No Go, Node, Python, CMake, or compiler is needed to run the core. Optional
+local model and voice choices can install their separately disclosed
+dependencies later.
+
+To build from source instead, open PowerShell in the folder where you want
+MagicHandy and paste this entire block. It needs only Windows PowerShell and
+internet access:
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -50,15 +58,15 @@ Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/MagicHandy
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 ```
 
-The default PowerShell path installs only the dependencies needed to build the
+The PowerShell bootstrap repairs WinGet and installs Git when they are missing,
+then installs only the dependencies needed to build the
 pure-Go core. Device, model, runtime, and voice choices live in the same GUI
 used later from Settings. Choosing managed llama.cpp explains and installs its
 source compiler toolchain; choosing an existing Ollama install avoids that
 runtime and compiler footprint. Parakeet and local TTS remain explicit,
 separate GUI actions and install into app-owned data folders. Unattended flags
-remain available for managed deployments. Release clean-machine acceptance is
-still in progress. Flags, voice options, model imports, updater behavior, and
-manual setup are covered in the
+remain available for managed deployments. Flags, voice options, model imports,
+updater behavior, and manual setup are covered in the
 **[Getting Started guide](docs/getting-started.md)**.
 
 For later updates, open PowerShell in the same `MagicHandy` folder and run
@@ -94,9 +102,9 @@ MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working from source
 today: chat-driven motion (Handy Cloud, browser Bluetooth, Intiface), live
 controls, Freestyle, Chat Autopilot, long-term memory, editable prompt sets, a
 pattern/program library, voice providers with push-to-talk, and model
-management. The guided setup flow and unsigned Windows packaging workflow are
-implemented on the Phase 16 branch; curated model downloads, prebuilt managed
-llama.cpp bundles, signing, and release acceptance remain. See
+management. The guided setup flow and first unsigned Windows alpha are
+available; curated model downloads, prebuilt managed llama.cpp bundles,
+signing, and broader release acceptance remain. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full roadmap.
 
 MagicHandy and [LSO (Local Stroke Orchestrator)](docs/lso-merge-integration.md)
@@ -121,7 +129,8 @@ Contributions are welcome, from people and AI coding tools alike.
   [Goal scorecard](docs/goal-scorecard.md)
 - [Installation automation plan](docs/installation-automation.md) ·
   [Setup wizard design](docs/setup-wizard-design.md) ·
-  [Release checks and update handoff](docs/update-checks.md)
+  [Release checks and update handoff](docs/update-checks.md) ·
+  [Versioning and releases](docs/versioning-and-releases.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md) ·
   [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Pattern library and import contracts](docs/pattern-library.md)

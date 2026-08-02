@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 23,509,504 bytes plain and 16,907,264 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; packaged core remains well below 30 MB. |
-| Cold start to serving UI | < 500 ms | **Met** | Three fresh isolated-data launches of the current stripped binary listened in 92.2-121.8 ms and returned `/healthz` in 92.9-136.7 ms, including process-spawn and loopback-request overhead. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | Phase 16 produces one manifest-verified payload as a 15,581,904-byte portable ZIP and a 9,235,653-byte unsigned Inno setup EXE. The read-only PR workflow publishes only short-lived review artifacts. Local acceptance passed install, live update check, active-process over-install, settings retention, restart, uninstall, and data retention; no GitHub Release was created. |
+| Binary size | < 30 MB | **Met** | First-alpha tree: 23,602,688 bytes plain and 16,984,576 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
+| Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.1` publishes one manifest-verified payload as an approximately 15.6 MB portable ZIP and 9.3 MB unsigned Inno setup EXE. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -143,27 +143,31 @@ Ranked by threat to the stated goals:
 ## History
 
 - **2026-08-02** - Added the unsigned Windows x64 distribution path and
-  read-only update discovery. One clean-source-enforcing builder now produces a
+  read-only update discovery. One clean-source-enforcing builder produces a
   manifest-verified portable ZIP and Inno setup EXE from the same pure-Go core,
-  workers, GPL/source notices, and optional provisioning helpers; the PR
-  workflow has read-only permissions and cannot publish a release. In-app
+  workers, GPL/source notices, and optional provisioning helpers. The PR
+  workflow has read-only permissions; a separate tag workflow publishes only
+  an exact current `main` commit after repeating quality and install-lifecycle
+  gates. In-app
   setup now owns normal device, LLM, model, ASR, and TTS choices while the plain
   source installer builds the core and opens that wizard. Versioned builds use
   a bounded backend client to query the canonical latest stable GitHub Release,
   cache for six hours, throttle failed automatic retries for 15 minutes,
   revalidate with ETags, compare semantic versions, and produce a deduplicated
   opt-out notification without downloading or executing anything. Local
-  current-tree acceptance verified 88 manifest entries and both outer hashes,
-  a 15,581,904-byte portable ZIP, a 9,235,653-byte setup EXE, first install,
-  live `no_release` handling, active-process over-install, Japanese settings
-  retention, restart, uninstall, and retained database data. The core measures
-  23,509,504 / 16,907,264 bytes plain/stripped; the embedded UI is 1,646,533
+  first-alpha acceptance verifies every manifest entry and both outer hashes,
+  custom and Program Files installs, destination and shortcut choices, ARP
+  metadata, active-process over-install, Japanese settings retention, graceful
+  shutdown, explicit data retention, bounded default-data purge, and clean
+  reinstall. The candidate artifacts are approximately 15.6 MB portable and
+  9.3 MB setup. The core measures 23,602,688 / 16,984,576 bytes
+  plain/stripped; the embedded UI is 1,646,533
   raw / 788,728 level-9 gzip bytes. Full Go and 376-test frontend suites, vet,
   lint (zero issues), zero-CGo build, PowerShell integration/recovery tests,
   production frontend build, and production-only npm audit pass. The local
   race run remains unavailable because this MSYS2 installation has `gcc-libs`
-  but no GCC/Clang compiler package; CI retains the race gate. No hardware
-  command or GitHub Release was issued.
+  but no GCC/Clang compiler package; CI and the tag workflow retain the race
+  gate. No hardware command was issued.
 
 - **2026-08-01** - Fixed managed Faster Qwen stopping after ordinary seed or
   tone saves. Those controls now travel with each speech request, preserving

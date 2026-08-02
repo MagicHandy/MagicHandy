@@ -5,8 +5,10 @@ on:
   pull_request:
     paths:
       - ".github/workflows/package-windows.yml"
+      - ".github/workflows/release-windows.yml"
       - "installer/**"
       - "scripts/release/**"
+      - "scripts/test-installer.ps1"
       - "install.ps1"
       - "update.ps1"
       - "scripts/install-llama-runtime.ps1"
@@ -18,6 +20,9 @@ on:
       - "cmd/**"
       - "internal/**"
       - "web/**"
+      - "docs/**"
+      - "README.md"
+      - "LICENSE"
       - "go.mod"
       - "go.sum"
 
@@ -57,121 +62,14 @@ jobs:
           -Version "0.0.0-pr${{ github.event.pull_request.number || github.run_number }}"
           -Commit "${{ github.sha }}"
 
-      - name: Verify portable payload
+      - name: Verify Windows release lifecycle
         shell: powershell
-        run: |
-          $zips = @(Get-ChildItem artifacts\*-portable.zip -File)
-          if ($zips.Count -ne 1) { throw "Expected one portable ZIP, found $($zips.Count)." }
-          $zip = $zips[0]
-          Expand-Archive -LiteralPath $zip.FullName -DestinationPath artifacts\smoke
-          $executables = @(Get-ChildItem artifacts\smoke -Filter magichandy.exe -File -Recurse)
-          if ($executables.Count -ne 1) { throw "Expected one app executable, found $($executables.Count)." }
-          $exe = $executables[0]
-          $version = & $exe.FullName -version
-          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^magichandy 0\.0\.0-pr') {
-            throw "Packaged version check failed: $version"
-          }
-          foreach ($required in @(
-            'scripts\install-tts-module.ps1',
-            'scripts\update-tts-module.ps1',
-            'scripts\install-llama-runtime.ps1',
-            'scripts\build-managed-llama.ps1',
-            'scripts\install-parakeet-module.ps1',
-            'scripts\tts\faster-qwen-server.py',
-            'scripts\tts\chatterbox-server.py',
-            'SOURCE.txt',
-            'docs\update-checks.md',
-            'release-manifest.json'
-          )) {
-            $path = Join-Path $exe.Directory.FullName $required
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-              throw "Packaged payload is missing $required"
-            }
-          }
-          $manifest = Get-Content -LiteralPath (Join-Path $exe.Directory.FullName 'release-manifest.json') -Raw | ConvertFrom-Json
-          if ($manifest.license -ne 'GPL-3.0-only' -or $manifest.commit -ne '${{ github.sha }}' -or $manifest.source_state -ne 'clean') {
-            throw "Packaged manifest provenance is incorrect."
-          }
-          foreach ($file in $manifest.files) {
-            $path = Join-Path $exe.Directory.FullName ([string]$file.path).Replace('/', '\')
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Manifest file is missing: $($file.path)" }
-            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($actual -ne [string]$file.sha256) { throw "Manifest hash mismatch: $($file.path)" }
-          }
-
-      - name: Verify artifact checksums
-        shell: powershell
-        run: |
-          $checksumFile = Get-ChildItem artifacts\*-SHA256SUMS.txt -File
-          foreach ($line in Get-Content -LiteralPath $checksumFile.FullName) {
-            if ($line -notmatch '^([0-9a-f]{64})  (.+)$') { throw "Invalid checksum line: $line" }
-            $path = Join-Path artifacts $Matches[2]
-            $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($actual -ne $Matches[1]) { throw "Artifact checksum mismatch: $($Matches[2])" }
-          }
-
-      - name: Smoke install and uninstall
-        shell: powershell
-        run: |
-          $setup = Get-ChildItem artifacts\*-setup.exe -File
-          $installDir = Join-Path $env:RUNNER_TEMP 'MagicHandySetupSmoke'
-          $install = Start-Process -FilePath $setup.FullName -ArgumentList @(
-            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', ('/DIR="{0}"' -f $installDir)
-          ) -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Silent setup failed with exit $($install.ExitCode)." }
-          $version = & (Join-Path $installDir 'magichandy.exe') -version
-          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^magichandy 0\.0\.0-pr') {
-            throw "Installed app version check failed: $version"
-          }
-          $dataDir = Join-Path $env:RUNNER_TEMP 'MagicHandyUpgradeData'
-          & (Join-Path $installDir 'magichandy.exe') -data-dir $dataDir -set-ui-locale ja -set-chat-locale ja -complete-setup
-          if ($LASTEXITCODE -ne 0) { throw 'Could not seed upgrade-persistence settings.' }
-          $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-          $listener.Start()
-          $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
-          $listener.Stop()
-          $app = Start-Process -FilePath (Join-Path $installDir 'magichandy.exe') -ArgumentList @('-addr', "127.0.0.1:$port", '-data-dir', $dataDir) -PassThru -WindowStyle Hidden
-          try {
-            $ready = $false
-            for ($attempt = 0; $attempt -lt 80; $attempt++) {
-              try {
-                Invoke-RestMethod -Uri "http://127.0.0.1:$port/healthz" -TimeoutSec 1 | Out-Null
-                $ready = $true
-                break
-              } catch { Start-Sleep -Milliseconds 125 }
-            }
-            if (-not $ready) { throw 'Installed app did not become ready for over-install smoke.' }
-            $upgrade = Start-Process -FilePath $setup.FullName -ArgumentList @(
-              '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', '/CLOSEAPPLICATIONS', ('/DIR="{0}"' -f $installDir)
-            ) -Wait -PassThru
-            if ($upgrade.ExitCode -ne 0) { throw "Over-install failed with exit $($upgrade.ExitCode)." }
-            if (-not $app.WaitForExit(15000)) { throw 'Over-install did not close the running app.' }
-            $app = Start-Process -FilePath (Join-Path $installDir 'magichandy.exe') -ArgumentList @('-addr', "127.0.0.1:$port", '-data-dir', $dataDir) -PassThru -WindowStyle Hidden
-            $state = $null
-            for ($attempt = 0; $attempt -lt 80; $attempt++) {
-              try {
-                $state = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 1
-                break
-              } catch { Start-Sleep -Milliseconds 125 }
-            }
-            if (-not $state -or $state.settings.ui.locale -ne 'ja' -or -not $state.settings.ui.setup_completed) {
-              throw 'Over-install did not preserve app-owned settings.'
-            }
-          } finally {
-            if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force }
-          }
-          $uninstaller = Get-ChildItem $installDir -Filter 'unins*.exe' -File | Select-Object -First 1
-          if (-not $uninstaller) { throw 'Installed uninstaller was not found.' }
-          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @(
-            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
-          ) -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit $($uninstall.ExitCode)." }
-          if (Test-Path -LiteralPath (Join-Path $installDir 'magichandy.exe')) {
-            throw 'Silent uninstall left the app executable behind.'
-          }
-          if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'magichandy.db') -PathType Leaf)) {
-            throw 'Uninstall removed app-owned user data.'
-          }
+        run: >-
+          .\scripts\release\Test-WindowsRelease.ps1
+          -Version "0.0.0-pr${{ github.event.pull_request.number || github.run_number }}"
+          -Commit "${{ github.sha }}"
+          -ExerciseInstaller
+          -ExerciseDefaultInstall
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4

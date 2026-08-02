@@ -115,10 +115,16 @@ function Initialize-TTSPythonEnvironment {
     Assert-MagicHandyChildPath -Root $Root -Candidate $venv
     if (Test-Path -LiteralPath $python -PathType Leaf) {
         $reportedVersion = @(& $python --version 2>&1) -join ' '
-        if ($LASTEXITCODE -ne 0 -or $reportedVersion -notmatch "^Python $([regex]::Escape($PythonVersion))\.") {
-            Write-Warning "Replacing the module environment because it does not use required Python $PythonVersion."
-            Remove-Item -LiteralPath $venv -Recurse -Force
+        if ($LASTEXITCODE -eq 0 -and $reportedVersion -match "^Python $([regex]::Escape($PythonVersion))\.") {
+            Write-Host "Reusing the existing $reportedVersion environment; dependency checks will repair only changed packages."
+            return [pscustomobject]@{
+                Root = $venv
+                Python = $python
+                Version = $reportedVersion
+            }
         }
+        Write-Warning "Replacing the module environment because it does not use required Python $PythonVersion."
+        Remove-Item -LiteralPath $venv -Recurse -Force
     }
 
     Invoke-Checked -Executable $Uv -Arguments @('venv', '--python', $PythonVersion, '--allow-existing', $venv) -Description 'Python environment creation'
@@ -377,7 +383,15 @@ if ([string]::IsNullOrWhiteSpace($DataDir)) {
         $installState = InstallerSupport\Read-MagicHandyInstallState -Path $statePath
         $DataDir = [string]$installState.data_dir
     } else {
-        $DataDir = Join-Path $env:LOCALAPPDATA 'MagicHandy'
+        $applicationData = if (-not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
+            $env:APPDATA
+        } else {
+            [Environment]::GetFolderPath('ApplicationData')
+        }
+        if ([string]::IsNullOrWhiteSpace($applicationData)) {
+            throw 'The MagicHandy app data directory could not be resolved. Pass -DataDir explicitly.'
+        }
+        $DataDir = Join-Path $applicationData 'MagicHandy'
     }
 }
 $DataDir = [System.IO.Path]::GetFullPath($DataDir)

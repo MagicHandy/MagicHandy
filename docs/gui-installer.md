@@ -13,11 +13,10 @@ setup wizard") and feeds Phase 16.
 architecture decision; this document is the detailed implementation design.
 
 Status 2026-08-02: the thin Inno shell, portable payload, first-run detection,
-re-runnable seven-step GUI, and unified optional llama.cpp/Parakeet/TTS
-install-plan endpoint are
-implemented on the Phase 16 branch. The workflow intentionally publishes only
-short-lived CI artifacts; no installer binary has been released. Prebuilt
-llama.cpp bundles, curated model downloads, signing, and clean-machine release
+re-runnable seven-step GUI, unified optional llama.cpp/Parakeet/TTS install-plan
+endpoint, release lifecycle tests, and tag-gated publication are implemented.
+The first unsigned Windows alpha is `v0.1.0-alpha.1`. Prebuilt llama.cpp
+bundles, curated model downloads, signing, and broader optional-component
 acceptance remain open.
 
 ## What already exists (and changes the answer)
@@ -98,9 +97,12 @@ For the install binary itself, **Inno Setup** over WiX/NSIS/hand-rolled:
   offers nothing over Inno here; a pure-Go self-extracting stub would
   hand-roll uninstall/ARP semantics for purity points — recorded as the
   fallback if avoiding third-party build tools ever becomes a requirement.
-- Uninstall removes program files and shortcuts, **leaves the data
-  directory** (settings, database, models — possibly tens of GB, and
-  private) with the path shown; purging data stays a deliberate manual act.
+- Uninstall always removes program files and shortcuts, then makes app-data
+  disposition explicit. Interactive uninstall recommends deleting the private,
+  potentially multi-gigabyte `%APPDATA%\MagicHandy` tree for a clean reinstall
+  but can preserve it. Silent uninstall purges unless `/KEEPUSERDATA` is passed.
+  External Ollama/media/source paths and custom data directories are never
+  inferred or deleted.
 - The portable zip remains the second official artifact for
   no-install/USB use; both come from the same release workflow.
 
@@ -173,9 +175,9 @@ where the logic lives.
 
 | Gap | Where it lands |
 | --- | --- |
-| Release plumbing: portable ZIP, version metadata, artifact workflow | Implemented; release publication deliberately absent |
+| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; first alpha is `v0.1.0-alpha.1` |
 | Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Open; current managed path is an explicit source build |
-| Inno Setup script, silent install/uninstall, retained data | Implemented; clean-machine acceptance open |
+| Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |
 | Parakeet and managed TTS provisioning jobs | Implemented; full hardware/listening acceptance open |
 | Curated LLM downloads + hardware-fit recommendations | Open |
