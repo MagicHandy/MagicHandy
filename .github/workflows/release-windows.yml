@@ -157,9 +157,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install Inno Setup
+      - name: Install verified Inno Setup 7
         shell: powershell
-        run: choco install innosetup --no-progress -y
+        run: |
+          $iscc = .\scripts\release\Install-InnoSetup.ps1 `
+            -InstallRoot (Join-Path $env:RUNNER_TEMP 'inno-setup-7.0.2')
+          "INNO_ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Test installer and recovery scripts
         shell: powershell
@@ -172,6 +175,7 @@ jobs:
           -Version "${{ needs.validate.outputs.version }}"
           -Commit "${{ needs.validate.outputs.commit }}"
           -OutputRoot "artifacts\ci"
+          -ISCCPath "$env:INNO_ISCC"
 
       - name: Verify unsigned CI lifecycle artifacts
         shell: powershell

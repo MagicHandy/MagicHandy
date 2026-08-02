@@ -557,13 +557,24 @@ func main() {
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/MagicHandy-$version-windows-amd64-setup.exe')) -Message 'GitHub release must not publish the unsigned setup executable'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/release/*-setup.exe')) -Message 'public release retention must not include a setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/ci/*-setup.exe')) -Message 'unsigned setup should remain available only as short-lived CI evidence'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('Install-InnoSetup.ps1')) -Message 'release workflow should install the pinned Inno Setup 7 compiler'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ISCCPath "$env:INNO_ISCC"')) -Message 'release workflow should pass the verified Inno compiler explicitly'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('choco install innosetup')) -Message 'release workflow should not silently fall back to Chocolatey Inno Setup 6'
     Assert-True -Condition ($releaseWorkflowSource.IndexOf('- name: Publish GitHub release', [StringComparison]::Ordinal) -gt $releaseWorkflowSource.IndexOf('- name: Retain unsigned installer lifecycle evidence', [StringComparison]::Ordinal)) -Message 'GitHub release publication should be the final artifact step'
     $packageWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\package-windows.yml'))
     Assert-True -Condition ($packageWorkflowSource.Contains('-ArtifactPolicy UnsignedCI')) -Message 'pull-request packaging should explicitly select the unsigned CI policy'
     Assert-True -Condition ($packageWorkflowSource.Contains('magichandy-windows-unsigned-ci-')) -Message 'pull-request artifacts should be visibly labeled unsigned CI output'
+    Assert-True -Condition ($packageWorkflowSource.Contains('Install-InnoSetup.ps1')) -Message 'package workflow should install the pinned Inno Setup 7 compiler'
+    Assert-True -Condition ($packageWorkflowSource.Contains('-ISCCPath "$env:INNO_ISCC"')) -Message 'package workflow should pass the verified Inno compiler explicitly'
+    Assert-True -Condition (-not $packageWorkflowSource.Contains('choco install innosetup')) -Message 'package workflow should not silently fall back to Chocolatey Inno Setup 6'
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
+    $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))
+    Assert-True -Condition ($innoInstallerSource.Contains('innosetup-7.0.2-x64.exe')) -Message 'release tooling should pin the Inno Setup 7.0.2 x64 asset'
+    Assert-True -Condition ($innoInstallerSource.Contains('5ad54ca3def786f8f4212552e54cc6d8d61329e2d24a1cfee0571d42c2684ff1')) -Message 'release tooling should pin the official Inno Setup asset checksum'
+    $releaseBuilderSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Build-WindowsRelease.ps1'))
+    Assert-True -Condition ($releaseBuilderSource.Contains('Inno Setup 7 is required for the native x64 setup loader')) -Message 'release builder should reject Inno Setup 6 before compilation'
 
     $innoSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'installer\magichandy.iss'))
     Assert-True -Condition ($innoSource.Contains('#define InstallerSetupArchitecture "x64"')) -Message 'Windows setup should use a native x64 loader for the amd64 payload'

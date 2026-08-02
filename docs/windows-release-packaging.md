@@ -27,7 +27,7 @@ The release builder, unlike the installed app, needs:
 
 - Go from `go.mod`;
 - Node.js 24 and npm;
-- Inno Setup 6 or 7; and
+- Inno Setup 7 (the native x64 setup loader is not available in version 6); and
 - Git metadata for clean-source provenance verification.
 
 On this machine Inno Setup is normally discovered at:
@@ -35,6 +35,11 @@ On this machine Inno Setup is normally discovered at:
 ```text
 C:\Program Files\Inno Setup 7\ISCC.exe
 ```
+
+Windows workflows install the official Inno Setup 7.0.2 x64 asset from its
+immutable upstream release URL and verify the pinned SHA-256 before execution.
+The compiler path is passed explicitly to the release builder; the older
+Chocolatey version 6 package is not an allowed fallback.
 
 ## Build
 

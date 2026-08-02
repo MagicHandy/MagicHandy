@@ -76,16 +76,28 @@ function Resolve-ISCC {
     foreach ($candidate in @(
         (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 7\ISCC.exe'),
-        (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe')
     )) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
             return $candidate
         }
     }
-    throw 'Inno Setup 6 or 7 is required. Install it or pass -ISCCPath.'
+    throw 'Inno Setup 7 is required for the native x64 setup loader. Install it or pass -ISCCPath.'
+}
+
+function Assert-InnoSetup7 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $savedErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $help = @(& $Path /? 2>&1) -join "`n"
+    } finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+    }
+    if (-not $help.Contains('Inno Setup 7 Command-Line Compiler')) {
+        throw "Inno Setup 7 is required for the native x64 setup loader; '$Path' is not a supported compiler."
+    }
 }
 
 function Read-GitValue {
@@ -312,6 +324,7 @@ try {
     if (-not $SkipInstaller) {
         Write-Warning 'Building a hardened x64, non-solid ZIP setup executable for local/CI lifecycle testing. It remains unsigned; do not attach it to a public release.'
         $iscc = Resolve-ISCC
+        Assert-InnoSetup7 -Path $iscc
         $innoScript = Join-Path $repository 'installer\magichandy.iss'
         Invoke-ReleaseCommand -Executable $iscc -Arguments @(
             "/DSourceDir=$payloadRoot",
