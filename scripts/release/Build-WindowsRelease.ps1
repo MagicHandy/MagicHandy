@@ -1,12 +1,14 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Builds the versioned Windows payload, portable ZIP, and unsigned Inno Setup executable.
+Builds the versioned Windows payload, portable ZIP, and optional unsigned Inno Setup executable.
 
 .DESCRIPTION
-The script never publishes a release. Both distributable artifacts are built
-from the same staged payload, which includes the pure-Go app, first-party voice
-adapters, licenses, user documentation, and the optional managed voice setup
+The script never publishes a release. The unsigned setup executable exists for
+local and CI lifecycle acceptance only; public release workflows must pass
+-SkipInstaller until a trusted Authenticode signing process is configured.
+Artifacts are built from one staged payload containing the pure-Go app,
+first-party voice adapters, licenses, documentation, and optional-module setup
 scripts used by the in-app setup flow.
 #>
 [CmdletBinding()]
@@ -308,6 +310,7 @@ try {
 
     $setupPath = $null
     if (-not $SkipInstaller) {
+        Write-Warning 'Building an unsigned setup executable for local/CI lifecycle testing. Do not attach it to a public release.'
         $iscc = Resolve-ISCC
         $innoScript = Join-Path $repository 'installer\magichandy.iss'
         Invoke-ReleaseCommand -Executable $iscc -Arguments @(

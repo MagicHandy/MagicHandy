@@ -547,6 +547,24 @@ func main() {
     } -Pattern 'local changes' -Message 'populated TTS source with a tracked edit'
     Assert-Equal -Expected 'user edit' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'TTS source retry should preserve genuine edits'
 
+    Write-Host 'Checking public Windows artifact policy...'
+    $releaseWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\release-windows.yml'))
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy UnsignedCI')) -Message 'release workflow should label the unsigned installer as CI lifecycle evidence'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy PortablePublic')) -Message 'release workflow should verify the public portable-only policy'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'public release build should omit the unsigned setup executable'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-portable.zip')) -Message 'GitHub release should publish the verified portable ZIP'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-SHA256SUMS.txt')) -Message 'GitHub release should publish the portable checksum file'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/MagicHandy-$version-windows-amd64-setup.exe')) -Message 'GitHub release must not publish the unsigned setup executable'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/release/*-setup.exe')) -Message 'public release retention must not include a setup executable'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/ci/*-setup.exe')) -Message 'unsigned setup should remain available only as short-lived CI evidence'
+    Assert-True -Condition ($releaseWorkflowSource.IndexOf('- name: Publish GitHub release', [StringComparison]::Ordinal) -gt $releaseWorkflowSource.IndexOf('- name: Retain unsigned installer lifecycle evidence', [StringComparison]::Ordinal)) -Message 'GitHub release publication should be the final artifact step'
+    $packageWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\package-windows.yml'))
+    Assert-True -Condition ($packageWorkflowSource.Contains('-ArtifactPolicy UnsignedCI')) -Message 'pull-request packaging should explicitly select the unsigned CI policy'
+    Assert-True -Condition ($packageWorkflowSource.Contains('magichandy-windows-unsigned-ci-')) -Message 'pull-request artifacts should be visibly labeled unsigned CI output'
+    $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
+    Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
+    Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
+
     $innoSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'installer\magichandy.iss'))
     Assert-True -Condition ($innoSource.Contains('DefaultDirName={autopf}\MagicHandy')) -Message 'Windows setup should default to Program Files'
     Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'

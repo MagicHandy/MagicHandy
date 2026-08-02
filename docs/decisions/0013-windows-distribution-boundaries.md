@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for the initial unsigned packaging workflow.
+Accepted, with the public unsigned-artifact clause superseded by
+[ADR 0014](0014-public-windows-signing-gate.md). Unsigned setup executables are
+now CI-only; public setup publication requires trusted Authenticode.
 
 ## Context
 
@@ -18,11 +20,12 @@ properties merely to imitate a conventional desktop application.
 
 ## Decision
 
-1. **Unsigned until a signing process exists.** Development and pull-request
-   artifacts are labeled unsigned. Production signing requires a publisher
-   identity, protected certificate access, timestamping, rotation/revocation,
-   and verification in the release workflow. A placeholder or personal
-   certificate is not treated as production signing.
+1. **Unsigned setup artifacts remain private to CI until signing exists.**
+   Development and pull-request artifacts are labeled unsigned. Public setup
+   publication requires a publisher identity, protected certificate access,
+   timestamping, rotation/revocation, and verification in the release workflow.
+   A placeholder or personal certificate is not treated as production signing.
+   ADR 0014 defines the public artifact gate and temporary portable-only path.
 2. **Discovery without silent auto-update.** Versioned builds may perform a
    cached, unauthenticated read of the canonical GitHub latest-stable-release
    endpoint and notify the user when its semantic version is newer. The user
@@ -66,7 +69,8 @@ Positive:
 
 Negative:
 
-- unsigned artifacts produce Windows reputation warnings;
+- portable alpha artifacts remain unsigned and may produce Windows reputation
+  warnings until the signing service is provisioned;
 - packaged users perform explicit over-install upgrades;
 - managed llama.cpp currently requires compiler tooling unless the user chooses
   existing Ollama, an external server, or no chat setup; and

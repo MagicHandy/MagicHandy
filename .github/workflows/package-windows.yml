@@ -55,26 +55,27 @@ jobs:
         shell: powershell
         run: choco install innosetup --no-progress -y
 
-      - name: Build unsigned Windows artifacts
+      - name: Build unsigned CI lifecycle artifacts
         shell: powershell
         run: >-
           .\scripts\release\Build-WindowsRelease.ps1
           -Version "0.0.0-pr${{ github.event.pull_request.number || github.run_number }}"
           -Commit "${{ github.sha }}"
 
-      - name: Verify Windows release lifecycle
+      - name: Verify unsigned CI lifecycle artifacts
         shell: powershell
         run: >-
           .\scripts\release\Test-WindowsRelease.ps1
           -Version "0.0.0-pr${{ github.event.pull_request.number || github.run_number }}"
           -Commit "${{ github.sha }}"
+          -ArtifactPolicy UnsignedCI
           -ExerciseInstaller
           -ExerciseDefaultInstall
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: magichandy-windows-unsigned-${{ github.run_number }}
+          name: magichandy-windows-unsigned-ci-${{ github.run_number }}
           path: |
             artifacts/*-portable.zip
             artifacts/*-setup.exe

@@ -1279,8 +1279,12 @@ Mitigation:
 
 - build the setup EXE and portable ZIP from one staged payload with exact commit
   provenance, GPL source URL, per-file SHA-256 manifest, and outer checksums
-- keep the pull-request workflow read-only and artifact-only; do not create a
-  GitHub Release or describe unsigned artifacts as production-signed
+- keep the pull-request workflow read-only and artifact-only; label unsigned
+  setup output `unsigned-ci`, retain it briefly for lifecycle evidence, and
+  never attach it to a GitHub Release
+- publish only an independently verified portable ZIP and checksum until a
+  trusted signing identity exists; reject any setup EXE in that public output
+  directory
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
   all optional decisions and progress remain in the backend-authoritative GUI
 - collect optional runtime/voice choices without executing them, show purpose,
@@ -1312,17 +1316,27 @@ Exit evidence:
 - a clean standard Windows account installs, configures, updates, repairs an
   interrupted optional module, and uninstalls without preinstalled developer
   dependencies or undisclosed prompts
-- production artifacts are signed by a documented protected process, or the
-  project explicitly accepts and communicates unsigned distribution risk
+- a public setup release has valid, timestamped Authenticode on the installer
+  and every payload executable through a documented protected process
 
-Status 2026-08-02: manifest/checksum generation, read-only PR packaging,
-SemVer-tag publication, thin Inno shell, GUI-owned choices, the unified install
-plan, controller gates, cancellation, core-only source updates, and
-non-executing release discovery are implemented. Release acceptance verifies
-every staged and outer hash, custom and Program Files installs, shortcut/ARP
-metadata, active-process over-install, retained settings, explicit data
-retention, bounded clean purge, and fresh state after reinstall. R28 remains
-High pending broader clean-machine acceptance of voice components and a
-production signing decision. The managed llama.cpp CPU and CUDA bundle paths
-have passed real-network install, checksum, extraction, activation, and runner
-probes without developer toolchains.
+Status 2026-08-02: the unsigned alpha.6 setup executable was classified at
+launch as `Behavior:Win32/DefenseEvasion.A!ml` and its GitHub Release was
+withdrawn. Exact checksum and CI provenance did not mitigate the absent
+publisher identity or justify a security bypass. The file was submitted to
+Microsoft for analysis. ADR 0014 now separates unsigned seven-day CI lifecycle
+artifacts from a dedicated portable-only public directory and adds a
+timestamped `SignedPublic` verification policy. Release acceptance still
+verifies every staged and outer hash, custom and Program Files installs,
+shortcut/ARP metadata, active-process over-install, retained settings, explicit
+data retention, bounded clean purge, and fresh state after reinstall. R28
+remains High pending broader clean-machine voice acceptance and provisioned
+production signing. The managed llama.cpp CPU and CUDA bundle paths have passed
+real-network install, checksum, extraction, activation, and runner probes
+without developer toolchains.
+
+The exact setup hash subsequently showed 4 of 71 detections on VirusTotal. Its
+sandbox summary reported no direct detection but attached generic obfuscation
+and self-delete behavior tags to the unsigned Inno Setup overlay. Microsoft
+Security Intelligence case `15c1e36d-fb35-4c5d-85de-83707169818a` remains the
+authoritative pending vendor determination; the public artifact stays withdrawn
+regardless of heuristic interpretation.
