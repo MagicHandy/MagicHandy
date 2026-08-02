@@ -258,13 +258,14 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
    idle/API-read measurements, but active motion and the one-hour soak were last
    measured before SQLite. Those rows remain unmeasured for the current build.
 8. **Release provisioning**: `install.ps1` now builds every first-party Go voice
-   adapter and can provision a clean Windows source machine, including the
-   compiler; `update.ps1` preserves or revises those choices. Managed llama.cpp
-   still builds outside the core. Local TTS is no longer coupled to that build:
-   dedicated scripts install or update the optional Python/model module and
-   write its settings explicitly. Phase 16
-   must provide checksummed prebuilt runtimes before the GUI setup path can avoid
-   installing Git/CMake/Visual Studio rather than merely automating them.
+   adapter and can provision a clean Windows source machine. Plain installs and
+   core-only updates now delegate interactive choices to `#/setup`; explicit
+   flags retain unattended provisioning. Managed llama.cpp still builds outside
+   the core. Local TTS is no longer coupled to that build: dedicated scripts
+   install or update the optional Python/model module and write its settings
+   explicitly. Phase 16 must provide checksummed prebuilt runtimes before the
+   managed GUI path can avoid installing Git/CMake/Visual Studio rather than
+   merely automating them.
 9. **Motion/transport concurrency audit (2026-07-16)**: engine commands are
    serialized per run, request-originated calls inherit run cancellation, and
    Stop is a final wire barrier that blocks new starts until every overlapping
@@ -1563,9 +1564,23 @@ fixtures cover old and current StrokeGPT-ReVibed formats.
 ## Objective
 
 Make MagicHandy distributable as a core binary app that a non-developer can
-install and configure end to end without a source toolchain: prebuilt llama.cpp
-runtime choice, model downloads, voice provisioning, and StrokeGPT-ReVibed
-porting through a GUI. Source builds remain an advanced/developer fallback.
+install and configure through one embedded GUI. The setup EXE and portable ZIP
+must run the core without a source toolchain. Optional managed runtimes may add
+their own explicit dependencies; existing Ollama/external providers and skip
+paths must remain available.
+
+Status 2026-08-02: **in progress**. The Phase 16 branch implements the unsigned
+portable/setup artifacts, artifact-only CI workflow, fresh-store detection,
+six-step `#/setup` route, optional llama.cpp/Parakeet/TTS job endpoints, and
+GUI-delegating source install/update scripts. Versioned builds also implement
+cached latest-stable GitHub release discovery, an automatic/manual preference,
+and a notification plus explicit release-page handoff; this is not an artifact
+download or auto-update path. A local packaged acceptance run verified manifest
+and outer hashes, first install, a live release check, active-process
+over-install, settings retention, restart, uninstall, and retained app data.
+No installer binary is released by this work. Clean-machine acceptance on a
+standard dependency-free account, prebuilt managed llama.cpp bundles,
+curated model downloads, signing, and final budget evidence remain open.
 
 Delivered ahead of this phase (#55, #56, #61, #62, #64, #65): the
 model-manager foundation now
@@ -1578,20 +1593,19 @@ build all first-party workers, persist non-secret choices, and reuse them from a
 fast-forward-only updater. The installer/update reliability pass additionally
 enforces typed closed-schema choices, coherent rollback-capable binary builds,
 inner-hash verification for the pinned Parakeet runner, stable delegated state
-paths, and generated-launcher ownership. The source flow now asks separately for
-app UI and chat reply languages, localizes every later decision, applies those
-choices to SQLite settings, migrates saved installer state, and provides
-`change-language.ps1` as a native-name recovery path. It also offers managed
-Faster Qwen3-TTS or Chatterbox in the same decision tree, bootstraps uv and the
-module-compatible Python/PyTorch environment, and has a PowerShell-only
-bootstrap that installs Git before cloning on an otherwise clean Windows host.
+paths, and generated-launcher ownership. The source flow can still apply
+app/chat locales and explicit unattended choices, migrates saved installer
+state, and provides `change-language.ps1` as a native-name recovery path. Its
+plain path now builds only the core and opens the GUI instead of asking the
+same product questions in PowerShell. Managed Faster Qwen3-TTS and Chatterbox
+bootstrap uv and module-compatible Python/PyTorch environments behind explicit
+GUI or unattended actions. A PowerShell-only bootstrap installs Git before
+cloning on an otherwise clean Windows host.
 The command-line flow installs Faster Qwen without reference prompts; the GUI
 owns its reference WAV and exact transcript.
-Phase 16 still owns
-clean-machine
-acceptance, curated checksum-pinned model downloads, hardware-fit
-recommendations, and release packaging that avoids installing a source
-toolchain for non-developers.
+Phase 16 still owns clean-machine acceptance, curated checksum-pinned model
+downloads, hardware-fit recommendations, and prebuilt managed llama.cpp
+bundles that avoid installing a compiler toolchain for that optional path.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive
@@ -1608,63 +1622,74 @@ artifact.
 
 Implement, as slices:
 
-- **16.0 — release plumbing**: Windows binary build, portable zip, embedded
-  assets, default config/data directory behavior, version command/endpoint,
-  release GitHub Actions workflow and release-notes template; publish
-  checksum-pinned CPU and CUDA llama.cpp runtime bundles from the same pinned
-  revision, with manifests and license notices consumable by the app
-- **16.1 — Windows setup binary**: Inno Setup script compiled in CI
+- **16.0 — release plumbing (implemented, acceptance open)**: versioned pure-Go
+  Windows core and worker builds, one staged payload, portable ZIP, exact-source
+  notice, GPL license, per-file manifest, outer SHA-256 sums, and an
+  artifact-only GitHub Actions workflow. Prebuilt CPU/CUDA llama.cpp bundles
+  remain open and are not represented as available downloads.
+- **16.1 — Windows setup binary (implemented, acceptance open)**: Inno Setup script compiled in CI
   (build-time-only dependency), Start Menu/desktop shortcuts, Add/Remove
   Programs uninstall that leaves the data directory, silent-install flags,
   over-install upgrades, finish page launching first-run setup
-- **16.2 — first-run onboarding wizard** (`#/setup`, re-runnable from
-  Settings): UI/chat language (reusing the shipped locale and built-in prompt
-  mappings) -> welcome/consent → device → LLM runtime (checksummed prebuilt
-  CPU/CUDA download by default, advanced managed source build, skip-for-Ollama
-  with store import, or external URL)
-  → LLM model (import or curated download) → optional voice provisioning
+- **16.2 — first-run onboarding wizard (implemented, acceptance open)**
+  (`#/setup`, re-runnable from Settings): UI/chat language → device → LLM
+  runtime (current managed source build, existing Ollama, external URL, or
+  skip) → LLM model (GGUF import, Ollama model, external ID, or skip) → optional voice provisioning
   (Parakeet runner+model, Faster Qwen3-TTS or Chatterbox module installation,
-  an external compatible endpoint, or ElevenLabs key entry; all large runtime
-  and model work remains size/license-visible and progress-reporting) → finish.
+  or an external compatible endpoint; ElevenLabs and detailed reference/tuning
+  remain in Settings > Voice; all large runtime and model work remains
+  size/license-visible and progress-reporting) → finish.
   Every step skippable; every step is the
   existing settings/API surface, never a second implementation. The user
   decision tree, screen design, and branding slots are specified in
   `docs/setup-wizard-design.md` (wireframe: `docs/setup-wizard-sketch.svg`);
   the app icon and Inno banner slots there are inputs to slice 16.1
+- **16.2B — update discovery (implemented, acceptance open)**: versioned builds
+  query the canonical latest stable GitHub Release through a bounded backend
+  client, cache and conditionally revalidate the result, compare semantic
+  versions, and create one notification per release. General settings owns the
+  automatic/manual preference and explicit check. Downloading or applying an
+  artifact remains outside this slice; see `docs/update-checks.md` and ADR 0013
 - **16.3 — StrokeGPT-ReVibed porting step** *(undecided; gated on Phase 15)*:
   the wizard surfaces the Phase 15 importer — install-location detection,
   dry-run preview with the compatibility report, per-category opt-in,
   non-destructive import. Exists only if the undecided Phase 15 importer is
   built (see its status note above)
-- log-to-file by default with a mostly quiet console; print the local URL
-  prominently (clickable in terminals that support it)
+- preserve current structured file logging and print the local URL prominently
 - keep binding to localhost by default; document that the app is a
   single-operator local controller and must not be port-forwarded
-- decision docs: signing, auto-update, worker bundle strategy, WebView2
-  app-window shell (presentation only), and LAN/HTTPS exposure (whether
-  MagicHandy ships the HTTPS/cert story or scopes LAN access out — see
-  risk R18)
+- decision docs: ADR 0013 records unsigned artifact labeling, explicit
+  over-install updates, optional worker/runtime separation, deferred WebView2,
+  retained user data, and loopback-only LAN/HTTPS policy
 - check the binary-size (<30 MB) and cold-start (<500 ms) budgets from
   `docs/goals-and-guardrails.md` (the setup binary is a separate artifact
   with its own small overhead; the core binary budget is unchanged)
 
 ## Validation
 
-Standard suite plus: unzip release, run from a clean directory, config/data
-directories created correctly, install and select a prebuilt managed llama.cpp
-runtime on a machine without Go/Git/CMake/Visual Studio, and confirm no source
-checkout is required.
+Standard suite plus: verify every manifest and outer checksum; unzip and run the
+portable payload; silently install/version-check/uninstall the setup EXE;
+confirm config/data placement and retained user data; exercise an over-install
+while the old core is running and confirm settings survive; exercise fresh/existing
+setup entry, cancellation, and optional module retry. A machine without
+Go/Git/CMake/Visual Studio must run the packaged core. The future prebuilt
+managed llama.cpp path receives its own no-toolchain check when implemented.
 
 ## Done Criteria
 
-- A user can download and run the core app without Python.
-- Release artifact includes license and README; budgets are measured.
-- Optional voice worker setup is documented separately.
+- A user can install and run the core without Go, Node, Python, or a compiler.
+- Setup and portable artifacts share one payload, license, source notice, and
+  verified manifest; no release is published by the PR workflow.
+- GUI and unattended paths can provision optional ASR/TTS modules, while
+  skipped or failed modules leave the core usable.
+- Source install/update and Windows package builds remain functional.
+- Clean-machine, visual, budget, and optional-module acceptance is recorded.
 
 ## Out Of Scope
 
 - production code signing unless credentials/process already exist
-- auto-update implementation unless explicitly approved
+- automatic update download/application unless explicitly approved (read-only
+  release discovery is implemented in 16.2B)
 
 # Phase 17: Parity Review And Default-App Decision
 

@@ -16,6 +16,8 @@ import "./styles/media.css";
 import "./styles/personas.css";
 import "./styles/prompt-inspector.css";
 import "./styles/model-manager.css";
+import "./styles/setup.css";
+import "./styles/update.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

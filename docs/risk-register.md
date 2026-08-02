@@ -1250,3 +1250,58 @@ Exit evidence:
 Status 2026-07-30: mitigations and automated evidence are implemented. Keep the
 risk open at Low until archives exported on one release are imported by a later
 release during release-upgrade acceptance.
+
+## R28: Windows Packaging And Optional Provisioning Trust
+
+Level: High
+
+Description:
+The Windows setup shell installs an executable that can later launch privileged
+or multi-gigabyte optional provisioning: compiler tools, CUDA, external source
+checkouts, Python environments, and model downloads. Unsigned development
+artifacts also trigger Windows reputation warnings and provide no publisher
+identity. A stale helper, unverified payload, accidental release publication,
+or silent replay of old installer choices could change the machine or replace a
+working runtime without informed consent.
+
+Mitigation:
+
+- build the setup EXE and portable ZIP from one staged payload with exact commit
+  provenance, GPL source URL, per-file SHA-256 manifest, and outer checksums
+- keep the pull-request workflow read-only and artifact-only; do not create a
+  GitHub Release or describe unsigned artifacts as production-signed
+- keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
+  all optional decisions and progress remain in the backend-authoritative GUI
+- require a separate controller-gated GUI action for every optional runtime or
+  model operation and show purpose, license, hardware, and disk cost first
+- keep one cancellable backend setup queue, bounded logs, process-tree teardown,
+  and resumable partial downloads
+- make source updates core-only so saved legacy installer state cannot silently
+  rebuild llama.cpp, Parakeet, or a Python environment
+- retain user data on uninstall and disclose its path; never delete model or
+  credential state as an uninstall side effect
+- keep packaged defaults on loopback and defer LAN/HTTPS and auto-update until
+  their authentication, signing, rollback, and motion-stop designs exist
+- keep release discovery read-only and opt-out: query only the canonical latest
+  stable GitHub endpoint, cache and conditionally revalidate it, construct the
+  release link locally, send no credentials, and never download or execute an
+  artifact
+
+Exit evidence:
+
+- CI verifies payload/outer hashes and performs silent install, version, and
+  uninstall smoke tests
+- a clean standard Windows account installs, configures, updates, repairs an
+  interrupted optional module, and uninstalls without preinstalled developer
+  dependencies or undisclosed prompts
+- production artifacts are signed by a documented protected process, or the
+  project explicitly accepts and communicates unsigned distribution risk
+
+Status 2026-08-02: manifest/checksum generation, artifact-only CI, thin Inno
+shell, GUI-owned choices, controller gates, cancellation, core-only source
+updates, and non-executing release discovery are implemented on the Phase 16
+branch. Local acceptance verified every staged and outer hash, first install,
+the versioned app's live GitHub check, an over-install while that app was
+running, preserved settings, restart, uninstall, and retained user data. R28
+remains High pending the full clean-machine acceptance run on a standard
+dependency-free account and a production signing decision.

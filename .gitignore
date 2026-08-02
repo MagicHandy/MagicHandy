@@ -1,6 +1,7 @@
 # Build outputs
 /bin/
 /dist/
+/artifacts/
 /.gocache/
 /.tmp-*/
 /workers/*/target/

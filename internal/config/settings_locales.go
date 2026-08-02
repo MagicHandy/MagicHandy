@@ -11,12 +11,18 @@ const (
 	LocaleSimplifiedChinese = "zh-Hans"
 	// LocaleJapanese selects Japanese.
 	LocaleJapanese = "ja"
+	// UpdateCheckAutomatic checks GitHub Releases after the UI connects.
+	UpdateCheckAutomatic = "automatic"
+	// UpdateCheckManual only contacts GitHub after an explicit user action.
+	UpdateCheckManual = "manual"
 )
 
 // UISettings contains presentation preferences shared by every browser client.
 type UISettings struct {
-	Locale string `json:"locale"`
-	Theme  string `json:"theme"`
+	Locale          string `json:"locale"`
+	Theme           string `json:"theme"`
+	SetupCompleted  bool   `json:"setup_completed"`
+	UpdateCheckMode string `json:"update_check_mode,omitempty"`
 }
 
 // IsSupportedLocale reports whether locale has bundled UI and prompt catalogs.

@@ -1,15 +1,16 @@
 # Windows Source Installer
 
-`install.ps1` builds and configures MagicHandy from source. `update.ps1`
-fast-forwards a clean checkout, preserves the install choices, rebuilds, and
-relaunches it. Both scripts share
+`install.ps1` bootstraps and builds MagicHandy from source. Its normal path
+then opens the app-owned guided setup instead of maintaining a second console
+decision tree. `update.ps1` fast-forwards a clean checkout, rebuilds the core,
+and optionally reopens guided setup. Both scripts share
 `scripts/installer/InstallerSupport.psm1`; they do not maintain parallel
 provisioning logic.
 
-The core install stays pure Go. The main decision tree can provision an
-optional local TTS module, but its managed Python, PyTorch, and model files
-remain isolated under the data directory. The same module lifecycle is also
-available through the scripts documented under
+The core install stays pure Go. Guided setup can provision an optional local
+TTS module, but its managed Python, PyTorch, and model files remain isolated
+under the data directory. The same module lifecycle is also available through
+the scripts documented under
 [Optional Local TTS](#optional-local-tts).
 
 ## Quick Start
@@ -44,30 +45,33 @@ NVIDIA GPU is present.
 
 ## Normal Install Choices
 
-The interactive flow asks for:
+A plain `.\install.ps1` uses the profile data directory, port 49717, English
+as the bootstrap locale, and creates the generated launcher. It does not ask
+for device, model, runtime, CUDA, speech, or model-download choices. After the
+core build is ready it opens `#/setup`, where the user can choose:
 
-1. app/installer UI language;
-2. built-in chat response language;
-3. data directory and local HTTP port;
-4. whether to configure a local LLM;
-5. managed llama.cpp or Ollama;
-6. CPU or CUDA for a managed llama.cpp build;
-7. optional Ollama provisioning/model pull;
-8. optional Parakeet runner and model;
-9. optional managed local TTS module, CPU/CUDA target, and auto-launch; and
-10. optional launcher creation.
+1. app and built-in chat response languages;
+2. device transport and a write-only Handy key when Cloud REST is selected;
+3. managed llama.cpp, an existing Ollama service, an external compatible
+   server, or no chat setup;
+4. a managed GGUF import, an Ollama model, or an external model identifier;
+5. optional Faster Qwen3-TTS or Chatterbox provisioning; and
+6. optional Parakeet speech recognition.
 
-Selecting managed llama.cpp explains why it is useful: MagicHandy owns a
+The GUI explains why managed llama.cpp is useful: MagicHandy owns a
 pinned, tuned runtime and controls startup, GGUF loading, structured-response
 behavior, and diagnostics. Selecting Ollama avoids that source build and saves
 compiler/runtime space when the user already has a suitable installation, at
 the cost of less runner lifecycle control.
 
 CUDA normally produces local LLM and TTS output much faster than CPU on a
-supported NVIDIA GPU. The decision tree also states the cost: compatible
+supported NVIDIA GPU. Guided setup also states the cost: compatible
 drivers, GPU memory, several GiB of disk, and the CUDA Toolkit for a managed
 llama.cpp source build. TTS PyTorch wheels carry their selected CUDA runtime and
 do not add a compiler dependency.
+
+For automation, passing `-Yes` with explicit feature flags retains the
+non-interactive provisioning path. Flags are not required for normal use.
 
 ## Provisioned Packages
 
@@ -78,7 +82,7 @@ do not add a compiler dependency.
 | Managed llama.cpp | `Kitware.CMake` | Generate the native build |
 | Managed llama.cpp | Visual Studio Build Tools, Desktop C++ workload, Windows SDK | Compile the Windows runtime |
 | Managed llama.cpp with CUDA | `Nvidia.CUDA` | Build NVIDIA acceleration |
-| Ollama | `Ollama.Ollama` | Install the external local-model daemon when requested |
+| Unattended `-SkipLlamaBuild` path | `Ollama.Ollama` | Install the external local-model daemon when explicitly requested by flags |
 | Parakeet | pinned runner archive and GGUF model | Optional managed ASR |
 | Managed local TTS | `astral-sh.uv`, managed Python 3.10 or 3.11, pinned Python packages and model | Optional isolated local speech |
 
@@ -101,8 +105,8 @@ the core.
 
 ## Optional Local TTS
 
-Local voice cloning is independent of the llama.cpp choice but is now offered
-in the main installer decision tree. The installer offers:
+Local voice cloning is independent of the llama.cpp choice and is offered in
+guided setup. The provisioning scripts offer:
 
 - Faster Qwen3-TTS for NVIDIA/CUDA systems; and
 - Chatterbox Turbo for CPU or broader NVIDIA compatibility.
@@ -225,7 +229,7 @@ By default, non-secret install state is stored at:
 %LOCALAPPDATA%\MagicHandy\install-state.json
 ```
 
-Schema 3 records:
+Schema 3 records source-bootstrap and unattended-install history:
 
 - repository and data paths;
 - local port;
@@ -256,7 +260,8 @@ Run:
 The updater:
 
 - restores the saved UI language before displaying prompts;
-- shows the previous choices and asks whether to modify them;
+- shows the previous source-bootstrap choices and asks whether to open guided
+  setup after the rebuild;
 - refuses to update a dirty worktree;
 - fast-forwards the current branch to its safe upstream target without
   discarding local commits;
@@ -265,14 +270,16 @@ The updater:
 - explicitly takes controller ownership, sends Emergency Stop, and terminates
   only the app process tree belonging to this checkout;
 - stages rebuilt binaries before replacing the active files;
-- validates and reuses an installed selected TTS module without repeating its
-  multi-gigabyte installation;
-- reapplies SQLite-backed language settings after a successful build; and
+- preserves managed runtimes and models without replaying stale installer
+  choices;
+- refreshes only the small app-owned launcher shim in every recognized managed
+  TTS installation;
+- preserves SQLite-backed GUI settings; and
 - opens the browser only after the new server owns the configured port and
   answers `/api/state`.
 
-Reconfiguring the main decision tree can install or retarget the selected TTS
-module. An ordinary app update only validates and reuses it. Run
+Use Settings or `#/setup` to install or retarget optional features. An ordinary
+app update does not reinstall them. Run
 `scripts/update-tts-module.ps1` when intentionally updating the module's pinned
 source, dependencies, model, reference, or other module-level choices.
 Declining installer-managed TTS does not remove module assets or disable a
@@ -296,7 +303,7 @@ in-memory settings snapshot cannot overwrite the correction.
 
 - PowerShell syntax and localized catalog integrity;
 - plan-only no-write behavior;
-- package and build decision trees;
+- GUI-default and unattended package/build plans;
 - install-state migration, validation, and atomic writes;
 - managed llama.cpp versus Ollama plans;
 - optional Parakeet plans;

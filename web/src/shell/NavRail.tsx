@@ -18,6 +18,7 @@ const LINKS = [
 
 export function routeBase(hash: string): string {
   const candidate = hash.replace(/^#\/?/, "").split("/")[0] || "chat";
+  if (candidate === "setup") return "setup";
   return LINKS.some((link) => link.base === candidate) ? candidate : "chat";
 }
 

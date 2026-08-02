@@ -13,6 +13,7 @@ import { PromptSetEditor } from "../components/PromptSetEditor";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { ThemePicker } from "../components/ThemePicker";
+import { UpdateSettingsPanel } from "../components/UpdateSettingsPanel";
 import { LOCALE_OPTIONS, normalizeLocale, t, translateKnown, type MessageKey } from "../i18n";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 import type { MediaSettingsPayload } from "../api/types";
@@ -71,7 +72,7 @@ const SECTIONS = [
 ] as const;
 
 export function SettingsRoute() {
-  const { backendOnline, readOnly, refresh } = useAppState();
+  const { backendOnline, readOnly, refresh, state } = useAppState();
   const { show } = useToast();
   const hash = useHashRoute();
   const requestedSection = hash.split("/")[2] || "general";
@@ -125,6 +126,8 @@ export function SettingsRoute() {
       ui: {
         locale: cur.ui?.locale ?? "en",
         theme: cur.ui?.theme ?? DEFAULT_THEME,
+        setup_completed: cur.ui?.setup_completed ?? true,
+        update_check_mode: cur.ui?.update_check_mode ?? "automatic",
         ...p,
       },
     } : cur));
@@ -172,6 +175,8 @@ export function SettingsRoute() {
       ui: {
         locale: normalizeLocale(s.ui?.locale),
         theme: normalizeTheme(s.ui?.theme),
+        setup_completed: s.ui?.setup_completed ?? true,
+        update_check_mode: s.ui?.update_check_mode ?? "automatic",
       },
       // Playback filters save through their immediate endpoint. Omitting them
       // here prevents a stale Settings draft from overwriting newer values.
@@ -379,6 +384,21 @@ export function SettingsRoute() {
                 disabled={locked}
                 onChange={(theme) => patchUI({ theme })}
               />
+            </div>
+            <div className="group">
+              <h3 className="group-title">{t("Updates")}</h3>
+              <UpdateSettingsPanel
+                currentVersion={state?.version}
+                automatic={(s.ui?.update_check_mode ?? "automatic") !== "manual"}
+                preferenceDisabled={locked}
+                checkDisabled={!backendOnline || loading}
+                onAutomaticChange={(automatic) => patchUI({ update_check_mode: automatic ? "automatic" : "manual" })}
+              />
+            </div>
+            <div className="group">
+              <h3 className="group-title">{t("Guided setup")}</h3>
+              <p className="hint-block">{t("Review device, model, and optional voice choices in the same guided flow used after installation.")}</p>
+              <a className="btn btn-secondary settings-setup-link" href="#/setup">{t("Run setup again")}</a>
             </div>
           </>
         )}

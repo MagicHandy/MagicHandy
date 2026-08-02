@@ -26,6 +26,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/persona"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
+	"github.com/mapledaemon/MagicHandy/internal/updatecheck"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
@@ -52,7 +53,9 @@ type Runtime struct {
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
 	// ExecutablePath makes first-party worker discovery deterministic and
 	// injectable in tests. Empty falls back to os.Executable.
-	ExecutablePath string
+	ExecutablePath      string
+	UpdateHTTPClient    *http.Client
+	UpdateReleaseAPIURL string
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -74,6 +77,8 @@ type Server struct {
 	llmAutoloadID       uint64
 	models              *llm.ModelManager
 	managedLLM          *llm.ManagedLlamaRuntimeManager
+	setup               *setupManager
+	updates             *updatecheck.Checker
 	controller          controllerRuntime
 	personalization     personalizationRuntime
 	personas            *persona.Store
@@ -120,12 +125,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if runtime.Traces == nil {
-		runtime.Traces = diagnostics.NewTraceRing(1)
-	}
-	if runtime.Transport == nil {
-		runtime.Transport = transport.NewFake()
-	}
+	runtime = normalizeRuntime(runtime)
 
 	// Settings owns the one process database handle. Every sibling persistence
 	// domain borrows it so pooling, writer serialization, and shutdown have one
@@ -166,6 +166,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		llm:             newLLMRuntime(runtime),
 		models:          modelManager,
 		managedLLM:      managedLLM,
+		updates:         newUpdateChecker(runtime, version),
 		controller:      newControllerRuntime(),
 		hostPathPicker:  systemHostPathPicker,
 		personalization: personalization,
@@ -174,6 +175,14 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		started:         time.Now().UTC(),
 		version:         version,
 	}
+	server.setup = newSetupManager(
+		lifecycleCtx,
+		store.DataDir(),
+		runtime.ExecutablePath,
+		logger,
+		server.applyInstalledVoiceModule,
+		server.applyInstalledParakeet,
+	)
 
 	manager, err := server.newModeManager()
 	if err != nil {
@@ -208,6 +217,16 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	server.startMediaAutoScan(settings.Media)
 
 	return server, nil
+}
+
+func normalizeRuntime(runtime Runtime) Runtime {
+	if runtime.Traces == nil {
+		runtime.Traces = diagnostics.NewTraceRing(1)
+	}
+	if runtime.Transport == nil {
+		runtime.Transport = transport.NewFake()
+	}
+	return runtime
 }
 
 func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings config.ChatSettings) error {
@@ -288,10 +307,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
 	mux.HandleFunc("POST /api/controller/takeover", s.handleControllerTakeover)
-	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
-	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
-	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
-	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
+	s.settingsAndUpdateRoutes(mux)
 	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
 	s.personaRoutes(mux)
@@ -340,8 +356,25 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.libraryRoutes(mux)
 	s.mediaRoutes(mux)
 	s.voiceRoutes(mux)
+	s.setupRoutes(mux)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
 	mux.HandleFunc("GET /", s.handleStatic)
+}
+
+func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("GET /api/update", s.handleUpdateStatus)
+	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
+	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
+}
+
+func newUpdateChecker(runtime Runtime, version VersionInfo) *updatecheck.Checker {
+	return updatecheck.New(updatecheck.Options{
+		CurrentVersion: version.Version,
+		Endpoint:       runtime.UpdateReleaseAPIURL,
+		HTTPClient:     runtime.UpdateHTTPClient,
+	})
 }
 
 func (s *Server) llmRoutes(mux *http.ServeMux) {

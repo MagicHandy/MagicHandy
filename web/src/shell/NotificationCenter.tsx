@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { api } from "../api/client";
 import type { MediaJobState, MediaScanState } from "../api/types";
 import { formatNumber, t } from "../i18n";
 import { useAppState, useNotifications, type NotificationDraft } from "../state/app-state";
@@ -67,6 +68,30 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
     const draft = jobNotification(job);
     if (draft) push(draft);
   }, [job, push]);
+
+  const setupComplete = state?.settings?.ui?.setup_completed !== false;
+  const automaticUpdateChecks = state?.settings?.ui?.update_check_mode !== "manual";
+  const releaseBuild = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(state?.version?.trim() ?? "");
+  useEffect(() => {
+    if (!backendOnline || !setupComplete || !automaticUpdateChecks || !releaseBuild) return;
+    let cancelled = false;
+    void api.updateStatus().then((status) => {
+      if (cancelled || status.state !== "available" || !status.latest) return;
+      push({
+        title: t("New MagicHandy release"),
+        detail: t("{version} is available. Open General settings to review the release.", { version: status.latest.version || status.latest.tag }),
+        category: "system",
+        tone: "info",
+        href: "#/settings/general",
+        sourceKey: `update-available:${status.latest.tag}`,
+      });
+    }).catch(() => {
+      // Startup update checks are advisory; manual checks surface failures.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [automaticUpdateChecks, backendOnline, push, releaseBuild, setupComplete]);
 
   const active = scan?.running === true || job?.running === true;
   const attention = !backendOnline || voiceCrashed || speakNotReady;

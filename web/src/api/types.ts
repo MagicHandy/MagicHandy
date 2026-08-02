@@ -855,7 +855,7 @@ export interface OptionHints {
 export interface PublicSettings {
   version: number;
   server: { port: number };
-  ui?: { locale: string; theme?: string };
+  ui?: { locale: string; theme?: string; setup_completed?: boolean; update_check_mode?: "automatic" | "manual" | string };
   media?: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;
@@ -916,6 +916,70 @@ export interface ManagedLLMDuplicateSnapshot {
   managed: boolean;
   runner_name?: string;
   processes: ManagedLLMDuplicateProcess[];
+}
+
+export interface SetupJob {
+  id: string;
+  kind: "llama_runtime" | "parakeet" | "voice_module" | string;
+  module: string;
+  device: string;
+  status: "queued" | "running" | "complete" | "failed" | "cancelled" | string;
+  message: string;
+  output?: string;
+  started_at: string;
+  updated_at: string;
+}
+
+export interface SetupVoiceModule {
+  id: "faster-qwen3-tts" | "chatterbox" | string;
+  name: string;
+  provider: string;
+  summary: string;
+  license: string;
+  model: string;
+  model_license: string;
+  python_version: string;
+  disk_estimate: string;
+  supported_devices: string[];
+  recommended_for_nvidia: boolean;
+  reference_requirement: string;
+  source_url: string;
+  source_revision: string;
+  port: number;
+}
+
+export interface SetupStatus {
+  required: boolean;
+  data_dir: string;
+  hardware: {
+    platform: string;
+    nvidia: boolean;
+    cuda: boolean;
+    gpu_name?: string;
+    vram_mib?: string;
+  };
+  voice_modules: SetupVoiceModule[];
+  llama_runtime: {
+    name: string;
+    summary: string;
+    license: string;
+    source_version: string;
+    disk_estimate: string;
+    build_dependencies: string[];
+    backends: Array<"auto" | "cpu" | "cuda">;
+  };
+  parakeet: {
+    name: string;
+    summary: string;
+    runner_license: string;
+    model_license: string;
+    download_size: string;
+    runner_version: string;
+    model: string;
+  };
+  installation?: SetupJob;
+  scripts_present: boolean;
+  helpers: { llama: boolean; parakeet: boolean; voice: boolean };
 }
 
 export interface ManagedLLMModel {
@@ -1021,7 +1085,7 @@ export interface OllamaModelScan {
 // keep the stored secret; clear_connection_key removes it.
 export interface SettingsUpdate {
   server: { port: number };
-  ui?: { locale: string; theme: string };
+  ui?: { locale: string; theme: string; setup_completed: boolean; update_check_mode: "automatic" | "manual" | string };
   media: MediaSettingsPayload;
   device: {
     hsp_dispatch_owner: string;
@@ -1038,6 +1102,23 @@ export interface SettingsUpdate {
   chat?: NonNullable<PublicSettings["chat"]>;
   diagnostics: { verbosity: string };
   clear_connection_key: boolean;
+}
+
+export interface UpdateRelease {
+  version: string;
+  tag: string;
+  name?: string;
+  url: string;
+  published_at?: string;
+}
+
+export interface UpdateStatus {
+  state: "available" | "current" | "development" | "no_release" | "error" | string;
+  current_version: string;
+  latest?: UpdateRelease;
+  checked_at?: string;
+  stale?: boolean;
+  message?: string;
 }
 
 export interface ConnectionCheckResult {

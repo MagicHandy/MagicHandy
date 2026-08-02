@@ -688,7 +688,10 @@ function Write-MagicHandyInstallState {
 
 function Show-MagicHandyInstallState {
     [CmdletBinding()]
-    param([Parameter(Mandatory = $true)][object]$State)
+    param(
+        [Parameter(Mandatory = $true)][object]$State,
+        [switch]$CoreOnly
+    )
 
     $yes = Get-MagicHandyText -Key 'choice_yes'
     $no = Get-MagicHandyText -Key 'choice_no'
@@ -706,18 +709,20 @@ function Show-MagicHandyInstallState {
     }
     $launcher = if ([bool]$State.create_launcher) { $yes } else { $no }
     $model = if ([string]::IsNullOrWhiteSpace([string]$State.ollama_model)) { '({0})' -f (Get-MagicHandyText -Key 'choice_unchanged') } else { $State.ollama_model }
-    $values = @(
+    $values = [System.Collections.Generic.List[object]]@(
         @('summary_ui_language', (Get-MagicHandyLanguageName -Locale $State.ui_locale)),
         @('summary_chat_language', (Get-MagicHandyLanguageName -Locale $State.chat_locale)),
         @('summary_data_dir', $State.data_dir),
-        @('summary_port', $State.port),
-        @('summary_llama', $managed),
-        @('summary_ollama', $ollama),
-        @('summary_ollama_model', $model),
-        @('summary_parakeet', $parakeet),
-        @('summary_tts', $tts),
-        @('summary_launcher', $launcher)
+        @('summary_port', $State.port)
     )
+    if (-not $CoreOnly) {
+        $values.Add(@('summary_llama', $managed))
+        $values.Add(@('summary_ollama', $ollama))
+        $values.Add(@('summary_ollama_model', $model))
+        $values.Add(@('summary_parakeet', $parakeet))
+        $values.Add(@('summary_tts', $tts))
+    }
+    $values.Add(@('summary_launcher', $launcher))
     foreach ($item in $values) {
         Write-Host ('  {0}: {1}' -f (Get-MagicHandyText -Key $item[0]), $item[1])
     }
@@ -727,7 +732,8 @@ function Get-MagicHandyProvisionPlan {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][object]$State,
-        [switch]$PreserveAppLanguages
+        [switch]$PreserveAppLanguages,
+        [switch]$CoreOnly
     )
 
     $plan = New-Object System.Collections.Generic.List[string]
@@ -742,7 +748,7 @@ function Get-MagicHandyProvisionPlan {
             (Get-MagicHandyLanguageName -Locale $State.chat_locale)
         )))
     }
-    if ([bool]$State.build_managed_llama) {
+    if (-not $CoreOnly -and [bool]$State.build_managed_llama) {
         $plan.Add((Get-MagicHandyText -Key 'plan_git_cmake'))
         $plan.Add((Get-MagicHandyText -Key 'plan_cpp'))
         if ([string]$State.llama_backend -eq 'cuda') {
@@ -750,16 +756,16 @@ function Get-MagicHandyProvisionPlan {
         }
         $plan.Add((Get-MagicHandyText -Key 'plan_llama' -Values @($State.llama_backend)))
     }
-    if ([bool]$State.ensure_ollama) {
+    if (-not $CoreOnly -and [bool]$State.ensure_ollama) {
         $plan.Add((Get-MagicHandyText -Key 'plan_ollama'))
         if (-not [string]::IsNullOrWhiteSpace([string]$State.ollama_model)) {
             $plan.Add((Get-MagicHandyText -Key 'plan_ollama_model' -Values @($State.ollama_model)))
         }
     }
-    if ([bool]$State.install_parakeet) {
+    if (-not $CoreOnly -and [bool]$State.install_parakeet) {
         $plan.Add((Get-MagicHandyText -Key 'plan_parakeet'))
     }
-    if ([string]$State.tts_module -ne 'none') {
+    if (-not $CoreOnly -and [string]$State.tts_module -ne 'none') {
         $plan.Add((Get-MagicHandyText -Key 'plan_tts' -Values @(
             $State.tts_module,
             $State.tts_device,
@@ -1587,7 +1593,8 @@ function Set-MagicHandyAppLanguages {
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [Parameter(Mandatory = $true)][string]$DataDir,
         [Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$UILocale,
-        [Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$ChatLocale
+        [Parameter(Mandatory = $true)][ValidateSet('en', 'es', 'pt-BR', 'zh-Hans', 'ja')][string]$ChatLocale,
+        [switch]$CompleteSetup
     )
 
     $resolvedUILocale = ConvertTo-MagicHandyLocale -Value $UILocale
@@ -1603,6 +1610,9 @@ function Set-MagicHandyAppLanguages {
         (ConvertTo-MagicHandyNativeArgument -Value $DataDir), `
         (ConvertTo-MagicHandyNativeArgument -Value $resolvedUILocale), `
         (ConvertTo-MagicHandyNativeArgument -Value $resolvedChatLocale)
+    if ($CompleteSetup) {
+        $argumentLine += ' -complete-setup'
+    }
     $process = Start-Process `
         -FilePath $executable `
         -ArgumentList $argumentLine `
@@ -1951,6 +1961,39 @@ function Sync-MagicHandyTTSModuleArtifacts {
     Copy-Item -LiteralPath $source -Destination $destination -Force
 }
 
+function Sync-MagicHandyInstalledTTSArtifacts {
+    param(
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [Parameter(Mandatory = $true)][string]$RepositoryPath
+    )
+
+    foreach ($module in @(
+            @{ ID = 'faster-qwen3-tts'; Folder = 'faster-qwen3-tts' },
+            @{ ID = 'chatterbox'; Folder = 'chatterbox-tts' }
+        )) {
+        $root = Join-Path $DataDir ("voice\" + $module.Folder)
+        $statePath = Join-Path $root 'module-state.json'
+        if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+            continue
+        }
+        try {
+            $moduleState = [System.IO.File]::ReadAllText($statePath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+            if ([int]$moduleState.schema_version -ne 2 -or [string]$moduleState.module -ne [string]$module.ID) {
+                Write-Warning "Skipped an unrecognized TTS module state at '$statePath'. Use guided setup to repair it."
+                continue
+            }
+            $fixture = [pscustomobject]@{
+                tts_module = [string]$module.ID
+                data_dir = $DataDir
+            }
+            Sync-MagicHandyTTSModuleArtifacts -State $fixture -RepositoryPath $RepositoryPath -InstallRoot $root
+            Write-Host "Updated the installed $($module.ID) launcher shim." -ForegroundColor Green
+        } catch {
+            Write-Warning "Could not refresh the installed TTS launcher at '$root': $($_.Exception.Message)"
+        }
+    }
+}
+
 function Install-MagicHandyTTSModule {
     param(
         [Parameter(Mandatory = $true)][object]$State,
@@ -2041,12 +2084,14 @@ function Invoke-MagicHandyProvision {
         [switch]$AssumeYes,
         [switch]$PlanOnly,
         [switch]$PreserveAppLanguages,
-        [switch]$ReconfigureTTS
+        [switch]$ReconfigureTTS,
+        [switch]$CoreOnly,
+        [switch]$CompleteSetup
     )
 
     if ($PlanOnly) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'provision_plan_heading')
-        foreach ($item in (Get-MagicHandyProvisionPlan -State $State -PreserveAppLanguages:$PreserveAppLanguages)) {
+        foreach ($item in (Get-MagicHandyProvisionPlan -State $State -PreserveAppLanguages:$PreserveAppLanguages -CoreOnly:$CoreOnly)) {
             Write-Host "  - $item"
         }
         return
@@ -2064,7 +2109,7 @@ function Invoke-MagicHandyProvision {
     $go = Ensure-MagicHandyGo -AssumeYes:$AssumeYes
     Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $go
 
-    if ([bool]$State.build_managed_llama) {
+    if (-not $CoreOnly -and [bool]$State.build_managed_llama) {
         Write-InstallerHeading "Managed llama.cpp ($($State.llama_backend))"
         $git = Ensure-MagicHandyGit -AssumeYes:$AssumeYes
         $cmake = Ensure-MagicHandyCMake -AssumeYes:$AssumeYes
@@ -2079,18 +2124,18 @@ function Invoke-MagicHandyProvision {
         }
     }
 
-    if ([bool]$State.ensure_ollama) {
+    if (-not $CoreOnly -and [bool]$State.ensure_ollama) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'ollama_heading')
         $ollama = Ensure-MagicHandyOllama -AssumeYes:$AssumeYes
         Ensure-MagicHandyOllamaModel -OllamaExecutable $ollama -Model ([string]$State.ollama_model)
     }
 
-    if ([bool]$State.install_parakeet) {
+    if (-not $CoreOnly -and [bool]$State.install_parakeet) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'parakeet_heading')
         Install-MagicHandyParakeet -DataDir $State.data_dir
     }
 
-    if ([string]$State.tts_module -ne 'none') {
+    if (-not $CoreOnly -and [string]$State.tts_module -ne 'none') {
         Write-InstallerHeading (Get-MagicHandyText -Key 'tts_heading')
         Install-MagicHandyTTSModule `
             -State $State `
@@ -2099,11 +2144,15 @@ function Invoke-MagicHandyProvision {
             -AssumeYes:$AssumeYes
     }
 
+    if ($CoreOnly) {
+        Sync-MagicHandyInstalledTTSArtifacts -DataDir ([string]$State.data_dir) -RepositoryPath $RepositoryPath
+    }
+
     Write-InstallerHeading (Get-MagicHandyText -Key 'languages_heading')
     if ($PreserveAppLanguages) {
         Write-Host (Get-MagicHandyText -Key 'plan_languages_preserved') -ForegroundColor DarkGray
     } else {
-        Set-MagicHandyAppLanguages -RepositoryPath $RepositoryPath -DataDir $State.data_dir -UILocale $State.ui_locale -ChatLocale $State.chat_locale
+        Set-MagicHandyAppLanguages -RepositoryPath $RepositoryPath -DataDir $State.data_dir -UILocale $State.ui_locale -ChatLocale $State.chat_locale -CompleteSetup:$CompleteSetup
     }
 
     if ([bool]$State.create_launcher) {
@@ -2121,13 +2170,15 @@ function Start-MagicHandyApp {
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [Parameter(Mandatory = $true)][string]$DataDir,
         [Parameter(Mandatory = $true)][int]$Port,
-        [switch]$NoBrowser
+        [switch]$NoBrowser,
+        [switch]$Setup
     )
     $exe = Join-Path $RepositoryPath 'magichandy.exe'
     if (-not (Test-Path -LiteralPath $exe)) {
         throw "MagicHandy executable not found at '$exe'."
     }
     $url = "http://127.0.0.1:$Port"
+    $browserURL = if ($Setup) { "$url/#/setup" } else { $url }
     $listeners = @(Get-MagicHandyLoopbackListeners -Port $Port)
     if ($listeners.Count -gt 0) {
         $ownedProcesses = @(Get-MagicHandyCheckoutProcesses -RepositoryPath $RepositoryPath)
@@ -2136,7 +2187,7 @@ function Start-MagicHandyApp {
         $foreignListeners = @($listeners | Where-Object { [int]$_.OwningProcess -notin $ownedIDs })
         if ($ownedProcesses.Count -eq 1 -and $ownedListeners.Count -gt 0 -and $foreignListeners.Count -eq 0 -and (Test-MagicHandyHTTPReady -Port $Port)) {
             if (-not $NoBrowser) {
-                Start-Process $url
+                Start-Process $browserURL
             }
             Write-Host "MagicHandy is already running at $url" -ForegroundColor Green
             return
@@ -2154,7 +2205,7 @@ function Start-MagicHandyApp {
         }
         if (Test-MagicHandyProcessReady -Port $Port -TargetProcessId $process.Id) {
             if (-not $NoBrowser) {
-                Start-Process $url
+                Start-Process $browserURL
             }
             Write-Host "MagicHandy is running at $url" -ForegroundColor Green
             return
@@ -2309,6 +2360,10 @@ Export-ModuleMember -Function @(
     'Ensure-MagicHandyWinGet',
     'Invoke-MagicHandyWinGetInstall',
     'Ensure-MagicHandyGit',
+    'Ensure-MagicHandyCMake',
+    'Ensure-MagicHandyVCToolchain',
+    'Ensure-MagicHandyCUDA',
+    'Install-MagicHandyParakeet',
     'Sync-MagicHandyTTSModuleArtifacts',
     'Invoke-MagicHandyProvision',
     'Test-MagicHandyAppRunning',

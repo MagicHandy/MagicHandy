@@ -25,7 +25,7 @@ const baseState = {
   settings: {
     version: 1,
     server: { port: 49717 },
-    ui: { locale: "en", theme: "steel-azure" },
+    ui: { locale: "en", theme: "steel-azure", setup_completed: true, update_check_mode: "automatic" },
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
     motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, apply_video_speed_limit: false, style: "balanced" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", llama_cpp_context_size: 32768, ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
@@ -302,7 +302,7 @@ describe("app shell safety invariants", () => {
         ...baseState,
         settings: {
           ...baseState.settings,
-          ui: { locale: "en", theme: "deep-violet" },
+          ui: { locale: "en", theme: "deep-violet", setup_completed: true, update_check_mode: "automatic" },
         },
       },
     });

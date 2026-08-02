@@ -644,8 +644,10 @@ func DefaultSettings() Settings {
 			Port: DefaultServerPort,
 		},
 		UI: UISettings{
-			Locale: LocaleEnglish,
-			Theme:  ThemeSteelAzure,
+			Locale:          LocaleEnglish,
+			Theme:           ThemeSteelAzure,
+			SetupCompleted:  false,
+			UpdateCheckMode: UpdateCheckAutomatic,
 		},
 		Media: MediaSettings{
 			RemoveMissingOnScan: true,
@@ -815,6 +817,11 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		theme := strings.TrimSpace(update.UI.Theme)
 		if theme != "" {
 			next.UI.Theme = theme
+		}
+		next.UI.SetupCompleted = update.UI.SetupCompleted
+		updateCheckMode := strings.TrimSpace(update.UI.UpdateCheckMode)
+		if updateCheckMode != "" {
+			next.UI.UpdateCheckMode = updateCheckMode
 		}
 	}
 	if update.Media != nil {
@@ -998,6 +1005,7 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 
 	var header struct {
 		Version int                        `json:"version"`
+		UI      map[string]json.RawMessage `json:"ui"`
 		Voice   map[string]json.RawMessage `json:"voice"`
 		LLM     map[string]json.RawMessage `json:"llm"`
 	}
@@ -1018,6 +1026,12 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	}
 	if _, present := header.Voice["asr_provider"]; !present {
 		settings.Voice.ASRProvider = ""
+	}
+	// Setup completion is additive. Settings documents written before the
+	// wizard existed belong to configured users; only a fresh store should
+	// enter setup automatically.
+	if _, present := header.UI["setup_completed"]; !present {
+		settings.UI.SetupCompleted = true
 	}
 	if _, present := header.Voice["parakeet_source"]; !present {
 		settings.Voice.ParakeetSource = ""
@@ -1056,6 +1070,9 @@ func validateSettings(settings Settings) error {
 	}
 	if !IsSupportedUITheme(settings.UI.Theme) {
 		return fmt.Errorf("unknown UI theme %q", settings.UI.Theme)
+	}
+	if !oneOf(settings.UI.UpdateCheckMode, UpdateCheckAutomatic, UpdateCheckManual) {
+		return fmt.Errorf("unknown update check mode %q", settings.UI.UpdateCheckMode)
 	}
 	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
@@ -1105,6 +1122,10 @@ func applyMissingDefaults(settings Settings) Settings {
 	settings.UI.Theme = strings.TrimSpace(settings.UI.Theme)
 	if settings.UI.Theme == "" {
 		settings.UI.Theme = defaults.UI.Theme
+	}
+	settings.UI.UpdateCheckMode = strings.TrimSpace(settings.UI.UpdateCheckMode)
+	if settings.UI.UpdateCheckMode == "" {
+		settings.UI.UpdateCheckMode = defaults.UI.UpdateCheckMode
 	}
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner

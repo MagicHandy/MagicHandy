@@ -1,0 +1,58 @@
+.update-settings {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.update-version-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.update-version-row span {
+  color: var(--muted);
+}
+
+.update-version-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.86rem;
+  text-align: right;
+}
+
+.update-actions {
+  justify-content: flex-start;
+}
+
+.update-actions .btn {
+  text-decoration: none;
+}
+
+.update-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--muted);
+}
+
+.update-result > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.update-result strong {
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.update-result small {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}

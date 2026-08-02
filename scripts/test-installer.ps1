@@ -60,8 +60,11 @@ try {
         'install.ps1',
         'update.ps1',
         'change-language.ps1',
+        'scripts\install-llama-runtime.ps1',
+        'scripts\install-parakeet-module.ps1',
         'scripts\install-tts-module.ps1',
         'scripts\update-tts-module.ps1',
+        'scripts\release\Build-WindowsRelease.ps1',
         'scripts\installer\InstallerSupport.psm1',
         'internal\llm\runtimeassets\build-managed-llama.ps1'
     )
@@ -97,6 +100,10 @@ try {
     $mainInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'install.ps1'))
     Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceWav')) -Message 'main installer must not expose a reference WAV choice'
     Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceTranscript')) -Message 'main installer must not expose a reference transcript choice'
+    Assert-True -Condition ($mainInstallerSource.Contains('$guiOwnsFreshChoices')) -Message 'plain source installation should delegate optional choices to guided setup'
+    Assert-True -Condition (-not $mainInstallerSource.Contains('function Read-ReconfiguredState')) -Message 'console reconfiguration should be retired in favor of guided setup'
+    $updateSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'update.ps1'))
+    Assert-True -Condition ($updateSource.Contains('CoreOnly = $true')) -Message 'updates should not replay stale optional installer choices before opening guided setup'
     $coreCommandSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'cmd\magichandy\main.go'))
     Assert-True -Condition (-not $coreCommandSource.Contains('"tts-reference-text"')) -Message 'the internal install command must leave Faster Qwen transcript changes to the GUI'
     $ttsUpdaterSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\update-tts-module.ps1'))
@@ -1152,6 +1159,14 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
 
     Write-Host 'Checking install.ps1 plan-only behavior...'
     $freshPlanState = Join-Path $tempRoot 'fresh-plan-state.json'
+    $guidedPlan = (& (Join-Path $Repo 'install.ps1') `
+        -NoLaunch `
+        -PlanOnly `
+        -StatePath $freshPlanState 6>&1 | Out-String)
+    Assert-True -Condition ($guidedPlan -match 'Optional device, model, and voice choices will open in the MagicHandy setup wizard') -Message 'plain installation should explain GUI-owned choices'
+    Assert-PlanExcludes -Plan @($guidedPlan -split "`r?`n") -Pattern 'Ensure Git and CMake|Visual Studio C\+\+|CUDA Toolkit|Ensure Ollama is installed|Install checksum-verified Parakeet|Bootstrap uv'
+    Assert-True -Condition (-not (Test-Path -LiteralPath $freshPlanState)) -Message 'guided install plan must not persist state'
+
     & (Join-Path $Repo 'install.ps1') `
         -Yes `
         -SkipLlamaBuild `
@@ -1226,9 +1241,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Write-Host 'Checking updater runtime reconfiguration prompt...'
     $global:MagicHandyInstallerResponses = New-Object System.Collections.Generic.Queue[string]
     $global:MagicHandyInstallerPrompts = New-Object System.Collections.Generic.List[string]
-    foreach ($response in @('y', '', '', '', '', 'y', 'n', 'y', '-', 'n', 'n', 'y')) {
-        $global:MagicHandyInstallerResponses.Enqueue($response)
-    }
+    $global:MagicHandyInstallerResponses.Enqueue('y')
     function global:Read-Host {
         param([string]$Prompt)
         $global:MagicHandyInstallerPrompts.Add($Prompt)
@@ -1250,11 +1263,10 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         Remove-Variable MagicHandyInstallerResponses -Scope Global -ErrorAction SilentlyContinue
         Remove-Variable MagicHandyInstallerPrompts -Scope Global -ErrorAction SilentlyContinue
     }
-    Assert-True -Condition (($capturedPrompts -join "`n") -match 'Modify previous installation choices') -Message 'updater should ask whether to modify choices'
-    Assert-True -Condition ($reconfigureOutput -match 'Managed llama\.cpp: no') -Message 'reconfiguration should switch managed llama.cpp off'
-    Assert-True -Condition ($reconfigureOutput -match 'Ollama model:\s+\(unchanged\)') -Message 'reconfiguration should clear the optional model'
-    Assert-True -Condition ($reconfigureOutput -match 'Installer-managed local TTS: no') -Message 'reconfiguration should allow declining installer-managed TTS'
-    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|CUDA Toolkit|NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
+    Assert-True -Condition (($capturedPrompts -join "`n") -match 'Open guided setup after rebuilding') -Message 'updater should offer the app-owned setup flow'
+    Assert-True -Condition ($reconfigureOutput -match 'Current source installation') -Message 'updater should show its compact source context'
+    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Managed llama\.cpp:|Installer-managed local TTS:|Parakeet ASR:|Ensure Ollama:'
+    Assert-PlanExcludes -Plan @($reconfigureOutput -split "`r?`n") -Pattern 'Ensure Git and CMake|Visual Studio C\+\+|CUDA Toolkit|Ensure Ollama is installed|Install checksum-verified Parakeet|Bootstrap uv'
     Assert-Equal -Expected $beforeHash -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $statePath).Hash) -Message 'reconfiguration plan must not rewrite state'
     Assert-Equal -Expected 0 -Actual $remainingResponses -Message 'all expected prompts should be consumed'
 

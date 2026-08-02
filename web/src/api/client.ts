@@ -28,6 +28,8 @@ import type {
   LLMModelManagerSnapshot,
   LLMProviderStatus,
   ManagedLLMDuplicateSnapshot,
+  SetupJob,
+  SetupStatus,
   ManagedLlamaRuntimeBuild,
   MediaScanState,
   MediaFunscript,
@@ -48,6 +50,7 @@ import type {
   PromptCompositionPayload,
   PublicSettings,
   SettingsUpdate,
+  UpdateStatus,
   VoiceRequestSnapshot,
   VoiceState,
   VoiceWorkerStatus,
@@ -534,6 +537,26 @@ export const api = {
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
   resetSettings: () => request<{ settings: PublicSettings }>("POST", "/api/settings/reset", {}),
+  updateStatus: (refresh = false) => request<UpdateStatus>("GET", `/api/update${refresh ? "?refresh=1" : ""}`),
+
+  // First-run setup. Product choices remain available after onboarding, so
+  // these endpoints are also the repair/install path from Settings.
+  setupStatus: () => request<SetupStatus>("GET", "/api/setup"),
+  saveSetupPreferences: (body: {
+    ui_locale?: string;
+    chat_locale?: string;
+    device_owner?: string;
+    connection_key?: string;
+    llm?: PublicSettings["llm"];
+  }) => request<{ settings: PublicSettings }>("PUT", "/api/setup/preferences", body),
+  installSetupLlama: (backend: "auto" | "cpu" | "cuda") =>
+    request<{ installation: SetupJob }>("POST", "/api/setup/llm/install", { backend }),
+  installSetupParakeet: () =>
+    request<{ installation: SetupJob }>("POST", "/api/setup/parakeet/install", {}),
+  installSetupVoice: (module: string, device: "cpu" | "cuda", auto_launch: boolean) =>
+    request<{ installation: SetupJob }>("POST", "/api/setup/voice/install", { module, device, auto_launch }),
+  cancelSetupInstall: () => request<{ installation: SetupJob }>("DELETE", "/api/setup/install"),
+  completeSetup: () => request<{ settings: PublicSettings }>("POST", "/api/setup/complete", {}),
 
   // Provider checks are diagnostic-only. Cloud Connect/Disconnect own the
   // controller-gated command lifecycle.

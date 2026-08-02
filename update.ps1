@@ -3,19 +3,17 @@
     Updates a source installation of MagicHandy without discarding setup choices.
 
 .DESCRIPTION
-    Reads the non-secret choices saved by install.ps1, displays them, and asks
-    whether they should be modified. Unless reconfiguration is requested, the
-    same data directory, port, managed llama.cpp selection, Ollama preference,
-    Parakeet choice, managed local TTS install choice, and launcher choice are
-    reused. An already installed TTS module is verified and reused without
-    repeating its multi-gigabyte installation; use
-    scripts\update-tts-module.ps1 when intentionally updating that module.
+    Reads and preserves the non-secret bootstrap choices saved by install.ps1.
+    Interactive product choices now live in MagicHandy's setup and Settings
+    screens. When requested, the updater rebuilds first and opens that GUI
+    instead of duplicating its device, LLM, model, and voice questions here.
 
     The updater refuses to update over local source changes and only performs a
     fast-forward Git update. Main follows origin/main, live feature branches
     follow their configured upstream, and merged features whose remote branch
     was deleted may safely advance from origin/main. It then invokes the current
-    install.ps1 so dependencies and worker binaries are provisioned consistently.
+    install.ps1 so the Go prerequisite and core worker binaries are provisioned
+    consistently. GUI-owned optional runtimes and models are left in place.
     A running app from this checkout receives Emergency Stop and is terminated
     before replacement; launch succeeds only after the rebuilt server is ready.
 
@@ -24,7 +22,8 @@
     asking whether to reconfigure.
 
 .PARAMETER Reconfigure
-    Skip the initial question and walk through every saved installation choice.
+    Open the in-app setup wizard after the update. Saved source provisioning
+    choices are retained for compatibility with unattended installations.
 
 .PARAMETER NoPull
     Rebuild the current checkout without fetching or fast-forwarding source.
@@ -44,12 +43,11 @@
 
 .EXAMPLE
     .\update.ps1 -Yes -NoLaunch
-    Resolve a safe fast-forward target and rebuild unattended using the previous choices.
+    Resolve a safe fast-forward target and rebuild the core unattended.
 
 .EXAMPLE
     .\update.ps1 -Reconfigure
-    Safely fast-forward, then revisit choices such as managed llama.cpp,
-    Parakeet, and managed local TTS.
+    Safely fast-forward, rebuild, then open the in-app setup wizard.
 #>
 #Requires -Version 5.1
 [CmdletBinding()]
@@ -65,9 +63,6 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ($Reconfigure -and $Yes) {
-    throw 'Reconfigure is interactive and cannot be combined with Yes.'
-}
 $Repo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $support = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
 if (-not (Test-Path -LiteralPath $support)) {
@@ -85,9 +80,9 @@ Write-MagicHandyBanner -Operation Update
 Write-Host ('  ' + (Get-MagicHandyText -Key 'update_preserved_note')) -ForegroundColor DarkGray
 
 Write-InstallerHeading (Get-MagicHandyText -Key 'current_heading')
-Show-MagicHandyInstallState -State $state
+Show-MagicHandyInstallState -State $state -CoreOnly
 
-$modifyChoices = if ($Reconfigure) {
+$openSetup = if ($Reconfigure) {
     $true
 } elseif ($Yes) {
     $false
@@ -111,11 +106,11 @@ if (-not (Test-Path -LiteralPath $installer)) {
 $arguments = @{
     StatePath = $StatePath
     UpdateRun = $true
+    CoreOnly = $true
 }
-if ($modifyChoices) {
-    $arguments.Reconfigure = $true
-} else {
-    $arguments.UseSavedChoices = $true
+$arguments.UseSavedChoices = $true
+if ($openSetup) {
+    $arguments.OpenSetup = $true
 }
 if ($Yes) {
     $arguments.Yes = $true

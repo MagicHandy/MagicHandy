@@ -18,6 +18,7 @@ vi.mock("../api/client", () => ({
     getSettings: vi.fn(),
     saveSettings: vi.fn(),
     resetSettings: vi.fn(),
+    updateStatus: vi.fn(),
     exportTrace: vi.fn(),
     startManualTest: vi.fn(),
     stopMotion: vi.fn(),
@@ -64,7 +65,7 @@ function settings(verbosity: string): PublicSettings {
   return {
     version: 1,
     server: { port: 49717 },
-    ui: { locale: "en", theme: "steel-azure" },
+    ui: { locale: "en", theme: "steel-azure", update_check_mode: "automatic" },
     media: {
       library_paths: ["C:\\Media"],
       auto_scan_on_startup: false,
@@ -191,7 +192,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "ja", theme: "steel-azure" });
+    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "ja", theme: "steel-azure", setup_completed: true, update_check_mode: "automatic" });
   });
 
 
@@ -209,7 +210,7 @@ describe("SettingsRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "en", theme: "deep-violet" });
+    expect(saveSettings.mock.calls[0][0].ui).toEqual({ locale: "en", theme: "deep-violet", setup_completed: true, update_check_mode: "automatic" });
   });
   it("does not overwrite immediate playback filters from a stale settings draft", async () => {
     app.hash = "#/settings/general";

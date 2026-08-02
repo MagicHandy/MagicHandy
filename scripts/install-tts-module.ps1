@@ -33,6 +33,7 @@ param(
     [switch]$SpeakReplies,
     [switch]$Update,
     [switch]$PlanOnly,
+    [switch]$SkipAppConfiguration,
     [switch]$Yes
 )
 
@@ -513,6 +514,29 @@ if ($Module -eq 'faster-qwen3-tts') {
     $healthPath = '/api/model-info'
 }
 
+$moduleState = [ordered]@{
+    schema_version = 2
+    module = $Module
+    provider = $provider
+    install_root = $InstallRoot
+    data_dir = $DataDir
+    source_url = $sourceURL
+    source_revision = $sourceRevision
+    model = $Model
+    voice = $Voice
+    language = $Language
+    device = $Device
+    port = $Port
+    auto_launch = [bool]$AutoLaunch
+    speak_replies = [bool]$SpeakReplies
+}
+
+if ($SkipAppConfiguration) {
+    Write-TTSModuleState -Path (Join-Path $InstallRoot 'module-state.json') -State $moduleState
+    Write-Host 'Module files are ready. The running MagicHandy app owns the settings update.' -ForegroundColor Green
+    return
+}
+
 $exe = Join-Path $repository 'magichandy.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
     throw "MagicHandy executable not found at '$exe'. Run install.ps1 or update.ps1 before installing a TTS module."
@@ -554,23 +578,6 @@ try {
         $settingsArguments += '-tts-speak-replies'
     }
     Invoke-Checked -Executable $exe -Arguments $settingsArguments -Description 'MagicHandy TTS settings update'
-
-    $moduleState = [ordered]@{
-        schema_version = 2
-        module = $Module
-        provider = $provider
-        install_root = $InstallRoot
-        data_dir = $DataDir
-        source_url = $sourceURL
-        source_revision = $sourceRevision
-        model = $Model
-        voice = $Voice
-        language = $Language
-        device = $Device
-        port = $Port
-        auto_launch = [bool]$AutoLaunch
-        speak_replies = [bool]$SpeakReplies
-    }
     Write-TTSModuleState -Path (Join-Path $InstallRoot 'module-state.json') -State $moduleState
 } finally {
     if ($wasRunning) {

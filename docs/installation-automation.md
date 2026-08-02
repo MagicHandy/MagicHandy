@@ -1,191 +1,145 @@
-# Installation Automation — Parity Plan
+# Installation Automation
 
 ## Goal
 
-A non-technical user should be able to get MagicHandy running — app, LLM, model,
-and device — with as little friction as StrokeGPT-ReVibed offered, ideally less.
-This doc compares the two, records what already exists, and lays out the roadmap
-to parity. It is the reference for the interactive installer (`install.ps1`) and
-the eventual in-app setup wizard — whose shape is now decided:
-[docs/gui-installer.md](gui-installer.md) records the evaluation (2026-07-11)
-that the GUI installer is the app's own first-run wizard behind a thin Inno
-Setup shell, with the Windows setup binary and wizard slices scheduled in
+MagicHandy must be installable on a clean 64-bit Windows machine without
+requiring the user to discover dependencies manually. The normal path has one
+interactive owner: the embedded setup flow at `#/setup`. PowerShell and Inno
+Setup provide bootstrap, operating-system integration, and unattended entry
+points; they do not maintain competing product-choice screens.
+
+This policy supersedes the earlier console-first parity plan. It follows
+[ADR 0011](decisions/0011-windows-installer-shell.md) and is implemented in
 Phase 16.
 
-A structural advantage worth stating up front: MagicHandy's core is a single
-pure-Go binary with **no Python, no venv, no pip, and no torch/CUDA in the core**.
-The hardest, most failure-prone part of the old setup — building a Python ML
-environment with matching CUDA/torch wheels — simply does not exist here. CUDA
-matters only for app-owned external model processes (`llama-server` and
-optional local TTS servers), never for the MagicHandy Go core itself.
+## Entry Points
 
-## What StrokeGPT-ReVibed automated (the parity target)
-
-- A Python virtual environment plus dependency install (including heavy ML deps).
-- GPU/CUDA handling: detecting the GPU and installing matching torch/CUDA wheels,
-  with a CPU fallback.
-- Model selection and download — LLM models plus voice (ASR/TTS) models — via a
-  manager rather than manual file wrangling.
-- Start/Stop convenience scripts.
-- A first-run configuration path so the user did not start from a blank state.
-- (For LAN/mobile use) a local certificate/HTTPS helper.
-
-## What MagicHandy has today
-
-- **Build/run from source:** `go run ./cmd/magichandy` (or `go build`). No venv,
-  no pip.
-- **Interactive installer (`install.ps1`, this repo):** asks for app UI and
-  chat reply languages before other decisions, then can bootstrap a clean
-  64-bit Windows machine. It repairs/installs WinGet through Microsoft's
-  supported PowerShell path when needed, then installs and verifies Go. A
-  selected managed llama.cpp source build additionally provisions Git, CMake,
-  the Visual Studio Desktop C++ workload/Windows SDK, and CUDA when selected.
-  Choosing Ollama avoids the managed source build; the installer can provision
-  Ollama too. It builds the core and all first-party Go voice adapters.
-  Optional Parakeet assets remain consented,
-  size/license-visible, and SHA-256 verified, and voice remains disabled. The
-  installer can write a `Start-MagicHandy.ps1` launcher and open the app.
-  Faster Qwen3-TTS and Chatterbox are explicit choices in the same decision
-  tree. The selected path repairs WinGet and bootstraps uv, a compatible
-  managed Python runtime, PyTorch, and the model without requiring any of them
-  to be preinstalled. Those assets remain isolated from the pure-Go core.
-- **Clean-machine bootstrap (`bootstrap.ps1`):** starts with Windows PowerShell
-  and internet access only, repairs WinGet, installs Git after consent, clones
-  the repository, and delegates every product choice to `install.ps1`.
-- **State-aware source updater (`update.ps1`):** atomically reads the non-secret
-  install choices stored under LocalAppData, restores the saved UI language,
-  shows UI/chat locales with the remaining choices, asks whether to revise them,
-  refuses a dirty worktree, resolves an explicit safe fast-forward target,
-  and rebuilds through the same provisioning implementation. Live feature
-  branches follow their upstream; merged features with a deleted upstream may
-  advance from `origin/main` only after an ancestry check. Provider credentials
-  and the Handy connection key never enter installer state. Rebuilds first send
-  Emergency Stop and terminate only this checkout's app process tree; binaries
-  are staged before replacement, and browser launch waits for the rebuilt
-  process to own the configured port and answer `/api/state`.
-- **Local model manager:** Settings > Model lists runtime/daemon models and
-  SQLite-backed managed GGUF copies. Users can import a standalone GGUF or scan
-  a configurable Ollama library path and copy a compatible model with
-  SHA-256-verified progress. Managed llama.cpp can also build/switch its pinned
-  app-owned runtime from this screen; the core never builds or downloads a
-  runtime/model on startup.
-- **Local data:** settings, memory, prompt sets, chat history, patterns,
-  programs, preference feedback, and model metadata in a local SQLite DB; the
-  Handy connection key is stored locally and never echoed back.
-
-## Gaps vs the target
-
-1. No packaged release yet. Source setup no longer requires Go or the compiler
-   to be preinstalled, but it installs a multi-GB developer toolchain when a
-   managed source build is selected. Phase 16 still owns a prebuilt path that
-   does not install those tools at all.
-2. No in-app curated model catalog or guided network download yet. Local GGUF
-   and compatible Ollama-library imports are implemented with copy progress.
-3. GPU handling can install the CUDA Toolkit when CUDA is explicitly selected,
-   but does not yet recommend a model from detected VRAM.
-4. No in-app first-run setup wizard (the installer script is the current
-   stand-in).
-5. Voice setup is partial: provider adapters, provider-scoped settings,
-   continuous hands-free and hold-to-talk browser capture, app-managed Parakeet
-   plus main-installer and standalone Faster Qwen3-TTS/Chatterbox paths, and
-   guarded local Windows path browsing exist. App-managed assets are discovered separately
-   from custom overrides. A real managed-Parakeet browser microphone run,
-   local-cloning listening/performance acceptance, and any LAN/HTTPS story
-   remain open (managed browser audio: R24; local TTS: R17; LAN/HTTPS: R18).
-
-## Roadmap to parity
-
-Ordered roughly by leverage. Each step keeps the cross-cutting rules below.
-
-1. **Bootstrap installer — done** (`install.ps1`, `update.ps1`): bare-machine
-   WinGet/Go/toolchain provisioning, complete first-party Go binary build, data
-   folder, LLM/voice choices, atomic non-secret state, choice-preserving source
-   updates, launcher, and launch. This is the entry point until releases exist.
-2. **Model-manager foundation (done).** Durable model inventory, provider model
-   list, standalone GGUF import, configurable Ollama-path scan/import,
-   checksum verification, cancellation, selection, and guarded removal.
-3. **Packaged releases (Phase 16).** Windows portable zip / setup binary so the
-   installer can *download a prebuilt binary* instead of building from source —
-   no Go required for end users. Production signing remains an explicit Phase
-   16 decision. Linux/macOS artifacts are best-effort.
-4. **Managed llama.cpp runner provisioning (done for source installs).** The
-   installer provisions missing Git/CMake/MSVC/CUDA build dependencies, and the
-   installer and Model UI invoke one embedded helper pinned to `b9966` /
-   `c749cb0`, verify the checkout and executable, build CPU or CUDA, install the
-   complete runtime atomically, and activate a constrained app-data manifest.
-   No user path setting remains. Phase 16 must publish checksummed prebuilt CPU
-   and CUDA runtime bundles so release users do not need Git/CMake/Visual Studio;
-   source build remains an advanced fallback.
-5. **Curated model catalog + guided download.** A small, opinionated list of
-   recommended GGUF models with visible size, license, checksum, and rough VRAM
-   fit; one-click download with progress; and "import a local GGUF" without a
-   download. Startup and status checks never trigger a download (guardrail).
-6. **GPU/VRAM aware recommendations.** Use `nvidia-smi` (and VRAM) to recommend a
-   runner build and a model size that fits, with an honest CPU fallback and a
-   note on driver/CUDA-toolkit expectations. Because CUDA lives only in
-   external runners, this stays far simpler than the old torch/CUDA install.
-7. **In-app first-run setup wizard.** The eventual best UX and the real parity
-   milestone for non-technical users: connect the Handy (enter key, test),
-   choose a provider, pick/download a model, and confirm — all in the browser UI,
-   superseding the script for most people. Designed in
-   [docs/gui-installer.md](gui-installer.md) (Phase 16 slices 16.1-16.3),
-   including voice provisioning moved behind API endpoints and the
-   StrokeGPT-ReVibed porting step over the Phase 15 importer.
-8. **Voice setup (implemented adapters and source provisioning).** Provider
-   selection, workers, push-to-talk, browser playback, and app-managed Parakeet
-   installation have landed. The main decision tree and dedicated scripts
-   install pinned Faster Qwen3-TTS or Chatterbox modules and persist their
-   hardware and auto-launch choices; arbitrary
-   compatible endpoints use the same Go adapter. Broader microphone, listening,
-   latency, and GPU-coexistence checks still require release evidence.
-   Providers stay optional and off the core runtime path (ADRs 0007 and 0012).
-9. **Cross-platform + LAN.** Linux/macOS install scripts; decide the LAN/mobile
-   HTTPS story explicitly before promising phone use (risk R18).
-
-## Cross-cutting rules
-
-These hold for every step above (from `docs/goals-and-guardrails.md` and
-`AGENTS.md`):
-
-- **Downloads are explicit user actions** with visible size, license, checksum,
-  and disk-use; show compact inline progress, retry transient failures, retain
-  resumable partials, verify before install, and move files atomically. Startup
-  and status checks must never kick off a multi-GB download.
-- **Build-tool installation is explicit too.** WinGet package agreements are
-  accepted only after the script names the package, purpose, license, and large
-  disk impact. `-Yes` is the unattended form of that consent.
-- **The core stays pure-Go.** CUDA/torch and any native ML live in the external
-  runner or a worker process, never in the MagicHandy binary.
-- **Secrets never touch logs or the catalog** — the connection key and any API
-  keys stay local and redacted.
-- **Provider choice is visible state**, not a silent mid-session switch, and the
-  app runs (chat aside) even with no model configured.
-
-## Parity checklist
-
-| StrokeGPT-ReVibed setup capability | MagicHandy status | Where |
+| Entry point | Intended user | Responsibility |
 | --- | --- | --- |
-| One-command environment setup | **Implemented for source installs** — bootstraps dependencies and compiler | `install.ps1` |
-| No Python/venv/torch in the core install | **Implemented**; optional local TTS modules install an isolated environment only when selected | by design + ADR 0012 |
-| Prebuilt one-click download | Planned | Phase 16 |
-| LLM runner provisioning (CUDA/CPU) | **Implemented for source installs** | installer + Settings > Model |
-| Model selection + local/Ollama import UI | **Implemented** | Settings > Model |
-| Curated model download UI | Planned | catalog + Settings > Model |
-| GPU/VRAM-aware recommendations | CUDA provisioning implemented; model/VRAM advice remains | installer + future catalog |
-| Start/Stop convenience | `Start-MagicHandy.ps1` (opt-in) | install.ps1 |
-| First-run setup wizard | Planned (script is the stand-in) | step 7 |
-| Voice model setup | Partial - Parakeet is app-managed; Faster Qwen3-TTS/Chatterbox are in the main decision tree with standalone update scripts and Settings auto-launch; release listening and prebuilt provisioning remain | Phase 13 + Phase 16 |
-| LAN/mobile HTTPS helper | Undecided (scope in R18) | step 9 |
+| Windows setup EXE | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open `#/setup` |
+| Portable ZIP | No-install or USB use | Provide the same payload without Windows integration |
+| `bootstrap.ps1` + `install.ps1` | Source user | Repair WinGet/Git, build the pure-Go core, then open `#/setup` |
+| `install.ps1 -Yes ...` | Managed automation | Provision explicitly selected optional components without prompts |
+| `update.ps1` | Existing source checkout | Safely fast-forward and rebuild the core; optionally open `#/setup` |
+| Settings > General > Run setup again | Existing app | Revisit device, model, and voice choices at any time |
 
-## Related docs
+The setup EXE and portable ZIP require no Go, Node, Python, CMake, Visual
+Studio, or CUDA installation to run the MagicHandy core. Optional selections
+can add their own dependencies after explicit consent.
 
-- `install.ps1` — the interactive installer.
-- `update.ps1` — the choice-preserving source updater.
-- `change-language.ps1` — the native-name UI/chat language recovery flow.
-- `docs/localization-wording.md` — the catalog, tone, and translation contract.
-- `scripts/installer/InstallerSupport.psm1` — shared provisioning/state logic.
-- `docs/source-installer.md` — package IDs, state schema, commands, and updater contract.
-- `IMPLEMENTATION_PLAN.md` — Phase 16 (packaging), Phases 12-13 (voice).
-- `docs/model-management.md` — model catalog and llama.cpp runner strategy.
-- `docs/risk-register.md` — R13 (runner/model management), R18 (LAN/HTTPS).
-- `docs/goals-and-guardrails.md` — the download/pure-Go/secret rules above.
+## GUI-Owned Decisions
+
+Guided setup owns:
+
+1. app and chat reply language;
+2. device transport, write-only Cloud key, and non-motion connection check;
+3. managed llama.cpp, existing Ollama, external llama.cpp, or skip;
+4. managed GGUF import, Ollama model selection, or external model ID;
+5. optional Faster Qwen3-TTS or Chatterbox installation and execution device;
+6. optional Parakeet installation; and
+7. completion plus the data directory and local address summary.
+
+Every step is skippable. Installing a voice module does not enable voice,
+start microphone capture, speak text, connect hardware, or command motion.
+Reference WAV and transcript selection remains in Settings > Voice.
+
+## Dependency Boundaries
+
+The core and first-party adapters are pure Go and build with `CGO_ENABLED=0`.
+Optional dependencies stay outside the core process:
+
+| Choice | Additional dependencies | Why it may be chosen |
+| --- | --- | --- |
+| Managed llama.cpp source build | Git, CMake, Visual Studio C++ Build Tools; CUDA Toolkit for CUDA | App-owned pinned runner, startup, diagnostics, and lifecycle |
+| Existing Ollama | Existing Ollama service only | Avoid duplicate compiler/runtime storage and use an existing model library |
+| Parakeet | Pinned `parakeet.cpp` runner and roughly 646 MiB GGUF model | Local speech recognition |
+| Faster Qwen3-TTS | `uv`, managed Python 3.11, CUDA PyTorch, pinned source/model | Faster NVIDIA voice cloning |
+| Chatterbox | `uv`, managed Python 3.10, PyTorch, pinned source/model | CPU fallback and broader NVIDIA compatibility |
+
+The managed llama.cpp path currently builds from source. Prebuilt CPU/CUDA
+runtime bundles remain planned; until they land, choosing that path installs a
+large compiler toolchain. The GUI says so before the action. Choosing existing
+Ollama or skipping chat setup keeps that toolchain off the machine.
+
+## Downloads And Consent
+
+- No model, runtime, Python environment, CUDA toolkit, or optional worker is
+  downloaded during app startup or a status check.
+- Each GUI install button is a separate user action and shows purpose, disk
+  impact, and source/model licenses before it starts.
+- Pinned downloads use the same verification and resumable paths as the
+  source scripts. Parakeet verifies runner and model hashes; managed TTS pins
+  source revisions and keeps resumable model caches.
+- The backend owns one cancellable setup queue and streams bounded status and
+  logs to the UI. Cancellation retains safe partial downloads for retry.
+- `-Yes` is the unattended equivalent of consent and is honored only when the
+  caller explicitly selects optional features.
+
+## Source Install And Update Contract
+
+A plain `install.ps1` creates a bootstrap state containing only repository,
+data-directory, port, locale, and launcher information. Optional legacy fields
+remain in schema 3 for compatibility with unattended installs, but the normal
+path initializes them to off and does not act on them.
+
+`update.ps1` always performs a core-only provision. It preserves SQLite-owned
+settings and optional assets, refreshes small launcher shims in recognized TTS
+module roots, and asks one question: whether to open guided setup after the
+rebuild. It never rebuilds llama.cpp, reinstalls Parakeet, or recreates a Python
+environment merely because old installer state says that component once
+existed.
+
+Both scripts refuse unsafe source updates, stop only a verified app process
+owned by the checkout, stage replacement binaries, and wait for the new server
+before opening the browser.
+
+## Current Status
+
+Implemented on the Phase 16 branch:
+
+- portable Windows ZIP and thin Inno Setup EXE from one versioned payload;
+- artifact manifest, exact source revision, GPL license, and SHA-256 sums;
+- artifact-only GitHub workflow with portable and silent install/uninstall
+  smoke checks; no GitHub Release is created;
+- fresh-store detection and a re-runnable `#/setup` route;
+- GUI-managed llama.cpp source build, GGUF import, Ollama/external selection,
+  Parakeet, Faster Qwen3-TTS, and Chatterbox provisioning;
+- one cancellable backend setup queue with controller ownership;
+- source bootstrap and updater delegation to the GUI; and
+- packaged helper scripts so optional modules remain repairable after install.
+
+Still open:
+
+- clean-machine acceptance of the setup EXE and every optional path;
+- prebuilt managed llama.cpp CPU/CUDA bundles;
+- curated checksum-pinned GGUF downloads and hardware-fit recommendations;
+- production code signing and publisher identity;
+- any automatic update implementation;
+- LAN/mobile HTTPS support; and
+- a Phase 15 legacy importer, so no migration step appears in setup.
+
+## Acceptance
+
+- A standard user can install, run, and uninstall the core from the setup EXE
+  without a developer toolchain.
+- The portable ZIP and setup EXE report the same version and contain the same
+  release manifest.
+- Silent setup and uninstall work; uninstall retains `%APPDATA%\MagicHandy` and
+  tells interactive users where that data remains.
+- A fresh app opens setup, an existing settings document does not, and setup is
+  re-runnable from Settings.
+- Every optional job is explicit, cancellable, controller-gated, and leaves the
+  app usable when skipped or failed.
+- Source `install.ps1` works with no preinstalled dependencies; `update.ps1`
+  preserves GUI choices and optional assets.
+- Standard Go, frontend, PowerShell, race, lint, pure-Go, packaging, and visual
+  checks are green.
+
+## Related Docs
+
+- [Windows release packaging](windows-release-packaging.md)
+- [Windows source installer](source-installer.md)
+- [GUI installer design](gui-installer.md)
+- [Setup wizard design](setup-wizard-design.md)
+- [ADR 0011](decisions/0011-windows-installer-shell.md)
+- [Risk register](risk-register.md)

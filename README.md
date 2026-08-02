@@ -6,8 +6,9 @@ or let Freestyle run hands-free. Conversations, settings, and credentials stay
 on your machine — no account, no tracking.
 
 > **Status:** early and under active development. Local chat already drives
-> real device motion, but there is no packaged one-click installer yet.
-> Expect rough edges — see [what's coming](#roadmap).
+> real device motion. An unsigned Windows setup binary and portable ZIP can be
+> built by CI, but no installer binary has been released yet. Expect rough
+> edges — see [what's coming](#roadmap).
 
 ## What it does
 
@@ -38,9 +39,9 @@ on your machine — no account, no tracking.
 ## Get started
 
 On Windows, open PowerShell in the folder where you want MagicHandy and paste
-this entire block. It needs only Windows PowerShell and internet access; the
-bootstrap repairs WinGet and installs Git when they are missing, then the main
-installer provisions only the features you select:
+this entire block. It needs only Windows PowerShell and internet access. The
+bootstrap repairs WinGet and installs Git when they are missing, builds the
+core, and opens the guided setup screen:
 
 ```powershell
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -49,19 +50,25 @@ Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/MagicHandy
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bootstrap
 ```
 
-The installer is designed to bootstrap a clean 64-bit Windows machine and
-provisions only what your choices require, including compilers, managed
-llama.cpp or Ollama, CUDA, speech recognition, and optional local TTS with its
-own Python/PyTorch environment. Release clean-machine acceptance remains open.
-Its first two questions choose the app UI and chat reply languages; every later
-question uses the selected UI language. Run `.\change-language.ps1` if either
-choice needs to be corrected. Flags, voice options, model imports, updater
-behavior, and manual setup are all covered in the
+The default PowerShell path installs only the dependencies needed to build the
+pure-Go core. Device, model, runtime, and voice choices live in the same GUI
+used later from Settings. Choosing managed llama.cpp explains and installs its
+source compiler toolchain; choosing an existing Ollama install avoids that
+runtime and compiler footprint. Parakeet and local TTS remain explicit,
+separate GUI actions and install into app-owned data folders. Unattended flags
+remain available for managed deployments. Release clean-machine acceptance is
+still in progress. Flags, voice options, model imports, updater behavior, and
+manual setup are covered in the
 **[Getting Started guide](docs/getting-started.md)**.
 
 For later updates, open PowerShell in the same `MagicHandy` folder and run
-`.\update.ps1`; it keeps your previous installation choices unless you ask to
-change them.
+`.\update.ps1`. It updates the core without replaying old optional-install
+choices, then can open guided setup when you want to change them.
+
+Versioned Windows builds also check the project's latest stable GitHub Release
+and place an update notice in the app. The check can be set to manual-only in
+**Settings > General**. MagicHandy never downloads or executes an update in the
+background; packaged updates remain an explicit reviewed over-install.
 
 Prefer to build it yourself? `go run ./cmd/magichandy` (Go 1.25+) serves the
 app at <http://127.0.0.1:49717> — no Node required. Details in the
@@ -87,9 +94,10 @@ MagicHandy is a ground-up Go rewrite of StrokeGPT-ReVibed. Working from source
 today: chat-driven motion (Handy Cloud, browser Bluetooth, Intiface), live
 controls, Freestyle, Chat Autopilot, long-term memory, editable prompt sets, a
 pattern/program library, voice providers with push-to-talk, and model
-management. Planned: guided setup, curated model downloads, and packaged
-releases. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full
-roadmap.
+management. The guided setup flow and unsigned Windows packaging workflow are
+implemented on the Phase 16 branch; curated model downloads, prebuilt managed
+llama.cpp bundles, signing, and release acceptance remain. See
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full roadmap.
 
 MagicHandy and [LSO (Local Stroke Orchestrator)](docs/lso-merge-integration.md)
 are being combined into one project on this Go core.
@@ -112,7 +120,8 @@ Contributions are welcome, from people and AI coding tools alike.
 - [Goals and guardrails](docs/goals-and-guardrails.md) ·
   [Goal scorecard](docs/goal-scorecard.md)
 - [Installation automation plan](docs/installation-automation.md) ·
-  [Setup wizard design](docs/setup-wizard-design.md)
+  [Setup wizard design](docs/setup-wizard-design.md) ·
+  [Release checks and update handoff](docs/update-checks.md)
 - [Motion and transport contract](docs/decisions/0002-motion-transport-contract.md) ·
   [HSP v4 invariants](docs/hsp-v4-invariants.md)
 - [Pattern library and import contracts](docs/pattern-library.md)
