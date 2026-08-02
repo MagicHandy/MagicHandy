@@ -5,18 +5,23 @@ Everything you need to install, update, and run MagicHandy from source. The
 
 ## Windows setup package
 
-Phase 16 can build an unsigned setup EXE and portable ZIP, but they are not yet
-published as a release. The setup EXE installs the prebuilt core, shortcuts,
-and uninstaller without requiring Go, Node, Python, CMake, or Visual Studio,
-then opens the same guided setup described below. Build and smoke-test commands
+The first unsigned Windows x64 setup EXE and portable ZIP are published as
+[v0.1.0-alpha.1](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.1).
+The setup EXE defaults to `C:\Program Files\MagicHandy`, exposes the destination
+chooser and an optional desktop shortcut, and installs the prebuilt core,
+Start Menu shortcut, and uninstaller without requiring Go, Node, Python, CMake,
+or Visual Studio. It then opens the same guided setup described below. Verify
+the download with the release's `SHA256SUMS` file. Build and acceptance commands
 are in [windows-release-packaging.md](windows-release-packaging.md).
 
-After releases begin, versioned builds check the latest stable GitHub Release
+Versioned builds check the latest stable GitHub Release
 and notify through the app. **Settings > General > Updates** provides an
 explicit check and a manual-only preference. The app opens the release page;
 it does not silently download or run setup. Installing a newer setup EXE over
-the existing package preserves `%APPDATA%\MagicHandy`. Full behavior and trust
-boundaries are in [update-checks.md](update-checks.md).
+the existing package preserves `%APPDATA%\MagicHandy`. Interactive uninstall
+asks whether to remove that app-owned tree; choose **Yes** for a clean reinstall.
+Full behavior and trust boundaries are in
+[update-checks.md](update-checks.md).
 
 ## Windows source bootstrap (`install.ps1`)
 

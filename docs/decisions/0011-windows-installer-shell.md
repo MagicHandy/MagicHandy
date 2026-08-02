@@ -24,7 +24,9 @@ are installed on the machine and consume several GB.
 
 1. Inno Setup is the thin Windows installation shell. It installs the app,
    creates shortcuts and Add/Remove Programs metadata, supports unattended and
-   over-install upgrades, leaves user data on uninstall, and launches setup.
+   over-install upgrades, asks whether to purge app-owned data on interactive
+   uninstall, and launches setup. Silent uninstall purges by default;
+   `/KEEPUSERDATA` is the explicit retention override.
 2. The embedded React app owns interactive first-run setup at `#/setup`. The
    wizard arranges existing settings and API operations and remains re-runnable
    from Settings. It does not duplicate provider, model, migration, or consent

@@ -65,6 +65,7 @@ try {
         'scripts\install-tts-module.ps1',
         'scripts\update-tts-module.ps1',
         'scripts\release\Build-WindowsRelease.ps1',
+        'scripts\release\Test-WindowsRelease.ps1',
         'scripts\installer\InstallerSupport.psm1',
         'internal\llm\runtimeassets\build-managed-llama.ps1'
     )
@@ -80,13 +81,15 @@ try {
     Assert-True -Condition ($bootstrapSource.Contains('Microsoft.WinGet.Client')) -Message 'clean-machine bootstrap should use the official WinGet repair path'
     Assert-True -Condition ($bootstrapSource.Contains('--id Git.Git')) -Message 'clean-machine bootstrap should install Git when missing'
     Assert-True -Condition ($bootstrapSource.Contains('& $installer @installerArguments')) -Message 'clean-machine bootstrap should delegate choices to install.ps1'
-    $ttsInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\install-tts-module.ps1'))
+    $ttsInstaller = Join-Path $Repo 'scripts\install-tts-module.ps1'
+    $ttsInstallerSource = [System.IO.File]::ReadAllText($ttsInstaller)
     Assert-True -Condition ($ttsInstallerSource.Contains('--query-gpu=compute_cap')) -Message 'Chatterbox install should detect NVIDIA compute capability'
     Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia.txt')) -Message 'Chatterbox install should retain the CUDA 12.1 dependency set'
     Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia-cu128.txt')) -Message 'Chatterbox install should retain the RTX 50-series CUDA 12.8 dependency set'
     Assert-True -Condition ($ttsInstallerSource.Contains("Microsoft\WinGet\Links\uv.exe")) -Message 'TTS install should resolve the WinGet portable uv link in the current process'
     Assert-True -Condition ($ttsInstallerSource.Contains("Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv'")) -Message 'TTS install should repair WinGet and refresh PATH after installing uv'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('python', 'install', `$PythonVersion)")) -Message 'TTS install should explicitly provision its managed Python runtime'
+    Assert-True -Condition ($ttsInstallerSource.Contains('Reusing the existing $reportedVersion environment')) -Message 'TTS reinstall should not replace an in-use compatible Python launcher'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Reference WAV path'")) -Message 'TTS install must leave Faster Qwen reference selection to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Exact reference transcript'")) -Message 'TTS install must leave Faster Qwen transcription to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains('[string]$ReferenceTranscript')) -Message 'TTS install must not expose a Faster Qwen transcript parameter'
@@ -115,6 +118,78 @@ try {
     Assert-True -Condition ($installerModuleSource.Contains('-NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments')) -Message 'TTS process isolation should preserve script paths and argument boundaries'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
+
+    Write-Host 'Checking compatible TTS Python environment reuse...'
+    $ttsTokens = $null
+    $ttsErrors = $null
+    $ttsAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $ttsInstaller,
+        [ref]$ttsTokens,
+        [ref]$ttsErrors
+    )
+    foreach ($functionName in @('Invoke-Checked', 'Initialize-TTSPythonEnvironment')) {
+        $functionAst = $ttsAst.Find({
+            $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $args[0].Name -eq $functionName
+        }, $true)
+        Assert-True -Condition ($null -ne $functionAst) -Message "TTS installer should define $functionName"
+        Invoke-Expression $functionAst.Extent.Text
+    }
+
+    $fakeRuntimeSource = Join-Path $tempRoot 'fake-tts-runtime.go'
+    $fakeRuntimeBuild = Join-Path $tempRoot 'fake-tts-runtime.exe'
+    [System.IO.File]::WriteAllText($fakeRuntimeSource, @'
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func main() {
+	if strings.EqualFold(filepath.Base(os.Args[0]), "uv.exe") {
+		if len(os.Args) > 1 && os.Args[1] == "venv" {
+			fmt.Fprintln(os.Stderr, "compatible environments must not be recreated")
+			os.Exit(97)
+		}
+		return
+	}
+	fmt.Println("Python 3.11.15")
+}
+'@)
+    $goCommand = Get-Command 'go.exe' -ErrorAction SilentlyContinue
+    if (-not $goCommand) {
+        $goCommand = Get-Command 'go' -ErrorAction Stop
+    }
+    & $goCommand.Source build -trimpath -o $fakeRuntimeBuild $fakeRuntimeSource
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not build the isolated TTS recovery fixture (exit $LASTEXITCODE)."
+    }
+
+    $reuseRoot = Join-Path $tempRoot 'tts-reuse'
+    $reuseScripts = Join-Path $reuseRoot '.venv\Scripts'
+    New-Item -ItemType Directory -Force -Path $reuseScripts | Out-Null
+    $fakeUv = Join-Path $tempRoot 'uv.exe'
+    $fakePython = Join-Path $reuseScripts 'python.exe'
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeUv
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakePython
+    $reusedEnvironment = Initialize-TTSPythonEnvironment -Uv $fakeUv -Root $reuseRoot -PythonVersion '3.11'
+    Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
+    Assert-Equal -Expected 'Python 3.11.15' -Actual ([string]$reusedEnvironment.Version) -Message 'compatible TTS Python version should be retained'
+    Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
+
+    $innoSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'installer\magichandy.iss'))
+    Assert-True -Condition ($innoSource.Contains('DefaultDirName={autopf}\MagicHandy')) -Message 'Windows setup should default to Program Files'
+    Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'
+    Assert-True -Condition ($innoSource.Contains('Name: "desktopicon"')) -Message 'Windows setup should offer a desktop shortcut'
+    Assert-True -Condition ($innoSource.Contains('Flags: unchecked')) -Message 'desktop shortcut should remain opt-in'
+    Assert-True -Condition ($innoSource.Contains("HasUninstallSwitch('/KEEPUSERDATA')")) -Message 'uninstall should support explicit data retention'
+    Assert-True -Condition ($innoSource.Contains("HasUninstallSwitch('/PURGEUSERDATA')")) -Message 'uninstall should support explicit clean removal'
+    Assert-True -Condition ($innoSource.Contains('PurgeRequested or UninstallSilent')) -Message 'silent uninstall should default to a clean reset'
+    Assert-True -Condition ($innoSource.Contains("ExpandConstant('{userappdata}\MagicHandy')")) -Message 'clean uninstall should target only the packaged app data root'
+    Assert-True -Condition ($innoSource.Contains('Parameters: "-prepare-uninstall"')) -Message 'uninstall should request graceful app and worker shutdown before removal'
 
     Write-Host 'Checking installer localization catalogs and prompt coverage...'
     $localeRoot = Join-Path $Repo 'scripts\installer\locales'
@@ -208,6 +283,22 @@ try {
     Assert-True -Condition ($qwenPlan -match 'Reference:\s+configure later in Settings > Voice') -Message 'Faster Qwen should direct reference setup to the GUI'
     Assert-True -Condition ($qwenPlan -match 'no dependencies, files, models, processes, or settings were changed') -Message 'Faster Qwen plan should state its no-write contract'
     Assert-True -Condition (-not (Test-Path -LiteralPath $qwenRoot)) -Message 'Faster Qwen plan should not create its install root'
+
+    $savedLocalAppData = $env:LOCALAPPDATA
+    $savedAppData = $env:APPDATA
+    try {
+        $env:LOCALAPPDATA = Join-Path $tempRoot 'standalone-local-app-data'
+        $env:APPDATA = Join-Path $tempRoot 'standalone-roaming-app-data'
+        $standalonePlan = & $ttsInstaller -Module faster-qwen3-tts -PlanOnly -Yes 6>&1 | Out-String -Width 4096
+        $expectedStandaloneData = Join-Path $env:APPDATA 'MagicHandy'
+        Assert-True `
+            -Condition ($standalonePlan -match [regex]::Escape($expectedStandaloneData)) `
+            -Message 'standalone TTS install should share the core and uninstaller app-data root'
+        Assert-True -Condition (-not (Test-Path -LiteralPath $expectedStandaloneData)) -Message 'standalone TTS plan should not create app data'
+    } finally {
+        $env:LOCALAPPDATA = $savedLocalAppData
+        $env:APPDATA = $savedAppData
+    }
 
     $chatterRoot = Join-Path $ttsData 'voice\chatterbox-tts'
     $chatterPlan = & $ttsInstaller -Module chatterbox -DataDir $ttsData -InstallRoot $chatterRoot -Device cpu -PlanOnly -Yes 6>&1 | Out-String

@@ -1280,8 +1280,9 @@ Mitigation:
   downloads
 - make source updates core-only so saved legacy installer state cannot silently
   rebuild llama.cpp, Parakeet, or a Python environment
-- retain user data on uninstall and disclose its path; never delete model or
-  credential state as an uninstall side effect
+- make uninstall data disposition explicit: recommend a bounded purge of the
+  packaged `%APPDATA%\MagicHandy` root for clean reinstall, support explicit
+  retention, and never infer or delete external/custom paths
 - keep packaged defaults on loopback and defer LAN/HTTPS and auto-update until
   their authentication, signing, rollback, and motion-stop designs exist
 - keep release discovery read-only and opt-out: query only the canonical latest
@@ -1299,12 +1300,12 @@ Exit evidence:
 - production artifacts are signed by a documented protected process, or the
   project explicitly accepts and communicates unsigned distribution risk
 
-Status 2026-08-02: manifest/checksum generation, artifact-only CI, thin Inno
-shell, GUI-owned choices, the unified install plan, controller gates,
-cancellation, core-only source
-updates, and non-executing release discovery are implemented on the Phase 16
-branch. Local acceptance verified every staged and outer hash, first install,
-the versioned app's live GitHub check, an over-install while that app was
-running, preserved settings, restart, uninstall, and retained user data. R28
-remains High pending the full clean-machine acceptance run on a standard
-dependency-free account and a production signing decision.
+Status 2026-08-02: manifest/checksum generation, read-only PR packaging,
+SemVer-tag publication, thin Inno shell, GUI-owned choices, the unified install
+plan, controller gates, cancellation, core-only source updates, and
+non-executing release discovery are implemented. Release acceptance verifies
+every staged and outer hash, custom and Program Files installs, shortcut/ARP
+metadata, active-process over-install, retained settings, explicit data
+retention, bounded clean purge, and fresh state after reinstall. R28 remains
+High pending broader clean-machine acceptance of optional components and a
+production signing decision.

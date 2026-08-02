@@ -104,7 +104,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0-M2 implemented; M3 hardware acceptance in progress** | #104 |
 | 19 | Personas — named presets over the personalization axes (design: `docs/persona-page.md`) | **Slices 1-7 and release-hardening review implemented; model-specific lore baselines, TTS voice, and preferred pattern tags remain open** | — |
-| 16 | Windows packaging, first-run setup, release pipeline | **Foundations landed; release slices not started** | #55, #56, #61, #62, #64, #65 |
+| 16 | Windows packaging, first-run setup, release pipeline | **First unsigned alpha implemented; optional-runtime acceptance continues** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
 Phase 13.0 note: the ADR 0003 delivery-ordering trio landed as its own PR
@@ -1569,19 +1569,20 @@ must run the core without a source toolchain. Optional managed runtimes may add
 their own explicit dependencies; existing Ollama/external providers and skip
 paths must remain available.
 
-Status 2026-08-02: **in progress**. The Phase 16 branch implements the unsigned
-portable/setup artifacts, artifact-only CI workflow, fresh-store detection,
-seven-step `#/setup` route, one optional llama.cpp/Parakeet/TTS install-plan
-endpoint, and GUI-delegating source install/update scripts. Versioned builds
-also implement
+Status 2026-08-02: **first alpha implemented; broader acceptance in progress**.
+The unsigned portable/setup artifacts, read-only PR packaging, tag-gated release
+publication, fresh-store detection, seven-step `#/setup` route, one optional
+llama.cpp/Parakeet/TTS install-plan endpoint, and GUI-delegating source
+install/update scripts are implemented. Versioned builds also implement
 cached latest-stable GitHub release discovery, an automatic/manual preference,
 and a notification plus explicit release-page handoff; this is not an artifact
 download or auto-update path. A local packaged acceptance run verified manifest
-and outer hashes, first install, a live release check, active-process
-over-install, settings retention, restart, uninstall, and retained app data.
-No installer binary is released by this work. Clean-machine acceptance on a
-standard dependency-free account, prebuilt managed llama.cpp bundles,
-curated model downloads, signing, and final budget evidence remain open.
+and outer hashes, custom and Program Files installs, destination/shortcut/ARP
+metadata, active-process over-install, explicit retention, bounded clean purge,
+and fresh reinstall state. The first unsigned Windows prerelease is
+`v0.1.0-alpha.1`. Broader clean-machine acceptance of optional components,
+prebuilt managed llama.cpp bundles, curated model downloads, signing, and final
+budget evidence remain open.
 
 Delivered ahead of this phase (#55, #56, #61, #62, #64, #65): the
 model-manager foundation now
@@ -1619,8 +1620,8 @@ bundles that avoid installing a compiler toolchain for that optional path.
 setup surface is the app itself — a first-run onboarding wizard (`#/setup`)
 in the embedded React UI orchestrating the existing build/import/provision
 APIs — delivered by a thin Inno Setup binary that handles only install
-directory, shortcuts, the uninstall entry (program files only; the data
-directory survives), and launching the app into setup. Native installer
+directory, shortcuts, the uninstall entry, explicit default-data retain/purge,
+and launching the app into setup. Native installer
 frameworks and dedicated Electron/Tauri installer apps were evaluated and
 rejected for the interactive surface; the portable zip stays as the second
 artifact.
@@ -1629,15 +1630,16 @@ artifact.
 
 Implement, as slices:
 
-- **16.0 — release plumbing (implemented, acceptance open)**: versioned pure-Go
+- **16.0 — release plumbing (implemented; first alpha published)**: versioned pure-Go
   Windows core and worker builds, one staged payload, portable ZIP, exact-source
   notice, GPL license, per-file manifest, outer SHA-256 sums, and an
-  artifact-only GitHub Actions workflow. Prebuilt CPU/CUDA llama.cpp bundles
-  remain open and are not represented as available downloads.
-- **16.1 — Windows setup binary (implemented, acceptance open)**: Inno Setup script compiled in CI
+  read-only PR artifacts and SemVer-tag publication after release-owned quality
+  gates. Prebuilt CPU/CUDA llama.cpp bundles remain open and are not represented
+  as available downloads.
+- **16.1 — Windows setup binary (implemented and lifecycle-tested)**: Inno Setup script compiled in CI
   (build-time-only dependency), Start Menu/desktop shortcuts, Add/Remove
-  Programs uninstall that leaves the data directory, silent-install flags,
-  over-install upgrades, finish page launching first-run setup
+  Programs uninstall with explicit default-data retention/purge, silent-install
+  flags, over-install upgrades, finish page launching first-run setup
 - **16.2 — first-run onboarding wizard (implemented, acceptance open)**
   (`#/setup`, re-runnable from Settings): UI/chat language → device → LLM
   runtime (Recommended managed source build, explicit existing Ollama,
@@ -1669,7 +1671,7 @@ Implement, as slices:
   single-operator local controller and must not be port-forwarded
 - decision docs: ADR 0013 records unsigned artifact labeling, explicit
   over-install updates, optional worker/runtime separation, deferred WebView2,
-  retained user data, and loopback-only LAN/HTTPS policy
+  explicit bounded uninstall cleanup, and loopback-only LAN/HTTPS policy
 - check the binary-size (<30 MB) and cold-start (<500 ms) budgets from
   `docs/goals-and-guardrails.md` (the setup binary is a separate artifact
   with its own small overhead; the core binary budget is unchanged)
@@ -1678,7 +1680,8 @@ Implement, as slices:
 
 Standard suite plus: verify every manifest and outer checksum; unzip and run the
 portable payload; silently install/version-check/uninstall the setup EXE;
-confirm config/data placement and retained user data; exercise an over-install
+confirm config/data placement, explicit retention, purge, and fresh reinstall;
+exercise an over-install
 while the old core is running and confirm settings survive; exercise fresh/existing
 setup entry, cancellation, and optional module retry. A machine without
 Go/Git/CMake/Visual Studio must run the packaged core. The future prebuilt
@@ -1688,7 +1691,8 @@ managed llama.cpp path receives its own no-toolchain check when implemented.
 
 - A user can install and run the core without Go, Node, Python, or a compiler.
 - Setup and portable artifacts share one payload, license, source notice, and
-  verified manifest; no release is published by the PR workflow.
+  verified manifest; the PR workflow cannot publish, while a validated tag on
+  `main` can publish only after release gates pass.
 - GUI and unattended paths can provision optional ASR/TTS modules, while
   skipped or failed modules leave the core usable.
 - Source install/update and Windows package builds remain functional.

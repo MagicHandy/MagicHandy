@@ -10,7 +10,10 @@ same app, workers, optional-module helper scripts, license, source notice, and
 release manifest. Neither artifact bundles models, Python, CUDA, llama.cpp, or
 Parakeet; those remain explicit setup choices.
 
-No command in this document publishes a GitHub Release.
+Release versions and tag policy are defined in
+[Versioning And Releases](versioning-and-releases.md). Local build and test
+commands never publish. The tag-triggered workflow publishes only after its own
+quality and install-lifecycle gates pass.
 
 ## Build Prerequisites
 
@@ -76,48 +79,63 @@ The staged `MagicHandy` directory contains:
 The manifest is generated after all payload files except the manifest itself
 are staged. The outer checksum file covers the portable ZIP and setup EXE.
 
-## Local Smoke Test
+## Local Acceptance
 
-Build with a disposable version, then verify both forms:
+Build with a disposable version, then verify the payload and isolated
+current-user install lifecycle:
 
 ```powershell
-$setup = Get-ChildItem .\artifacts\*-setup.exe | Select-Object -First 1
-$installDir = Join-Path $env:TEMP 'MagicHandySetupSmoke'
-$install = Start-Process -FilePath $setup.FullName -ArgumentList @(
-  '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', ('/DIR="{0}"' -f $installDir)
-) -Wait -PassThru
-if ($install.ExitCode -ne 0) { throw "Setup failed with exit $($install.ExitCode)." }
-& (Join-Path $installDir 'magichandy.exe') -version
-$uninstaller = Get-ChildItem $installDir -Filter 'unins*.exe' | Select-Object -First 1
-$uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @(
-  '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
-) -Wait -PassThru
-if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed with exit $($uninstall.ExitCode)." }
+$commit = (git rev-parse HEAD).Trim()
+.\scripts\release\Test-WindowsRelease.ps1 `
+  -Version 0.0.0-local `
+  -Commit $commit `
+  -ExerciseInstaller
 ```
 
-Also expand the portable ZIP, run `magichandy.exe -version`, verify every
-manifest hash, and start the app with a disposable data directory. Silent smoke
-tests must not launch a browser or create shortcuts.
+The test expands the portable ZIP, verifies exact version/provenance and every
+manifest/outer hash, installs to an isolated custom directory, verifies the
+desktop and Start Menu choices plus Add/Remove Programs metadata, performs an
+active-process over-install, confirms settings survive, and exercises explicit
+data retention before cleaning up.
 
-Interactive uninstall removes program files and shortcuts but deliberately
-retains `%APPDATA%\MagicHandy`, including settings, history, models, and voice
-modules. It reports that path after uninstall. Silent uninstall suppresses the
-message but follows the same data-retention policy.
+`-ExerciseDefaultInstall` additionally tests the real Program Files default and
+`%APPDATA%\MagicHandy` purge/reinstall boundary. It requires an elevated clean
+test host and refuses to run if an existing install, data directory, shortcut,
+or uninstall entry would be touched. CI runs this form on a disposable Windows
+runner.
+
+Interactive uninstall asks whether to remove `%APPDATA%\MagicHandy`, including
+settings, history, imported managed models, managed runtimes, and voice modules.
+Yes is the recommended clean-reinstall choice. Silent uninstall purges by
+default. `/KEEPUSERDATA` preserves that tree and `/PURGEUSERDATA` states clean
+removal explicitly. External Ollama models, media/funscript folders, source
+checkouts, and custom `-data-dir` paths are outside this boundary. Standalone
+managed-voice setup falls back to this same app-data root. Source bootstrap
+metadata under `%LOCALAPPDATA%` is separate, is not read by the packaged app,
+and is not removed with a package.
 
 ## CI Workflow
 
-`.github/workflows/package-windows.yml` runs on relevant pull requests and
-manual dispatch. It:
+`.github/workflows/package-windows.yml` runs with read-only repository access on
+relevant pull requests and manual dispatch. It:
 
 1. builds unsigned artifacts;
 2. verifies the portable payload, exact source provenance, and every manifest
    hash;
 3. verifies the outer checksum file;
-4. silently installs, checks the installed version, and silently uninstalls;
+4. verifies custom and Program Files installs, shortcuts, ARP metadata,
+   over-install, explicit retention, clean purge, and fresh reinstall state;
 5. uploads a short-lived workflow artifact for review.
 
-The workflow has `contents: read`, has no release trigger, and never invokes a
-GitHub Release API. Artifact retention is seven days.
+It has no release trigger and never invokes a GitHub Release API. Artifact
+retention is seven days.
+
+`.github/workflows/release-windows.yml` runs only for a supported SemVer tag.
+It requires that the exact tagged commit matches the current `origin/main` tip,
+that the checkout is clean, and that matching release notes exist. It reruns Go, race,
+lint, pure-Go, frontend, installer, package, and full Windows lifecycle gates,
+then creates the GitHub Release from those verified artifacts. Prerelease tags
+are marked as GitHub prereleases.
 
 ## Release Boundaries
 

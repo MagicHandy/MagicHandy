@@ -121,6 +121,44 @@ function Get-ReleaseSourceState {
     return 'clean'
 }
 
+function Resolve-WindowsNumericVersion {
+    param([Parameter(Mandatory = $true)][string]$SemanticVersion)
+
+    $match = [regex]::Match(
+        $SemanticVersion,
+        '^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<stage>alpha|beta|rc)\.(?<ordinal>[1-9]\d*))?$'
+    )
+    if (-not $match.Success) {
+        # Pull-request and local acceptance versions are deliberately not
+        # represented as ordered Windows release versions.
+        return '0.0.0.0'
+    }
+
+    $major = [uint32]$match.Groups['major'].Value
+    $minor = [uint32]$match.Groups['minor'].Value
+    $patch = [uint32]$match.Groups['patch'].Value
+    foreach ($component in @($major, $minor, $patch)) {
+        if ($component -gt 65535) {
+            throw "Version '$SemanticVersion' exceeds the Windows 16-bit version-component limit."
+        }
+    }
+
+    $build = 65535
+    if ($match.Groups['stage'].Success) {
+        $ordinal = [uint32]$match.Groups['ordinal'].Value
+        if ($ordinal -gt 9999) {
+            throw "Version '$SemanticVersion' has a prerelease ordinal above 9999."
+        }
+        switch ($match.Groups['stage'].Value) {
+            'alpha' { $build = $ordinal }
+            'beta' { $build = 10000 + $ordinal }
+            'rc' { $build = 20000 + $ordinal }
+        }
+    }
+
+    return '{0}.{1}.{2}.{3}' -f $major, $minor, $patch, $build
+}
+
 if ([string]::IsNullOrWhiteSpace($Commit)) {
     $Commit = Read-GitValue -Arguments @('rev-parse', 'HEAD')
 }
@@ -139,17 +177,7 @@ if ($Version -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$') {
 }
 $sourceState = Get-ReleaseSourceState
 $artifactVersion = $Version -replace '[^0-9A-Za-z._-]', '-'
-$numericMatch = [regex]::Match($Version, '^(?:v)?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:\.(?<build>\d+))?')
-$numericVersion = if ($numericMatch.Success) {
-    $build = if ($numericMatch.Groups['build'].Success) { $numericMatch.Groups['build'].Value } else { '0' }
-    '{0}.{1}.{2}.{3}' -f `
-        $numericMatch.Groups['major'].Value, `
-        $numericMatch.Groups['minor'].Value, `
-        $numericMatch.Groups['patch'].Value, `
-        $build
-} else {
-    '0.0.0.0'
-}
+$numericVersion = Resolve-WindowsNumericVersion -SemanticVersion $Version
 
 $go = Resolve-ReleaseExecutable -Names @('go.exe', 'go')
 if (-not $go) {

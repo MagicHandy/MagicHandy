@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -46,6 +47,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	ttsFlags := addTTSModuleFlags(flags)
 	logLevel := flags.String("log-level", "info", "structured log level: debug, info, warn, or error")
 	showVersion := flags.Bool("version", false, "print version and exit")
+	prepareUninstall := flags.Bool("prepare-uninstall", false, "stop the installed app and its managed workers before uninstall")
 
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -54,12 +56,17 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		_, err := fmt.Fprintf(stdout, "magichandy %s (%s)\n", version, commit)
 		return err
 	}
+	if *prepareUninstall {
+		return prepareForUninstall(stdout)
+	}
 
 	level, err := logging.ParseLevel(*logLevel)
 	if err != nil {
 		return err
 	}
 	logger := logging.New(stderr, level)
+	installerShutdown, closeInstallerShutdown := installerShutdownListener(logger)
+	defer closeInstallerShutdown()
 
 	store, settings, loadStatus, err := openSettingsStore(*dataDir)
 	if err != nil {
@@ -117,6 +124,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	select {
 	case <-ctx.Done():
 		stopSignals()
+	case <-installerShutdown:
+		logger.Info("shutdown requested by Windows uninstaller")
+		stopSignals()
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
@@ -124,16 +134,40 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return err
 	}
 
+	return shutdownHTTPServer(server, api, logger)
+}
+
+func prepareForUninstall(stdout io.Writer) error {
+	requested, err := requestInstallerShutdown(30 * time.Second)
+	if err != nil {
+		return fmt.Errorf("prepare uninstall: %w", err)
+	}
+	if requested {
+		_, err = fmt.Fprintln(stdout, "The running MagicHandy instance stopped cleanly.")
+	} else {
+		_, err = fmt.Fprintln(stdout, "No running MagicHandy instance uses this installation path.")
+	}
+	return err
+}
+
+func installerShutdownListener(logger *slog.Logger) (<-chan struct{}, func()) {
+	requests, cleanup, err := listenForInstallerShutdown()
+	if err != nil {
+		logger.Warn("installer shutdown coordination unavailable", "error", err)
+		return nil, func() {}
+	}
+	return requests, cleanup
+}
+
+func shutdownHTTPServer(server *http.Server, api *httpapi.Server, logger *slog.Logger) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	api.Quiesce()
-
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown server: %w", err)
 	}
 	logger.Info("server stopped")
-
 	return nil
 }
 

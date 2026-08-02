@@ -104,8 +104,9 @@ Implemented on the Phase 16 branch:
 
 - portable Windows ZIP and thin Inno Setup EXE from one versioned payload;
 - artifact manifest, exact source revision, GPL license, and SHA-256 sums;
-- artifact-only GitHub workflow with portable and silent install/uninstall
-  smoke checks; no GitHub Release is created;
+- read-only pull-request packaging plus a separate SemVer-tag publication
+  workflow with portable, install, upgrade, retain, purge, and clean-reinstall
+  acceptance;
 - fresh-store detection and a re-runnable `#/setup` route;
 - GUI-managed llama.cpp source build, GGUF import, Ollama/external selection,
   Parakeet, Faster Qwen3-TTS, and Chatterbox provisioning;
@@ -115,7 +116,7 @@ Implemented on the Phase 16 branch:
 
 Still open:
 
-- clean-machine acceptance of the setup EXE and every optional path;
+- broader clean-machine acceptance of every optional model and voice path;
 - prebuilt managed llama.cpp CPU/CUDA bundles;
 - curated checksum-pinned GGUF downloads and hardware-fit recommendations;
 - production code signing and publisher identity;
@@ -129,8 +130,8 @@ Still open:
   without a developer toolchain.
 - The portable ZIP and setup EXE report the same version and contain the same
   release manifest.
-- Silent setup and uninstall work; uninstall retains `%APPDATA%\MagicHandy` and
-  tells interactive users where that data remains.
+- Silent setup and uninstall work; silent uninstall purges the default app-owned
+  data root, `/KEEPUSERDATA` preserves it, and interactive uninstall asks.
 - A fresh app opens setup, an existing settings document does not, and setup is
   re-runnable from Settings.
 - Every optional job is explicit, cancellable, controller-gated, and leaves the

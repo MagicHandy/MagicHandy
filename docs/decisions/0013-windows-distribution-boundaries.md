@@ -45,9 +45,13 @@ properties merely to imitate a conventional desktop application.
    not to port-forward the app. LAN/mobile access is out of scope until there is
    authenticated HTTPS, certificate lifecycle, origin policy, and an explicit
    multi-client/controller threat model.
-6. **User data survives uninstall.** Program files and shortcuts are removed;
-   `%APPDATA%\MagicHandy` is retained and disclosed to interactive users. A
-   future purge action must be separate, explicit, and credential-aware.
+6. **Uninstall makes data disposition explicit.** Program files, shortcuts, and
+   Add/Remove Programs metadata are always removed. Interactive uninstall asks
+   whether to purge `%APPDATA%\MagicHandy`, recommends purge for a clean
+   reinstall, and permits cancellation. Silent uninstall purges by default;
+   `/KEEPUSERDATA` is the explicit retention override. Purge is constrained to
+   the packaged app's default data root and never follows external Ollama,
+   media, funscript, source-checkout, or custom `-data-dir` paths.
 
 ## Consequences
 
@@ -78,12 +82,15 @@ Negative:
 
 ## Verification
 
-- the packaging workflow has read-only repository permissions and no release
-  publication step;
+- the pull-request packaging workflow has read-only repository permissions and
+  no release publication step; a separate tag-only workflow can publish after
+  validating SemVer, exact source provenance, the current `main` tip, and all
+  gates;
 - release checks use the canonical repository, stable semantic tags, bounded
   responses, conditional requests, and no user credentials;
 - artifact manifests identify the exact source commit and GPL-3.0-only license;
-- setup silent-install and uninstall smoke tests run in CI;
+- setup custom/default install, upgrade, shortcut, retention, purge, and clean
+  reinstall tests run in CI;
 - optional runtime files are absent from the core payload while their helper
   scripts are present; and
 - the shipped defaults continue to validate loopback addresses only.
