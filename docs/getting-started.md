@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows setup package
 
 The first unsigned Windows x64 setup EXE and portable ZIP are published as
-[v0.1.0-alpha.1](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.1).
+[v0.1.0-alpha.2](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.2).
 The setup EXE defaults to `C:\Program Files\MagicHandy`, exposes the destination
 chooser and an optional desktop shortcut, and installs the prebuilt core,
 Start Menu shortcut, and uninstaller without requiring Go, Node, Python, CMake,
@@ -55,17 +55,18 @@ The guided setup explains each optional path before it runs:
 
 - The source bootstrap repairs Windows Package Manager (WinGet) through
   Microsoft's supported path when needed, then installs and verifies Go.
-- Choosing the **managed llama.cpp build** additionally provisions Git, CMake,
-  the Visual Studio Desktop C++ workload, and CUDA when selected.
-- Choosing an **existing Ollama** install avoids the managed llama.cpp source
-  build and its compiler/runtime storage.
+- Choosing the **managed llama.cpp runtime** downloads an official,
+  checksum-pinned CPU or CUDA bundle. It does not install Git, CMake, Visual
+  Studio, MSYS2, or the CUDA Toolkit.
+- Choosing an **existing Ollama** install avoids the managed llama.cpp runtime
+  and its disk use.
 - Managed llama.cpp is the tightly controlled path: MagicHandy pins and tunes
   the runner and owns startup, model loading, structured replies, and
   diagnostics. Ollama is the simpler space-saving choice when an existing
   installation and model library should remain externally managed.
 - CUDA normally makes local LLM and TTS inference much faster on a supported
   NVIDIA GPU. It also consumes disk and VRAM and requires a compatible driver;
-  managed llama.cpp source builds additionally need the CUDA Toolkit.
+  the managed llama.cpp CUDA bundle needs no separately installed Toolkit.
 - The bootstrap builds the core and all first-party Go voice adapters.
   The optional Parakeet runner and its roughly 646 MiB model are a separate,
   checksum-verified GUI action, and voice remains disabled until you enable it.

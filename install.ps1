@@ -231,13 +231,9 @@ function Resolve-InitialBackend([bool]$BuildManaged) {
         return 'cpu'
     }
     Write-Host (Get-MagicHandyText -Key 'cuda_benefit') -ForegroundColor DarkGray
-    if (Resolve-MagicHandyExecutable -Name 'nvcc') {
-        Write-Host (Get-MagicHandyText -Key 'cuda_detected') -ForegroundColor Green
-        return 'cuda'
-    }
-    Write-Host (Get-MagicHandyText -Key 'cuda_missing')
+    Write-Host (Get-MagicHandyText -Key 'cuda_detected') -ForegroundColor Green
     Write-Host (Get-MagicHandyText -Key 'cuda_tradeoff') -ForegroundColor DarkGray
-    if (Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'cuda_question') -Default $false -AssumeYes:$Yes) {
+    if ($Yes -or (Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'cuda_question') -Default $true)) {
         return 'cuda'
     }
     return 'cpu'

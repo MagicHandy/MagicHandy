@@ -46,7 +46,7 @@ including the always-reachable Emergency Stop.
    - skip
 
 3. Model runtime
-   - managed llama.cpp source build: auto / CPU / CUDA (default, Recommended)
+   - managed verified llama.cpp runtime: auto / CPU / CUDA (default, Recommended)
    - existing Ollama service
    - external compatible llama.cpp server
    - skip chat setup
@@ -75,23 +75,21 @@ including the always-reachable Emergency Stop.
 ```
 
 The Phase 15 StrokeGPT-ReVibed importer is not implemented, so no migration
-step or disabled placeholder is shown. Curated GGUF downloads and prebuilt
-llama.cpp bundles are also absent until real catalogs, hashes, licenses, and
-download handlers exist.
+step or disabled placeholder is shown. Curated GGUF model downloads remain
+absent until a real model catalog, hashes, licenses, and download handlers exist.
 
 ## Runtime Choice
 
-The current managed option is a source build. It is the fresh-install default
-and keeps the **Recommended** badge because it gives MagicHandy a pinned,
-app-owned runner whose startup, model loading, diagnostics, and shutdown are
-under application control. CPU builds can reuse MSYS2 UCRT64 GCC/CMake/Ninja;
-when MSYS2 is present but those packages are missing, the reviewed install plan
-may add them. CPU falls back to Visual Studio C++ Build Tools. CUDA builds use
-Visual Studio C++ and the NVIDIA Toolkit. The screen states the several-GiB
-temporary compiler/build footprint before the user continues.
+The current managed option installs checksum-pinned official Windows bundles.
+It is the fresh-install default and keeps the **Recommended** badge because it
+gives MagicHandy a pinned, app-owned runner whose startup, model loading,
+diagnostics, and shutdown are under application control. CPU downloads about
+18 MiB. CUDA downloads about 628 MiB, installs about 1.1 GiB, and requires a
+compatible NVIDIA driver and GPU. Neither option installs a compiler or CUDA
+Toolkit. The screen states those costs before the user continues.
 
 Ollama is never preselected or marked Recommended. It is an explicit option for
-an existing installation and can save the managed compiler/runtime footprint by
+an existing installation and can save the managed runtime footprint by
 using the user's daemon and model library. The model step also supports a
 different workflow: read-only scanning of an Ollama library followed by an
 explicit copy of one compatible GGUF into MagicHandy's checksummed managed
@@ -147,7 +145,8 @@ slots.
 ## Copy Rules
 
 - Use plain questions and concrete consequences.
-- Call the current managed runtime a **source build**, never a prebuilt bundle.
+- Call the current managed runtime a **verified release** or **managed runtime**;
+  do not describe it as a local source build.
 - Describe Ollama as existing/user-managed unless the GUI gains a verified
   Ollama installer action.
 - Never claim a feature was installed merely because a job was queued.

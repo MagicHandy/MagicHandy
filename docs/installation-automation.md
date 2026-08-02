@@ -53,16 +53,17 @@ Optional dependencies stay outside the core process:
 
 | Choice | Additional dependencies | Why it may be chosen |
 | --- | --- | --- |
-| Managed llama.cpp source build | Git; MSYS2 UCRT64 GCC/CMake/Ninja or Visual Studio C++ for CPU; Visual Studio C++ and CUDA Toolkit for CUDA | App-owned pinned runner, startup, diagnostics, and lifecycle |
-| Existing Ollama | Existing Ollama service only | Avoid duplicate compiler/runtime storage and use an existing model library |
+| Managed llama.cpp release | Official checksum-pinned Windows bundle; compatible NVIDIA driver for CUDA | App-owned pinned runner, startup, diagnostics, and lifecycle without a compiler toolchain |
+| Existing Ollama | Existing Ollama service only | Avoid managed-runtime storage and use an existing model library |
 | Parakeet | Pinned `parakeet.cpp` runner and roughly 646 MiB GGUF model | Local speech recognition |
 | Faster Qwen3-TTS | `uv`, managed Python 3.11, CUDA PyTorch, pinned source/model | Faster NVIDIA voice cloning |
 | Chatterbox | `uv`, managed Python 3.10, PyTorch, pinned source/model | CPU fallback and broader NVIDIA compatibility |
 
-The managed llama.cpp path currently builds from source. Prebuilt CPU/CUDA
-runtime bundles remain planned; until they land, choosing that path installs a
-large compiler toolchain. The GUI says so before the action. Choosing existing
-Ollama or skipping chat setup keeps that toolchain off the machine.
+The managed llama.cpp path downloads official `b9966` Windows artifacts with
+fixed sizes and SHA-256 digests. CPU is approximately 18 MiB compressed; CUDA
+is approximately 628 MiB compressed and 1.1 GiB installed. Neither path needs
+Git, CMake, Visual Studio, MSYS2, or the CUDA Toolkit. Choosing existing Ollama
+or skipping chat setup avoids the managed runtime's disk use.
 
 ## Downloads And Consent
 
@@ -108,7 +109,7 @@ Implemented on the Phase 16 branch:
   workflow with portable, install, upgrade, retain, purge, and clean-reinstall
   acceptance;
 - fresh-store detection and a re-runnable `#/setup` route;
-- GUI-managed llama.cpp source build, GGUF import, Ollama/external selection,
+- GUI-managed verified llama.cpp installation, GGUF import, Ollama/external selection,
   Parakeet, Faster Qwen3-TTS, and Chatterbox provisioning;
 - one cancellable backend setup queue with controller ownership;
 - source bootstrap and updater delegation to the GUI; and
@@ -117,7 +118,6 @@ Implemented on the Phase 16 branch:
 Still open:
 
 - broader clean-machine acceptance of every optional model and voice path;
-- prebuilt managed llama.cpp CPU/CUDA bundles;
 - curated checksum-pinned GGUF downloads and hardware-fit recommendations;
 - production code signing and publisher identity;
 - any automatic update implementation;

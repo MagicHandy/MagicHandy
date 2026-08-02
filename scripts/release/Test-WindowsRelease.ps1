@@ -173,6 +173,7 @@ try {
         'scripts\update-tts-module.ps1',
         'scripts\install-llama-runtime.ps1',
         'scripts\build-managed-llama.ps1',
+        'scripts\LICENSE-llama.cpp',
         'scripts\install-parakeet-module.ps1',
         'scripts\tts\faster-qwen-server.py',
         'scripts\tts\chatterbox-server.py',

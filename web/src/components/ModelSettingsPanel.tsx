@@ -193,7 +193,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     try {
       const response = await api.buildManagedLlamaRuntime(runtimeBackend);
       setManager((current) => current ? { ...current, runtime_build: response.build } : current);
-      show(t("Managed llama.cpp build started."));
+      show(t("Managed llama.cpp installation started."));
     } catch (error) {
       show(message(error), "error");
     } finally {
@@ -520,7 +520,7 @@ function ManagedRuntime({
   const metadata = [
     runtime?.version || runtime?.expected_version,
     runtime?.backend?.toUpperCase(),
-    runtime?.source === "built_from_source" ? "Built from pinned source" : undefined,
+    runtime?.source === "verified_upstream_release" ? t("Verified upstream release") : runtime?.source === "built_from_source" ? t("Built from pinned source") : undefined,
   ];
   return (
     <div className="managed-runtime" aria-label={t("Managed llama.cpp runtime")}>
@@ -530,17 +530,17 @@ function ManagedRuntime({
       </div>
       <div className="managed-runtime-controls">
         <label className="field runtime-backend">
-          <span className="label">{t("Build backend")}</span>
+          <span className="label">{t("Runtime backend")}</span>
           <select value={backend} disabled={locked || active} onChange={(event) => setBackend(event.target.value as "auto" | "cpu" | "cuda")}>
             {backends.map((option) => <option key={option} value={option}>{option === "auto" ? t("Auto-detect") : option.toUpperCase()}</option>)}
           </select>
         </label>
-        <button type="button" className="btn btn-secondary" disabled={locked || active || busy !== "" || !runtime?.build_supported} title={runtime?.build_supported ? t("Build the pinned app-owned llama.cpp runtime") : t("Source builds currently require Windows x64")} onClick={() => void onBuild()}>
-          {runtime?.installed ? t("Build / switch runtime") : t("Build runtime")}
+        <button type="button" className="btn btn-secondary" disabled={locked || active || busy !== "" || !runtime?.build_supported} title={runtime?.build_supported ? t("Install the pinned app-owned llama.cpp runtime") : t("Managed runtime installation currently requires Windows x64")} onClick={() => void onBuild()}>
+          {runtime?.installed ? t("Install / switch runtime") : t("Install runtime")}
         </button>
-        {active && <button type="button" className="btn btn-secondary" disabled={locked || busy === "runtime-cancel"} onClick={() => void onCancel()}>{t("Cancel build")}</button>}
+        {active && <button type="button" className="btn btn-secondary" disabled={locked || busy === "runtime-cancel"} onClick={() => void onCancel()}>{t("Cancel install")}</button>}
       </div>
-      {active && <progress className="runtime-build-progress" aria-label={t("Managed llama.cpp build in progress")} />}
+      {active && <progress className="runtime-build-progress" aria-label={t("Managed llama.cpp installation in progress")} />}
       {build && <p className={`form-status runtime-build-message${build.status === "failed" ? " form-status-error" : ""}`}>{build.message}</p>}
       <p className="form-status">{selectedModel ? t("Selected model: {display_name}", { display_name: selectedModel.display_name }) : t("Select a managed model below before loading the runtime.")}</p>
     </div>

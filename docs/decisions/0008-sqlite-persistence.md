@@ -85,7 +85,7 @@ only their durability substrate moves from JSON files to DB tables.
   Normalizing settings into columns is a deliberate non-goal (see Alternatives).
 - **Not persisted in SQLite**: the diagnostics trace ring (ephemeral,
   high-frequency, in-memory), motion/engine runtime state, and embedded web
-  assets. Managed llama.cpp build jobs are also process-local. The active
+  assets. Managed llama.cpp installation jobs are also process-local. The active
   runtime manifest stays beside the versioned runner files because it must be
   activated atomically with that filesystem install; durable model inventory
   and selected model ID remain in SQLite-backed model/settings records.

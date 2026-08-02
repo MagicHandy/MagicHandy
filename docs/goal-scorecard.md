@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | First-alpha tree: 23,602,688 bytes plain and 16,984,576 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.1` publishes one manifest-verified payload as an approximately 15.6 MB portable ZIP and 9.3 MB unsigned Inno setup EXE. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.2` publishes one manifest-verified payload and corrects the managed llama.cpp fresh-install path with official checksum-pinned CPU/CUDA bundles. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -141,6 +141,16 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-02** - Replaced managed llama.cpp source compilation with official
+  `b9966` Windows CPU and CUDA 12.4 archives pinned by exact size and SHA-256.
+  The installer resumes partial HTTPS downloads, rejects unsafe ZIP paths,
+  stages atomically, records provenance and the upstream MIT license, probes
+  commit `c749cb0`, and requires CUDA device detection before activation. It
+  accepts valid legacy source-built manifests but no longer provisions Git,
+  CMake, MSYS2, Visual Studio, or CUDA Toolkit for this path. Real-network CPU
+  and CUDA installs passed; the CUDA runner detected an RTX 5070 Ti. No model
+  was loaded and no hardware motion was issued.
 
 - **2026-08-02** - Added the unsigned Windows x64 distribution path and
   read-only update discovery. One clean-source-enforcing builder produces a

@@ -34,7 +34,7 @@ directly.
 - 64-bit Windows 10 or Windows 11
 - Windows PowerShell 5.1 or newer
 - internet access for selected dependencies and models
-- enough free space for the source toolchain and selected runtimes
+- enough free space for the app build and selected runtimes
 
 The installer can start without Go, Git, CMake, a C++ compiler, CUDA, Ollama,
 Parakeet, uv, Python, PyTorch, or a speech model. Missing components are named
@@ -63,15 +63,15 @@ core build is ready it opens `#/setup`, where the user can choose:
 Managed llama.cpp is the Recommended fresh-install default; Ollama is never
 selected implicitly. The GUI explains why managed llama.cpp is useful: MagicHandy owns a
 pinned, tuned runtime and controls startup, GGUF loading, structured-response
-behavior, and diagnostics. Selecting Ollama avoids that source build and saves
-compiler/runtime space when the user already has a suitable installation, at
+behavior, and diagnostics. Selecting Ollama avoids that managed runtime and
+saves its disk space when the user already has a suitable installation, at
 the cost of less runner lifecycle control.
 
 CUDA normally produces local LLM and TTS output much faster than CPU on a
-supported NVIDIA GPU. Guided setup also states the cost: compatible
-drivers, GPU memory, several GiB of disk, and the CUDA Toolkit for a managed
-llama.cpp source build. TTS PyTorch wheels carry their selected CUDA runtime and
-do not add a compiler dependency.
+supported NVIDIA GPU. Guided setup also states the cost: compatible drivers,
+GPU memory, and about 1.1 GiB installed for managed llama.cpp. Its official
+CUDA 12.4 bundle needs no CUDA Toolkit or compiler. TTS PyTorch wheels carry
+their selected CUDA runtime and do not add a compiler dependency.
 
 For automation, passing `-Yes` with explicit feature flags retains the
 non-interactive provisioning path. Flags are not required for normal use.

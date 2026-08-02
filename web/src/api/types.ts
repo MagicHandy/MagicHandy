@@ -1055,7 +1055,7 @@ export interface ManagedLlamaRuntimeStatus {
   version?: string;
   commit?: string;
   backend?: "cpu" | "cuda";
-  source?: "built_from_source";
+  source?: "built_from_source" | "verified_upstream_release";
   built_at?: string;
   message: string;
 }

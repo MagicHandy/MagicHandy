@@ -7,7 +7,7 @@ quality-first path; Ollama remains a first-class external provider. The model
 manager gives llama.cpp a durable inventory without making model downloads or
 runtime discovery part of startup.
 
-The inventory, local imports, and app-owned llama.cpp source-build lifecycle are
+The inventory, local imports, and app-owned llama.cpp release lifecycle are
 implemented. Curated model downloads and hardware-fit recommendations remain
 release work.
 
@@ -17,7 +17,7 @@ release work.
   jobs.
 - SQLite schema v9 owns model metadata in `llm_models`.
 - Model files live under the app data directory, outside SQLite.
-- `ManagedLlamaRuntimeManager` owns explicit build/cancel state and activates
+- `ManagedLlamaRuntimeManager` owns explicit install/cancel state and activates
   only validated app-owned runtime manifests.
 - The managed llama.cpp provider owns only its runner process. The backend
   resolves the active runner and selected model ID to app-owned paths, then
@@ -59,10 +59,12 @@ data/
   runtimes/
     llama.cpp/
       active.json               constrained active-runtime manifest
-      .tools/                   embedded build helper materialized at use
+      .tools/                   embedded installer and upstream license
+      downloads/                resumable archive partials during installation
       installs/
         b9966-<backend>-c749cb0/
           runtime.json
+          provenance.json
           LICENSE-llama.cpp
           bin/                  llama-server plus required shared libraries
 ```
@@ -72,34 +74,33 @@ then rename it into the model store. Startup removes only model-import partials
 older than 24 hours, so another process starting on the same data directory
 does not immediately unlink an active copy.
 
-## Managed llama.cpp Runtime Build
+## Managed llama.cpp Runtime Installation
 
 Managed mode never asks for `llama-server` or GGUF paths. MagicHandy pins
 llama.cpp release `b9966` at commit
-`c749cb041706647f460bb918cccc9d91995205ab` and embeds the PowerShell build
-helper in the Go binary. **Build runtime** is an explicit, controller-gated
-action. The same helper is called by `install.ps1` when the user accepts its
-managed-runtime prompt. Direct helper and in-app builds still require the tools
-to exist; the source installer detects, installs, and verifies missing Git,
-CMake, Visual Studio Desktop C++/Windows SDK, and selected CUDA dependencies
-before invoking it.
+`c749cb041706647f460bb918cccc9d91995205ab` and embeds the PowerShell installer
+plus upstream MIT license in the Go binary. **Install runtime** is an explicit,
+controller-gated action. The same helper is called by `install.ps1` when the
+user accepts its managed-runtime prompt. No Git, CMake, C++ compiler, MSYS2, or
+CUDA Toolkit is required.
 
 The helper:
 
-1. requires Windows/amd64 plus Git, CMake, and Visual Studio C++ Build Tools;
-2. chooses CUDA in `auto` mode only when NVIDIA tooling and `nvcc` are present,
-   otherwise CPU;
-3. fetches the pinned tag with Git long-path support and verifies the exact
-   commit;
-4. builds only the local `llama-server` target, with curl, HTTPS, and embedded
-   llama.cpp UI assets disabled;
-5. probes the resulting executable for commit `c749cb0`;
+1. requires Windows/amd64 and chooses CUDA in `auto` mode when a working NVIDIA
+   driver and GPU are present, otherwise CPU;
+2. downloads official `b9966` Windows CPU or CUDA 12.4 runner/runtime archives
+   over HTTPS with retry and partial resume;
+3. verifies exact archive sizes and SHA-256 digests before extraction;
+4. rejects rooted, traversing, duplicate, or symbolic-link archive entries;
+5. probes the resulting executable for commit `c749cb0` and, for CUDA, requires
+   a detected CUDA device;
 6. copies the complete binary/DLL set and MIT license into a versioned staging
-   directory; and
+   directory and records archive provenance; and
 7. atomically writes `active.json` only after the install is valid.
 
-Build source and intermediates use a job-specific temporary directory beneath
-the runtime root and are removed after success or failure. Runtime inspection
+Extraction intermediates use a job-specific temporary directory beneath the
+runtime root and are removed after success or failure. Verified archives are
+removed after activation; interrupted partial downloads remain resumable. Runtime inspection
 does no network I/O and starts no process. The managed server itself launches
 with `--offline --no-ui`, one generation slot (`--parallel 1`), and the saved
 context size. The reviewed choices are 16,384, 32,768 (default), 65,536, and

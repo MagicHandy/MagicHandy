@@ -260,12 +260,12 @@ editable prompt sets, memory, and reset-to-defaults — Phase 10.)
 8. **Release provisioning**: `install.ps1` now builds every first-party Go voice
    adapter and can provision a clean Windows source machine. Plain installs and
    core-only updates now delegate interactive choices to `#/setup`; explicit
-   flags retain unattended provisioning. Managed llama.cpp still builds outside
-   the core. Local TTS is no longer coupled to that build: dedicated scripts
+   flags retain unattended provisioning. Managed llama.cpp installs as a
+   verified external runner outside the core. Local TTS is independent:
+   dedicated scripts
    install or update the optional Python/model module and write its settings
-   explicitly. Phase 16 must provide checksummed prebuilt runtimes before the
-   managed GUI path can avoid installing Git/CMake/Visual Studio rather than
-   merely automating them.
+   explicitly. Phase 16 now provides checksum-pinned official CPU/CUDA runtime
+   bundles without Git, CMake, Visual Studio, MSYS2, or CUDA Toolkit.
 9. **Motion/transport concurrency audit (2026-07-16)**: engine commands are
    serialized per run, request-originated calls inherit run cancellation, and
    Stop is a final wire barrier that blocks new starts until every overlapping
@@ -1569,7 +1569,7 @@ must run the core without a source toolchain. Optional managed runtimes may add
 their own explicit dependencies; existing Ollama/external providers and skip
 paths must remain available.
 
-Status 2026-08-02: **first alpha implemented; broader acceptance in progress**.
+Status 2026-08-02: **corrective alpha implemented; broader acceptance in progress**.
 The unsigned portable/setup artifacts, read-only PR packaging, tag-gated release
 publication, fresh-store detection, seven-step `#/setup` route, one optional
 llama.cpp/Parakeet/TTS install-plan endpoint, and GUI-delegating source
@@ -1580,24 +1580,25 @@ download or auto-update path. A local packaged acceptance run verified manifest
 and outer hashes, custom and Program Files installs, destination/shortcut/ARP
 metadata, active-process over-install, explicit retention, bounded clean purge,
 and fresh reinstall state. The first unsigned Windows prerelease is
-`v0.1.0-alpha.1`. Broader clean-machine acceptance of optional components,
-prebuilt managed llama.cpp bundles, curated model downloads, signing, and final
+`v0.1.0-alpha.1`; `v0.1.0-alpha.2` replaces its managed llama.cpp source-build
+failure surface with verified upstream CPU/CUDA bundles. Broader clean-machine
+acceptance of voice components, curated model downloads, signing, and final
 budget evidence remain open.
 
 Delivered ahead of this phase (#55, #56, #61, #62, #64, #65): the
 model-manager foundation now
 owns schema v9 inventory, managed GGUF storage, standalone/Ollama import,
-ID-based selection, and the Model UI. The app also owns a pinned source-build
-lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, build
+ID-based selection, and the Model UI. The app also owns a pinned verified-release
+lifecycle for llama.cpp on Windows/amd64, including CPU/CUDA choice, install
 status, cancellation, manifest validation, and installer opt-out for existing
 Ollama users. Managed llama.cpp remains the Recommended fresh-setup default;
 Ollama is never selected implicitly and is presented as the existing-runtime,
 lower-disk alternative. Compatible Ollama-library GGUF files can be scanned and
-explicitly copied into the managed store from the setup model picker. CPU
-source builds can reuse or provision MSYS2 UCRT64 GCC/CMake/Ninja and fall back
-to Visual Studio, while CUDA continues through Visual Studio and the NVIDIA
-Toolkit. The source installer can bootstrap WinGet/Go/Git/CMake/MSVC/CUDA,
-build all first-party workers, persist non-secret choices, and reuse them from a
+explicitly copied into the managed store from the setup model picker. CPU uses
+an approximately 18 MiB official archive. CUDA uses checksum-pinned CUDA 12.4
+runner/runtime archives, approximately 628 MiB compressed and 1.1 GiB installed,
+with only a compatible NVIDIA driver. The source installer can bootstrap
+WinGet/Go/Git, build all first-party workers, persist non-secret choices, and reuse them from a
 fast-forward-only updater. The installer/update reliability pass additionally
 enforces typed closed-schema choices, coherent rollback-capable binary builds,
 inner-hash verification for the pinned Parakeet runner, stable delegated state
@@ -1611,9 +1612,8 @@ GUI or unattended actions. A PowerShell-only bootstrap installs Git before
 cloning on an otherwise clean Windows host.
 The command-line flow installs Faster Qwen without reference prompts; the GUI
 owns its reference WAV and exact transcript.
-Phase 16 still owns clean-machine acceptance, curated checksum-pinned model
-downloads, hardware-fit recommendations, and prebuilt managed llama.cpp
-bundles that avoid installing a compiler toolchain for that optional path.
+Phase 16 still owns broader clean-machine voice acceptance, curated
+checksum-pinned model downloads, and hardware-fit recommendations.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive
@@ -1634,15 +1634,15 @@ Implement, as slices:
   Windows core and worker builds, one staged payload, portable ZIP, exact-source
   notice, GPL license, per-file manifest, outer SHA-256 sums, and an
   read-only PR artifacts and SemVer-tag publication after release-owned quality
-  gates. Prebuilt CPU/CUDA llama.cpp bundles remain open and are not represented
-  as available downloads.
+  gates. Checksum-pinned official CPU/CUDA llama.cpp bundles are implemented and
+  remain separate explicit downloads rather than inflating the core artifact.
 - **16.1 — Windows setup binary (implemented and lifecycle-tested)**: Inno Setup script compiled in CI
   (build-time-only dependency), Start Menu/desktop shortcuts, Add/Remove
   Programs uninstall with explicit default-data retention/purge, silent-install
   flags, over-install upgrades, finish page launching first-run setup
 - **16.2 — first-run onboarding wizard (implemented, acceptance open)**
   (`#/setup`, re-runnable from Settings): UI/chat language → device → LLM
-  runtime (Recommended managed source build, explicit existing Ollama,
+  runtime (Recommended verified managed release, explicit existing Ollama,
   external URL, or skip) → LLM model (GGUF import, explicit copy from an
   existing Ollama library, Ollama daemon model, external ID, or skip) →
   optional voice selection (Parakeet runner+model, Faster Qwen3-TTS or
@@ -1684,8 +1684,8 @@ confirm config/data placement, explicit retention, purge, and fresh reinstall;
 exercise an over-install
 while the old core is running and confirm settings survive; exercise fresh/existing
 setup entry, cancellation, and optional module retry. A machine without
-Go/Git/CMake/Visual Studio must run the packaged core. The future prebuilt
-managed llama.cpp path receives its own no-toolchain check when implemented.
+Go/Git/CMake/Visual Studio must run the packaged core. Managed llama.cpp must
+install and probe CPU/CUDA bundles without those tools or the CUDA Toolkit.
 
 ## Done Criteria
 

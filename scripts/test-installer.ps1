@@ -77,6 +77,7 @@ try {
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\chatterbox-server.py') -PathType Leaf) -Message 'Chatterbox launcher shim should ship with the installer'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'internal\llm\runtimeassets\LICENSE-llama.cpp') -PathType Leaf) -Message 'managed llama.cpp installer should ship the pinned upstream license'
     $bootstrapSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'bootstrap.ps1'))
     Assert-True -Condition ($bootstrapSource.Contains('Microsoft.WinGet.Client')) -Message 'clean-machine bootstrap should use the official WinGet repair path'
     Assert-True -Condition ($bootstrapSource.Contains('--id Git.Git')) -Message 'clean-machine bootstrap should install Git when missing'
@@ -224,36 +225,65 @@ func main() {
         Assert-True -Condition (-not $source.Contains("-Question '")) -Message "$file should not pass a literal single-quoted decision prompt"
         Assert-True -Condition (-not $source.Contains('Read-Host ''')) -Message "$file should not use a literal Read-Host decision prompt"
     }
-    Write-Host 'Checking same-process CUDA environment initialization...'
+    Write-Host 'Checking verified managed llama.cpp release metadata...'
     $builderPath = Join-Path $Repo 'internal\llm\runtimeassets\build-managed-llama.ps1'
+    $builderSource = [System.IO.File]::ReadAllText($builderPath)
     $builderTokens = $null
     $builderErrors = $null
     $builderAst = [System.Management.Automation.Language.Parser]::ParseFile($builderPath, [ref]$builderTokens, [ref]$builderErrors)
-    $initializerAst = $builderAst.Find({
-        $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-            $args[0].Name -eq 'Initialize-CudaToolkitEnvironment'
-    }, $true)
-    Assert-True -Condition ($null -ne $initializerAst) -Message 'managed llama.cpp builder should define CUDA environment initialization'
-    Invoke-Expression $initializerAst.Extent.Text
-
-    $fakeToolkit = Join-Path $tempRoot 'CUDA\v99.1'
-    $fakeNvcc = Join-Path $fakeToolkit 'bin\nvcc.exe'
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fakeNvcc) | Out-Null
-    [System.IO.File]::WriteAllText($fakeNvcc, '')
-    $originalCUDAPath = [Environment]::GetEnvironmentVariable('CUDA_PATH', 'Process')
-    $originalCudaToolkitDir = [Environment]::GetEnvironmentVariable('CudaToolkitDir', 'Process')
-    try {
-        $env:CUDA_PATH = 'stale'
-        $env:CudaToolkitDir = ''
-        Initialize-CudaToolkitEnvironment -Nvcc $fakeNvcc
-        Assert-Equal -Expected $fakeToolkit -Actual $env:CUDA_PATH -Message 'CUDA_PATH should use the resolved nvcc toolkit root'
-        Assert-Equal -Expected "$fakeToolkit\" -Actual $env:CudaToolkitDir -Message 'CudaToolkitDir should include the trailing separator required by MSBuild'
-        $childEnvironment = & powershell.exe -NoProfile -Command '[Console]::Write($env:CUDA_PATH + [char]124 + $env:CudaToolkitDir)'
-        Assert-Equal -Expected "$fakeToolkit|$fakeToolkit\" -Actual $childEnvironment -Message 'CUDA environment should reach child build processes'
-    } finally {
-        [Environment]::SetEnvironmentVariable('CUDA_PATH', $originalCUDAPath, 'Process')
-        [Environment]::SetEnvironmentVariable('CudaToolkitDir', $originalCudaToolkitDir, 'Process')
+    foreach ($expected in @(
+        'llama-b9966-bin-win-cpu-x64.zip',
+        'a2e791df47c8abd09e23f85a00699d6d6552445f6bba21e810263eaeefbf672a',
+        'llama-b9966-bin-win-cuda-12.4-x64.zip',
+        'bd95fbe38267b41ba109f922b978985e3ce982fef47040f90534a291617fcee9',
+        'cudart-llama-bin-win-cuda-12.4-x64.zip',
+        '8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6',
+        "source = 'verified_upstream_release'",
+        'Probe verified CUDA llama-server'
+    )) {
+        Assert-True -Condition ($builderSource.Contains($expected)) -Message "managed llama.cpp installer should pin $expected"
     }
+    Assert-True -Condition (-not $builderSource.Contains('nvcc')) -Message 'managed llama.cpp installation should not require the CUDA Toolkit compiler'
+    Assert-True -Condition (-not $builderSource.Contains('Resolve-CMake')) -Message 'managed llama.cpp installation should not require CMake'
+    Assert-True -Condition (-not $builderSource.Contains('Test-VCToolchain')) -Message 'managed llama.cpp installation should not require Visual Studio Build Tools'
+
+    $extractorAst = $builderAst.Find({
+        $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $args[0].Name -eq 'Expand-VerifiedZip'
+    }, $true)
+    Assert-True -Condition ($null -ne $extractorAst) -Message 'managed llama.cpp installer should define verified archive extraction'
+    Invoke-Expression $extractorAst.Extent.Text
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $unsafeArchive = Join-Path $tempRoot 'unsafe-llama.zip'
+    $unsafeStream = [System.IO.MemoryStream]::new()
+    $unsafeZip = [System.IO.Compression.ZipArchive]::new(
+        $unsafeStream,
+        [System.IO.Compression.ZipArchiveMode]::Create,
+        $true
+    )
+    try {
+        $unsafeEntry = $unsafeZip.CreateEntry('../escape.txt')
+        $unsafeEntryStream = $unsafeEntry.Open()
+        $unsafeWriter = [System.IO.StreamWriter]::new($unsafeEntryStream)
+        try {
+            $unsafeWriter.Write('untrusted')
+        } finally {
+            $unsafeWriter.Dispose()
+            $unsafeEntryStream.Dispose()
+        }
+    } finally {
+        $unsafeZip.Dispose()
+        $unsafeBytes = $unsafeStream.ToArray()
+        $unsafeStream.Dispose()
+        $unsafeZip = $null
+        $unsafeStream = $null
+    }
+    [System.IO.File]::WriteAllBytes($unsafeArchive, $unsafeBytes)
+    $unsafeDestination = Join-Path $tempRoot 'unsafe-extract'
+    Assert-Throws -Action { Expand-VerifiedZip -Archive $unsafeArchive -Destination $unsafeDestination } -Pattern 'unsafe path' -Message 'managed llama.cpp installer zip traversal rejection'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $tempRoot 'escape.txt'))) -Message 'unsafe archive must not write outside staging'
 
     Write-Host 'Checking installer branding and completion art...'
     $installBanner = Write-MagicHandyBanner -Operation Install 6>&1 | Out-String
@@ -1135,12 +1165,11 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     $managedPlan = @(Get-MagicHandyProvisionPlan -State $loaded)
     Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.25'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Apply app UI language English and chat reply language English'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'Visual Studio C\+\+'
-    Assert-PlanContains -Plan $managedPlan -Pattern 'CUDA Toolkit'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verify.+managed llama\.cpp \(cuda\)'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'
     Assert-PlanContains -Plan $managedPlan -Pattern 'OpenAI-compatible TTS'
     Assert-PlanContains -Plan $managedPlan -Pattern 'managed Python.+chatterbox local TTS \(cuda; auto-launch: yes\)'
-    Assert-PlanExcludes -Plan $managedPlan -Pattern 'NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
+    Assert-PlanExcludes -Plan $managedPlan -Pattern 'CMake|Visual Studio|CUDA Toolkit|NeuTTS|neutts-rs|eSpeak NG|LLVM/libclang|Rustup'
 
     $ollamaState = New-MagicHandyInstallState `
         -RepositoryPath $Repo `
