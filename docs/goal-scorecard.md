@@ -60,7 +60,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.3` retains the checksum-pinned llama.cpp bundles and corrects fresh/retried managed TTS source checkout. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.4` retains the checksum-pinned llama.cpp bundles and retry-safe TTS source checkout, then hardens clean-machine voice dependencies with executable probes, packaged constraints, provider-specific runtime imports, and CUDA verification before model download. The read-only PR workflow cannot publish. Release-owned gates cover exact provenance and checksums, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -141,6 +141,22 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-02** - Audited every executable and native boundary used by managed
+  voice setup for `v0.1.0-alpha.4`. The installer now probes `uv.exe`, bypasses
+  an unusable WinGet portable alias through the real package directory, probes
+  Git and exposes it to `uv` child processes, and packages validated dependency
+  constraints with the Windows payload. Clean Python 3.11 and 3.10 resolutions
+  covered 97 Faster Qwen packages and 125 Chatterbox packages respectively.
+  The exact pinned Qwen, Chatterbox server, and Chatterbox engine sources were
+  reviewed for external executables and native builds: managed WAV paths need
+  neither FFmpeg nor native SoX, and Chatterbox's one source distribution is a
+  pure-Python antlr runtime. Chatterbox now mirrors its upstream ONNX/protobuf
+  repair, constrains engine-sensitive NumPy/safetensors versions, and verifies
+  its actual Turbo/audio/native imports. Faster Qwen retains `pip check`; both
+  providers verify the Hugging Face launcher and selected PyTorch backend before
+  model download. No frontend bundle, core memory path, hardware connection, or
+  motion behavior changed.
 
 - **2026-08-02** - Corrected the managed TTS fresh-install and retry path for
   `v0.1.0-alpha.3`. A new source clone is staged atomically and its expected

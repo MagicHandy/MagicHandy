@@ -5,8 +5,8 @@ Everything you need to install, update, and run MagicHandy from source. The
 
 ## Windows setup package
 
-The first unsigned Windows x64 setup EXE and portable ZIP are published as
-[v0.1.0-alpha.2](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.2).
+The current unsigned Windows x64 setup EXE and portable ZIP are published as
+[v0.1.0-alpha.4](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.4).
 The setup EXE defaults to `C:\Program Files\MagicHandy`, exposes the destination
 chooser and an optional desktop shortcut, and installs the prebuilt core,
 Start Menu shortcut, and uninstaller without requiring Go, Node, Python, CMake,
@@ -136,6 +136,12 @@ download warning before
 consent, creates an isolated `uv` environment, and writes the selected
 provider and auto-launch choice into MagicHandy's SQLite settings. Use
 `-PlanOnly` to inspect the operation without changing the machine.
+
+Setup verifies real Git and `uv` executables instead of trusting aliases,
+installs constrained dependency versions, and tests the final Python/native
+runtime and selected CUDA backend before downloading a model. Native SoX and
+FFmpeg are not required for the managed 12 Hz Qwen and WAV-only Chatterbox
+paths.
 
 For Faster Qwen, the command-line step installs only the runtime and model.
 Add the reference WAV and its exact transcript later in Settings > Voice; an

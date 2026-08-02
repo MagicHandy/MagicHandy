@@ -88,9 +88,19 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia.txt')) -Message 'Chatterbox install should retain the CUDA 12.1 dependency set'
     Assert-True -Condition ($ttsInstallerSource.Contains('requirements-nvidia-cu128.txt')) -Message 'Chatterbox install should retain the RTX 50-series CUDA 12.8 dependency set'
     Assert-True -Condition ($ttsInstallerSource.Contains("Microsoft\WinGet\Links\uv.exe")) -Message 'TTS install should resolve the WinGet portable uv link in the current process'
+    Assert-True -Condition ($ttsInstallerSource.Contains("Microsoft\WinGet\Packages")) -Message 'TTS install should bypass a stale WinGet alias through the real uv package binary'
+    Assert-True -Condition ($ttsInstallerSource.Contains('Test-UvExecutable')) -Message 'TTS install should probe uv instead of trusting path presence'
     Assert-True -Condition ($ttsInstallerSource.Contains("Invoke-MagicHandyWinGetInstall -ID 'astral-sh.uv'")) -Message 'TTS install should repair WinGet and refresh PATH after installing uv'
+    Assert-True -Condition ($ttsInstallerSource.Contains('Initialize-TTSGit')) -Message 'TTS install should expose its verified Git executable to uv child processes'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('python', 'install', `$PythonVersion)")) -Message 'TTS install should explicitly provision its managed Python runtime'
     Assert-True -Condition ($ttsInstallerSource.Contains('Reusing the existing $reportedVersion environment')) -Message 'TTS reinstall should not replace an in-use compatible Python launcher'
+    Assert-True -Condition ($ttsInstallerSource.Contains("@('pip', 'check', '--python', `$python)")) -Message 'TTS install should reject an inconsistent final Python dependency graph'
+    Assert-True -Condition ($ttsInstallerSource.Contains('faster-qwen-constraints.txt')) -Message 'Faster Qwen install should use the packaged validated dependency constraints'
+    Assert-True -Condition ($ttsInstallerSource.Contains('chatterbox-constraints.txt')) -Message 'Chatterbox install should use the packaged validated dependency constraints'
+    Assert-True -Condition ($ttsInstallerSource.Contains('protobuf==4.25.8')) -Message 'Chatterbox install should apply the pinned upstream ONNX protobuf compatibility repair'
+    Assert-True -Condition ($ttsInstallerSource.Contains('chatterbox.tts_turbo')) -Message 'Chatterbox install should verify the actual Turbo model import path'
+    Assert-True -Condition ($ttsInstallerSource.Contains('torch.cuda.is_available()')) -Message 'CUDA TTS install should verify the installed runtime can use the driver before downloading a model'
+    Assert-True -Condition ($ttsInstallerSource.Contains("@('version') -Description 'Hugging Face client verification'")) -Message 'TTS install should probe the generated Hugging Face launcher before downloading a model'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Reference WAV path'")) -Message 'TTS install must leave Faster Qwen reference selection to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Exact reference transcript'")) -Message 'TTS install must leave Faster Qwen transcription to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains('[string]$ReferenceTranscript')) -Message 'TTS install must not expose a Faster Qwen transcript parameter'
@@ -128,7 +138,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Initialize-TTSPythonEnvironment', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Invoke-Checked', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -150,7 +160,16 @@ import (
 )
 
 func main() {
-	if strings.EqualFold(filepath.Base(os.Args[0]), "uv.exe") {
+	base := filepath.Base(os.Args[0])
+	if strings.EqualFold(base, "git.exe") {
+		fmt.Println("git version 2.50.1.windows.1")
+		return
+	}
+	if strings.EqualFold(base, "uv.exe") {
+		if len(os.Args) > 1 && os.Args[1] == "--version" {
+			fmt.Println("uv 0.11.32")
+			return
+		}
 		if len(os.Args) > 1 && os.Args[1] == "venv" {
 			fmt.Fprintln(os.Stderr, "compatible environments must not be recreated")
 			os.Exit(97)
@@ -169,6 +188,46 @@ func main() {
         throw "Could not build the isolated TTS recovery fixture (exit $LASTEXITCODE)."
     }
 
+    Write-Host 'Checking WinGet uv alias recovery...'
+    $uvFixture = Join-Path $tempRoot 'uv-resolution'
+    $uvPathRoot = Join-Path $uvFixture 'path'
+    $uvLocalAppData = Join-Path $uvFixture 'local-app-data'
+    $uvPackage = Join-Path $uvLocalAppData 'Microsoft\WinGet\Packages\astral-sh.uv_Microsoft.Winget.Source_fixture'
+    New-Item -ItemType Directory -Force -Path $uvPathRoot, $uvPackage | Out-Null
+    $brokenUvAlias = Join-Path $uvPathRoot 'uv.exe'
+    $packagedUv = Join-Path $uvPackage 'uv.exe'
+    [System.IO.File]::WriteAllText($brokenUvAlias, 'not a Windows executable')
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $packagedUv
+    $savedUvPath = $env:Path
+    $savedUvLocalAppData = $env:LOCALAPPDATA
+    $savedUvUserProfile = $env:USERPROFILE
+    try {
+        $env:Path = $uvPathRoot
+        $env:LOCALAPPDATA = $uvLocalAppData
+        $env:USERPROFILE = Join-Path $uvFixture 'user-profile'
+        $resolvedUv = Resolve-Uv
+        Assert-Equal -Expected $packagedUv -Actual $resolvedUv -Message 'TTS install should bypass a broken WinGet alias and use its real package binary'
+    } finally {
+        $env:Path = $savedUvPath
+        $env:LOCALAPPDATA = $savedUvLocalAppData
+        $env:USERPROFILE = $savedUvUserProfile
+    }
+
+    Write-Host 'Checking Git child-process discovery...'
+    $fakeGitDirectory = Join-Path $tempRoot 'git-not-on-path'
+    New-Item -ItemType Directory -Force -Path $fakeGitDirectory | Out-Null
+    $fakeGit = Join-Path $fakeGitDirectory 'git.exe'
+    Copy-Item -LiteralPath $fakeRuntimeBuild -Destination $fakeGit
+    $savedGitPath = $env:Path
+    try {
+        $env:Path = ''
+        $resolvedGit = Initialize-TTSGit -Git $fakeGit
+        Assert-Equal -Expected $fakeGit -Actual $resolvedGit -Message 'TTS install should retain the verified absolute Git path'
+        Assert-Equal -Expected $fakeGitDirectory -Actual $env:Path -Message 'TTS install should expose Git to uv child processes'
+    } finally {
+        $env:Path = $savedGitPath
+    }
+
     $reuseRoot = Join-Path $tempRoot 'tts-reuse'
     $reuseScripts = Join-Path $reuseRoot '.venv\Scripts'
     New-Item -ItemType Directory -Force -Path $reuseScripts | Out-Null
@@ -180,6 +239,13 @@ func main() {
     Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
     Assert-Equal -Expected 'Python 3.11.15' -Actual ([string]$reusedEnvironment.Version) -Message 'compatible TTS Python version should be retained'
     Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
+    Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda
+
+    foreach ($constraintsFile in @('faster-qwen-constraints.txt', 'chatterbox-constraints.txt')) {
+        Assert-True `
+            -Condition (Test-Path -LiteralPath (Join-Path $Repo "scripts\tts\$constraintsFile") -PathType Leaf) `
+            -Message "$constraintsFile should ship beside the managed TTS launchers"
+    }
 
     Write-Host 'Checking fresh and interrupted TTS source checkout recovery...'
     $gitCommand = Get-Command 'git.exe' -ErrorAction SilentlyContinue

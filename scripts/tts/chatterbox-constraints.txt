@@ -1,0 +1,5 @@
+# The pinned Chatterbox engine declares NumPy <1.26 and safetensors 0.5.3.
+# Its server requirements are broader, so constrain the combined environment
+# to the engine versions that were validated by the pinned upstream revision.
+numpy>=1.24,<1.26
+safetensors==0.5.3

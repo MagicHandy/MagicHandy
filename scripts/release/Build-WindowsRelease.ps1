@@ -268,7 +268,9 @@ try {
     Copy-Item -LiteralPath (Join-Path $repository 'scripts\installer') -Destination $scriptsRoot -Recurse
     $ttsScriptsRoot = Join-Path $scriptsRoot 'tts'
     New-Item -ItemType Directory -Force -Path $ttsScriptsRoot | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $repository 'scripts\tts') -File -Filter '*.py' | ForEach-Object {
+    Get-ChildItem -LiteralPath (Join-Path $repository 'scripts\tts') -File | Where-Object {
+        $_.Extension -in @('.py', '.txt')
+    } | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $ttsScriptsRoot $_.Name)
     }
 
