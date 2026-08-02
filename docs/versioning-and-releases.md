@@ -22,14 +22,15 @@ clearly non-release `0.0.0-pr<N>` version and expire as workflow artifacts.
 
 | Stage | Meaning | Compatibility expectation |
 | --- | --- | --- |
-| `alpha.N` | Feature-complete enough for hands-on testing, with known gaps and unsigned Windows binaries | APIs, schema, setup, and UX can still change; data migrations must remain tested and non-destructive |
+| `alpha.N` | Feature-complete enough for hands-on testing, with known gaps and an explicitly documented Windows artifact policy | APIs, schema, setup, and UX can still change; data migrations must remain tested and non-destructive |
 | `beta.N` | Intended feature set is substantially complete and release blockers are narrowed to defects and acceptance | Breaking changes require explicit release notes and migration coverage |
 | `rc.N` | Candidate for the next non-prerelease build | Only release-blocking fixes should change behavior |
 | no suffix | Published non-prerelease | Supported update source for the in-app stable release checker |
 
 The prerelease counter starts at 1 and increments for every published build of
-the same base version. A rejected or broken release is followed by a new tag;
-its tag and assets are not silently replaced.
+the same base version. A rejected or broken release is followed by a new tag.
+Its tag is not moved or reused; unsafe assets may be withdrawn and the source
+release notes remain as an incident notice.
 
 Before `v1.0.0`, a minor version may contain deliberate breaking changes. Patch
 versions remain reserved for compatible fixes. Beginning with `v1.0.0`, normal
@@ -56,21 +57,26 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-Each Windows x64 release contains exactly these downloadable artifacts:
+Until trusted Authenticode signing is provisioned, each Windows x64 release
+contains exactly these downloadable artifacts:
 
-- `MagicHandy-<version>-windows-amd64-setup.exe`
 - `MagicHandy-<version>-windows-amd64-portable.zip`
 - `MagicHandy-<version>-windows-amd64-SHA256SUMS.txt`
 
-The setup EXE and portable ZIP are built from one staged payload. That payload
-records the exact source commit, GPL-3.0-only license, source URL, file sizes,
-and per-file SHA-256 hashes in `release-manifest.json`. The checksum file covers
-both outer artifacts.
+The portable payload records the exact source commit, GPL-3.0-only license,
+source URL, file sizes, and per-file SHA-256 hashes in
+`release-manifest.json`. The checksum file covers the ZIP.
 
-Until a project-owned signing certificate and protected signing process exist,
-Windows artifacts are explicitly **unsigned**. Release notes must say so and
-must not imply that a SmartScreen or unknown-publisher warning establishes a
-checksum failure.
+The workflow continues to build an unsigned setup EXE from the same staged
+payload and exercises the full install lifecycle, but retains it only as a
+short-lived `unsigned-ci` workflow artifact. It is not a public download.
+
+When setup publication returns, the public artifact set will add
+`MagicHandy-<version>-windows-amd64-setup.exe`, and the checksum file will cover
+both outer artifacts. The release gate requires valid, timestamped
+Authenticode from one explicitly pinned signer on the setup EXE and every
+shipped payload EXE. A self-signed certificate is rejected. See
+[ADR 0014](decisions/0014-public-windows-signing-gate.md).
 
 ## Release Gate
 
@@ -78,13 +84,14 @@ A release tag is created only after all of the following are true on the merged
 `main` commit:
 
 1. Go, race, lint, architecture, pure-Go, frontend, and installer suites pass.
-2. The package workflow verifies the portable manifest and outer checksums.
+2. The package workflow verifies the portable manifest, outer checksums, and
+   unsigned installer lifecycle without publishing its setup executable.
 3. The installer acceptance test covers Program Files default placement,
    custom destination selection, optional desktop and Start Menu shortcuts,
    Add/Remove Programs metadata, active-process over-install, explicit data
    retention, clean uninstall, and fresh state after reinstall.
-4. Release notes identify known limitations, unsigned status, install/update
-   instructions, and the exact source tag.
+4. Release notes identify known limitations, the active artifact/signing
+   policy, install/update instructions, and the exact source tag.
 5. The release workflow verifies that the tag is valid SemVer and that its
    commit exactly matches the current `origin/main` tip before publishing a
    GitHub Release.

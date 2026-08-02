@@ -16,16 +16,18 @@ Phase 16.
 
 | Entry point | Intended user | Responsibility |
 | --- | --- | --- |
-| Windows setup EXE | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open `#/setup` |
-| Portable ZIP | No-install or USB use | Provide the same payload without Windows integration |
+| Signed Windows setup EXE (temporarily unavailable) | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open `#/setup` |
+| Portable ZIP | Current public Windows path, no-install, or USB use | Provide the payload without Windows integration |
 | `bootstrap.ps1` + `install.ps1` | Source user | Repair WinGet/Git, build the pure-Go core, then open `#/setup` |
 | `install.ps1 -Yes ...` | Managed automation | Provision explicitly selected optional components without prompts |
 | `update.ps1` | Existing source checkout | Safely fast-forward and rebuild the core; optionally open `#/setup` |
 | Settings > General > Run setup again | Existing app | Revisit device, model, and voice choices at any time |
 
 The setup EXE and portable ZIP require no Go, Node, Python, CMake, Visual
-Studio, or CUDA installation to run the MagicHandy core. Optional selections
-can add their own dependencies after explicit consent.
+Studio, or CUDA installation to run the MagicHandy core. The unsigned setup EXE
+is currently CI-only under ADR 0014; public alphas use the portable ZIP until a
+trusted signing identity exists. Optional selections can add their own
+dependencies after explicit consent.
 
 ## GUI-Owned Decisions
 
@@ -103,11 +105,12 @@ before opening the browser.
 
 Implemented on the Phase 16 branch:
 
-- portable Windows ZIP and thin Inno Setup EXE from one versioned payload;
+- public portable Windows ZIP plus a thin Inno Setup lifecycle candidate from
+  one versioned payload; the unsigned setup artifact is CI-only;
 - artifact manifest, exact source revision, GPL license, and SHA-256 sums;
 - read-only pull-request packaging plus a separate SemVer-tag publication
-  workflow with portable, install, upgrade, retain, purge, and clean-reinstall
-  acceptance;
+  workflow. Public ZIP/checksum output is isolated from unsigned install,
+  upgrade, retain, purge, and clean-reinstall acceptance artifacts;
 - fresh-store detection and a re-runnable `#/setup` route;
 - GUI-managed verified llama.cpp installation, GGUF import, Ollama/external selection,
   Parakeet, Faster Qwen3-TTS, and Chatterbox provisioning;
@@ -126,10 +129,11 @@ Still open:
 
 ## Acceptance
 
-- A standard user can install, run, and uninstall the core from the setup EXE
-  without a developer toolchain.
-- The portable ZIP and setup EXE report the same version and contain the same
-  release manifest.
+- A standard user can extract and run the public portable core without a
+  developer toolchain. The setup lifecycle remains continuously tested while
+  public setup publication is signing-gated.
+- The portable ZIP and CI setup candidate report the same version and derive
+  from the same staged release manifest.
 - Silent setup and uninstall work; silent uninstall purges the default app-owned
   data root, `/KEEPUSERDATA` preserves it, and interactive uninstall asks.
 - A fresh app opens setup, an existing settings document does not, and setup is

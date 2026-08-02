@@ -8,7 +8,8 @@ Portable payload and checksum checks are always read-only. -ExerciseInstaller
 uses an isolated current-user install directory. -ExerciseDefaultInstall also
 tests the real Program Files default and clean user-data removal, but refuses to
 run when an existing packaged install or default MagicHandy data directory is
-present.
+present. ArtifactPolicy separates unsigned CI lifecycle packages from public
+portable releases and future Authenticode-signed setup releases.
 #>
 [CmdletBinding()]
 param(
@@ -17,6 +18,8 @@ param(
     [string]$ArtifactsRoot = '',
     [string]$RepositoryRoot = '',
     [ValidateSet('clean', 'dirty', 'unverified')][string]$ExpectedSourceState = 'clean',
+    [ValidateSet('UnsignedCI', 'PortablePublic', 'SignedPublic')][string]$ArtifactPolicy = 'UnsignedCI',
+    [string]$ExpectedSignerThumbprint = '',
     [switch]$ExerciseInstaller,
     [switch]$ExerciseDefaultInstall
 )
@@ -36,6 +39,17 @@ $ArtifactsRoot = [System.IO.Path]::GetFullPath($ArtifactsRoot)
 $Commit = $Commit.Trim().ToLowerInvariant()
 $artifactVersion = $Version -replace '[^0-9A-Za-z._-]', '-'
 $appID = '{A9859C5A-AD69-4D2E-91DA-809D109984DA}_is1'
+
+if ($ExerciseDefaultInstall -and -not $ExerciseInstaller) {
+    throw '-ExerciseDefaultInstall requires -ExerciseInstaller.'
+}
+if ($ArtifactPolicy -eq 'PortablePublic' -and ($ExerciseInstaller -or $ExerciseDefaultInstall)) {
+    throw 'PortablePublic artifacts intentionally contain no setup executable and cannot exercise installer lifecycle tests.'
+}
+$normalizedSignerThumbprint = $ExpectedSignerThumbprint.Replace(' ', '').Trim().ToUpperInvariant()
+if ($ArtifactPolicy -eq 'SignedPublic' -and $normalizedSignerThumbprint -notmatch '^[0-9A-F]{40}$') {
+    throw 'SignedPublic requires -ExpectedSignerThumbprint with the approved 40-character certificate thumbprint.'
+}
 
 function Assert-Release {
     param(
@@ -67,6 +81,49 @@ function Assert-Version {
     }
     $expected = "magichandy $Version ($Commit)"
     Assert-Release -Condition ($reported.Trim() -eq $expected) -Message "version output '$($reported.Trim())' should equal '$expected'"
+}
+
+function Get-PEMachine {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $reader = [System.IO.BinaryReader]::new($stream)
+    try {
+        if ($reader.ReadUInt16() -ne 0x5a4d) {
+            throw "'$Path' does not have a DOS executable header."
+        }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) {
+            throw "'$Path' has an invalid PE header offset."
+        }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) {
+            throw "'$Path' does not have a PE signature."
+        }
+        return $reader.ReadUInt16()
+    } finally {
+        $reader.Dispose()
+    }
+}
+
+function Assert-AuthenticodeStatus {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][System.Management.Automation.SignatureStatus]$ExpectedStatus,
+        [Parameter(Mandatory = $true)][string]$Description,
+        [string]$SignerThumbprint = ''
+    )
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    Assert-Release -Condition ($signature.Status -eq $ExpectedStatus) -Message "$Description Authenticode status should be $ExpectedStatus, got $($signature.Status)"
+    if ($ExpectedStatus -eq [System.Management.Automation.SignatureStatus]::Valid) {
+        Assert-Release -Condition ($null -ne $signature.SignerCertificate) -Message "$Description should expose a signer certificate"
+        $actualThumbprint = $signature.SignerCertificate.Thumbprint.Replace(' ', '').Trim().ToUpperInvariant()
+        Assert-Release -Condition ($actualThumbprint -eq $SignerThumbprint) -Message "$Description signer thumbprint should match the approved release identity"
+        Assert-Release -Condition ($signature.SignerCertificate.Subject -ne $signature.SignerCertificate.Issuer) -Message "$Description must not use a self-signed certificate"
+        Assert-Release -Condition ($null -ne $signature.TimeStamperCertificate) -Message "$Description should carry a trusted timestamp"
+        Assert-Release -Condition (-not [string]::IsNullOrWhiteSpace([string]$signature.TimeStamperCertificate.Subject)) -Message "$Description should carry a trusted timestamp"
+    }
 }
 
 function Wait-MagicHandyReady {
@@ -140,17 +197,34 @@ Assert-Release -Condition (Test-Path -LiteralPath $ArtifactsRoot -PathType Conta
 $portablePath = Join-Path $ArtifactsRoot "MagicHandy-$artifactVersion-windows-amd64-portable.zip"
 $setupPath = Join-Path $ArtifactsRoot "MagicHandy-$artifactVersion-windows-amd64-setup.exe"
 $checksumPath = Join-Path $ArtifactsRoot "MagicHandy-$artifactVersion-windows-amd64-SHA256SUMS.txt"
-foreach ($path in @($portablePath, $setupPath, $checksumPath)) {
+$requiresSetup = $ArtifactPolicy -ne 'PortablePublic'
+$requiredArtifacts = @($portablePath, $checksumPath)
+if ($requiresSetup) {
+    $requiredArtifacts += $setupPath
+}
+foreach ($path in $requiredArtifacts) {
     Assert-Release -Condition (Test-Path -LiteralPath $path -PathType Leaf) -Message "expected artifact '$path' should exist"
 }
+if (-not $requiresSetup) {
+    Assert-Release -Condition (-not (Test-Path -LiteralPath $setupPath)) -Message 'PortablePublic output must not contain a setup executable'
+}
 $releaseFiles = @(Get-ChildItem -LiteralPath $ArtifactsRoot -File | Where-Object { $_.Name -like "MagicHandy-$artifactVersion-windows-amd64-*" })
-Assert-Release -Condition ($releaseFiles.Count -eq 3) -Message 'release output should contain exactly setup, portable, and checksum artifacts for this version'
-$setupVersion = (Get-Item -LiteralPath $setupPath).VersionInfo
-$expectedNumericVersion = Get-ExpectedWindowsNumericVersion
-Assert-Release -Condition ($setupVersion.FileVersion.Trim() -eq $expectedNumericVersion) -Message "setup file version should be $expectedNumericVersion"
-Assert-Release -Condition ($setupVersion.ProductVersion.Trim() -eq $expectedNumericVersion) -Message "setup product version should be $expectedNumericVersion"
-$signature = Get-AuthenticodeSignature -LiteralPath $setupPath
-Assert-Release -Condition ($signature.Status -eq [System.Management.Automation.SignatureStatus]::NotSigned) -Message 'setup should be explicitly unsigned until the signing process exists'
+$expectedArtifactCount = if ($requiresSetup) { 3 } else { 2 }
+Assert-Release -Condition ($releaseFiles.Count -eq $expectedArtifactCount) -Message "$ArtifactPolicy output should contain exactly $expectedArtifactCount artifacts for this version"
+if ($requiresSetup) {
+    $setupVersion = (Get-Item -LiteralPath $setupPath).VersionInfo
+    $expectedNumericVersion = Get-ExpectedWindowsNumericVersion
+    Assert-Release -Condition ($setupVersion.FileVersion.Trim() -eq $expectedNumericVersion) -Message "setup file version should be $expectedNumericVersion"
+    Assert-Release -Condition ($setupVersion.ProductVersion.Trim() -eq $expectedNumericVersion) -Message "setup product version should be $expectedNumericVersion"
+    $setupMachine = Get-PEMachine -Path $setupPath
+    Assert-Release -Condition ($setupMachine -eq 0x8664) -Message ("setup loader should be x64 (machine 0x8664), got 0x{0:x4}" -f $setupMachine)
+    $expectedSetupSignature = if ($ArtifactPolicy -eq 'SignedPublic') {
+        [System.Management.Automation.SignatureStatus]::Valid
+    } else {
+        [System.Management.Automation.SignatureStatus]::NotSigned
+    }
+    Assert-AuthenticodeStatus -Path $setupPath -ExpectedStatus $expectedSetupSignature -Description 'setup executable' -SignerThumbprint $normalizedSignerThumbprint
+}
 
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("magichandy-release-test-" + [Guid]::NewGuid().ToString('N'))
 $app = $null
@@ -167,6 +241,18 @@ try {
     Assert-Release -Condition ($executables.Count -eq 1) -Message 'portable archive should contain one core executable'
     $portableRoot = $executables[0].Directory.FullName
     Assert-Version -Executable $executables[0].FullName
+    $payloadExecutables = @(Get-ChildItem -LiteralPath $portableRoot -Filter '*.exe' -File -Recurse)
+    Assert-Release -Condition ($payloadExecutables.Count -eq 4) -Message 'portable archive should contain the core and three first-party voice executables'
+    $expectedPayloadSignature = if ($ArtifactPolicy -eq 'SignedPublic') {
+        [System.Management.Automation.SignatureStatus]::Valid
+    } else {
+        [System.Management.Automation.SignatureStatus]::NotSigned
+    }
+    foreach ($executable in $payloadExecutables) {
+        $payloadMachine = Get-PEMachine -Path $executable.FullName
+        Assert-Release -Condition ($payloadMachine -eq 0x8664) -Message ("payload executable '$($executable.Name)' should be x64 (machine 0x8664), got 0x{0:x4}" -f $payloadMachine)
+        Assert-AuthenticodeStatus -Path $executable.FullName -ExpectedStatus $expectedPayloadSignature -Description "payload executable '$($executable.Name)'" -SignerThumbprint $normalizedSignerThumbprint
+    }
 
     foreach ($required in @(
         'scripts\install-tts-module.ps1',
@@ -202,7 +288,8 @@ try {
 
     Write-Host 'Verifying outer artifact checksums...'
     $checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    Assert-Release -Condition ($checksumLines.Count -eq 2) -Message 'checksum file should cover the setup EXE and portable ZIP'
+    $expectedChecksumCount = if ($requiresSetup) { 2 } else { 1 }
+    Assert-Release -Condition ($checksumLines.Count -eq $expectedChecksumCount) -Message "$ArtifactPolicy checksum file should cover exactly $expectedChecksumCount distributable artifact(s)"
     foreach ($line in $checksumLines) {
         Assert-Release -Condition ($line -match '^([0-9a-f]{64})  (.+)$') -Message "checksum line '$line' should use SHA256SUMS format"
         $artifact = Join-Path $ArtifactsRoot $Matches[2]
@@ -212,7 +299,7 @@ try {
     }
 
     if (-not $ExerciseInstaller) {
-        Write-Host 'Windows release payload verification passed.' -ForegroundColor Green
+        Write-Host "Windows release payload verification passed ($ArtifactPolicy)." -ForegroundColor Green
         return
     }
 

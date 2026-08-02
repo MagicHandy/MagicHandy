@@ -13,6 +13,15 @@
 #ifndef NumericVersion
   #define NumericVersion "0.0.0.0"
 #endif
+#ifndef InstallerSetupArchitecture
+  #define InstallerSetupArchitecture "x64"
+#endif
+#ifndef InstallerCompression
+  #define InstallerCompression "zip/9"
+#endif
+#ifndef InstallerSolidCompression
+  #define InstallerSolidCompression "no"
+#endif
 
 [Setup]
 AppId={{A9859C5A-AD69-4D2E-91DA-809D109984DA}
@@ -31,8 +40,9 @@ DefaultGroupName=MagicHandy
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=MagicHandy-{#ArtifactVersion}-windows-amd64-setup
-Compression=lzma2/ultra64
-SolidCompression=yes
+SetupArchitecture={#InstallerSetupArchitecture}
+Compression={#InstallerCompression}
+SolidCompression={#InstallerSolidCompression}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin

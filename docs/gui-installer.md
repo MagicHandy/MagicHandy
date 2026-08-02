@@ -15,11 +15,13 @@ architecture decision; this document is the detailed implementation design.
 Status 2026-08-02: the thin Inno shell, portable payload, first-run detection,
 re-runnable seven-step GUI, unified optional llama.cpp/Parakeet/TTS install-plan
 endpoint, release lifecycle tests, and tag-gated publication are implemented.
-The first unsigned Windows alpha is `v0.1.0-alpha.1`; `v0.1.0-alpha.6`
-includes verified upstream llama.cpp bundles and app-owned, policy-tolerant
-managed Python setup with native CPython virtual-environment launchers. Curated
-model downloads, signing, and broader optional-component acceptance remain
-open.
+The alpha.6 public setup was withdrawn after a severe Defender classification.
+Alpha.7 is portable-only: the unsigned Inno shell remains exercised as CI
+lifecycle evidence, while ADR 0014 blocks it from public releases until trusted
+Authenticode is provisioned. Verified upstream llama.cpp bundles and app-owned,
+policy-tolerant managed Python setup with native CPython virtual-environment
+launchers remain available. Curated model downloads, signing, and broader
+optional-component acceptance remain open.
 
 ## What already exists (and changes the answer)
 
@@ -177,14 +179,14 @@ where the logic lives.
 
 | Gap | Where it lands |
 | --- | --- |
-| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; current corrective alpha is `v0.1.0-alpha.6` |
+| Release plumbing: portable ZIP, version metadata, PR artifacts, tag publication | Implemented; `v0.1.0-alpha.7` is portable-only pending trusted setup signing |
 | Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b9966` CPU and CUDA 12.4 assets |
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |
 | Parakeet and managed TTS provisioning jobs | Implemented; full hardware/listening acceptance open |
 | Curated LLM downloads + hardware-fit recommendations | Open |
 | StrokeGPT-ReVibed importer API | Not implemented; therefore absent from setup |
-| Signing / auto-update / WebView2 / LAN policy | Recorded in ADR 0013; implementation deferred |
+| Signing / auto-update / WebView2 / LAN policy | Distribution boundaries are in ADR 0013; ADR 0014 blocks public setup until valid timestamped Authenticode |
 
 `install.ps1` stays for source-first developers and unattended installs. Its
 plain path builds the core and defers interactive choices to `#/setup`.

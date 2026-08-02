@@ -35,10 +35,13 @@ References:
 
 ## Update Paths
 
-Packaged users review the release notes and checksums, download the newer setup
-EXE, and run it over the existing installation. Inno Setup uses the stable app
-identity, closes the running `magichandy.exe`, replaces program files, and
-leaves `%APPDATA%\MagicHandy` intact. Database migrations remain the new core's
+When a trusted signed setup EXE is available, packaged users review the release
+notes and checksums and run it over the existing installation. Inno Setup uses
+the stable app identity, closes the running `magichandy.exe`, replaces program
+files, and leaves `%APPDATA%\MagicHandy` intact. Public setup publication is
+temporarily blocked by ADR 0014. Existing packaged users should not overwrite
+Program Files manually with portable files; use a separate portable directory
+or wait for a signed setup release. Database migrations remain the new core's
 responsibility at startup.
 
 Portable users replace the extracted application directory with the new
