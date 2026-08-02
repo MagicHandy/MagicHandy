@@ -76,6 +76,35 @@ function Resolve-CMake {
     return $null
 }
 
+function Resolve-MSYS2UCRTToolchain {
+    $roots = @('C:\msys64')
+    if (-not [string]::IsNullOrWhiteSpace($env:SystemDrive)) {
+        $roots += (Join-Path $env:SystemDrive 'msys64')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $roots += (Join-Path $env:ProgramFiles 'MSYS2')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $roots += (Join-Path $env:LOCALAPPDATA 'Programs\msys64')
+    }
+    foreach ($root in ($roots | Select-Object -Unique)) {
+        $bin = Join-Path $root 'ucrt64\bin'
+        $tools = [ordered]@{
+            Bin = $bin
+            C = Join-Path $bin 'gcc.exe'
+            CXX = Join-Path $bin 'g++.exe'
+            CMake = Join-Path $bin 'cmake.exe'
+            Ninja = Join-Path $bin 'ninja.exe'
+        }
+        $required = @($tools.C, $tools.CXX, $tools.CMake, $tools.Ninja)
+        $missing = @($required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })
+        if ($missing.Count -eq 0) {
+            return [pscustomobject]$tools
+        }
+    }
+    return $null
+}
+
 function Initialize-CudaToolkitEnvironment([string]$Nvcc) {
     $nvccPath = [System.IO.Path]::GetFullPath($Nvcc)
     $cudaToolkitDir = Split-Path -Parent (Split-Path -Parent $nvccPath)
@@ -180,14 +209,6 @@ $git = Resolve-Executable 'git'
 if (-not $git) {
     throw 'Git is required to fetch the pinned llama.cpp source. Install Git, then retry.'
 }
-$cmake = Resolve-CMake
-if (-not $cmake) {
-    throw 'CMake is required to build llama.cpp. Install CMake or the Visual Studio CMake tools, then retry.'
-}
-if (-not (Test-VCToolchain)) {
-    throw 'The Visual Studio Desktop C++ Build Tools workload is required to build llama.cpp. Run install.ps1 to provision it, then retry.'
-}
-
 $nvcc = Resolve-Executable 'nvcc'
 $selectedBackend = $Backend
 if ($selectedBackend -eq 'auto') {
@@ -198,6 +219,22 @@ if ($selectedBackend -eq 'cuda') {
         throw 'The CUDA backend requires the NVIDIA CUDA Toolkit (nvcc). Install it or choose the CPU backend.'
     }
     Initialize-CudaToolkitEnvironment -Nvcc $nvcc
+}
+
+$msysToolchain = if ($selectedBackend -eq 'cpu') { Resolve-MSYS2UCRTToolchain } else { $null }
+$useMSYS2 = $null -ne $msysToolchain
+if ($useMSYS2) {
+    $cmake = $msysToolchain.CMake
+    $env:Path = "$($msysToolchain.Bin);$env:Path"
+    Write-Host "Using MSYS2 UCRT64 GCC from $($msysToolchain.Bin)."
+} else {
+    $cmake = Resolve-CMake
+    if (-not $cmake) {
+        throw 'CMake is required to build llama.cpp. Install CMake, MSYS2 UCRT64 CMake, or the Visual Studio CMake tools, then retry.'
+    }
+    if (-not (Test-VCToolchain)) {
+        throw 'The Visual Studio Desktop C++ Build Tools workload is required for this llama.cpp build. CPU builds may alternatively use MSYS2 UCRT64 GCC/CMake/Ninja.'
+    }
 }
 
 $resolvedDataDir = [System.IO.Path]::GetFullPath($DataDir)
@@ -251,7 +288,6 @@ try {
     $configure = @(
         '-S', $sourceDir,
         '-B', $buildDir,
-        '-A', 'x64',
         '-DLLAMA_BUILD_SERVER=ON',
         '-DLLAMA_BUILD_TOOLS=ON',
         '-DLLAMA_BUILD_TESTS=OFF',
@@ -264,10 +300,25 @@ try {
         '-DGGML_CCACHE=OFF',
         "-DGGML_CUDA=$(if ($selectedBackend -eq 'cuda') { 'ON' } else { 'OFF' })"
     )
+    if ($useMSYS2) {
+        $configure += @(
+            '-G', 'Ninja',
+            '-DCMAKE_BUILD_TYPE=Release',
+            "-DCMAKE_C_COMPILER=$($msysToolchain.C)",
+            "-DCMAKE_CXX_COMPILER=$($msysToolchain.CXX)",
+            "-DCMAKE_MAKE_PROGRAM=$($msysToolchain.Ninja)"
+        )
+    } else {
+        $configure += @('-A', 'x64')
+    }
     Invoke-Checked $cmake $configure 'Configure llama.cpp'
 
     Write-Host 'Building llama-server from source. This can take several minutes...'
-    Invoke-Checked $cmake @('--build', $buildDir, '--config', 'Release', '--target', 'llama-server', '--parallel') 'Build llama-server'
+    $buildArguments = @('--build', $buildDir, '--target', 'llama-server', '--parallel')
+    if (-not $useMSYS2) {
+        $buildArguments += @('--config', 'Release')
+    }
+    Invoke-Checked $cmake $buildArguments 'Build llama-server'
 
     $builtRunner = Join-Path $buildDir 'bin\Release\llama-server.exe'
     if (-not (Test-Path -LiteralPath $builtRunner)) {
@@ -285,6 +336,28 @@ try {
     $stageBin = Join-Path $installStage 'bin'
     New-Item -ItemType Directory -Force -Path $stageBin | Out-Null
     Get-ChildItem -LiteralPath $builtBin -File | Copy-Item -Destination $stageBin -Force
+    if ($useMSYS2) {
+        foreach ($runtimeDLL in @('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll', 'libgomp-1.dll')) {
+            $runtimePath = Join-Path $msysToolchain.Bin $runtimeDLL
+            if (Test-Path -LiteralPath $runtimePath -PathType Leaf) {
+                Copy-Item -LiteralPath $runtimePath -Destination $stageBin -Force
+            }
+        }
+
+        # The build-time PATH contains the full UCRT64 directory. Probe the
+        # staged runner without it so a missing GCC runtime DLL cannot produce
+        # an install that only works while MSYS2 happens to be on PATH.
+        $buildPath = $env:Path
+        try {
+            $env:Path = "$stageBin;$env:SystemRoot\System32;$env:SystemRoot"
+            $stagedVersion = Invoke-Captured (Join-Path $stageBin 'llama-server.exe') @('--version') 'Probe self-contained MSYS2 llama-server'
+            if ($stagedVersion -notmatch $LlamaCommit.Substring(0, 7)) {
+                throw 'The staged MSYS2 llama-server failed its pinned-version probe.'
+            }
+        } finally {
+            $env:Path = $buildPath
+        }
+    }
     Copy-Item -LiteralPath (Join-Path $sourceDir 'LICENSE') -Destination (Join-Path $installStage 'LICENSE-llama.cpp') -Force
     Move-Item -LiteralPath $installStage -Destination $installDir
     Write-RuntimeManifest $runtimeRoot $installID $selectedBackend $runnerRelative

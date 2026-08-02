@@ -23,6 +23,12 @@ func TestDefaultSettingsIncludesPhaseTwoFields(t *testing.T) {
 	if settings.UI.Theme != ThemeSteelAzure {
 		t.Fatalf("UI theme = %q, want %q", settings.UI.Theme, ThemeSteelAzure)
 	}
+	if settings.UI.SetupCompleted {
+		t.Fatal("fresh settings should require guided setup")
+	}
+	if settings.UI.UpdateCheckMode != UpdateCheckAutomatic {
+		t.Fatalf("update check mode = %q, want %q", settings.UI.UpdateCheckMode, UpdateCheckAutomatic)
+	}
 	if settings.Device.HSPDispatchOwner != DispatchOwnerCloudREST {
 		t.Fatalf("dispatch owner = %q, want %q", settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST)
 	}

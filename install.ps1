@@ -3,10 +3,16 @@
     Builds and configures MagicHandy on a 64-bit Windows machine.
 
 .DESCRIPTION
-    The installer can start on a machine without Go, Git, CMake, a C++ compiler,
-    CUDA, or Ollama. Missing selected dependencies are installed with WinGet
-    after explicit consent, then verified before the build continues. If WinGet
-    itself is unavailable, the script offers the official Microsoft repair path.
+    The default interactive path bootstraps only the Go toolchain needed to
+    build the core, then opens MagicHandy's setup wizard. Device, LLM, model,
+    and voice choices live in that GUI. This keeps one decision tree and avoids
+    installing compilers, CUDA, models, or Python environments before the user
+    selects them.
+
+    Explicit command-line feature flags and -Yes retain the unattended source
+    provisioning path. That path can start on a machine without Go, Git, CMake,
+    a C++ compiler, CUDA, or Ollama and installs selected dependencies with
+    WinGet after consent.
 
     The core app and all first-party Go voice adapters are built with CGO
     disabled. Managed llama.cpp, Ollama, and the checksum-verified Parakeet
@@ -16,24 +22,25 @@
     These never become core dependencies, and no model is downloaded at app
     startup.
 
-    Non-secret installation choices are stored under LocalAppData so update.ps1
-    can preserve or revise them. API keys and the Handy connection key are never
-    written to installer state.
+    Non-secret bootstrap and unattended choices are stored under LocalAppData.
+    update.ps1 preserves that compatibility state but does not replay optional
+    installs; the app database owns interactive product choices. API keys and
+    the Handy connection key are never written to installer state.
 
 .PARAMETER Port
     Local HTTP port. Default: 49717.
 
 .PARAMETER DataDir
-    Settings/model/data directory. The unattended default is the Windows profile
-    data directory. Interactive setup can instead choose a portable .\data folder.
+    Settings/model/data directory. The default is the Windows profile data
+    directory. Pass an explicit path for a portable or managed layout.
 
 .PARAMETER UILanguage
-    Installer and app UI locale: en, es, pt-BR, zh-Hans, or ja. Interactive
-    setup asks this before every other choice. Unattended default: en.
+    Bootstrap and app UI locale: en, es, pt-BR, zh-Hans, or ja. The normal path
+    starts with English and lets the user choose in the GUI. Unattended default: en.
 
 .PARAMETER ChatLanguage
-    Built-in chat reply locale: en, es, pt-BR, zh-Hans, or ja. Interactive
-    setup asks separately. Unattended default: the selected UI locale.
+    Built-in chat reply locale: en, es, pt-BR, zh-Hans, or ja. The normal path
+    asks in the GUI. Unattended default: the selected UI locale.
 
 .PARAMETER LlamaBackend
     Managed llama.cpp backend: auto, cpu, or cuda. Auto selects CUDA only when an
@@ -50,8 +57,8 @@
     Do not install the optional 644 MiB Parakeet ASR model and CPU runner.
 
 .PARAMETER TTSModule
-    Optional managed local TTS module: none, faster-qwen3-tts, or chatterbox.
-    Interactive setup explains the tradeoffs when this is omitted.
+    Optional managed local TTS module for unattended provisioning: none,
+    faster-qwen3-tts, or chatterbox. Guided setup owns the normal choice.
 
 .PARAMETER TTSDevice
     Local TTS execution device: auto, cpu, or cuda. Faster Qwen3-TTS requires
@@ -125,10 +132,12 @@ param(
     [string]$StatePath,
     [switch]$PlanOnly,
 
-    # update.ps1 uses these mutually exclusive modes.
+    # update.ps1 uses these internal modes.
     [switch]$UseSavedChoices,
     [switch]$Reconfigure,
-    [switch]$UpdateRun
+    [switch]$UpdateRun,
+    [switch]$OpenSetup,
+    [switch]$CoreOnly
 )
 
 Set-StrictMode -Version Latest
@@ -147,9 +156,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $Repo 'cmd\magichandy'))) {
 if ($UseSavedChoices -and $Reconfigure) {
     throw 'UseSavedChoices and Reconfigure cannot be combined.'
 }
-if ($Reconfigure -and $Yes) {
-    throw 'Reconfigure is interactive and cannot be combined with Yes.'
-}
+$explicitFeatureParameters = @(
+    'LlamaBackend', 'SkipLlamaBuild', 'OllamaModel', 'SkipParakeet',
+    'TTSModule', 'TTSDevice', 'NoTTSAutoLaunch'
+)
+$hasExplicitFeatureChoice = [bool]($explicitFeatureParameters | Where-Object {
+    $PSBoundParameters.ContainsKey($_)
+} | Select-Object -First 1)
+$guiOwnsFreshChoices = -not $Yes -and -not $UseSavedChoices -and -not $Reconfigure -and
+    -not $UpdateRun -and -not $hasExplicitFeatureChoice
 if (-not $StatePath) {
     $StatePath = Get-MagicHandyInstallStatePath
 }
@@ -168,7 +183,7 @@ if ($UseSavedChoices -or $Reconfigure) {
 } else {
     $resolvedUILanguage = if (-not [string]::IsNullOrWhiteSpace($UILanguage)) {
         $UILanguage
-    } elseif ($Yes) {
+    } elseif ($Yes -or $guiOwnsFreshChoices) {
         'en'
     } else {
         Read-MagicHandyLanguage -QuestionKey 'language_selector' -Default 'en'
@@ -176,7 +191,7 @@ if ($UseSavedChoices -or $Reconfigure) {
     Set-MagicHandyInstallerLocale -Locale $resolvedUILanguage
     $resolvedChatLanguage = if (-not [string]::IsNullOrWhiteSpace($ChatLanguage)) {
         $ChatLanguage
-    } elseif ($Yes) {
+    } elseif ($Yes -or $guiOwnsFreshChoices) {
         $resolvedUILanguage
     } else {
         Read-MagicHandyLanguage -QuestionKey 'chat_language_selector' -Default $resolvedUILanguage
@@ -194,7 +209,7 @@ function Resolve-InitialDataDir {
     if (-not [string]::IsNullOrWhiteSpace($DataDir)) {
         return [System.IO.Path]::GetFullPath($DataDir)
     }
-    if ($Yes) {
+    if ($Yes -or $guiOwnsFreshChoices) {
         return [System.IO.Path]::GetFullPath((Get-ProfileDataDir))
     }
     $portable = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'portable_question') -Default $false
@@ -423,76 +438,23 @@ function New-FreshConfiguration {
         -CreateLauncher $launcher
 }
 
-function Read-ValidPort([int]$Default) {
-    while ($true) {
-        $raw = Read-MagicHandyValue -Question (Get-MagicHandyText -Key 'port_question') -Default ([string]$Default)
-        $parsed = 0
-        if ([int]::TryParse($raw, [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 65535) {
-            return $parsed
-        }
-        Write-Warning (Get-MagicHandyText -Key 'port_invalid')
-    }
-}
-
-function Read-ReconfiguredState([object]$Existing) {
-    Write-InstallerHeading (Get-MagicHandyText -Key 'modify_heading')
-    $newUILanguage = Read-MagicHandyLanguage -QuestionKey 'ui_language_reconfigure' -Default ([string]$Existing.ui_locale)
-    Set-MagicHandyInstallerLocale -Locale $newUILanguage
-    $newChatLanguage = Read-MagicHandyLanguage -QuestionKey 'chat_language_reconfigure' -Default ([string]$Existing.chat_locale)
-    $newDataDir = Read-MagicHandyValue -Question (Get-MagicHandyText -Key 'data_dir_question') -Default ([string]$Existing.data_dir)
-    $newDataDir = [System.IO.Path]::GetFullPath($newDataDir)
-    $newPort = Read-ValidPort -Default ([int]$Existing.port)
-    $setupLLM = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'setup_llm_question') -Default ([bool]$Existing.setup_llm)
-
-    $buildManaged = $false
-    $backend = 'cpu'
-    $ensureOllama = $false
-    $model = ''
-    if ($setupLLM) {
-        Write-Host ''
-        Write-Host (Get-MagicHandyText -Key 'llama_benefit')
-        Write-Host (Get-MagicHandyText -Key 'llama_ollama_tradeoff') -ForegroundColor DarkGray
-        $buildManaged = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'llama_keep_question') -Default ([bool]$Existing.build_managed_llama)
-        if ($buildManaged) {
-            Write-Host (Get-MagicHandyText -Key 'cuda_benefit') -ForegroundColor DarkGray
-            Write-Host (Get-MagicHandyText -Key 'cuda_tradeoff') -ForegroundColor DarkGray
-            $backendDefault = if ([string]$Existing.llama_backend -eq 'cuda') { 'cuda' } else { 'cpu' }
-            $backend = Read-MagicHandyBackend -Default $backendDefault
-        }
-        $ollamaDefault = if (-not $buildManaged) { $true } else { [bool]$Existing.ensure_ollama }
-        $ensureOllama = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'ollama_keep_question') -Default $ollamaDefault
-        if (-not $buildManaged -and -not $ensureOllama) {
-            Write-Host (Get-MagicHandyText -Key 'ollama_forced') -ForegroundColor Yellow
-            $ensureOllama = $true
-        }
-        if ($ensureOllama) {
-            $model = Read-MagicHandyOptionalValue -Question (Get-MagicHandyText -Key 'ollama_model_question') -Default ([string]$Existing.ollama_model)
-        }
-    }
-    $parakeet = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'parakeet_keep_question') -Default ([bool]$Existing.install_parakeet)
-    $tts = Read-TTSConfiguration `
-        -DefaultModule ([string]$Existing.tts_module) `
-        -DefaultDevice ([string]$Existing.tts_device) `
-        -DefaultAutoLaunch ([bool]$Existing.tts_auto_launch)
-    $launcher = Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'launcher_refresh_question') -Default ([bool]$Existing.create_launcher)
-
+function New-GUIBootstrapConfiguration {
     return New-MagicHandyInstallState `
         -RepositoryPath $Repo `
-        -DataDir $newDataDir `
-        -Port $newPort `
-        -UILocale $newUILanguage `
-        -ChatLocale $newChatLanguage `
-        -SetupLLM $setupLLM `
-        -BuildManagedLlama $buildManaged `
-        -LlamaBackend $backend `
-        -EnsureOllama $ensureOllama `
-        -OllamaModel $model `
-        -InstallParakeet $parakeet `
-        -TTSModule ([string]$tts.Module) `
-        -TTSDevice ([string]$tts.Device) `
-        -TTSAutoLaunch ([bool]$tts.AutoLaunch) `
-        -CreateLauncher $launcher `
-        -InstalledAt ([string]$Existing.installed_at)
+        -DataDir (Resolve-InitialDataDir) `
+        -Port $Port `
+        -UILocale $resolvedUILanguage `
+        -ChatLocale $resolvedChatLanguage `
+        -SetupLLM $false `
+        -BuildManagedLlama $false `
+        -LlamaBackend 'cpu' `
+        -EnsureOllama $false `
+        -OllamaModel '' `
+        -InstallParakeet $false `
+        -TTSModule 'none' `
+        -TTSDevice 'cpu' `
+        -TTSAutoLaunch $false `
+        -CreateLauncher (-not $NoLauncher)
 }
 
 function Copy-SavedState([object]$Existing) {
@@ -521,19 +483,23 @@ if (-not $UpdateRun) {
 
 $existing = $preloadedState
 $state = if ($UseSavedChoices -or $Reconfigure) {
-    if ($Reconfigure) {
-        Read-ReconfiguredState -Existing $existing
-    } else {
+    if (-not $CoreOnly) {
         Write-InstallerHeading (Get-MagicHandyText -Key 'preserved_heading')
         Show-MagicHandyInstallState -State $existing
-        Copy-SavedState -Existing $existing
     }
+    Copy-SavedState -Existing $existing
+} elseif ($guiOwnsFreshChoices) {
+    Write-Host ''
+    Write-Host 'Optional device, model, and voice choices will open in the MagicHandy setup wizard.' -ForegroundColor Cyan
+    New-GUIBootstrapConfiguration
 } else {
     New-FreshConfiguration
 }
 
-Write-InstallerHeading (Get-MagicHandyText -Key 'selected_heading')
-Show-MagicHandyInstallState -State $state
+if (-not $CoreOnly) {
+    Write-InstallerHeading (Get-MagicHandyText -Key 'selected_heading')
+    Show-MagicHandyInstallState -State $state
+}
 $runningPort = if ($null -ne $existing) { [int]$existing.port } else { [int]$state.port }
 Invoke-MagicHandyProvision `
     -State $state `
@@ -542,7 +508,9 @@ Invoke-MagicHandyProvision `
     -AssumeYes:$Yes `
     -PlanOnly:$PlanOnly `
     -PreserveAppLanguages:$UseSavedChoices `
-    -ReconfigureTTS:$Reconfigure
+    -ReconfigureTTS:$false `
+    -CoreOnly:$CoreOnly `
+    -CompleteSetup:(-not $guiOwnsFreshChoices -and -not $OpenSetup -and -not $Reconfigure)
 
 if ($PlanOnly) {
     Write-Host ''
@@ -556,9 +524,16 @@ if ($PlanOnly) {
 Write-MagicHandyInstallState -State $state -Path $StatePath
 Write-Host (Get-MagicHandyText -Key 'state_saved' -Values @($StatePath)) -ForegroundColor Green
 
-$launch = -not $NoLaunch -and ($Yes -or (Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'start_question') -Default $true))
+$launch = -not $NoLaunch -and (
+    $Yes -or $guiOwnsFreshChoices -or $OpenSetup -or $Reconfigure -or
+    (Confirm-MagicHandyChoice -Question (Get-MagicHandyText -Key 'start_question') -Default $true)
+)
 if ($launch) {
-    Start-MagicHandyApp -RepositoryPath $Repo -DataDir ([string]$state.data_dir) -Port ([int]$state.port)
+    Start-MagicHandyApp `
+        -RepositoryPath $Repo `
+        -DataDir ([string]$state.data_dir) `
+        -Port ([int]$state.port) `
+        -Setup:($guiOwnsFreshChoices -or $OpenSetup -or $Reconfigure)
 }
 
 if (-not $UpdateRun) {

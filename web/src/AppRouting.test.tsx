@@ -1,16 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 const app = vi.hoisted(() => ({
   route: "#/settings/device",
   refresh: vi.fn(),
+  state: {} as Record<string, unknown>,
 }));
 
 vi.mock("./state/app-state", () => ({
   useHashRoute: () => app.route,
-  useAppState: () => ({ state: {}, startupError: "", refresh: app.refresh }),
+  useAppState: () => ({ state: app.state, startupError: "", refresh: app.refresh, readOnly: false }),
 }));
 
 vi.mock("./shell/AppShell", () => ({
@@ -31,8 +32,22 @@ vi.mock("./routes/ChatRoute", () => ({ ChatRoute: () => <div>Chat route</div> })
 vi.mock("./routes/PresetModesRoute", () => ({ PresetModesRoute: () => <div>Modes route</div> }));
 vi.mock("./routes/PatternLibraryRoute", () => ({ PatternLibraryRoute: () => <div>Library route</div> }));
 vi.mock("./routes/VideoRoute", () => ({ VideoRoute: () => <div>Videos route</div> }));
+vi.mock("./routes/SetupRoute", () => ({ SetupRoute: () => <div>Setup route</div> }));
 
 describe("App route lifetime", () => {
+  beforeEach(() => {
+    app.state = {};
+    window.location.hash = "#/chat";
+  });
+
+  it("redirects a fresh data store into guided setup", async () => {
+    app.route = "#/chat";
+    app.state = { settings: { ui: { setup_completed: false } } };
+    render(<App />);
+
+    await waitFor(() => expect(window.location.hash).toBe("#/setup"));
+  });
+
   it("preserves settings drafts between subsections but resets them after leaving Settings", () => {
     app.route = "#/settings/device";
     const result = render(<App />);

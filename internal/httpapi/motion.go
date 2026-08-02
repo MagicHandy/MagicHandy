@@ -662,6 +662,9 @@ func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
 		s.stopLLMAutoload()
+		if s.setup != nil {
+			s.setup.Close()
+		}
 		if err := s.closeLLM(); err != nil {
 			s.logger.Warn("LLM provider did not close cleanly during shutdown", "error", err)
 		}

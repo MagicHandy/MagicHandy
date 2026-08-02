@@ -56,6 +56,32 @@ func TestRunConfiguresLanguagesWithoutStartingServer(t *testing.T) {
 	if got.Server.Port != 51234 {
 		t.Fatalf("server port = %d, want preserved 51234", got.Server.Port)
 	}
+	if got.UI.SetupCompleted {
+		t.Fatal("language-only bootstrap should leave guided setup incomplete")
+	}
+}
+
+func TestRunLanguageConfigurationCanCompleteUnattendedSetup(t *testing.T) {
+	dataDir := t.TempDir()
+	err := run([]string{
+		"-data-dir", dataDir,
+		"-set-ui-locale", config.LocaleEnglish,
+		"-set-chat-locale", config.LocaleEnglish,
+		"-complete-setup",
+	}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("run completed language configuration: %v", err)
+	}
+
+	store, err := config.OpenStore(dataDir)
+	if err != nil {
+		t.Fatalf("OpenStore verify: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	settings, _ := store.Snapshot()
+	if !settings.UI.SetupCompleted {
+		t.Fatal("unattended setup was not marked complete")
+	}
 }
 
 func TestRunLanguageConfigurationRefusesRecoveredDefaults(t *testing.T) {

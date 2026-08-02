@@ -1,4 +1,4 @@
-# GUI Installer — Evaluation And Design (2026-07-11)
+# GUI Installer — Decision And Implemented Design
 
 The Windows install story needs three things a portable zip and a console
 script cannot deliver alone: a real install binary (shortcuts, uninstall
@@ -11,6 +11,14 @@ how to get there and records the decision. It extends
 setup wizard") and feeds Phase 16.
 [ADR 0011](decisions/0011-windows-installer-shell.md) records the
 architecture decision; this document is the detailed implementation design.
+
+Status 2026-08-02: the thin Inno shell, portable payload, first-run detection,
+re-runnable seven-step GUI, and unified optional llama.cpp/Parakeet/TTS
+install-plan endpoint are
+implemented on the Phase 16 branch. The workflow intentionally publishes only
+short-lived CI artifacts; no installer binary has been released. Prebuilt
+llama.cpp bundles, curated model downloads, signing, and clean-machine release
+acceptance remain open.
 
 ## What already exists (and changes the answer)
 
@@ -99,8 +107,8 @@ For the install binary itself, **Inno Setup** over WiX/NSIS/hand-rolled:
 ## First-run onboarding wizard (`#/setup`)
 
 Trigger: fresh data directory (no settings/database) or an explicit
-`-setup` flag; re-runnable later from Settings. Every step is skippable and
-non-blocking — the app must remain fully usable with everything declined
+`-setup` flag; re-runnable later from Settings. Every optional feature is
+skippable before installation and non-blocking — the app must remain usable with everything declined
 (voice optional, Ollama instead of managed builds, no migration).
 
 The steps below are the *contract* (what each step may do and through which
@@ -110,48 +118,49 @@ screen anatomy, visual treatment, and branding slots — lives in
 [setup-wizard-sketch.svg](setup-wizard-sketch.svg).
 
 1. **Welcome / consent** — what setup will and won't do: nothing downloads
-   or builds without an explicit per-item click showing size and license;
+   or builds before the user selects components with size/license disclosure
+   and explicitly continues to installation;
    nothing here ever commands the device.
 2. **Device** — connection key (write-only), dispatch owner, non-motion
    connection check. Existing settings surface, embedded.
-3. **LLM runtime** — checksummed prebuilt managed llama.cpp CPU/CUDA bundles
-   by default, with size/license/backend fit visible before download; an
-   advanced managed **source build** (backend auto/CPU/CUDA, streaming status,
-   cancel — existing endpoint); **skip because Ollama** (scan + import from
-   the local Ollama store — existing endpoints); or an external server URL.
-   The prebuilt path is required before this wizard can claim that end users
-   need no Git/CMake/Visual Studio toolchain.
-4. **LLM model** — import GGUF / import from Ollama (existing), or the
-   Phase 16 curated checksum-pinned downloads with hardware-fit
-   recommendations once those land.
+3. **LLM runtime** — the Recommended fresh-install default is a pinned managed
+   **source build** (backend auto/CPU/CUDA), with its compiler and disk cost
+   visible. CPU can reuse/provision MSYS2 UCRT64 GCC/CMake/Ninja or fall back to
+   Visual Studio; CUDA uses Visual Studio and the NVIDIA Toolkit. **Use existing
+   Ollama** is never selected implicitly and avoids that compiler/runtime
+   footprint; use an external compatible server; or skip. Checksummed prebuilt
+   CPU/CUDA bundles remain a planned replacement for the default managed path.
+4. **LLM model** — import a local GGUF into the checksummed managed store,
+   scan an existing Ollama library and explicitly copy one compatible model,
+   choose a model exposed by an Ollama daemon, enter an external server model
+   ID, or skip.
+   Curated checksum-pinned downloads and hardware-fit recommendations remain
+   planned and are not represented as available actions.
 5. **Voice (optional)** — Parakeet ASR: download the pinned parakeet.cpp
    runner + model (sizes, licenses, SHA-256 — lifted from `install.ps1`
     into API endpoints so the wizard and the script share one checksummed
     path). Local TTS: choose Faster Qwen3-TTS for NVIDIA/CUDA, Chatterbox for
     broader hardware, or an existing OpenAI-compatible endpoint; show pinned
     source/model licenses, disk impact, reference requirements, and process
-    ownership before installation. ElevenLabs: write-only key entry. Installing
-    assets does not enable or start voice;
+    ownership before installation. Installing assets does not enable or start voice;
     enablement is explicit and a separate Start action confirms model readiness.
-    App-managed modules and custom local paths are separate choices.
-    Speak-replies and push-to-talk explained.
-6. **Port from StrokeGPT-ReVibed** *(conditional — exists only if the
-   undecided Phase 15 importer is built; see `docs/parity-with-stgpt-rv.md`)* —
-   detect likely install locations, offer
-   a browse fallback, then run the Phase 15 importer in **dry-run** first:
-   per-category preview (settings, memories, prompt sets/personas, motion
-   patterns, programs/funscripts) with counts and the compatibility report,
-   per-category opt-in, then the real non-destructive import. Secrets land
-   in the redacted store and are never echoed. If the importer decision lands
-   as "won't build", this step disappears from the wizard entirely rather than
-   shipping disabled.
-7. **Finish** — where things live (data dir, local URL, docs), what was
+    App-managed modules and custom local paths are separate choices. Reference
+    WAV/transcript selection, enabling voice, and starting workers stay in
+    Settings > Voice.
+6. **Install** — submit the selected local components once, then show the
+   backend-owned sequential queue, per-component state, bounded terminal
+   output, cancellation, and retry.
+7. **Finish** — where things live (data dir, local URL), what was
    skipped and where to do it later.
 
+The Phase 15 importer does not exist, so setup contains no disabled or
+placeholder migration step. Add it only with a real dry-run and
+non-destructive importer API.
+
 Invariants: all mutating steps sit behind the controller lease like every
-other surface; downloads are server-side, checksum-pinned, size/license
-visible, individually consented; the wizard adds no second copy of any
-operation — every step is the existing settings/API surface arranged in
+other surface; downloads are server-side, checksum-pinned, and size/license
+visible before one reviewed install plan starts. The wizard adds no second copy
+of any operation — every step is the existing settings/API surface arranged in
 order.
 
 Presentation: the default stays "binary opens the default browser at the
@@ -164,15 +173,16 @@ where the logic lives.
 
 | Gap | Where it lands |
 | --- | --- |
-| Release plumbing: portable zip, version metadata, release workflow | Slice 16.0 (already in scope) |
-| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Slice 16.0 |
-| Inno Setup script, CI compile, uninstall story, over-install upgrade | Slice 16.1 |
-| First-run detection, `#/setup` wizard route and steps, re-run from Settings | Slice 16.2 |
-| Voice provisioning endpoints (checksummed downloads with progress, mirroring `install.ps1`) | Slice 16.2 |
-| Curated LLM downloads + hardware-fit recommendations | Phase 16 scope (already listed) |
-| StrokeGPT-ReVibed importer API (dry-run, report, non-destructive) | Phase 15 — undecided; slice 16.3 exists only if it is built |
-| Signing / auto-update / WebView2 shell decisions | Phase 16 decision docs (already listed) |
+| Release plumbing: portable ZIP, version metadata, artifact workflow | Implemented; release publication deliberately absent |
+| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Open; current managed path is an explicit source build |
+| Inno Setup script, silent install/uninstall, retained data | Implemented; clean-machine acceptance open |
+| First-run detection, `#/setup`, re-run from Settings | Implemented |
+| Parakeet and managed TTS provisioning jobs | Implemented; full hardware/listening acceptance open |
+| Curated LLM downloads + hardware-fit recommendations | Open |
+| StrokeGPT-ReVibed importer API | Not implemented; therefore absent from setup |
+| Signing / auto-update / WebView2 / LAN policy | Recorded in ADR 0013; implementation deferred |
 
-`install.ps1` stays for source-first developers and unattended installs, with
-`update.ps1` preserving or revisiting its non-secret choices. Both shrink over
-time to wrappers that fetch a release and defer to the same in-app setup.
+`install.ps1` stays for source-first developers and unattended installs. Its
+plain path builds the core and defers interactive choices to `#/setup`.
+`update.ps1` rebuilds only the core, preserves GUI-owned optional assets, and
+can reopen setup instead of replaying old source-installer choices.

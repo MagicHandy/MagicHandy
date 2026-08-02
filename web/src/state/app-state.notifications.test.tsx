@@ -17,7 +17,7 @@ function NotificationHarness() {
         onClick={() => push({
           title: "Library scan complete",
           tone: "success",
-          category: "library",
+          category: "system",
           sourceKey: "scan-complete:one",
         })}
       >
@@ -28,11 +28,22 @@ function NotificationHarness() {
         onClick={() => push({
           title: "New library scan complete",
           tone: "success",
-          category: "library",
+          category: "system",
           sourceKey: "scan-complete:two",
         })}
       >
         Push newer scan result
+      </button>
+      <button
+        type="button"
+        onClick={() => push({
+          title: "Hidden library result",
+          tone: "success",
+          category: "library",
+          sourceKey: "scan-complete:hidden",
+        })}
+      >
+        Push hidden library result
       </button>
       <button type="button" onClick={markAllRead}>Mark read</button>
       <button type="button" onClick={clear}>Clear</button>
@@ -45,7 +56,7 @@ function NotificationHarness() {
 }
 
 describe("notification feedback channel", () => {
-  it("retains toast feedback in notification history", () => {
+  it("shows routine toast feedback without adding default notification history", () => {
     render(
       <ToastProvider>
         <NotificationHarness />
@@ -55,8 +66,8 @@ describe("notification feedback channel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show toast" }));
 
     expect(screen.getByText("Library scan failed", { selector: ".toast" })).toBeVisible();
-    expect(screen.getByRole("list", { name: "Notification history" })).toHaveTextContent("Library scan failed");
-    expect(screen.getByRole("status", { name: "Unread count" })).toHaveTextContent("1");
+    expect(screen.getByRole("list", { name: "Notification history" })).toBeEmptyDOMElement();
+    expect(screen.getByRole("status", { name: "Unread count" })).toHaveTextContent("0");
   });
 
   it("deduplicates backend events by source key and manages unread state", () => {
@@ -128,5 +139,19 @@ describe("notification feedback channel", () => {
 
     expect(screen.getByRole("list", { name: "Notification history" })).toHaveTextContent("Library scan complete");
     expect(screen.getByRole("status", { name: "Unread count" })).toHaveTextContent("0");
+  });
+
+  it("persists the source key of a category excluded from history", () => {
+    render(
+      <ToastProvider>
+        <NotificationHarness />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Push hidden library result" }));
+
+    expect(screen.getByRole("list", { name: "Notification history" })).toBeEmptyDOMElement();
+    const stored = JSON.parse(window.sessionStorage.getItem("magichandy-notifications-v1") || "{}") as { sourceKeys?: string[] };
+    expect(stored.sourceKeys).toContain("scan-complete:hidden");
   });
 });

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-01, local-LLM latency consistency and process recovery
+## Snapshot — 2026-08-02, Windows packaging and release discovery
 
 ### Goal 1: Maintainability
 
@@ -31,9 +31,9 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,341 lines, `internal/config/settings_test.go` 1,467, `internal/httpapi/chat.go` 1,286, `internal/httpapi/voice.go` 1,095, `internal/httpapi/voice_test.go` 1,071, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. LLM update merging and context-size tests are isolated in focused config files; voice normalization/defaulting/validation remains separate as well. All remain below the 1,500-line emergency ceiling; split when responsibilities can be separated without weakening lifecycle ownership. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,140 lines, `web/src/App.test.tsx` 1,441, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,443, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Provider-specific TTS fields replace the retired reference-code dialog without another UI tree; locale catalogs remain data and lazy-load outside the English startup chunk, and `web/dist` remains the single shipped build. |
-| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,319 physical lines and remains outside the Go/web architecture size test as a manually reviewed guideline exception. Optional Python/PyTorch speech setup lives in dedicated install/update scripts; the shared module only validates, invokes, and refreshes their small app-owned launchers. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,436 lines, `internal/config/settings_test.go` 1,473, `internal/httpapi/chat.go` 1,334, `internal/httpapi/voice.go` 1,153, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Setup/update tests and the release checker live in focused files; all enforced paths remain below the 1,500-line emergency ceiling. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,248 lines, `web/src/App.test.tsx` 1,485, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,446, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Setup and update UI use the canonical app and lazy locale chunks; `web/dist` remains the single shipped build. `App.test.tsx` is close to the 1,500-line emergency ceiling and must be split before more broad shell coverage lands there. |
+| Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,374 physical lines and remains outside the Go/web architecture size test as a manually reviewed guideline exception. Optional Python/PyTorch speech setup lives in dedicated install/update scripts; the shared module owns bootstrap/state/process helpers used by source and GUI provisioning. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
 | Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phase 18 M1-M2 reuse one bounded exact-name funscript document for the canvas and one shared-engine finite media target, keep host paths out of the API, and leave real-device timing claims to the explicit M3 acceptance gate. |
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current tree: 23,296,000 bytes plain and 16,720,896 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; the voice lifecycle recovery changes remain well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Current tree: 23,509,504 bytes plain and 16,907,264 bytes stripped with `CGO_ENABLED=0` and `-ldflags "-s -w"`; packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Three fresh isolated-data launches of the current stripped binary listened in 92.2-121.8 ms and returned `/healthz` in 92.9-136.7 ms, including process-spawn and loopback-request overhead. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Pending** | Phase 16 |
+| Release pipeline | portable zip, versioning, release workflow | **Met** | Phase 16 produces one manifest-verified payload as a 15,581,904-byte portable ZIP and a 9,235,653-byte unsigned Inno setup EXE. The read-only PR workflow publishes only short-lived review artifacts. Local acceptance passed install, live update check, active-process over-install, settings retention, restart, uninstall, and data retention; no GitHub Release was created. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -112,9 +112,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,562,162 raw / 763,714 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 738,698 raw / 196,619 gzip bytes; all
-   HTML/CSS/JS is 1,117,800 raw / 326,966 gzip bytes. LLM loading controls,
+   browser payload is 1,646,533 raw / 788,728 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 781,869 raw / 206,975 gzip bytes; all
+   HTML/CSS/JS is 1,202,297 raw / 351,331 gzip bytes. The Phase 16 setup and
+   update UI add 84,371 raw / 25,014 gzip bytes overall and 43,171 raw / 10,356
+   gzip bytes to the English startup path against the preceding snapshot. LLM
+   loading controls,
    phase diagnostics, speech policy, and duplicate-process recovery add 21,116
    raw / 6,163 gzip bytes overall and 9,696 raw / 2,180 gzip bytes to startup
    against the checked-in predecessor. The local-TTS transition
@@ -138,6 +141,29 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-02** - Added the unsigned Windows x64 distribution path and
+  read-only update discovery. One clean-source-enforcing builder now produces a
+  manifest-verified portable ZIP and Inno setup EXE from the same pure-Go core,
+  workers, GPL/source notices, and optional provisioning helpers; the PR
+  workflow has read-only permissions and cannot publish a release. In-app
+  setup now owns normal device, LLM, model, ASR, and TTS choices while the plain
+  source installer builds the core and opens that wizard. Versioned builds use
+  a bounded backend client to query the canonical latest stable GitHub Release,
+  cache for six hours, throttle failed automatic retries for 15 minutes,
+  revalidate with ETags, compare semantic versions, and produce a deduplicated
+  opt-out notification without downloading or executing anything. Local
+  current-tree acceptance verified 88 manifest entries and both outer hashes,
+  a 15,581,904-byte portable ZIP, a 9,235,653-byte setup EXE, first install,
+  live `no_release` handling, active-process over-install, Japanese settings
+  retention, restart, uninstall, and retained database data. The core measures
+  23,509,504 / 16,907,264 bytes plain/stripped; the embedded UI is 1,646,533
+  raw / 788,728 level-9 gzip bytes. Full Go and 376-test frontend suites, vet,
+  lint (zero issues), zero-CGo build, PowerShell integration/recovery tests,
+  production frontend build, and production-only npm audit pass. The local
+  race run remains unavailable because this MSYS2 installation has `gcc-libs`
+  but no GCC/Clang compiler package; CI retains the race gate. No hardware
+  command or GitHub Release was issued.
 
 - **2026-08-01** - Fixed managed Faster Qwen stopping after ordinary seed or
   tone saves. Those controls now travel with each speech request, preserving

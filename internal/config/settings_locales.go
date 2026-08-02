@@ -11,12 +11,37 @@ const (
 	LocaleSimplifiedChinese = "zh-Hans"
 	// LocaleJapanese selects Japanese.
 	LocaleJapanese = "ja"
+	// UpdateCheckAutomatic checks GitHub Releases after the UI connects.
+	UpdateCheckAutomatic = "automatic"
+	// UpdateCheckManual only contacts GitHub after an explicit user action.
+	UpdateCheckManual = "manual"
+	// NotificationCategoryApp stores routine command feedback in notification history.
+	NotificationCategoryApp = "app"
+	// NotificationCategorySystem stores core and device availability changes.
+	NotificationCategorySystem = "system"
+	// NotificationCategoryLibrary stores media scan and processing results.
+	NotificationCategoryLibrary = "library"
+	// NotificationCategoryVoice stores managed voice worker alerts.
+	NotificationCategoryVoice = "voice"
+	// NotificationCategoryUpdates stores available-release notices.
+	NotificationCategoryUpdates = "updates"
 )
+
+// DefaultNotificationCategories keeps routine feedback and successful library
+// work out of the bell while retaining operational and release alerts.
+var DefaultNotificationCategories = []string{
+	NotificationCategorySystem,
+	NotificationCategoryVoice,
+	NotificationCategoryUpdates,
+}
 
 // UISettings contains presentation preferences shared by every browser client.
 type UISettings struct {
-	Locale string `json:"locale"`
-	Theme  string `json:"theme"`
+	Locale                 string   `json:"locale"`
+	Theme                  string   `json:"theme"`
+	SetupCompleted         bool     `json:"setup_completed"`
+	UpdateCheckMode        string   `json:"update_check_mode,omitempty"`
+	NotificationCategories []string `json:"notification_categories"`
 }
 
 // IsSupportedLocale reports whether locale has bundled UI and prompt catalogs.

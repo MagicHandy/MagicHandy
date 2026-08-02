@@ -3,7 +3,22 @@
 Everything you need to install, update, and run MagicHandy from source. The
 [README](../README.md) carries the short version; this page carries the detail.
 
-## Windows installer (`install.ps1`)
+## Windows setup package
+
+Phase 16 can build an unsigned setup EXE and portable ZIP, but they are not yet
+published as a release. The setup EXE installs the prebuilt core, shortcuts,
+and uninstaller without requiring Go, Node, Python, CMake, or Visual Studio,
+then opens the same guided setup described below. Build and smoke-test commands
+are in [windows-release-packaging.md](windows-release-packaging.md).
+
+After releases begin, versioned builds check the latest stable GitHub Release
+and notify through the app. **Settings > General > Updates** provides an
+explicit check and a manual-only preference. The app opens the release page;
+it does not silently download or run setup. Installing a newer setup EXE over
+the existing package preserves `%APPDATA%\MagicHandy`. Full behavior and trust
+boundaries are in [update-checks.md](update-checks.md).
+
+## Windows source bootstrap (`install.ps1`)
 
 On a machine without Git or other development dependencies, open PowerShell in
 the desired parent folder and run:
@@ -21,18 +36,24 @@ From an existing project checkout:
 .\install.ps1
 ```
 
-The source installer can start on a clean 64-bit Windows machine. Its first two
-questions select the app UI/installer language and the default chat reply
-language. Every later decision-tree question switches to the selected UI
-language. Everything it installs is named, licensed, and consented to before it
-happens:
+The source bootstrap can start on a clean 64-bit Windows machine. With no
+feature flags, it installs or repairs only Git, WinGet, and Go as needed, builds
+the core and first-party Go workers, writes a launcher, and opens `#/setup`.
+App language, chat language, device, model runtime, model, Parakeet, and local
+TTS choices are made in that GUI and remain available from Settings later.
 
-- It repairs Windows Package Manager (WinGet) through Microsoft's supported
-  path when needed, then installs and verifies Go.
+This split keeps one interactive decision tree. The PowerShell scripts retain
+explicit flags for unattended or managed deployments, but a normal install no
+longer asks a long sequence of console questions.
+
+The guided setup explains each optional path before it runs:
+
+- The source bootstrap repairs Windows Package Manager (WinGet) through
+  Microsoft's supported path when needed, then installs and verifies Go.
 - Choosing the **managed llama.cpp build** additionally provisions Git, CMake,
   the Visual Studio Desktop C++ workload, and CUDA when selected.
-- Choosing **Ollama** instead avoids the managed llama.cpp source build; the
-  installer can provision Ollama too.
+- Choosing an **existing Ollama** install avoids the managed llama.cpp source
+  build and its compiler/runtime storage.
 - Managed llama.cpp is the tightly controlled path: MagicHandy pins and tunes
   the runner and owns startup, model loading, structured replies, and
   diagnostics. Ollama is the simpler space-saving choice when an existing
@@ -40,11 +61,11 @@ happens:
 - CUDA normally makes local LLM and TTS inference much faster on a supported
   NVIDIA GPU. It also consumes disk and VRAM and requires a compatible driver;
   managed llama.cpp source builds additionally need the CUDA Toolkit.
-- The installer builds the core and all first-party Go voice adapters.
-  The optional Parakeet runner and its 644 MiB model remain a separate,
-  checksum-verified prompt, and voice remains disabled until you enable it.
+- The bootstrap builds the core and all first-party Go voice adapters.
+  The optional Parakeet runner and its roughly 646 MiB model are a separate,
+  checksum-verified GUI action, and voice remains disabled until you enable it.
 - Optional Faster Qwen3-TTS and Chatterbox local speech modules are choices in
-  the same decision tree. The selected path bootstraps WinGet, uv, managed
+  guided setup. The selected path bootstraps WinGet, uv, managed
   Python, PyTorch, and its model as needed. Those files remain isolated and
   never become normal app or llama.cpp dependencies.
 - Enabled speech input and **Speak chat replies** load their configured workers
@@ -93,7 +114,7 @@ Package IDs, the state schema, and the full command reference live in
 
 ## Optional local TTS
 
-The main installer offers local cloning directly. It requires no preinstalled
+Guided setup offers local cloning directly. It requires no preinstalled
 Python, uv, PyTorch, or compiler: Faster Qwen receives managed Python 3.11,
 while Chatterbox receives Python 3.10 for its prebuilt Windows wheels. The
 standalone entry point remains available:
@@ -129,11 +150,11 @@ in [voice-tts-modules.md](voice-tts-modules.md).
 .\update.ps1
 ```
 
-The updater restores the saved UI language before showing its banner. It then
-shows the saved UI/chat languages, data directory, port,
-llama.cpp/Ollama selection, Parakeet choice, managed TTS choice, and launcher
-choice before asking whether to modify them. It rebuilds through the same provisioning implementation as the
-installer, and it:
+The updater restores the saved UI language, shows the source-bootstrap state,
+and asks only whether guided setup should open after the rebuild. It updates
+the core and small app-owned TTS launcher shims without rebuilding or deleting
+managed llama.cpp, Parakeet, Python environments, models, or other GUI-owned
+assets. It also:
 
 - refuses to update over local source changes and only fast-forwards — `main`
   follows `origin/main`, a live feature branch follows its configured
@@ -155,10 +176,10 @@ Ollama models directory and explicitly copy a compatible model — imports show
 progress, verify SHA-256, and never modify the Ollama library. Models are
 never bundled or downloaded at startup.
 
-One-click packaging, guided model download, and GPU/CUDA-aware recommendations
-are being brought up to the polish of the original StrokeGPT app — see the
-plan in [installation-automation.md](installation-automation.md) and the
-first-run wizard design in [gui-installer.md](gui-installer.md).
+The Windows setup binary, portable ZIP, and first-run setup flow are documented
+in [windows-release-packaging.md](windows-release-packaging.md) and
+[gui-installer.md](gui-installer.md). Curated downloads and model-fit guidance
+remain planned.
 
 ## Build and run by hand
 

@@ -36,15 +36,13 @@ func main() {
 }
 
 func run(args []string, stdout io.Writer, stderr io.Writer) error {
-	defaults := config.Default()
-
 	flags := flag.NewFlagSet("magichandy", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 
 	addr := flags.String("addr", "", "HTTP listen address override")
 	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
-	setUILocale := flags.String("set-ui-locale", "", "set the app UI locale and exit")
-	setChatLocale := flags.String("set-chat-locale", "", "set the built-in chat reply locale and exit")
+	languageFlags := addLanguageFlags(flags)
+	browserFlags := addBrowserFlags(flags)
 	ttsFlags := addTTSModuleFlags(flags)
 	logLevel := flags.String("log-level", "info", "structured log level: debug, info, warn, or error")
 	showVersion := flags.Bool("version", false, "print version and exit")
@@ -67,7 +65,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if handled, err := configureLanguagesAndExit(store, loadStatus, *setUILocale, *setChatLocale, stdout); handled {
+	if handled, err := configureLanguagesAndExit(store, loadStatus, *languageFlags.ui, *languageFlags.chat, *languageFlags.completeSetup, stdout); handled {
 		return err
 	}
 	ttsConfiguration := ttsFlags.configuration()
@@ -101,7 +99,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	defer api.Close()
 
-	server, err := newHTTPServer(listenAddress(defaults.Server.Address, settings.Server.Port, *addr), api.Handler())
+	server, err := newHTTPServer(listenAddress(config.Default().Server.Address, settings.Server.Port, *addr), api.Handler())
 	if err != nil {
 		return err
 	}
@@ -114,6 +112,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		logger.Info("server starting", "addr", server.Addr)
 		errCh <- server.ListenAndServe()
 	}()
+	launchBrowserWhenReady(*browserFlags.open, *browserFlags.setup, server.Addr, logger)
 
 	select {
 	case <-ctx.Done():
@@ -136,6 +135,20 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	logger.Info("server stopped")
 
 	return nil
+}
+
+type languageConfigurationFlags struct {
+	ui            *string
+	chat          *string
+	completeSetup *bool
+}
+
+func addLanguageFlags(flags *flag.FlagSet) languageConfigurationFlags {
+	return languageConfigurationFlags{
+		ui:            flags.String("set-ui-locale", "", "set the app UI locale and exit"),
+		chat:          flags.String("set-chat-locale", "", "set the built-in chat reply locale and exit"),
+		completeSetup: flags.Bool("complete-setup", false, "mark command-line setup complete when applying locales"),
+	}
 }
 
 func openSettingsStore(dataDir string) (*config.Store, config.Settings, config.LoadStatus, error) {
@@ -355,11 +368,11 @@ func newHTTPServer(address string, handler http.Handler) (*http.Server, error) {
 	}, nil
 }
 
-func configureLanguagesAndExit(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string, stdout io.Writer) (bool, error) {
+func configureLanguagesAndExit(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string, completeSetup bool, stdout io.Writer) (bool, error) {
 	if uiLocale == "" && chatLocale == "" {
 		return false, nil
 	}
-	configureErr := configureLanguages(store, loadStatus, uiLocale, chatLocale)
+	configureErr := configureLanguages(store, loadStatus, uiLocale, chatLocale, completeSetup)
 	closeErr := store.Close()
 	if configureErr != nil {
 		return true, configureErr
@@ -371,7 +384,7 @@ func configureLanguagesAndExit(store *config.Store, loadStatus config.LoadStatus
 	return true, err
 }
 
-func configureLanguages(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string) error {
+func configureLanguages(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string, completeSetup bool) error {
 	if uiLocale == "" || chatLocale == "" {
 		return errors.New("set-ui-locale and set-chat-locale must be provided together")
 	}
@@ -387,6 +400,7 @@ func configureLanguages(store *config.Store, loadStatus config.LoadStatus, uiLoc
 	}
 	_, _, err := store.Update(func(settings config.Settings) (config.Settings, error) {
 		settings.UI.Locale = uiLocale
+		settings.UI.SetupCompleted = completeSetup
 		settings.LLM.PromptSet = promptSet
 		return settings, nil
 	})

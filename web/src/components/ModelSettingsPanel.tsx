@@ -9,15 +9,14 @@ import type {
   ManagedLlamaRuntimeBuild,
   ManagedLlamaRuntimeStatus,
   ManagedLLMModel,
-  OllamaModelCandidate,
   OllamaModelInfo,
-  OllamaModelScan,
   PublicSettings,
 } from "../api/types";
 import { RefreshIcon, TrashIcon, UploadIcon } from "../shell/icons";
 import { useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
 import { HostPathField } from "./HostPathField";
+import { OllamaLibraryImport } from "./OllamaLibraryImport";
 
 type LLMSettings = PublicSettings["llm"];
 
@@ -52,12 +51,10 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
   const [ollamaMessage, setOllamaMessage] = useState("");
   const [ollamaError, setOllamaError] = useState("");
-  const [scan, setScan] = useState<OllamaModelScan | null>(null);
   const [showOllamaImport, setShowOllamaImport] = useState(false);
   const [showGGUFImport, setShowGGUFImport] = useState(false);
   const [ggufPath, setGGUFPath] = useState("");
   const [ggufName, setGGUFName] = useState("");
-  const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState("");
   const [confirmRemove, setConfirmRemove] = useState("");
   const [runtimeBackend, setRuntimeBackend] = useState<"auto" | "cpu" | "cuda">("auto");
@@ -68,7 +65,6 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
 
   const dirty = JSON.stringify(settings) !== JSON.stringify(saved);
   const ollamaPath = settings.ollama_models_path ?? "";
-  const scanPath = ollamaPath.trim() || manager?.suggested_ollama_path || "";
   const activeImports = manager?.imports.some(isActiveImport) ?? false;
   const runtimeBuildActive = isActiveRuntimeBuild(manager?.runtime_build);
   const selectedManagedModel = manager?.models.find((model) => model.id === settings.model);
@@ -223,32 +219,6 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     setBusy("");
   }
 
-  async function scanOllama() {
-    setScanning(true);
-    try {
-      const result = await api.scanOllamaModels(scanPath);
-      setScan(result);
-      patch({ ollama_models_path: result.path });
-    } catch (error) {
-      show(message(error), "error");
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  async function importOllama(candidate: OllamaModelCandidate) {
-    setBusy(candidate.id);
-    try {
-      const response = await api.importOllamaModel(scan?.path || scanPath, candidate.id);
-      mergeImport(response.import);
-      show(t("Import started for {name}.", { name: candidate.name }));
-    } catch (error) {
-      show(message(error), "error");
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function importGGUF() {
     setBusy("gguf");
     try {
@@ -313,8 +283,6 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
 
   const statusTone = !dirty && status?.available ? "ready" : !dirty && status?.loaded ? "waiting" : "idle";
   const statusMessage = dirty ? "Save settings to check this configuration." : status?.message || "Checking runtime";
-  const pathPlaceholder = manager?.suggested_ollama_path || "Ollama models directory";
-
   return (
     <>
       <h2 className="section-title">{t("Model")}</h2>
@@ -503,13 +471,14 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
         )}
 
         {showOllamaImport && (
-          <div className="ollama-import" aria-label={t("Import models from Ollama")}>
-            <div className="model-import-path">
-              <HostPathField label={t("Ollama models path")} kind="directory" value={ollamaPath} placeholder={pathPlaceholder} disabled={locked || scanning} onChange={(ollama_models_path) => { setScan(null); patch({ ollama_models_path }); }} />
-              <button type="button" className="btn btn-primary" disabled={locked || scanning} onClick={() => void scanOllama()}>{scanning ? t("Scanning...") : t("Scan library")}</button>
-            </div>
-            {scan && <OllamaCandidates candidates={scan.candidates} managed={manager?.models ?? []} locked={locked} busy={busy} onImport={importOllama} />}
-          </div>
+          <OllamaLibraryImport
+            path={ollamaPath}
+            suggestedPath={manager?.suggested_ollama_path}
+            managedModels={manager?.models ?? []}
+            locked={locked}
+            onPathChange={(ollama_models_path) => patch({ ollama_models_path })}
+            onImportStarted={mergeImport}
+          />
         )}
 
         {manager ? (
@@ -648,34 +617,6 @@ function ImportProgress({ jobs, locked, busy, onCancel }: { jobs: LLMModelImport
         </div>
       ))}
     </div>
-  );
-}
-
-function OllamaCandidates({ candidates, managed, locked, busy, onImport }: { candidates: OllamaModelCandidate[]; managed: ManagedLLMModel[]; locked: boolean; busy: string; onImport: (candidate: OllamaModelCandidate) => void }) {
-  const [query, setQuery] = useState("");
-  if (!candidates.length) return <p className="empty-state model-empty">{t("No Ollama manifests found.")}</p>;
-  const imported = new Set(managed.map((model) => `sha256:${model.sha256}`));
-  const normalizedQuery = query.trim().toLowerCase();
-  const visible = normalizedQuery
-    ? candidates.filter((candidate) => [candidate.name, candidate.family, candidate.parameter_size, candidate.quantization].some((value) => value?.toLowerCase().includes(normalizedQuery)))
-    : candidates;
-  return (
-    <>
-      <label className="field ollama-candidate-filter"><span className="label">{t("Filter models")}</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-      <div className="ollama-candidates" aria-label={t("Ollama models available to import")}>
-        {visible.map((candidate) => {
-          const alreadyImported = Boolean(candidate.imported_model_id) || imported.has(candidate.digest ?? "");
-          return (
-            <div className="ollama-candidate" key={candidate.id}>
-              <ModelIdentity name={candidate.name} metadata={[candidate.parameter_size, candidate.quantization, formatBytes(candidate.size_bytes), candidate.license]} />
-              <div className="model-candidate-result">{alreadyImported ? t("Imported") : candidate.reason || t("Ready to copy")}</div>
-              <button type="button" className="btn btn-secondary" disabled={locked || alreadyImported || !candidate.importable || busy === candidate.id} onClick={() => void onImport(candidate)}>{busy === candidate.id ? t("Starting...") : t("Import copy")}</button>
-            </div>
-          );
-        })}
-        {!visible.length && <p className="empty-state model-empty">{t("No matching models.")}</p>}
-      </div>
-    </>
   );
 }
 

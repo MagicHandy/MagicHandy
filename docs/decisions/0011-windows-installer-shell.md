@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for planning. Implementation is Phase 16.
+Accepted. Implementation is Phase 16.
 
 ## Context
 
@@ -31,12 +31,12 @@ are installed on the machine and consume several GB.
    logic in installer script.
 3. The portable zip and setup binary are built from the same versioned release
    payload. Inno Setup is a build-time dependency only.
-4. Phase 16 publishes checksum-pinned CPU and CUDA llama.cpp runtime bundles
-   with manifests, size, license, and backend information. The wizard uses these
-   prebuilt bundles by default; source build is an advanced/developer fallback.
-   The app cannot claim a no-toolchain-footprint setup path until this is
-   implemented and tested on a machine without installing Go, Git, CMake, or
-   Visual Studio.
+4. The initial wizard exposes the existing pinned managed llama.cpp source
+   build and states its compiler and disk cost. Existing Ollama, an external
+   server, and skipping chat are no-toolchain alternatives. Checksummed CPU and
+   CUDA llama.cpp bundles remain the intended future default; the app cannot
+   claim a no-toolchain managed-llama path until those bundles are implemented
+   and tested without Git, CMake, or Visual Studio.
 5. Every network download remains an explicit user action with visible size,
    license, checksum verification, progress, cancellation, and atomic install.
 6. Production signing, auto-update, a WebView2 presentation shell, and LAN/HTTPS
@@ -49,8 +49,8 @@ Positive:
 - One interactive UI stack and one implementation of setup operations.
 - Installer code stays small and focused on Windows integration.
 - Setup capabilities remain useful and testable after first run.
-- Prebuilt managed runtimes remove the source-toolchain requirement for release
-  users without changing the pure-Go core boundary.
+- The setup EXE and portable ZIP remove the source-toolchain requirement for
+  the core app without changing the pure-Go boundary.
 - Until those releases exist, `install.ps1` and `update.ps1` provide one shared,
   state-aware source workflow that can provision a bare machine without manual
   dependency hunting.

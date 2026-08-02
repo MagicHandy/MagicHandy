@@ -6,12 +6,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { api, clientId } from "../api/client";
-import type { AppState, MotionInfo } from "../api/types";
+import type { AppState, MotionInfo, NotificationCategory } from "../api/types";
+import { notificationCategories } from "../notification-preferences";
 
 interface AppStateValue {
   state: AppState | null;
@@ -135,7 +137,7 @@ export interface AppNotification {
   id: string;
   title: string;
   detail?: string;
-  category: "app" | "library" | "system" | "voice";
+  category: NotificationCategory;
   tone: NotificationTone;
   createdAt: string;
   read: boolean;
@@ -177,6 +179,7 @@ interface NotificationSession {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const appState = useContext(AppStateContext);
   const [toast, setToast] = useState<{ message: string; tone: string; visible: boolean }>({
     message: "",
     tone: "info",
@@ -187,9 +190,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const consumedSourceKeys = useRef(new Set(initialSession.sourceKeys));
   const timer = useRef<number | undefined>(undefined);
   const sequence = useRef(0);
+  const notificationPreferencesReady = Boolean(appState?.state?.settings);
+  const enabledCategoryKey = notificationCategories(appState?.state?.settings?.ui?.notification_categories).join("|");
+  const enabledCategories = useMemo(() => new Set(enabledCategoryKey.split("|").filter(Boolean)), [enabledCategoryKey]);
 
   const push = useCallback((draft: NotificationDraft) => {
-    if (draft.sourceKey && !rememberNotificationSource(consumedSourceKeys.current, draft.sourceKey)) return;
+    const rememberedSource = Boolean(draft.sourceKey && rememberNotificationSource(consumedSourceKeys.current, draft.sourceKey));
+    if (draft.sourceKey && !rememberedSource) return;
+    if (!enabledCategories.has(draft.category ?? "app")) {
+      // Persist newly consumed backend event keys even when their category is
+      // hidden, otherwise the same stale completion can reappear on refresh.
+      if (rememberedSource) setItems((current) => current.slice());
+      return;
+    }
     setItems((current) => {
       const next: AppNotification = {
         id: `notification-${Date.now()}-${++sequence.current}`,
@@ -204,7 +217,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       };
       return [next, ...current].slice(0, MAX_NOTIFICATIONS);
     });
-  }, []);
+  }, [enabledCategories]);
+
+  useEffect(() => {
+    if (!notificationPreferencesReady) return;
+    setItems((current) => current.filter((item) => enabledCategories.has(item.category)));
+  }, [enabledCategories, notificationPreferencesReady]);
 
   useEffect(() => {
     writeNotificationSession({
@@ -298,7 +316,7 @@ function readStoredNotification(value: unknown): AppNotification | null {
 }
 
 function isNotificationCategory(value: unknown): value is AppNotification["category"] {
-  return value === "app" || value === "library" || value === "system" || value === "voice";
+  return value === "app" || value === "library" || value === "system" || value === "voice" || value === "updates";
 }
 
 function isNotificationTone(value: unknown): value is NotificationTone {

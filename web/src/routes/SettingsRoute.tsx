@@ -3,7 +3,7 @@
 // share one Save; prompt sets, memory, reset use their own immediate APIs.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { PublicSettings, SettingsUpdate } from "../api/types";
+import type { NotificationCategory, PublicSettings, SettingsUpdate } from "../api/types";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { ManualMotionTest } from "../components/ManualMotionTest";
 import { MediaSettingsPanel } from "../components/MediaSettingsPanel";
@@ -13,10 +13,12 @@ import { PromptSetEditor } from "../components/PromptSetEditor";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { ThemePicker } from "../components/ThemePicker";
+import { UpdateSettingsPanel } from "../components/UpdateSettingsPanel";
 import { LOCALE_OPTIONS, normalizeLocale, t, translateKnown, type MessageKey } from "../i18n";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 import type { MediaSettingsPayload } from "../api/types";
 import { DEFAULT_THEME, normalizeTheme } from "../theme";
+import { notificationCategories } from "../notification-preferences";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -59,6 +61,16 @@ const PROMPT_SET_LABELS: Record<string, string> = {
   magichandy_motion_v1_zh_hans: "简体中文",
   magichandy_motion_v1_ja: "日本語",
 };
+
+function notificationPreferenceOptions(): Array<{ category: NotificationCategory; label: string; detail: string }> {
+  return [
+    { category: "app", label: t("Routine app feedback"), detail: t("Save confirmations and other short-lived command results.") },
+    { category: "system", label: t("Core and device status"), detail: t("Connection loss, recovery, and other operational state changes.") },
+    { category: "library", label: t("Library and media tasks"), detail: t("Completed scans, thumbnail jobs, and media conversions.") },
+    { category: "voice", label: t("Voice worker alerts"), detail: t("Speech input and output failures that need attention.") },
+    { category: "updates", label: t("Software updates"), detail: t("A new stable MagicHandy release is available.") },
+  ];
+}
 const SECTIONS = [
   { id: "general", label: "General" },
   { id: "device", label: "Device" },
@@ -71,7 +83,7 @@ const SECTIONS = [
 ] as const;
 
 export function SettingsRoute() {
-  const { backendOnline, readOnly, refresh } = useAppState();
+  const { backendOnline, readOnly, refresh, state } = useAppState();
   const { show } = useToast();
   const hash = useHashRoute();
   const requestedSection = hash.split("/")[2] || "general";
@@ -125,9 +137,20 @@ export function SettingsRoute() {
       ui: {
         locale: cur.ui?.locale ?? "en",
         theme: cur.ui?.theme ?? DEFAULT_THEME,
+        setup_completed: cur.ui?.setup_completed ?? true,
+        update_check_mode: cur.ui?.update_check_mode ?? "automatic",
+        notification_categories: notificationCategories(cur.ui?.notification_categories),
         ...p,
       },
     } : cur));
+  }
+  function patchNotificationCategory(category: NotificationCategory, enabled: boolean) {
+    const current = notificationCategories(s?.ui?.notification_categories);
+    patchUI({
+      notification_categories: enabled
+        ? Array.from(new Set([...current, category]))
+        : current.filter((item) => item !== category),
+    });
   }
   function patchDevice(p: Partial<PublicSettings["device"]>) {
     setS((cur) => (cur ? { ...cur, device: { ...cur.device, ...p } } : cur));
@@ -172,6 +195,9 @@ export function SettingsRoute() {
       ui: {
         locale: normalizeLocale(s.ui?.locale),
         theme: normalizeTheme(s.ui?.theme),
+        setup_completed: s.ui?.setup_completed ?? true,
+        update_check_mode: s.ui?.update_check_mode ?? "automatic",
+        notification_categories: notificationCategories(s.ui?.notification_categories),
       },
       // Playback filters save through their immediate endpoint. Omitting them
       // here prevents a stale Settings draft from overwriting newer values.
@@ -379,6 +405,33 @@ export function SettingsRoute() {
                 disabled={locked}
                 onChange={(theme) => patchUI({ theme })}
               />
+            </div>
+            <div className="group">
+              <h3 className="group-title">{t("Updates")}</h3>
+              <UpdateSettingsPanel
+                currentVersion={state?.version}
+                automatic={(s.ui?.update_check_mode ?? "automatic") !== "manual"}
+                preferenceDisabled={locked}
+                checkDisabled={!backendOnline || loading}
+                onAutomaticChange={(automatic) => patchUI({ update_check_mode: automatic ? "automatic" : "manual" })}
+              />
+            </div>
+            <div className="group">
+              <h3 className="group-title">{t("Notification history")}</h3>
+              <p className="hint-block">{t("Choose which events create bell history and unread badges. Live activity, offline state, and Emergency Stop remain visible regardless.")}</p>
+              <div className="notification-preference-list">
+                {notificationPreferenceOptions().map((option) => (
+                  <label className="toggle-line" key={option.category}>
+                    <span className="toggle"><input type="checkbox" checked={notificationCategories(s.ui?.notification_categories).includes(option.category)} disabled={locked} onChange={(event) => patchNotificationCategory(option.category, event.target.checked)} /><span className="track" aria-hidden="true" /></span>
+                    <span>{option.label}<small>{option.detail}</small></span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="group">
+              <h3 className="group-title">{t("Guided setup")}</h3>
+              <p className="hint-block">{t("Review device, model, and optional voice choices in the same guided flow used after installation.")}</p>
+              <a className="btn btn-secondary settings-setup-link" href="#/setup">{t("Run setup again")}</a>
             </div>
           </>
         )}

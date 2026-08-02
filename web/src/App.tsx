@@ -8,6 +8,7 @@ import { PresetModesRoute } from "./routes/PresetModesRoute";
 import { ChatRoute } from "./routes/ChatRoute";
 import { PersonasRoute } from "./routes/PersonasRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
+import { SetupRoute } from "./routes/SetupRoute";
 import { VideoRoute } from "./routes/VideoRoute";
 import { AppShell } from "./shell/AppShell";
 import { routeBase } from "./shell/NavRail";
@@ -39,6 +40,11 @@ export function App() {
       }
     };
   }, [theme]);
+  useEffect(() => {
+    if (state?.settings?.ui?.setup_completed === false && base !== "setup") {
+      window.location.hash = "#/setup";
+    }
+  }, [base, state?.settings?.ui?.setup_completed]);
   useEffect(() => {
     const workspace = document.getElementById("workspace");
     if (!workspace) return;
@@ -101,7 +107,9 @@ export function App() {
           )}
         </section>
       ) : <ErrorBoundary key={base}>
-        {base === "personas" ? (
+        {base === "setup" ? (
+          <SetupRoute />
+        ) : base === "personas" ? (
           <PersonasRoute />
         ) : base === "modes" ? (
           <PresetModesRoute />
