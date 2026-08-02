@@ -33,13 +33,29 @@ function Test-InnoSetup7 {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         return $false
     }
-    $savedErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
+
+    # ISCC reports help with exit code 1. Invoke it through Process so that
+    # probing a valid compiler cannot leak that native status to the caller.
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $Path
+    $startInfo.Arguments = '/?'
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
     try {
-        $help = @(& $Path /? 2>&1) -join "`n"
+        if (-not $process.Start()) {
+            return $false
+        }
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
     } finally {
-        $ErrorActionPreference = $savedErrorActionPreference
+        $process.Dispose()
     }
+    $help = "$stdout`n$stderr"
     return $help.Contains('Inno Setup 7 Command-Line Compiler')
 }
 

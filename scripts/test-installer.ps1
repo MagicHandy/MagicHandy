@@ -573,6 +573,8 @@ func main() {
     $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))
     Assert-True -Condition ($innoInstallerSource.Contains('innosetup-7.0.2-x64.exe')) -Message 'release tooling should pin the Inno Setup 7.0.2 x64 asset'
     Assert-True -Condition ($innoInstallerSource.Contains('5ad54ca3def786f8f4212552e54cc6d8d61329e2d24a1cfee0571d42c2684ff1')) -Message 'release tooling should pin the official Inno Setup asset checksum'
+    Assert-True -Condition ($innoInstallerSource.Contains('System.Diagnostics.ProcessStartInfo')) -Message 'Inno compiler probing should not leak ISCC help exit code 1 through LASTEXITCODE'
+    Assert-True -Condition (-not $innoInstallerSource.Contains('@(& $Path /?')) -Message 'Inno compiler probing should not invoke ISCC help as a native PowerShell command'
     $releaseBuilderSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Build-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseBuilderSource.Contains('Inno Setup 7 is required for the native x64 setup loader')) -Message 'release builder should reject Inno Setup 6 before compilation'
 
