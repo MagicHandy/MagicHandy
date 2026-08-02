@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Builds the versioned Windows payload, portable ZIP, and optional unsigned Inno Setup executable.
+Builds the versioned Windows payload, portable ZIP, and optional unsigned x64 Inno Setup executable.
 
 .DESCRIPTION
 The script never publishes a release. The unsigned setup executable exists for
@@ -310,7 +310,7 @@ try {
 
     $setupPath = $null
     if (-not $SkipInstaller) {
-        Write-Warning 'Building an unsigned setup executable for local/CI lifecycle testing. Do not attach it to a public release.'
+        Write-Warning 'Building a hardened x64, non-solid ZIP setup executable for local/CI lifecycle testing. It remains unsigned; do not attach it to a public release.'
         $iscc = Resolve-ISCC
         $innoScript = Join-Path $repository 'installer\magichandy.iss'
         Invoke-ReleaseCommand -Executable $iscc -Arguments @(

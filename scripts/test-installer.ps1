@@ -566,6 +566,9 @@ func main() {
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
 
     $innoSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'installer\magichandy.iss'))
+    Assert-True -Condition ($innoSource.Contains('#define InstallerSetupArchitecture "x64"')) -Message 'Windows setup should use a native x64 loader for the amd64 payload'
+    Assert-True -Condition ($innoSource.Contains('#define InstallerCompression "zip/9"')) -Message 'Windows setup should avoid the opaque ultra-LZMA stream associated with the withdrawn package'
+    Assert-True -Condition ($innoSource.Contains('#define InstallerSolidCompression "no"')) -Message 'Windows setup payload compression should remain non-solid'
     Assert-True -Condition ($innoSource.Contains('DefaultDirName={autopf}\MagicHandy')) -Message 'Windows setup should default to Program Files'
     Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'
     Assert-True -Condition ($innoSource.Contains('Name: "desktopicon"')) -Message 'Windows setup should offer a desktop shortcut'

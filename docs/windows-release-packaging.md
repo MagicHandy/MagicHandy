@@ -5,13 +5,16 @@ MagicHandy can build two Windows x64 artifacts from one staged payload:
 - `MagicHandy-<version>-windows-amd64-setup.exe`
 - `MagicHandy-<version>-windows-amd64-portable.zip`
 
-The setup EXE is a thin Inno Setup shell. Until trusted Authenticode signing is
-provisioned, that unsigned EXE is **CI lifecycle evidence only** and is not a
-GitHub Release asset. Public alphas temporarily contain the portable ZIP and a
-checksum file covering that ZIP. The portable archive contains the app,
-workers, optional-module helper scripts, license, source notice, and release
-manifest. It does not bundle models, Python, CUDA, llama.cpp, or Parakeet;
-those remain explicit setup choices.
+The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
+`zip/9` payload compression. This avoids the 32-bit loader and opaque solid
+ultra-LZMA stream used by the withdrawn alpha.6 package. Until trusted
+Authenticode signing is provisioned, that unsigned EXE is **CI lifecycle
+evidence only** and is not a GitHub Release asset; the packaging change reduces
+heuristic risk but does not establish publisher identity. Public alphas
+temporarily contain the portable ZIP and a checksum file covering that ZIP.
+The portable archive contains the app, workers, optional-module helper scripts,
+license, source notice, and release manifest. It does not bundle models,
+Python, CUDA, llama.cpp, or Parakeet; those remain explicit setup choices.
 
 Release versions and tag policy are defined in
 [Versioning And Releases](versioning-and-releases.md). Local build and test
@@ -46,8 +49,8 @@ $commit = git rev-parse HEAD
 
 The script runs `npm ci` and the production frontend build, cross-builds the
 core and three Go voice adapters with `CGO_ENABLED=0`, stages the payload,
-creates the portable ZIP, optionally compiles an unsigned Inno Setup lifecycle
-candidate, and writes
+creates the portable ZIP, optionally compiles a native-x64 unsigned Inno Setup
+lifecycle candidate, and writes
 `MagicHandy-<version>-windows-amd64-SHA256SUMS.txt` under `artifacts\`.
 
 Useful build-only options:
@@ -154,8 +157,8 @@ and is not removed with a package.
 relevant pull requests and manual dispatch. It:
 
 1. builds unsigned CI-only artifacts;
-2. verifies the portable payload, exact source provenance, and every manifest
-   hash;
+2. verifies the setup loader and every payload executable are x64, then checks
+   portable payload provenance and every manifest hash;
 3. verifies the outer checksum file;
 4. verifies custom and Program Files installs, shortcuts, ARP metadata,
    over-install, explicit retention, clean purge, and fresh reinstall state;

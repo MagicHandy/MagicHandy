@@ -1340,3 +1340,13 @@ and self-delete behavior tags to the unsigned Inno Setup overlay. Microsoft
 Security Intelligence case `15c1e36d-fb35-4c5d-85de-83707169818a` remains the
 authoritative pending vendor determination; the public artifact stays withdrawn
 regardless of heuristic interpretation.
+
+A controlled same-payload packaging comparison subsequently removed two
+avoidable structural triggers from the CI setup: the 32-bit loader around an
+amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
+`zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
+and a current Defender custom scan with no threats. Its larger approximately
+17.9 MB size is an accepted transparency tradeoff. This does not lower R28 or
+authorize public setup distribution: the candidate is still unsigned,
+launch-time cloud reputation was not independently reproduced, and ADR 0014's
+Authenticode gate remains authoritative.

@@ -30,6 +30,17 @@ The exact executable was submitted to Microsoft Security Intelligence as
 submission `15c1e36d-fb35-4c5d-85de-83707169818a` for false-positive analysis.
 Its status was `Submitted / Pending` when this decision was recorded.
 
+A controlled same-payload packaging comparison also found avoidable structural
+traits in the withdrawn package: its loader was 32-bit even though the payload
+and artifact name were amd64, and the payload was one solid
+`lzma2/ultra64` stream. Inno Setup documents its
+[64-bit architecture modes](https://jrsoftware.org/ishelp/topic_64bit.htm) and
+that the single-file [Setup loader](https://jrsoftware.org/ishelp/topic_setup_usesetupldr.htm)
+extracts and runs Setup from a temporary directory. Those traits are consistent
+with the report's PE32, opaque overlay, `obfuscated`, and `self-delete`
+observations, but correlation is not proof that they alone caused the cloud
+classification.
+
 VirusTotal report:
 <https://www.virustotal.com/gui/file/42b47976da6ed0431e8dea8bce63f15fcb48fbf9ae962e44a82a691d33cf85bd/detection>
 
@@ -40,26 +51,31 @@ VirusTotal report:
    upgrade, shortcut, uninstall, purge, and clean-reinstall behavior. That
    executable is retained only as a short-lived workflow artifact, is labeled
    `unsigned-ci`, and is never attached to a GitHub Release.
-2. **Public releases are portable-only until signing exists.** The temporary
+2. **CI setup packaging removes avoidable heuristic triggers.** The amd64 setup
+   uses Inno's native x64 loader, `zip/9` compression, and non-solid streams.
+   Acceptance reads the PE header and fails if either the setup loader or a
+   payload executable is not x64. This is defense in depth, not a substitute
+   for publisher identity or the public signing gate.
+3. **Public releases are portable-only until signing exists.** The temporary
    public artifact set contains the manifest-verified portable ZIP and a
    checksum file covering only that ZIP. It is built into a dedicated release
    directory, and release verification fails if a setup executable appears
    there.
-3. **A public setup executable requires trusted Authenticode.** Restoring setup
+4. **A public setup executable requires trusted Authenticode.** Restoring setup
    publication requires a protected organizational signing identity, a trusted
    timestamp, and `Valid` Authenticode status on the setup executable and all
    shipped payload executables. Release verification pins the approved signer
    certificate thumbprint and rejects self-signed certificates. A self-signed
    or personal development certificate does not satisfy this gate.
-4. **Signing is a release operation, not a source-build dependency.** Developer
+5. **Signing is a release operation, not a source-build dependency.** Developer
    and CI lifecycle builds remain possible without signing credentials. The
    eventual signing service must expose credentials only to the protected tag
    workflow and must not make private key material available to pull requests.
-5. **Warnings are not an installation step.** Documentation must not advise
+6. **Warnings are not an installation step.** Documentation must not advise
    users to disable Defender, ignore a malware classification, or use a
    SmartScreen bypass. A newly detected public artifact is withdrawn and
    investigated before another version is published.
-6. **Published tags remain immutable.** A withdrawn version keeps its tag and a
+7. **Published tags remain immutable.** A withdrawn version keeps its tag and a
    source-tree notice explaining the withdrawal. A corrected release uses the
    next SemVer prerelease ordinal.
 
@@ -92,7 +108,8 @@ Negative:
 ## Verification
 
 - `Test-WindowsRelease.ps1 -ArtifactPolicy UnsignedCI` requires the full
-  unsigned setup/portable/checksum set and supports installer lifecycle tests.
+  unsigned setup/portable/checksum set, verifies x64 PE machine headers, and
+  supports installer lifecycle tests.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

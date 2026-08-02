@@ -83,6 +83,30 @@ function Assert-Version {
     Assert-Release -Condition ($reported.Trim() -eq $expected) -Message "version output '$($reported.Trim())' should equal '$expected'"
 }
 
+function Get-PEMachine {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $reader = [System.IO.BinaryReader]::new($stream)
+    try {
+        if ($reader.ReadUInt16() -ne 0x5a4d) {
+            throw "'$Path' does not have a DOS executable header."
+        }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) {
+            throw "'$Path' has an invalid PE header offset."
+        }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) {
+            throw "'$Path' does not have a PE signature."
+        }
+        return $reader.ReadUInt16()
+    } finally {
+        $reader.Dispose()
+    }
+}
+
 function Assert-AuthenticodeStatus {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -192,6 +216,8 @@ if ($requiresSetup) {
     $expectedNumericVersion = Get-ExpectedWindowsNumericVersion
     Assert-Release -Condition ($setupVersion.FileVersion.Trim() -eq $expectedNumericVersion) -Message "setup file version should be $expectedNumericVersion"
     Assert-Release -Condition ($setupVersion.ProductVersion.Trim() -eq $expectedNumericVersion) -Message "setup product version should be $expectedNumericVersion"
+    $setupMachine = Get-PEMachine -Path $setupPath
+    Assert-Release -Condition ($setupMachine -eq 0x8664) -Message ("setup loader should be x64 (machine 0x8664), got 0x{0:x4}" -f $setupMachine)
     $expectedSetupSignature = if ($ArtifactPolicy -eq 'SignedPublic') {
         [System.Management.Automation.SignatureStatus]::Valid
     } else {
@@ -223,6 +249,8 @@ try {
         [System.Management.Automation.SignatureStatus]::NotSigned
     }
     foreach ($executable in $payloadExecutables) {
+        $payloadMachine = Get-PEMachine -Path $executable.FullName
+        Assert-Release -Condition ($payloadMachine -eq 0x8664) -Message ("payload executable '$($executable.Name)' should be x64 (machine 0x8664), got 0x{0:x4}" -f $payloadMachine)
         Assert-AuthenticodeStatus -Path $executable.FullName -ExpectedStatus $expectedPayloadSignature -Description "payload executable '$($executable.Name)'" -SignerThumbprint $normalizedSignerThumbprint
     }
 
