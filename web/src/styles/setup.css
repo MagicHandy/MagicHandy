@@ -1,11 +1,14 @@
 .workspace > .setup-layout {
   width: min(100%, var(--content-wide-max));
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .setup-layout {
   display: grid;
   grid-template-columns: minmax(190px, 224px) minmax(0, 1fr);
-  min-height: min(720px, calc(100vh - var(--status-h) - 52px));
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--line);
   background: var(--surface);
 }
@@ -120,6 +123,7 @@
 .setup-main {
   display: grid;
   min-width: 0;
+  min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
@@ -138,7 +142,9 @@
 .setup-body {
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 22px clamp(20px, 4vw, 42px);
+  scrollbar-gutter: stable;
 }
 
 .setup-copy {
@@ -160,6 +166,76 @@
   margin-top: 4px;
   font-size: 1rem;
   font-weight: 650;
+}
+
+.setup-model-library {
+  max-width: 820px;
+  gap: 18px;
+}
+
+.setup-method {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.setup-method-head {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.setup-method-head h2,
+.setup-method-head p {
+  margin: 0;
+}
+
+.setup-method-head h2 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.setup-method-head p {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.setup-method-body {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.setup-method-body > .field,
+.setup-method-body > .host-path-field,
+.setup-method-body > .setup-empty {
+  margin: 0;
+}
+
+.setup-method-body > .btn {
+  width: fit-content;
+}
+
+.setup-method .ollama-import {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.setup-method .ollama-candidates {
+  max-height: min(300px, 34vh);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-inset);
+}
+
+.setup-method .ollama-candidate {
+  padding-inline: 10px;
 }
 
 .setup-fields {
@@ -470,9 +546,14 @@
 }
 
 @media (max-width: 780px) {
+  .workspace > .setup-layout {
+    flex: 0 0 auto;
+  }
+
   .setup-layout {
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
+    overflow: visible;
   }
 
   .setup-progress {
@@ -515,6 +596,7 @@
 
   .setup-body {
     overflow: visible;
+    scrollbar-gutter: auto;
   }
 }
 
@@ -540,6 +622,10 @@
 
   .setup-subsection {
     padding-left: 0;
+  }
+
+  .setup-method {
+    padding: 14px;
   }
 
   .setup-actions {

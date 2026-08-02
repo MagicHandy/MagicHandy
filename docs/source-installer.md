@@ -146,6 +146,10 @@ reuses the managed source checkout, Python environment, installed packages,
 and model cache. Package metadata created by the install itself is registered
 in that checkout's private `.git/info/exclude`; tracked source edits and any
 other untracked files still stop the update instead of being overwritten. The
+initial no-checkout clone is staged beside the final source directory and moved
+into place only after Git succeeds. A retry recognizes and completes the empty
+worktree left by older installers without treating Git's expected deleted-file
+status as a user edit. Populated dirty worktrees remain protected. The
 main installer runs module scripts in an isolated Windows PowerShell process.
 Their support-module initialization therefore cannot invalidate the active
 parent provisioner before launcher creation and saved-state commit.

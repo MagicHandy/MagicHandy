@@ -165,6 +165,9 @@ describe("SetupRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await screen.findByRole("heading", { name: "Choose a chat model" });
+    expect(screen.getByRole("region", { name: "Managed model" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Import a GGUF file" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Import from an existing Ollama library" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Ollama models path" }), {
       target: { value: "C:\\Users\\Test\\.ollama\\models" },
     });

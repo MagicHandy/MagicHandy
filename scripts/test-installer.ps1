@@ -128,7 +128,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Initialize-TTSPythonEnvironment')) {
+    foreach ($functionName in @('Invoke-Checked', 'Initialize-TTSPythonEnvironment', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -180,6 +180,43 @@ func main() {
     Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
     Assert-Equal -Expected 'Python 3.11.15' -Actual ([string]$reusedEnvironment.Version) -Message 'compatible TTS Python version should be retained'
     Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
+
+    Write-Host 'Checking fresh and interrupted TTS source checkout recovery...'
+    $gitCommand = Get-Command 'git.exe' -ErrorAction SilentlyContinue
+    if (-not $gitCommand) {
+        $gitCommand = Get-Command 'git' -ErrorAction Stop
+    }
+    $sourceFixture = Join-Path $tempRoot 'tts-source-fixture'
+    New-Item -ItemType Directory -Force -Path $sourceFixture | Out-Null
+    Invoke-Checked -Executable $gitCommand.Source -Arguments @('-C', $sourceFixture, 'init') -Description 'TTS source fixture initialization'
+    Invoke-Checked -Executable $gitCommand.Source -Arguments @('-C', $sourceFixture, 'config', 'user.name', 'MagicHandy Installer Test') -Description 'TTS source fixture user configuration'
+    Invoke-Checked -Executable $gitCommand.Source -Arguments @('-C', $sourceFixture, 'config', 'user.email', 'installer-test@magichandy.invalid') -Description 'TTS source fixture email configuration'
+    $fixtureFile = Join-Path $sourceFixture 'module.txt'
+    [System.IO.File]::WriteAllText($fixtureFile, 'pinned module source')
+    Invoke-Checked -Executable $gitCommand.Source -Arguments @('-C', $sourceFixture, 'add', 'module.txt') -Description 'TTS source fixture staging'
+    Invoke-Checked -Executable $gitCommand.Source -Arguments @('-C', $sourceFixture, 'commit', '-m', 'fixture') -Description 'TTS source fixture commit'
+    $fixtureRevision = (& $gitCommand.Source -C $sourceFixture rev-parse HEAD).Trim()
+    Assert-True -Condition ($LASTEXITCODE -eq 0 -and $fixtureRevision -match '^[0-9a-f]{40}$') -Message 'TTS source fixture should have a pinned revision'
+
+    $freshCheckout = Join-Path $tempRoot 'tts-source-fresh'
+    Sync-PinnedSource -Git $gitCommand.Source -URL $sourceFixture -Revision $fixtureRevision -Destination $freshCheckout
+    Assert-Equal -Expected 'pinned module source' -Actual ([System.IO.File]::ReadAllText((Join-Path $freshCheckout 'module.txt'))) -Message 'fresh TTS source clone should complete its checkout'
+    Assert-Equal -Expected '' -Actual ((@(& $gitCommand.Source -C $freshCheckout status --porcelain) -join "`n")) -Message 'fresh TTS source clone should finish cleanly'
+
+    $interruptedCheckout = Join-Path $tempRoot 'tts-source-interrupted'
+    Invoke-Checked -Executable $gitCommand.Source -Arguments @('clone', '--no-checkout', $sourceFixture, $interruptedCheckout) -Description 'Interrupted TTS source fixture clone'
+    $interruptedStatus = @(& $gitCommand.Source -C $interruptedCheckout status --porcelain)
+    Assert-True -Condition ($LASTEXITCODE -eq 0 -and $interruptedStatus.Count -gt 0) -Message 'no-checkout fixture should reproduce the alpha.2 dirty status'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $interruptedCheckout 'module.txt'))) -Message 'no-checkout fixture should not have a populated worktree'
+    Sync-PinnedSource -Git $gitCommand.Source -URL $sourceFixture -Revision $fixtureRevision -Destination $interruptedCheckout
+    Assert-Equal -Expected 'pinned module source' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'retry should recover the alpha.2 no-checkout residue'
+    Assert-Equal -Expected '' -Actual ((@(& $gitCommand.Source -C $interruptedCheckout status --porcelain) -join "`n")) -Message 'recovered TTS source should finish cleanly'
+
+    [System.IO.File]::WriteAllText((Join-Path $interruptedCheckout 'module.txt'), 'user edit')
+    Assert-Throws -Action {
+        Sync-PinnedSource -Git $gitCommand.Source -URL $sourceFixture -Revision $fixtureRevision -Destination $interruptedCheckout
+    } -Pattern 'local changes' -Message 'populated TTS source with a tracked edit'
+    Assert-Equal -Expected 'user edit' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'TTS source retry should preserve genuine edits'
 
     $innoSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'installer\magichandy.iss'))
     Assert-True -Condition ($innoSource.Contains('DefaultDirName={autopf}\MagicHandy')) -Message 'Windows setup should default to Program Files'

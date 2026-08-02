@@ -410,6 +410,12 @@ Follow-up implementation evidence from 2026-07-13:
   totals 1,091,158 / 318,747 gzip bytes. The English startup path is 726,450 /
   193,763 gzip bytes, up 1,246 / 284 bytes. The artwork is unchanged; the delta
   is the managed-only selector and warning across five localized catalogs.
+- The alpha.3 setup containment pass adds 1,719 raw / 256 level-9 gzip bytes
+  against its checked-in alpha.2 base. The complete embedded browser payload is
+  1,676,301 / 797,485, all HTML/CSS/JS is 1,232,065 / 360,088, and the English
+  startup path is 795,608 / 210,346 raw/gzip bytes. Artwork and localized chunks
+  are unchanged. The delta is the bounded wizard layout and labeled model import
+  regions; process memory was not remeasured for this UI-only change.
 
 ## Procedure
 
