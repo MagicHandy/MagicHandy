@@ -48,13 +48,13 @@ if ($ArtifactPolicy -eq 'PortablePublic' -and ($ExerciseInstaller -or $ExerciseD
     throw 'PortablePublic artifacts intentionally contain no setup executable and cannot exercise installer lifecycle tests.'
 }
 $reviewedCaseID = '15c1e36d-fb35-4c5d-85de-83707169818a'
-$reviewedVersion = '0.1.0-alpha.8'
+$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9')
 if ($ArtifactPolicy -eq 'ReviewedUnsignedPublic') {
     if ($ReviewedFalsePositiveCaseID.Trim().ToLowerInvariant() -ne $reviewedCaseID) {
         throw "ReviewedUnsignedPublic requires Microsoft false-positive case $reviewedCaseID."
     }
-    if ($Version.Trim() -ne $reviewedVersion) {
-        throw "ReviewedUnsignedPublic is approved only for version $reviewedVersion."
+    if ($Version.Trim() -notin $reviewedVersions) {
+        throw "ReviewedUnsignedPublic is approved only for versions $($reviewedVersions -join ', ')."
     }
 } elseif (-not [string]::IsNullOrWhiteSpace($ReviewedFalsePositiveCaseID)) {
     throw '-ReviewedFalsePositiveCaseID is valid only with ReviewedUnsignedPublic.'
@@ -278,6 +278,7 @@ try {
         'scripts\tts\faster-qwen-constraints.txt',
         'scripts\tts\chatterbox-server.py',
         'scripts\tts\chatterbox-constraints.txt',
+        'scripts\tts\runtime-probe.py',
         'SOURCE.txt',
         'docs\update-checks.md',
         'docs\versioning-and-releases.md',

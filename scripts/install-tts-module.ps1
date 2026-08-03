@@ -330,6 +330,7 @@ function Initialize-TTSPythonEnvironment {
     Assert-MagicHandyChildPath -Root $Root -Candidate $managedPythonRoot
     Assert-MagicHandyChildPath -Root $Root -Candidate $uvCacheRoot
     Assert-MagicHandyChildPath -Root $Root -Candidate $uvCredentialsRoot
+    New-Item -ItemType Directory -Path $Root -Force | Out-Null
 
     # Keep uv's runtime, cache, and credential lock files inside the TTS module.
     # The process-scoped settings also prevent later dependency commands from
@@ -363,12 +364,17 @@ function Initialize-TTSPythonEnvironment {
     $managedPython = Find-TTSManagedPython -InstallDirectory $managedPythonRoot -PythonVersion $PythonVersion
     if ([string]::IsNullOrWhiteSpace($managedPython)) {
         $previousErrorAction = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
+        Push-Location -LiteralPath $Root
         try {
-            $installOutput = @(& $Uv python install --install-dir $managedPythonRoot --no-bin --no-registry $PythonVersion 2>&1)
-            $installExit = $LASTEXITCODE
+            $ErrorActionPreference = 'Continue'
+            try {
+                $installOutput = @(& $Uv python install --install-dir 'managed-python' --no-bin --no-registry $PythonVersion 2>&1)
+                $installExit = $LASTEXITCODE
+            } finally {
+                $ErrorActionPreference = $previousErrorAction
+            }
         } finally {
-            $ErrorActionPreference = $previousErrorAction
+            Pop-Location
         }
         $installOutput | ForEach-Object { Write-Host $_ }
         $installText = @($installOutput | ForEach-Object { [string]$_ }) -join "`n"
@@ -397,7 +403,8 @@ function Initialize-TTSPythonEnvironment {
     # patch-specific home and standard Windows launchers instead.
     Invoke-Checked `
         -Executable $managedPython `
-        -Arguments @('-m', 'venv', '--without-pip', $venv) `
+        -Arguments @('-m', 'venv', '--without-pip', '.venv') `
+        -WorkingDirectory $Root `
         -Description 'Python environment creation'
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
         throw "The isolated Python executable was not created at '$python'."
@@ -420,44 +427,16 @@ function Test-TTSPythonRuntime {
     param(
         [Parameter(Mandatory = $true)][string]$Python,
         [Parameter(Mandatory = $true)][string]$Module,
-        [Parameter(Mandatory = $true)][string]$RuntimeDevice
+        [Parameter(Mandatory = $true)][string]$RuntimeDevice,
+        [Parameter(Mandatory = $true)][string]$Probe
     )
 
-    $probe = @'
-import importlib
-import sys
-
-module_name, device = sys.argv[1:3]
-required = ["torch", "numpy", "soundfile", "fastapi", "uvicorn", "huggingface_hub"]
-if module_name == "faster-qwen3-tts":
-    required.extend(["faster_qwen3_tts", "qwen_tts"])
-else:
-    required.extend([
-        "chatterbox.tts",
-        "chatterbox.tts_turbo",
-        "s3tokenizer",
-        "onnx",
-        "google.protobuf",
-        "librosa",
-        "torchaudio",
-        "perth",
-        "pyloudnorm",
-    ])
-for dependency in required:
-    importlib.import_module(dependency)
-
-import torch
-if device == "cuda" and not torch.cuda.is_available():
-    raise RuntimeError(
-        "the installed PyTorch CUDA runtime cannot use this NVIDIA driver; "
-        "update the driver or choose a CPU-capable voice module"
-    )
-backend = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
-print(f"Verified Python voice runtime ({backend}).")
-'@
+    if (-not (Test-Path -LiteralPath $Probe -PathType Leaf)) {
+        throw "The Python voice runtime probe is unavailable: '$Probe'."
+    }
     Invoke-Checked `
         -Executable $Python `
-        -Arguments @('-c', $probe, $Module, $RuntimeDevice) `
+        -Arguments @($Probe, $Module, $RuntimeDevice) `
         -Description 'Python voice runtime verification'
 }
 
@@ -505,17 +484,35 @@ function Invoke-Checked {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
         [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [Parameter(Mandatory = $true)][string]$Description
+        [Parameter(Mandatory = $true)][string]$Description,
+        [string]$WorkingDirectory = ''
     )
+
+    $pushedLocation = $false
+    if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+        $WorkingDirectory = [System.IO.Path]::GetFullPath($WorkingDirectory)
+        if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
+            throw "$Description working directory is unavailable: '$WorkingDirectory'."
+        }
+        Push-Location -LiteralPath $WorkingDirectory
+        $pushedLocation = $true
+    }
+
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $exitCode = 1
     try {
-        & $Executable @Arguments
-        $exitCode = $LASTEXITCODE
-    } catch {
-        throw "$Description could not start '$Executable': $($_.Exception.Message)"
+        try {
+            & $Executable @Arguments
+            $exitCode = $LASTEXITCODE
+        } catch {
+            throw "$Description could not start '$Executable': $($_.Exception.Message)"
+        }
     } finally {
         $ErrorActionPreference = $previousErrorAction
+        if ($pushedLocation) {
+            Pop-Location
+        }
     }
     if ($exitCode -ne 0) {
         throw "$Description failed (exit $exitCode)."
@@ -868,49 +865,68 @@ $pythonVersion = if ($Module -eq 'chatterbox') { '3.10' } else { '3.11' }
 $pythonEnvironment = Initialize-TTSPythonEnvironment -Uv $uv -Root $InstallRoot -PythonVersion $pythonVersion
 $venv = [string]$pythonEnvironment.Root
 $python = [string]$pythonEnvironment.Python
+$relativePython = '.venv\Scripts\python.exe'
 
-if ($Module -eq 'faster-qwen3-tts') {
-    $constraints = Join-Path $PSScriptRoot 'tts\faster-qwen-constraints.txt'
-    if (-not (Test-Path -LiteralPath $constraints -PathType Leaf)) {
-        throw "The Faster Qwen3-TTS dependency constraints are unavailable: '$constraints'."
-    }
-    Invoke-Checked `
-        -Executable $uv `
-        -Arguments @('pip', 'install', '--python', $python, '--torch-backend', 'cu128', '--constraint', $constraints, '--editable', "$sourceRoot[demo]") `
-        -Description 'Faster Qwen3-TTS dependency installation'
+$constraintsSource = if ($Module -eq 'faster-qwen3-tts') {
+    Join-Path $PSScriptRoot 'tts\faster-qwen-constraints.txt'
 } else {
-    $requirements = Get-ChatterboxRequirements -RuntimeDevice $Device
-    $requirementsPath = Join-Path $sourceRoot $requirements
-    if (-not (Test-Path -LiteralPath $requirementsPath -PathType Leaf)) {
-        throw "The pinned Chatterbox dependency set is unavailable: '$requirementsPath'."
+    Join-Path $PSScriptRoot 'tts\chatterbox-constraints.txt'
+}
+if (-not (Test-Path -LiteralPath $constraintsSource -PathType Leaf)) {
+    throw "The $Module dependency constraints are unavailable: '$constraintsSource'."
+}
+$stagedConstraintsName = '.magichandy-install-constraints.txt'
+$stagedConstraints = Join-Path $InstallRoot $stagedConstraintsName
+Assert-MagicHandyChildPath -Root $InstallRoot -Candidate $stagedConstraints
+Copy-Item -LiteralPath $constraintsSource -Destination $stagedConstraints -Force
+
+# uv parses requirements-file arguments separately on Windows. Absolute paths
+# containing spaces (notably Program Files) can be truncated at the first space,
+# so every local uv path is relative to the app-owned module directory.
+try {
+    if ($Module -eq 'faster-qwen3-tts') {
+        Invoke-Checked `
+            -Executable $uv `
+            -Arguments @('pip', 'install', '--python', $relativePython, '--torch-backend', 'cu128', '--constraint', $stagedConstraintsName, '--editable', 'source[demo]') `
+            -WorkingDirectory $InstallRoot `
+            -Description 'Faster Qwen3-TTS dependency installation'
+    } else {
+        $requirements = Get-ChatterboxRequirements -RuntimeDevice $Device
+        $requirementsPath = Join-Path $sourceRoot $requirements
+        if (-not (Test-Path -LiteralPath $requirementsPath -PathType Leaf)) {
+            throw "The pinned Chatterbox dependency set is unavailable: '$requirementsPath'."
+        }
+        $relativeRequirements = Join-Path 'source' $requirements
+        Write-Host "Chatterbox dependency set: $requirements"
+        Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $relativePython, '--constraint', $stagedConstraintsName, '-r', $relativeRequirements) -WorkingDirectory $InstallRoot -Description 'Chatterbox dependency installation'
+        Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $relativePython, '--no-deps', $chatterboxEngine, 's3tokenizer==0.3.0', 'onnx==1.16.0') -WorkingDirectory $InstallRoot -Description 'Pinned Chatterbox engine installation'
+        # The pinned server intentionally overrides descript-audiotools' obsolete
+        # protobuf metadata bound; ONNX 1.16 requires a newer runtime and the
+        # Chatterbox maintainers validate that combination at runtime.
+        Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $relativePython, '--no-deps', 'protobuf==4.25.8') -WorkingDirectory $InstallRoot -Description 'Chatterbox ONNX protobuf compatibility installation'
     }
-    $constraints = Join-Path $PSScriptRoot 'tts\chatterbox-constraints.txt'
-    if (-not (Test-Path -LiteralPath $constraints -PathType Leaf)) {
-        throw "The Chatterbox dependency constraints are unavailable: '$constraints'."
-    }
-    Write-Host "Chatterbox dependency set: $requirements"
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--constraint', $constraints, '-r', $requirementsPath) -Description 'Chatterbox dependency installation'
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--no-deps', $chatterboxEngine, 's3tokenizer==0.3.0', 'onnx==1.16.0') -Description 'Pinned Chatterbox engine installation'
-    # The pinned server intentionally overrides descript-audiotools' obsolete
-    # protobuf metadata bound; ONNX 1.16 requires a newer runtime and the
-    # Chatterbox maintainers validate that combination at runtime.
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, '--no-deps', 'protobuf==4.25.8') -Description 'Chatterbox ONNX protobuf compatibility installation'
+} finally {
+    Remove-Item -LiteralPath $stagedConstraints -Force -ErrorAction SilentlyContinue
 }
 
 $hf = Join-Path $venv 'Scripts\hf.exe'
 if (-not (Test-Path -LiteralPath $hf -PathType Leaf)) {
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $python, 'huggingface-hub>=0.36.0,<1.0') -Description 'Hugging Face client installation'
+    Invoke-Checked -Executable $uv -Arguments @('pip', 'install', '--python', $relativePython, 'huggingface-hub>=0.36.0,<1.0') -WorkingDirectory $InstallRoot -Description 'Hugging Face client installation'
 }
 if (-not (Test-Path -LiteralPath $hf -PathType Leaf)) {
     throw "The Hugging Face client was not installed at '$hf'."
 }
 if ($Module -eq 'faster-qwen3-tts') {
-    Invoke-Checked -Executable $uv -Arguments @('pip', 'check', '--python', $python) -Description 'Python dependency compatibility check'
+    Invoke-Checked -Executable $uv -Arguments @('pip', 'check', '--python', $relativePython) -WorkingDirectory $InstallRoot -Description 'Python dependency compatibility check'
 } else {
     Write-Host 'Validating Chatterbox through its runtime imports; its pinned ONNX protobuf override intentionally conflicts with obsolete package metadata.'
 }
 Invoke-Checked -Executable $hf -Arguments @('version') -Description 'Hugging Face client verification'
-Test-TTSPythonRuntime -Python $python -Module $Module -RuntimeDevice $Device
+Test-TTSPythonRuntime `
+    -Python $python `
+    -Module $Module `
+    -RuntimeDevice $Device `
+    -Probe (Join-Path $PSScriptRoot 'tts\runtime-probe.py')
 $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/chatterbox-turbo' }
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
 Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache
