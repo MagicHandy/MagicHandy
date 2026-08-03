@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows release package
 
 The current Windows x64 release is
-[v0.1.0-alpha.9](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.9).
+[v0.1.0-alpha.11](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.11).
 Download its setup EXE and `SHA256SUMS` file, verify the setup hash, and run it.
 The portable ZIP is also available when installer integration is not wanted.
 The prebuilt core requires no Go, Node, Python, CMake, or Visual Studio and
@@ -14,7 +14,7 @@ opens the same guided setup described below.
 
 The executables remain unsigned. Microsoft completed false-positive case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`
-and removed the alpha.6 detection. Alpha.9 keeps the hardened x64/non-solid
+and removed the alpha.6 detection. Alpha.11 keeps the hardened x64/non-solid
 package, adds an exact-artifact Defender scan, and receives the full installer
 lifecycle test before publication. If
 Defender or SmartScreen classifies a new download as unsafe, do not bypass the
@@ -22,8 +22,9 @@ warning; retain the checksum and report the detection.
 Build and acceptance commands are in
 [windows-release-packaging.md](windows-release-packaging.md).
 
-Versioned builds check the latest stable GitHub Release
-and notify through the app. **Settings > General > Updates** provides an
+Versioned builds check the latest compatible GitHub Release and notify through
+the app. Stable builds ignore prereleases; alpha, beta, and release-candidate
+builds can follow newer compatible prereleases. **Settings > General > Updates** provides an
 explicit check and a manual-only preference. The app opens the release page;
 it does not silently download or run an artifact. Setup over-install upgrades
 preserve `%APPDATA%\MagicHandy`. Existing packaged installs keep their current

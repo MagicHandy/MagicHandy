@@ -91,11 +91,11 @@ function UpdateResult({ status }: { status: UpdateStatus }) {
     tone = "info";
   } else if (status.state === "current") {
     title = t("MagicHandy is up to date");
-    detail = t("{version} is the latest stable release.", { version: latestVersion || status.current_version });
+    detail = t("{version} is the latest compatible release.", { version: latestVersion || status.current_version });
     tone = "success";
   } else if (status.state === "no_release") {
     title = t("No published release");
-    detail = t("No stable GitHub release has been published yet.");
+    detail = t("No compatible GitHub release has been published yet.");
     tone = "neutral";
   } else if (status.state === "development") {
     title = t("Development build");

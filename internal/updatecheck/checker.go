@@ -1,6 +1,6 @@
 // Package updatecheck compares the running build with MagicHandy's latest
-// stable GitHub release. It only discovers releases; installing one remains an
-// explicit user action through the release page.
+// compatible GitHub release. It only discovers releases; installing one
+// remains an explicit user action through the release page.
 package updatecheck
 
 import (
@@ -17,13 +17,15 @@ import (
 )
 
 const (
-	// DefaultReleaseAPIURL is GitHub's latest stable release endpoint. Drafts
-	// and prereleases are intentionally outside the automatic update channel.
-	DefaultReleaseAPIURL = "https://api.github.com/repos/MagicHandy/MagicHandy/releases/latest"
+	// DefaultReleaseAPIURL lists enough releases to select the highest version
+	// compatible with the running build's stable or prerelease channel.
+	DefaultReleaseAPIURL = "https://api.github.com/repos/MagicHandy/MagicHandy/releases?per_page=100"
 	defaultReleasePage   = "https://github.com/MagicHandy/MagicHandy/releases/tag/"
 	defaultCacheTTL      = 6 * time.Hour
 	defaultFailureTTL    = 15 * time.Minute
 	maxResponseBytes     = 2 << 20
+	releasePageSize      = 100
+	maxReleasePages      = 10
 )
 
 // State describes the result without making network failure look like an app
@@ -31,13 +33,13 @@ const (
 type State string
 
 const (
-	// StateAvailable means a newer stable release exists.
+	// StateAvailable means a newer compatible release exists.
 	StateAvailable State = "available"
-	// StateCurrent means the running version is at least as new as the latest stable release.
+	// StateCurrent means the running version is at least as new as the latest compatible release.
 	StateCurrent State = "current"
 	// StateDevelopment means the running build has no comparable semantic version.
 	StateDevelopment State = "development"
-	// StateNoRelease means the repository has no published stable release.
+	// StateNoRelease means the repository has no compatible published release.
 	StateNoRelease State = "no_release"
 	// StateError means the release check could not produce a result.
 	StateError State = "error"
@@ -50,6 +52,14 @@ type Release struct {
 	Name        string    `json:"name,omitempty"`
 	URL         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at,omitempty"`
+}
+
+type githubRelease struct {
+	TagName     string `json:"tag_name"`
+	Name        string `json:"name"`
+	PublishedAt string `json:"published_at"`
+	Draft       bool   `json:"draft"`
+	Prerelease  bool   `json:"prerelease"`
 }
 
 // Status is returned by the local API for both startup and manual checks.
@@ -161,54 +171,145 @@ func (c *Checker) Check(ctx context.Context, refresh bool) Status {
 }
 
 func (c *Checker) fetch(ctx context.Context, checkedAt time.Time) (Status, string, bool, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint, nil)
-	if err != nil {
-		return Status{}, "", false, errors.New("the release check is not configured correctly")
-	}
-	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("User-Agent", "MagicHandy/"+displayVersion(c.currentVersion))
-	request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
-	if c.etag != "" {
-		request.Header.Set("If-None-Match", c.etag)
-	}
-
-	response, err := c.client.Do(request)
-	if err != nil {
-		return Status{}, "", false, errors.New("GitHub Releases could not be reached")
-	}
-	defer func() { _ = response.Body.Close() }()
-
-	if response.StatusCode == http.StatusNotModified {
-		if c.cached.CheckedAt.IsZero() {
-			return Status{}, "", false, errors.New("GitHub returned an empty cached release response")
+	var payload []githubRelease
+	etag := ""
+	pagesFetched := 0
+	for page := 1; page <= maxReleasePages; page++ {
+		pageURL, err := releasePageURL(c.endpoint, page)
+		if err != nil {
+			return Status{}, "", false, errors.New("the release check is not configured correctly")
 		}
-		return Status{}, response.Header.Get("ETag"), true, nil
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+		if err != nil {
+			return Status{}, "", false, errors.New("the release check is not configured correctly")
+		}
+		request.Header.Set("Accept", "application/vnd.github+json")
+		request.Header.Set("User-Agent", "MagicHandy/"+displayVersion(c.currentVersion))
+		request.Header.Set("X-GitHub-Api-Version", "2026-03-10")
+		if page == 1 && c.etag != "" {
+			request.Header.Set("If-None-Match", c.etag)
+		}
+
+		response, err := c.client.Do(request)
+		if err != nil {
+			return Status{}, "", false, errors.New("GitHub Releases could not be reached")
+		}
+		if response.StatusCode == http.StatusNotModified {
+			_ = response.Body.Close()
+			if page != 1 || c.cached.CheckedAt.IsZero() {
+				return Status{}, "", false, errors.New("GitHub returned an empty cached release response")
+			}
+			return Status{}, response.Header.Get("ETag"), true, nil
+		}
+		if response.StatusCode != http.StatusOK {
+			_ = response.Body.Close()
+			return Status{}, "", false, fmt.Errorf("GitHub Releases returned HTTP %d", response.StatusCode)
+		}
+		var pagePayload []githubRelease
+		decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
+		decodeErr := decoder.Decode(&pagePayload)
+		_ = response.Body.Close()
+		if decodeErr != nil {
+			return Status{}, "", false, errors.New("GitHub returned an invalid release response")
+		}
+		if page == 1 {
+			etag = response.Header.Get("ETag")
+		}
+		pagesFetched = page
+		payload = append(payload, pagePayload...)
+		if len(pagePayload) < releasePageSize {
+			break
+		}
+		if page == maxReleasePages {
+			return Status{}, "", false, errors.New("GitHub returned too many release pages")
+		}
 	}
-	if response.StatusCode == http.StatusNotFound {
+	if pagesFetched > 1 {
+		// One ETag cannot safely revalidate multiple independently cached pages.
+		etag = ""
+	}
+	latest, ok := selectRelease(c.currentVersion, payload)
+	if !ok {
 		return Status{
 			State:          StateNoRelease,
 			CurrentVersion: c.currentVersion,
 			CheckedAt:      checkedAt,
-		}, response.Header.Get("ETag"), false, nil
+		}, etag, false, nil
 	}
-	if response.StatusCode != http.StatusOK {
-		return Status{}, "", false, fmt.Errorf("GitHub Releases returned HTTP %d", response.StatusCode)
-	}
-
-	var payload struct {
-		TagName     string `json:"tag_name"`
-		Name        string `json:"name"`
-		PublishedAt string `json:"published_at"`
-	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
-	if err := decoder.Decode(&payload); err != nil {
-		return Status{}, "", false, errors.New("GitHub returned an invalid release response")
-	}
-	status, err := compareRelease(c.currentVersion, payload.TagName, payload.Name, payload.PublishedAt, checkedAt)
+	status, err := compareRelease(c.currentVersion, latest.TagName, latest.Name, latest.PublishedAt, checkedAt)
 	if err != nil {
 		return Status{}, "", false, err
 	}
-	return status, response.Header.Get("ETag"), false, nil
+	return status, etag, false, nil
+}
+
+func releasePageURL(endpoint string, page int) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("invalid release endpoint")
+	}
+	if page > 1 {
+		query := parsed.Query()
+		query.Set("per_page", fmt.Sprint(releasePageSize))
+		query.Set("page", fmt.Sprint(page))
+		parsed.RawQuery = query.Encode()
+	}
+	return parsed.String(), nil
+}
+
+func selectRelease(currentVersion string, releases []githubRelease) (githubRelease, bool) {
+	current, currentOK := parseVersion(currentVersion)
+	var selected githubRelease
+	var selectedVersion version
+	found := false
+	for _, candidate := range releases {
+		if candidate.Draft {
+			continue
+		}
+		candidateVersion, ok := parseVersion(candidate.TagName)
+		if !ok || candidate.Prerelease != (len(candidateVersion.pre) > 0) {
+			continue
+		}
+		if currentOK {
+			if !releaseChannelAllows(current, candidateVersion) {
+				continue
+			}
+		} else if len(candidateVersion.pre) > 0 {
+			// Preserve the former manual-check behavior for development builds.
+			continue
+		}
+		if !found || candidateVersion.Compare(selectedVersion) > 0 {
+			selected = candidate
+			selectedVersion = candidateVersion
+			found = true
+		}
+	}
+	return selected, found
+}
+
+func releaseChannelAllows(current, candidate version) bool {
+	if len(current.pre) == 0 {
+		return len(candidate.pre) == 0
+	}
+	if len(candidate.pre) == 0 {
+		return true
+	}
+	currentRank, currentOK := prereleaseRank(current.pre[0])
+	candidateRank, candidateOK := prereleaseRank(candidate.pre[0])
+	return currentOK && candidateOK && candidateRank >= currentRank
+}
+
+func prereleaseRank(stage string) (int, bool) {
+	switch stage {
+	case "alpha":
+		return 0, true
+	case "beta":
+		return 1, true
+	case "rc":
+		return 2, true
+	default:
+		return 0, false
+	}
 }
 
 func compareRelease(currentVersion, tag, name, published string, checkedAt time.Time) (Status, error) {

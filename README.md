@@ -7,7 +7,7 @@ on your machine — no account, no tracking.
 
 > **Status:** early alpha and under active development. Local chat already
 > drives real device motion. The current Windows build is
-> [v0.1.0-alpha.8](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.8),
+> [v0.1.0-alpha.11](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.11),
 > with a full setup EXE and portable ZIP. The binaries remain unsigned.
 > Expect rough edges — see [what's coming](#roadmap).
 
@@ -40,7 +40,7 @@ on your machine — no account, no tracking.
 ## Get started
 
 For Windows x64, download the setup EXE and SHA-256 checksum file from the
-[v0.1.0-alpha.8 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.8).
+[v0.1.0-alpha.11 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.11).
 Verify the setup hash, run it, and complete guided setup in the browser. The
 portable ZIP remains available when Windows installer integration is not
 wanted. No Go, Node, Python, CMake, or compiler is needed to run the core. The
@@ -75,8 +75,9 @@ For later updates, open PowerShell in the same `MagicHandy` folder and run
 `.\update.ps1`. It updates the core without replaying old optional-install
 choices, then can open guided setup when you want to change them.
 
-Versioned Windows builds also check the project's latest stable GitHub Release
-and place an update notice in the app. The check can be set to manual-only in
+Versioned Windows builds also check the project's latest compatible GitHub
+Release and place an update notice in the app. Stable builds stay on stable
+releases; prerelease builds can follow newer prereleases. The check can be set to manual-only in
 **Settings > General**. MagicHandy never downloads or executes an update in the
 background. Packaged updates require explicit release-note and checksum review;
 the setup EXE supports over-install while preserving app data.

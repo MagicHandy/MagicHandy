@@ -1663,9 +1663,10 @@ Implement, as slices:
   `docs/setup-wizard-design.md` (wireframe: `docs/setup-wizard-sketch.svg`);
   the app icon and Inno banner slots there are inputs to slice 16.1
 - **16.2B — update discovery (implemented, acceptance open)**: versioned builds
-  query the canonical latest stable GitHub Release through a bounded backend
-  client, cache and conditionally revalidate the result, compare semantic
-  versions, and create one notification per release. General settings owns the
+  query the canonical GitHub Release list through a bounded backend client,
+  select the highest semantic version compatible with the stable or progressive
+  alpha/beta/RC channel, cache and conditionally revalidate the result, and
+  create one notification per release. General settings owns the
   automatic/manual preference and explicit check. Downloading or applying an
   artifact remains outside this slice; see `docs/update-checks.md` and ADR 0013
 - **16.3 — StrokeGPT-ReVibed porting step** *(undecided; gated on Phase 15)*:

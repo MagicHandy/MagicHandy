@@ -2,6 +2,7 @@ package updatecheck
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -53,7 +54,7 @@ func TestCheckerCachesAndRevalidatesLatestRelease(t *testing.T) {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
-		_, _ = w.Write([]byte(`{"tag_name":"v1.4.0","name":"MagicHandy 1.4","published_at":"2026-08-01T12:00:00Z"}`))
+		_, _ = w.Write([]byte(`[{"tag_name":"v1.4.0","name":"MagicHandy 1.4","published_at":"2026-08-01T12:00:00Z"}]`))
 	}))
 	t.Cleanup(server.Close)
 
@@ -95,8 +96,9 @@ func TestCheckerHandlesDevelopmentNoReleaseAndFailure(t *testing.T) {
 		current string
 		want    State
 	}{
-		{name: "development", status: http.StatusOK, body: `{"tag_name":"v1.0.0"}`, current: "dev", want: StateDevelopment},
-		{name: "no release", status: http.StatusNotFound, current: "1.0.0", want: StateNoRelease},
+		{name: "development", status: http.StatusOK, body: `[{"tag_name":"v1.0.0"}]`, current: "dev", want: StateDevelopment},
+		{name: "no release", status: http.StatusOK, body: `[]`, current: "1.0.0", want: StateNoRelease},
+		{name: "missing endpoint", status: http.StatusNotFound, current: "1.0.0", want: StateError},
 		{name: "rate limited", status: http.StatusForbidden, current: "1.0.0", want: StateError},
 	}
 	for _, test := range tests {
@@ -125,7 +127,7 @@ func TestFailedRefreshRetainsLastResult(t *testing.T) {
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		_, _ = w.Write([]byte(`{"tag_name":"v2.0.0"}`))
+		_, _ = w.Write([]byte(`[{"tag_name":"v2.0.0"}]`))
 	}))
 	t.Cleanup(server.Close)
 	checker := New(Options{CurrentVersion: "1.0.0", Endpoint: server.URL, HTTPClient: server.Client()})
@@ -139,6 +141,96 @@ func TestFailedRefreshRetainsLastResult(t *testing.T) {
 	}
 	if repeated := checker.Check(context.Background(), false); !repeated.Stale || requests.Load() != 2 {
 		t.Fatalf("automatic retry was not throttled: status=%+v requests=%d", repeated, requests.Load())
+	}
+}
+
+func TestCheckerSelectsNewerPrereleaseRegardlessOfGitHubOrder(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"tag_name":"v0.1.0-alpha.9","prerelease":true},
+			{"tag_name":"v9.0.0-alpha.1","draft":true,"prerelease":true},
+			{"tag_name":"not-semver","prerelease":true},
+			{"tag_name":"v0.1.0-alpha.11","prerelease":false},
+			{"tag_name":"v0.1.0-alpha.10","name":"MagicHandy v0.1.0-alpha.10","prerelease":true},
+			{"tag_name":"v0.1.0-alpha.8","prerelease":true}
+		]`))
+	}))
+	t.Cleanup(server.Close)
+
+	status := New(Options{
+		CurrentVersion: "0.1.0-alpha.9",
+		Endpoint:       server.URL,
+		HTTPClient:     server.Client(),
+	}).Check(context.Background(), false)
+	if status.State != StateAvailable || status.Latest == nil || status.Latest.Version != "0.1.0-alpha.10" {
+		t.Fatalf("status = %+v, want alpha.10 available", status)
+	}
+}
+
+func TestReleaseSelectionRespectsChannelProgression(t *testing.T) {
+	t.Parallel()
+	releases := []githubRelease{
+		{TagName: "v1.1.0-alpha.2", Prerelease: true},
+		{TagName: "v1.0.0-beta.2", Prerelease: true},
+		{TagName: "v1.0.0-rc.2", Prerelease: true},
+		{TagName: "v1.0.0"},
+	}
+	tests := []struct {
+		current string
+		want    string
+	}{
+		{current: "1.0.0-alpha.1", want: "v1.1.0-alpha.2"},
+		{current: "1.0.0-beta.1", want: "v1.0.0"},
+		{current: "1.0.0-rc.1", want: "v1.0.0"},
+		{current: "0.9.0", want: "v1.0.0"},
+		{current: "dev", want: "v1.0.0"},
+	}
+	for _, test := range tests {
+		selected, ok := selectRelease(test.current, releases)
+		if !ok || selected.TagName != test.want {
+			t.Errorf("selectRelease(%q) = %q, %t; want %q", test.current, selected.TagName, ok, test.want)
+		}
+	}
+}
+
+func TestCheckerFollowsReleasePagesForStableChannel(t *testing.T) {
+	t.Parallel()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Query().Get("page") == "2" {
+			_ = json.NewEncoder(w).Encode([]githubRelease{{TagName: "v1.0.0"}})
+			return
+		}
+		page := make([]githubRelease, releasePageSize)
+		for index := range page {
+			page[index] = githubRelease{TagName: "v2.0.0-alpha.1", Prerelease: true}
+		}
+		_ = json.NewEncoder(w).Encode(page)
+	}))
+	t.Cleanup(server.Close)
+
+	status := New(Options{
+		CurrentVersion: "0.9.0",
+		Endpoint:       server.URL,
+		HTTPClient:     server.Client(),
+	}).Check(context.Background(), false)
+	if status.State != StateAvailable || status.Latest == nil || status.Latest.Version != "1.0.0" {
+		t.Fatalf("status = %+v, want paginated stable release", status)
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("requests = %d, want 2", requests.Load())
+	}
+}
+
+func TestReleaseSelectionAdvancesAlphaOrdinal(t *testing.T) {
+	t.Parallel()
+	selected, ok := selectRelease("0.1.0-alpha.10", []githubRelease{
+		{TagName: "v0.1.0-alpha.11", Prerelease: true},
+	})
+	if !ok || selected.TagName != "v0.1.0-alpha.11" {
+		t.Fatalf("selection = %q, %t; want alpha.11", selected.TagName, ok)
 	}
 }
 

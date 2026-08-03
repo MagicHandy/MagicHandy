@@ -1,8 +1,8 @@
 # Release Checks And Update Handoff
 
-MagicHandy can discover a newer stable release without silently downloading or
-executing one. The core performs the network request, the embedded UI reports
-the result, and the user remains in control of the actual update.
+MagicHandy can discover a newer compatible release without silently downloading
+or executing one. The core performs the network request, the embedded UI
+reports the result, and the user remains in control of the actual update.
 
 ## Current Behavior
 
@@ -11,22 +11,27 @@ the result, and the user remains in control of the actual update.
   branch, not a release tag, determines whether they are current.
 - **Settings > General > Updates** can switch automatic checks to manual-only
   and can run an explicit check at any time.
-- A newer stable semantic version creates one deduplicated notification for that
-  release in the existing notification center. Selecting it opens General
+- A newer compatible semantic version creates one deduplicated notification for
+  that release in the existing notification center. Stable builds consider only
+  stable releases. Alpha can advance to alpha/beta/RC/stable, beta to
+  beta/RC/stable, and RC to RC/stable. Selecting the notification opens General
   settings, where **View release** opens the canonical project release page.
 - No release, an up-to-date build, a development build, and a failed check are
   distinct results. Automatic network failures do not raise a startup alarm;
   an explicit check reports the failure in place.
 
-GitHub's `GET /repos/MagicHandy/MagicHandy/releases/latest` endpoint is the
-source of truth. It selects the latest published stable release rather than a
-draft or prerelease. The request is unauthenticated, sends the recommended
-GitHub API headers, caches a successful result for six hours, and revalidates
-with `ETag` / `If-None-Match`. GitHub documents an unauthenticated limit of 60
-requests per hour per source IP; the cache keeps normal app use well below it.
-An unavailable request is retried automatically no more than once every 15
-minutes. **Check now** remains an explicit bypass, and a previous successful
-result stays visible as stale rather than disappearing during an outage.
+GitHub's paginated `GET /repos/MagicHandy/MagicHandy/releases?per_page=100`
+endpoint is the source of truth. The core follows up to ten pages and fails
+closed instead of silently truncating a larger result. It ignores drafts, malformed semantic tags, and releases
+whose GitHub prerelease flag disagrees with their tag. It selects the highest
+allowed semantic version instead of trusting response order. The bounded request
+is unauthenticated, sends the recommended GitHub API headers, caches a successful
+result for six hours, and revalidates with `ETag` / `If-None-Match`. GitHub
+documents an unauthenticated limit of 60 requests per hour per source IP; the
+cache keeps normal app use well below it. An unavailable request is retried
+automatically no more than once every 15 minutes. **Check now** remains an
+explicit bypass, and a previous successful result stays visible as stale rather
+than disappearing during an outage.
 
 References:
 
@@ -69,10 +74,10 @@ The release checker deliberately does not:
 - stop motion or take controller ownership; or
 - treat update discovery as required for startup.
 
-The local API returns a canonical `github.com/MagicHandy/MagicHandy` release
-URL constructed from the release tag. Only the latest stable semantic version
-is comparable. The setting is shared through the backend settings snapshot, so
-multiple tabs do not maintain conflicting update preferences.
+The local API returns a canonical `github.com/MagicHandy/MagicHandy` release URL
+constructed from the selected tag. The browser cannot choose the repository,
+channel, or download target. The setting is shared through the backend settings
+snapshot, so multiple tabs do not maintain conflicting update preferences.
 
 ## Local API
 

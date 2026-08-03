@@ -416,6 +416,15 @@ Follow-up implementation evidence from 2026-07-13:
   startup path is 795,608 / 210,346 raw/gzip bytes. Artwork and localized chunks
   are unchanged. The delta is the bounded wizard layout and labeled model import
   regions; process memory was not remeasured for this UI-only change.
+- The alpha.11 update-channel wording produces a complete embedded browser
+  payload of 1,676,852 raw / 797,558 level-9 gzip bytes. HTML/CSS/JS totals
+  1,232,616 / 360,161 and the English startup path is 796,097 / 210,419. Against
+  alpha.10 this is +86 / -2 bytes overall and for HTML/CSS/JS, and +24 / -2 on
+  the startup path. The artwork is unchanged. Local Go 1.26.4 on Windows/amd64
+  produces a 23,660,032-byte plain candidate and a 17,031,168-byte release-style
+  stripped candidate with `CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w"`, and
+  injected alpha.11/40-character commit metadata. Tag CI uses the `go.mod` 1.25
+  toolchain and remains authoritative for the published artifact.
 
 ## Procedure
 
@@ -423,7 +432,12 @@ For Windows local measurements:
 
 ```powershell
 $env:CGO_ENABLED = "0"
-go build -o $env:TEMP\magichandy.exe ./cmd/magichandy
+go version
+$commit = (git rev-parse HEAD).Trim()
+go build -trimpath -o $env:TEMP\magichandy-plain.exe ./cmd/magichandy
+go build -trimpath `
+  -ldflags "-s -w -X main.version=0.1.0-alpha.11 -X main.commit=$commit" `
+  -o $env:TEMP\magichandy.exe ./cmd/magichandy
 $proc = Start-Process -FilePath $env:TEMP\magichandy.exe -ArgumentList "-addr", "127.0.0.1:49718" -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 2
 1..3 | ForEach-Object {

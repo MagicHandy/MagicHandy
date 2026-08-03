@@ -15,7 +15,7 @@ func TestUpdateStatusUsesConfiguredGitHubReleaseEndpoint(t *testing.T) {
 		if r.Header.Get("User-Agent") == "" {
 			t.Error("release request omitted User-Agent")
 		}
-		_, _ = w.Write([]byte(`{"tag_name":"v1.2.3","name":"MagicHandy 1.2.3"}`))
+		_, _ = w.Write([]byte(`[{"tag_name":"v1.2.3","name":"MagicHandy 1.2.3"}]`))
 	}))
 	t.Cleanup(github.Close)
 
