@@ -272,6 +272,52 @@ func TestLlamaCPPStatusRequiresSelectedModelWhenModelListExists(t *testing.T) {
 	}
 }
 
+func TestLlamaCPPStatusDistinguishesModelLoadingFromFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":{"message":"Loading model","type":"unavailable_error","code":503}}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewLlamaCPPProvider(HTTPProviderOptions{
+		BaseURL: server.URL,
+		Model:   "local-model",
+	})
+	if err != nil {
+		t.Fatalf("NewLlamaCPPProvider: %v", err)
+	}
+
+	status := provider.Status(t.Context())
+	if status.Available || !status.Loaded || !status.Loading {
+		t.Fatalf("loading status = %+v", status)
+	}
+	if status.Message != "llama.cpp is loading the model" {
+		t.Fatalf("loading message = %q", status.Message)
+	}
+}
+
+func TestLlamaCPPStatusKeepsUnknownServiceUnavailableAsFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":{"message":"model is not loading because the runtime is unavailable"}}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewLlamaCPPProvider(HTTPProviderOptions{BaseURL: server.URL, Model: "local-model"})
+	if err != nil {
+		t.Fatalf("NewLlamaCPPProvider: %v", err)
+	}
+	status := provider.Status(t.Context())
+	if status.Loading || status.Message != "health endpoint returned 503" {
+		t.Fatalf("unavailable status = %+v", status)
+	}
+}
+
 func TestManagedLlamaCPPStatusRequiresManagedRuntimeAndModel(t *testing.T) {
 	provider, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
 		HTTPProviderOptions: HTTPProviderOptions{

@@ -910,6 +910,7 @@ export interface LLMProviderStatus {
   model_available?: boolean;
   managed?: boolean;
   loaded?: boolean;
+  loading?: boolean;
   models?: string[];
   message?: string;
 }

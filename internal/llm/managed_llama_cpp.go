@@ -17,7 +17,11 @@ import (
 )
 
 const (
-	managedLlamaLoadTimeout   = 30 * time.Second
+	// Fresh installs can load a multi-gigabyte GGUF from cold storage while
+	// antivirus and optional-component setup are still active. Keep this below
+	// the default generation timeout while allowing substantially more than the
+	// old 30-second budget.
+	managedLlamaLoadTimeout   = 90 * time.Second
 	managedLlamaUnloadTimeout = 10 * time.Second
 	// The app admits one interactive stream and cancels Autopilot work before
 	// yielding to it. A brief cancellation overlap does not need another

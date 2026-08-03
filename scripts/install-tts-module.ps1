@@ -428,16 +428,37 @@ function Test-TTSPythonRuntime {
         [Parameter(Mandatory = $true)][string]$Python,
         [Parameter(Mandatory = $true)][string]$Module,
         [Parameter(Mandatory = $true)][string]$RuntimeDevice,
-        [Parameter(Mandatory = $true)][string]$Probe
+        [Parameter(Mandatory = $true)][string]$Probe,
+        [string]$NumbaCacheDirectory = ''
     )
 
     if (-not (Test-Path -LiteralPath $Probe -PathType Leaf)) {
         throw "The Python voice runtime probe is unavailable: '$Probe'."
     }
-    Invoke-Checked `
-        -Executable $Python `
-        -Arguments @($Probe, $Module, $RuntimeDevice) `
-        -Description 'Python voice runtime verification'
+    $previousNumbaCache = [System.Environment]::GetEnvironmentVariable(
+        'NUMBA_CACHE_DIR',
+        [System.EnvironmentVariableTarget]::Process
+    )
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($NumbaCacheDirectory)) {
+            New-Item -ItemType Directory -Path $NumbaCacheDirectory -Force | Out-Null
+            [System.Environment]::SetEnvironmentVariable(
+                'NUMBA_CACHE_DIR',
+                $NumbaCacheDirectory,
+                [System.EnvironmentVariableTarget]::Process
+            )
+        }
+        Invoke-Checked `
+            -Executable $Python `
+            -Arguments @($Probe, $Module, $RuntimeDevice) `
+            -Description 'Python voice runtime verification'
+    } finally {
+        [System.Environment]::SetEnvironmentVariable(
+            'NUMBA_CACHE_DIR',
+            $previousNumbaCache,
+            [System.EnvironmentVariableTarget]::Process
+        )
+    }
 }
 
 function Get-ChatterboxRequirements {
@@ -922,11 +943,17 @@ if ($Module -eq 'faster-qwen3-tts') {
     Write-Host 'Validating Chatterbox through its runtime imports; its pinned ONNX protobuf override intentionally conflicts with obsolete package metadata.'
 }
 Invoke-Checked -Executable $hf -Arguments @('version') -Description 'Hugging Face client verification'
+$numbaCacheDirectory = if ($Module -eq 'faster-qwen3-tts') {
+    Join-Path $InstallRoot 'runtime-cache\numba'
+} else {
+    ''
+}
 Test-TTSPythonRuntime `
     -Python $python `
     -Module $Module `
     -RuntimeDevice $Device `
-    -Probe (Join-Path $PSScriptRoot 'tts\runtime-probe.py')
+    -Probe (Join-Path $PSScriptRoot 'tts\runtime-probe.py') `
+    -NumbaCacheDirectory $numbaCacheDirectory
 $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/chatterbox-turbo' }
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
 Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache

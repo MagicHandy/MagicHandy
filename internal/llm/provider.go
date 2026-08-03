@@ -64,6 +64,7 @@ type ProviderStatus struct {
 	ModelAvailable bool     `json:"model_available"`
 	Managed        bool     `json:"managed"`
 	Loaded         bool     `json:"loaded"`
+	Loading        bool     `json:"loading,omitempty"`
 	Models         []string `json:"models,omitempty"`
 	Message        string   `json:"message,omitempty"`
 }

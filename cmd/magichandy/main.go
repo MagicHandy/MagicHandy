@@ -334,6 +334,8 @@ func configureTTSModule(
 		sameProvider := settings.Voice.TTSProvider == configuration.Provider
 		settings.Voice.Enabled = true
 		settings.Voice.TTSProvider = configuration.Provider
+		settings.Voice.TTSWorkerPath = ""
+		settings.Voice.TTSWorkerArgs = nil
 		settings.Voice.TTSModuleRoot = strings.TrimSpace(configuration.ModuleRoot)
 		settings.Voice.TTSBaseURL = strings.TrimRight(strings.TrimSpace(configuration.BaseURL), "/")
 		settings.Voice.TTSModel = strings.TrimSpace(configuration.Model)

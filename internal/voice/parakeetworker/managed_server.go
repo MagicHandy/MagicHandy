@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/processtree"
 )
 
 // DefaultServerPort is the loopback port used by a managed parakeet-server
@@ -32,6 +34,7 @@ type managedServer struct {
 	command *exec.Cmd
 	done    chan error
 	stderr  *serverTail
+	tree    *processtree.Handle
 }
 
 func newManagedServer(path, model string, port int) *managedServer {
@@ -85,16 +88,24 @@ func (s *managedServer) Start() error {
 	command.Dir = filepath.Dir(s.path)
 	command.Stdout = s.stderr
 	command.Stderr = s.stderr
+	processtree.Configure(command)
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start parakeet-server: %w", err)
+	}
+	tree, err := processtree.Attach(command)
+	if err != nil {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return fmt.Errorf("contain parakeet-server process tree: %w", err)
 	}
 
 	done := make(chan error, 1)
 	go func() {
-		done <- command.Wait()
+		done <- errors.Join(command.Wait(), tree.Close())
 	}()
 	s.command = command
 	s.done = done
+	s.tree = tree
 	return nil
 }
 
@@ -105,26 +116,27 @@ func (s *managedServer) Stop() error {
 	s.mu.Lock()
 	command := s.command
 	done := s.done
+	tree := s.tree
 	s.command = nil
 	s.done = nil
+	s.tree = nil
 	s.mu.Unlock()
 
 	if command == nil {
 		return nil
 	}
-	if command.Process != nil {
-		if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			return err
-		}
+	var stopErr error
+	if err := tree.Close(); err != nil {
+		stopErr = err
 	}
 	if done != nil {
 		select {
 		case <-done:
 		case <-time.After(managedServerStopTimeout):
-			return errors.New("parakeet-server did not exit after termination")
+			stopErr = errors.Join(stopErr, errors.New("parakeet-server did not exit after termination"))
 		}
 	}
-	return nil
+	return stopErr
 }
 
 func (s *managedServer) Running() bool {
@@ -141,6 +153,7 @@ func (s *managedServer) runningLocked() bool {
 	case err := <-s.done:
 		s.command = nil
 		s.done = nil
+		s.tree = nil
 		if err != nil {
 			s.stderr.WriteString(err.Error())
 		}

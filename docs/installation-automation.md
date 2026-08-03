@@ -48,6 +48,11 @@ Guided setup owns:
 Every optional feature is skippable before the plan starts. Installing a voice module does not enable voice,
 start microphone capture, speak text, connect hardware, or command motion.
 Reference WAV and transcript selection remains in Settings > Voice.
+Managed TTS installation selects the worker shipped with the current app and
+removes obsolete custom worker overrides. The setup job completes only after
+the same readiness contract used by Settings > Voice validates the managed
+Python executable, pinned upstream server, MagicHandy adapter, and required
+model or voice files.
 
 ## Dependency Boundaries
 
@@ -67,6 +72,13 @@ fixed sizes and SHA-256 digests. CPU is approximately 18 MiB compressed; CUDA
 is approximately 628 MiB compressed and 1.1 GiB installed. Neither path needs
 Git, CMake, Visual Studio, MSYS2, or the CUDA Toolkit. Choosing existing Ollama
 or skipping chat setup avoids the managed runtime's disk use.
+
+Managed Faster Qwen keeps Hugging Face, `uv`, and Numba caches below its
+app-owned module root. The installer runtime probe and every managed launch use
+the same Numba cache path, so Python never needs to write compiled cache probes
+into packaged dependencies. Managed Python servers are assigned to one owned
+process tree; stopping or restarting the worker terminates both a launcher and
+the interpreter descendants it created.
 
 ## Downloads And Consent
 

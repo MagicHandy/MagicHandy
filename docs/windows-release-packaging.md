@@ -9,10 +9,11 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 `zip/9` payload compression. This avoids the 32-bit loader and opaque solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
-ADR 0014 therefore permits alpha.8 and alpha.9 setup publication through a
-dedicated policy bound to those versions and case. Alpha.9 also adds a Defender
-scan of the exact public artifact directory. A later unsigned version fails closed until a
-new explicit review decision. This exception does not establish publisher
+ADR 0014 therefore permits alpha.8 through alpha.10 setup publication through a
+dedicated policy bound to those versions and case. Alpha.9 and later reviewed
+versions also add a Defender scan of the exact public artifact directory. A
+later unsigned version fails closed until a new explicit review decision. This
+exception does not establish publisher
 identity; trusted Authenticode remains the production target.
 The portable archive contains the app, workers, optional-module helper scripts,
 license, source notice, and release manifest. It does not bundle models,
@@ -128,12 +129,12 @@ directory. The exact setup then receives the full lifecycle test:
 ```powershell
 $commit = (git rev-parse HEAD).Trim()
 .\scripts\release\Build-WindowsRelease.ps1 `
-  -Version 0.0.0-local `
+  -Version 0.1.0-alpha.10 `
   -Commit $commit `
   -OutputRoot artifacts\release `
   -SkipFrontendBuild
 .\scripts\release\Test-WindowsRelease.ps1 `
-  -Version 0.0.0-local `
+  -Version 0.1.0-alpha.10 `
   -Commit $commit `
   -ArtifactsRoot artifacts\release `
   -ArtifactPolicy ReviewedUnsignedPublic `
@@ -141,10 +142,11 @@ $commit = (git rev-parse HEAD).Trim()
   -ExerciseInstaller
 ```
 
-`ReviewedUnsignedPublic` accepts only alpha.8 or alpha.9 with the recorded
-Microsoft case ID and checks the x64 unsigned setup, four x64 payload executables, manifests,
-and both outer hashes. `SignedPublic` is the fail-closed long-term policy. It
-requires valid, timestamped Authenticode on the setup executable and all four
+`ReviewedUnsignedPublic` accepts only alpha.8 through alpha.10 with the recorded
+Microsoft case ID and checks the x64 unsigned setup, four x64 payload
+executables, manifests, and both outer hashes. `SignedPublic` is the fail-closed
+long-term policy. It requires valid, timestamped Authenticode on the setup
+executable and all four
 payload executables, rejects self-signed certificates, and requires the
 approved certificate's 40-character thumbprint through
 `-ExpectedSignerThumbprint`. The current workflow does not select this policy

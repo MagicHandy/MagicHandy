@@ -152,7 +152,9 @@ screen anatomy, visual treatment, and branding slots — lives in
     enablement is explicit and a separate Start action confirms model readiness.
     App-managed modules and custom local paths are separate choices. Reference
     WAV/transcript selection, enabling voice, and starting workers stay in
-    Settings > Voice.
+    Settings > Voice. A managed install resets stale custom-worker overrides
+    and is complete only when the runtime files and model snapshot satisfy the
+    same readiness check shown on that page.
 6. **Install** — submit the selected local components once, then show the
    backend-owned sequential queue, per-component state, bounded terminal
    output, cancellation, and retry.

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -134,6 +136,64 @@ func TestSetupCompletePersistsWizardState(t *testing.T) {
 	settings, _ := server.store.Snapshot()
 	if !settings.UI.SetupCompleted {
 		t.Fatal("setup completion was not persisted")
+	}
+}
+
+func TestVerifyInstalledVoiceModuleUsesRuntimeReadinessContract(t *testing.T) {
+	root := t.TempDir()
+	module := setupVoiceModules[0]
+	state, err := json.Marshal(map[string]any{
+		"schema_version": 2,
+		"module":         module.ID,
+		"provider":       module.Provider,
+		"model":          module.Model,
+		"voice":          config.DefaultFasterQwenVoice,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "module-state.json"), state, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	managedTestFile(t, filepath.Join(root, ".venv", managedPythonDirectory(), managedPythonName()))
+	managedTestFile(t, filepath.Join(root, "magichandy-faster-qwen-server.py"))
+
+	if err := verifyInstalledVoiceModule(root, module); err == nil || !strings.Contains(err.Error(), "server entry point") {
+		t.Fatalf("pre-server verification error = %v", err)
+	}
+	managedTestFile(t, filepath.Join(root, "source", "examples", "openai_server.py"))
+	if err := verifyInstalledVoiceModule(root, module); err == nil || !strings.Contains(err.Error(), "model") {
+		t.Fatalf("pre-model verification error = %v", err)
+	}
+	managedFasterQwenSnapshot(t, root, module.Model, "abc123")
+	if err := verifyInstalledVoiceModule(root, module); err != nil {
+		t.Fatalf("complete module verification: %v", err)
+	}
+}
+
+func TestApplyInstalledVoiceModuleResetsManagedWorkerOverride(t *testing.T) {
+	server := newTestServer(t)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Voice.TTSProvider = config.VoiceTTSProviderFasterQwen
+		settings.Voice.TTSWorkerPath = `C:\old-install\voice-openai-tts-worker.exe`
+		settings.Voice.TTSWorkerArgs = []string{"--legacy"}
+		settings.Voice.TTSReferenceWAV = `C:\voices\reference.wav`
+		settings.Voice.TTSReferenceText = "Exact transcript."
+		return settings
+	})
+	module := setupVoiceModules[0]
+	if err := server.applyInstalledVoiceModule(t.Context(), setupVoiceInstallResult{
+		Module: module, Device: config.TTSDeviceCUDA, AutoLaunch: true, Root: t.TempDir(),
+	}); err != nil {
+		t.Fatalf("apply installed voice module: %v", err)
+	}
+	saved, _ := server.store.Snapshot()
+	if saved.Voice.TTSWorkerPath != "" || len(saved.Voice.TTSWorkerArgs) != 0 {
+		t.Fatalf("managed worker override survived setup: %+v", saved.Voice)
+	}
+	if saved.Voice.TTSReferenceWAV != `C:\voices\reference.wav` ||
+		saved.Voice.TTSReferenceText != "Exact transcript." {
+		t.Fatalf("same-provider reinstall discarded the saved reference: %+v", saved.Voice)
 	}
 }
 

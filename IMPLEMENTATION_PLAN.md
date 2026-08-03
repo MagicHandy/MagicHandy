@@ -1090,6 +1090,11 @@ Status: **complete** (#89).
   stale readiness and terminate the owned process tree. Provider URLs, response
   sizes, staged audio, reference WAVs, and encoder diagnostics are bounded and
   validated before crossing their trust boundaries.
+- Managed Python server children use the same platform process-tree ownership
+  as first-party workers, including a kill-on-close Windows job. Stopping the
+  Qwen or Parakeet worker therefore cannot leave a real interpreter behind a
+  terminated launcher. Faster Qwen's installer probe and runtime share an
+  app-owned Numba cache instead of probing packaged dependency directories.
 - Retained TTS audio covers the accepted core workload and is unaffected by ASR
   history, while per-clip and recent-request limits keep memory bounded.
 - Automated coverage includes burst audio delivery, malformed protocol frames,
@@ -1611,7 +1616,9 @@ bootstrap uv and module-compatible Python/PyTorch environments behind explicit
 GUI or unattended actions. A PowerShell-only bootstrap installs Git before
 cloning on an otherwise clean Windows host.
 The command-line flow installs Faster Qwen without reference prompts; the GUI
-owns its reference WAV and exact transcript.
+owns its reference WAV and exact transcript. Managed TTS setup clears obsolete
+worker overrides and verifies its Python, upstream server, adapter, and model or
+voice files against the runtime readiness contract before reporting success.
 Phase 16 still owns broader clean-machine voice acceptance, curated
 checksum-pinned model downloads, and hardware-fit recommendations.
 

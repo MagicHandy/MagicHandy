@@ -3,8 +3,9 @@
 ## Status
 
 Accepted; amended 2026-08-03 after Microsoft completed the false-positive
-review and again for the alpha.9 installer correction. This supersedes ADR 0013
-where that ADR defines public unsigned setup publication.
+review, for the alpha.9 installer correction, and for alpha.10's runtime
+readiness corrections. This supersedes ADR 0013 where that ADR defines public
+unsigned setup publication.
 
 ## Context
 
@@ -59,18 +60,19 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 and alpha.9 reviewed unsigned setup are explicit exceptions.** The
-   tag workflow may publish only those two unsigned setup versions with the
+3. **Alpha.8 through alpha.10 reviewed unsigned setup are explicit
+   exceptions.** The tag workflow may publish only those three unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
    case ID above. Alpha.9 corrects installer-script argument handling without
-   changing the hardened Inno packaging shape. Its tag workflow also scans the
-   exact candidate directory with Microsoft Defender before lifecycle
-   verification. The verifier rejects every other version, so a later unsigned
-   setup requires a new reviewed policy change. It builds setup, portable ZIP,
-   and two-entry checksum into one dedicated `artifacts/release` directory,
-   runs the full lifecycle against that exact setup, and publishes only the
-   three explicit paths. An ordinary `UnsignedCI` build cannot enter a GitHub
-   Release.
+   changing the hardened Inno packaging shape. Alpha.10 retains that shape and
+   corrects managed llama.cpp cold-load readiness, managed TTS verification,
+   and worker process-tree cleanup. The tag workflow scans each exact candidate
+   directory with Microsoft Defender before lifecycle verification. The
+   verifier rejects every other version, so a later unsigned setup requires a
+   new reviewed policy change. It builds setup, portable ZIP, and two-entry
+   checksum into one dedicated `artifacts/release` directory, runs the full
+   lifecycle against that exact setup, and publishes only the three explicit
+   paths. An ordinary `UnsignedCI` build cannot enter a GitHub Release.
 4. **Trusted Authenticode remains the production target.** `SignedPublic`
    requires a protected organizational signing identity, trusted timestamp,
    and `Valid` Authenticode status on the setup executable and every shipped
@@ -111,8 +113,9 @@ Negative:
 - public alpha executables still have no publisher identity and may show
   reputation warnings until signing is provisioned;
 - Microsoft's determination covers the submitted alpha.6 hash, not alpha.8,
-  alpha.9, or any future package; the alpha.9 exception therefore adds an exact
-  pre-publication Defender scan but still does not establish publisher identity;
+  alpha.9, alpha.10, or any future package; the later exceptions therefore add
+  an exact pre-publication Defender scan but still do not establish publisher
+  identity;
   and
 - a trusted signing service and identity-validation process are still needed
   before the reviewed unsigned exception can be retired.
@@ -125,11 +128,12 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires the
-  alpha.8 or alpha.9 version and recorded Microsoft case ID, the
+  alpha.8, alpha.9, or alpha.10 version and recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- The alpha.9 tag workflow runs Microsoft Defender against the exact public
-  artifact directory before lifecycle verification or release creation.
+- The alpha.9 and later reviewed tag workflows run Microsoft Defender against
+  the exact public artifact directory before lifecycle verification or release
+  creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
   executable and every payload EXE.

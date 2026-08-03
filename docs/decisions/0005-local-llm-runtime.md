@@ -93,6 +93,11 @@ autonomous work never preempts Chat. Per-message diagnostics separate
 preparation, scheduler wait, first token, generation, and repair time. See
 `docs/llm-latency-consistency.md`.
 
+During a managed cold load, llama.cpp reports HTTP 503 with a structured
+`Loading model` body. That response is a transient loading state, not a failed
+runtime. The provider waits within a 90-second readiness budget and the UI
+continues polling; other 503 responses remain failures.
+
 Model inventory is a sibling concern, not part of `Provider`. A provider is a
 configured runtime adapter; the model manager owns durable records, managed
 copies, imports, and filesystem state. This keeps model setup usable even when
